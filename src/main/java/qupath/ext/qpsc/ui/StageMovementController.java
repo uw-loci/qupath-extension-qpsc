@@ -398,13 +398,16 @@ public class StageMovementController {
             arrowRow.setAlignment(Pos.CENTER);
             arrowRow.getChildren().addAll(leftBtn, upDownBox, rightBtn);
 
-            // Add "um" label below
+            // Add "um" label and keyboard hint below
             Label arrowLabel = new Label("um");
             arrowLabel.setStyle("-fx-font-size: 10px;");
 
+            Label keyboardHint = new Label("WASD / Arrow keys");
+            keyboardHint.setStyle("-fx-font-size: 9px; -fx-text-fill: #666666;");
+
             VBox arrowGrid = new VBox(2);
             arrowGrid.setAlignment(Pos.CENTER);
-            arrowGrid.getChildren().addAll(arrowRow, arrowLabel, sampleMovementCheckbox);
+            arrowGrid.getChildren().addAll(arrowRow, arrowLabel, keyboardHint, sampleMovementCheckbox);
 
             // --- Z Scroll Control ---
             logger.debug("Adding Z scroll wheel control");
@@ -709,7 +712,7 @@ public class StageMovementController {
             dlg.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
             dlg.initModality(Modality.NONE);
 
-            // Add WASD keyboard support for XY movement (similar to arrow keys)
+            // Add WASD and arrow key support for XY movement
             // Using event filter to capture keys before text fields consume them
             dlg.getDialogPane().addEventFilter(KeyEvent.KEY_PRESSED, event -> {
                 // Only respond if focus is not on a text field (to allow typing in fields)
@@ -718,31 +721,36 @@ public class StageMovementController {
                 }
 
                 KeyCode code = event.getCode();
-                if (code == KeyCode.W || code == KeyCode.A || code == KeyCode.S || code == KeyCode.D) {
-                    event.consume();
-                    switch (code) {
-                        case W:
-                            upBtn.fire();
-                            logger.debug("WASD: W key triggered up movement");
-                            break;
-                        case S:
-                            downBtn.fire();
-                            logger.debug("WASD: S key triggered down movement");
-                            break;
-                        case A:
-                            leftBtn.fire();
-                            logger.debug("WASD: A key triggered left movement");
-                            break;
-                        case D:
-                            rightBtn.fire();
-                            logger.debug("WASD: D key triggered right movement");
-                            break;
-                        default:
-                            break;
-                    }
+                switch (code) {
+                    case W:
+                    case UP:
+                        event.consume();
+                        upBtn.fire();
+                        logger.debug("Keyboard: {} triggered up movement", code);
+                        break;
+                    case S:
+                    case DOWN:
+                        event.consume();
+                        downBtn.fire();
+                        logger.debug("Keyboard: {} triggered down movement", code);
+                        break;
+                    case A:
+                    case LEFT:
+                        event.consume();
+                        leftBtn.fire();
+                        logger.debug("Keyboard: {} triggered left movement", code);
+                        break;
+                    case D:
+                    case RIGHT:
+                        event.consume();
+                        rightBtn.fire();
+                        logger.debug("Keyboard: {} triggered right movement", code);
+                        break;
+                    default:
+                        break;
                 }
             });
-            logger.debug("WASD keyboard controls enabled for XY movement");
+            logger.debug("WASD and arrow key controls enabled for XY movement");
 
             // Add listener to refresh alignment status when image changes
             if (gui != null) {
