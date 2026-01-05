@@ -41,7 +41,8 @@ dependencies {
     shadow(libs.snakeyaml)
     shadow(libs.gson)
 
-    implementation("io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.1.0")
+    // Bundle tiles-to-pyramid into the shadow JAR for single-file distribution
+    shadow("io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.1.0")
     implementation("io.github.qupath:qupath-extension-bioformats:0.6.0-rc4")
     // If you aren't using Groovy, this can be removed
     shadow(libs.bundles.groovy)
