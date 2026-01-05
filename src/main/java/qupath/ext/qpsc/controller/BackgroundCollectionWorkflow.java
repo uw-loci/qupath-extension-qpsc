@@ -232,6 +232,7 @@ public class BackgroundCollectionWorkflow {
 
                 // Try to load from angle_exposures list (the format readers expect)
                 if (existingData != null && existingData.containsKey("angle_exposures")) {
+                    @SuppressWarnings("unchecked")
                     List<Map<String, Double>> existingList =
                             (List<Map<String, Double>>) existingData.get("angle_exposures");
                     for (Map<String, Double> pair : existingList) {

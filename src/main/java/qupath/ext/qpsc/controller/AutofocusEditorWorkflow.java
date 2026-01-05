@@ -931,6 +931,7 @@ public class AutofocusEditorWorkflow {
             Map<String, Object> data = yaml.load(Files.newInputStream(autofocusFile.toPath()));
 
             if (data != null) {
+                @SuppressWarnings("unchecked")
                 List<Map<String, Object>> afSettings = (List<Map<String, Object>>) data.get("autofocus_settings");
 
                 if (afSettings != null) {

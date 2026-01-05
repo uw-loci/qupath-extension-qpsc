@@ -485,6 +485,7 @@ public class MicroscopeConfigManager {
      * @param key Top-level modality key (e.g., "PPM")
      * @return Map containing settings, or empty map if not found
      */
+    @SuppressWarnings("unchecked")
     public Map<String, Object> getModalityConfig(String key) {
         Object section = configData.get(key);
         if (section instanceof Map) {

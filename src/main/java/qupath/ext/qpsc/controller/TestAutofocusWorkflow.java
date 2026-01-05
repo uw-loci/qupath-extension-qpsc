@@ -301,6 +301,7 @@ public class TestAutofocusWorkflow {
      * @param configManager Configuration manager instance
      * @return Objective identifier or null if not found
      */
+    @SuppressWarnings("unchecked")
     private static String getCurrentObjective(MicroscopeConfigManager configManager) {
         try {
             Map<String, Object> config = configManager.getAllConfig();

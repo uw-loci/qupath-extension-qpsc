@@ -91,6 +91,7 @@ public class GreenBoxPreviewController {
      *         </ul>
      * @throws IllegalArgumentException if macroImage is null
      */
+    @SuppressWarnings("unchecked")
     public static CompletableFuture<GreenBoxDetector.DetectionResult> showPreviewDialog(
             BufferedImage macroImage,
             GreenBoxDetector.DetectionParams savedParams) {

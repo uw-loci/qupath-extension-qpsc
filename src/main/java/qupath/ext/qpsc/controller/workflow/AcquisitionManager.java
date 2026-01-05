@@ -325,9 +325,9 @@ public class AcquisitionManager {
                 logger.error("Failed to save project entry state before acquisition", e);
             }
 
-            // Get current annotations
+            // Get current annotations using GUI hierarchy for reliable retrieval
             List<PathObject> currentAnnotations = AnnotationHelper.getCurrentValidAnnotations(
-                    state.selectedAnnotationClasses
+                    gui, state.selectedAnnotationClasses
             );
             if (currentAnnotations.isEmpty()) {
                 throw new RuntimeException("No valid annotations for acquisition");

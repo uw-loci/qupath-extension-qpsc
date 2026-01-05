@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.BirefringenceOptimizationDialog;
-import qupath.lib.gui.dialogs.Dialogs;
+import qupath.fx.dialogs.Dialogs;
 
 import java.awt.Desktop;
 import java.io.File;

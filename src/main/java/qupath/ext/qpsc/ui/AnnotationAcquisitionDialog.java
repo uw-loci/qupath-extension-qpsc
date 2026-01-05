@@ -44,6 +44,7 @@ public class AnnotationAcquisitionDialog {
      * @param preselectedClasses Classes selected from previous runs
      * @return CompletableFuture with selected classes and whether to proceed
      */
+    @SuppressWarnings("unchecked")
     public static CompletableFuture<AcquisitionResult> showDialog(
             Set<String> availableClasses,
             List<String> preselectedClasses) {
