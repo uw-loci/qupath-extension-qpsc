@@ -21,12 +21,21 @@ allprojects {
     repositories {
         mavenLocal() // Checks your local Maven repository first.
         mavenCentral()
-        // Optionally include other repositories if needed.
+        // SciJava repository - mirrors many OME/Bio-Formats artifacts
+        maven {
+            name = "SciJava"
+            url = uri("https://maven.scijava.org/content/repositories/releases")
+        }
+        // Alternative OME repository URL
+        maven {
+            name = "OME-Artifacts"
+            url = uri("https://artifacts.openmicroscopy.org/artifactory/maven/")
+        }
+        // Original OME repository (may be unreliable)
         maven {
             name = "OME"
             url = uri("https://repo.openmicroscopy.org/artifactory/ome-releases")
         }
-
     }
 }
 val javafxVersion = "17.0.2"
