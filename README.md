@@ -28,6 +28,7 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
   - [Background Collection](#background-collection)
   - [Polarizer Calibration (PPM)](#polarizer-calibration-ppm)
   - [Autofocus Settings Editor](#autofocus-settings-editor)
+- [Building from Source](#building-from-source)
 - [File Structure (For Developers)](#file-structure-for-developers)
 - [YAML Configuration](#yaml-configuration)
 - [Future Plans](#future-plans)
@@ -443,6 +444,86 @@ autofocus_settings:
 - If `autofocus_{microscope}.yml` doesn't exist, editor loads sensible defaults
 - Objectives from main config automatically populate
 - Save creates the file with all configured objectives
+
+---
+
+## Building from Source
+
+If you want to build the extension yourself (for development or to get the latest changes), follow these steps:
+
+### Prerequisites
+
+- **Java 21+** (JDK, not just JRE)
+- **Git** for cloning repositories
+
+### Build Steps
+
+**1. Clone both repositories:**
+
+```bash
+git clone https://github.com/uw-loci/qupath-extension-tiles-to-pyramid.git
+git clone https://github.com/uw-loci/qupath-extension-qpsc.git
+```
+
+**2. Publish tiles-to-pyramid to Maven Local** (required one-time setup):
+
+```bash
+cd qupath-extension-tiles-to-pyramid
+./gradlew publishToMavenLocal
+```
+
+This installs the tiles-to-pyramid dependency to your local Maven repository (`~/.m2/repository/`).
+
+**3. Build the QPSC extension:**
+
+```bash
+cd qupath-extension-qpsc
+./gradlew shadowJar
+```
+
+**4. Find the output JAR:**
+
+The built JAR will be at:
+```
+build/libs/qupath-extension-qpsc-<version>-all.jar
+```
+
+The `-all` suffix indicates this is a "fat JAR" that includes the tiles-to-pyramid dependency bundled inside.
+
+### Troubleshooting Build Issues
+
+**OME Repository Unavailable:**
+
+If you see errors about `repo.openmicroscopy.org` being unreachable:
+```
+Could not resolve ome:formats-gpl:8.1.1
+> No such host is known (repo.openmicroscopy.org)
+```
+
+This can happen when the OME artifact server is down. The build configuration has been updated to minimize dependence on this repository, but if issues persist:
+
+1. Ensure you're using the latest version of both repositories (`git pull`)
+2. Try building with `--offline` if you've built successfully before:
+   ```bash
+   ./gradlew shadowJar --offline
+   ```
+
+**tiles-to-pyramid Not Found:**
+
+If you see:
+```
+Could not resolve io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.1.0
+```
+
+Make sure you completed Step 2 (publishToMavenLocal) in the tiles-to-pyramid directory.
+
+### Development in IntelliJ IDEA
+
+For development with hot-reload via QuPath:
+
+1. Clone the [qupath-qpsc-dev](https://github.com/uw-loci/qupath-qpsc-dev) repository (custom QuPath build with QPSC pre-installed)
+2. Open as a Gradle project in IntelliJ
+3. Run the QuPath main class to launch with the extension
 
 ---
 
