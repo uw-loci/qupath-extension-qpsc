@@ -311,14 +311,23 @@ public class PolarizerCalibrationWorkflow {
                 params.startAngle(), params.endAngle(), params.stepSize());
 
         // Create and show progress dialog on JavaFX thread
-        // Use AtomicReference to hold the dialog reference since we're on a background thread
-        AtomicReference<Alert> progressDialogRef = new AtomicReference<>();
+        // Use AtomicReference to hold the Stage reference since we're on a background thread
+        AtomicReference<javafx.stage.Stage> progressStageRef = new AtomicReference<>();
 
         Platform.runLater(() -> {
-            Alert progressDialog = new Alert(Alert.AlertType.INFORMATION);
-            progressDialog.setTitle("Calibration In Progress");
-            progressDialog.setHeaderText("Polarizer Calibration Running");
-            progressDialog.setContentText(
+            // Use a Stage instead of Alert for proper close behavior
+            javafx.stage.Stage progressStage = new javafx.stage.Stage();
+            progressStage.initModality(Modality.APPLICATION_MODAL);
+            progressStage.setTitle("Calibration In Progress");
+
+            VBox content = new VBox(15);
+            content.setPadding(new Insets(20));
+            content.setAlignment(Pos.CENTER_LEFT);
+
+            Label headerLabel = new Label("Polarizer Calibration Running");
+            headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+
+            Label messageLabel = new Label(
                     "Calibration is in progress. This may take several minutes (typically 5-10 minutes).\n\n" +
                     "IMPORTANT: Check the Python server logs for detailed progress information.\n" +
                     "The logs will show:\n" +
@@ -328,10 +337,25 @@ public class PolarizerCalibrationWorkflow {
                     "Please wait for the calibration to complete.\n" +
                     "This dialog will close automatically when finished."
             );
-            progressDialog.getDialogPane().setMinWidth(500);
-            progressDialog.getButtonTypes().clear(); // Remove buttons - dialog stays open until calibration completes
-            progressDialogRef.set(progressDialog);
-            progressDialog.show();
+            messageLabel.setWrapText(true);
+
+            javafx.scene.control.ProgressIndicator progressIndicator = new javafx.scene.control.ProgressIndicator();
+            progressIndicator.setProgress(-1); // Indeterminate
+
+            content.getChildren().addAll(headerLabel, progressIndicator, messageLabel);
+
+            javafx.scene.Scene scene = new javafx.scene.Scene(content, 550, 300);
+            progressStage.setScene(scene);
+            progressStage.setResizable(false);
+
+            // Prevent user from closing during calibration (they can still use window manager)
+            progressStage.setOnCloseRequest(event -> {
+                // Allow close but log it
+                logger.info("User closed progress dialog during calibration");
+            });
+
+            progressStageRef.set(progressStage);
+            progressStage.show();
         });
 
         try {
@@ -369,9 +393,9 @@ public class PolarizerCalibrationWorkflow {
 
             // Close progress dialog and show success
             Platform.runLater(() -> {
-                Alert progressDialog = progressDialogRef.get();
-                if (progressDialog != null) {
-                    progressDialog.close();
+                javafx.stage.Stage progressStage = progressStageRef.get();
+                if (progressStage != null) {
+                    progressStage.close();
                 }
             });
 
@@ -420,9 +444,9 @@ public class PolarizerCalibrationWorkflow {
 
             // Close progress dialog and show error
             Platform.runLater(() -> {
-                Alert progressDialog = progressDialogRef.get();
-                if (progressDialog != null) {
-                    progressDialog.close();
+                javafx.stage.Stage progressStage = progressStageRef.get();
+                if (progressStage != null) {
+                    progressStage.close();
                 }
                 Dialogs.showErrorMessage("Calibration Failed",
                         "Failed to complete polarizer calibration:\n" + e.getMessage());
