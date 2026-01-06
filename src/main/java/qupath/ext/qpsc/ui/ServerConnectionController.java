@@ -185,7 +185,11 @@ public class ServerConnectionController {
         Button connectButton = new Button(res.getString("server.connection.connectButton"));
         connectButton.setOnAction(e -> connectNow());
 
-        HBox buttonBox = new HBox(10, testButton, connectButton);
+        Button probeButton = new Button("Probe Server");
+        probeButton.setTooltip(new Tooltip("Quick check if server is responding (helps diagnose multi-instance issues)"));
+        probeButton.setOnAction(e -> probeServerStatus());
+
+        HBox buttonBox = new HBox(10, testButton, connectButton, probeButton);
         grid.add(buttonBox, 0, row++, 2, 1);
 
         // Connection status with progress indicator
@@ -418,6 +422,21 @@ public class ServerConnectionController {
                 String error = e.getMessage();
                 logMessage("Connection failed: " + error);
 
+                // Provide helpful guidance based on error type
+                if (error != null && (error.contains("Connection refused") || error.contains("connect"))) {
+                    logMessage("");
+                    logMessage("TROUBLESHOOTING:");
+                    logMessage("1. Make sure the Python microscope server is running");
+                    logMessage("2. Check that only ONE server instance is running");
+                    logMessage("3. Verify the host and port settings are correct");
+                } else if (error != null && (error.contains("timeout") || error.contains("Timeout"))) {
+                    logMessage("");
+                    logMessage("TROUBLESHOOTING:");
+                    logMessage("1. Server may be busy or unresponsive");
+                    logMessage("2. Check if multiple server instances are running (can cause conflicts)");
+                    logMessage("3. Try increasing the connection timeout in Advanced settings");
+                }
+
                 Platform.runLater(() -> {
                     statusLabel.setText(String.format(
                             res.getString("server.status.failed"),
@@ -487,6 +506,61 @@ public class ServerConnectionController {
                     setControlsEnabled(true);
                 });
             }
+        });
+    }
+
+    /**
+     * Probes the server to check if it's available and responding.
+     * This is a quick diagnostic check that helps identify multi-instance issues.
+     */
+    private void probeServerStatus() {
+        progressIndicator.setVisible(true);
+        statusLabel.setText("Probing server...");
+        statusLabel.setTextFill(Color.BLUE);
+        setControlsEnabled(false);
+
+        CompletableFuture.runAsync(() -> {
+            String host = hostField.getText();
+            int port = portSpinner.getValue();
+            int timeout = connectTimeoutSpinner.getValue();
+
+            logMessage("Probing server at " + host + ":" + port + "...");
+
+            MicroscopeSocketClient.ServerProbeResult result =
+                    MicroscopeSocketClient.probeServer(host, port, timeout);
+
+            if (result.isResponding()) {
+                logMessage("Server probe successful: " + result.getMessage());
+                Platform.runLater(() -> {
+                    statusLabel.setText("Server OK: " + result.getMessage());
+                    statusLabel.setTextFill(Color.GREEN);
+                });
+            } else if (result.canConnect()) {
+                // Connected but not responding correctly - possible multi-instance issue
+                logMessage("WARNING: Connected but server not responding correctly!");
+                logMessage("This can happen if multiple server instances are running.");
+                logMessage("Please ensure only ONE server instance is running.");
+                logMessage("Details: " + result.getMessage());
+
+                Platform.runLater(() -> {
+                    statusLabel.setText("WARNING: Server connection issue - check for multiple instances!");
+                    statusLabel.setTextFill(Color.ORANGE);
+                });
+            } else {
+                // Cannot connect at all
+                logMessage("Cannot connect to server: " + result.getMessage());
+                logMessage("Make sure the Python server is running.");
+
+                Platform.runLater(() -> {
+                    statusLabel.setText("No server: " + result.getMessage());
+                    statusLabel.setTextFill(Color.RED);
+                });
+            }
+
+            Platform.runLater(() -> {
+                progressIndicator.setVisible(false);
+                setControlsEnabled(true);
+            });
         });
     }
 

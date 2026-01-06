@@ -1812,6 +1812,96 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
+     * Probes a server to check if it is available and responding.
+     * This is a quick connectivity test that does not establish a persistent connection.
+     *
+     * @param host The server host
+     * @param port The server port
+     * @param timeoutMs Connection timeout in milliseconds
+     * @return ServerProbeResult containing connection status and details
+     */
+    public static ServerProbeResult probeServer(String host, int port, int timeoutMs) {
+        Socket testSocket = null;
+        try {
+            testSocket = new Socket();
+            testSocket.setSoTimeout(timeoutMs);
+            testSocket.connect(new InetSocketAddress(host, port), timeoutMs);
+
+            // Try to send a simple GETXY command
+            DataOutputStream out = new DataOutputStream(testSocket.getOutputStream());
+            DataInputStream in = new DataInputStream(testSocket.getInputStream());
+
+            out.write("getxy___".getBytes());
+            out.flush();
+
+            // Read response (8 bytes for two floats)
+            byte[] response = new byte[8];
+            in.readFully(response);
+
+            // Parse response
+            ByteBuffer buffer = ByteBuffer.wrap(response);
+            buffer.order(ByteOrder.BIG_ENDIAN);
+            float x = buffer.getFloat();
+            float y = buffer.getFloat();
+
+            return new ServerProbeResult(true, true, host, port,
+                    String.format("Server responding. Stage position: (%.2f, %.2f)", x, y));
+
+        } catch (ConnectException e) {
+            return new ServerProbeResult(false, false, host, port,
+                    "Connection refused - no server running on port " + port);
+        } catch (SocketTimeoutException e) {
+            return new ServerProbeResult(false, false, host, port,
+                    "Connection timed out - server may not be running");
+        } catch (IOException e) {
+            // Connected but had issues
+            return new ServerProbeResult(true, false, host, port,
+                    "Connected but server not responding correctly: " + e.getMessage());
+        } finally {
+            if (testSocket != null) {
+                try {
+                    testSocket.close();
+                } catch (IOException ignored) {}
+            }
+        }
+    }
+
+    /**
+     * Result of a server probe operation.
+     */
+    public static class ServerProbeResult {
+        private final boolean canConnect;
+        private final boolean isResponding;
+        private final String host;
+        private final int port;
+        private final String message;
+
+        public ServerProbeResult(boolean canConnect, boolean isResponding, String host, int port, String message) {
+            this.canConnect = canConnect;
+            this.isResponding = isResponding;
+            this.host = host;
+            this.port = port;
+            this.message = message;
+        }
+
+        /** Returns true if TCP connection could be established */
+        public boolean canConnect() { return canConnect; }
+
+        /** Returns true if server is responding correctly to commands */
+        public boolean isResponding() { return isResponding; }
+
+        public String getHost() { return host; }
+        public int getPort() { return port; }
+        public String getMessage() { return message; }
+
+        @Override
+        public String toString() {
+            return String.format("ServerProbeResult[%s:%d, connect=%s, responding=%s, msg='%s']",
+                    host, port, canConnect, isResponding, message);
+        }
+    }
+
+    /**
      * Shuts down the microscope server.
      * This will terminate the server process.
      *
