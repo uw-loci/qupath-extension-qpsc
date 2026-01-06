@@ -5,7 +5,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.ExistingImageWorkflowV2.WorkflowState;
 import qupath.ext.qpsc.controller.MicroscopeController;
-import qupath.ext.qpsc.ui.RefinementSelectionController.RefinementChoice;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.GreenBoxPreviewController;
 import qupath.ext.qpsc.ui.UIFunctions;
@@ -293,17 +292,10 @@ public class ExistingAlignmentPath {
             state.transform = fullResToStage;
             MicroscopeController.getInstance().setCurrentTransform(fullResToStage);
 
-            // Save if not requesting refinement
-            if (state.refinementChoice == RefinementChoice.NONE) {
-                saveSlideAlignment(context);
-            }
-
-            // Handle refinement if requested
-            if (state.refinementChoice != RefinementChoice.NONE) {
-                return performRefinement(context);
-            } else {
-                return CompletableFuture.completedFuture(state);
-            }
+            // Always save alignment - refinement is handled by ExistingImageWorkflowV2.handleRefinement()
+            // to avoid double execution when single-tile refinement is selected
+            saveSlideAlignment(context);
+            return CompletableFuture.completedFuture(state);
         } catch (Exception e) {
             logger.error("Error in createTransform", e);
             return CompletableFuture.failedFuture(e);
@@ -390,48 +382,6 @@ public class ExistingAlignmentPath {
 
         logger.info("Created full-res→stage transform");
         return fullResToStage;
-    }
-
-    /**
-     * Performs single-tile refinement if requested.
-     *
-     * <p>Allows the user to manually adjust alignment using a single tile
-     * for improved accuracy. The selected tile is stored in the workflow state
-     * to ensure its parent annotation is acquired first (so the sample is already in focus).
-     *
-     * @return CompletableFuture containing the refined workflow state
-     */
-    private CompletableFuture<WorkflowState> performRefinement(GreenBoxContext context) {
-        // Use the same tile creation as acquisition - delegates to TilingUtilities
-        // which reads invertedX/Y from global preferences for consistent tile positioning
-        logger.info("Creating tiles for refinement using global inversion preferences");
-
-        // Use the 5-parameter version which reads inversion from preferences
-        // This ensures refinement tiles match acquisition tiles
-        TileHelper.createTilesForAnnotations(
-                state.annotations,
-                state.sample,
-                state.projectInfo.getTempTileDirectory(),
-                state.projectInfo.getImagingModeWithIndex(),
-                state.pixelSize
-        );
-
-        return SingleTileRefinement.performRefinement(
-                gui, state.annotations, state.transform
-        ).thenApply(result -> {
-            if (result.transform != null) {
-                state.transform = result.transform;
-                MicroscopeController.getInstance().setCurrentTransform(result.transform);
-            }
-            // Store the selected refinement tile for acquisition prioritization
-            state.refinementTile = result.selectedTile;
-            if (result.selectedTile != null) {
-                logger.info("Stored refinement tile '{}' for acquisition prioritization",
-                        result.selectedTile.getName());
-            }
-            saveSlideAlignment(context);
-            return state;
-        });
     }
 
     /**
