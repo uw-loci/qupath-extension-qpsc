@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * PolarizerCalibrationWorkflow - Calibrate PPM rotation stage to find crossed polarizer positions
@@ -118,9 +119,9 @@ public class PolarizerCalibrationWorkflow {
                 "IMPORTANT: Position microscope at a uniform, bright background area.\n" +
                 "This calibration finds crossed polarizer positions by sweeping rotation angles.\n\n" +
                 "When to use:\n" +
-                "  • After installing or repositioning polarization optics\n" +
-                "  • After reseating or replacing rotation stage\n" +
-                "  • To validate/update rotation_angles in config_PPM.yml"
+                "  - After installing or repositioning polarization optics\n" +
+                "  - After reseating or replacing rotation stage\n" +
+                "  - To validate/update rotation_angles in config_PPM.yml"
             );
             instructionLabel.setWrapText(true);
             instructionLabel.setStyle("-fx-font-size: 11px;");
@@ -309,25 +310,29 @@ public class PolarizerCalibrationWorkflow {
         logger.info("Executing polarizer calibration: {} to {} deg, step {}",
                 params.startAngle(), params.endAngle(), params.stepSize());
 
-        // Create progress dialog
-        Alert progressDialog = new Alert(Alert.AlertType.INFORMATION);
-        progressDialog.setTitle("Calibration In Progress");
-        progressDialog.setHeaderText("Polarizer Calibration Running");
-        progressDialog.setContentText(
-                "Calibration is in progress. This may take several minutes (typically 5-10 minutes).\n\n" +
-                "IMPORTANT: Check the Python server logs for detailed progress information.\n" +
-                "The logs will show:\n" +
-                "  - Coarse sweep progress (finding approximate minima)\n" +
-                "  - Fine sweep progress (refining exact positions)\n" +
-                "  - Stability check results (if enabled)\n\n" +
-                "Please wait for the calibration to complete.\n" +
-                "This dialog will close automatically when finished."
-        );
-        progressDialog.getDialogPane().setMinWidth(500);
-        progressDialog.getButtonTypes().clear(); // Remove buttons - dialog stays open until calibration completes
+        // Create and show progress dialog on JavaFX thread
+        // Use AtomicReference to hold the dialog reference since we're on a background thread
+        AtomicReference<Alert> progressDialogRef = new AtomicReference<>();
 
-        // Show progress dialog on JavaFX thread
-        Platform.runLater(() -> progressDialog.show());
+        Platform.runLater(() -> {
+            Alert progressDialog = new Alert(Alert.AlertType.INFORMATION);
+            progressDialog.setTitle("Calibration In Progress");
+            progressDialog.setHeaderText("Polarizer Calibration Running");
+            progressDialog.setContentText(
+                    "Calibration is in progress. This may take several minutes (typically 5-10 minutes).\n\n" +
+                    "IMPORTANT: Check the Python server logs for detailed progress information.\n" +
+                    "The logs will show:\n" +
+                    "  - Coarse sweep progress (finding approximate minima)\n" +
+                    "  - Fine sweep progress (refining exact positions)\n" +
+                    "  - Stability check results (if enabled)\n\n" +
+                    "Please wait for the calibration to complete.\n" +
+                    "This dialog will close automatically when finished."
+            );
+            progressDialog.getDialogPane().setMinWidth(500);
+            progressDialog.getButtonTypes().clear(); // Remove buttons - dialog stays open until calibration completes
+            progressDialogRef.set(progressDialog);
+            progressDialog.show();
+        });
 
         try {
             // Get socket client
@@ -362,8 +367,13 @@ public class PolarizerCalibrationWorkflow {
             logger.info("Polarizer calibration completed successfully");
             logger.info("Report saved to: {}", reportPath);
 
-            // Close progress dialog
-            Platform.runLater(() -> progressDialog.close());
+            // Close progress dialog and show success
+            Platform.runLater(() -> {
+                Alert progressDialog = progressDialogRef.get();
+                if (progressDialog != null) {
+                    progressDialog.close();
+                }
+            });
 
             // Show success and offer to open report
             Platform.runLater(() -> {
@@ -373,10 +383,10 @@ public class PolarizerCalibrationWorkflow {
                 alert.setContentText(
                         "Calibration report saved to:\n" + reportPath + "\n\n" +
                         "The report contains:\n" +
-                        "  • Calibration Results - Crossed polarizer positions found\n" +
-                        "  • Config Recommendations - Values to update in config_PPM.yml\n" +
-                        "  • Calibration Metadata - Parameters and conditions used\n" +
-                        "  • Raw Data - Complete measurement data for verification\n\n" +
+                        "  - Calibration Results: Crossed polarizer positions found\n" +
+                        "  - Config Recommendations: Values to update in config_PPM.yml\n" +
+                        "  - Calibration Metadata: Parameters and conditions used\n" +
+                        "  - Raw Data: Complete measurement data for verification\n\n" +
                         "Would you like to open the report folder?"
                 );
 
@@ -408,11 +418,12 @@ public class PolarizerCalibrationWorkflow {
         } catch (Exception e) {
             logger.error("Polarizer calibration failed", e);
 
-            // Close progress dialog
-            Platform.runLater(() -> progressDialog.close());
-
-            // Show error
+            // Close progress dialog and show error
             Platform.runLater(() -> {
+                Alert progressDialog = progressDialogRef.get();
+                if (progressDialog != null) {
+                    progressDialog.close();
+                }
                 Dialogs.showErrorMessage("Calibration Failed",
                         "Failed to complete polarizer calibration:\n" + e.getMessage());
             });
