@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.SampleSetupController;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.utilities.AnnotationPreservationService;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.ObjectiveUtils;
@@ -161,6 +162,38 @@ public class ProjectHelper {
                             flippedX,
                             flippedY
                     );
+
+                    // Restore preserved annotations if any (from standalone image workflow)
+                    // This handles the case where user drew annotations before starting workflow
+                    if (AnnotationPreservationService.hasPreservedAnnotations()) {
+                        logger.info("Restoring {} preserved annotations after project creation",
+                                AnnotationPreservationService.getPreservedAnnotationCount());
+
+                        // Restore with flip transformation matching the image import
+                        boolean restored = AnnotationPreservationService.restoreAnnotations(
+                                gui, flippedX, flippedY);
+
+                        if (restored) {
+                            // Save the annotations to the project entry
+                            try {
+                                var project = gui.getProject();
+                                var imageData = gui.getImageData();
+                                if (project != null && imageData != null) {
+                                    var entry = project.getEntry(imageData);
+                                    if (entry != null) {
+                                        entry.saveImageData(imageData);
+                                        project.syncChanges();
+                                        logger.info("Saved restored annotations to project");
+                                    }
+                                }
+                            } catch (Exception e) {
+                                logger.warn("Failed to save restored annotations: {}", e.getMessage());
+                            }
+                        }
+
+                        // Clear preserved annotations after restoration
+                        AnnotationPreservationService.clearPreservedAnnotations();
+                    }
 
                     // Save macro dimensions if available
                     BufferedImage macroImage = MacroImageUtility.retrieveMacroImage(gui);

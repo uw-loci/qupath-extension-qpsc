@@ -10,6 +10,7 @@ import qupath.ext.qpsc.ui.*;
 import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.ExistingImageAcquisitionConfig;
 import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.RefinementChoice;
 import qupath.ext.qpsc.utilities.*;
+import qupath.ext.qpsc.utilities.AnnotationPreservationService;
 import qupath.lib.objects.classes.PathClass;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -80,6 +81,23 @@ public class ExistingImageWorkflowV2 {
             // Step 1: Validate prerequisites
             if (!validatePrerequisites()) {
                 return;
+            }
+
+            // Step 1.5: Preserve annotations if this is a standalone image (no project)
+            // This handles the case where user drags image into QuPath, draws annotations,
+            // then starts the workflow. Without preservation, annotations would be lost
+            // when the new project is created.
+            if (gui.getProject() == null) {
+                ImageData<?> imageData = gui.getImageData();
+                if (imageData != null && imageData.getHierarchy() != null &&
+                        !imageData.getHierarchy().getAnnotationObjects().isEmpty()) {
+                    logger.info("Standalone image with annotations detected - preserving for project creation");
+                    boolean captured = AnnotationPreservationService.captureAnnotations(gui);
+                    if (captured) {
+                        logger.info("Preserved {} annotations from standalone image",
+                                AnnotationPreservationService.getPreservedAnnotationCount());
+                    }
+                }
             }
 
             // Step 2: Check if annotations exist and show annotation dialog FIRST
@@ -586,6 +604,8 @@ public class ExistingImageWorkflowV2 {
          */
         private void cleanup() {
             logger.info("Workflow completed - cleaning up");
+            // Clear any preserved annotations (should already be restored, but cleanup just in case)
+            AnnotationPreservationService.clearPreservedAnnotations();
         }
 
         /**
@@ -622,6 +642,10 @@ public class ExistingImageWorkflowV2 {
                             "An error occurred: " + displayCause.getMessage());
                 });
             }
+
+            // Clear preserved annotations on error to prevent stale data
+            AnnotationPreservationService.clearPreservedAnnotations();
+
             cleanup();
             return null;
         }
