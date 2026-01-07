@@ -22,14 +22,19 @@ public class ImageProcessing {
      * annotation representing the actual data area. This handles the common case where padding is added
      * to accommodate tile boundaries at different pyramid levels.</p>
      *
+     * <p>If no whitespace is detected (image has no edge padding), the method returns the full image
+     * bounds. This is a normal condition for images that were cropped to tissue boundaries and should
+     * not be treated as an error.</p>
+     *
      * <p><b>Important:</b> This method operates on the image as it exists in QuPath, which means
      * any flips applied during import have already been performed. The returned bounds are in
      * the flipped coordinate system, which matches the green box detection coordinates.</p>
      *
      * @param gui The QuPath GUI instance with already-flipped image
      * @param scriptDirectory Directory containing the WhiteBackground.json classifier
-     * @return Rectangle representing the actual data bounds (x, y, width, height) in flipped coordinates,
-     *         or null if detection fails
+     * @return Rectangle representing the actual data bounds (x, y, width, height) in flipped coordinates.
+     *         Returns full image bounds (0, 0, width, height) if no whitespace detected.
+     *         Returns null only if classifier file is missing or an exception occurs.
      */
     public static Rectangle detectOcus40DataBounds(QuPathGUI gui, String scriptDirectory) {
         logger.info("Detecting Ocus40 data bounds using white background classifier");
@@ -62,6 +67,10 @@ public class ImageProcessing {
             // Run the script
             gui.runScript(null, script);
 
+            // Get image dimensions for fallback
+            int imageWidth = gui.getImageData().getServer().getWidth();
+            int imageHeight = gui.getImageData().getServer().getHeight();
+
             // Find the Bounds annotation
             var boundsAnnotation = hierarchy.getAnnotationObjects().stream()
                     .filter(ann -> ann.getPathClass() != null &&
@@ -69,40 +78,44 @@ public class ImageProcessing {
                     .findFirst()
                     .orElse(null);
 
+            Rectangle dataBounds;
+
             if (boundsAnnotation == null) {
-                logger.error("No Bounds annotation created by white background detection");
-                return null;
+                // No whitespace detected - the entire image is data with no padding
+                logger.warn("No Bounds annotation created by white background detection - no whitespace detected");
+                logger.info("Image appears to have no edge padding - using full image bounds");
+                dataBounds = new Rectangle(0, 0, imageWidth, imageHeight);
+                logger.info("Using full image as data bounds: width={}, height={}", imageWidth, imageHeight);
+            } else {
+                // Whitespace detected - use the Bounds annotation
+                ROI boundsROI = boundsAnnotation.getROI();
+                dataBounds = new Rectangle(
+                        (int) boundsROI.getBoundsX(),
+                        (int) boundsROI.getBoundsY(),
+                        (int) boundsROI.getBoundsWidth(),
+                        (int) boundsROI.getBoundsHeight()
+                );
+
+                logger.info("Detected data bounds: x={}, y={}, width={}, height={}",
+                        dataBounds.x, dataBounds.y, dataBounds.width, dataBounds.height);
+                logger.info("Centroid in QuPath pixels of data bounds X {} Y {}",
+                        boundsROI.getCentroidX(), boundsROI.getCentroidY());
+
+                // Calculate padding amounts for logging
+                int leftPadding = dataBounds.x;
+                int topPadding = dataBounds.y;
+                int rightPadding = imageWidth - (dataBounds.x + dataBounds.width);
+                int bottomPadding = imageHeight - (dataBounds.y + dataBounds.height);
+
+                logger.info("Detected padding - Left: {}, Top: {}, Right: {}, Bottom: {}",
+                        leftPadding, topPadding, rightPadding, bottomPadding);
+
+                // Remove the Bounds annotation to clean up
+                hierarchy.removeObject(boundsAnnotation, true);
+                QP.resetSelection();
+                // Fire update to refresh the viewer
+                hierarchy.fireHierarchyChangedEvent(gui.getViewer());
             }
-
-            // Get the bounds
-            ROI boundsROI = boundsAnnotation.getROI();
-            Rectangle dataBounds = new Rectangle(
-                    (int) boundsROI.getBoundsX(),
-                    (int) boundsROI.getBoundsY(),
-                    (int) boundsROI.getBoundsWidth(),
-                    (int) boundsROI.getBoundsHeight()
-            );
-
-            logger.info("Detected data bounds: x={}, y={}, width={}, height={}",
-                    dataBounds.x, dataBounds.y, dataBounds.width, dataBounds.height);
-            logger.info("Centroid in QuPath pixels of data bounds X {} Y {}", boundsROI.getCentroidX(), boundsROI.getCentroidY());
-            // Calculate padding amounts for logging
-            int imageWidth = gui.getImageData().getServer().getWidth();
-            int imageHeight = gui.getImageData().getServer().getHeight();
-
-            int leftPadding = dataBounds.x;
-            int topPadding = dataBounds.y;
-            int rightPadding = imageWidth - (dataBounds.x + dataBounds.width);
-            int bottomPadding = imageHeight - (dataBounds.y + dataBounds.height);
-
-            logger.info("Detected padding - Left: {}, Top: {}, Right: {}, Bottom: {}",
-                    leftPadding, topPadding, rightPadding, bottomPadding);
-
-            // Remove the Bounds annotation to clean up
-            hierarchy.removeObject(boundsAnnotation, true);
-            QP.resetSelection();
-            // Fire update to refresh the viewer
-            hierarchy.fireHierarchyChangedEvent(gui.getViewer());
 
             return dataBounds;
 
