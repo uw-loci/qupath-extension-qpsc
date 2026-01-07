@@ -1,0 +1,105 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags (e.g., v1.0.0, v1.2.3)
+
+permissions:
+  contents: write  # Required for creating releases
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build
+
+      - name: Find JAR file
+        id: find_jar
+        run: |
+          JAR_PATH=$(find build/libs -name "*.jar" -not -name "*-javadoc.jar" -not -name "*-sources.jar" | head -n 1)
+          JAR_NAME=$(basename "$JAR_PATH")
+          echo "jar_path=$JAR_PATH" >> $GITHUB_OUTPUT
+          echo "jar_name=$JAR_NAME" >> $GITHUB_OUTPUT
+          echo "Found JAR: $JAR_NAME at $JAR_PATH"
+
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: QPSC Extension ${{ steps.get_version.outputs.version }}
+          body: |
+            ## QPSC QuPath Extension ${{ steps.get_version.outputs.version }}
+
+            ### Installation
+
+            1. Download the JAR file below
+            2. Place it in QuPath's `extensions` folder:
+               - **Windows**: `C:\Users\YourName\QuPath\extensions\`
+               - **macOS**: `~/QuPath/extensions/`
+               - **Linux**: `~/QuPath/extensions/`
+            3. Restart QuPath
+            4. Access QPSC from `Extensions > QPSC` menu
+
+            ### What's New
+
+            See the [CHANGELOG](https://github.com/uw-loci/qupath-extension-qpsc/blob/main/CHANGELOG.md) for detailed release notes.
+
+            ### Requirements
+
+            - QuPath 0.5.0 or later
+            - Java 21 or later
+            - [Microscope Command Server](https://github.com/uw-loci/microscope_command_server) (Python)
+            - [Micro-Manager](https://micro-manager.org/) 2.0+
+
+            ### Getting Started
+
+            For complete setup instructions, see the [QPSC Documentation](https://github.com/uw-loci/QPSC).
+
+            ### Installation Script
+
+            For automated setup on Windows, use the [PPM-QuPath.ps1](https://github.com/uw-loci/QPSC/blob/main/PPM-QuPath.ps1) script.
+          draft: false
+          prerelease: false
+
+      - name: Upload JAR to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.find_jar.outputs.jar_path }}
+          asset_name: ${{ steps.find_jar.outputs.jar_name }}
+          asset_content_type: application/java-archive
+
+      - name: Release Summary
+        run: |
+          echo "✅ Release created successfully!"
+          echo "📦 Artifact: ${{ steps.find_jar.outputs.jar_name }}"
+          echo "🏷️  Version: ${{ steps.get_version.outputs.version }}"
+          echo "🔗 Release URL: ${{ steps.create_release.outputs.html_url }}"
