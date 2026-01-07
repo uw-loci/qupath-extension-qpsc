@@ -518,14 +518,38 @@ public class ExistingImageWorkflowV2 {
             }
 
             // Create tiles if needed
-            // Uses same inversion settings as acquisition (from global preferences)
+            // CRITICAL: Must use flip status from image metadata, not global preferences.
+            // The annotations have coordinates that match the current image's flip state,
+            // so tiles must be created with matching flip parameters to position correctly.
             if (state.projectInfo != null) {
+                // Get flip status from current image metadata - the actual flip state of THIS image,
+                // not from global preferences which may have changed since the image was created
+                boolean invertedX = false;
+                boolean invertedY = false;
+                ProjectImageEntry<?> currentEntry = gui.getProject() != null && gui.getImageData() != null
+                        ? gui.getProject().getEntry(gui.getImageData())
+                        : null;
+                if (currentEntry != null) {
+                    invertedX = ImageMetadataManager.isFlippedX(currentEntry);
+                    invertedY = ImageMetadataManager.isFlippedY(currentEntry);
+                    logger.debug("Using flip status from image metadata for tile creation: flipX={}, flipY={}",
+                            invertedX, invertedY);
+                } else {
+                    // Fallback to global preferences if no image entry available
+                    invertedX = QPPreferenceDialog.getInvertedXProperty();
+                    invertedY = QPPreferenceDialog.getInvertedYProperty();
+                    logger.warn("No image entry found - falling back to global preferences for tile creation");
+                }
+
+                // Call the 7-parameter version that accepts explicit flip parameters
                 TileHelper.createTilesForAnnotations(
                         state.annotations,
                         state.sample,
                         state.projectInfo.getTempTileDirectory(),
                         state.projectInfo.getImagingModeWithIndex(),
-                        state.pixelSize
+                        state.pixelSize,
+                        invertedX,  // Explicit flip from image metadata
+                        invertedY   // Explicit flip from image metadata
                 );
             }
 
