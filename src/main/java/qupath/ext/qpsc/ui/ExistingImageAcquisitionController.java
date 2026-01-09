@@ -20,11 +20,16 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.SampleNameValidator;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
+import qupath.lib.projects.Project;
 
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
 import java.io.File;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -609,6 +614,20 @@ public class ExistingImageAcquisitionController {
             refinementBox = new VBox(10);
             refinementBox.setPadding(new Insets(10));
 
+            // Add informational banner if using refined alignment
+            if (isUsingRefinedAlignment()) {
+                String date = getRefinedAlignmentDate();
+                long ageInDays = getAlignmentAgeInDays();
+
+                HBox banner = createRefinedAlignmentBanner(date, ageInDays);
+                refinementBox.getChildren().add(banner);
+
+                // Add spacing after banner
+                Region spacer = new Region();
+                spacer.setPrefHeight(5);
+                refinementBox.getChildren().add(spacer);
+            }
+
             refinementGroup = new ToggleGroup();
 
             noRefineRadio = new RadioButton("Proceed without refinement");
@@ -621,7 +640,10 @@ public class ExistingImageAcquisitionController {
             fullManualRadio.setToggleGroup(refinementGroup);
 
             // Add descriptions
-            Label noRefineDesc = new Label("    Fastest - use alignment as-is. Accuracy: +/- 20 um");
+            Label noRefineDesc = new Label(
+                isUsingRefinedAlignment() ?
+                    "    Fastest - use alignment as-is. Accuracy: +/- 5 um (previously refined)" :
+                    "    Fastest - use alignment as-is. Accuracy: +/- 20 um");
             noRefineDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
 
             Label singleTileDesc = new Label("    Verify position with one tile. Accuracy: +/- 5 um");
@@ -854,6 +876,168 @@ public class ExistingImageAcquisitionController {
 
         private void triggerPreviewUpdate() {
             previewDebounce.playFromStart();
+        }
+
+        /**
+         * Check if the current alignment is a slide-specific refined alignment.
+         * @return true if using a previously refined alignment
+         */
+        private boolean isUsingRefinedAlignment() {
+            if (preset == null || preset.getTransform() == null) {
+                return false;
+            }
+
+            // Check if this is a slide-specific alignment
+            // Slide-specific alignments are saved when single-tile refinement is performed
+            String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+            if (imageName == null) {
+                return false;
+            }
+
+            // Check if alignment file exists for this specific image
+            Project<BufferedImage> project = gui.getProject();
+            if (project == null) {
+                return false;
+            }
+
+            AffineTransform slideTransform =
+                AffineTransformManager.loadSlideAlignment(project, imageName);
+
+            return slideTransform != null;
+        }
+
+        /**
+         * Get the date when the slide-specific alignment was created.
+         * @return formatted date string, or null if not available
+         */
+        private String getRefinedAlignmentDate() {
+            String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+            if (imageName == null) {
+                return null;
+            }
+
+            Project<BufferedImage> project = gui.getProject();
+            if (project == null) {
+                return null;
+            }
+
+            String dateStr = AffineTransformManager.getSlideAlignmentDate(project, imageName);
+            if (dateStr == null) {
+                return null;
+            }
+
+            // Parse and format date for display
+            try {
+                SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                SimpleDateFormat outputFormat = new SimpleDateFormat("MMM d, yyyy");
+                Date date = inputFormat.parse(dateStr);
+                return outputFormat.format(date);
+            } catch (Exception e) {
+                return dateStr; // Return as-is if parsing fails
+            }
+        }
+
+        /**
+         * Calculate the age of the refined alignment in days.
+         * @return number of days since alignment was created, or -1 if unable to determine
+         */
+        private long getAlignmentAgeInDays() {
+            String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+            if (imageName == null) {
+                return -1;
+            }
+
+            Project<BufferedImage> project = gui.getProject();
+            if (project == null) {
+                return -1;
+            }
+
+            String dateStr = AffineTransformManager.getSlideAlignmentDate(project, imageName);
+            if (dateStr == null) {
+                return -1;
+            }
+
+            try {
+                SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                Date alignmentDate = inputFormat.parse(dateStr);
+                Date now = new Date();
+                long diffMillis = now.getTime() - alignmentDate.getTime();
+                return diffMillis / (1000 * 60 * 60 * 24); // Convert to days
+            } catch (Exception e) {
+                return -1;
+            }
+        }
+
+        /**
+         * Create an informational banner indicating that a previously refined alignment is being used.
+         * @param date Date the alignment was refined
+         * @param ageInDays Age of the alignment in days
+         * @return HBox containing the banner
+         */
+        private HBox createRefinedAlignmentBanner(String date, long ageInDays) {
+            HBox banner = new HBox(10);
+            banner.setPadding(new Insets(12, 15, 12, 15));
+
+            // Determine if alignment is outdated (> 1 day)
+            boolean isOutdated = ageInDays > 1;
+
+            // Style based on age
+            if (isOutdated) {
+                // Amber warning style for old alignments
+                banner.setStyle("-fx-background-color: #FFF8E1; -fx-border-color: #FFD54F; " +
+                               "-fx-border-width: 0 0 1 0;");
+            } else {
+                // Blue info style for recent alignments
+                banner.setStyle("-fx-background-color: #E3F2FD; -fx-border-color: #90CAF9; " +
+                               "-fx-border-width: 0 0 1 0;");
+            }
+
+            // Icon
+            Label iconLabel = new Label(isOutdated ? "[!]" : "[*]");
+            iconLabel.setStyle(String.format("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: %s;",
+                isOutdated ? "#F57F17" : "#1565C0"));
+
+            // Message
+            VBox messageBox = new VBox(2);
+
+            // Title
+            String titleText = isOutdated ?
+                "Previously Refined Alignment May Be Outdated" :
+                "Using Previously Refined Alignment";
+            Label titleLabel = new Label(titleText);
+            titleLabel.setStyle(String.format("-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: %s;",
+                isOutdated ? "#F57F17" : "#1565C0"));
+
+            // Date with age indicator
+            String ageText;
+            if (ageInDays == 0) {
+                ageText = "today";
+            } else if (ageInDays == 1) {
+                ageText = "yesterday";
+            } else if (ageInDays > 1) {
+                ageText = String.format("%d days ago", ageInDays);
+            } else {
+                ageText = ""; // Unknown age
+            }
+
+            String detailText = date != null ?
+                String.format("Last refined: %s%s", date, ageText.isEmpty() ? "" : " (" + ageText + ")") :
+                "Last refined: Unknown";
+            Label detailLabel = new Label(detailText);
+            detailLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #424242;");
+
+            // Recommendation
+            String recommendationText = isOutdated ?
+                "The system may have shifted - consider re-aligning" :
+                "Recommendation: Proceed without refinement";
+            Label recommendationLabel = new Label(recommendationText);
+            recommendationLabel.setStyle(String.format("-fx-font-size: 11px; -fx-font-style: italic; -fx-text-fill: %s;",
+                isOutdated ? "#F57F17" : "#1565C0"));
+
+            messageBox.getChildren().addAll(titleLabel, detailLabel, recommendationLabel);
+
+            banner.getChildren().addAll(iconLabel, messageBox);
+            return banner;
         }
 
         private void updatePreviewPanel() {
