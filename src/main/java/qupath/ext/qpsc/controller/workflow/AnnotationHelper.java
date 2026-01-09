@@ -268,6 +268,68 @@ public class AnnotationHelper {
         }
     }
 
+    /**
+     * Runs tissue detection and returns the resulting annotations.
+     * This method does not check for existing annotations first - it always attempts to run detection.
+     *
+     * @param gui QuPath GUI instance
+     * @param validClasses List of class names to consider valid
+     * @return List of annotations created by tissue detection (may be empty if detection fails or is cancelled)
+     */
+    public static List<PathObject> runTissueDetection(QuPathGUI gui, List<String> validClasses) {
+        logger.info("Running tissue detection");
+
+        String tissueScript = QPPreferenceDialog.getTissueDetectionScriptProperty();
+
+        if (tissueScript == null || tissueScript.isBlank()) {
+            logger.info("No tissue detection script configured, prompting user");
+            tissueScript = promptForTissueDetectionScript();
+        }
+
+        if (tissueScript != null && !tissueScript.isBlank()) {
+            try {
+                logger.info("Running tissue detection script: {}", tissueScript);
+
+                // Get current image pixel size
+                double pixelSize = gui.getImageData().getServer()
+                        .getPixelCalibration().getAveragedPixelSizeMicrons();
+
+                // Calculate script paths and modify script with parameters
+                Map<String, String> scriptPaths = MinorFunctions.calculateScriptPaths(tissueScript);
+                String modifiedScript = TileProcessingUtilities.modifyTissueDetectScript(
+                        tissueScript,
+                        String.valueOf(pixelSize),
+                        scriptPaths.get("jsonTissueClassfierPathString")
+                );
+
+                // Run the script
+                gui.runScript(null, modifiedScript);
+                logger.info("Tissue detection completed");
+
+                // Collect annotations after tissue detection
+                List<PathObject> annotations = getCurrentValidAnnotations(gui, validClasses);
+                logger.info("Found {} annotations after tissue detection", annotations.size());
+
+                if (!annotations.isEmpty()) {
+                    ensureAnnotationNames(annotations);
+                }
+
+                return annotations;
+
+            } catch (Exception e) {
+                logger.error("Error running tissue detection", e);
+                Platform.runLater(() ->
+                        UIFunctions.notifyUserOfError(
+                                "Error running tissue detection: " + e.getMessage(),
+                                "Tissue Detection"
+                        )
+                );
+            }
+        }
+
+        return Collections.emptyList();
+    }
+
     //TODO this should probably be a part of another dialog.
 
     /**

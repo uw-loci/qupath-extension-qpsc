@@ -264,42 +264,41 @@ public class ExistingAlignmentPath {
         // with the flipped image hierarchy. Using supplyAsync() spawns a new thread that
         // may see stale image data (the original unflipped image), causing tiles to appear
         // at wrong positions.
-        try {
-            // CRITICAL: Get annotations from the CORRECT source
-            // The GUI may not have fully switched to the flipped image yet, so gui.getImageData()
-            // might return the original image's hierarchy with unflipped coordinates.
-            // We need to read from the flipped entry's saved data directly.
-            logger.info("Retrieving annotations for tile creation");
-            state.annotations = getAnnotationsFromCorrectSource();
-            if (state.annotations.isEmpty()) {
-                return CompletableFuture.failedFuture(new RuntimeException("No valid annotations found"));
-            }
 
-            logger.info("Found {} annotations for tile creation", state.annotations.size());
+        // First, ensure annotations exist (may show dialog if none found)
+        return ensureAnnotationsForTransform()
+                .thenApply(annotations -> {
+                    try {
+                        // CRITICAL: Get annotations from the CORRECT source
+                        // The GUI may not have fully switched to the flipped image yet, so gui.getImageData()
+                        // might return the original image's hierarchy with unflipped coordinates.
+                        // We need to read from the flipped entry's saved data directly.
+                        state.annotations = annotations;
+                        logger.info("Found {} annotations for tile creation", state.annotations.size());
 
-            // Log annotation positions for debugging
-            logAnnotationPositions(state.annotations);
+                        // Log annotation positions for debugging
+                        logAnnotationPositions(state.annotations);
 
-            // Create transform
-            AffineTransform fullResToStage = createFullResToStageTransform(context);
+                        // Create transform
+                        AffineTransform fullResToStage = createFullResToStageTransform(context);
 
-            // Validate transform
-            if (!validateTransform(fullResToStage)) {
-                return CompletableFuture.failedFuture(
-                        new RuntimeException("Transform validation failed - produces out-of-bounds coordinates"));
-            }
+                        // Validate transform
+                        if (!validateTransform(fullResToStage)) {
+                            throw new RuntimeException("Transform validation failed - produces out-of-bounds coordinates");
+                        }
 
-            state.transform = fullResToStage;
-            MicroscopeController.getInstance().setCurrentTransform(fullResToStage);
+                        state.transform = fullResToStage;
+                        MicroscopeController.getInstance().setCurrentTransform(fullResToStage);
 
-            // Always save alignment - refinement is handled by ExistingImageWorkflowV2.handleRefinement()
-            // to avoid double execution when single-tile refinement is selected
-            saveSlideAlignment(context);
-            return CompletableFuture.completedFuture(state);
-        } catch (Exception e) {
-            logger.error("Error in createTransform", e);
-            return CompletableFuture.failedFuture(e);
-        }
+                        // Always save alignment - refinement is handled by ExistingImageWorkflowV2.handleRefinement()
+                        // to avoid double execution when single-tile refinement is selected
+                        saveSlideAlignment(context);
+                        return state;
+                    } catch (Exception e) {
+                        logger.error("Error in createTransform", e);
+                        throw new RuntimeException("Error in createTransform: " + e.getMessage(), e);
+                    }
+                });
     }
 
     /**
@@ -767,6 +766,73 @@ public class ExistingAlignmentPath {
         boolean flipYMatches = !requiresFlipY || isFlippedY;
 
         return flipXMatches && flipYMatches;
+    }
+
+    /**
+     * Ensures annotations exist for transform creation, showing dialog if needed.
+     * This method wraps getAnnotationsFromCorrectSource() and handles the case
+     * when no annotations are found by showing an interactive dialog.
+     *
+     * @return CompletableFuture containing list of annotations
+     */
+    private CompletableFuture<java.util.List<PathObject>> ensureAnnotationsForTransform() {
+        logger.info("Retrieving annotations for tile creation");
+        java.util.List<PathObject> annotations = getAnnotationsFromCorrectSource();
+
+        if (!annotations.isEmpty()) {
+            return CompletableFuture.completedFuture(annotations);
+        }
+
+        // No annotations found - show warning dialog with options
+        logger.info("No annotations found, showing warning dialog");
+        return handleNoAnnotationsForTransform();
+    }
+
+    /**
+     * Handles the case when no annotations are found by showing a dialog with options.
+     * This method will recursively call itself if the user's choice doesn't result in annotations.
+     */
+    private CompletableFuture<java.util.List<PathObject>> handleNoAnnotationsForTransform() {
+        return UIFunctions.showAnnotationWarningDialog()
+                .thenCompose(action -> {
+                    switch (action) {
+                        case RUN_TISSUE_DETECTION:
+                            logger.info("User chose to run tissue detection");
+                            // Run tissue detection
+                            java.util.List<PathObject> annotations =
+                                AnnotationHelper.runTissueDetection(gui, state.selectedAnnotationClasses);
+
+                            if (annotations.isEmpty()) {
+                                logger.warn("Tissue detection did not create any annotations");
+                                // Show dialog again
+                                return handleNoAnnotationsForTransform();
+                            }
+
+                            logger.info("Tissue detection created {} annotations", annotations.size());
+                            return CompletableFuture.completedFuture(annotations);
+
+                        case MANUAL_ANNOTATIONS_CREATED:
+                            logger.info("User indicated manual annotations were created");
+                            // Re-check for annotations from correct source
+                            java.util.List<PathObject> manualAnnotations = getAnnotationsFromCorrectSource();
+
+                            if (manualAnnotations.isEmpty()) {
+                                logger.warn("Still no annotations found after user indicated creation");
+                                // Show dialog again
+                                return handleNoAnnotationsForTransform();
+                            }
+
+                            logger.info("Found {} manual annotations", manualAnnotations.size());
+                            return CompletableFuture.completedFuture(manualAnnotations);
+
+                        case CANCEL:
+                            logger.info("User cancelled workflow due to no annotations");
+                            throw new CancellationException("Workflow cancelled - no annotations available");
+
+                        default:
+                            throw new RuntimeException("Unexpected annotation action: " + action);
+                    }
+                });
     }
 
     /**

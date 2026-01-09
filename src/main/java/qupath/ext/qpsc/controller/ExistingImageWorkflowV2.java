@@ -200,6 +200,7 @@ public class ExistingImageWorkflowV2 {
 
         /**
          * Ensures annotations exist for acquisition, prompting for creation if needed.
+         * Shows a user-friendly dialog with options when no annotations are detected.
          */
         private CompletableFuture<WorkflowState> ensureAnnotationsExist(WorkflowState state) {
             if (state == null) return CompletableFuture.completedFuture(null);
@@ -209,19 +210,68 @@ public class ExistingImageWorkflowV2 {
                 return CompletableFuture.completedFuture(state);
             }
 
-            // Use AnnotationHelper to ensure annotations exist
+            // Determine valid annotation classes
             List<String> validClasses = state.selectedAnnotationClasses != null && !state.selectedAnnotationClasses.isEmpty()
                     ? state.selectedAnnotationClasses
                     : PersistentPreferences.getSelectedAnnotationClasses();
 
-            state.annotations = AnnotationHelper.ensureAnnotationsExist(gui, state.pixelSize, validClasses);
+            // Check for existing annotations
+            state.annotations = AnnotationHelper.getCurrentValidAnnotations(gui, validClasses);
 
-            if (state.annotations.isEmpty()) {
-                throw new RuntimeException("No valid annotations found. Please create annotations before acquisition.");
+            if (!state.annotations.isEmpty()) {
+                logger.info("Found {} existing annotations", state.annotations.size());
+                return CompletableFuture.completedFuture(state);
             }
 
-            logger.info("Ensured {} annotations exist for acquisition", state.annotations.size());
-            return CompletableFuture.completedFuture(state);
+            // No annotations found - show warning dialog with options
+            logger.info("No annotations found, showing warning dialog");
+            return handleNoAnnotations(state, validClasses);
+        }
+
+        /**
+         * Handles the case when no annotations are found by showing a dialog with options.
+         * This method will recursively call itself if the user's choice doesn't result in annotations.
+         */
+        private CompletableFuture<WorkflowState> handleNoAnnotations(WorkflowState state, List<String> validClasses) {
+            return UIFunctions.showAnnotationWarningDialog()
+                    .thenCompose(action -> {
+                        switch (action) {
+                            case RUN_TISSUE_DETECTION:
+                                logger.info("User chose to run tissue detection");
+                                // Run tissue detection
+                                state.annotations = AnnotationHelper.runTissueDetection(gui, validClasses);
+
+                                if (state.annotations.isEmpty()) {
+                                    logger.warn("Tissue detection did not create any annotations");
+                                    // Show dialog again
+                                    return handleNoAnnotations(state, validClasses);
+                                }
+
+                                logger.info("Tissue detection created {} annotations", state.annotations.size());
+                                return CompletableFuture.completedFuture(state);
+
+                            case MANUAL_ANNOTATIONS_CREATED:
+                                logger.info("User indicated manual annotations were created");
+                                // Re-check for annotations
+                                state.annotations = AnnotationHelper.getCurrentValidAnnotations(gui, validClasses);
+
+                                if (state.annotations.isEmpty()) {
+                                    logger.warn("Still no annotations found after user indicated creation");
+                                    // Show dialog again
+                                    return handleNoAnnotations(state, validClasses);
+                                }
+
+                                logger.info("Found {} manual annotations", state.annotations.size());
+                                return CompletableFuture.completedFuture(state);
+
+                            case CANCEL:
+                                logger.info("User cancelled workflow due to no annotations");
+                                throw new CancellationException("Workflow cancelled - no annotations available");
+
+                            default:
+                                throw new RuntimeException("Unexpected annotation action: " + action);
+                        }
+                    });
         }
 
         /**
@@ -518,38 +568,29 @@ public class ExistingImageWorkflowV2 {
             }
 
             // Create tiles if needed
-            // CRITICAL: Must use flip status from image metadata, not global preferences.
-            // The annotations have coordinates that match the current image's flip state,
-            // so tiles must be created with matching flip parameters to position correctly.
+            // CRITICAL: Annotations from flipped images are already in the flipped coordinate space.
+            // The tile grid generation should NOT apply additional flip transformations because
+            // that would cause a double-flip (annotations already flipped, then grid flips them again).
+            //
+            // The flip/invert parameters are for STAGE coordinate transformation (pixel -> stage),
+            // NOT for tile grid generation from annotation bounds.
+            //
+            // TODO: This is part of the larger "flipped vs inverted" terminology issue.
+            // See CLAUDE.md section "COORDINATE SYSTEM TERMINOLOGY" and TODO_LIST.md for the
+            // comprehensive review needed to properly separate optical flipping from stage inversion.
             if (state.projectInfo != null) {
-                // Get flip status from current image metadata - the actual flip state of THIS image,
-                // not from global preferences which may have changed since the image was created
-                boolean invertedX = false;
-                boolean invertedY = false;
-                ProjectImageEntry<?> currentEntry = gui.getProject() != null && gui.getImageData() != null
-                        ? gui.getProject().getEntry(gui.getImageData())
-                        : null;
-                if (currentEntry != null) {
-                    invertedX = ImageMetadataManager.isFlippedX(currentEntry);
-                    invertedY = ImageMetadataManager.isFlippedY(currentEntry);
-                    logger.debug("Using flip status from image metadata for tile creation: flipX={}, flipY={}",
-                            invertedX, invertedY);
-                } else {
-                    // Fallback to global preferences if no image entry available
-                    invertedX = QPPreferenceDialog.getInvertedXProperty();
-                    invertedY = QPPreferenceDialog.getInvertedYProperty();
-                    logger.warn("No image entry found - falling back to global preferences for tile creation");
-                }
+                logger.info("Creating tiles for refinement - annotations are in flipped image coordinate space");
 
-                // Call the 7-parameter version that accepts explicit flip parameters
+                // Pass false for both axes because annotation coordinates are already in target space
+                // The grid generation should use the annotation bounds directly without additional transformation
                 TileHelper.createTilesForAnnotations(
                         state.annotations,
                         state.sample,
                         state.projectInfo.getTempTileDirectory(),
                         state.projectInfo.getImagingModeWithIndex(),
                         state.pixelSize,
-                        invertedX,  // Explicit flip from image metadata
-                        invertedY   // Explicit flip from image metadata
+                        false,  // Don't flip X - annotations already in correct space
+                        false   // Don't flip Y - annotations already in correct space
                 );
             }
 

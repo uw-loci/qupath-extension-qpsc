@@ -976,4 +976,102 @@ public class UIFunctions {
         };
     }
 
+    /**
+     * Enum representing user's choice when no annotations are detected.
+     */
+    public enum AnnotationAction {
+        RUN_TISSUE_DETECTION,
+        MANUAL_ANNOTATIONS_CREATED,
+        CANCEL
+    }
+
+    /**
+     * Shows a non-modal warning dialog when no annotations are detected.
+     * Gives the user three options:
+     * 1. Run tissue detection script defined in properties
+     * 2. Indicate they've just created manual annotations
+     * 3. Cancel the workflow
+     *
+     * The dialog stays on top but allows interaction with QuPath.
+     *
+     * @return CompletableFuture that completes with the user's choice
+     */
+    public static CompletableFuture<AnnotationAction> showAnnotationWarningDialog() {
+        logger.info("Showing annotation warning dialog");
+
+        CompletableFuture<AnnotationAction> future = new CompletableFuture<>();
+
+        Platform.runLater(() -> {
+            Stage stage = new Stage();
+            stage.initModality(Modality.NONE); // Non-modal - user can interact with QuPath
+            stage.setTitle("No Annotations Detected");
+            stage.setAlwaysOnTop(true);
+            stage.setResizable(false);
+
+            VBox layout = new VBox(15);
+            layout.setPadding(new Insets(20));
+            layout.setMinWidth(450);
+
+            // Warning message
+            Label warningLabel = new Label("No annotations detected");
+            warningLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+
+            Label infoLabel = new Label(
+                "Annotations are needed for subsequent steps.\nPlease choose an option below:"
+            );
+            infoLabel.setWrapText(true);
+
+            Separator separator = new Separator();
+
+            // Buttons for each option
+            Button tissueDetectionButton = new Button("Run tissue detection defined in Properties");
+            tissueDetectionButton.setPrefWidth(400);
+            tissueDetectionButton.setOnAction(e -> {
+                logger.info("User chose to run tissue detection");
+                stage.close();
+                future.complete(AnnotationAction.RUN_TISSUE_DETECTION);
+            });
+
+            Button manualAnnotationsButton = new Button("I have just created manual annotations!");
+            manualAnnotationsButton.setPrefWidth(400);
+            manualAnnotationsButton.setOnAction(e -> {
+                logger.info("User indicated manual annotations were created");
+                stage.close();
+                future.complete(AnnotationAction.MANUAL_ANNOTATIONS_CREATED);
+            });
+
+            Button cancelButton = new Button("Cancel workflow");
+            cancelButton.setPrefWidth(400);
+            cancelButton.setStyle("-fx-text-fill: #d32f2f;"); // Red text for cancel
+            cancelButton.setOnAction(e -> {
+                logger.info("User cancelled workflow from annotation warning dialog");
+                stage.close();
+                future.complete(AnnotationAction.CANCEL);
+            });
+
+            // Handle window close (treat as cancel)
+            stage.setOnCloseRequest(e -> {
+                if (!future.isDone()) {
+                    logger.info("Annotation warning dialog closed - treating as cancel");
+                    future.complete(AnnotationAction.CANCEL);
+                }
+            });
+
+            layout.getChildren().addAll(
+                warningLabel,
+                infoLabel,
+                separator,
+                tissueDetectionButton,
+                manualAnnotationsButton,
+                cancelButton
+            );
+
+            Scene scene = new Scene(layout);
+            stage.setScene(scene);
+            stage.show();
+        });
+
+        return future;
+    }
+
 }
