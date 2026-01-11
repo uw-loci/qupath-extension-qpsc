@@ -883,12 +883,18 @@ public class ExistingImageAcquisitionController {
          * @return true if using a previously refined alignment
          */
         private boolean isUsingRefinedAlignment() {
+            AffineTransformManager.TransformPreset preset = transformCombo.getValue();
             if (preset == null || preset.getTransform() == null) {
                 return false;
             }
 
             // Check if this is a slide-specific alignment
             // Slide-specific alignments are saved when single-tile refinement is performed
+            QuPathGUI gui = QuPathGUI.getInstance();
+            if (gui == null || gui.getImageData() == null) {
+                return false;
+            }
+
             String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
             if (imageName == null) {
                 return false;
@@ -911,6 +917,11 @@ public class ExistingImageAcquisitionController {
          * @return formatted date string, or null if not available
          */
         private String getRefinedAlignmentDate() {
+            QuPathGUI gui = QuPathGUI.getInstance();
+            if (gui == null || gui.getImageData() == null) {
+                return null;
+            }
+
             String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
             if (imageName == null) {
                 return null;
@@ -942,6 +953,11 @@ public class ExistingImageAcquisitionController {
          * @return number of days since alignment was created, or -1 if unable to determine
          */
         private long getAlignmentAgeInDays() {
+            QuPathGUI gui = QuPathGUI.getInstance();
+            if (gui == null || gui.getImageData() == null) {
+                return -1;
+            }
+
             String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
             if (imageName == null) {
                 return -1;
