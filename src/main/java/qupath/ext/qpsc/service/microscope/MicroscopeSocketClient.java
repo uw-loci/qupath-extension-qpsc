@@ -98,6 +98,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * Each command is exactly 8 bytes with trailing underscores for padding.
      */
     public enum Command {
+        /** Send microscope configuration file path (CRITICAL - must be first command after connection) */
+        CONFIG("config__"),
         /** Get XY stage position */
         GETXY("getxy___"),
         /** Get Z stage position */
@@ -267,6 +269,21 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
                 logger.info("Successfully connected to microscope server");
 
+                // CRITICAL: Send config immediately after connection
+                try {
+                    sendConfig();
+                } catch (IllegalStateException e) {
+                    // Config not set - close connection and fail
+                    logger.error("Config not set: {}", e.getMessage());
+                    cleanup();
+                    throw new IOException("Connection failed: " + e.getMessage(), e);
+                } catch (IOException e) {
+                    // Config send failed - close connection and fail
+                    logger.error("Failed to send config to server: {}", e.getMessage());
+                    cleanup();
+                    throw new IOException("Failed to configure server: " + e.getMessage(), e);
+                }
+
             } catch (IOException e) {
                 cleanup();
                 throw new IOException("Failed to connect to microscope server: " + e.getMessage(), e);
@@ -294,6 +311,97 @@ public class MicroscopeSocketClient implements AutoCloseable {
             logger.info("Disconnected from microscope server");
         }
     }
+
+    /**
+     * Send microscope configuration file path to server (CONFIG command).
+     *
+     * CRITICAL: This must be called immediately after connection to configure the server
+     * with the correct microscope settings. Operating with wrong config could damage hardware.
+     *
+     * @throws IOException if communication fails
+     * @throws IllegalStateException if config file path is not set in preferences
+     */
+    public void sendConfig() throws IOException {
+        if (!isConnected()) {
+            throw new IllegalStateException("Cannot send config - not connected to server");
+        }
+
+        // Get config path from preferences
+        String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
+
+        // SAFETY CHECK: Config path MUST be set
+        if (configPath == null || configPath.trim().isEmpty()) {
+            throw new IllegalStateException(
+                "Microscope config file path not set in preferences! " +
+                "Go to Edit > Preferences > QPSC to set the microscope configuration file."
+            );
+        }
+
+        logger.info("Sending CONFIG command with path: {}", configPath);
+
+        synchronized (socketLock) {
+            try {
+                // Send CONFIG command (8 bytes)
+                output.write(Command.CONFIG.getValue());
+                output.flush();
+
+                // Send config path length (4 bytes, big-endian)
+                byte[] pathBytes = configPath.getBytes(StandardCharsets.UTF_8);
+                ByteBuffer lengthBuffer = ByteBuffer.allocate(4);
+                lengthBuffer.order(ByteOrder.BIG_ENDIAN);
+                lengthBuffer.putInt(pathBytes.length);
+                output.write(lengthBuffer.array());
+
+                // Send config path string
+                output.write(pathBytes);
+                output.flush();
+
+                logger.debug("Sent config path ({} bytes)", pathBytes.length);
+
+                // Read response (8 bytes)
+                byte[] response = new byte[8];
+                input.readFully(response);
+                String responseStr = new String(response, StandardCharsets.UTF_8);
+
+                if ("CFG___OK".equals(responseStr)) {
+                    logger.info("Server config loaded successfully");
+                } else if ("CFG_FAIL".equals(responseStr)) {
+                    // Read error message: 4-byte length + message
+                    byte[] lengthBytes = new byte[4];
+                    input.readFully(lengthBytes);
+                    ByteBuffer lengthBuf = ByteBuffer.wrap(lengthBytes);
+                    lengthBuf.order(ByteOrder.BIG_ENDIAN);
+                    int errorLength = lengthBuf.getInt();
+
+                    byte[] errorBytes = new byte[errorLength];
+                    input.readFully(errorBytes);
+                    String errorMsg = new String(errorBytes, StandardCharsets.UTF_8);
+
+                    throw new IOException("Server failed to load config: " + errorMsg);
+                } else if ("CFG_BLCK".equals(responseStr)) {
+                    // Another connection is active
+                    byte[] lengthBytes = new byte[4];
+                    input.readFully(lengthBytes);
+                    ByteBuffer lengthBuf = ByteBuffer.wrap(lengthBytes);
+                    lengthBuf.order(ByteOrder.BIG_ENDIAN);
+                    int msgLength = lengthBuf.getInt();
+
+                    byte[] msgBytes = new byte[msgLength];
+                    input.readFully(msgBytes);
+                    String msg = new String(msgBytes, StandardCharsets.UTF_8);
+
+                    throw new IOException("Server connection blocked: " + msg);
+                } else {
+                    throw new IOException("Unexpected CONFIG response: " + responseStr);
+                }
+            } catch (EOFException e) {
+                throw new IOException("Server closed connection during CONFIG", e);
+            } catch (SocketTimeoutException e) {
+                throw new IOException("Timeout waiting for CONFIG response from server", e);
+            }
+        }
+    }
+
     /**
      * Gets the current camera field of view in microns.
      * This returns the actual FOV dimensions accounting for the current objective
