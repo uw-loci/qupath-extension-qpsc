@@ -57,14 +57,10 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create or Update Release
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref }}
-          release_name: QPSC Extension ${{ steps.get_version.outputs.version }}
+          name: QPSC Extension ${{ steps.get_version.outputs.version }}
           body: |
             ## QPSC QuPath Extension ${{ steps.get_version.outputs.version }}
 
@@ -96,22 +92,12 @@ jobs:
             ### Installation Script
 
             For automated setup on Windows, use the [PPM-QuPath.ps1](https://github.com/uw-loci/QPSC/blob/main/PPM-QuPath.ps1) script.
+          files: ${{ steps.find_jar.outputs.jar_path }}
           draft: false
           prerelease: false
 
-      - name: Upload JAR to Release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ steps.find_jar.outputs.jar_path }}
-          asset_name: ${{ steps.find_jar.outputs.jar_name }}
-          asset_content_type: application/java-archive
-
       - name: Release Summary
         run: |
-          echo "✅ Release created successfully!"
+          echo "✅ Release created/updated successfully!"
           echo "📦 Artifact: ${{ steps.find_jar.outputs.jar_name }}"
           echo "🏷️  Version: ${{ steps.get_version.outputs.version }}"
-          echo "🔗 Release URL: ${{ steps.create_release.outputs.html_url }}"
