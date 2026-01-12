@@ -23,6 +23,18 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
+      - name: Checkout tiles-to-pyramid dependency
+        uses: actions/checkout@v4
+        with:
+          repository: uw-loci/qupath-extension-tiles-to-pyramid
+          path: tiles-to-pyramid
+
+      - name: Build and publish tiles-to-pyramid to mavenLocal
+        working-directory: tiles-to-pyramid
+        run: |
+          chmod +x gradlew
+          ./gradlew publishToMavenLocal
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
