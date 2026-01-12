@@ -165,28 +165,38 @@ public class AnnotationHelper {
         var hierarchy = gui.getImageData().getHierarchy();
         var allAnnotations = hierarchy.getAnnotationObjects();
 
+        // If validClasses is null or empty, accept ALL annotations (don't filter by class)
+        // This handles the case where no classes are selected yet but tissue detection created annotations
         var annotations = allAnnotations.stream()
-                .filter(ann -> ann.getROI() != null && !ann.getROI().isEmpty())
-                .filter(ann -> ann.getPathClass() != null &&
-                        validClasses.contains(ann.getPathClass().getName()))
-                .collect(Collectors.toList());
+                .filter(ann -> ann.getROI() != null && !ann.getROI().isEmpty());
+
+        // Only filter by class if validClasses is provided and not empty
+        if (validClasses != null && !validClasses.isEmpty()) {
+            annotations = annotations.filter(ann -> ann.getPathClass() != null &&
+                    validClasses.contains(ann.getPathClass().getName()));
+            logger.debug("Filtering by annotation classes: {}", validClasses);
+        } else {
+            logger.debug("No class filter - accepting all annotations with valid ROIs");
+        }
+
+        var finalAnnotations = annotations.collect(Collectors.toList());
 
         // Log annotation positions to help diagnose coordinate issues
-        if (!annotations.isEmpty()) {
-            PathObject firstAnn = annotations.get(0);
+        if (!finalAnnotations.isEmpty()) {
+            PathObject firstAnn = finalAnnotations.get(0);
             logger.info("Found {} valid annotations. First annotation '{}' at position: ({}, {}) size: {}x{}",
-                    annotations.size(),
+                    finalAnnotations.size(),
                     firstAnn.getName() != null ? firstAnn.getName() : "unnamed",
                     firstAnn.getROI().getBoundsX(),
                     firstAnn.getROI().getBoundsY(),
                     firstAnn.getROI().getBoundsWidth(),
                     firstAnn.getROI().getBoundsHeight());
         } else {
-            logger.debug("Found {} valid annotations from {} total with classes: {} (using GUI hierarchy)",
-                    annotations.size(), allAnnotations.size(), validClasses);
+            logger.debug("Found {} valid annotations from {} total (using GUI hierarchy)",
+                    finalAnnotations.size(), allAnnotations.size());
         }
 
-        return annotations;
+        return finalAnnotations;
     }
 
     /**
@@ -210,16 +220,22 @@ public class AnnotationHelper {
      */
     @Deprecated
     public static List<PathObject> getCurrentValidAnnotations(List<String> validClasses) {
+        // If validClasses is null or empty, accept ALL annotations (don't filter by class)
         var annotations = QP.getAnnotationObjects().stream()
-                .filter(ann -> ann.getROI() != null && !ann.getROI().isEmpty())
-                .filter(ann -> ann.getPathClass() != null &&
-                        validClasses.contains(ann.getPathClass().getName()))
-                .collect(Collectors.toList());
+                .filter(ann -> ann.getROI() != null && !ann.getROI().isEmpty());
 
-        logger.debug("Found {} valid annotations from {} total with classes: {}",
-                annotations.size(), QP.getAnnotationObjects().size(), validClasses);
+        // Only filter by class if validClasses is provided and not empty
+        if (validClasses != null && !validClasses.isEmpty()) {
+            annotations = annotations.filter(ann -> ann.getPathClass() != null &&
+                    validClasses.contains(ann.getPathClass().getName()));
+        }
 
-        return annotations;
+        var finalAnnotations = annotations.collect(Collectors.toList());
+
+        logger.debug("Found {} valid annotations from {} total",
+                finalAnnotations.size(), QP.getAnnotationObjects().size());
+
+        return finalAnnotations;
     }
 
     /**

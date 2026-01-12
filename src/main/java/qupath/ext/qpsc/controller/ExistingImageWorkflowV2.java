@@ -440,7 +440,7 @@ public class ExistingImageWorkflowV2 {
                         Project<BufferedImage> project = (Project<BufferedImage>) projectInfo.getCurrentProject();
                         return ImageFlipHelper.validateAndFlipIfNeeded(gui, project, state.sample);
                     })
-                    .thenApply(validated -> {
+                    .thenCompose(validated -> {
                         if (!validated) {
                             throw new RuntimeException("Image validation failed");
                         }
@@ -449,19 +449,16 @@ public class ExistingImageWorkflowV2 {
                         state.pixelSize = getPixelSizeFromPreferences();
 
                         // Use selected classes or preferences
-                        List<String> validClasses = (state.selectedAnnotationClasses != null && !state.selectedAnnotationClasses.isEmpty())
+                        state.selectedAnnotationClasses = (state.selectedAnnotationClasses != null && !state.selectedAnnotationClasses.isEmpty())
                                 ? state.selectedAnnotationClasses
                                 : PersistentPreferences.getSelectedAnnotationClasses();
 
-                        // Ensure annotations exist using the working implementation
-                        state.annotations = AnnotationHelper.ensureAnnotationsExist(gui, state.pixelSize, validClasses);
-
-                        if (state.annotations.isEmpty()) {
-                            throw new RuntimeException("No valid annotations found");
-                        }
-
-                        logger.info("Slide-specific alignment ready with {} annotations", state.annotations.size());
-                        return state;
+                        // Use the new dialog-based annotation handling (non-blocking)
+                        return ensureAnnotationsExist(state);
+                    })
+                    .thenApply(finalState -> {
+                        logger.info("Slide-specific alignment ready with {} annotations", finalState.annotations.size());
+                        return finalState;
                     });
         }
 
