@@ -215,7 +215,18 @@ public class ExistingImageWorkflowV2 {
                     ? state.selectedAnnotationClasses
                     : PersistentPreferences.getSelectedAnnotationClasses();
 
-            // Check for existing annotations
+            // CRITICAL: If no annotation classes are configured, we MUST show the dialog
+            // to let the user either run tissue detection or create annotations manually.
+            // We should NOT search for existing annotations when validClasses is empty because:
+            // 1. It would find ANY annotations (including stale ones from previous runs)
+            // 2. Those annotations might be from the wrong image (original vs flipped)
+            // 3. It bypasses the user's ability to configure what they want
+            if (validClasses == null || validClasses.isEmpty()) {
+                logger.info("No annotation classes configured - showing dialog to guide user");
+                return handleNoAnnotations(state, validClasses);
+            }
+
+            // Check for existing annotations with the specified classes
             state.annotations = AnnotationHelper.getCurrentValidAnnotations(gui, validClasses);
 
             if (!state.annotations.isEmpty()) {
