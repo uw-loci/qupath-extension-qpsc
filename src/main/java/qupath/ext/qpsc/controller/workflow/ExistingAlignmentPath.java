@@ -889,12 +889,20 @@ public class ExistingAlignmentPath {
             var hierarchy = flippedData.getHierarchy();
             var allAnnotations = hierarchy.getAnnotationObjects();
 
-            // Filter by selected classes
-            java.util.List<PathObject> annotations = allAnnotations.stream()
-                    .filter(ann -> ann.getROI() != null && !ann.getROI().isEmpty())
-                    .filter(ann -> ann.getPathClass() != null &&
-                            state.selectedAnnotationClasses.contains(ann.getPathClass().getName()))
-                    .collect(java.util.stream.Collectors.toList());
+            // Filter by selected classes (if any specified)
+            var annotationStream = allAnnotations.stream()
+                    .filter(ann -> ann.getROI() != null && !ann.getROI().isEmpty());
+
+            // Only filter by class if selectedAnnotationClasses is provided and not empty
+            if (state.selectedAnnotationClasses != null && !state.selectedAnnotationClasses.isEmpty()) {
+                annotationStream = annotationStream.filter(ann -> ann.getPathClass() != null &&
+                        state.selectedAnnotationClasses.contains(ann.getPathClass().getName()));
+                logger.debug("Filtering flipped entry annotations by classes: {}", state.selectedAnnotationClasses);
+            } else {
+                logger.debug("No class filter - accepting all annotations from flipped entry");
+            }
+
+            java.util.List<PathObject> annotations = annotationStream.collect(java.util.stream.Collectors.toList());
 
             if (!annotations.isEmpty()) {
                 PathObject firstAnn = annotations.get(0);
