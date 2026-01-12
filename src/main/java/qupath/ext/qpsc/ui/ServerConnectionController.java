@@ -372,6 +372,28 @@ public class ServerConnectionController {
      * Tests the connection with current settings.
      */
     private void testConnection() {
+        // SAFETY CHECK: Validate config is set before attempting connection
+        String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        if (configPath == null || configPath.trim().isEmpty()) {
+            Platform.runLater(() -> {
+                statusLabel.setText("❌ Config Not Set");
+                statusLabel.setTextFill(Color.RED);
+
+                javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.ERROR);
+                alert.setTitle("Config Not Set");
+                alert.setHeaderText("Microscope configuration file not set");
+                alert.setContentText(
+                    "Please set the microscope configuration file path in the Preferences tab below.\n\n" +
+                    "This is required for safe operation - the wrong config could damage the microscope!"
+                );
+                alert.showAndWait();
+
+                logMessage("ERROR: Microscope config file not set!");
+                logMessage("Go to Preferences tab and set the config file path.");
+            });
+            return;
+        }
+
         // Show progress
         progressIndicator.setVisible(true);
         statusLabel.setText(res.getString("server.status.testing"));
@@ -423,7 +445,26 @@ public class ServerConnectionController {
                 logMessage("Connection failed: " + error);
 
                 // Provide helpful guidance based on error type
-                if (error != null && (error.contains("Connection refused") || error.contains("connect"))) {
+                if (error != null && error.contains("config file path not set")) {
+                    logMessage("");
+                    logMessage("CRITICAL: Microscope config file not set!");
+                    logMessage("This should have been caught earlier - please report this bug.");
+                    logMessage("Go to Preferences tab and set the config file path.");
+                } else if (error != null && error.contains("connection blocked")) {
+                    logMessage("");
+                    logMessage("TROUBLESHOOTING:");
+                    logMessage("1. Another QuPath instance is already connected to the server");
+                    logMessage("2. Only ONE connection is allowed at a time for safety");
+                    logMessage("3. Close the other QuPath instance or disconnect it");
+                    logMessage("4. Wait a few seconds and try again");
+                } else if (error != null && error.contains("Failed to load config")) {
+                    logMessage("");
+                    logMessage("TROUBLESHOOTING:");
+                    logMessage("1. Server could not load the config file");
+                    logMessage("2. Check that the config file path is correct (see Preferences tab)");
+                    logMessage("3. Verify the config file is valid YAML format");
+                    logMessage("4. Ensure the config file has required sections (microscope, stage, id_detector)");
+                } else if (error != null && (error.contains("Connection refused") || error.contains("connect"))) {
                     logMessage("");
                     logMessage("TROUBLESHOOTING:");
                     logMessage("1. Make sure the Python microscope server is running");

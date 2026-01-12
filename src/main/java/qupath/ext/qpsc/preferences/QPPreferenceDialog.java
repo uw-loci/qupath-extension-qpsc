@@ -144,7 +144,9 @@ public class QPPreferenceDialog {
                 .propertyType(PropertyItemBuilder.PropertyType.FILE)
                 .name("Microscope Config File")
                 .category(CATEGORY)
-                .description("Path to YAML config describing your microscope setup.")
+                .description("Path to YAML config describing your microscope setup.\n\n" +
+                        "⚠️ REQUIRED: This must be set before connecting to the microscope server.\n" +
+                        "⚠️ CRITICAL: Using the wrong config could damage the microscope!")
                 .build());
 
         items.add(new PropertyItemBuilder<>(projectsFolderProperty, String.class)

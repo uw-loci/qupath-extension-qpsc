@@ -86,9 +86,26 @@ public class MicroscopeController {
                         new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date())
                 );
             } catch (IOException e) {
-                logger.warn("Failed to connect to microscope server on startup: {}", e.getMessage());
-                logger.info("Will attempt to connect when first command is sent");
-                PersistentPreferences.setSocketLastConnectionStatus("Failed: " + e.getMessage());
+                String errorMsg = e.getMessage();
+
+                // Provide specific guidance based on error type
+                if (errorMsg != null && errorMsg.contains("config file path not set")) {
+                    logger.warn("Cannot connect: Microscope config file not set in preferences");
+                    logger.warn("Go to Edit > Preferences > QPSC to set the configuration file path");
+                    PersistentPreferences.setSocketLastConnectionStatus("Config Not Set - See Preferences");
+                } else if (errorMsg != null && errorMsg.contains("connection blocked")) {
+                    logger.warn("Cannot connect: Another QuPath instance is already connected to the server");
+                    logger.warn("Only one connection allowed at a time for safety");
+                    PersistentPreferences.setSocketLastConnectionStatus("Blocked - Another Connection Active");
+                } else if (errorMsg != null && errorMsg.contains("Failed to load config")) {
+                    logger.warn("Cannot connect: Server failed to load config - {}", errorMsg);
+                    logger.warn("Check that the config file path is correct and file is valid");
+                    PersistentPreferences.setSocketLastConnectionStatus("Config Load Failed");
+                } else {
+                    logger.warn("Failed to connect to microscope server on startup: {}", errorMsg);
+                    logger.info("Will attempt to connect when first command is sent");
+                    PersistentPreferences.setSocketLastConnectionStatus("Failed: " + errorMsg);
+                }
             }
         }
 
