@@ -797,10 +797,11 @@ public class ExistingAlignmentPath {
                 .thenCompose(action -> {
                     switch (action) {
                         case RUN_TISSUE_DETECTION:
-                            logger.info("User chose to run tissue detection");
-                            // Run tissue detection
+                            logger.info("User chose to run tissue detection for alignment");
+                            // Run tissue detection - get ALL annotations (no class filter)
+                            // Class filtering happens later during acquisition, not during alignment
                             java.util.List<PathObject> annotations =
-                                AnnotationHelper.runTissueDetection(gui, state.selectedAnnotationClasses);
+                                AnnotationHelper.runTissueDetection(gui, null);  // null = no class filter
 
                             if (annotations.isEmpty()) {
                                 logger.warn("Tissue detection did not create any annotations");
@@ -808,7 +809,7 @@ public class ExistingAlignmentPath {
                                 return handleNoAnnotationsForTransform();
                             }
 
-                            logger.info("Tissue detection created {} annotations", annotations.size());
+                            logger.info("Tissue detection created {} annotations for alignment", annotations.size());
                             return CompletableFuture.completedFuture(annotations);
 
                         case MANUAL_ANNOTATIONS_CREATED:
@@ -852,17 +853,19 @@ public class ExistingAlignmentPath {
         boolean requiresFlipX = QPPreferenceDialog.getFlipMacroXProperty();
         boolean requiresFlipY = QPPreferenceDialog.getFlipMacroYProperty();
 
-        // If no flip required, use normal annotation retrieval
+        // If no flip required, get ALL annotations from current GUI hierarchy
+        // NOTE: Do NOT filter by class - alignment needs all annotations regardless of class
+        // Class filtering happens later during acquisition, not during alignment
         if (!requiresFlipX && !requiresFlipY) {
-            logger.info("No flip required - using standard annotation retrieval");
-            return AnnotationHelper.ensureAnnotationsExist(gui, state.pixelSize, state.selectedAnnotationClasses);
+            logger.info("No flip required - retrieving all annotations from GUI hierarchy");
+            return AnnotationHelper.getCurrentValidAnnotations(gui, null);  // null = no class filter
         }
 
         // Flip is required - we need to read from the flipped entry directly
         Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
         if (project == null) {
             logger.error("No project available - falling back to GUI hierarchy");
-            return AnnotationHelper.ensureAnnotationsExist(gui, state.pixelSize, state.selectedAnnotationClasses);
+            return AnnotationHelper.getCurrentValidAnnotations(gui, null);  // null = no class filter
         }
 
         // Find the flipped entry
@@ -879,7 +882,7 @@ public class ExistingAlignmentPath {
 
         if (flippedEntry == null) {
             logger.error("Could not find flipped entry - falling back to GUI hierarchy");
-            return AnnotationHelper.ensureAnnotationsExist(gui, state.pixelSize, state.selectedAnnotationClasses);
+            return AnnotationHelper.getCurrentValidAnnotations(gui, null);  // null = no class filter
         }
 
         // Read annotations directly from the flipped entry's saved data
@@ -889,20 +892,14 @@ public class ExistingAlignmentPath {
             var hierarchy = flippedData.getHierarchy();
             var allAnnotations = hierarchy.getAnnotationObjects();
 
-            // Filter by selected classes (if any specified)
-            var annotationStream = allAnnotations.stream()
-                    .filter(ann -> ann.getROI() != null && !ann.getROI().isEmpty());
+            // Get ALL annotations - NO class filtering at alignment stage
+            // Class filtering happens later during acquisition selection, not during alignment
+            java.util.List<PathObject> annotations = allAnnotations.stream()
+                    .filter(ann -> ann.getROI() != null && !ann.getROI().isEmpty())
+                    .collect(java.util.stream.Collectors.toList());
 
-            // Only filter by class if selectedAnnotationClasses is provided and not empty
-            if (state.selectedAnnotationClasses != null && !state.selectedAnnotationClasses.isEmpty()) {
-                annotationStream = annotationStream.filter(ann -> ann.getPathClass() != null &&
-                        state.selectedAnnotationClasses.contains(ann.getPathClass().getName()));
-                logger.debug("Filtering flipped entry annotations by classes: {}", state.selectedAnnotationClasses);
-            } else {
-                logger.debug("No class filter - accepting all annotations from flipped entry");
-            }
-
-            java.util.List<PathObject> annotations = annotationStream.collect(java.util.stream.Collectors.toList());
+            logger.info("Retrieved {} annotations from flipped entry (no class filter applied)",
+                    annotations.size());
 
             if (!annotations.isEmpty()) {
                 PathObject firstAnn = annotations.get(0);
@@ -919,10 +916,10 @@ public class ExistingAlignmentPath {
                 logger.info("First annotation position: {}% x, {}% y (flipped coordinates)",
                         String.format("%.1f", xPercent), String.format("%.1f", yPercent));
             } else {
-                // No annotations in flipped entry - run tissue detection
-                // This will create annotations on the currently displayed (flipped) image
-                logger.info("No annotations in flipped entry - running tissue detection");
-                return AnnotationHelper.ensureAnnotationsExist(gui, state.pixelSize, state.selectedAnnotationClasses);
+                // No annotations in flipped entry - they need to be created
+                // Return empty list so ensureAnnotationsForTransform will show the dialog
+                logger.info("No annotations in flipped entry - will show dialog to create them");
+                return java.util.Collections.emptyList();
             }
 
             // Ensure annotation names
@@ -943,7 +940,7 @@ public class ExistingAlignmentPath {
         } catch (Exception e) {
             logger.error("Failed to read annotations from flipped entry: {}", e.getMessage());
             logger.error("Falling back to GUI hierarchy (may have wrong coordinates!)");
-            return AnnotationHelper.ensureAnnotationsExist(gui, state.pixelSize, state.selectedAnnotationClasses);
+            return AnnotationHelper.getCurrentValidAnnotations(gui, null);  // null = no class filter
         }
     }
 
