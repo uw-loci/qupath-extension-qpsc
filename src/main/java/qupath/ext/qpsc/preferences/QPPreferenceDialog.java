@@ -108,6 +108,10 @@ public class QPPreferenceDialog {
     private static final StringProperty metadataPropagationPrefixProperty =
             PathPrefs.createPersistentPreference("MetadataPropagationPrefix", "OCR");
 
+    // Autofocus behavior - DANGER: May result in out-of-focus regions
+    private static final BooleanProperty skipManualAutofocusProperty =
+            PathPrefs.createPersistentPreference("skipManualAutofocus", false);
+
     /**
      * Register all preferences in QuPath's PreferencePane. Call once during extension installation.
      */
@@ -217,6 +221,17 @@ public class QPPreferenceDialog {
                 .description("Automatically connect to microscope server when QuPath starts")
                 .build());
 
+        items.add(new PropertyItemBuilder<>(skipManualAutofocusProperty, Boolean.class)
+                .name("No Manual Autofocus (Danger)")
+                .category(CATEGORY)
+                .description("WARNING: Enabling this setting may result in out-of-focus regions!\n\n" +
+                             "When enabled, the manual autofocus dialog will never appear. " +
+                             "If autofocus fails, the system will automatically retry once and then " +
+                             "continue imaging with whatever focus level results.\n\n" +
+                             "Only enable this for unattended acquisition where some out-of-focus " +
+                             "regions are acceptable.")
+                .build());
+
         // Filename configuration section
         items.add(new PropertyItemBuilder<>(includeObjectiveInFilenameProperty, Boolean.class)
                 .name("Image name includes: Objective")
@@ -302,6 +317,17 @@ public class QPPreferenceDialog {
         autoConnectToServerProperty.set(autoConnect);
     }
 
+    /**
+     * Returns true if manual autofocus dialogs should be bypassed.
+     * WARNING: This may result in out-of-focus imaging regions.
+     */
+    public static boolean getSkipManualAutofocus() {
+        return skipManualAutofocusProperty.get();
+    }
+
+    public static void setSkipManualAutofocus(boolean skip) {
+        skipManualAutofocusProperty.set(skip);
+    }
 
     public static String getMicroscopeConfigFileProperty() {
         return microscopeConfigFileProperty.get();
