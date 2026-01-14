@@ -39,6 +39,7 @@ public class AcquisitionCommandBuilder {
 
     // White balance parameters
     private boolean whiteBalanceEnabled = true;
+    private boolean perAngleWhiteBalance = false;
 
     // Autofocus parameters
     private Integer autofocusNTiles;
@@ -165,7 +166,17 @@ public class AcquisitionCommandBuilder {
      * @param enabled Whether white balance is enabled
      */
     public AcquisitionCommandBuilder whiteBalance(boolean enabled) {
+        return whiteBalance(enabled, false);
+    }
+
+    /**
+     * Configure white balance with per-angle option
+     * @param enabled Whether white balance is enabled
+     * @param perAngle Whether to use per-angle white balance (PPM mode)
+     */
+    public AcquisitionCommandBuilder whiteBalance(boolean enabled, boolean perAngle) {
         this.whiteBalanceEnabled = enabled;
+        this.perAngleWhiteBalance = perAngle;
         if (enabled && !processingSteps.contains("white_balance")) {
             processingSteps.add("white_balance");
         }
@@ -363,8 +374,11 @@ public class AcquisitionCommandBuilder {
             }
         }
 
-        // Add white balance parameter
+        // Add white balance parameters
         args.addAll(Arrays.asList("--white-balance", String.valueOf(whiteBalanceEnabled)));
+        if (whiteBalanceEnabled && perAngleWhiteBalance) {
+            args.addAll(Arrays.asList("--wb-per-angle", "true"));
+        }
 
         // Add autofocus parameters
         if (autofocusNTiles != null && autofocusNSteps != null && autofocusSearchRange != null) {

@@ -48,6 +48,7 @@ public class BackgroundCollectionController {
     private ComboBox<String> modalityComboBox;
     private ComboBox<String> objectiveComboBox;
     private TextField outputPathField;
+    private CheckBox perAngleWhiteBalanceCheckBox;
     private VBox exposureControlsPane;
     private List<AngleExposure> currentAngleExposures = new ArrayList<>();
     private List<TextField> exposureFields = new ArrayList<>();
@@ -215,7 +216,16 @@ public class BackgroundCollectionController {
         
         // Set default output path
         setDefaultOutputPath();
-        
+
+        // Per-angle white balance checkbox
+        perAngleWhiteBalanceCheckBox = new CheckBox("Use different white balance per angle");
+        perAngleWhiteBalanceCheckBox.setSelected(false);
+        perAngleWhiteBalanceCheckBox.setTooltip(new Tooltip(
+                "If checked, applies angle-specific white balance settings from PPM calibration.\n" +
+                "If unchecked, uses single white balance at 90 deg (uncrossed).\n\n" +
+                "Run 'White Balance Calibration' (PPM mode) first to generate per-angle settings."
+        ));
+
         // Exposure controls (will be populated when modality AND objective are selected)
         Label exposureLabel = new Label("Exposure Times (ms):");
         exposureControlsPane = new VBox(10);
@@ -229,6 +239,7 @@ public class BackgroundCollectionController {
                 instructionLabel,
                 new Separator(),
                 modalityPane,
+                perAngleWhiteBalanceCheckBox,
                 new Separator(),
                 exposureLabel,
                 backgroundValidationLabel,
@@ -577,7 +588,8 @@ public class BackgroundCollectionController {
 
             // Remove the settingsMatchExisting check - it's not relevant for background collection
             // We're creating new backgrounds, not using them for correction
-            return new BackgroundCollectionResult(modality, objective, finalExposures, outputPath);
+            boolean usePerAngleWB = perAngleWhiteBalanceCheckBox.isSelected();
+            return new BackgroundCollectionResult(modality, objective, finalExposures, outputPath, usePerAngleWB);
 
         } catch (Exception e) {
             logger.error("Error creating result", e);

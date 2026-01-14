@@ -570,12 +570,19 @@ public class AcquisitionManager {
                         WSI_pixelSize_um
                     );
 
+                // Apply JAI camera white balance settings from workflow state
+                config.commandBuilder().whiteBalance(
+                        state.enableWhiteBalance,
+                        state.perAngleWhiteBalance
+                );
+
                 logger.info("Acquisition parameters for {}:", annotation.getName());
                 logger.info("  Config: {}", configFileLocation);
                 logger.info("  Sample: {}", actualSampleName);
-                logger.info("  Hardware: {} / {} @ {} µm/px", config.objective(), config.detector(), config.WSI_pixelSize_um());
-                logger.info("  Autofocus: {} tiles, {} steps, {} µm range", config.afTiles(), config.afSteps(), config.afRange());
+                logger.info("  Hardware: {} / {} @ {} um/px", config.objective(), config.detector(), config.WSI_pixelSize_um());
+                logger.info("  Autofocus: {} tiles, {} steps, {} um range", config.afTiles(), config.afSteps(), config.afRange());
                 logger.info("  Processing: {}", config.processingSteps());
+                logger.info("  White balance: enabled={}, perAngle={}", state.enableWhiteBalance, state.perAngleWhiteBalance);
                 if (config.bgEnabled()) {
                     logger.info("  Background correction: {} method from {}", config.bgMethod(), config.bgFolder());
                 }

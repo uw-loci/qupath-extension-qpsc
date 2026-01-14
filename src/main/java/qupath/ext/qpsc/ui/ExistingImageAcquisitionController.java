@@ -109,7 +109,11 @@ public class ExistingImageAcquisitionController {
             RefinementChoice refinementChoice,
 
             // Advanced (green box params handled by ExistingAlignmentPath)
-            Map<String, Double> angleOverrides
+            Map<String, Double> angleOverrides,
+
+            // White balance settings (JAI camera only)
+            boolean enableWhiteBalance,
+            boolean perAngleWhiteBalance
     ) {}
 
     /**
@@ -196,6 +200,11 @@ public class ExistingImageAcquisitionController {
         private ModalityHandler.BoundingBoxUI modalityUI;
         private TitledPane modalityPane;
         private VBox modalityContent;
+
+        // UI Components - White Balance Section (JAI camera only)
+        private VBox whiteBalanceSection;
+        private CheckBox enableWhiteBalanceCheckBox;
+        private CheckBox perAngleWhiteBalanceCheckBox;
 
         // UI Components - Preview Section
         private Label previewAnnotationsLabel;
@@ -462,7 +471,10 @@ public class ExistingImageAcquisitionController {
             // Preview updates on hardware change
             modalityBox.valueProperty().addListener((obs, old, newVal) -> triggerPreviewUpdate());
             objectiveBox.valueProperty().addListener((obs, old, newVal) -> triggerPreviewUpdate());
-            detectorBox.valueProperty().addListener((obs, old, newVal) -> triggerPreviewUpdate());
+            detectorBox.valueProperty().addListener((obs, old, newVal) -> {
+                triggerPreviewUpdate();
+                updateWhiteBalanceVisibility();  // Update WB section visibility when detector changes
+            });
 
             int row = 0;
             grid.add(new Label("Modality:"), 0, row);
@@ -684,6 +696,34 @@ public class ExistingImageAcquisitionController {
             // Note: Green box detection parameters are handled by ExistingAlignmentPath
             // which shows its own dialog during the alignment process
 
+            // === JAI WHITE BALANCE SECTION ===
+            // Only visible when JAI camera is selected
+            whiteBalanceSection = new VBox(8);
+            whiteBalanceSection.setPadding(new Insets(5, 0, 10, 0));
+
+            Label wbHeader = new Label("JAI Camera White Balance");
+            wbHeader.setStyle("-fx-font-weight: bold;");
+
+            enableWhiteBalanceCheckBox = new CheckBox("Enable white balance correction");
+            enableWhiteBalanceCheckBox.setSelected(true);
+            enableWhiteBalanceCheckBox.setTooltip(new Tooltip(
+                    "Apply white balance calibration during acquisition.\n" +
+                    "Requires running White Balance Calibration first."));
+
+            perAngleWhiteBalanceCheckBox = new CheckBox("Use per-angle white balance (PPM)");
+            perAngleWhiteBalanceCheckBox.setSelected(false);
+            perAngleWhiteBalanceCheckBox.setTooltip(new Tooltip(
+                    "Use different white balance settings for each polarizer angle.\n" +
+                    "If unchecked, uses single white balance at 90 deg (uncrossed).\n\n" +
+                    "Run PPM White Balance calibration first to generate per-angle settings."));
+            // Disable per-angle checkbox when white balance is disabled
+            perAngleWhiteBalanceCheckBox.disableProperty().bind(
+                    enableWhiteBalanceCheckBox.selectedProperty().not());
+
+            whiteBalanceSection.getChildren().addAll(wbHeader, enableWhiteBalanceCheckBox, perAngleWhiteBalanceCheckBox);
+            whiteBalanceSection.setVisible(false);  // Hidden by default
+            whiteBalanceSection.setManaged(false);
+
             // Modality-specific options (will be populated by updateModalityUI)
             modalityContent = new VBox(5);
             Label modalityPlaceholder = new Label("Select a modality to see specific options.");
@@ -693,7 +733,7 @@ public class ExistingImageAcquisitionController {
             modalityPane = new TitledPane("Modality Options", modalityContent);
             modalityPane.setExpanded(false);
 
-            content.getChildren().add(modalityPane);
+            content.getChildren().addAll(whiteBalanceSection, modalityPane);
 
             advancedPane = new TitledPane("ADVANCED OPTIONS", content);
             advancedPane.setExpanded(false);
@@ -834,6 +874,37 @@ public class ExistingImageAcquisitionController {
                 modalityContent.getChildren().add(placeholder);
                 modalityPane.setExpanded(false);
             }
+
+            // Update white balance visibility based on current detector and modality
+            updateWhiteBalanceVisibility();
+        }
+
+        /**
+         * Updates the visibility of the white balance section based on current detector and modality.
+         * White balance section is only shown for JAI cameras.
+         * Per-angle checkbox is only shown for PPM modality.
+         */
+        private void updateWhiteBalanceVisibility() {
+            if (whiteBalanceSection == null) {
+                return;  // Not yet initialized
+            }
+
+            String detectorDisplay = detectorBox.getValue();
+            String detector = detectorDisplay != null ? extractIdFromDisplayString(detectorDisplay) : null;
+            boolean isJAI = configManager.isJAICamera(detector);
+
+            // Show white balance section only for JAI cameras
+            whiteBalanceSection.setVisible(isJAI);
+            whiteBalanceSection.setManaged(isJAI);
+
+            // Per-angle option only makes sense for PPM modality
+            String modality = modalityBox.getValue();
+            boolean isPPM = modality != null && modality.toLowerCase().startsWith("ppm");
+            perAngleWhiteBalanceCheckBox.setVisible(isPPM);
+            perAngleWhiteBalanceCheckBox.setManaged(isPPM);
+
+            logger.debug("White balance visibility updated: JAI={}, PPM={}, section visible={}",
+                    isJAI, isPPM, whiteBalanceSection.isVisible());
         }
 
         private void updateConfidenceLabel() {
@@ -1312,21 +1383,28 @@ public class ExistingImageAcquisitionController {
                     angleOverrides = modalityUI.getAngleOverrides();
                 }
 
+                // Get white balance settings (only relevant for JAI cameras)
+                boolean enableWhiteBalance = enableWhiteBalanceCheckBox.isSelected();
+                boolean perAngleWhiteBalance = perAngleWhiteBalanceCheckBox.isSelected() &&
+                        perAngleWhiteBalanceCheckBox.isVisible();  // Only if checkbox is visible (PPM mode)
+
                 // Save preferences
                 PersistentPreferences.setLastSampleName(sampleName);
                 PersistentPreferences.setLastModality(modality);
                 PersistentPreferences.setLastObjective(objective);
                 PersistentPreferences.setLastDetector(detector);
 
-                logger.info("Created acquisition config: sample={}, modality={}, useExisting={}, refinement={}",
-                        sampleName, modality, useExisting, refinement);
+                logger.info("Created acquisition config: sample={}, modality={}, useExisting={}, refinement={}, " +
+                           "enableWB={}, perAngleWB={}",
+                        sampleName, modality, useExisting, refinement, enableWhiteBalance, perAngleWhiteBalance);
 
                 return new ExistingImageAcquisitionConfig(
                         sampleName, projectsFolder, hasOpenProject,
                         modality, objective, detector,
                         useExisting, transform, confidence,
                         refinement,
-                        angleOverrides
+                        angleOverrides,
+                        enableWhiteBalance, perAngleWhiteBalance
                 );
 
             } catch (Exception e) {

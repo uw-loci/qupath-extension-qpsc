@@ -194,7 +194,8 @@ public class BackgroundCollectionWorkflow {
             String modality,
             String objective,
             List<AngleExposure> angleExposures,
-            String outputPath
+            String outputPath,
+            boolean usePerAngleWhiteBalance
     ) {}
     
     /**

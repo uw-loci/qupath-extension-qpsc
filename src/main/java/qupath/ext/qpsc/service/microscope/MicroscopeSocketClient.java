@@ -140,7 +140,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
         /** Run autofocus parameter benchmark */
         AFBENCH("afbench_"),
         /** PPM birefringence maximization test */
-        PPMBIREF("ppmbiref");
+        PPMBIREF("ppmbiref"),
+        /** Simple white balance calibration at single exposure */
+        WBSIMPLE("wbsimple"),
+        /** PPM white balance calibration at 4 angles */
+        WBPPM("wbppm___");
 
         private final byte[] value;
 
@@ -2397,6 +2401,337 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
 
         return lastState;
+    }
+
+    // ==================== WHITE BALANCE CALIBRATION ====================
+
+    /**
+     * Result of white balance calibration for a single configuration (angle/exposure).
+     */
+    public static class WhiteBalanceResult {
+        public final double exposureRed;
+        public final double exposureGreen;
+        public final double exposureBlue;
+        public final boolean converged;
+
+        public WhiteBalanceResult(double exposureRed, double exposureGreen, double exposureBlue, boolean converged) {
+            this.exposureRed = exposureRed;
+            this.exposureGreen = exposureGreen;
+            this.exposureBlue = exposureBlue;
+            this.converged = converged;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("WhiteBalanceResult[R=%.2f, G=%.2f, B=%.2f, converged=%s]",
+                    exposureRed, exposureGreen, exposureBlue, converged);
+        }
+    }
+
+    /**
+     * Run simple white balance calibration at a single starting exposure.
+     *
+     * This calibrates the camera at the current PPM angle (no rotation) using
+     * the specified initial exposure as the starting point for all channels.
+     *
+     * @param outputPath Output directory for calibration results
+     * @param initialExposureMs Starting exposure time for all channels (ms)
+     * @param targetIntensity Target mean intensity (0-255, default 180)
+     * @param tolerance Acceptable deviation from target (default 5)
+     * @return WhiteBalanceResult with per-channel exposure times
+     * @throws IOException if communication fails or calibration fails
+     */
+    public WhiteBalanceResult runSimpleWhiteBalance(
+            String outputPath,
+            double initialExposureMs,
+            double targetIntensity,
+            double tolerance) throws IOException {
+
+        // Build WBSIMPLE command message
+        StringBuilder message = new StringBuilder();
+        message.append("--output ").append(outputPath);
+        message.append(" --exposure ").append(initialExposureMs);
+        message.append(" --target ").append(targetIntensity);
+        message.append(" --tolerance ").append(tolerance);
+        message.append(" ").append(END_MARKER);
+
+        byte[] messageBytes = message.toString().getBytes(StandardCharsets.UTF_8);
+
+        logger.info("Sending simple white balance command:");
+        logger.info("  Output path: {}", outputPath);
+        logger.info("  Initial exposure: {} ms", initialExposureMs);
+        logger.info("  Target intensity: {}", targetIntensity);
+        logger.info("  Tolerance: {}", tolerance);
+
+        synchronized (socketLock) {
+            ensureConnected();
+
+            int originalTimeout = readTimeout;
+            try {
+                // White balance can take 2-3 minutes for full calibration
+                if (socket != null) {
+                    socket.setSoTimeout(180000); // 3 minutes
+                    logger.debug("Set socket timeout to 3 minutes for white balance");
+                }
+
+                // Send WBSIMPLE command (8 bytes)
+                output.write(Command.WBSIMPLE.getValue());
+                output.flush();
+                logger.debug("Sent WBSIMPLE command (8 bytes)");
+
+                Thread.sleep(50);
+
+                // Send message
+                output.write(messageBytes);
+                output.flush();
+                logger.debug("Sent white balance message ({} bytes)", messageBytes.length);
+
+                lastActivityTime.set(System.currentTimeMillis());
+                logger.info("Simple white balance command sent successfully");
+
+                // Read the STARTED acknowledgment
+                byte[] buffer = new byte[2048];
+                int bytesRead = input.read(buffer);
+                if (bytesRead > 0) {
+                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                    logger.info("Received server response: {}", response);
+
+                    if (response.startsWith("FAILED:")) {
+                        throw new IOException("White balance failed: " + response.substring(7));
+                    } else if (!response.startsWith("STARTED:")) {
+                        logger.warn("Unexpected initial response: {}", response);
+                    }
+                }
+
+                // Wait for final SUCCESS/FAILED response
+                logger.info("Waiting for white balance calibration to complete...");
+                bytesRead = input.read(buffer);
+                if (bytesRead > 0) {
+                    String finalResponse = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                    logger.info("Received final response: {}", finalResponse);
+
+                    if (finalResponse.startsWith("FAILED:")) {
+                        throw new IOException("White balance failed: " + finalResponse.substring(7));
+                    }
+
+                    if (finalResponse.startsWith("SUCCESS:")) {
+                        return parseSimpleWBResponse(finalResponse);
+                    }
+                }
+
+                throw new IOException("No valid response received from white balance calibration");
+
+            } catch (IOException | InterruptedException e) {
+                handleIOException(new IOException("White balance error", e));
+                throw new IOException("White balance error: " + e.getMessage(), e);
+            } finally {
+                if (socket != null) {
+                    try {
+                        socket.setSoTimeout(originalTimeout);
+                    } catch (IOException e) {
+                        logger.warn("Failed to restore socket timeout", e);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Run PPM white balance calibration at 4 standard angles.
+     *
+     * This calibrates the camera at each of the 4 PPM angles (positive, negative,
+     * crossed, uncrossed) using different starting exposures for each angle.
+     *
+     * @param outputPath Output directory for calibration results
+     * @param positiveAngle Positive angle (typically 7.0 degrees)
+     * @param positiveExposure Initial exposure for positive angle (ms)
+     * @param negativeAngle Negative angle (typically -7.0 degrees)
+     * @param negativeExposure Initial exposure for negative angle (ms)
+     * @param crossedAngle Crossed angle (typically 0.0 degrees)
+     * @param crossedExposure Initial exposure for crossed angle (ms)
+     * @param uncrossedAngle Uncrossed angle (typically 90.0 degrees)
+     * @param uncrossedExposure Initial exposure for uncrossed angle (ms)
+     * @param targetIntensity Target mean intensity (0-255, default 180)
+     * @param tolerance Acceptable deviation from target (default 5)
+     * @return Map of angle names to WhiteBalanceResult
+     * @throws IOException if communication fails or calibration fails
+     */
+    public Map<String, WhiteBalanceResult> runPPMWhiteBalance(
+            String outputPath,
+            double positiveAngle, double positiveExposure,
+            double negativeAngle, double negativeExposure,
+            double crossedAngle, double crossedExposure,
+            double uncrossedAngle, double uncrossedExposure,
+            double targetIntensity,
+            double tolerance) throws IOException {
+
+        // Build WBPPM command message
+        StringBuilder message = new StringBuilder();
+        message.append("--output ").append(outputPath);
+        message.append(" --positive_angle ").append(positiveAngle);
+        message.append(" --positive_exp ").append(positiveExposure);
+        message.append(" --negative_angle ").append(negativeAngle);
+        message.append(" --negative_exp ").append(negativeExposure);
+        message.append(" --crossed_angle ").append(crossedAngle);
+        message.append(" --crossed_exp ").append(crossedExposure);
+        message.append(" --uncrossed_angle ").append(uncrossedAngle);
+        message.append(" --uncrossed_exp ").append(uncrossedExposure);
+        message.append(" --target ").append(targetIntensity);
+        message.append(" --tolerance ").append(tolerance);
+        message.append(" ").append(END_MARKER);
+
+        byte[] messageBytes = message.toString().getBytes(StandardCharsets.UTF_8);
+
+        logger.info("Sending PPM white balance command:");
+        logger.info("  Output path: {}", outputPath);
+        logger.info("  Positive: {} deg, {} ms", positiveAngle, positiveExposure);
+        logger.info("  Negative: {} deg, {} ms", negativeAngle, negativeExposure);
+        logger.info("  Crossed: {} deg, {} ms", crossedAngle, crossedExposure);
+        logger.info("  Uncrossed: {} deg, {} ms", uncrossedAngle, uncrossedExposure);
+        logger.info("  Target intensity: {}, Tolerance: {}", targetIntensity, tolerance);
+
+        synchronized (socketLock) {
+            ensureConnected();
+
+            int originalTimeout = readTimeout;
+            try {
+                // PPM calibration involves 4 angles, can take 10-15 minutes
+                if (socket != null) {
+                    socket.setSoTimeout(900000); // 15 minutes
+                    logger.debug("Set socket timeout to 15 minutes for PPM white balance");
+                }
+
+                // Send WBPPM command (8 bytes)
+                output.write(Command.WBPPM.getValue());
+                output.flush();
+                logger.debug("Sent WBPPM command (8 bytes)");
+
+                Thread.sleep(50);
+
+                // Send message
+                output.write(messageBytes);
+                output.flush();
+                logger.debug("Sent PPM white balance message ({} bytes)", messageBytes.length);
+
+                lastActivityTime.set(System.currentTimeMillis());
+                logger.info("PPM white balance command sent successfully");
+
+                // Read the STARTED acknowledgment
+                byte[] buffer = new byte[4096];
+                int bytesRead = input.read(buffer);
+                if (bytesRead > 0) {
+                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                    logger.info("Received server response: {}", response);
+
+                    if (response.startsWith("FAILED:")) {
+                        throw new IOException("PPM white balance failed: " + response.substring(7));
+                    } else if (!response.startsWith("STARTED:")) {
+                        logger.warn("Unexpected initial response: {}", response);
+                    }
+                }
+
+                // Wait for final SUCCESS/FAILED response
+                logger.info("Waiting for PPM white balance calibration to complete (4 angles)...");
+                bytesRead = input.read(buffer);
+                if (bytesRead > 0) {
+                    String finalResponse = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                    logger.info("Received final response: {}", finalResponse);
+
+                    if (finalResponse.startsWith("FAILED:")) {
+                        throw new IOException("PPM white balance failed: " + finalResponse.substring(7));
+                    }
+
+                    if (finalResponse.startsWith("SUCCESS:")) {
+                        return parsePPMWBResponse(finalResponse);
+                    }
+                }
+
+                throw new IOException("No valid response received from PPM white balance calibration");
+
+            } catch (IOException | InterruptedException e) {
+                handleIOException(new IOException("PPM white balance error", e));
+                throw new IOException("PPM white balance error: " + e.getMessage(), e);
+            } finally {
+                if (socket != null) {
+                    try {
+                        socket.setSoTimeout(originalTimeout);
+                    } catch (IOException e) {
+                        logger.warn("Failed to restore socket timeout", e);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Parse response from WBSIMPLE command.
+     * Format: SUCCESS:/output/path|CONVERGED|exp_r:15.2,exp_g:18.5,exp_b:22.1
+     */
+    private WhiteBalanceResult parseSimpleWBResponse(String response) {
+        // Remove "SUCCESS:" prefix
+        String data = response.substring(8);
+        String[] parts = data.split("\\|");
+
+        boolean converged = false;
+        double expR = 0, expG = 0, expB = 0;
+
+        if (parts.length >= 2) {
+            converged = "CONVERGED".equals(parts[1].trim());
+        }
+
+        if (parts.length >= 3) {
+            String expStr = parts[2].trim();
+            String[] expParts = expStr.split(",");
+            for (String expPart : expParts) {
+                String[] kv = expPart.split(":");
+                if (kv.length == 2) {
+                    String key = kv[0].trim();
+                    double value = Double.parseDouble(kv[1].trim());
+                    switch (key) {
+                        case "exp_r" -> expR = value;
+                        case "exp_g" -> expG = value;
+                        case "exp_b" -> expB = value;
+                    }
+                }
+            }
+        }
+
+        return new WhiteBalanceResult(expR, expG, expB, converged);
+    }
+
+    /**
+     * Parse response from WBPPM command.
+     * Format: SUCCESS:/path|positive:15.2,18.5,22.1:Y|negative:...|crossed:...|uncrossed:...
+     */
+    private Map<String, WhiteBalanceResult> parsePPMWBResponse(String response) {
+        Map<String, WhiteBalanceResult> results = new HashMap<>();
+
+        // Remove "SUCCESS:" prefix
+        String data = response.substring(8);
+        String[] parts = data.split("\\|");
+
+        // Skip first part (output path)
+        for (int i = 1; i < parts.length; i++) {
+            String part = parts[i].trim();
+            if (part.isEmpty()) continue;
+
+            // Format: name:exp_r,exp_g,exp_b:Y/N
+            String[] segments = part.split(":");
+            if (segments.length >= 3) {
+                String name = segments[0].trim();
+                String[] exps = segments[1].split(",");
+                boolean converged = "Y".equals(segments[2].trim());
+
+                if (exps.length >= 3) {
+                    double expR = Double.parseDouble(exps[0].trim());
+                    double expG = Double.parseDouble(exps[1].trim());
+                    double expB = Double.parseDouble(exps[2].trim());
+                    results.put(name, new WhiteBalanceResult(expR, expG, expB, converged));
+                }
+            }
+        }
+
+        return results;
     }
 
 }

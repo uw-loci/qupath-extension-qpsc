@@ -1569,6 +1569,45 @@ public class MicroscopeConfigManager {
         return false;
     }
 
+    /**
+     * Check if the specified detector is a JAI 3-CCD camera.
+     * JAI cameras support per-channel exposure control for white balance calibration.
+     *
+     * @param detectorId The detector identifier (e.g., "LOCI_DETECTOR_JAI_001")
+     * @return true if this is a JAI camera, false otherwise
+     */
+    public boolean isJAICamera(String detectorId) {
+        if (detectorId == null || detectorId.isEmpty()) {
+            return false;
+        }
+
+        // Check by ID convention first (fast path)
+        if (detectorId.toUpperCase().contains("JAI")) {
+            logger.debug("Detector {} identified as JAI camera by ID convention", detectorId);
+            return true;
+        }
+
+        // Alternative: check manufacturer field in resources_LOCI.yml
+        try {
+            Map<String, Object> detectorSection = getResourceSection("id_detector");
+            if (detectorSection != null && detectorSection.containsKey(detectorId)) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> detectorData = (Map<String, Object>) detectorSection.get(detectorId);
+                if (detectorData != null) {
+                    String manufacturer = (String) detectorData.get("manufacturer");
+                    if ("JAI".equalsIgnoreCase(manufacturer)) {
+                        logger.debug("Detector {} identified as JAI camera by manufacturer field", detectorId);
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not check manufacturer for detector: {}", detectorId);
+        }
+
+        return false;
+    }
+
     // ========== HARDWARE SECTION ACCESS METHODS ==========
 
     /**

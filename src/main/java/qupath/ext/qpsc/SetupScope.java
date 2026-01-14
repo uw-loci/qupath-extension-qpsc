@@ -310,12 +310,29 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 			}
 		});
 
+		// White balance calibration (JAI camera)
+		MenuItem whiteBalanceOption = new MenuItem(res.getString("menu.whiteBalance"));
+		whiteBalanceOption.setDisable(!configValid);
+		setMenuItemTooltip(whiteBalanceOption,
+				"Calibrate white balance for the JAI 3-CCD camera by adjusting per-channel " +
+				"exposure times. Simple mode calibrates at the current angle. PPM mode calibrates " +
+				"at all 4 standard PPM angles (positive, negative, crossed, uncrossed) with " +
+				"different starting exposures for each angle.");
+		whiteBalanceOption.setOnAction(e -> {
+			try {
+				QPScopeController.getInstance().startWorkflow("whiteBalance");
+			} catch (IOException ex) {
+				throw new RuntimeException(ex);
+			}
+		});
+
 		// Add items to utilities submenu
 		utilitiesMenu.getItems().addAll(
 				alignmentOption,
 				stageMapOption,
 				new SeparatorMenuItem(),
 				backgroundCollectionOption,
+				whiteBalanceOption,
 				polarizerCalibrationOption,
 				ppmSensitivityTestOption,
 				birefringenceOptimizationOption,

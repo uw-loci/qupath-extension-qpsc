@@ -361,9 +361,14 @@ public class ExistingImageWorkflowV2 {
             // Store whether this is an existing project
             state.isExistingProject = config.isExistingProject();
 
-            logger.info("Config initialized: sample={}, modality={}, useExisting={}, refinement={}",
+            // Store JAI camera white balance settings
+            state.enableWhiteBalance = config.enableWhiteBalance();
+            state.perAngleWhiteBalance = config.perAngleWhiteBalance();
+
+            logger.info("Config initialized: sample={}, modality={}, useExisting={}, refinement={}, WB={}/perAngle={}",
                     config.sampleName(), config.modality(),
-                    config.useExistingAlignment(), config.refinementChoice());
+                    config.useExistingAlignment(), config.refinementChoice(),
+                    config.enableWhiteBalance(), config.perAngleWhiteBalance());
 
             return CompletableFuture.completedFuture(state);
         }
@@ -750,5 +755,9 @@ public class ExistingImageWorkflowV2 {
                 RefinementSelectionController.RefinementChoice.NONE;
         public GreenBoxDetector.DetectionParams greenBoxParams;
         public List<String> selectedAnnotationClasses = new ArrayList<>();
+
+        // JAI camera white balance settings
+        public boolean enableWhiteBalance = true;
+        public boolean perAngleWhiteBalance = false;
     }
 }

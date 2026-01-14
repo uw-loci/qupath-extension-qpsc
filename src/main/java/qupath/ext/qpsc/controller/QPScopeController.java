@@ -175,6 +175,10 @@ public class QPScopeController {
                 logger.debug("Launching PPM rotation sensitivity test");
                 PPMSensitivityTestWorkflow.run();
             }
+            case "whiteBalance" -> {
+                logger.debug("Launching white balance calibration workflow");
+                WhiteBalanceWorkflow.run();
+            }
             case "serverConnection" -> {
                 logger.debug("Launching server connection dialog");
                 ServerConnectionController.showDialog()

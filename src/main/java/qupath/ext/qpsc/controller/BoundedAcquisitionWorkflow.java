@@ -296,8 +296,15 @@ public class BoundedAcquisitionWorkflow {
                                                 finalWSI_pixelSize_um
                                         );
 
-                                logger.info("Starting acquisition - Sample: {}, Mode: {}, Angles: {}",
-                                        result.sampleName(), modeWithIndex, angleExposures.size());
+                                // Apply user's white balance settings from UI (overrides config defaults)
+                                config.commandBuilder().whiteBalance(
+                                        result.enableWhiteBalance(),
+                                        result.perAngleWhiteBalance()
+                                );
+
+                                logger.info("Starting acquisition - Sample: {}, Mode: {}, Angles: {}, WB enabled: {}, per-angle WB: {}",
+                                        result.sampleName(), modeWithIndex, angleExposures.size(),
+                                        result.enableWhiteBalance(), result.perAngleWhiteBalance());
 
                                 String commandString = config.commandBuilder().buildSocketMessage();
                                 MinorFunctions.saveAcquisitionCommand(

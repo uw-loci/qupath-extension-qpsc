@@ -1,0 +1,398 @@
+package qupath.ext.qpsc.controller;
+
+import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.WhiteBalanceDialog;
+import qupath.fx.dialogs.Dialogs;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.Map;
+
+/**
+ * Workflow for running JAI camera white balance calibration.
+ *
+ * <p>This workflow guides users through white balance calibration for the JAI camera,
+ * supporting both simple (single angle) and PPM (4 angle) calibration modes.
+ *
+ * <p>Workflow steps:
+ * <ol>
+ *   <li>Connect to microscope server</li>
+ *   <li>Show configuration dialog for calibration parameters</li>
+ *   <li>Send calibration command (WBSIMPLE or WBPPM) to Python server</li>
+ *   <li>Monitor calibration progress</li>
+ *   <li>Display results summary with per-channel exposures</li>
+ * </ol>
+ *
+ * @author Mike Nelson
+ * @since 1.0
+ */
+public class WhiteBalanceWorkflow {
+    private static final Logger logger = LoggerFactory.getLogger(WhiteBalanceWorkflow.class);
+
+    /**
+     * Runs the complete white balance calibration workflow.
+     *
+     * <p>This is the main entry point called from the QuPath menu.
+     * The workflow is asynchronous and will not block the UI thread.
+     *
+     * @throws IOException if initial server connection fails
+     */
+    public static void run() throws IOException {
+        logger.info("Starting White Balance Calibration workflow");
+
+        // Get server connection parameters
+        String host = QPPreferenceDialog.getMicroscopeServerHost();
+        int port = QPPreferenceDialog.getMicroscopeServerPort();
+
+        logger.debug("Connecting to microscope server at {}:{}", host, port);
+
+        // Create socket client
+        MicroscopeSocketClient client = new MicroscopeSocketClient(host, port);
+
+        try {
+            // Connect to server
+            client.connect();
+            logger.info("Connected to microscope server");
+
+            // Show configuration dialog
+            WhiteBalanceDialog.showDialog()
+                    .thenAccept(result -> {
+                        if (result == null) {
+                            logger.info("White balance calibration cancelled by user");
+                            closeClient(client);
+                            return;
+                        }
+
+                        // Validate output directory
+                        String outputPath = result.isSimple() ?
+                                result.getSimpleParams().outputPath() :
+                                result.getPPMParams().outputPath();
+
+                        File outputDir = new File(outputPath);
+                        if (!outputDir.exists()) {
+                            if (!outputDir.mkdirs()) {
+                                Platform.runLater(() -> {
+                                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                                    alert.setTitle("Invalid Output Directory");
+                                    alert.setHeaderText("Could not create output directory");
+                                    alert.setContentText("Failed to create:\n" + outputPath);
+                                    alert.showAndWait();
+                                });
+                                closeClient(client);
+                                return;
+                            }
+                            logger.info("Created output directory: {}", outputPath);
+                        }
+
+                        // Confirm and run calibration
+                        Platform.runLater(() -> {
+                            String modeDesc = result.isSimple() ? "Simple" : "PPM (4 angles)";
+                            String timeEstimate = result.isSimple() ? "2-3 minutes" : "10-15 minutes";
+
+                            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+                            confirm.setTitle("Confirm White Balance Calibration");
+                            confirm.setHeaderText("Ready to start " + modeDesc + " white balance calibration");
+
+                            StringBuilder details = new StringBuilder();
+                            if (result.isSimple()) {
+                                var params = result.getSimpleParams();
+                                details.append(String.format(
+                                        "Mode: Simple White Balance\n" +
+                                        "Base Exposure: %.1f ms\n" +
+                                        "Target Intensity: %.0f\n" +
+                                        "Tolerance: %.1f\n",
+                                        params.baseExposureMs(),
+                                        params.targetIntensity(),
+                                        params.tolerance()
+                                ));
+                            } else {
+                                var params = result.getPPMParams();
+                                details.append(String.format(
+                                        "Mode: PPM White Balance (4 angles)\n" +
+                                        "Positive (%.1f deg): %.1f ms\n" +
+                                        "Negative (%.1f deg): %.1f ms\n" +
+                                        "Crossed (%.1f deg): %.1f ms\n" +
+                                        "Uncrossed (%.1f deg): %.1f ms\n" +
+                                        "Target Intensity: %.0f\n" +
+                                        "Tolerance: %.1f\n",
+                                        params.positiveAngle(), params.positiveExposureMs(),
+                                        params.negativeAngle(), params.negativeExposureMs(),
+                                        params.crossedAngle(), params.crossedExposureMs(),
+                                        params.uncrossedAngle(), params.uncrossedExposureMs(),
+                                        params.targetIntensity(),
+                                        params.tolerance()
+                                ));
+                            }
+
+                            details.append(String.format(
+                                    "\nOutput: %s\n" +
+                                    "Estimated time: %s\n\n" +
+                                    "IMPORTANT: Ensure a neutral gray/white target or blank slide\n" +
+                                    "is in the field of view before continuing.",
+                                    outputPath,
+                                    timeEstimate
+                            ));
+
+                            confirm.setContentText(details.toString());
+
+                            confirm.showAndWait().ifPresent(response -> {
+                                if (response == ButtonType.OK) {
+                                    if (result.isSimple()) {
+                                        runSimpleCalibration(client, result.getSimpleParams());
+                                    } else {
+                                        runPPMCalibration(client, result.getPPMParams());
+                                    }
+                                } else {
+                                    logger.info("White balance cancelled by user at confirmation");
+                                    closeClient(client);
+                                }
+                            });
+                        });
+                    })
+                    .exceptionally(ex -> {
+                        logger.error("Error in white balance workflow", ex);
+                        Platform.runLater(() -> {
+                            Dialogs.showErrorMessage("White Balance Error",
+                                    "Error during calibration: " + ex.getMessage());
+                        });
+                        closeClient(client);
+                        return null;
+                    });
+
+        } catch (Exception e) {
+            closeClient(client);
+            throw e;
+        }
+    }
+
+    /**
+     * Runs simple white balance calibration.
+     */
+    private static void runSimpleCalibration(MicroscopeSocketClient client,
+                                             WhiteBalanceDialog.SimpleWBParams params) {
+        // Show progress dialog
+        Stage progressStage = new Stage();
+        progressStage.initModality(Modality.APPLICATION_MODAL);
+        progressStage.setTitle("Simple White Balance");
+        progressStage.setResizable(false);
+
+        VBox root = new VBox(15);
+        root.setPadding(new Insets(20));
+        root.setAlignment(Pos.CENTER);
+        root.setPrefWidth(400);
+
+        Label statusLabel = new Label("Running white balance calibration...");
+        statusLabel.setStyle("-fx-font-size: 14px;");
+
+        ProgressIndicator progress = new ProgressIndicator();
+        progress.setStyle("-fx-min-width: 50px; -fx-min-height: 50px;");
+
+        Label detailLabel = new Label("Adjusting per-channel exposures to balance colors");
+        detailLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+
+        root.getChildren().addAll(statusLabel, progress, detailLabel);
+
+        Scene scene = new Scene(root);
+        progressStage.setScene(scene);
+        progressStage.show();
+
+        // Run calibration in background thread
+        Thread calibrationThread = new Thread(() -> {
+            try {
+                MicroscopeSocketClient.WhiteBalanceResult result = client.runSimpleWhiteBalance(
+                        params.outputPath(),
+                        params.baseExposureMs(),
+                        params.targetIntensity(),
+                        params.tolerance()
+                );
+
+                Platform.runLater(() -> {
+                    progressStage.close();
+                    showSimpleResults(result, params.outputPath());
+                });
+
+            } catch (Exception e) {
+                logger.error("Simple white balance failed", e);
+                Platform.runLater(() -> {
+                    progressStage.close();
+                    Dialogs.showErrorMessage("White Balance Failed",
+                            "Calibration failed: " + e.getMessage());
+                });
+            } finally {
+                closeClient(client);
+            }
+        }, "WhiteBalanceCalibration");
+        calibrationThread.setDaemon(true);
+        calibrationThread.start();
+    }
+
+    /**
+     * Runs PPM white balance calibration (4 angles).
+     */
+    private static void runPPMCalibration(MicroscopeSocketClient client,
+                                          WhiteBalanceDialog.PPMWBParams params) {
+        // Show progress dialog
+        Stage progressStage = new Stage();
+        progressStage.initModality(Modality.APPLICATION_MODAL);
+        progressStage.setTitle("PPM White Balance");
+        progressStage.setResizable(false);
+
+        VBox root = new VBox(15);
+        root.setPadding(new Insets(20));
+        root.setAlignment(Pos.CENTER);
+        root.setPrefWidth(450);
+
+        Label statusLabel = new Label("Running PPM white balance calibration...");
+        statusLabel.setStyle("-fx-font-size: 14px;");
+
+        ProgressIndicator progress = new ProgressIndicator();
+        progress.setStyle("-fx-min-width: 50px; -fx-min-height: 50px;");
+
+        Label detailLabel = new Label("Calibrating 4 PPM angles:\n" +
+                "Positive (7 deg) -> Negative (-7 deg) -> Crossed (0 deg) -> Uncrossed (90 deg)");
+        detailLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        detailLabel.setWrapText(true);
+
+        root.getChildren().addAll(statusLabel, progress, detailLabel);
+
+        Scene scene = new Scene(root);
+        progressStage.setScene(scene);
+        progressStage.show();
+
+        // Run calibration in background thread
+        Thread calibrationThread = new Thread(() -> {
+            try {
+                Map<String, MicroscopeSocketClient.WhiteBalanceResult> results = client.runPPMWhiteBalance(
+                        params.outputPath(),
+                        params.positiveAngle(), params.positiveExposureMs(),
+                        params.negativeAngle(), params.negativeExposureMs(),
+                        params.crossedAngle(), params.crossedExposureMs(),
+                        params.uncrossedAngle(), params.uncrossedExposureMs(),
+                        params.targetIntensity(),
+                        params.tolerance()
+                );
+
+                Platform.runLater(() -> {
+                    progressStage.close();
+                    showPPMResults(results, params.outputPath());
+                });
+
+            } catch (Exception e) {
+                logger.error("PPM white balance failed", e);
+                Platform.runLater(() -> {
+                    progressStage.close();
+                    Dialogs.showErrorMessage("PPM White Balance Failed",
+                            "Calibration failed: " + e.getMessage());
+                });
+            } finally {
+                closeClient(client);
+            }
+        }, "PPMWhiteBalanceCalibration");
+        calibrationThread.setDaemon(true);
+        calibrationThread.start();
+    }
+
+    /**
+     * Shows results dialog for simple white balance.
+     */
+    private static void showSimpleResults(MicroscopeSocketClient.WhiteBalanceResult result,
+                                          String outputPath) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("White Balance Complete");
+        alert.setHeaderText(result.converged ? "Calibration Converged" : "Calibration Complete (did not fully converge)");
+
+        String content = String.format(
+                "Per-Channel Exposures:\n\n" +
+                "  Red:   %.2f ms\n" +
+                "  Green: %.2f ms\n" +
+                "  Blue:  %.2f ms\n\n" +
+                "Converged: %s\n\n" +
+                "Results saved to:\n%s",
+                result.exposureRed,
+                result.exposureGreen,
+                result.exposureBlue,
+                result.converged ? "Yes" : "No",
+                outputPath
+        );
+
+        alert.setContentText(content);
+        alert.showAndWait();
+    }
+
+    /**
+     * Shows results dialog for PPM white balance.
+     */
+    private static void showPPMResults(Map<String, MicroscopeSocketClient.WhiteBalanceResult> results,
+                                       String outputPath) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("PPM White Balance Complete");
+
+        boolean allConverged = results.values().stream().allMatch(r -> r.converged);
+        alert.setHeaderText(allConverged ?
+                "All Angles Converged" :
+                "Calibration Complete (some angles did not converge)");
+
+        StringBuilder content = new StringBuilder();
+        content.append("Per-Channel Exposures (ms):\n\n");
+        content.append(String.format("%-12s %8s %8s %8s  %s\n", "Angle", "Red", "Green", "Blue", "Conv"));
+        content.append("─".repeat(50)).append("\n");
+
+        String[] angleOrder = {"positive", "negative", "crossed", "uncrossed"};
+        for (String name : angleOrder) {
+            MicroscopeSocketClient.WhiteBalanceResult r = results.get(name);
+            if (r != null) {
+                content.append(String.format("%-12s %8.2f %8.2f %8.2f  %s\n",
+                        capitalize(name),
+                        r.exposureRed,
+                        r.exposureGreen,
+                        r.exposureBlue,
+                        r.converged ? "Yes" : "No"
+                ));
+            }
+        }
+
+        content.append("\nResults saved to:\n").append(outputPath);
+
+        alert.setContentText(content.toString());
+
+        // Use a monospace font for the table
+        alert.getDialogPane().lookup(".content.label").setStyle("-fx-font-family: monospace;");
+
+        alert.showAndWait();
+    }
+
+    /**
+     * Capitalize first letter of a string.
+     */
+    private static String capitalize(String s) {
+        if (s == null || s.isEmpty()) return s;
+        return Character.toUpperCase(s.charAt(0)) + s.substring(1);
+    }
+
+    /**
+     * Safely closes the microscope socket client.
+     */
+    private static void closeClient(MicroscopeSocketClient client) {
+        if (client != null) {
+            try {
+                client.close();
+                logger.debug("Closed microscope socket client");
+            } catch (Exception e) {
+                logger.warn("Error closing client: {}", e.getMessage());
+            }
+        }
+    }
+}
