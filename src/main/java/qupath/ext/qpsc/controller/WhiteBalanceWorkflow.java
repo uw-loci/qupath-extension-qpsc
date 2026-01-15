@@ -17,6 +17,7 @@ import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.WhiteBalanceDialog;
 import qupath.fx.dialogs.Dialogs;
 
+import java.awt.Desktop;
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
@@ -314,22 +315,53 @@ public class WhiteBalanceWorkflow {
         alert.setTitle("White Balance Complete");
         alert.setHeaderText(result.converged ? "Calibration Converged" : "Calibration Complete (did not fully converge)");
 
-        String content = String.format(
-                "Per-Channel Exposures:\n\n" +
-                "  Red:   %.2f ms\n" +
-                "  Green: %.2f ms\n" +
-                "  Blue:  %.2f ms\n\n" +
-                "Converged: %s\n\n" +
-                "Results saved to:\n%s",
-                result.exposureRed,
-                result.exposureGreen,
-                result.exposureBlue,
-                result.converged ? "Yes" : "No",
-                outputPath
-        );
+        // Check if any gains are not 1.0 (meaning gain was applied)
+        boolean hasGain = result.gainRed != 1.0 || result.gainGreen != 1.0 || result.gainBlue != 1.0;
 
-        alert.setContentText(content);
-        alert.showAndWait();
+        StringBuilder content = new StringBuilder();
+        content.append("Per-Channel Results:\n\n");
+        content.append(String.format("  Red:   %.2f ms", result.exposureRed));
+        if (hasGain) content.append(String.format(" @ %.3fx gain", result.gainRed));
+        content.append("\n");
+        content.append(String.format("  Green: %.2f ms", result.exposureGreen));
+        if (hasGain) content.append(String.format(" @ %.3fx gain", result.gainGreen));
+        content.append("\n");
+        content.append(String.format("  Blue:  %.2f ms", result.exposureBlue));
+        if (hasGain) content.append(String.format(" @ %.3fx gain", result.gainBlue));
+        content.append("\n\n");
+        content.append(String.format("Converged: %s", result.converged ? "Yes" : "No"));
+
+        alert.setContentText(content.toString());
+
+        // Add Open Folder button
+        ButtonType openFolderButton = new ButtonType("Open Folder", ButtonBar.ButtonData.LEFT);
+        alert.getButtonTypes().add(openFolderButton);
+
+        alert.showAndWait().ifPresent(response -> {
+            if (response == openFolderButton) {
+                openFolder(outputPath);
+            }
+        });
+    }
+
+    /**
+     * Opens a folder in the system file explorer.
+     */
+    private static void openFolder(String path) {
+        try {
+            File folder = new File(path);
+            if (folder.exists()) {
+                if (Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(folder);
+                } else {
+                    logger.warn("Desktop not supported, cannot open folder");
+                }
+            } else {
+                logger.warn("Folder does not exist: {}", path);
+            }
+        } catch (IOException e) {
+            logger.error("Failed to open folder: {}", path, e);
+        }
     }
 
     /**
@@ -345,16 +377,27 @@ public class WhiteBalanceWorkflow {
                 "All Angles Converged" :
                 "Calibration Complete (some angles did not converge)");
 
+        // Check if any gains are not 1.0
+        boolean hasGain = results.values().stream()
+                .anyMatch(r -> r.gainRed != 1.0 || r.gainGreen != 1.0 || r.gainBlue != 1.0);
+
         StringBuilder content = new StringBuilder();
-        content.append("Per-Channel Exposures (ms):\n\n");
-        content.append(String.format("%-12s %8s %8s %8s  %s\n", "Angle", "Red", "Green", "Blue", "Conv"));
-        content.append("─".repeat(50)).append("\n");
+        if (hasGain) {
+            // Show exposures and gains in separate tables
+            content.append("Exposures (ms):\n");
+            content.append(String.format("%-10s %7s %7s %7s  %s\n", "Angle", "Red", "Green", "Blue", "Conv"));
+            content.append("-".repeat(45)).append("\n");
+        } else {
+            content.append("Per-Channel Exposures (ms):\n\n");
+            content.append(String.format("%-10s %7s %7s %7s  %s\n", "Angle", "Red", "Green", "Blue", "Conv"));
+            content.append("-".repeat(45)).append("\n");
+        }
 
         String[] angleOrder = {"positive", "negative", "crossed", "uncrossed"};
         for (String name : angleOrder) {
             MicroscopeSocketClient.WhiteBalanceResult r = results.get(name);
             if (r != null) {
-                content.append(String.format("%-12s %8.2f %8.2f %8.2f  %s\n",
+                content.append(String.format("%-10s %7.2f %7.2f %7.2f  %s\n",
                         capitalize(name),
                         r.exposureRed,
                         r.exposureGreen,
@@ -364,14 +407,37 @@ public class WhiteBalanceWorkflow {
             }
         }
 
-        content.append("\nResults saved to:\n").append(outputPath);
+        if (hasGain) {
+            content.append("\nGains (linear):\n");
+            content.append(String.format("%-10s %7s %7s %7s\n", "Angle", "Red", "Green", "Blue"));
+            content.append("-".repeat(38)).append("\n");
+            for (String name : angleOrder) {
+                MicroscopeSocketClient.WhiteBalanceResult r = results.get(name);
+                if (r != null) {
+                    content.append(String.format("%-10s %7.3f %7.3f %7.3f\n",
+                            capitalize(name),
+                            r.gainRed,
+                            r.gainGreen,
+                            r.gainBlue
+                    ));
+                }
+            }
+        }
 
         alert.setContentText(content.toString());
 
         // Use a monospace font for the table
         alert.getDialogPane().lookup(".content.label").setStyle("-fx-font-family: monospace;");
 
-        alert.showAndWait();
+        // Add Open Folder button
+        ButtonType openFolderButton = new ButtonType("Open Folder", ButtonBar.ButtonData.LEFT);
+        alert.getButtonTypes().add(openFolderButton);
+
+        alert.showAndWait().ifPresent(response -> {
+            if (response == openFolderButton) {
+                openFolder(outputPath);
+            }
+        });
     }
 
     /**

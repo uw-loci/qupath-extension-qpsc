@@ -2412,19 +2412,32 @@ public class MicroscopeSocketClient implements AutoCloseable {
         public final double exposureRed;
         public final double exposureGreen;
         public final double exposureBlue;
+        public final double gainRed;
+        public final double gainGreen;
+        public final double gainBlue;
         public final boolean converged;
 
-        public WhiteBalanceResult(double exposureRed, double exposureGreen, double exposureBlue, boolean converged) {
+        public WhiteBalanceResult(double exposureRed, double exposureGreen, double exposureBlue,
+                                  double gainRed, double gainGreen, double gainBlue,
+                                  boolean converged) {
             this.exposureRed = exposureRed;
             this.exposureGreen = exposureGreen;
             this.exposureBlue = exposureBlue;
+            this.gainRed = gainRed;
+            this.gainGreen = gainGreen;
+            this.gainBlue = gainBlue;
             this.converged = converged;
         }
 
         @Override
         public String toString() {
-            return String.format("WhiteBalanceResult[R=%.2f, G=%.2f, B=%.2f, converged=%s]",
-                    exposureRed, exposureGreen, exposureBlue, converged);
+            return String.format("WhiteBalanceResult[R=%.2f/%.3fx, G=%.2f/%.3fx, B=%.2f/%.3fx, converged=%s]",
+                    exposureRed, gainRed, exposureGreen, gainGreen, exposureBlue, gainBlue, converged);
+        }
+
+        // Convenience constructor for backward compatibility (gains default to 1.0)
+        public WhiteBalanceResult(double exposureRed, double exposureGreen, double exposureBlue, boolean converged) {
+            this(exposureRed, exposureGreen, exposureBlue, 1.0, 1.0, 1.0, converged);
         }
     }
 
@@ -2697,12 +2710,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * Format: SUCCESS:/output/path|CONVERGED|exp_r:15.2,exp_g:18.5,exp_b:22.1
      */
     private WhiteBalanceResult parseSimpleWBResponse(String response) {
+        // Format: SUCCESS:{output_path}|{status}|{exp_str}|{gain_str}
         // Remove "SUCCESS:" prefix
         String data = response.substring(8);
         String[] parts = data.split("\\|");
 
         boolean converged = false;
         double expR = 0, expG = 0, expB = 0;
+        double gainR = 1.0, gainG = 1.0, gainB = 1.0;
 
         if (parts.length >= 2) {
             converged = "CONVERGED".equals(parts[1].trim());
@@ -2725,12 +2740,30 @@ public class MicroscopeSocketClient implements AutoCloseable {
             }
         }
 
-        return new WhiteBalanceResult(expR, expG, expB, converged);
+        // Parse gain values (parts[3])
+        if (parts.length >= 4) {
+            String gainStr = parts[3].trim();
+            String[] gainParts = gainStr.split(",");
+            for (String gainPart : gainParts) {
+                String[] kv = gainPart.split(":");
+                if (kv.length == 2) {
+                    String key = kv[0].trim();
+                    double value = Double.parseDouble(kv[1].trim());
+                    switch (key) {
+                        case "gain_r" -> gainR = value;
+                        case "gain_g" -> gainG = value;
+                        case "gain_b" -> gainB = value;
+                    }
+                }
+            }
+        }
+
+        return new WhiteBalanceResult(expR, expG, expB, gainR, gainG, gainB, converged);
     }
 
     /**
      * Parse response from WBPPM command.
-     * Format: SUCCESS:/path|positive:15.2,18.5,22.1:Y|negative:...|crossed:...|uncrossed:...
+     * Format: SUCCESS:/path|name:exp_r,exp_g,exp_b:gain_r,gain_g,gain_b:Y/N|...
      */
     private Map<String, WhiteBalanceResult> parsePPMWBResponse(String response) {
         Map<String, WhiteBalanceResult> results = new HashMap<>();
@@ -2744,9 +2777,26 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String part = parts[i].trim();
             if (part.isEmpty()) continue;
 
-            // Format: name:exp_r,exp_g,exp_b:Y/N
+            // Format: name:exp_r,exp_g,exp_b:gain_r,gain_g,gain_b:Y/N
             String[] segments = part.split(":");
-            if (segments.length >= 3) {
+            if (segments.length >= 4) {
+                // New format with gains
+                String name = segments[0].trim();
+                String[] exps = segments[1].split(",");
+                String[] gains = segments[2].split(",");
+                boolean converged = "Y".equals(segments[3].trim());
+
+                if (exps.length >= 3 && gains.length >= 3) {
+                    double expR = Double.parseDouble(exps[0].trim());
+                    double expG = Double.parseDouble(exps[1].trim());
+                    double expB = Double.parseDouble(exps[2].trim());
+                    double gainR = Double.parseDouble(gains[0].trim());
+                    double gainG = Double.parseDouble(gains[1].trim());
+                    double gainB = Double.parseDouble(gains[2].trim());
+                    results.put(name, new WhiteBalanceResult(expR, expG, expB, gainR, gainG, gainB, converged));
+                }
+            } else if (segments.length >= 3) {
+                // Old format without gains (backward compatibility)
                 String name = segments[0].trim();
                 String[] exps = segments[1].split(",");
                 boolean converged = "Y".equals(segments[2].trim());
