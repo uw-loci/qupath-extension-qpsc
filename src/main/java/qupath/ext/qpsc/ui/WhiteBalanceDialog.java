@@ -8,12 +8,14 @@ import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.DirectoryChooser;
-import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.lib.gui.prefs.PathPrefs;
 
 import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -21,12 +23,13 @@ import java.util.concurrent.CompletableFuture;
  *
  * <p>This dialog provides two modes of white balance calibration:
  * <ul>
- *   <li><b>Simple White Balance</b>: Calibrates at a single exposure at the current angle</li>
- *   <li><b>PPM White Balance</b>: Calibrates at 4 standard PPM angles with different exposures</li>
+ *   <li><b>Simple White Balance</b>: Standard method - calibrates once and applies the same
+ *       correction to all PPM angles. This has been the default approach.</li>
+ *   <li><b>PPM White Balance</b>: Experimental per-angle calibration at each of the 4 standard
+ *       PPM angles. Requires updated JAI camera DLL with per-channel exposure support.</li>
  * </ul>
  *
- * <p>The dialog follows the same pattern as AutofocusBenchmarkDialog with
- * TitledPane sections for organizing the settings.
+ * <p>The dialog is non-modal to allow interaction with QuPath while it remains open.
  *
  * @author Mike Nelson
  * @since 1.0
@@ -38,7 +41,7 @@ public class WhiteBalanceDialog {
     private static final DoubleProperty targetIntensityProperty =
             PathPrefs.createPersistentPreference("wb.targetIntensity", 180.0);
     private static final DoubleProperty toleranceProperty =
-            PathPrefs.createPersistentPreference("wb.tolerance", 5.0);
+            PathPrefs.createPersistentPreference("wb.tolerance", 2.0);
     private static final StringProperty outputPathProperty =
             PathPrefs.createPersistentPreference("wb.outputPath", "");
     private static final StringProperty cameraProperty =
@@ -137,7 +140,7 @@ public class WhiteBalanceDialog {
         Platform.runLater(() -> {
             try {
                 Dialog<WBDialogResult> dialog = new Dialog<>();
-                dialog.initModality(Modality.APPLICATION_MODAL);
+                // Non-modal so user can interact with QuPath while dialog is open
                 dialog.setTitle("White Balance Calibration");
                 dialog.setHeaderText("Configure JAI camera white balance calibration");
                 dialog.setResizable(true);
@@ -146,6 +149,13 @@ public class WhiteBalanceDialog {
                 VBox content = new VBox(15);
                 content.setPadding(new Insets(20));
                 content.setPrefWidth(650);
+
+                // Wrap content in ScrollPane for long content
+                ScrollPane scrollPane = new ScrollPane(content);
+                scrollPane.setFitToWidth(true);
+                scrollPane.setPrefViewportHeight(500);
+                scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+                scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
 
                 // ========== CAMERA SELECTION SECTION ==========
                 TitledPane cameraPane = createCameraSectionPane();
@@ -177,7 +187,7 @@ public class WhiteBalanceDialog {
                 ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
 
                 dialog.getDialogPane().getButtonTypes().addAll(runSimpleButton, runPPMButton, cancelButton);
-                dialog.getDialogPane().setContent(content);
+                dialog.getDialogPane().setContent(scrollPane);
 
                 // Get references to UI elements for result conversion
                 // Camera dropdown
@@ -379,13 +389,29 @@ public class WhiteBalanceDialog {
         grid.add(toleranceNote, 2, row);
         row++;
 
-        // Output folder
+        // Output folder - default to config file directory if no saved preference
         Label outputLabel = new Label("Output Folder:");
 
         TextField outputField = new TextField();
         outputField.setId("outputPath");
         outputField.setPrefWidth(300);
-        outputField.setText(outputPathProperty.get());
+
+        // Set default output path from config file location if no saved preference
+        String savedPath = outputPathProperty.get();
+        if (savedPath == null || savedPath.isEmpty()) {
+            try {
+                String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                if (configPath != null && !configPath.isEmpty()) {
+                    Path configDir = Paths.get(configPath).getParent();
+                    if (configDir != null) {
+                        savedPath = configDir.toString();
+                    }
+                }
+            } catch (Exception e) {
+                logger.debug("Could not get default output path from config location: {}", e.getMessage());
+            }
+        }
+        outputField.setText(savedPath != null ? savedPath : "");
         outputField.setPromptText("Select output folder for calibration files");
 
         Button browseButton = new Button("Browse...");
@@ -427,8 +453,8 @@ public class WhiteBalanceDialog {
 
         // Description
         Label descLabel = new Label(
-                "Simple white balance calibrates at a single exposure at the current PPM angle.\n" +
-                "Use this for quick calibration or for non-PPM imaging."
+                "Standard white balance method - calibrates once and applies the same correction\n" +
+                "to all PPM angles. This has been the default approach and works well for most cases."
         );
         descLabel.setWrapText(true);
         descLabel.setStyle("-fx-font-size: 11px;");
@@ -465,9 +491,9 @@ public class WhiteBalanceDialog {
 
         // Description/instruction
         Label descLabel = new Label(
-                "PPM white balance calibrates at each of the 4 standard PPM angles.\n" +
-                "Run 'Collect Background Images' first (without white balance) to determine\n" +
-                "appropriate exposure times at each angle, then enter those values below."
+                "Per-angle white balance (experimental) - calibrates separately at each of the\n" +
+                "4 standard PPM angles. This newer method requires the updated JAI camera DLL.\n" +
+                "Run 'Collect Background Images' first to determine exposure times at each angle."
         );
         descLabel.setWrapText(true);
         descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
