@@ -3,6 +3,7 @@ package qupath.ext.qpsc.utilities;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.ui.SampleSetupController;
 import qupath.ext.qpsc.modality.ppm.ui.PPMAngleSelectionController;
@@ -120,12 +121,12 @@ public class AcquisitionConfigurationBuilder {
         // Get white balance setting from config for this profile
         boolean whiteBalanceEnabled = configManager.isWhiteBalanceEnabled(baseModality, objective, detector);
         logger.debug("White balance enabled for {}/{}/{}: {}", baseModality, objective, detector, whiteBalanceEnabled);
-        
-        // TODO: Add white balance configuration validation
-        // TODO: When white balance is enabled, validate that gains are properly configured for this hardware combination
-        // TODO: Show warning if white balance is enabled but no gains are available (similar to autofocus validation)
-        // TODO: This is lower priority since we're currently not actively white balancing in the workflow
-        
+
+        // Check if per-angle white balance is enabled (from QuPath preferences)
+        // This uses calibration data from imageprocessing YAML's white_balance_calibration section
+        boolean perAngleWhiteBalance = QPPreferenceDialog.isJaiWhiteBalancePerAngle();
+        logger.debug("Per-angle white balance mode (from preferences): {}", perAngleWhiteBalance ? "PPM" : "SIMPLE");
+
         // Build enhanced acquisition command
         // Use the sampleName parameter (from ProjectInfo) - NOT sample.sampleName() which may differ
         AcquisitionCommandBuilder acquisitionBuilder = AcquisitionCommandBuilder.builder()
@@ -138,7 +139,7 @@ public class AcquisitionConfigurationBuilder {
                 .hardware(objective, detector, explicitPixelSize)
                 .autofocus(afTiles, afSteps, afRange)
                 .processingPipeline(processingSteps)
-                .whiteBalance(whiteBalanceEnabled);
+                .whiteBalance(whiteBalanceEnabled, perAngleWhiteBalance);
         
         // Only add background correction if enabled and configured
         if (bgEnabled && bgMethod != null && bgFolder != null) {
