@@ -53,129 +53,121 @@ public class WhiteBalanceWorkflow {
     public static void run() throws IOException {
         logger.info("Starting White Balance Calibration workflow");
 
-        // Get server connection parameters
-        String host = QPPreferenceDialog.getMicroscopeServerHost();
-        int port = QPPreferenceDialog.getMicroscopeServerPort();
+        // Use the singleton's client to avoid conflicts with auto-connect
+        MicroscopeSocketClient client = MicroscopeController.getInstance().getSocketClient();
 
-        logger.debug("Connecting to microscope server at {}:{}", host, port);
+        // Ensure connected
+        if (!client.isConnected()) {
+            try {
+                client.connect();
+            } catch (IOException e) {
+                throw new IOException("Failed to connect to microscope server: " + e.getMessage(), e);
+            }
+        }
 
-        // Create socket client
-        MicroscopeSocketClient client = new MicroscopeSocketClient(host, port);
+        logger.info("Using existing microscope server connection");
 
-        try {
-            // Connect to server
-            client.connect();
-            logger.info("Connected to microscope server");
+        // Show configuration dialog
+        WhiteBalanceDialog.showDialog()
+                .thenAccept(result -> {
+                    if (result == null) {
+                        logger.info("White balance calibration cancelled by user");
+                        // Don't close client - it's the singleton's shared connection
+                        return;
+                    }
 
-            // Show configuration dialog
-            WhiteBalanceDialog.showDialog()
-                    .thenAccept(result -> {
-                        if (result == null) {
-                            logger.info("White balance calibration cancelled by user");
-                            closeClient(client);
+                    // Validate output directory
+                    String outputPath = result.isSimple() ?
+                            result.getSimpleParams().outputPath() :
+                            result.getPPMParams().outputPath();
+
+                    File outputDir = new File(outputPath);
+                    if (!outputDir.exists()) {
+                        if (!outputDir.mkdirs()) {
+                            Platform.runLater(() -> {
+                                Alert alert = new Alert(Alert.AlertType.ERROR);
+                                alert.setTitle("Invalid Output Directory");
+                                alert.setHeaderText("Could not create output directory");
+                                alert.setContentText("Failed to create:\n" + outputPath);
+                                alert.showAndWait();
+                            });
                             return;
                         }
+                        logger.info("Created output directory: {}", outputPath);
+                    }
 
-                        // Validate output directory
-                        String outputPath = result.isSimple() ?
-                                result.getSimpleParams().outputPath() :
-                                result.getPPMParams().outputPath();
+                    // Confirm and run calibration
+                    Platform.runLater(() -> {
+                        String modeDesc = result.isSimple() ? "Simple" : "PPM (4 angles)";
+                        String timeEstimate = result.isSimple() ? "2-3 minutes" : "10-15 minutes";
 
-                        File outputDir = new File(outputPath);
-                        if (!outputDir.exists()) {
-                            if (!outputDir.mkdirs()) {
-                                Platform.runLater(() -> {
-                                    Alert alert = new Alert(Alert.AlertType.ERROR);
-                                    alert.setTitle("Invalid Output Directory");
-                                    alert.setHeaderText("Could not create output directory");
-                                    alert.setContentText("Failed to create:\n" + outputPath);
-                                    alert.showAndWait();
-                                });
-                                closeClient(client);
-                                return;
-                            }
-                            logger.info("Created output directory: {}", outputPath);
+                        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+                        confirm.setTitle("Confirm White Balance Calibration");
+                        confirm.setHeaderText("Ready to start " + modeDesc + " white balance calibration");
+
+                        StringBuilder details = new StringBuilder();
+                        if (result.isSimple()) {
+                            var params = result.getSimpleParams();
+                            details.append(String.format(
+                                    "Mode: Simple White Balance\n" +
+                                    "Base Exposure: %.1f ms\n" +
+                                    "Target Intensity: %.0f\n" +
+                                    "Tolerance: %.1f\n",
+                                    params.baseExposureMs(),
+                                    params.targetIntensity(),
+                                    params.tolerance()
+                            ));
+                        } else {
+                            var params = result.getPPMParams();
+                            details.append(String.format(
+                                    "Mode: PPM White Balance (4 angles)\n" +
+                                    "Positive (%.1f deg): %.1f ms\n" +
+                                    "Negative (%.1f deg): %.1f ms\n" +
+                                    "Crossed (%.1f deg): %.1f ms\n" +
+                                    "Uncrossed (%.1f deg): %.1f ms\n" +
+                                    "Target Intensity: %.0f\n" +
+                                    "Tolerance: %.1f\n",
+                                    params.positiveAngle(), params.positiveExposureMs(),
+                                    params.negativeAngle(), params.negativeExposureMs(),
+                                    params.crossedAngle(), params.crossedExposureMs(),
+                                    params.uncrossedAngle(), params.uncrossedExposureMs(),
+                                    params.targetIntensity(),
+                                    params.tolerance()
+                            ));
                         }
 
-                        // Confirm and run calibration
-                        Platform.runLater(() -> {
-                            String modeDesc = result.isSimple() ? "Simple" : "PPM (4 angles)";
-                            String timeEstimate = result.isSimple() ? "2-3 minutes" : "10-15 minutes";
+                        details.append(String.format(
+                                "\nOutput: %s\n" +
+                                "Estimated time: %s\n\n" +
+                                "IMPORTANT: Ensure a neutral gray/white target or blank slide\n" +
+                                "is in the field of view before continuing.",
+                                outputPath,
+                                timeEstimate
+                        ));
 
-                            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-                            confirm.setTitle("Confirm White Balance Calibration");
-                            confirm.setHeaderText("Ready to start " + modeDesc + " white balance calibration");
+                        confirm.setContentText(details.toString());
 
-                            StringBuilder details = new StringBuilder();
-                            if (result.isSimple()) {
-                                var params = result.getSimpleParams();
-                                details.append(String.format(
-                                        "Mode: Simple White Balance\n" +
-                                        "Base Exposure: %.1f ms\n" +
-                                        "Target Intensity: %.0f\n" +
-                                        "Tolerance: %.1f\n",
-                                        params.baseExposureMs(),
-                                        params.targetIntensity(),
-                                        params.tolerance()
-                                ));
-                            } else {
-                                var params = result.getPPMParams();
-                                details.append(String.format(
-                                        "Mode: PPM White Balance (4 angles)\n" +
-                                        "Positive (%.1f deg): %.1f ms\n" +
-                                        "Negative (%.1f deg): %.1f ms\n" +
-                                        "Crossed (%.1f deg): %.1f ms\n" +
-                                        "Uncrossed (%.1f deg): %.1f ms\n" +
-                                        "Target Intensity: %.0f\n" +
-                                        "Tolerance: %.1f\n",
-                                        params.positiveAngle(), params.positiveExposureMs(),
-                                        params.negativeAngle(), params.negativeExposureMs(),
-                                        params.crossedAngle(), params.crossedExposureMs(),
-                                        params.uncrossedAngle(), params.uncrossedExposureMs(),
-                                        params.targetIntensity(),
-                                        params.tolerance()
-                                ));
-                            }
-
-                            details.append(String.format(
-                                    "\nOutput: %s\n" +
-                                    "Estimated time: %s\n\n" +
-                                    "IMPORTANT: Ensure a neutral gray/white target or blank slide\n" +
-                                    "is in the field of view before continuing.",
-                                    outputPath,
-                                    timeEstimate
-                            ));
-
-                            confirm.setContentText(details.toString());
-
-                            confirm.showAndWait().ifPresent(response -> {
-                                if (response == ButtonType.OK) {
-                                    if (result.isSimple()) {
-                                        runSimpleCalibration(client, result.getSimpleParams());
-                                    } else {
-                                        runPPMCalibration(client, result.getPPMParams());
-                                    }
+                        confirm.showAndWait().ifPresent(response -> {
+                            if (response == ButtonType.OK) {
+                                if (result.isSimple()) {
+                                    runSimpleCalibration(client, result.getSimpleParams());
                                 } else {
-                                    logger.info("White balance cancelled by user at confirmation");
-                                    closeClient(client);
+                                    runPPMCalibration(client, result.getPPMParams());
                                 }
-                            });
+                            } else {
+                                logger.info("White balance cancelled by user at confirmation");
+                            }
                         });
-                    })
-                    .exceptionally(ex -> {
-                        logger.error("Error in white balance workflow", ex);
-                        Platform.runLater(() -> {
-                            Dialogs.showErrorMessage("White Balance Error",
-                                    "Error during calibration: " + ex.getMessage());
-                        });
-                        closeClient(client);
-                        return null;
                     });
-
-        } catch (Exception e) {
-            closeClient(client);
-            throw e;
-        }
+                })
+                .exceptionally(ex -> {
+                    logger.error("Error in white balance workflow", ex);
+                    Platform.runLater(() -> {
+                        Dialogs.showErrorMessage("White Balance Error",
+                                "Error during calibration: " + ex.getMessage());
+                    });
+                    return null;
+                });
     }
 
     /**
@@ -231,9 +223,8 @@ public class WhiteBalanceWorkflow {
                     Dialogs.showErrorMessage("White Balance Failed",
                             "Calibration failed: " + e.getMessage());
                 });
-            } finally {
-                closeClient(client);
             }
+            // Don't close client - it's the singleton's shared connection
         }, "WhiteBalanceCalibration");
         calibrationThread.setDaemon(true);
         calibrationThread.start();
@@ -297,9 +288,8 @@ public class WhiteBalanceWorkflow {
                     Dialogs.showErrorMessage("PPM White Balance Failed",
                             "Calibration failed: " + e.getMessage());
                 });
-            } finally {
-                closeClient(client);
             }
+            // Don't close client - it's the singleton's shared connection
         }, "PPMWhiteBalanceCalibration");
         calibrationThread.setDaemon(true);
         calibrationThread.start();
@@ -382,17 +372,4 @@ public class WhiteBalanceWorkflow {
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
-    /**
-     * Safely closes the microscope socket client.
-     */
-    private static void closeClient(MicroscopeSocketClient client) {
-        if (client != null) {
-            try {
-                client.close();
-                logger.debug("Closed microscope socket client");
-            } catch (Exception e) {
-                logger.warn("Error closing client: {}", e.getMessage());
-            }
-        }
-    }
 }
