@@ -61,6 +61,17 @@ public class WhiteBalanceDialog {
     private static final DoubleProperty ppmUncrossedExpProperty =
             PathPrefs.createPersistentPreference("wb.ppm.uncrossed.exposure", Double.NaN);
 
+    // PPM WB target intensity preferences per angle
+    // Defaults based on optical properties of polarized light
+    private static final DoubleProperty ppmPositiveTargetProperty =
+            PathPrefs.createPersistentPreference("wb.ppm.positive.target", 160.0);
+    private static final DoubleProperty ppmNegativeTargetProperty =
+            PathPrefs.createPersistentPreference("wb.ppm.negative.target", 160.0);
+    private static final DoubleProperty ppmCrossedTargetProperty =
+            PathPrefs.createPersistentPreference("wb.ppm.crossed.target", 125.0);
+    private static final DoubleProperty ppmUncrossedTargetProperty =
+            PathPrefs.createPersistentPreference("wb.ppm.uncrossed.target", 245.0);
+
     // Fixed PPM angles (standard values)
     public static final double POSITIVE_ANGLE = 7.0;
     public static final double NEGATIVE_ANGLE = -7.0;
@@ -84,11 +95,11 @@ public class WhiteBalanceDialog {
     public record PPMWBParams(
             String outputPath,
             String camera,
-            double positiveAngle, double positiveExposureMs,
-            double negativeAngle, double negativeExposureMs,
-            double crossedAngle, double crossedExposureMs,
-            double uncrossedAngle, double uncrossedExposureMs,
-            double targetIntensity,
+            double positiveAngle, double positiveExposureMs, double positiveTarget,
+            double negativeAngle, double negativeExposureMs, double negativeTarget,
+            double crossedAngle, double crossedExposureMs, double crossedTarget,
+            double uncrossedAngle, double uncrossedExposureMs, double uncrossedTarget,
+            double targetIntensity,  // Default fallback target (for backward compatibility)
             double tolerance
     ) {}
 
@@ -198,11 +209,16 @@ public class WhiteBalanceDialog {
                 Spinner<?> toleranceSpinner = (Spinner<?>) sharedPane.getContent().lookup("#tolerance");
                 // Simple WB
                 Spinner<?> simpleExpSpinner = (Spinner<?>) simplePane.getContent().lookup("#simpleExposure");
-                // PPM WB
+                // PPM WB - exposures
                 Spinner<?> posExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#positiveExposure");
                 Spinner<?> negExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#negativeExposure");
                 Spinner<?> crossExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#crossedExposure");
                 Spinner<?> uncrossExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#uncrossedExposure");
+                // PPM WB - per-angle targets
+                Spinner<?> posTargetSpinner = (Spinner<?>) ppmPane.getContent().lookup("#positiveTarget");
+                Spinner<?> negTargetSpinner = (Spinner<?>) ppmPane.getContent().lookup("#negativeTarget");
+                Spinner<?> crossTargetSpinner = (Spinner<?>) ppmPane.getContent().lookup("#crossedTarget");
+                Spinner<?> uncrossTargetSpinner = (Spinner<?>) ppmPane.getContent().lookup("#uncrossedTarget");
 
                 // Validation for PPM button
                 Button ppmBtn = (Button) dialog.getDialogPane().lookupButton(runPPMButton);
@@ -268,26 +284,38 @@ public class WhiteBalanceDialog {
                         double crossExp = (Double) crossExpSpinner.getValue();
                         double uncrossExp = (Double) uncrossExpSpinner.getValue();
 
-                        // Save PPM preferences
+                        // Get per-angle targets
+                        double posTarget = (Double) posTargetSpinner.getValue();
+                        double negTarget = (Double) negTargetSpinner.getValue();
+                        double crossTarget = (Double) crossTargetSpinner.getValue();
+                        double uncrossTarget = (Double) uncrossTargetSpinner.getValue();
+
+                        // Save PPM preferences - exposures
                         ppmPositiveExpProperty.set(posExp);
                         ppmNegativeExpProperty.set(negExp);
                         ppmCrossedExpProperty.set(crossExp);
                         ppmUncrossedExpProperty.set(uncrossExp);
 
+                        // Save PPM preferences - targets
+                        ppmPositiveTargetProperty.set(posTarget);
+                        ppmNegativeTargetProperty.set(negTarget);
+                        ppmCrossedTargetProperty.set(crossTarget);
+                        ppmUncrossedTargetProperty.set(uncrossTarget);
+
                         logger.info("User selected PPM White Balance:");
                         logger.info("  Output: {}", outPath);
-                        logger.info("  Positive ({}deg): {} ms", POSITIVE_ANGLE, posExp);
-                        logger.info("  Negative ({}deg): {} ms", NEGATIVE_ANGLE, negExp);
-                        logger.info("  Crossed ({}deg): {} ms", CROSSED_ANGLE, crossExp);
-                        logger.info("  Uncrossed ({}deg): {} ms", UNCROSSED_ANGLE, uncrossExp);
-                        logger.info("  Target: {}, Tolerance: {}", target, tolerance);
+                        logger.info("  Positive ({}deg): {} ms, target={}", POSITIVE_ANGLE, posExp, posTarget);
+                        logger.info("  Negative ({}deg): {} ms, target={}", NEGATIVE_ANGLE, negExp, negTarget);
+                        logger.info("  Crossed ({}deg): {} ms, target={}", CROSSED_ANGLE, crossExp, crossTarget);
+                        logger.info("  Uncrossed ({}deg): {} ms, target={}", UNCROSSED_ANGLE, uncrossExp, uncrossTarget);
+                        logger.info("  Default target: {}, Tolerance: {}", target, tolerance);
 
                         return WBDialogResult.ppm(new PPMWBParams(
                                 outPath, camera,
-                                POSITIVE_ANGLE, posExp,
-                                NEGATIVE_ANGLE, negExp,
-                                CROSSED_ANGLE, crossExp,
-                                UNCROSSED_ANGLE, uncrossExp,
+                                POSITIVE_ANGLE, posExp, posTarget,
+                                NEGATIVE_ANGLE, negExp, negTarget,
+                                CROSSED_ANGLE, crossExp, crossTarget,
+                                UNCROSSED_ANGLE, uncrossExp, uncrossTarget,
                                 target, tolerance
                         ));
                     }
@@ -483,7 +511,7 @@ public class WhiteBalanceDialog {
     }
 
     /**
-     * Creates the PPM White Balance pane with 4 angle/exposure pairs.
+     * Creates the PPM White Balance pane with 4 angle/exposure/target triplets.
      */
     private static TitledPane createPPMWBPane() {
         VBox vbox = new VBox(10);
@@ -491,14 +519,14 @@ public class WhiteBalanceDialog {
 
         // Description/instruction
         Label descLabel = new Label(
-                "Per-angle white balance (experimental) - calibrates separately at each of the\n" +
-                "4 standard PPM angles. This newer method requires the updated JAI camera DLL.\n" +
+                "Per-angle white balance - calibrates separately at each of the 4 standard PPM angles.\n" +
+                "Target intensities are pre-set based on optical properties (crossed is dim, uncrossed is bright).\n" +
                 "Run 'Collect Background Images' first to determine exposure times at each angle."
         );
         descLabel.setWrapText(true);
         descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
 
-        // Grid for angle/exposure pairs
+        // Grid for angle/exposure/target triplets
         GridPane grid = new GridPane();
         grid.setHgap(15);
         grid.setVgap(8);
@@ -508,11 +536,14 @@ public class WhiteBalanceDialog {
         angleHeader.setStyle("-fx-font-weight: bold;");
         Label expHeader = new Label("Exposure (ms)");
         expHeader.setStyle("-fx-font-weight: bold;");
+        Label targetHeader = new Label("Target Intensity");
+        targetHeader.setStyle("-fx-font-weight: bold;");
 
         grid.add(angleHeader, 0, 0);
         grid.add(expHeader, 1, 0);
+        grid.add(targetHeader, 2, 0);
 
-        // Positive (7.0 deg)
+        // Positive (7.0 deg) - birefringence angle, moderate brightness
         Label posLabel = new Label(String.format("Positive (%.1f deg):", POSITIVE_ANGLE));
         posLabel.setPrefWidth(150);
         double posDefault = Double.isNaN(ppmPositiveExpProperty.get()) ? 0.0 : ppmPositiveExpProperty.get();
@@ -520,45 +551,71 @@ public class WhiteBalanceDialog {
         posSpinner.setId("positiveExposure");
         posSpinner.setEditable(true);
         posSpinner.setPrefWidth(100);
+        Spinner<Double> posTargetSpinner = new Spinner<>(0.0, 255.0, ppmPositiveTargetProperty.get(), 5.0);
+        posTargetSpinner.setId("positiveTarget");
+        posTargetSpinner.setEditable(true);
+        posTargetSpinner.setPrefWidth(80);
+        posTargetSpinner.setTooltip(new Tooltip("Target intensity for birefringence angle (moderate)"));
 
         grid.add(posLabel, 0, 1);
         grid.add(posSpinner, 1, 1);
+        grid.add(posTargetSpinner, 2, 1);
 
-        // Negative (-7.0 deg)
+        // Negative (-7.0 deg) - birefringence angle, moderate brightness
         Label negLabel = new Label(String.format("Negative (%.1f deg):", NEGATIVE_ANGLE));
         double negDefault = Double.isNaN(ppmNegativeExpProperty.get()) ? 0.0 : ppmNegativeExpProperty.get();
         Spinner<Double> negSpinner = new Spinner<>(0.0, 500.0, negDefault, 1.0);
         negSpinner.setId("negativeExposure");
         negSpinner.setEditable(true);
         negSpinner.setPrefWidth(100);
+        Spinner<Double> negTargetSpinner = new Spinner<>(0.0, 255.0, ppmNegativeTargetProperty.get(), 5.0);
+        negTargetSpinner.setId("negativeTarget");
+        negTargetSpinner.setEditable(true);
+        negTargetSpinner.setPrefWidth(80);
+        negTargetSpinner.setTooltip(new Tooltip("Target intensity for birefringence angle (moderate)"));
 
         grid.add(negLabel, 0, 2);
         grid.add(negSpinner, 1, 2);
+        grid.add(negTargetSpinner, 2, 2);
 
-        // Crossed (0.0 deg)
+        // Crossed (0.0 deg) - very dim due to blocked light
         Label crossLabel = new Label(String.format("Crossed (%.1f deg):", CROSSED_ANGLE));
         double crossDefault = Double.isNaN(ppmCrossedExpProperty.get()) ? 0.0 : ppmCrossedExpProperty.get();
-        Spinner<Double> crossSpinner = new Spinner<>(0.0, 500.0, crossDefault, 1.0);
+        Spinner<Double> crossSpinner = new Spinner<>(0.0, 5000.0, crossDefault, 10.0);  // Higher max for crossed
         crossSpinner.setId("crossedExposure");
         crossSpinner.setEditable(true);
         crossSpinner.setPrefWidth(100);
+        Spinner<Double> crossTargetSpinner = new Spinner<>(0.0, 255.0, ppmCrossedTargetProperty.get(), 5.0);
+        crossTargetSpinner.setId("crossedTarget");
+        crossTargetSpinner.setEditable(true);
+        crossTargetSpinner.setPrefWidth(80);
+        crossTargetSpinner.setTooltip(new Tooltip("Target intensity for crossed polarizers (dim)"));
 
         grid.add(crossLabel, 0, 3);
         grid.add(crossSpinner, 1, 3);
+        grid.add(crossTargetSpinner, 2, 3);
 
-        // Uncrossed (90.0 deg)
+        // Uncrossed (90.0 deg) - very bright
         Label uncrossLabel = new Label(String.format("Uncrossed (%.1f deg):", UNCROSSED_ANGLE));
         double uncrossDefault = Double.isNaN(ppmUncrossedExpProperty.get()) ? 0.0 : ppmUncrossedExpProperty.get();
-        Spinner<Double> uncrossSpinner = new Spinner<>(0.0, 500.0, uncrossDefault, 1.0);
+        Spinner<Double> uncrossSpinner = new Spinner<>(0.0, 500.0, uncrossDefault, 0.1);  // Fine control for short exposure
         uncrossSpinner.setId("uncrossedExposure");
         uncrossSpinner.setEditable(true);
         uncrossSpinner.setPrefWidth(100);
+        Spinner<Double> uncrossTargetSpinner = new Spinner<>(0.0, 255.0, ppmUncrossedTargetProperty.get(), 5.0);
+        uncrossTargetSpinner.setId("uncrossedTarget");
+        uncrossTargetSpinner.setEditable(true);
+        uncrossTargetSpinner.setPrefWidth(80);
+        uncrossTargetSpinner.setTooltip(new Tooltip("Target intensity for uncrossed polarizers (bright)"));
 
         grid.add(uncrossLabel, 0, 4);
         grid.add(uncrossSpinner, 1, 4);
+        grid.add(uncrossTargetSpinner, 2, 4);
 
         // Note about fixed angles
-        Label noteLabel = new Label("(Angles are fixed at standard PPM values)");
+        Label noteLabel = new Label(
+                "(Angles are fixed at standard PPM values. Targets match optical properties.)"
+        );
         noteLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
 
         vbox.getChildren().addAll(descLabel, grid, noteLabel);

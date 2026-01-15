@@ -268,10 +268,10 @@ public class WhiteBalanceWorkflow {
             try {
                 Map<String, MicroscopeSocketClient.WhiteBalanceResult> results = client.runPPMWhiteBalance(
                         params.outputPath(),
-                        params.positiveAngle(), params.positiveExposureMs(),
-                        params.negativeAngle(), params.negativeExposureMs(),
-                        params.crossedAngle(), params.crossedExposureMs(),
-                        params.uncrossedAngle(), params.uncrossedExposureMs(),
+                        params.positiveAngle(), params.positiveExposureMs(), params.positiveTarget(),
+                        params.negativeAngle(), params.negativeExposureMs(), params.negativeTarget(),
+                        params.crossedAngle(), params.crossedExposureMs(), params.crossedTarget(),
+                        params.uncrossedAngle(), params.uncrossedExposureMs(), params.uncrossedTarget(),
                         params.targetIntensity(),
                         params.tolerance()
                 );

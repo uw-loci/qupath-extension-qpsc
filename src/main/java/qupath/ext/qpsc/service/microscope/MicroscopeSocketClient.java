@@ -2537,31 +2537,36 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
-     * Run PPM white balance calibration at 4 standard angles.
+     * Run PPM white balance calibration at 4 standard angles with per-angle targets.
      *
      * This calibrates the camera at each of the 4 PPM angles (positive, negative,
-     * crossed, uncrossed) using different starting exposures for each angle.
+     * crossed, uncrossed) using different starting exposures and target intensities
+     * for each angle.
      *
      * @param outputPath Output directory for calibration results
      * @param positiveAngle Positive angle (typically 7.0 degrees)
      * @param positiveExposure Initial exposure for positive angle (ms)
+     * @param positiveTarget Target intensity for positive angle (0-255)
      * @param negativeAngle Negative angle (typically -7.0 degrees)
      * @param negativeExposure Initial exposure for negative angle (ms)
+     * @param negativeTarget Target intensity for negative angle (0-255)
      * @param crossedAngle Crossed angle (typically 0.0 degrees)
      * @param crossedExposure Initial exposure for crossed angle (ms)
+     * @param crossedTarget Target intensity for crossed angle (0-255)
      * @param uncrossedAngle Uncrossed angle (typically 90.0 degrees)
      * @param uncrossedExposure Initial exposure for uncrossed angle (ms)
-     * @param targetIntensity Target mean intensity (0-255, default 180)
+     * @param uncrossedTarget Target intensity for uncrossed angle (0-255)
+     * @param targetIntensity Default target intensity (0-255, used as fallback)
      * @param tolerance Acceptable deviation from target (default 5)
      * @return Map of angle names to WhiteBalanceResult
      * @throws IOException if communication fails or calibration fails
      */
     public Map<String, WhiteBalanceResult> runPPMWhiteBalance(
             String outputPath,
-            double positiveAngle, double positiveExposure,
-            double negativeAngle, double negativeExposure,
-            double crossedAngle, double crossedExposure,
-            double uncrossedAngle, double uncrossedExposure,
+            double positiveAngle, double positiveExposure, double positiveTarget,
+            double negativeAngle, double negativeExposure, double negativeTarget,
+            double crossedAngle, double crossedExposure, double crossedTarget,
+            double uncrossedAngle, double uncrossedExposure, double uncrossedTarget,
             double targetIntensity,
             double tolerance) throws IOException {
 
@@ -2570,12 +2575,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
         message.append("--output ").append(outputPath);
         message.append(" --positive_angle ").append(positiveAngle);
         message.append(" --positive_exp ").append(positiveExposure);
+        message.append(" --target_positive ").append(positiveTarget);
         message.append(" --negative_angle ").append(negativeAngle);
         message.append(" --negative_exp ").append(negativeExposure);
+        message.append(" --target_negative ").append(negativeTarget);
         message.append(" --crossed_angle ").append(crossedAngle);
         message.append(" --crossed_exp ").append(crossedExposure);
+        message.append(" --target_crossed ").append(crossedTarget);
         message.append(" --uncrossed_angle ").append(uncrossedAngle);
         message.append(" --uncrossed_exp ").append(uncrossedExposure);
+        message.append(" --target_uncrossed ").append(uncrossedTarget);
         message.append(" --target ").append(targetIntensity);
         message.append(" --tolerance ").append(tolerance);
         message.append(" ").append(END_MARKER);
@@ -2584,11 +2593,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         logger.info("Sending PPM white balance command:");
         logger.info("  Output path: {}", outputPath);
-        logger.info("  Positive: {} deg, {} ms", positiveAngle, positiveExposure);
-        logger.info("  Negative: {} deg, {} ms", negativeAngle, negativeExposure);
-        logger.info("  Crossed: {} deg, {} ms", crossedAngle, crossedExposure);
-        logger.info("  Uncrossed: {} deg, {} ms", uncrossedAngle, uncrossedExposure);
-        logger.info("  Target intensity: {}, Tolerance: {}", targetIntensity, tolerance);
+        logger.info("  Positive: {} deg, {} ms, target={}", positiveAngle, positiveExposure, positiveTarget);
+        logger.info("  Negative: {} deg, {} ms, target={}", negativeAngle, negativeExposure, negativeTarget);
+        logger.info("  Crossed: {} deg, {} ms, target={}", crossedAngle, crossedExposure, crossedTarget);
+        logger.info("  Uncrossed: {} deg, {} ms, target={}", uncrossedAngle, uncrossedExposure, uncrossedTarget);
+        logger.info("  Default target: {}, Tolerance: {}", targetIntensity, tolerance);
 
         synchronized (socketLock) {
             ensureConnected();
