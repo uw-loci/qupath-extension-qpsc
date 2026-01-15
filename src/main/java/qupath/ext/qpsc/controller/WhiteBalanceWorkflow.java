@@ -204,11 +204,16 @@ public class WhiteBalanceWorkflow {
         // Run calibration in background thread
         Thread calibrationThread = new Thread(() -> {
             try {
+                var advanced = params.advanced();
                 MicroscopeSocketClient.WhiteBalanceResult result = client.runSimpleWhiteBalance(
                         params.outputPath(),
                         params.baseExposureMs(),
                         params.targetIntensity(),
-                        params.tolerance()
+                        params.tolerance(),
+                        advanced.maxGainDb(),
+                        advanced.gainThresholdRatio(),
+                        advanced.maxIterations(),
+                        advanced.calibrateBlackLevel()
                 );
 
                 Platform.runLater(() -> {
@@ -266,6 +271,7 @@ public class WhiteBalanceWorkflow {
         // Run calibration in background thread
         Thread calibrationThread = new Thread(() -> {
             try {
+                var advanced = params.advanced();
                 Map<String, MicroscopeSocketClient.WhiteBalanceResult> results = client.runPPMWhiteBalance(
                         params.outputPath(),
                         params.positiveAngle(), params.positiveExposureMs(), params.positiveTarget(),
@@ -273,7 +279,11 @@ public class WhiteBalanceWorkflow {
                         params.crossedAngle(), params.crossedExposureMs(), params.crossedTarget(),
                         params.uncrossedAngle(), params.uncrossedExposureMs(), params.uncrossedTarget(),
                         params.targetIntensity(),
-                        params.tolerance()
+                        params.tolerance(),
+                        advanced.maxGainDb(),
+                        advanced.gainThresholdRatio(),
+                        advanced.maxIterations(),
+                        advanced.calibrateBlackLevel()
                 );
 
                 Platform.runLater(() -> {

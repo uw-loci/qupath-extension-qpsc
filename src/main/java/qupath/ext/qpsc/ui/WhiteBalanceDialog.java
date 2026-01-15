@@ -1,7 +1,9 @@
 package qupath.ext.qpsc.ui;
 
 import javafx.application.Platform;
+import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.StringProperty;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -72,11 +74,36 @@ public class WhiteBalanceDialog {
     private static final DoubleProperty ppmUncrossedTargetProperty =
             PathPrefs.createPersistentPreference("wb.ppm.uncrossed.target", 245.0);
 
+    // Advanced calibration settings
+    // Max analog gain in dB (JAI supports 0-36.13 dB, but keep low to minimize noise)
+    // 3 dB = 1.41x linear gain, 6 dB = 2x, 12 dB = 4x
+    private static final DoubleProperty maxGainDbProperty =
+            PathPrefs.createPersistentPreference("wb.advanced.maxGainDb", 3.0);
+    // Exposure ratio threshold before applying gain compensation
+    private static final DoubleProperty gainThresholdRatioProperty =
+            PathPrefs.createPersistentPreference("wb.advanced.gainThresholdRatio", 2.0);
+    // Maximum calibration iterations before giving up
+    private static final IntegerProperty maxIterationsProperty =
+            PathPrefs.createPersistentPreference("wb.advanced.maxIterations", 30);
+    // Whether to perform black level calibration
+    private static final BooleanProperty calibrateBlackLevelProperty =
+            PathPrefs.createPersistentPreference("wb.advanced.calibrateBlackLevel", true);
+
     // Fixed PPM angles (standard values)
     public static final double POSITIVE_ANGLE = 7.0;
     public static final double NEGATIVE_ANGLE = -7.0;
     public static final double CROSSED_ANGLE = 0.0;
     public static final double UNCROSSED_ANGLE = 90.0;
+
+    /**
+     * Result record for advanced calibration settings (shared by both modes).
+     */
+    public record AdvancedWBParams(
+            double maxGainDb,           // Max analog gain in dB (default 3.0)
+            double gainThresholdRatio,  // Exposure ratio before using gain (default 2.0)
+            int maxIterations,          // Max calibration iterations (default 30)
+            boolean calibrateBlackLevel // Whether to calibrate black level (default true)
+    ) {}
 
     /**
      * Result record for Simple White Balance configuration.
@@ -86,7 +113,8 @@ public class WhiteBalanceDialog {
             String camera,
             double baseExposureMs,
             double targetIntensity,
-            double tolerance
+            double tolerance,
+            AdvancedWBParams advanced
     ) {}
 
     /**
@@ -100,7 +128,8 @@ public class WhiteBalanceDialog {
             double crossedAngle, double crossedExposureMs, double crossedTarget,
             double uncrossedAngle, double uncrossedExposureMs, double uncrossedTarget,
             double targetIntensity,  // Default fallback target (for backward compatibility)
-            double tolerance
+            double tolerance,
+            AdvancedWBParams advanced
     ) {}
 
     /**
@@ -184,12 +213,17 @@ public class WhiteBalanceDialog {
                 TitledPane ppmPane = createPPMWBPane();
                 ppmPane.setExpanded(false);
 
+                // ========== ADVANCED SETTINGS SECTION ==========
+                TitledPane advancedPane = createAdvancedSettingsPane();
+                advancedPane.setExpanded(false);
+
                 // Add all sections
                 content.getChildren().addAll(
                         cameraPane,
                         sharedPane,
                         simplePane,
-                        ppmPane
+                        ppmPane,
+                        advancedPane
                 );
 
                 // ========== DIALOG BUTTONS ==========
@@ -219,6 +253,11 @@ public class WhiteBalanceDialog {
                 Spinner<?> negTargetSpinner = (Spinner<?>) ppmPane.getContent().lookup("#negativeTarget");
                 Spinner<?> crossTargetSpinner = (Spinner<?>) ppmPane.getContent().lookup("#crossedTarget");
                 Spinner<?> uncrossTargetSpinner = (Spinner<?>) ppmPane.getContent().lookup("#uncrossedTarget");
+                // Advanced settings
+                Spinner<?> maxGainSpinner = (Spinner<?>) advancedPane.getContent().lookup("#maxGainDb");
+                Spinner<?> gainThresholdSpinner = (Spinner<?>) advancedPane.getContent().lookup("#gainThresholdRatio");
+                Spinner<?> maxIterSpinner = (Spinner<?>) advancedPane.getContent().lookup("#maxIterations");
+                CheckBox blackLevelCheck = (CheckBox) advancedPane.getContent().lookup("#calibrateBlackLevel");
 
                 // Validation for PPM button
                 Button ppmBtn = (Button) dialog.getDialogPane().lookupButton(runPPMButton);
@@ -259,11 +298,27 @@ public class WhiteBalanceDialog {
                     double target = (Double) targetSpinner.getValue();
                     double tolerance = (Double) toleranceSpinner.getValue();
 
+                    // Get advanced settings
+                    double maxGain = (Double) maxGainSpinner.getValue();
+                    double gainThreshold = (Double) gainThresholdSpinner.getValue();
+                    int maxIter = (Integer) maxIterSpinner.getValue();
+                    boolean calibrateBL = blackLevelCheck.isSelected();
+
                     // Save shared preferences
                     outputPathProperty.set(outPath);
                     targetIntensityProperty.set(target);
                     toleranceProperty.set(tolerance);
                     cameraProperty.set(camera);
+
+                    // Save advanced preferences
+                    maxGainDbProperty.set(maxGain);
+                    gainThresholdRatioProperty.set(gainThreshold);
+                    maxIterationsProperty.set(maxIter);
+                    calibrateBlackLevelProperty.set(calibrateBL);
+
+                    AdvancedWBParams advanced = new AdvancedWBParams(
+                            maxGain, gainThreshold, maxIter, calibrateBL
+                    );
 
                     if (buttonType == runSimpleButton) {
                         double exposure = (Double) simpleExpSpinner.getValue();
@@ -273,9 +328,11 @@ public class WhiteBalanceDialog {
                         logger.info("  Output: {}", outPath);
                         logger.info("  Base exposure: {} ms", exposure);
                         logger.info("  Target: {}, Tolerance: {}", target, tolerance);
+                        logger.info("  Advanced: maxGain={}dB, gainThreshold={}, maxIter={}, calibrateBL={}",
+                                maxGain, gainThreshold, maxIter, calibrateBL);
 
                         return WBDialogResult.simple(new SimpleWBParams(
-                                outPath, camera, exposure, target, tolerance
+                                outPath, camera, exposure, target, tolerance, advanced
                         ));
 
                     } else if (buttonType == runPPMButton) {
@@ -309,6 +366,8 @@ public class WhiteBalanceDialog {
                         logger.info("  Crossed ({}deg): {} ms, target={}", CROSSED_ANGLE, crossExp, crossTarget);
                         logger.info("  Uncrossed ({}deg): {} ms, target={}", UNCROSSED_ANGLE, uncrossExp, uncrossTarget);
                         logger.info("  Default target: {}, Tolerance: {}", target, tolerance);
+                        logger.info("  Advanced: maxGain={}dB, gainThreshold={}, maxIter={}, calibrateBL={}",
+                                maxGain, gainThreshold, maxIter, calibrateBL);
 
                         return WBDialogResult.ppm(new PPMWBParams(
                                 outPath, camera,
@@ -316,7 +375,7 @@ public class WhiteBalanceDialog {
                                 NEGATIVE_ANGLE, negExp, negTarget,
                                 CROSSED_ANGLE, crossExp, crossTarget,
                                 UNCROSSED_ANGLE, uncrossExp, uncrossTarget,
-                                target, tolerance
+                                target, tolerance, advanced
                         ));
                     }
 
@@ -621,6 +680,112 @@ public class WhiteBalanceDialog {
         vbox.getChildren().addAll(descLabel, grid, noteLabel);
 
         TitledPane pane = new TitledPane("PPM White Balance (4 Angles)", vbox);
+        pane.setCollapsible(true);
+        return pane;
+    }
+
+    /**
+     * Creates the Advanced Settings pane with calibration algorithm parameters.
+     */
+    private static TitledPane createAdvancedSettingsPane() {
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(10));
+
+        int row = 0;
+
+        // Description
+        Label descLabel = new Label(
+                "Advanced calibration parameters. Default values work well for most cases."
+        );
+        descLabel.setWrapText(true);
+        descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        grid.add(descLabel, 0, row, 3, 1);
+        row++;
+
+        // Max Gain (dB)
+        Label maxGainLabel = new Label("Max Gain (dB):");
+        maxGainLabel.setPrefWidth(160);
+
+        Spinner<Double> maxGainSpinner = new Spinner<>(0.0, 36.0, maxGainDbProperty.get(), 0.5);
+        maxGainSpinner.setId("maxGainDb");
+        maxGainSpinner.setEditable(true);
+        maxGainSpinner.setPrefWidth(100);
+        maxGainSpinner.setTooltip(new Tooltip(
+                "Maximum analog gain in dB. Higher gain = more noise.\n" +
+                "3 dB = 1.41x, 6 dB = 2x, 12 dB = 4x linear gain.\n" +
+                "JAI camera supports 0-36 dB."
+        ));
+
+        Label maxGainNote = new Label("(3dB = 1.41x gain)");
+        maxGainNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        grid.add(maxGainLabel, 0, row);
+        grid.add(maxGainSpinner, 1, row);
+        grid.add(maxGainNote, 2, row);
+        row++;
+
+        // Gain Threshold Ratio
+        Label gainThresholdLabel = new Label("Gain Threshold Ratio:");
+
+        Spinner<Double> gainThresholdSpinner = new Spinner<>(1.0, 10.0, gainThresholdRatioProperty.get(), 0.1);
+        gainThresholdSpinner.setId("gainThresholdRatio");
+        gainThresholdSpinner.setEditable(true);
+        gainThresholdSpinner.setPrefWidth(100);
+        gainThresholdSpinner.setTooltip(new Tooltip(
+                "Exposure ratio between channels before applying gain compensation.\n" +
+                "If brightest/darkest channel exposure ratio exceeds this, gain is used\n" +
+                "to reduce exposure spread instead of relying purely on exposure."
+        ));
+
+        Label gainThresholdNote = new Label("(exposure ratio before using gain)");
+        gainThresholdNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        grid.add(gainThresholdLabel, 0, row);
+        grid.add(gainThresholdSpinner, 1, row);
+        grid.add(gainThresholdNote, 2, row);
+        row++;
+
+        // Max Iterations
+        Label maxIterLabel = new Label("Max Iterations:");
+
+        Spinner<Integer> maxIterSpinner = new Spinner<>(5, 100, maxIterationsProperty.get(), 5);
+        maxIterSpinner.setId("maxIterations");
+        maxIterSpinner.setEditable(true);
+        maxIterSpinner.setPrefWidth(100);
+        maxIterSpinner.setTooltip(new Tooltip(
+                "Maximum calibration iterations before giving up.\n" +
+                "More iterations = better convergence but longer calibration time."
+        ));
+
+        Label maxIterNote = new Label("(iterations before giving up)");
+        maxIterNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        grid.add(maxIterLabel, 0, row);
+        grid.add(maxIterSpinner, 1, row);
+        grid.add(maxIterNote, 2, row);
+        row++;
+
+        // Calibrate Black Level
+        Label blackLevelLabel = new Label("Calibrate Black Level:");
+
+        CheckBox blackLevelCheck = new CheckBox();
+        blackLevelCheck.setId("calibrateBlackLevel");
+        blackLevelCheck.setSelected(calibrateBlackLevelProperty.get());
+        blackLevelCheck.setTooltip(new Tooltip(
+                "Whether to calibrate black level before white balance.\n" +
+                "Improves accuracy but adds ~10 seconds to calibration."
+        ));
+
+        Label blackLevelNote = new Label("(improves accuracy, adds time)");
+        blackLevelNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        grid.add(blackLevelLabel, 0, row);
+        grid.add(blackLevelCheck, 1, row);
+        grid.add(blackLevelNote, 2, row);
+
+        TitledPane pane = new TitledPane("Advanced Settings", grid);
         pane.setCollapsible(true);
         return pane;
     }

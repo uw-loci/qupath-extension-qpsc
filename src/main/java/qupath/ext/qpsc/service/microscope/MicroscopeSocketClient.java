@@ -2445,7 +2445,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String outputPath,
             double initialExposureMs,
             double targetIntensity,
-            double tolerance) throws IOException {
+            double tolerance,
+            double maxGainDb,
+            double gainThresholdRatio,
+            int maxIterations,
+            boolean calibrateBlackLevel) throws IOException {
 
         // Build WBSIMPLE command message
         StringBuilder message = new StringBuilder();
@@ -2453,6 +2457,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         message.append(" --exposure ").append(initialExposureMs);
         message.append(" --target ").append(targetIntensity);
         message.append(" --tolerance ").append(tolerance);
+        message.append(" --max_gain_db ").append(maxGainDb);
+        message.append(" --gain_threshold ").append(gainThresholdRatio);
+        message.append(" --max_iterations ").append(maxIterations);
+        message.append(" --calibrate_black_level ").append(calibrateBlackLevel ? "true" : "false");
         message.append(" ").append(END_MARKER);
 
         byte[] messageBytes = message.toString().getBytes(StandardCharsets.UTF_8);
@@ -2462,6 +2470,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         logger.info("  Initial exposure: {} ms", initialExposureMs);
         logger.info("  Target intensity: {}", targetIntensity);
         logger.info("  Tolerance: {}", tolerance);
+        logger.info("  Advanced: maxGain={}dB, gainThreshold={}, maxIter={}, calibrateBL={}",
+                maxGainDb, gainThresholdRatio, maxIterations, calibrateBlackLevel);
 
         synchronized (socketLock) {
             ensureConnected();
@@ -2568,7 +2578,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double crossedAngle, double crossedExposure, double crossedTarget,
             double uncrossedAngle, double uncrossedExposure, double uncrossedTarget,
             double targetIntensity,
-            double tolerance) throws IOException {
+            double tolerance,
+            double maxGainDb,
+            double gainThresholdRatio,
+            int maxIterations,
+            boolean calibrateBlackLevel) throws IOException {
 
         // Build WBPPM command message
         StringBuilder message = new StringBuilder();
@@ -2587,6 +2601,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         message.append(" --target_uncrossed ").append(uncrossedTarget);
         message.append(" --target ").append(targetIntensity);
         message.append(" --tolerance ").append(tolerance);
+        message.append(" --max_gain_db ").append(maxGainDb);
+        message.append(" --gain_threshold ").append(gainThresholdRatio);
+        message.append(" --max_iterations ").append(maxIterations);
+        message.append(" --calibrate_black_level ").append(calibrateBlackLevel ? "true" : "false");
         message.append(" ").append(END_MARKER);
 
         byte[] messageBytes = message.toString().getBytes(StandardCharsets.UTF_8);
@@ -2598,6 +2616,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         logger.info("  Crossed: {} deg, {} ms, target={}", crossedAngle, crossedExposure, crossedTarget);
         logger.info("  Uncrossed: {} deg, {} ms, target={}", uncrossedAngle, uncrossedExposure, uncrossedTarget);
         logger.info("  Default target: {}, Tolerance: {}", targetIntensity, tolerance);
+        logger.info("  Advanced: maxGain={}dB, gainThreshold={}, maxIter={}, calibrateBL={}",
+                maxGainDb, gainThresholdRatio, maxIterations, calibrateBlackLevel);
 
         synchronized (socketLock) {
             ensureConnected();
