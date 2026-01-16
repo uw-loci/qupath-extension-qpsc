@@ -44,8 +44,8 @@ public class WhiteBalanceDialog {
             PathPrefs.createPersistentPreference("wb.targetIntensity", 180.0);
     private static final DoubleProperty toleranceProperty =
             PathPrefs.createPersistentPreference("wb.tolerance", 2.0);
-    private static final StringProperty outputPathProperty =
-            PathPrefs.createPersistentPreference("wb.outputPath", "");
+    // White balance output subfolder name under config directory
+    private static final String WB_SUBFOLDER = "white_balance_calibration";
     private static final StringProperty cameraProperty =
             PathPrefs.createPersistentPreference("wb.camera", "JAI AP-3200T-USB");
 
@@ -304,8 +304,7 @@ public class WhiteBalanceDialog {
                     int maxIter = (Integer) maxIterSpinner.getValue();
                     boolean calibrateBL = blackLevelCheck.isSelected();
 
-                    // Save shared preferences
-                    outputPathProperty.set(outPath);
+                    // Save shared preferences (output path is auto-derived, not saved)
                     targetIntensityProperty.set(target);
                     toleranceProperty.set(tolerance);
                     cameraProperty.set(camera);
@@ -482,49 +481,33 @@ public class WhiteBalanceDialog {
         TextField outputField = new TextField();
         outputField.setId("outputPath");
         outputField.setPrefWidth(300);
+        outputField.setEditable(false); // Read-only - always derived from config location
 
-        // Set default output path from config file location if no saved preference
-        String savedPath = outputPathProperty.get();
-        if (savedPath == null || savedPath.isEmpty()) {
-            try {
-                String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-                if (configPath != null && !configPath.isEmpty()) {
-                    Path configDir = Paths.get(configPath).getParent();
-                    if (configDir != null) {
-                        savedPath = configDir.toString();
-                    }
+        // Always derive output path from current config file location
+        String wbOutputPath = "";
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath != null && !configPath.isEmpty()) {
+                Path configDir = Paths.get(configPath).getParent();
+                if (configDir != null) {
+                    // Create white_balance_calibration subfolder path
+                    wbOutputPath = configDir.resolve(WB_SUBFOLDER).toString();
                 }
-            } catch (Exception e) {
-                logger.debug("Could not get default output path from config location: {}", e.getMessage());
             }
+        } catch (Exception e) {
+            logger.warn("Could not get output path from config location: {}", e.getMessage());
         }
-        outputField.setText(savedPath != null ? savedPath : "");
-        outputField.setPromptText("Select output folder for calibration files");
+        outputField.setText(wbOutputPath);
+        outputField.setPromptText("Output folder (derived from config location)");
 
-        Button browseButton = new Button("Browse...");
-        browseButton.setOnAction(e -> {
-            DirectoryChooser chooser = new DirectoryChooser();
-            chooser.setTitle("Select Output Folder for White Balance Calibration");
-
-            String currentPath = outputField.getText();
-            if (currentPath != null && !currentPath.isEmpty()) {
-                File currentDir = new File(currentPath);
-                if (currentDir.exists()) {
-                    chooser.setInitialDirectory(currentDir);
-                }
-            }
-
-            File selectedDir = chooser.showDialog(outputField.getScene().getWindow());
-            if (selectedDir != null) {
-                outputField.setText(selectedDir.getAbsolutePath());
-            }
-        });
-
-        HBox outputBox = new HBox(5, outputField, browseButton);
-        outputBox.setAlignment(Pos.CENTER_LEFT);
+        // Output is read-only (derived from config location)
+        // Add a note explaining this
+        Label outputNote = new Label("(auto: config folder/" + WB_SUBFOLDER + ")");
+        outputNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
 
         grid.add(outputLabel, 0, row);
-        grid.add(outputBox, 1, row, 2, 1);
+        grid.add(outputField, 1, row);
+        grid.add(outputNote, 2, row);
 
         TitledPane pane = new TitledPane("Shared Settings", grid);
         pane.setCollapsible(true);
