@@ -4,6 +4,9 @@
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](#license)
 [![Status](https://img.shields.io/badge/status-active%20development-orange)](#)
 
+> **Part of the QPSC (QuPath Scope Control) system**
+> For complete installation instructions and system overview, see: https://github.com/uw-loci/QPSC
+
 ## Overview
 
 **QPSC** is an extension for [QuPath](https://qupath.github.io/) that lets you **control your microscope directly from QuPath** to automatically acquire high-resolution images of regions you select.
