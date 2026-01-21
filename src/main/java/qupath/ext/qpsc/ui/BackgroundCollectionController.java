@@ -76,11 +76,17 @@ public class BackgroundCollectionController {
                 dialog.setTitle("Background Collection");
                 dialog.setHeaderText("Configure background image acquisition for flat field correction");
                 
-                // Create UI
+                // Create UI - wrap content in ScrollPane to handle variable height
                 VBox content = createDialogContent();
-                dialog.getDialogPane().setContent(content);
-                dialog.getDialogPane().setPrefWidth(600);
-                dialog.getDialogPane().setPrefHeight(500);
+                ScrollPane scrollPane = new ScrollPane(content);
+                scrollPane.setFitToWidth(true);
+                scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+                scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+
+                dialog.getDialogPane().setContent(scrollPane);
+                dialog.getDialogPane().setPrefWidth(620);
+                dialog.getDialogPane().setPrefHeight(580);
+                dialog.getDialogPane().setMinHeight(400);
                 dialog.setResizable(true);
                 
                 // Add buttons
