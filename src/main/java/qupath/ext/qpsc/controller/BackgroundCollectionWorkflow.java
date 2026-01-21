@@ -77,7 +77,7 @@ public class BackgroundCollectionWorkflow {
                             // Execute background acquisition
                             CompletableFuture.runAsync(() -> {
                                 executeBackgroundAcquisition(result.modality(), result.objective(),
-                                        result.angleExposures(), result.outputPath());
+                                        result.angleExposures(), result.outputPath(), result.usePerAngleWhiteBalance());
                             }).exceptionally(ex -> {
                                 logger.error("Background acquisition failed", ex);
                                 Platform.runLater(() -> {
@@ -107,16 +107,17 @@ public class BackgroundCollectionWorkflow {
     
     /**
      * Executes the background acquisition process via socket communication.
-     * 
+     *
      * @param modality The modality (e.g., "ppm")
      * @param objective The selected objective
      * @param angleExposures List of angle-exposure pairs
      * @param outputPath Base output path for background images
+     * @param usePerAngleWB Whether to apply per-angle white balance calibration
      */
     private static void executeBackgroundAcquisition(String modality, String objective, List<AngleExposure> angleExposures,
-                                                     String outputPath) {
-        logger.info("Executing background acquisition for modality '{}' with {} angles",
-                modality, angleExposures.size());
+                                                     String outputPath, boolean usePerAngleWB) {
+        logger.info("Executing background acquisition for modality '{}' with {} angles, perAngleWB={}",
+                modality, angleExposures.size(), usePerAngleWB);
 
         try {
             // Get socket client from MicroscopeController
@@ -164,7 +165,7 @@ public class BackgroundCollectionWorkflow {
             // Call the synchronous background acquisition method
             // Returns map of final exposures actually used by Python (with adaptive exposure)
             Map<Double, Double> finalExposures = socketClient.startBackgroundAcquisition(
-                    configFileLocation, finalOutputPath, modality, angles, exposures);
+                    configFileLocation, finalOutputPath, modality, angles, exposures, usePerAngleWB);
 
             logger.info("Background acquisition completed successfully with {} final exposures",
                     finalExposures.size());
