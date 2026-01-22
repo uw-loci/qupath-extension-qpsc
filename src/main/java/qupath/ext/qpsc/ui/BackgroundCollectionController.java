@@ -232,6 +232,16 @@ public class BackgroundCollectionController {
                 "Run 'White Balance Calibration' (PPM mode) first to generate per-angle settings."
         ));
 
+        // Listener to reload exposure values when per-angle white balance is toggled
+        perAngleWhiteBalanceCheckBox.selectedProperty().addListener((obs, wasSelected, isSelected) -> {
+            String modality = modalityComboBox.getValue();
+            String objective = objectiveComboBox.getValue();
+            if (modality != null && objective != null) {
+                logger.info("Per-angle white balance toggled to: {} - reloading exposure values", isSelected);
+                updateExposureControlsWithBackground(modality, objective);
+            }
+        });
+
         // Exposure controls (will be populated when modality AND objective are selected)
         Label exposureLabel = new Label("Exposure Times (ms):");
         exposureControlsPane = new VBox(10);
@@ -654,11 +664,13 @@ public class BackgroundCollectionController {
 
     /**
      * Gets default exposure time for background collection with config-file-first priority.
-     * Priority order: 1. Config file, 2. Preferences, 3. Fallback default
+     * When per-angle white balance is enabled, looks for per-channel (r, g, b) exposures.
+     * Priority order: 1. Config file (per-channel if WB enabled), 2. Preferences, 3. Fallback default
      */
     private double getBackgroundExposureDefault(double angle, String modality, String objective, String detector) {
-        logger.debug("Getting background collection exposure default for angle {} with modality={}, objective={}, detector={}",
-                angle, modality, objective, detector);
+        boolean perAngleWbEnabled = perAngleWhiteBalanceCheckBox != null && perAngleWhiteBalanceCheckBox.isSelected();
+        logger.debug("Getting background collection exposure default for angle {} with modality={}, objective={}, detector={}, perAngleWB={}",
+                angle, modality, objective, detector, perAngleWbEnabled);
 
         // Priority 1: Check config file first (most likely to have good starting values)
         try {
@@ -667,22 +679,34 @@ public class BackgroundCollectionController {
             Map<String, Object> exposures = configManager.getModalityExposures(modality, objective, detector);
 
             if (exposures != null) {
-                // Look for angle-specific exposure or general exposure
-                String angleKey = String.valueOf(angle);
-                if (exposures.containsKey(angleKey)) {
-                    Object exposureValue = exposures.get(angleKey);
-                    if (exposureValue instanceof Number) {
-                        double configExposure = ((Number) exposureValue).doubleValue();
-                        logger.info("Using config file exposure time for background collection angle {}: {}ms", angle, configExposure);
-                        return configExposure;
-                    }
-                }
-
                 // Try common angle names
                 String[] angleNames = getAngleNames(angle);
                 for (String angleName : angleNames) {
                     if (exposures.containsKey(angleName)) {
                         Object exposureValue = exposures.get(angleName);
+
+                        // Handle per-channel exposures (Map with r, g, b keys)
+                        if (exposureValue instanceof Map<?, ?> perChannelMap) {
+                            // Per-channel exposure - extract green channel as reference value
+                            // (green is typically the median and used for display purposes)
+                            Object greenValue = perChannelMap.get("g");
+                            if (greenValue instanceof Number) {
+                                double configExposure = ((Number) greenValue).doubleValue();
+                                logger.info("Using per-channel config exposure (green) for angle {} (key={}): {}ms",
+                                        angle, angleName, configExposure);
+                                return configExposure;
+                            }
+                            // Fallback to 'all' key if present (single exposure mode)
+                            Object allValue = perChannelMap.get("all");
+                            if (allValue instanceof Number) {
+                                double configExposure = ((Number) allValue).doubleValue();
+                                logger.info("Using config exposure ('all') for angle {} (key={}): {}ms",
+                                        angle, angleName, configExposure);
+                                return configExposure;
+                            }
+                        }
+
+                        // Handle simple numeric exposure
                         if (exposureValue instanceof Number) {
                             double configExposure = ((Number) exposureValue).doubleValue();
                             logger.info("Using config file exposure time for background collection angle {} (key={}): {}ms",
@@ -696,8 +720,9 @@ public class BackgroundCollectionController {
             logger.debug("Failed to read config file exposure settings for background collection", e);
         }
 
-        // Priority 2: Check persistent preferences as fallback
-        if ("ppm".equals(modality)) {
+        // Priority 2: Check persistent preferences as fallback (only if per-angle WB is NOT enabled)
+        // When per-angle WB is enabled, we want to use calibrated values, not generic preferences
+        if ("ppm".equals(modality) && !perAngleWbEnabled) {
             try {
                 double preferencesValue = getPersistentPreferenceExposure(angle);
                 if (preferencesValue > 0) {
@@ -710,8 +735,9 @@ public class BackgroundCollectionController {
         }
 
         // Priority 3: Fallback default
-        double fallback = 1.0;
-        logger.info("Using fallback default exposure time for background collection angle {}: {}ms", angle, fallback);
+        double fallback = perAngleWbEnabled ? 50.0 : 1.0; // Higher default for per-angle WB mode
+        logger.info("Using fallback default exposure time for background collection angle {}: {}ms (perAngleWB={})",
+                angle, fallback, perAngleWbEnabled);
         return fallback;
     }
 
