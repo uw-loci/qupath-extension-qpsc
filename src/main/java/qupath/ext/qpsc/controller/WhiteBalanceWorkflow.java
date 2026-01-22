@@ -111,9 +111,11 @@ public class WhiteBalanceWorkflow {
                             var params = result.getSimpleParams();
                             details.append(String.format(
                                     "Mode: Simple White Balance\n" +
+                                    "Objective: %s\n" +
                                     "Base Exposure: %.1f ms\n" +
                                     "Target Intensity: %.0f\n" +
                                     "Tolerance: %.1f\n",
+                                    params.objective() != null ? params.objective() : "unknown",
                                     params.baseExposureMs(),
                                     params.targetIntensity(),
                                     params.tolerance()
@@ -208,6 +210,10 @@ public class WhiteBalanceWorkflow {
         Thread calibrationThread = new Thread(() -> {
             try {
                 var advanced = params.advanced();
+                String yamlPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
+
+                logger.info("Simple WB calibration: objective={}, detector={}", params.objective(), params.detector());
+
                 MicroscopeSocketClient.WhiteBalanceResult result = client.runSimpleWhiteBalance(
                         params.outputPath(),
                         params.baseExposureMs(),
@@ -216,7 +222,10 @@ public class WhiteBalanceWorkflow {
                         advanced.maxGainDb(),
                         advanced.gainThresholdRatio(),
                         advanced.maxIterations(),
-                        advanced.calibrateBlackLevel()
+                        advanced.calibrateBlackLevel(),
+                        yamlPath,
+                        params.objective(),
+                        params.detector()
                 );
 
                 Platform.runLater(() -> {

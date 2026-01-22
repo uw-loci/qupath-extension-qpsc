@@ -2465,10 +2465,22 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double maxGainDb,
             double gainThresholdRatio,
             int maxIterations,
-            boolean calibrateBlackLevel) throws IOException {
+            boolean calibrateBlackLevel,
+            String yamlPath,
+            String objective,
+            String detector) throws IOException {
 
         // Build WBSIMPLE command message
         StringBuilder message = new StringBuilder();
+        if (yamlPath != null && !yamlPath.isEmpty()) {
+            message.append("--yaml ").append(yamlPath).append(" ");
+        }
+        if (objective != null && !objective.isEmpty()) {
+            message.append("--objective ").append(objective).append(" ");
+        }
+        if (detector != null && !detector.isEmpty()) {
+            message.append("--detector ").append(detector).append(" ");
+        }
         message.append("--output ").append(outputPath);
         message.append(" --exposure ").append(initialExposureMs);
         message.append(" --target ").append(targetIntensity);

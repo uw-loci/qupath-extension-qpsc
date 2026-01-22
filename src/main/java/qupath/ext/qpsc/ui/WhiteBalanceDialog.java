@@ -119,6 +119,8 @@ public class WhiteBalanceDialog {
     public record SimpleWBParams(
             String outputPath,
             String camera,
+            String objective,
+            String detector,
             double baseExposureMs,
             double targetIntensity,
             double tolerance,
@@ -258,8 +260,8 @@ public class WhiteBalanceDialog {
                 Spinner<?> negExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#negativeExposure");
                 Spinner<?> crossExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#crossedExposure");
                 Spinner<?> uncrossExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#uncrossedExposure");
-                // PPM WB - objective
-                ComboBox<?> ppmObjectiveCombo = (ComboBox<?>) ppmPane.getContent().lookup("#ppmObjective");
+                // Shared - objective (used by both Simple and PPM)
+                ComboBox<?> objectiveCombo = (ComboBox<?>) sharedPane.getContent().lookup("#wbObjective");
                 // PPM WB - per-angle targets
                 Spinner<?> posTargetSpinner = (Spinner<?>) ppmPane.getContent().lookup("#positiveTarget");
                 Spinner<?> negTargetSpinner = (Spinner<?>) ppmPane.getContent().lookup("#negativeTarget");
@@ -276,7 +278,7 @@ public class WhiteBalanceDialog {
                 Runnable validatePPM = () -> {
                     boolean valid = outputField.getText() != null && !outputField.getText().isEmpty();
                     // Check that objective is selected
-                    valid = valid && ppmObjectiveCombo.getValue() != null;
+                    valid = valid && objectiveCombo.getValue() != null;
                     // Check that all PPM exposures are set
                     valid = valid && posExpSpinner.getValue() != null && ((Double) posExpSpinner.getValue()) > 0;
                     valid = valid && negExpSpinner.getValue() != null && ((Double) negExpSpinner.getValue()) > 0;
@@ -289,14 +291,16 @@ public class WhiteBalanceDialog {
                 Button simpleBtn = (Button) dialog.getDialogPane().lookupButton(runSimpleButton);
                 Runnable validateSimple = () -> {
                     boolean valid = outputField.getText() != null && !outputField.getText().isEmpty();
+                    // Check that objective is selected
+                    valid = valid && objectiveCombo.getValue() != null;
                     valid = valid && simpleExpSpinner.getValue() != null && ((Double) simpleExpSpinner.getValue()) > 0;
                     simpleBtn.setDisable(!valid);
                 };
 
                 // Set up validation listeners
                 outputField.textProperty().addListener((obs, o, n) -> { validateSimple.run(); validatePPM.run(); });
+                objectiveCombo.valueProperty().addListener((obs, o, n) -> { validateSimple.run(); validatePPM.run(); });
                 simpleExpSpinner.valueProperty().addListener((obs, o, n) -> validateSimple.run());
-                ppmObjectiveCombo.valueProperty().addListener((obs, o, n) -> validatePPM.run());
                 posExpSpinner.valueProperty().addListener((obs, o, n) -> validatePPM.run());
                 negExpSpinner.valueProperty().addListener((obs, o, n) -> validatePPM.run());
                 crossExpSpinner.valueProperty().addListener((obs, o, n) -> validatePPM.run());
@@ -319,10 +323,33 @@ public class WhiteBalanceDialog {
                     int maxIter = (Integer) maxIterSpinner.getValue();
                     boolean calibrateBL = blackLevelCheck.isSelected();
 
+                    // Get objective and derive detector (shared by both modes)
+                    String selectedObjective = objectiveCombo.getValue() != null ?
+                            objectiveCombo.getValue().toString() : null;
+                    String selectedDetector = null;
+                    if (selectedObjective != null) {
+                        try {
+                            String cfgPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                            if (cfgPath != null && !cfgPath.isEmpty()) {
+                                MicroscopeConfigManager cfgMgr = MicroscopeConfigManager.getInstance(cfgPath);
+                                Set<String> detectors = cfgMgr.getAvailableDetectorsForModalityObjective("ppm", selectedObjective);
+                                if (!detectors.isEmpty()) {
+                                    selectedDetector = detectors.iterator().next();
+                                }
+                            }
+                        } catch (Exception e) {
+                            logger.warn("Could not determine detector for objective {}: {}",
+                                    selectedObjective, e.getMessage());
+                        }
+                    }
+
                     // Save shared preferences (output path is auto-derived, not saved)
                     targetIntensityProperty.set(target);
                     toleranceProperty.set(tolerance);
                     cameraProperty.set(camera);
+                    if (selectedObjective != null) {
+                        ppmObjectiveProperty.set(selectedObjective);
+                    }
 
                     // Save advanced preferences
                     maxGainDbProperty.set(maxGain);
@@ -339,6 +366,7 @@ public class WhiteBalanceDialog {
                         simpleExposureProperty.set(exposure);
 
                         logger.info("User selected Simple White Balance:");
+                        logger.info("  Objective: {}, Detector: {}", selectedObjective, selectedDetector);
                         logger.info("  Output: {}", outPath);
                         logger.info("  Base exposure: {} ms", exposure);
                         logger.info("  Target: {}, Tolerance: {}", target, tolerance);
@@ -346,7 +374,8 @@ public class WhiteBalanceDialog {
                                 maxGain, gainThreshold, maxIter, calibrateBL);
 
                         return WBDialogResult.simple(new SimpleWBParams(
-                                outPath, camera, exposure, target, tolerance, advanced
+                                outPath, camera, selectedObjective, selectedDetector,
+                                exposure, target, tolerance, advanced
                         ));
 
                     } else if (buttonType == runPPMButton) {
@@ -361,26 +390,6 @@ public class WhiteBalanceDialog {
                         double crossTarget = (Double) crossTargetSpinner.getValue();
                         double uncrossTarget = (Double) uncrossTargetSpinner.getValue();
 
-                        // Get objective and derive detector
-                        String selectedObjective = ppmObjectiveCombo.getValue() != null ?
-                                ppmObjectiveCombo.getValue().toString() : null;
-                        String selectedDetector = null;
-                        if (selectedObjective != null) {
-                            try {
-                                String cfgPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-                                if (cfgPath != null && !cfgPath.isEmpty()) {
-                                    MicroscopeConfigManager cfgMgr = MicroscopeConfigManager.getInstance(cfgPath);
-                                    Set<String> detectors = cfgMgr.getAvailableDetectorsForModalityObjective("ppm", selectedObjective);
-                                    if (!detectors.isEmpty()) {
-                                        selectedDetector = detectors.iterator().next();
-                                    }
-                                }
-                            } catch (Exception e) {
-                                logger.warn("Could not determine detector for objective {}: {}",
-                                        selectedObjective, e.getMessage());
-                            }
-                        }
-
                         // Save PPM preferences - exposures
                         ppmPositiveExpProperty.set(posExp);
                         ppmNegativeExpProperty.set(negExp);
@@ -392,11 +401,6 @@ public class WhiteBalanceDialog {
                         ppmNegativeTargetProperty.set(negTarget);
                         ppmCrossedTargetProperty.set(crossTarget);
                         ppmUncrossedTargetProperty.set(uncrossTarget);
-
-                        // Save objective preference
-                        if (selectedObjective != null) {
-                            ppmObjectiveProperty.set(selectedObjective);
-                        }
 
                         logger.info("User selected PPM White Balance:");
                         logger.info("  Objective: {}, Detector: {}", selectedObjective, selectedDetector);
@@ -549,6 +553,43 @@ public class WhiteBalanceDialog {
         grid.add(outputLabel, 0, row);
         grid.add(outputField, 1, row);
         grid.add(outputNote, 2, row);
+        row++;
+
+        // Objective selection - calibration results are objective-specific
+        Label objectiveLabel = new Label("Objective:");
+
+        ComboBox<String> objectiveCombo = new ComboBox<>();
+        objectiveCombo.setId("wbObjective");
+        objectiveCombo.setPrefWidth(200);
+        objectiveCombo.setTooltip(new Tooltip("Select the objective for calibration (exposures are objective-specific)"));
+
+        // Populate objectives from config
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath != null && !configPath.isEmpty()) {
+                MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
+                Set<String> objectives = configManager.getAvailableObjectivesForModality("ppm");
+                if (!objectives.isEmpty()) {
+                    objectiveCombo.getItems().addAll(objectives.stream().sorted().toList());
+                    // Restore previous selection or select first
+                    String savedObjective = ppmObjectiveProperty.get();
+                    if (savedObjective != null && !savedObjective.isEmpty() && objectives.contains(savedObjective)) {
+                        objectiveCombo.setValue(savedObjective);
+                    } else {
+                        objectiveCombo.getSelectionModel().selectFirst();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not load objectives for WB dialog: {}", e.getMessage());
+        }
+
+        Label objectiveNote = new Label("(calibration is objective-specific)");
+        objectiveNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        grid.add(objectiveLabel, 0, row);
+        grid.add(objectiveCombo, 1, row);
+        grid.add(objectiveNote, 2, row);
 
         TitledPane pane = new TitledPane("Shared Settings", grid);
         pane.setCollapsible(true);
@@ -608,44 +649,6 @@ public class WhiteBalanceDialog {
         );
         descLabel.setWrapText(true);
         descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
-
-        // Objective selection - calibration results are objective-specific
-        HBox objectiveBox = new HBox(10);
-        objectiveBox.setAlignment(Pos.CENTER_LEFT);
-
-        Label objectiveLabel = new Label("Objective:");
-        objectiveLabel.setPrefWidth(140);
-
-        ComboBox<String> objectiveCombo = new ComboBox<>();
-        objectiveCombo.setId("ppmObjective");
-        objectiveCombo.setPrefWidth(200);
-        objectiveCombo.setTooltip(new Tooltip("Select the objective for calibration (exposures are objective-specific)"));
-
-        // Populate objectives from config
-        try {
-            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            if (configPath != null && !configPath.isEmpty()) {
-                MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
-                Set<String> objectives = configManager.getAvailableObjectivesForModality("ppm");
-                if (!objectives.isEmpty()) {
-                    objectiveCombo.getItems().addAll(objectives.stream().sorted().toList());
-                    // Restore previous selection or select first
-                    String savedObjective = ppmObjectiveProperty.get();
-                    if (savedObjective != null && !savedObjective.isEmpty() && objectives.contains(savedObjective)) {
-                        objectiveCombo.setValue(savedObjective);
-                    } else {
-                        objectiveCombo.getSelectionModel().selectFirst();
-                    }
-                }
-            }
-        } catch (Exception e) {
-            logger.warn("Could not load objectives for PPM WB dialog: {}", e.getMessage());
-        }
-
-        Label objectiveNote = new Label("(calibration is objective-specific)");
-        objectiveNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
-
-        objectiveBox.getChildren().addAll(objectiveLabel, objectiveCombo, objectiveNote);
 
         // Grid for angle/exposure/target triplets
         GridPane grid = new GridPane();
@@ -739,7 +742,7 @@ public class WhiteBalanceDialog {
         );
         noteLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
 
-        vbox.getChildren().addAll(descLabel, objectiveBox, grid, noteLabel);
+        vbox.getChildren().addAll(descLabel, grid, noteLabel);
 
         TitledPane pane = new TitledPane("PPM White Balance (4 Angles)", vbox);
         pane.setCollapsible(true);
