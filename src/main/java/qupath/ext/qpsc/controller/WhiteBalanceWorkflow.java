@@ -122,12 +122,14 @@ public class WhiteBalanceWorkflow {
                             var params = result.getPPMParams();
                             details.append(String.format(
                                     "Mode: PPM White Balance (4 angles)\n" +
+                                    "Objective: %s\n" +
                                     "Positive (%.1f deg): %.1f ms\n" +
                                     "Negative (%.1f deg): %.1f ms\n" +
                                     "Crossed (%.1f deg): %.1f ms\n" +
                                     "Uncrossed (%.1f deg): %.1f ms\n" +
                                     "Target Intensity: %.0f\n" +
                                     "Tolerance: %.1f\n",
+                                    params.objective() != null ? params.objective() : "unknown",
                                     params.positiveAngle(), params.positiveExposureMs(),
                                     params.negativeAngle(), params.negativeExposureMs(),
                                     params.crossedAngle(), params.crossedExposureMs(),
@@ -274,23 +276,8 @@ public class WhiteBalanceWorkflow {
             try {
                 var advanced = params.advanced();
                 String yamlPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
-                // Get objective and detector for imaging_profiles update
-                String wbObjective = null;
-                String wbDetector = null;
-                try {
-                    var configManager = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(yamlPath);
-                    var objectives = configManager.getAvailableObjectivesForModality("ppm");
-                    if (!objectives.isEmpty()) {
-                        wbObjective = objectives.iterator().next();
-                        var detectors = configManager.getAvailableDetectorsForModalityObjective("ppm", wbObjective);
-                        if (!detectors.isEmpty()) {
-                            wbDetector = detectors.iterator().next();
-                        }
-                    }
-                    logger.info("WB calibration: objective={}, detector={}", wbObjective, wbDetector);
-                } catch (Exception e) {
-                    logger.warn("Could not determine objective/detector for WB config save", e);
-                }
+
+                logger.info("WB calibration: objective={}, detector={}", params.objective(), params.detector());
 
                 Map<String, MicroscopeSocketClient.WhiteBalanceResult> results = client.runPPMWhiteBalance(
                         params.outputPath(),
@@ -305,8 +292,8 @@ public class WhiteBalanceWorkflow {
                         advanced.maxIterations(),
                         advanced.calibrateBlackLevel(),
                         yamlPath,
-                        wbObjective,
-                        wbDetector
+                        params.objective(),
+                        params.detector()
                 );
 
                 Platform.runLater(() -> {

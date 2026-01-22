@@ -15,9 +15,13 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.lib.gui.prefs.PathPrefs;
 
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -89,6 +93,10 @@ public class WhiteBalanceDialog {
     private static final BooleanProperty calibrateBlackLevelProperty =
             PathPrefs.createPersistentPreference("wb.advanced.calibrateBlackLevel", true);
 
+    // Objective selection for PPM WB (objective-specific exposures)
+    private static final StringProperty ppmObjectiveProperty =
+            PathPrefs.createPersistentPreference("wb.ppm.objective", "");
+
     // Fixed PPM angles (standard values)
     public static final double POSITIVE_ANGLE = 7.0;
     public static final double NEGATIVE_ANGLE = -7.0;
@@ -123,6 +131,8 @@ public class WhiteBalanceDialog {
     public record PPMWBParams(
             String outputPath,
             String camera,
+            String objective,
+            String detector,
             double positiveAngle, double positiveExposureMs, double positiveTarget,
             double negativeAngle, double negativeExposureMs, double negativeTarget,
             double crossedAngle, double crossedExposureMs, double crossedTarget,
@@ -248,6 +258,8 @@ public class WhiteBalanceDialog {
                 Spinner<?> negExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#negativeExposure");
                 Spinner<?> crossExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#crossedExposure");
                 Spinner<?> uncrossExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#uncrossedExposure");
+                // PPM WB - objective
+                ComboBox<?> ppmObjectiveCombo = (ComboBox<?>) ppmPane.getContent().lookup("#ppmObjective");
                 // PPM WB - per-angle targets
                 Spinner<?> posTargetSpinner = (Spinner<?>) ppmPane.getContent().lookup("#positiveTarget");
                 Spinner<?> negTargetSpinner = (Spinner<?>) ppmPane.getContent().lookup("#negativeTarget");
@@ -263,6 +275,8 @@ public class WhiteBalanceDialog {
                 Button ppmBtn = (Button) dialog.getDialogPane().lookupButton(runPPMButton);
                 Runnable validatePPM = () -> {
                     boolean valid = outputField.getText() != null && !outputField.getText().isEmpty();
+                    // Check that objective is selected
+                    valid = valid && ppmObjectiveCombo.getValue() != null;
                     // Check that all PPM exposures are set
                     valid = valid && posExpSpinner.getValue() != null && ((Double) posExpSpinner.getValue()) > 0;
                     valid = valid && negExpSpinner.getValue() != null && ((Double) negExpSpinner.getValue()) > 0;
@@ -282,6 +296,7 @@ public class WhiteBalanceDialog {
                 // Set up validation listeners
                 outputField.textProperty().addListener((obs, o, n) -> { validateSimple.run(); validatePPM.run(); });
                 simpleExpSpinner.valueProperty().addListener((obs, o, n) -> validateSimple.run());
+                ppmObjectiveCombo.valueProperty().addListener((obs, o, n) -> validatePPM.run());
                 posExpSpinner.valueProperty().addListener((obs, o, n) -> validatePPM.run());
                 negExpSpinner.valueProperty().addListener((obs, o, n) -> validatePPM.run());
                 crossExpSpinner.valueProperty().addListener((obs, o, n) -> validatePPM.run());
@@ -346,6 +361,26 @@ public class WhiteBalanceDialog {
                         double crossTarget = (Double) crossTargetSpinner.getValue();
                         double uncrossTarget = (Double) uncrossTargetSpinner.getValue();
 
+                        // Get objective and derive detector
+                        String selectedObjective = ppmObjectiveCombo.getValue() != null ?
+                                ppmObjectiveCombo.getValue().toString() : null;
+                        String selectedDetector = null;
+                        if (selectedObjective != null) {
+                            try {
+                                String cfgPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                                if (cfgPath != null && !cfgPath.isEmpty()) {
+                                    MicroscopeConfigManager cfgMgr = MicroscopeConfigManager.getInstance(cfgPath);
+                                    Set<String> detectors = cfgMgr.getAvailableDetectorsForModalityObjective("ppm", selectedObjective);
+                                    if (!detectors.isEmpty()) {
+                                        selectedDetector = detectors.iterator().next();
+                                    }
+                                }
+                            } catch (Exception e) {
+                                logger.warn("Could not determine detector for objective {}: {}",
+                                        selectedObjective, e.getMessage());
+                            }
+                        }
+
                         // Save PPM preferences - exposures
                         ppmPositiveExpProperty.set(posExp);
                         ppmNegativeExpProperty.set(negExp);
@@ -358,7 +393,13 @@ public class WhiteBalanceDialog {
                         ppmCrossedTargetProperty.set(crossTarget);
                         ppmUncrossedTargetProperty.set(uncrossTarget);
 
+                        // Save objective preference
+                        if (selectedObjective != null) {
+                            ppmObjectiveProperty.set(selectedObjective);
+                        }
+
                         logger.info("User selected PPM White Balance:");
+                        logger.info("  Objective: {}, Detector: {}", selectedObjective, selectedDetector);
                         logger.info("  Output: {}", outPath);
                         logger.info("  Positive ({}deg): {} ms, target={}", POSITIVE_ANGLE, posExp, posTarget);
                         logger.info("  Negative ({}deg): {} ms, target={}", NEGATIVE_ANGLE, negExp, negTarget);
@@ -369,7 +410,7 @@ public class WhiteBalanceDialog {
                                 maxGain, gainThreshold, maxIter, calibrateBL);
 
                         return WBDialogResult.ppm(new PPMWBParams(
-                                outPath, camera,
+                                outPath, camera, selectedObjective, selectedDetector,
                                 POSITIVE_ANGLE, posExp, posTarget,
                                 NEGATIVE_ANGLE, negExp, negTarget,
                                 CROSSED_ANGLE, crossExp, crossTarget,
@@ -568,6 +609,44 @@ public class WhiteBalanceDialog {
         descLabel.setWrapText(true);
         descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
 
+        // Objective selection - calibration results are objective-specific
+        HBox objectiveBox = new HBox(10);
+        objectiveBox.setAlignment(Pos.CENTER_LEFT);
+
+        Label objectiveLabel = new Label("Objective:");
+        objectiveLabel.setPrefWidth(140);
+
+        ComboBox<String> objectiveCombo = new ComboBox<>();
+        objectiveCombo.setId("ppmObjective");
+        objectiveCombo.setPrefWidth(200);
+        objectiveCombo.setTooltip(new Tooltip("Select the objective for calibration (exposures are objective-specific)"));
+
+        // Populate objectives from config
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath != null && !configPath.isEmpty()) {
+                MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
+                Set<String> objectives = configManager.getAvailableObjectivesForModality("ppm");
+                if (!objectives.isEmpty()) {
+                    objectiveCombo.getItems().addAll(objectives.stream().sorted().toList());
+                    // Restore previous selection or select first
+                    String savedObjective = ppmObjectiveProperty.get();
+                    if (savedObjective != null && !savedObjective.isEmpty() && objectives.contains(savedObjective)) {
+                        objectiveCombo.setValue(savedObjective);
+                    } else {
+                        objectiveCombo.getSelectionModel().selectFirst();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not load objectives for PPM WB dialog: {}", e.getMessage());
+        }
+
+        Label objectiveNote = new Label("(calibration is objective-specific)");
+        objectiveNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        objectiveBox.getChildren().addAll(objectiveLabel, objectiveCombo, objectiveNote);
+
         // Grid for angle/exposure/target triplets
         GridPane grid = new GridPane();
         grid.setHgap(15);
@@ -660,7 +739,7 @@ public class WhiteBalanceDialog {
         );
         noteLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
 
-        vbox.getChildren().addAll(descLabel, grid, noteLabel);
+        vbox.getChildren().addAll(descLabel, objectiveBox, grid, noteLabel);
 
         TitledPane pane = new TitledPane("PPM White Balance (4 Angles)", vbox);
         pane.setCollapsible(true);
