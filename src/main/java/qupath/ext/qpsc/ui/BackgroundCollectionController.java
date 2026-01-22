@@ -342,25 +342,33 @@ public class BackgroundCollectionController {
 
         getBackgroundCollectionDefaults(modality, objective, finalDetector).thenAccept(defaultExposures -> {
             Platform.runLater(() -> {
-                logger.info("DEBUG: Inside callback - capturedSettings = {}",
-                        capturedSettings != null ? "FOUND" : "NULL");
+                boolean perAngleWbEnabled = perAngleWhiteBalanceCheckBox != null && perAngleWhiteBalanceCheckBox.isSelected();
+                logger.info("DEBUG: Inside callback - capturedSettings = {}, perAngleWB = {}",
+                        capturedSettings != null ? "FOUND" : "NULL", perAngleWbEnabled);
                 logger.debug("Creating exposure controls for {} angles", defaultExposures.size());
-                
-                // Prioritize existing background settings from previous collections
-                // Users want to see the values they used last time for this modality+objective
+
+                // When per-angle white balance is enabled, always use calibrated values from config
+                // (the defaultExposures now contain per-channel calibrated values from imageprocessing YAML)
+                // When per-angle WB is disabled, prefer previous background collection values if available
                 List<AngleExposure> exposuresToUse;
-                if (capturedSettings != null) {
-                    // Use exposure values from previous background collection for this modality+objective
+                if (perAngleWbEnabled) {
+                    // Per-angle WB mode: use calibrated per-channel exposures from imageprocessing YAML
+                    exposuresToUse = defaultExposures;
+                    logger.info("Per-angle WB enabled - using calibrated exposures from imageprocessing config");
+                    showBackgroundValidationMessage("Per-angle white balance: Using calibrated exposure values from config.",
+                            "-fx-text-fill: blue; -fx-font-weight: bold;");
+                } else if (capturedSettings != null) {
+                    // Standard mode with existing backgrounds: use previous collection values
                     exposuresToUse = capturedSettings.angleExposures;
                     logger.info("Loading exposure values from previous background collection: {}",
                             capturedSettings.settingsFilePath);
-                    showBackgroundValidationMessage("⚠️ Existing background images found. Values loaded from previous collection.",
+                    showBackgroundValidationMessage("Existing background images found. Values loaded from previous collection.",
                             "-fx-text-fill: orange; -fx-font-weight: bold;");
                 } else {
-                    // No previous backgrounds, use defaults from config/preferences
+                    // Standard mode, no previous backgrounds: use defaults from config/preferences
                     exposuresToUse = defaultExposures;
                     logger.info("No existing background settings - using defaults from config/preferences");
-                    showBackgroundValidationMessage("✓ No existing background images. Ready for new collection.",
+                    showBackgroundValidationMessage("No existing background images. Ready for new collection.",
                             "-fx-text-fill: green; -fx-font-weight: bold;");
                 }
                 
