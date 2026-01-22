@@ -2598,10 +2598,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double maxGainDb,
             double gainThresholdRatio,
             int maxIterations,
-            boolean calibrateBlackLevel) throws IOException {
+            boolean calibrateBlackLevel,
+            String yamlPath) throws IOException {
 
         // Build WBPPM command message
         StringBuilder message = new StringBuilder();
+        if (yamlPath != null && !yamlPath.isEmpty()) {
+            message.append("--yaml ").append(yamlPath).append(" ");
+        }
         message.append("--output ").append(outputPath);
         message.append(" --positive_angle ").append(positiveAngle);
         message.append(" --positive_exp ").append(positiveExposure);

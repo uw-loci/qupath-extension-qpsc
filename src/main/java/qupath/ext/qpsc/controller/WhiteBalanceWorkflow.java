@@ -273,6 +273,7 @@ public class WhiteBalanceWorkflow {
         Thread calibrationThread = new Thread(() -> {
             try {
                 var advanced = params.advanced();
+                String yamlPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
                 Map<String, MicroscopeSocketClient.WhiteBalanceResult> results = client.runPPMWhiteBalance(
                         params.outputPath(),
                         params.positiveAngle(), params.positiveExposureMs(), params.positiveTarget(),
@@ -284,7 +285,8 @@ public class WhiteBalanceWorkflow {
                         advanced.maxGainDb(),
                         advanced.gainThresholdRatio(),
                         advanced.maxIterations(),
-                        advanced.calibrateBlackLevel()
+                        advanced.calibrateBlackLevel(),
+                        yamlPath
                 );
 
                 Platform.runLater(() -> {
