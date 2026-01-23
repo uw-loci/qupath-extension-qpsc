@@ -788,6 +788,8 @@ public class AcquisitionManager {
                                                             logger.info("User chose to use current focus");
                                                             break;
                                                         case CANCEL_ACQUISITION:
+                                                            // Send SKIPAF first to unblock server's manual_focus wait
+                                                            socketClient.skipAutofocusRetry();
                                                             socketClient.cancelAcquisition();
                                                             logger.info("User chose to cancel acquisition");
                                                             break;

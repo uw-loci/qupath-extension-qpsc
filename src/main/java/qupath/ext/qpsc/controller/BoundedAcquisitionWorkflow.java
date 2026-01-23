@@ -375,6 +375,8 @@ public class BoundedAcquisitionWorkflow {
                                                                         logger.info("User chose to use current focus");
                                                                         break;
                                                                     case CANCEL_ACQUISITION:
+                                                                        // Send SKIPAF first to unblock server's manual_focus wait
+                                                                        socketClient.skipAutofocusRetry();
                                                                         socketClient.cancelAcquisition();
                                                                         logger.info("User chose to cancel acquisition");
                                                                         break;
@@ -416,13 +418,16 @@ public class BoundedAcquisitionWorkflow {
                                                     "Acquisition Cancelled"
                                             )
                                     );
-                                    return;
+                                    throw new java.util.concurrent.CancellationException("Acquisition was cancelled");
                                 } else if (finalState == MicroscopeSocketClient.AcquisitionState.FAILED) {
                                     String failureMessage = socketClient.getLastFailureMessage();
                                     throw new RuntimeException("Acquisition failed: " +
                                             (failureMessage != null ? failureMessage : "Unknown error"));
                                 }
 
+                            } catch (java.util.concurrent.CancellationException e) {
+                                // Cancellation is expected - don't log as error, just re-throw to prevent stitching
+                                throw e;
                             } catch (Exception e) {
                                 logger.error("Acquisition failed", e);
                                 throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);
@@ -485,12 +490,16 @@ public class BoundedAcquisitionWorkflow {
 
                             return stitchFuture;
                         }).exceptionally(ex -> {
-                            logger.error("Workflow failed", ex);
-                            Throwable cause = ex.getCause();
-                            String errorMessage = cause != null ? cause.getMessage() : ex.getMessage();
-                            Platform.runLater(() ->
-                                    UIFunctions.notifyUserOfError(errorMessage, "Acquisition Error")
-                            );
+                            Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                            if (cause instanceof java.util.concurrent.CancellationException) {
+                                logger.info("Acquisition workflow cancelled by user");
+                            } else {
+                                logger.error("Workflow failed", ex);
+                                String errorMessage = cause.getMessage() != null ? cause.getMessage() : ex.getMessage();
+                                Platform.runLater(() ->
+                                        UIFunctions.notifyUserOfError(errorMessage, "Acquisition Error")
+                                );
+                            }
                             return null;
                         });
 

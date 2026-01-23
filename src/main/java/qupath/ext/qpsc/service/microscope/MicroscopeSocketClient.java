@@ -2342,8 +2342,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     return currentState;
                 }
 
-                // Check for manual focus request - handle via callback or just reset timeout
-                try {
+                // Check for manual focus request - skip if cancelling (server may still report NEEDED)
+                if (currentState != AcquisitionState.CANCELLING) try {
                     int manualFocusRetries = isManualFocusRequested();
                     if (manualFocusRetries >= 0) {
                         // Manual focus is requested - reset timeout since we're waiting for user input
