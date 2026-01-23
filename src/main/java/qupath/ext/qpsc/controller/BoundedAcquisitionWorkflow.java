@@ -349,6 +349,56 @@ public class BoundedAcquisitionWorkflow {
                                 MicroscopeSocketClient.AcquisitionState finalState =
                                         socketClient.monitorAcquisition(
                                                 progress -> progressCounter.set(progress.current),
+                                                retriesRemaining -> {
+                                                    if (QPPreferenceDialog.getSkipManualAutofocus()) {
+                                                        logger.warn("Manual focus requested but 'No Manual Autofocus' enabled - " +
+                                                                   "skipping autofocus (retries remaining: {})", retriesRemaining);
+                                                        try {
+                                                            socketClient.skipAutofocusRetry();
+                                                            logger.info("Autofocus skipped - using current focus position");
+                                                        } catch (IOException e) {
+                                                            logger.error("Failed to send skip autofocus", e);
+                                                        }
+                                                    } else {
+                                                        logger.info("Manual focus requested - showing dialog (retries remaining: {})", retriesRemaining);
+                                                        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+                                                        Platform.runLater(() -> {
+                                                            try {
+                                                                UIFunctions.ManualFocusResult mfResult = UIFunctions.showManualFocusDialog(retriesRemaining);
+                                                                switch (mfResult) {
+                                                                    case RETRY_AUTOFOCUS:
+                                                                        socketClient.acknowledgeManualFocus();
+                                                                        logger.info("User chose to retry autofocus");
+                                                                        break;
+                                                                    case USE_CURRENT_FOCUS:
+                                                                        socketClient.skipAutofocusRetry();
+                                                                        logger.info("User chose to use current focus");
+                                                                        break;
+                                                                    case CANCEL_ACQUISITION:
+                                                                        socketClient.cancelAcquisition();
+                                                                        logger.info("User chose to cancel acquisition");
+                                                                        break;
+                                                                }
+                                                            } catch (IOException e) {
+                                                                logger.error("Failed to send manual focus response", e);
+                                                            } finally {
+                                                                latch.countDown();
+                                                            }
+                                                        });
+                                                        try {
+                                                            while (!latch.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                                                                try {
+                                                                    socketClient.getAcquisitionProgress();
+                                                                } catch (IOException e) {
+                                                                    logger.warn("Failed keepalive ping during manual focus", e);
+                                                                }
+                                                            }
+                                                        } catch (InterruptedException e) {
+                                                            logger.error("Interrupted waiting for manual focus dialog", e);
+                                                            Thread.currentThread().interrupt();
+                                                        }
+                                                    }
+                                                },
                                                 500, 300000
                                         );
 
