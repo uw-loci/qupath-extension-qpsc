@@ -931,12 +931,18 @@ public class UnifiedAcquisitionController {
                 double frameHeight = fov[1];
 
                 // Calculate tile grid
+                // Match the actual tiling logic in TilingUtilities.processBoundingBoxTilingRequest():
+                // The tiling expands bounds by half a frame on each side to ensure full coverage,
+                // so total tiling area = annotation + one full frame in each dimension.
+                double paddedWidth = width + frameWidth;
+                double paddedHeight = height + frameHeight;
+
                 double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
                 double stepX = frameWidth * (1.0 - overlapPercent / 100.0);
                 double stepY = frameHeight * (1.0 - overlapPercent / 100.0);
 
-                int tilesX = (int) Math.ceil(width / stepX);
-                int tilesY = (int) Math.ceil(height / stepY);
+                int tilesX = (int) Math.ceil(paddedWidth / stepX);
+                int tilesY = (int) Math.ceil(paddedHeight / stepY);
                 int totalTiles = tilesX * tilesY;
 
                 // Get angle count from modality - use sensible defaults for preview
