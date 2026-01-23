@@ -200,7 +200,7 @@ public class WhiteBalanceDialog {
                 // Main content container
                 VBox content = new VBox(15);
                 content.setPadding(new Insets(20));
-                content.setPrefWidth(650);
+                content.setPrefWidth(750);
 
                 // Wrap content in ScrollPane for long content
                 ScrollPane scrollPane = new ScrollPane(content);
@@ -498,6 +498,7 @@ public class WhiteBalanceDialog {
 
         Label targetNote = new Label("(0-255, typically 180 for 70% reflectance)");
         targetNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        targetNote.setTooltip(new Tooltip("0-255, typically 180 for 70% reflectance"));
 
         grid.add(targetLabel, 0, row);
         grid.add(targetSpinner, 1, row);
@@ -514,6 +515,7 @@ public class WhiteBalanceDialog {
 
         Label toleranceNote = new Label("(channels within tolerance are considered balanced)");
         toleranceNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        toleranceNote.setTooltip(new Tooltip("Channels within tolerance are considered balanced"));
 
         grid.add(toleranceLabel, 0, row);
         grid.add(toleranceSpinner, 1, row);
@@ -549,6 +551,7 @@ public class WhiteBalanceDialog {
         // Add a note explaining this
         Label outputNote = new Label("(auto: config folder/" + WB_SUBFOLDER + ")");
         outputNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        outputNote.setTooltip(new Tooltip("Auto-derived: config folder/" + WB_SUBFOLDER));
 
         grid.add(outputLabel, 0, row);
         grid.add(outputField, 1, row);
@@ -560,7 +563,7 @@ public class WhiteBalanceDialog {
 
         ComboBox<String> objectiveCombo = new ComboBox<>();
         objectiveCombo.setId("wbObjective");
-        objectiveCombo.setPrefWidth(200);
+        objectiveCombo.setPrefWidth(350);
         objectiveCombo.setTooltip(new Tooltip("Select the objective for calibration (exposures are objective-specific)"));
 
         // Populate objectives from config
@@ -586,6 +589,7 @@ public class WhiteBalanceDialog {
 
         Label objectiveNote = new Label("(calibration is objective-specific)");
         objectiveNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        objectiveNote.setTooltip(new Tooltip("Calibration is objective-specific"));
 
         grid.add(objectiveLabel, 0, row);
         grid.add(objectiveCombo, 1, row);
@@ -785,6 +789,7 @@ public class WhiteBalanceDialog {
 
         Label maxGainNote = new Label("(3dB = 1.41x gain)");
         maxGainNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        maxGainNote.setTooltip(new Tooltip("3dB = 1.41x, 6dB = 2x, 12dB = 4x linear gain"));
 
         grid.add(maxGainLabel, 0, row);
         grid.add(maxGainSpinner, 1, row);
@@ -806,6 +811,7 @@ public class WhiteBalanceDialog {
 
         Label gainThresholdNote = new Label("(exposure ratio before using gain)");
         gainThresholdNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        gainThresholdNote.setTooltip(new Tooltip("Exposure ratio between channels before applying gain compensation"));
 
         grid.add(gainThresholdLabel, 0, row);
         grid.add(gainThresholdSpinner, 1, row);
@@ -826,6 +832,7 @@ public class WhiteBalanceDialog {
 
         Label maxIterNote = new Label("(iterations before giving up)");
         maxIterNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        maxIterNote.setTooltip(new Tooltip("Maximum calibration iterations before giving up"));
 
         grid.add(maxIterLabel, 0, row);
         grid.add(maxIterSpinner, 1, row);
@@ -845,6 +852,7 @@ public class WhiteBalanceDialog {
 
         Label blackLevelNote = new Label("(improves accuracy, adds time)");
         blackLevelNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        blackLevelNote.setTooltip(new Tooltip("Improves accuracy but adds time to calibration"));
 
         grid.add(blackLevelLabel, 0, row);
         grid.add(blackLevelCheck, 1, row);
