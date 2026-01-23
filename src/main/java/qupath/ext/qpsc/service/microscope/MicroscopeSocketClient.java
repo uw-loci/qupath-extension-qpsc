@@ -2296,6 +2296,27 @@ public class MicroscopeSocketClient implements AutoCloseable {
             Consumer<AcquisitionProgress> progressCallback,
             long pollIntervalMs,
             long timeoutMs) throws IOException, InterruptedException {
+        return monitorAcquisition(progressCallback, null, pollIntervalMs, timeoutMs);
+    }
+
+    /**
+     * Monitors acquisition progress until completion or timeout.
+     * Calls the progress callback periodically, and handles manual focus requests
+     * via the dedicated manualFocusCallback.
+     *
+     * @param progressCallback Callback for progress updates (can be null)
+     * @param manualFocusCallback Callback for manual focus requests, receives retries remaining (can be null)
+     * @param pollIntervalMs Interval between progress checks in milliseconds
+     * @param timeoutMs Maximum time to wait in milliseconds (0 for no timeout)
+     * @return Final acquisition state
+     * @throws IOException if communication fails
+     * @throws InterruptedException if thread is interrupted
+     */
+    public AcquisitionState monitorAcquisition(
+            Consumer<AcquisitionProgress> progressCallback,
+            Consumer<Integer> manualFocusCallback,
+            long pollIntervalMs,
+            long timeoutMs) throws IOException, InterruptedException {
 
         long startTime = System.currentTimeMillis();
         // Use instance field instead of local variable so it can be reset externally
@@ -2321,14 +2342,20 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     return currentState;
                 }
 
-                // Check for manual focus request - if active, reset timeout
-                // This prevents timeout while waiting for user to respond to manual focus dialog
+                // Check for manual focus request - handle via callback or just reset timeout
                 try {
                     int manualFocusRetries = isManualFocusRequested();
                     if (manualFocusRetries >= 0) {
                         // Manual focus is requested - reset timeout since we're waiting for user input
                         lastProgressUpdateTime.set(System.currentTimeMillis());
-                        logger.debug("Manual focus requested (retries: {}) - resetting progress timeout", manualFocusRetries);
+                        if (manualFocusCallback != null) {
+                            // Delegate handling to caller (may block for dialog)
+                            manualFocusCallback.accept(manualFocusRetries);
+                            // Reset timeout again after handling (dialog may have taken time)
+                            lastProgressUpdateTime.set(System.currentTimeMillis());
+                        } else {
+                            logger.debug("Manual focus requested (retries: {}) - resetting progress timeout (no handler)", manualFocusRetries);
+                        }
                     }
                 } catch (IOException e) {
                     logger.debug("Failed to check manual focus status: {}", e.getMessage());

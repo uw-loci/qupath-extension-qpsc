@@ -701,96 +701,6 @@ public class AcquisitionManager {
                                     Platform.runLater(() -> progressDialog.updateCurrentAnnotationProgress(progress.current));
                                 }
 
-                                // Check for manual focus request (only once per request)
-                                try {
-                                    int retriesRemaining = socketClient.isManualFocusRequested();
-                                    if (retriesRemaining >= 0 && !handlingManualFocus.get()) {
-                                        handlingManualFocus.set(true);
-
-                                        // Check if user has opted to skip manual autofocus dialogs
-                                        if (QPPreferenceDialog.getSkipManualAutofocus()) {
-                                            // Bypass dialog - automatically retry autofocus and continue
-                                            logger.warn("Manual focus requested but 'No Manual Autofocus' is enabled - " +
-                                                       "automatically retrying autofocus (retries remaining: {})", retriesRemaining);
-                                            try {
-                                                socketClient.acknowledgeManualFocus();
-                                                logger.info("Automatic autofocus retry initiated (manual dialog bypassed)");
-                                            } catch (IOException e) {
-                                                logger.error("Failed to send automatic autofocus retry", e);
-                                            } finally {
-                                                handlingManualFocus.set(false);
-                                            }
-                                        } else {
-                                            // Original dialog-based behavior
-                                            logger.info("Manual focus requested by server - showing dialog (retries remaining: {})", retriesRemaining);
-
-                                            // Pause timing tracking so user wait time doesn't inflate estimates
-                                            if (progressDialog != null) {
-                                                progressDialog.pauseTimingForManualFocus();
-                                            }
-
-                                            // Use CountDownLatch to block until dialog is closed and acknowledged
-                                            java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-
-                                            // Capture retries for use in Platform.runLater
-                                            final int retriesForDialog = retriesRemaining;
-
-                                            // Show dialog on JavaFX thread
-                                            Platform.runLater(() -> {
-                                                try {
-                                                    UIFunctions.ManualFocusResult result = UIFunctions.showManualFocusDialog(retriesForDialog);
-
-                                                    // Handle user's choice
-                                                    try {
-                                                        switch (result) {
-                                                            case RETRY_AUTOFOCUS:
-                                                                socketClient.acknowledgeManualFocus();
-                                                                logger.info("User chose to retry autofocus");
-                                                                break;
-                                                            case USE_CURRENT_FOCUS:
-                                                                socketClient.skipAutofocusRetry();
-                                                                logger.info("User chose to use current focus");
-                                                                break;
-                                                            case CANCEL_ACQUISITION:
-                                                                socketClient.cancelAcquisition();
-                                                                logger.info("User chose to cancel acquisition");
-                                                                break;
-                                                        }
-                                                    } catch (IOException e) {
-                                                        logger.error("Failed to send manual focus response", e);
-                                                    }
-                                                } finally {
-                                                    handlingManualFocus.set(false);
-                                                    // Resume timing tracking after manual focus is handled
-                                                    if (progressDialog != null) {
-                                                        progressDialog.resumeTimingAfterManualFocus();
-                                                    }
-                                                    latch.countDown();
-                                                }
-                                            });
-
-                                            // Block until dialog is closed and acknowledged
-                                            // Periodically check progress to prevent timeout during manual focus
-                                            try {
-                                                while (!latch.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
-                                                    // Ping server every 30 seconds to prevent timeout
-                                                    try {
-                                                        socketClient.getAcquisitionProgress();
-                                                        logger.debug("Keepalive ping during manual focus");
-                                                    } catch (IOException e) {
-                                                        logger.warn("Failed to ping server during manual focus", e);
-                                                    }
-                                                }
-                                            } catch (InterruptedException e) {
-                                                logger.error("Interrupted while waiting for manual focus", e);
-                                                Thread.currentThread().interrupt();
-                                            }
-                                        }
-                                    }
-                                } catch (IOException e) {
-                                    logger.warn("Failed to check manual focus status: {}", e.getMessage());
-                                }
-
                                 // Check for acquisition metadata file (only once)
                                 if (!metadataRead.get() && progressDialog != null) {
                                     java.nio.file.Path metadataPath = java.nio.file.Paths.get(tileDirPath, "acquisition_metadata.txt");
@@ -830,6 +740,88 @@ public class AcquisitionManager {
                                             logger.warn("Failed to read acquisition metadata: {}", e.getMessage());
                                         }
                                     }
+                                }
+                            },
+                            // Manual focus callback - called directly from monitoring loop
+                            // when server requests manual focus (not dependent on progress callback)
+                            retriesRemaining -> {
+                                if (handlingManualFocus.getAndSet(true)) {
+                                    return; // Already handling a manual focus request
+                                }
+                                try {
+                                    if (QPPreferenceDialog.getSkipManualAutofocus()) {
+                                        // Skip manual focus - use current focus position and continue
+                                        logger.warn("Manual focus requested but 'No Manual Autofocus' enabled - " +
+                                                   "skipping autofocus (retries remaining: {})", retriesRemaining);
+                                        try {
+                                            socketClient.skipAutofocusRetry();
+                                            logger.info("Autofocus skipped - using current focus position (manual dialog bypassed)");
+                                        } catch (IOException e) {
+                                            logger.error("Failed to send skip autofocus", e);
+                                        }
+                                    } else {
+                                        // Show manual focus dialog to user
+                                        logger.info("Manual focus requested by server - showing dialog (retries remaining: {})", retriesRemaining);
+
+                                        // Pause timing tracking so user wait time doesn't inflate estimates
+                                        if (progressDialog != null) {
+                                            progressDialog.pauseTimingForManualFocus();
+                                        }
+
+                                        // Use CountDownLatch to block until dialog is closed and acknowledged
+                                        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+
+                                        // Show dialog on JavaFX thread
+                                        Platform.runLater(() -> {
+                                            try {
+                                                UIFunctions.ManualFocusResult result = UIFunctions.showManualFocusDialog(retriesRemaining);
+
+                                                // Handle user's choice
+                                                try {
+                                                    switch (result) {
+                                                        case RETRY_AUTOFOCUS:
+                                                            socketClient.acknowledgeManualFocus();
+                                                            logger.info("User chose to retry autofocus");
+                                                            break;
+                                                        case USE_CURRENT_FOCUS:
+                                                            socketClient.skipAutofocusRetry();
+                                                            logger.info("User chose to use current focus");
+                                                            break;
+                                                        case CANCEL_ACQUISITION:
+                                                            socketClient.cancelAcquisition();
+                                                            logger.info("User chose to cancel acquisition");
+                                                            break;
+                                                    }
+                                                } catch (IOException e) {
+                                                    logger.error("Failed to send manual focus response", e);
+                                                }
+                                            } finally {
+                                                // Resume timing tracking after manual focus is handled
+                                                if (progressDialog != null) {
+                                                    progressDialog.resumeTimingAfterManualFocus();
+                                                }
+                                                latch.countDown();
+                                            }
+                                        });
+
+                                        // Block until dialog is closed and acknowledged
+                                        // Periodically ping server to keep connection alive
+                                        try {
+                                            while (!latch.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                                                try {
+                                                    socketClient.getAcquisitionProgress();
+                                                    logger.debug("Keepalive ping during manual focus dialog");
+                                                } catch (IOException e) {
+                                                    logger.warn("Failed to ping server during manual focus", e);
+                                                }
+                                            }
+                                        } catch (InterruptedException e) {
+                                            logger.error("Interrupted while waiting for manual focus dialog", e);
+                                            Thread.currentThread().interrupt();
+                                        }
+                                    }
+                                } finally {
+                                    handlingManualFocus.set(false);
                                 }
                             },
                             500,    // Poll every 500ms for responsive UI
