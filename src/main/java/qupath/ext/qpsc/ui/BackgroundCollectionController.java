@@ -15,6 +15,7 @@ import qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.BackgroundCollect
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.modality.ppm.PPMPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
@@ -223,13 +224,16 @@ public class BackgroundCollectionController {
         // Set default output path
         setDefaultOutputPath();
 
-        // Per-angle white balance checkbox
-        perAngleWhiteBalanceCheckBox = new CheckBox("Use different white balance per angle");
-        perAngleWhiteBalanceCheckBox.setSelected(false);
+        // Per-angle white balance checkbox - load from persisted preference
+        perAngleWhiteBalanceCheckBox = new CheckBox("Use per-channel white balance (recommended for JAI)");
+        perAngleWhiteBalanceCheckBox.setSelected(PPMPreferences.getPerAngleWBEnabled());
         perAngleWhiteBalanceCheckBox.setTooltip(new Tooltip(
-                "If checked, applies angle-specific white balance settings from PPM calibration.\n" +
-                "If unchecked, uses single white balance at 90 deg (uncrossed).\n\n" +
-                "Run 'White Balance Calibration' (PPM mode) first to generate per-angle settings."
+                "RECOMMENDED FOR JAI CAMERAS: When checked, uses calibrated per-channel (R,G,B)\n" +
+                "exposures from white balance calibration. This ensures backgrounds match the\n" +
+                "exact exposure conditions used during acquisition for accurate flat-field correction.\n\n" +
+                "When unchecked, uses unified adaptive exposure (may cause over/under-correction).\n\n" +
+                "Run 'White Balance Calibration' (PPM mode) first to generate per-angle settings.\n" +
+                "This setting is remembered between sessions."
         ));
 
         // Listener to reload exposure values when per-angle white balance is toggled
@@ -616,6 +620,11 @@ public class BackgroundCollectionController {
             // Remove the settingsMatchExisting check - it's not relevant for background collection
             // We're creating new backgrounds, not using them for correction
             boolean usePerAngleWB = perAngleWhiteBalanceCheckBox.isSelected();
+
+            // Save the preference for next time
+            PPMPreferences.setPerAngleWBEnabled(usePerAngleWB);
+            logger.info("Saved per-angle WB preference: {}", usePerAngleWB);
+
             return new BackgroundCollectionResult(modality, objective, finalExposures, outputPath, usePerAngleWB);
 
         } catch (Exception e) {
@@ -773,13 +782,13 @@ public class BackgroundCollectionController {
      */
     private double getPersistentPreferenceExposure(double angle) {
         if (Math.abs(angle - 0.0) < 0.001) {
-            return qupath.ext.qpsc.modality.ppm.PPMPreferences.getZeroExposureMs();
+            return PPMPreferences.getZeroExposureMs();
         } else if (angle > 0 && angle < 20) {
-            return qupath.ext.qpsc.modality.ppm.PPMPreferences.getPlusExposureMs();
+            return PPMPreferences.getPlusExposureMs();
         } else if (angle < 0 && angle > -20) {
-            return qupath.ext.qpsc.modality.ppm.PPMPreferences.getMinusExposureMs();
+            return PPMPreferences.getMinusExposureMs();
         } else if (angle >= 40 && angle <= 100) {
-            return qupath.ext.qpsc.modality.ppm.PPMPreferences.getUncrossedExposureMs();
+            return PPMPreferences.getUncrossedExposureMs();
         }
 
         // Default fallback
