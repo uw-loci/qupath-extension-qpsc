@@ -28,6 +28,7 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 - [Multi-Sample Project Support](#multi-sample-project-support)
 - [Image Naming and Metadata System](#image-naming-and-metadata-system)
 - [Calibration Workflows](#calibration-workflows)
+  - [White Balance Calibration (JAI/Prism Cameras)](#white-balance-calibration-jaiprism-cameras)
   - [Background Collection](#background-collection)
   - [Polarizer Calibration (PPM)](#polarizer-calibration-ppm)
   - [Autofocus Settings Editor](#autofocus-settings-editor)
@@ -273,6 +274,104 @@ Projects can now contain multiple samples with distinct names:
 
 ## Calibration Workflows
 
+### White Balance Calibration (JAI/Prism Cameras)
+
+**Purpose**: Determine per-channel (R,G,B) exposure times needed to achieve neutral white balance at each polarization angle. This calibration is **critical** for prism-based color cameras like JAI.
+
+#### Why Prism-Based Cameras Are Different
+
+**Standard Bayer cameras** capture all color channels with a single exposure time. White balance is achieved through digital gain adjustments after capture.
+
+**Prism-based cameras (JAI, etc.)** use a prism to split light into separate R, G, B sensors. Each channel can have its own exposure time, enabling hardware-level white balance without digital gain artifacts. However, this means:
+
+- Each color channel may need a **different exposure time** to achieve white balance
+- Different polarization angles require **different per-channel exposure ratios**
+- **Backgrounds must be captured with the same per-channel exposures as acquisitions**, or flat-field correction will be incorrect
+
+#### The Critical Relationship: WB Calibration -> Backgrounds -> Acquisition
+
+For JAI and similar prism-based cameras, these three steps **must use matching exposure settings**:
+
+```
+1. WB Calibration  -->  Determines per-channel exposures, saves to YAML
+         |
+         v
+2. Background Collection  -->  Uses same per-channel exposures from YAML
+         |                      Captures white/neutral background images
+         v
+3. Acquisition  -->  Uses same per-channel exposures from YAML
+         |           Flat-field correction works correctly
+         v
+   Properly corrected images
+```
+
+**If any step uses different exposures, flat-field correction will over- or under-correct your images.**
+
+#### When to Run White Balance Calibration
+
+- **Required before first use** with a JAI or prism-based camera
+- After changing objectives (each objective/detector combination needs its own calibration)
+- After hardware changes affecting light path (filters, lamp replacement)
+- When images show color cast or uneven color balance across the field
+
+#### Workflow
+
+1. **Position the stage** at a clean, blank area (white reference or empty slide area)
+2. In QuPath, go to **Extensions > QP Scope > White Balance Calibration**
+3. Select:
+   - **Modality**: ppm (or other modality)
+   - **Objective**: Your current objective
+4. Click **Calibrate**
+
+**What happens:**
+- Server iteratively adjusts R, G, B exposures at each polarization angle
+- Finds exposure ratios that produce neutral gray (equal R, G, B values)
+- Saves calibration to `imageprocessing_{microscope}.yml`:
+
+```yaml
+imaging_profiles:
+  ppm:
+    LOCI_OBJECTIVE_OLYMPUS_20X_POL_001:
+      LOCI_DETECTOR_JAI_001:
+        angles:
+          crossed:
+            exposures_ms: {r: 45.2, g: 38.1, b: 52.3}
+            gains: {r: 1.0, g: 1.0, b: 1.0}
+          uncrossed:
+            exposures_ms: {r: 1.2, g: 1.0, b: 1.4}
+            gains: {r: 1.0, g: 1.0, b: 1.0}
+          positive:
+            exposures_ms: {r: 28.5, g: 24.2, b: 31.1}
+          negative:
+            exposures_ms: {r: 28.3, g: 24.1, b: 30.9}
+```
+
+#### After Calibration
+
+Once WB calibration is complete:
+
+1. **Run Background Collection** (see next section) - backgrounds will automatically use the calibrated exposures
+2. **Run acquisitions** - the same calibrated exposures will be applied
+3. Flat-field correction will work correctly because all three steps use matching exposures
+
+#### Automatic JAI Detection
+
+The system automatically detects JAI cameras and:
+- **Loads calibration automatically** during background collection (regardless of checkbox setting)
+- **Warns you** if no calibration exists for the current objective/detector
+- **Forces per-channel mode** when calibration is available
+
+This means even if you forget to check the "Use per-channel white balance" checkbox, JAI cameras will still use the correct per-channel exposures if calibration exists.
+
+#### Troubleshooting
+
+| Symptom | Cause | Solution |
+|---------|-------|----------|
+| Color cast in acquired images | WB calibration not run | Run White Balance Calibration for this objective |
+| Backgrounds not white | Background collection used wrong exposures | Re-run background collection after WB calibration |
+| Over/under-corrected tiles | Background/acquisition exposure mismatch | Ensure all steps use same objective and have calibration |
+| "No calibration found" warning | Missing calibration for objective | Run WB calibration for this objective/detector |
+
 ### Background Collection
 
 **Purpose**: Acquire flat-field correction images for improved image quality and quantitative analysis.
@@ -282,20 +381,45 @@ Projects can now contain multiple samples with distinct names:
 - **Fast Convergence**: Typically achieves target intensity in 2-5 iterations using proportional control algorithm
 - **Accurate Metadata**: Records actual exposure times used (not requested values) for reproducibility
 - **Modality Support**: Works with all imaging modes (PPM, brightfield, etc.)
+- **JAI/Prism Camera Support**: Automatically uses per-channel calibration when available (see below)
 
 **When to Use**:
 - Initial microscope setup
 - After light source changes or bulb replacement
 - When image quality degrades
 - For quantitative imaging requiring flat-field correction
+- **After running White Balance Calibration** (for JAI/prism cameras)
 
 **Workflow**:
 1. Position microscope at clean, blank area (uniform background)
 2. Select **"Collect Background Images"** from menu
 3. Choose modality, objective, and output folder
 4. Review/adjust angles and initial exposure estimates
-5. System acquires backgrounds, adjusting exposure automatically
-6. Metadata files saved with actual exposure values for each angle
+5. **For JAI cameras**: Verify "Use per-channel white balance" is checked (default: ON)
+6. System acquires backgrounds, adjusting exposure automatically
+7. Metadata files saved with actual exposure values for each angle
+
+#### Special Considerations for JAI/Prism Cameras
+
+> **Important**: For JAI and other prism-based cameras, you must run [White Balance Calibration](#white-balance-calibration-jaiprism-cameras) **before** collecting backgrounds.
+
+**Per-Channel White Balance Checkbox**:
+- Located in the Background Collection dialog
+- **Default: Checked (ON)** - recommended for JAI cameras
+- When checked: Uses calibrated per-channel (R,G,B) exposures from WB calibration
+- When unchecked: Uses unified adaptive exposure (may cause flat-field correction issues)
+- **Setting is remembered** between QuPath sessions
+
+**Automatic JAI Detection**:
+The system automatically detects JAI cameras and will:
+- Load WB calibration automatically, even if checkbox is unchecked
+- Warn you if no calibration exists for the current objective
+- Force per-channel mode when calibration is available
+
+**Why This Matters**:
+Background images must be captured with the **same exposure settings** used during acquisition. For JAI cameras with per-channel exposures, if backgrounds use different exposures, flat-field correction will produce incorrectly colored or intensity-shifted images.
+
+**Verification**: After background collection, the saved images should appear **white/neutral** (similar to the WB calibration verification images). If backgrounds appear colored or gray, re-run WB calibration first.
 
 ### Polarizer Calibration (PPM)
 
