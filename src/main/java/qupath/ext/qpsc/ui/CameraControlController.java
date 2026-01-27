@@ -120,19 +120,20 @@ public class CameraControlController {
         selectionGrid.setVgap(5);
 
         // Get available objectives and detectors from config
-        List<String> objectives = mgr.getAvailableObjectives();
-        List<String> detectors = mgr.getAvailableDetectors();
+        // Use PPM modality to get objectives that have PPM calibration profiles
+        Set<String> objectives = mgr.getAvailableObjectivesForModality("ppm");
+        Set<String> detectors = mgr.getHardwareDetectors();
 
         ComboBox<String> objectiveCombo = new ComboBox<>();
         objectiveCombo.getItems().addAll(objectives);
         if (!objectives.isEmpty()) {
-            objectiveCombo.setValue(objectives.get(0));
+            objectiveCombo.setValue(objectives.iterator().next());
         }
 
         ComboBox<String> detectorCombo = new ComboBox<>();
         detectorCombo.getItems().addAll(detectors);
         if (!detectors.isEmpty()) {
-            detectorCombo.setValue(detectors.get(0));
+            detectorCombo.setValue(detectors.iterator().next());
         }
 
         selectionGrid.add(new Label(res.getString("camera.label.objective")), 0, 0);
