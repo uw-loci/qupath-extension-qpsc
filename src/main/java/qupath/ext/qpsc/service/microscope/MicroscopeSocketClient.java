@@ -144,7 +144,23 @@ public class MicroscopeSocketClient implements AutoCloseable {
         /** Simple white balance calibration at single exposure */
         WBSIMPLE("wbsimple"),
         /** PPM white balance calibration at 4 angles */
-        WBPPM("wbppm___");
+        WBPPM("wbppm___"),
+
+        // Camera Control Commands
+        /** Get camera name from Core */
+        GETCAM("getcam__"),
+        /** Get exposure/gain mode flags (individual vs unified) */
+        GETMODE("getmode_"),
+        /** Set exposure/gain mode flags */
+        SETMODE("setmode_"),
+        /** Get exposure values (unified or per-channel RGB) */
+        GETEXP("getexp__"),
+        /** Set exposure values */
+        SETEXP("setexp__"),
+        /** Get gain values (unified or per-channel RGB) */
+        GETGAIN("getgain_"),
+        /** Set gain values */
+        SETGAIN("setgain_");
 
         private final byte[] value;
 
@@ -2865,6 +2881,321 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
 
         return results;
+    }
+
+    // ==================== Camera Control Methods ====================
+
+    /**
+     * Result of getCameraMode() containing exposure and gain mode flags.
+     *
+     * @param isJAI True if this is a JAI 3-CCD camera with per-channel control
+     * @param exposureIndividual True if per-channel exposure control is enabled
+     * @param gainIndividual True if per-channel gain control is enabled
+     */
+    public record CameraModeResult(boolean isJAI, boolean exposureIndividual, boolean gainIndividual) {}
+
+    /**
+     * Result of getExposures() containing exposure values.
+     *
+     * @param unified Unified exposure in ms (always available)
+     * @param red Red channel exposure in ms (only for JAI with individual mode)
+     * @param green Green channel exposure in ms (only for JAI with individual mode)
+     * @param blue Blue channel exposure in ms (only for JAI with individual mode)
+     * @param isPerChannel True if per-channel values are valid
+     */
+    public record ExposuresResult(double unified, double red, double green, double blue, boolean isPerChannel) {
+        public static ExposuresResult unified(double value) {
+            return new ExposuresResult(value, 0, 0, 0, false);
+        }
+
+        public static ExposuresResult perChannel(double all, double r, double g, double b) {
+            return new ExposuresResult(all, r, g, b, true);
+        }
+    }
+
+    /**
+     * Result of getGains() containing gain values.
+     *
+     * @param red Red channel analog gain
+     * @param green Green channel analog gain
+     * @param blue Blue channel analog gain
+     * @param isPerChannel True if per-channel values are valid
+     */
+    public record GainsResult(double red, double green, double blue, boolean isPerChannel) {
+        public static GainsResult unified(double value) {
+            return new GainsResult(value, value, value, false);
+        }
+
+        public static GainsResult perChannel(double r, double g, double b) {
+            return new GainsResult(r, g, b, true);
+        }
+    }
+
+    /**
+     * Gets the current camera name from the microscope Core.
+     *
+     * @return Camera name (e.g., "JAICamera", "MicroPublisher")
+     * @throws IOException if communication fails
+     */
+    public String getCameraName() throws IOException {
+        byte[] response = executeCommand(Command.GETCAM, null, 32);
+
+        // Trim null bytes and whitespace
+        String name = new String(response, StandardCharsets.UTF_8).trim();
+        // Also remove any null characters
+        name = name.replace("\0", "").trim();
+
+        if (name.startsWith("ERROR:")) {
+            throw new IOException("Failed to get camera name: " + name.substring(6));
+        }
+
+        logger.debug("Camera name: {}", name);
+        return name;
+    }
+
+    /**
+     * Gets the current camera mode (individual vs unified exposure/gain).
+     *
+     * @return CameraModeResult with mode flags
+     * @throws IOException if communication fails
+     */
+    public CameraModeResult getCameraMode() throws IOException {
+        byte[] response = executeCommand(Command.GETMODE, null, 16);
+
+        String modeStr = new String(response, StandardCharsets.UTF_8).trim().replace("\0", "");
+        logger.debug("Camera mode response: {}", modeStr);
+
+        if (modeStr.startsWith("ERROR:")) {
+            throw new IOException("Failed to get camera mode: " + modeStr.substring(6));
+        }
+
+        if (modeStr.startsWith("UNIFIED")) {
+            // Not a JAI camera - unified mode only
+            return new CameraModeResult(false, false, false);
+        }
+
+        if (modeStr.startsWith("JAI_EXP:")) {
+            // Parse JAI mode: "JAI_EXP:X_GAIN:Y"
+            boolean expIndividual = modeStr.contains("EXP:1");
+            boolean gainIndividual = modeStr.contains("GAIN:1");
+            return new CameraModeResult(true, expIndividual, gainIndividual);
+        }
+
+        // Default to unified mode
+        logger.warn("Unknown camera mode format: {}", modeStr);
+        return new CameraModeResult(false, false, false);
+    }
+
+    /**
+     * Sets the camera mode (individual vs unified exposure/gain).
+     * Only works for JAI 3-CCD cameras.
+     *
+     * @param exposureIndividual True to enable per-channel exposure control
+     * @param gainIndividual True to enable per-channel gain control
+     * @throws IOException if communication fails or camera doesn't support individual mode
+     */
+    public void setCameraMode(boolean exposureIndividual, boolean gainIndividual) throws IOException {
+        byte[] modeData = new byte[2];
+        modeData[0] = (byte) (exposureIndividual ? 1 : 0);
+        modeData[1] = (byte) (gainIndividual ? 1 : 0);
+
+        byte[] response = executeCommand(Command.SETMODE, modeData, 8);
+        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+
+        if (!responseStr.startsWith("ACK")) {
+            if (responseStr.startsWith("ERR_NJAI")) {
+                throw new IOException("Camera does not support individual mode (not a JAI camera)");
+            }
+            throw new IOException("Failed to set camera mode: " + responseStr);
+        }
+
+        logger.info("Camera mode set: exposure_individual={}, gain_individual={}", exposureIndividual, gainIndividual);
+    }
+
+    /**
+     * Gets current exposure values from the camera.
+     *
+     * @return ExposuresResult with exposure values in ms
+     * @throws IOException if communication fails
+     */
+    public ExposuresResult getExposures() throws IOException {
+        synchronized (socketLock) {
+            ensureConnected();
+
+            try {
+                // Send command
+                output.write(Command.GETEXP.getValue());
+                output.flush();
+                lastActivityTime.set(System.currentTimeMillis());
+
+                // First try to read 4 bytes (could be unified or error)
+                byte[] firstFloat = new byte[4];
+                input.readFully(firstFloat);
+
+                ByteBuffer buffer = ByteBuffer.wrap(firstFloat);
+                buffer.order(ByteOrder.BIG_ENDIAN);
+                float firstValue = buffer.getFloat();
+
+                if (firstValue < 0) {
+                    throw new IOException("Failed to get exposure values");
+                }
+
+                // Check if there's more data (per-channel mode sends 16 bytes total)
+                // Use available() with a small delay to check
+                Thread.sleep(20);
+                int available = input.available();
+
+                if (available >= 12) {
+                    // Per-channel mode: 4 floats total (all, R, G, B)
+                    byte[] remaining = new byte[12];
+                    input.readFully(remaining);
+
+                    ByteBuffer remainingBuffer = ByteBuffer.wrap(remaining);
+                    remainingBuffer.order(ByteOrder.BIG_ENDIAN);
+
+                    float red = remainingBuffer.getFloat();
+                    float green = remainingBuffer.getFloat();
+                    float blue = remainingBuffer.getFloat();
+
+                    logger.debug("Got per-channel exposures: all={}, R={}, G={}, B={}", firstValue, red, green, blue);
+                    return ExposuresResult.perChannel(firstValue, red, green, blue);
+                } else {
+                    // Unified mode: just 1 float
+                    logger.debug("Got unified exposure: {}", firstValue);
+                    return ExposuresResult.unified(firstValue);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted while getting exposure", e);
+            } catch (IOException e) {
+                handleIOException(e);
+                throw e;
+            }
+        }
+    }
+
+    /**
+     * Sets exposure values on the camera.
+     *
+     * @param exposures Array of exposure values in ms. Length 1 for unified, 3 for per-channel (R, G, B)
+     * @throws IOException if communication fails
+     */
+    public void setExposures(float[] exposures) throws IOException {
+        if (exposures == null || (exposures.length != 1 && exposures.length != 3)) {
+            throw new IllegalArgumentException("Exposures must have length 1 (unified) or 3 (R, G, B)");
+        }
+
+        // Build payload: 1 byte count + N floats
+        ByteBuffer buffer = ByteBuffer.allocate(1 + exposures.length * 4);
+        buffer.order(ByteOrder.BIG_ENDIAN);
+        buffer.put((byte) exposures.length);
+        for (float exp : exposures) {
+            buffer.putFloat(exp);
+        }
+
+        byte[] response = executeCommand(Command.SETEXP, buffer.array(), 8);
+        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+
+        if (!responseStr.startsWith("ACK")) {
+            if (responseStr.startsWith("ERR_NJAI")) {
+                throw new IOException("Per-channel exposure requires JAI camera");
+            }
+            throw new IOException("Failed to set exposure: " + responseStr);
+        }
+
+        logger.info("Exposure set successfully: {}", java.util.Arrays.toString(exposures));
+    }
+
+    /**
+     * Gets current gain values from the camera.
+     *
+     * @return GainsResult with gain values
+     * @throws IOException if communication fails
+     */
+    public GainsResult getGains() throws IOException {
+        synchronized (socketLock) {
+            ensureConnected();
+
+            try {
+                // Send command
+                output.write(Command.GETGAIN.getValue());
+                output.flush();
+                lastActivityTime.set(System.currentTimeMillis());
+
+                // First read 4 bytes
+                byte[] firstFloat = new byte[4];
+                input.readFully(firstFloat);
+
+                ByteBuffer buffer = ByteBuffer.wrap(firstFloat);
+                buffer.order(ByteOrder.BIG_ENDIAN);
+                float firstValue = buffer.getFloat();
+
+                if (firstValue < 0) {
+                    throw new IOException("Failed to get gain values");
+                }
+
+                // Check if there's more data (per-channel mode sends 12 bytes total)
+                Thread.sleep(20);
+                int available = input.available();
+
+                if (available >= 8) {
+                    // Per-channel mode: 3 floats (R, G, B)
+                    byte[] remaining = new byte[8];
+                    input.readFully(remaining);
+
+                    ByteBuffer remainingBuffer = ByteBuffer.wrap(remaining);
+                    remainingBuffer.order(ByteOrder.BIG_ENDIAN);
+
+                    float green = remainingBuffer.getFloat();
+                    float blue = remainingBuffer.getFloat();
+
+                    logger.debug("Got per-channel gains: R={}, G={}, B={}", firstValue, green, blue);
+                    return GainsResult.perChannel(firstValue, green, blue);
+                } else {
+                    // Unified mode: just 1 float
+                    logger.debug("Got unified gain: {}", firstValue);
+                    return GainsResult.unified(firstValue);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted while getting gain", e);
+            } catch (IOException e) {
+                handleIOException(e);
+                throw e;
+            }
+        }
+    }
+
+    /**
+     * Sets gain values on the camera.
+     *
+     * @param gains Array of gain values. Length 1 for unified, 3 for per-channel (R, G, B)
+     * @throws IOException if communication fails
+     */
+    public void setGains(float[] gains) throws IOException {
+        if (gains == null || (gains.length != 1 && gains.length != 3)) {
+            throw new IllegalArgumentException("Gains must have length 1 (unified) or 3 (R, G, B)");
+        }
+
+        // Build payload: 1 byte count + N floats
+        ByteBuffer buffer = ByteBuffer.allocate(1 + gains.length * 4);
+        buffer.order(ByteOrder.BIG_ENDIAN);
+        buffer.put((byte) gains.length);
+        for (float gain : gains) {
+            buffer.putFloat(gain);
+        }
+
+        byte[] response = executeCommand(Command.SETGAIN, buffer.array(), 8);
+        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+
+        if (!responseStr.startsWith("ACK")) {
+            if (responseStr.startsWith("ERR_NJAI")) {
+                throw new IOException("Per-channel gain requires JAI camera");
+            }
+            throw new IOException("Failed to set gain: " + responseStr);
+        }
+
+        logger.info("Gain set successfully: {}", java.util.Arrays.toString(gains));
     }
 
 }

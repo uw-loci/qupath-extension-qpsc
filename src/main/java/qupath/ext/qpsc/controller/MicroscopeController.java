@@ -430,4 +430,159 @@ public class MicroscopeController {
     public void disconnect() {
         socketClient.disconnect();
     }
+
+    // ==================== Camera Control Methods ====================
+
+    /**
+     * Gets the current camera name from the microscope.
+     *
+     * @return Camera name (e.g., "JAICamera", "MicroPublisher")
+     * @throws IOException if communication fails
+     */
+    public String getCameraName() throws IOException {
+        try {
+            return socketClient.getCameraName();
+        } catch (IOException e) {
+            logger.error("Failed to get camera name: {}", e.getMessage());
+            throw new IOException("Failed to get camera name via socket", e);
+        }
+    }
+
+    /**
+     * Gets the current camera mode (individual vs unified exposure/gain).
+     *
+     * @return CameraModeResult with mode flags
+     * @throws IOException if communication fails
+     */
+    public MicroscopeSocketClient.CameraModeResult getCameraMode() throws IOException {
+        try {
+            return socketClient.getCameraMode();
+        } catch (IOException e) {
+            logger.error("Failed to get camera mode: {}", e.getMessage());
+            throw new IOException("Failed to get camera mode via socket", e);
+        }
+    }
+
+    /**
+     * Sets the camera mode (individual vs unified exposure/gain).
+     *
+     * @param exposureIndividual True to enable per-channel exposure control
+     * @param gainIndividual True to enable per-channel gain control
+     * @throws IOException if communication fails or camera doesn't support individual mode
+     */
+    public void setCameraMode(boolean exposureIndividual, boolean gainIndividual) throws IOException {
+        try {
+            socketClient.setCameraMode(exposureIndividual, gainIndividual);
+            logger.info("Set camera mode: exposure_individual={}, gain_individual={}", exposureIndividual, gainIndividual);
+        } catch (IOException e) {
+            logger.error("Failed to set camera mode: {}", e.getMessage());
+            throw new IOException("Failed to set camera mode via socket", e);
+        }
+    }
+
+    /**
+     * Gets current exposure values from the camera.
+     *
+     * @return ExposuresResult with exposure values in ms
+     * @throws IOException if communication fails
+     */
+    public MicroscopeSocketClient.ExposuresResult getExposures() throws IOException {
+        try {
+            return socketClient.getExposures();
+        } catch (IOException e) {
+            logger.error("Failed to get exposures: {}", e.getMessage());
+            throw new IOException("Failed to get exposures via socket", e);
+        }
+    }
+
+    /**
+     * Sets exposure values on the camera.
+     *
+     * @param exposures Array of exposure values in ms. Length 1 for unified, 3 for per-channel (R, G, B)
+     * @throws IOException if communication fails
+     */
+    public void setExposures(float[] exposures) throws IOException {
+        try {
+            socketClient.setExposures(exposures);
+            logger.info("Set exposures: {}", java.util.Arrays.toString(exposures));
+        } catch (IOException e) {
+            logger.error("Failed to set exposures: {}", e.getMessage());
+            throw new IOException("Failed to set exposures via socket", e);
+        }
+    }
+
+    /**
+     * Gets current gain values from the camera.
+     *
+     * @return GainsResult with gain values
+     * @throws IOException if communication fails
+     */
+    public MicroscopeSocketClient.GainsResult getGains() throws IOException {
+        try {
+            return socketClient.getGains();
+        } catch (IOException e) {
+            logger.error("Failed to get gains: {}", e.getMessage());
+            throw new IOException("Failed to get gains via socket", e);
+        }
+    }
+
+    /**
+     * Sets gain values on the camera.
+     *
+     * @param gains Array of gain values. Length 1 for unified, 3 for per-channel (R, G, B)
+     * @throws IOException if communication fails
+     */
+    public void setGains(float[] gains) throws IOException {
+        try {
+            socketClient.setGains(gains);
+            logger.info("Set gains: {}", java.util.Arrays.toString(gains));
+        } catch (IOException e) {
+            logger.error("Failed to set gains: {}", e.getMessage());
+            throw new IOException("Failed to set gains via socket", e);
+        }
+    }
+
+    /**
+     * Applies camera settings for a specific PPM angle.
+     * This sets the exposure and gain values from the calibration profile
+     * AND moves the rotation stage to the specified angle.
+     *
+     * @param angleName The angle name (e.g., "uncrossed", "crossed", "positive", "negative")
+     * @param exposures Per-channel exposures [R, G, B] in ms
+     * @param gains Per-channel gains [R, G, B]
+     * @param rotationDegrees The rotation angle in degrees to move to
+     * @throws IOException if communication fails
+     */
+    public void applyCameraSettingsForAngle(String angleName, float[] exposures, float[] gains, double rotationDegrees) throws IOException {
+        logger.info("Applying camera settings for angle '{}' at {} degrees", angleName, rotationDegrees);
+
+        // First move the rotation stage
+        try {
+            socketClient.moveStageR(rotationDegrees);
+            logger.info("Moved rotation stage to {} degrees", rotationDegrees);
+        } catch (IOException e) {
+            logger.error("Failed to move rotation stage: {}", e.getMessage());
+            throw new IOException("Failed to move rotation stage to " + rotationDegrees + " degrees", e);
+        }
+
+        // Set exposures (this will auto-enable individual mode if needed)
+        try {
+            socketClient.setExposures(exposures);
+            logger.info("Set exposures for {}: R={}, G={}, B={}", angleName, exposures[0], exposures[1], exposures[2]);
+        } catch (IOException e) {
+            logger.error("Failed to set exposures: {}", e.getMessage());
+            throw new IOException("Failed to set exposures for " + angleName, e);
+        }
+
+        // Set gains (this will auto-enable individual mode if needed)
+        try {
+            socketClient.setGains(gains);
+            logger.info("Set gains for {}: R={}, G={}, B={}", angleName, gains[0], gains[1], gains[2]);
+        } catch (IOException e) {
+            logger.error("Failed to set gains: {}", e.getMessage());
+            throw new IOException("Failed to set gains for " + angleName, e);
+        }
+
+        logger.info("Camera settings applied successfully for angle '{}'", angleName);
+    }
 }

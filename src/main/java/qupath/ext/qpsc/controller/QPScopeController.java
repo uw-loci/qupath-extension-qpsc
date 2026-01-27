@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.ui.CameraControlController;
 import qupath.ext.qpsc.ui.ServerConnectionController;
 import qupath.ext.qpsc.ui.StageMovementController;
 
@@ -33,6 +34,7 @@ import qupath.ext.qpsc.ui.StageMovementController;
  *   <li><strong>birefringenceOptimization</strong> - PPM birefringence angle optimization test</li>
  *   <li><strong>autofocusEditor</strong> - Per-objective autofocus settings editor</li>
  *   <li><strong>basicStageInterface</strong> - Manual stage movement and testing interface</li>
+ *   <li><strong>cameraControl</strong> - View and apply camera exposure/gain settings</li>
  *   <li><strong>serverConnection</strong> - Connection testing and server communication diagnostics</li>
  * </ol>
  *
@@ -178,6 +180,10 @@ public class QPScopeController {
             case "whiteBalance" -> {
                 logger.debug("Launching white balance calibration workflow");
                 WhiteBalanceWorkflow.run();
+            }
+            case "cameraControl" -> {
+                logger.debug("Launching camera control dialog");
+                CameraControlController.showCameraControlDialog();
             }
             case "serverConnection" -> {
                 logger.debug("Launching server connection dialog");

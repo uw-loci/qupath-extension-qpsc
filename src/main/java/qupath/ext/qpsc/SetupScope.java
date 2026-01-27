@@ -326,6 +326,21 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 			}
 		});
 
+		// Camera control dialog (view and apply camera settings)
+		MenuItem cameraControlOption = new MenuItem(res.getString("menu.cameraControl"));
+		setMenuItemTooltip(cameraControlOption,
+				"Open a dialog to view and test camera exposure/gain settings. " +
+				"Shows calibrated values from imaging profiles and allows testing different " +
+				"settings without saving. For JAI 3-CCD cameras, supports per-channel RGB control. " +
+				"Apply buttons set both camera settings and rotation stage angle.");
+		cameraControlOption.setOnAction(e -> {
+			try {
+				QPScopeController.getInstance().startWorkflow("cameraControl");
+			} catch (IOException ex) {
+				throw new RuntimeException(ex);
+			}
+		});
+
 		// Add items to utilities submenu
 		utilitiesMenu.getItems().addAll(
 				alignmentOption,
@@ -333,6 +348,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 				new SeparatorMenuItem(),
 				backgroundCollectionOption,
 				whiteBalanceOption,
+				cameraControlOption,
 				polarizerCalibrationOption,
 				ppmSensitivityTestOption,
 				birefringenceOptimizationOption,
