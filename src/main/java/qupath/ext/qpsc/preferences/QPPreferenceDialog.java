@@ -123,6 +123,16 @@ public class QPPreferenceDialog {
     private static final StringProperty lastCalibrationFolderProperty =
             PathPrefs.createPersistentPreference("lastCalibrationFolder", "");
 
+    // Sunburst calibration dialog settings - remembered between sessions
+    private static final StringProperty sunburstLastModalityProperty =
+            PathPrefs.createPersistentPreference("sunburstLastModality", "");
+    private static final IntegerProperty sunburstExpectedRectanglesProperty =
+            PathPrefs.createPersistentPreference("sunburstExpectedRectangles", 16);
+    private static final DoubleProperty sunburstSaturationThresholdProperty =
+            PathPrefs.createPersistentPreference("sunburstSaturationThreshold", 0.1);
+    private static final DoubleProperty sunburstValueThresholdProperty =
+            PathPrefs.createPersistentPreference("sunburstValueThreshold", 0.1);
+
     /**
      * Register all preferences in QuPath's PreferencePane. Call once during extension installation.
      */
@@ -551,5 +561,63 @@ public class QPPreferenceDialog {
 
         // Last resort - user home
         return System.getProperty("user.home");
+    }
+
+    // ===== Sunburst Calibration Dialog Preferences =====
+
+    /**
+     * Gets the last selected modality for sunburst calibration.
+     */
+    public static String getSunburstLastModality() {
+        return sunburstLastModalityProperty.get();
+    }
+
+    /**
+     * Sets the last selected modality for sunburst calibration.
+     */
+    public static void setSunburstLastModality(String modality) {
+        sunburstLastModalityProperty.set(modality);
+    }
+
+    /**
+     * Gets the expected rectangles count for sunburst calibration.
+     */
+    public static int getSunburstExpectedRectangles() {
+        return sunburstExpectedRectanglesProperty.get();
+    }
+
+    /**
+     * Sets the expected rectangles count for sunburst calibration.
+     */
+    public static void setSunburstExpectedRectangles(int count) {
+        sunburstExpectedRectanglesProperty.set(count);
+    }
+
+    /**
+     * Gets the saturation threshold for sunburst calibration.
+     */
+    public static double getSunburstSaturationThreshold() {
+        return sunburstSaturationThresholdProperty.get();
+    }
+
+    /**
+     * Sets the saturation threshold for sunburst calibration.
+     */
+    public static void setSunburstSaturationThreshold(double threshold) {
+        sunburstSaturationThresholdProperty.set(threshold);
+    }
+
+    /**
+     * Gets the value threshold for sunburst calibration.
+     */
+    public static double getSunburstValueThreshold() {
+        return sunburstValueThresholdProperty.get();
+    }
+
+    /**
+     * Sets the value threshold for sunburst calibration.
+     */
+    public static void setSunburstValueThreshold(double threshold) {
+        sunburstValueThresholdProperty.set(threshold);
     }
 }

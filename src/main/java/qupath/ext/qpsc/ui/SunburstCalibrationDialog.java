@@ -182,7 +182,13 @@ public class SunburstCalibrationDialog {
             if (modalityCombo.getItems().isEmpty()) {
                 modalityCombo.getItems().add("ppm_20x");
             }
-            modalityCombo.getSelectionModel().selectFirst();
+            // Select last used modality if available, otherwise select first
+            String lastModality = QPPreferenceDialog.getSunburstLastModality();
+            if (lastModality != null && !lastModality.isEmpty() && modalityCombo.getItems().contains(lastModality)) {
+                modalityCombo.getSelectionModel().select(lastModality);
+            } else {
+                modalityCombo.getSelectionModel().selectFirst();
+            }
 
             grid.add(modalityLabelBox, 0, row);
             grid.add(modalityCombo, 1, row);
@@ -210,7 +216,8 @@ public class SunburstCalibrationDialog {
                 "may indicate slide positioning or threshold issues."
             );
 
-            Spinner<Integer> rectanglesSpinner = new Spinner<>(4, 32, 16, 4);
+            int savedRectangles = QPPreferenceDialog.getSunburstExpectedRectangles();
+            Spinner<Integer> rectanglesSpinner = new Spinner<>(4, 32, savedRectangles, 4);
             rectanglesSpinner.setEditable(true);
             rectanglesSpinner.setPrefWidth(100);
 
@@ -231,7 +238,8 @@ public class SunburstCalibrationDialog {
                 "If too much background is included, try raising it."
             );
 
-            Spinner<Double> saturationSpinner = new Spinner<>(0.01, 0.5, 0.1, 0.01);
+            double savedSaturation = QPPreferenceDialog.getSunburstSaturationThreshold();
+            Spinner<Double> saturationSpinner = new Spinner<>(0.01, 0.5, savedSaturation, 0.01);
             saturationSpinner.setEditable(true);
             saturationSpinner.setPrefWidth(100);
 
@@ -253,7 +261,8 @@ public class SunburstCalibrationDialog {
                 "try lowering this value."
             );
 
-            Spinner<Double> valueSpinner = new Spinner<>(0.01, 0.5, 0.1, 0.01);
+            double savedValue = QPPreferenceDialog.getSunburstValueThreshold();
+            Spinner<Double> valueSpinner = new Spinner<>(0.01, 0.5, savedValue, 0.01);
             valueSpinner.setEditable(true);
             valueSpinner.setPrefWidth(100);
 
@@ -353,16 +362,24 @@ public class SunburstCalibrationDialog {
                 if (button == okType) {
                     String name = nameField.getText().trim();
                     String folderPath = outputField.getText().trim();
+                    String selectedModality = modalityCombo.getSelectionModel().getSelectedItem();
+                    int rectangles = rectanglesSpinner.getValue();
+                    double saturation = saturationSpinner.getValue();
+                    double value = valueSpinner.getValue();
 
-                    // Remember the folder for next time
+                    // Remember all settings for next time
                     QPPreferenceDialog.setLastCalibrationFolder(folderPath);
+                    QPPreferenceDialog.setSunburstLastModality(selectedModality);
+                    QPPreferenceDialog.setSunburstExpectedRectangles(rectangles);
+                    QPPreferenceDialog.setSunburstSaturationThreshold(saturation);
+                    QPPreferenceDialog.setSunburstValueThreshold(value);
 
                     return new SunburstCalibrationParams(
                             folderPath,
-                            modalityCombo.getSelectionModel().getSelectedItem(),
-                            rectanglesSpinner.getValue(),
-                            saturationSpinner.getValue(),
-                            valueSpinner.getValue(),
+                            selectedModality,
+                            rectangles,
+                            saturation,
+                            value,
                             name.isEmpty() ? null : name
                     );
                 }
