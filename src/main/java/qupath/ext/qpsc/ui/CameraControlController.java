@@ -777,12 +777,9 @@ public class CameraControlController {
             gainB.setDisable(!gainIndividual);
 
             gainAll.setStyle(gainIndividual ? disabledStyle : enabledStyle);
-            // Note: Per-channel gain fields may have validation styling, so only change if needed
-            if (!gainIndividual) {
-                gainR.setStyle(disabledStyle);
-                gainG.setStyle(disabledStyle);
-                gainB.setStyle(disabledStyle);
-            }
+            gainR.setStyle(gainIndividual ? enabledStyle : disabledStyle);
+            gainG.setStyle(gainIndividual ? enabledStyle : disabledStyle);
+            gainB.setStyle(gainIndividual ? enabledStyle : disabledStyle);
         }
     }
 
