@@ -585,4 +585,37 @@ public class MicroscopeController {
 
         logger.info("Camera settings applied successfully for angle '{}'", angleName);
     }
+
+    // ==================== Live Mode Control Methods ====================
+
+    /**
+     * Checks if live mode is currently running on the microscope.
+     *
+     * @return true if live mode is active, false otherwise
+     * @throws IOException if communication fails
+     */
+    public boolean isLiveModeRunning() throws IOException {
+        try {
+            return socketClient.isLiveModeRunning();
+        } catch (IOException e) {
+            logger.error("Failed to check live mode status: {}", e.getMessage());
+            throw new IOException("Failed to check live mode status via socket", e);
+        }
+    }
+
+    /**
+     * Sets live mode on or off.
+     *
+     * @param enable true to enable live mode, false to disable
+     * @throws IOException if communication fails or studio is not available
+     */
+    public void setLiveMode(boolean enable) throws IOException {
+        try {
+            socketClient.setLiveMode(enable);
+            logger.info("Live mode set to: {}", enable ? "ON" : "OFF");
+        } catch (IOException e) {
+            logger.error("Failed to set live mode: {}", e.getMessage());
+            throw new IOException("Failed to set live mode via socket", e);
+        }
+    }
 }

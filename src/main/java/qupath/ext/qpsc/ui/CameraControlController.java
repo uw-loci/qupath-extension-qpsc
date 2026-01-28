@@ -31,7 +31,8 @@ import java.util.*;
  *   <li>Mode toggles for Individual vs Unified exposure/gain (JAI only)</li>
  *   <li>Per-angle calibration settings display with editable fields</li>
  *   <li>Apply buttons that set camera settings AND move rotation stage</li>
- *   <li>Reload buttons to restore values from YAML calibration file</li>
+ *   <li>Automatic live mode handling (turn off during setting changes)</li>
+ *   <li>Reload button to restore values from YAML calibration file</li>
  * </ul>
  *
  * <p>Note: Values can be edited for testing, but changes are NOT saved to YAML.
@@ -99,20 +100,7 @@ public class CameraControlController {
         // Main content
         VBox content = new VBox(10);
         content.setPadding(new Insets(15));
-        content.setPrefWidth(550);
-
-        // --- Warning Labels ---
-        Label viewerWarning = new Label(res.getString("camera.warning.multipleViewers"));
-        viewerWarning.setStyle("-fx-font-weight: bold; -fx-text-fill: #cc3300;");
-        viewerWarning.setWrapText(true);
-
-        Label liveViewWarning = new Label(res.getString("camera.warning.liveView"));
-        liveViewWarning.setStyle("-fx-font-weight: bold; -fx-text-fill: #cc3300;");
-        liveViewWarning.setWrapText(true);
-
-        VBox warningBox = new VBox(3, viewerWarning, liveViewWarning);
-        warningBox.setStyle("-fx-padding: 0 0 10 0;");
-        content.getChildren().add(warningBox);
+        content.setPrefWidth(650);
 
         // --- Camera Info Section ---
         Label cameraLabel = new Label();
@@ -153,6 +141,11 @@ public class CameraControlController {
         selectionGrid.add(objectiveCombo, 1, 0);
         selectionGrid.add(new Label(res.getString("camera.label.detector")), 0, 1);
         selectionGrid.add(detectorCombo, 1, 1);
+
+        // Reload from YAML button next to selectors
+        Button reloadAllButton = new Button(res.getString("camera.button.reloadAll"));
+        selectionGrid.add(reloadAllButton, 2, 0, 1, 2);
+        GridPane.setValignment(reloadAllButton, javafx.geometry.VPos.CENTER);
 
         content.getChildren().add(selectionGrid);
 
@@ -245,7 +238,7 @@ public class CameraControlController {
 
         content.getChildren().add(modeBox);
 
-        // --- Per-Angle Settings Section ---
+        // --- Per-Angle Settings Section (Flat Layout) ---
         Label settingsHeader = new Label(res.getString("camera.label.perAngleSettings"));
         settingsHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
         Label settingsNote = new Label(res.getString("camera.label.settingsNote"));
@@ -254,35 +247,113 @@ public class CameraControlController {
 
         content.getChildren().addAll(new Separator(), settingsHeader, settingsNote);
 
-        // Create accordion for angle sections
-        Accordion accordion = new Accordion();
-
         // Store field references for reload functionality
         Map<String, AngleFields> angleFieldsMap = new HashMap<>();
 
+        // Global status label
+        Label statusLabel = new Label();
+        statusLabel.setStyle("-fx-font-size: 11px;");
+
+        // Create a flat grid with all angles visible
+        GridPane anglesGrid = new GridPane();
+        anglesGrid.setHgap(8);
+        anglesGrid.setVgap(8);
+        anglesGrid.setPadding(new Insets(10, 0, 10, 0));
+
+        // Column constraints for better layout
+        ColumnConstraints labelCol = new ColumnConstraints();
+        labelCol.setPrefWidth(80);
+        ColumnConstraints fieldCol = new ColumnConstraints();
+        fieldCol.setPrefWidth(55);
+        ColumnConstraints buttonCol = new ColumnConstraints();
+        buttonCol.setPrefWidth(100);
+
+        anglesGrid.getColumnConstraints().addAll(
+                labelCol,  // Angle name
+                new ColumnConstraints(), fieldCol,  // All
+                new ColumnConstraints(), fieldCol,  // R
+                new ColumnConstraints(), fieldCol,  // G
+                new ColumnConstraints(), fieldCol,  // B
+                buttonCol  // Apply button
+        );
+
+        // Header row
+        int row = 0;
+        Label expHeader = new Label(res.getString("camera.label.exposureMs"));
+        expHeader.setStyle("-fx-font-weight: bold;");
+        anglesGrid.add(expHeader, 0, row);
+        anglesGrid.add(new Label(res.getString("camera.label.all")), 1, row);
+        anglesGrid.add(new Label(res.getString("camera.label.r")), 3, row);
+        anglesGrid.add(new Label(res.getString("camera.label.g")), 5, row);
+        anglesGrid.add(new Label(res.getString("camera.label.b")), 7, row);
+        row++;
+
+        // Create rows for each angle
         for (Map.Entry<String, Double> angleEntry : PPM_ANGLES.entrySet()) {
             String angleName = angleEntry.getKey();
             double angleDegrees = angleEntry.getValue();
 
-            TitledPane anglePane = createAnglePane(angleName, angleDegrees, res, controller, mgr,
-                    objectiveCombo, detectorCombo, angleFieldsMap);
-            accordion.getPanes().add(anglePane);
+            // Angle label
+            Label angleLabel = new Label(String.format("%s (%.0f deg)", capitalize(angleName), angleDegrees));
+            angleLabel.setStyle("-fx-font-weight: bold;");
+            anglesGrid.add(angleLabel, 0, row);
+
+            // Exposure fields
+            TextField expAllField = createSmallField("0");
+            TextField expRField = createSmallField("0");
+            TextField expGField = createSmallField("0");
+            TextField expBField = createSmallField("0");
+
+            anglesGrid.add(expAllField, 2, row);
+            anglesGrid.add(expRField, 4, row);
+            anglesGrid.add(expGField, 6, row);
+            anglesGrid.add(expBField, 8, row);
+
+            // Apply button for this angle
+            Button applyButton = new Button(res.getString("camera.button.apply"));
+            applyButton.setOnAction(e -> applySettingsWithLiveModeHandling(
+                    controller, angleName, angleDegrees,
+                    expRField, expGField, expBField,
+                    angleFieldsMap.get(angleName),
+                    statusLabel, res));
+            anglesGrid.add(applyButton, 9, row);
+
+            row++;
+
+            // Gain row for this angle
+            Label gainLabel = new Label(res.getString("camera.label.gain"));
+            gainLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+            anglesGrid.add(gainLabel, 0, row);
+
+            // Gain fields (no "all" field for gain)
+            TextField gainRField = createSmallField("1.0");
+            TextField gainGField = createSmallField("1.0");
+            TextField gainBField = createSmallField("1.0");
+
+            anglesGrid.add(gainRField, 4, row);
+            anglesGrid.add(gainGField, 6, row);
+            anglesGrid.add(gainBField, 8, row);
+
+            // Store fields for this angle
+            AngleFields fields = new AngleFields(expAllField, expRField, expGField, expBField,
+                    gainRField, gainGField, gainBField);
+            angleFieldsMap.put(angleName, fields);
+
+            row++;
+
+            // Add a small separator between angles
+            Separator sep = new Separator();
+            sep.setPadding(new Insets(3, 0, 3, 0));
+            anglesGrid.add(sep, 0, row, 10, 1);
+            row++;
         }
 
-        // Expand first pane by default
-        if (!accordion.getPanes().isEmpty()) {
-            accordion.setExpandedPane(accordion.getPanes().get(0));
-        }
-
-        content.getChildren().add(accordion);
+        content.getChildren().add(anglesGrid);
 
         // Status label
-        Label statusLabel = new Label();
-        statusLabel.setStyle("-fx-font-size: 11px;");
         content.getChildren().add(statusLabel);
 
-        // Reload all button
-        Button reloadAllButton = new Button("Reload All from YAML");
+        // Reload all button action
         reloadAllButton.setOnAction(e -> {
             String objective = objectiveCombo.getValue();
             String detector = detectorCombo.getValue();
@@ -290,10 +361,6 @@ public class CameraControlController {
                 reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res);
             }
         });
-
-        HBox buttonBox = new HBox(10, reloadAllButton);
-        buttonBox.setAlignment(Pos.CENTER_RIGHT);
-        content.getChildren().add(buttonBox);
 
         // Objective/Detector change listeners - reload values
         objectiveCombo.setOnAction(e -> {
@@ -321,7 +388,7 @@ public class CameraControlController {
         // Finalize dialog
         ScrollPane scrollPane = new ScrollPane(content);
         scrollPane.setFitToWidth(true);
-        scrollPane.setPrefHeight(600);
+        scrollPane.setPrefHeight(550);
 
         dlg.getDialogPane().setContent(scrollPane);
         dlg.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
@@ -338,115 +405,85 @@ public class CameraControlController {
     }
 
     /**
-     * Creates a TitledPane for a single PPM angle with exposure/gain fields and apply button.
+     * Creates a small text field for exposure/gain values.
      */
-    private static TitledPane createAnglePane(String angleName, double angleDegrees,
-                                              ResourceBundle res, MicroscopeController controller,
-                                              MicroscopeConfigManager mgr,
-                                              ComboBox<String> objectiveCombo, ComboBox<String> detectorCombo,
-                                              Map<String, AngleFields> angleFieldsMap) {
+    private static TextField createSmallField(String initialValue) {
+        TextField field = new TextField(initialValue);
+        field.setPrefWidth(55);
+        field.setMaxWidth(55);
+        return field;
+    }
 
-        VBox angleContent = new VBox(8);
-        angleContent.setPadding(new Insets(10));
+    /**
+     * Applies camera settings for an angle, handling live mode automatically.
+     * If live mode is running, it will be turned off, settings applied, then turned back on.
+     */
+    private static void applySettingsWithLiveModeHandling(
+            MicroscopeController controller,
+            String angleName, double angleDegrees,
+            TextField expRField, TextField expGField, TextField expBField,
+            AngleFields fields,
+            Label statusLabel, ResourceBundle res) {
 
-        // Create fields for exposure
-        Label expLabel = new Label(res.getString("camera.label.exposureMs"));
-        expLabel.setStyle("-fx-font-weight: bold;");
+        try {
+            // Parse values
+            float[] exposures = new float[]{
+                    Float.parseFloat(expRField.getText()),
+                    Float.parseFloat(expGField.getText()),
+                    Float.parseFloat(expBField.getText())
+            };
+            float[] gains = new float[]{
+                    Float.parseFloat(fields.gainR.getText()),
+                    Float.parseFloat(fields.gainG.getText()),
+                    Float.parseFloat(fields.gainB.getText())
+            };
 
-        TextField expAllField = new TextField("0");
-        TextField expRField = new TextField("0");
-        TextField expGField = new TextField("0");
-        TextField expBField = new TextField("0");
-
-        expAllField.setPrefWidth(70);
-        expRField.setPrefWidth(70);
-        expGField.setPrefWidth(70);
-        expBField.setPrefWidth(70);
-
-        HBox expRow = new HBox(8,
-                new Label(res.getString("camera.label.all")), expAllField,
-                new Label(res.getString("camera.label.r")), expRField,
-                new Label(res.getString("camera.label.g")), expGField,
-                new Label(res.getString("camera.label.b")), expBField
-        );
-        expRow.setAlignment(Pos.CENTER_LEFT);
-
-        // Create fields for gain
-        Label gainLabel = new Label(res.getString("camera.label.gain"));
-        gainLabel.setStyle("-fx-font-weight: bold;");
-
-        TextField gainRField = new TextField("1.0");
-        TextField gainGField = new TextField("1.0");
-        TextField gainBField = new TextField("1.0");
-
-        gainRField.setPrefWidth(70);
-        gainGField.setPrefWidth(70);
-        gainBField.setPrefWidth(70);
-
-        HBox gainRow = new HBox(8,
-                new Label(res.getString("camera.label.r")), gainRField,
-                new Label(res.getString("camera.label.g")), gainGField,
-                new Label(res.getString("camera.label.b")), gainBField
-        );
-        gainRow.setAlignment(Pos.CENTER_LEFT);
-
-        // Store fields
-        AngleFields fields = new AngleFields(expAllField, expRField, expGField, expBField,
-                gainRField, gainGField, gainBField);
-        angleFieldsMap.put(angleName, fields);
-
-        // Status label for this angle
-        Label angleStatus = new Label();
-        angleStatus.setStyle("-fx-font-size: 11px;");
-
-        // Apply button
-        Button applyButton = new Button(String.format(res.getString("camera.button.applyAndMove"),
-                angleName + " (" + angleDegrees + " deg)"));
-        applyButton.setOnAction(e -> {
+            // Check if live mode is running
+            boolean wasLive = false;
             try {
-                float[] exposures = new float[]{
-                        Float.parseFloat(expRField.getText()),
-                        Float.parseFloat(expGField.getText()),
-                        Float.parseFloat(expBField.getText())
-                };
-                float[] gains = new float[]{
-                        Float.parseFloat(gainRField.getText()),
-                        Float.parseFloat(gainGField.getText()),
-                        Float.parseFloat(gainBField.getText())
-                };
-
-                controller.applyCameraSettingsForAngle(angleName, exposures, gains, angleDegrees);
-                angleStatus.setText(String.format(res.getString("camera.status.applied"), angleName, angleDegrees));
-                angleStatus.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
-                logger.info("Applied settings for angle {} at {} degrees", angleName, angleDegrees);
-            } catch (NumberFormatException ex) {
-                angleStatus.setText("Invalid number format");
-                angleStatus.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
-            } catch (IOException ex) {
-                String errorMsg = String.format(res.getString("camera.error.applyFailed"), ex.getMessage());
-                angleStatus.setText(errorMsg);
-                angleStatus.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
-                logger.error("Failed to apply settings for {}: {}", angleName, ex.getMessage());
+                wasLive = controller.isLiveModeRunning();
+                if (wasLive) {
+                    logger.info("Live mode is running - turning off for settings change");
+                    controller.setLiveMode(false);
+                    // Small delay to let the camera settle
+                    Thread.sleep(100);
+                }
+            } catch (IOException e) {
+                logger.warn("Could not check/set live mode: {} - proceeding anyway", e.getMessage());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
-        });
 
-        // Reload button for this angle
-        Button reloadButton = new Button(res.getString("camera.button.reload"));
-        reloadButton.setOnAction(e -> {
-            String objective = objectiveCombo.getValue();
-            String detector = detectorCombo.getValue();
-            if (objective != null && detector != null) {
-                loadAngleFromYAML(mgr, objective, detector, angleName, fields, angleStatus, res);
+            // Apply the settings
+            controller.applyCameraSettingsForAngle(angleName, exposures, gains, angleDegrees);
+
+            // Turn live mode back on if it was running
+            if (wasLive) {
+                try {
+                    // Small delay to let settings take effect
+                    Thread.sleep(100);
+                    controller.setLiveMode(true);
+                    logger.info("Live mode restored after settings change");
+                } catch (IOException e) {
+                    logger.warn("Could not restore live mode: {}", e.getMessage());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
             }
-        });
 
-        HBox buttonRow = new HBox(10, applyButton, reloadButton);
-        buttonRow.setAlignment(Pos.CENTER_LEFT);
+            statusLabel.setText(String.format(res.getString("camera.status.applied"), angleName, angleDegrees));
+            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
+            logger.info("Applied settings for angle {} at {} degrees", angleName, angleDegrees);
 
-        angleContent.getChildren().addAll(expLabel, expRow, gainLabel, gainRow, buttonRow, angleStatus);
-
-        String paneTitle = String.format("%s (%.1f deg)", capitalize(angleName), angleDegrees);
-        return new TitledPane(paneTitle, angleContent);
+        } catch (NumberFormatException ex) {
+            statusLabel.setText("Invalid number format");
+            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+        } catch (IOException ex) {
+            String errorMsg = String.format(res.getString("camera.error.applyFailed"), ex.getMessage());
+            statusLabel.setText(errorMsg);
+            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+            logger.error("Failed to apply settings for {}: {}", angleName, ex.getMessage());
+        }
     }
 
     /**

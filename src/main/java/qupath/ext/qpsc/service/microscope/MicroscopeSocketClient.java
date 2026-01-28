@@ -162,7 +162,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
         /** Get gain values (unified or per-channel RGB) */
         GETGAIN("getgain_"),
         /** Set gain values */
-        SETGAIN("setgain_");
+        SETGAIN("setgain_"),
+
+        // Live Mode Control Commands
+        /** Check if live mode is currently running */
+        GETLIVE("getlive_"),
+        /** Set live mode on (1) or off (0) */
+        SETLIVE("setlive_");
 
         private final byte[] value;
 
@@ -3333,6 +3339,45 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
 
         logger.info("Gain set successfully: {}", java.util.Arrays.toString(gains));
+    }
+
+    // ==================== Live Mode Control Methods ====================
+
+    /**
+     * Checks if live mode is currently running on the microscope.
+     *
+     * @return true if live mode is active, false otherwise
+     * @throws IOException if communication fails
+     */
+    public boolean isLiveModeRunning() throws IOException {
+        byte[] response = executeCommand(Command.GETLIVE, null, 1);
+        boolean isLive = response[0] == 1;
+        logger.debug("Live mode status: {}", isLive ? "ON" : "OFF");
+        return isLive;
+    }
+
+    /**
+     * Sets live mode on or off.
+     *
+     * @param enable true to enable live mode, false to disable
+     * @throws IOException if communication fails or studio is not available
+     */
+    public void setLiveMode(boolean enable) throws IOException {
+        byte[] payload = new byte[] { (byte) (enable ? 1 : 0) };
+        byte[] response = executeCommand(Command.SETLIVE, payload, 8);
+        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+
+        if (!responseStr.startsWith("ACK")) {
+            if (responseStr.startsWith("ERR_NSTD")) {
+                throw new IOException("No studio available to control live mode");
+            }
+            if (responseStr.startsWith("ERR_LIVE")) {
+                throw new IOException("Failed to set live mode");
+            }
+            throw new IOException("Failed to set live mode: " + responseStr);
+        }
+
+        logger.info("Live mode set to: {}", enable ? "ON" : "OFF");
     }
 
 }
