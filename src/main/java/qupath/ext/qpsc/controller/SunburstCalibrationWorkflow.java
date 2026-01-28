@@ -142,6 +142,7 @@ public class SunburstCalibrationWorkflow {
             logger.info("  Calibration name: {}", params.calibrationName());
         }
 
+        MicroscopeSocketClient socketClient = null;
         try {
             // Get microscope configuration
             String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
@@ -150,7 +151,7 @@ public class SunburstCalibrationWorkflow {
 
             // Connect to microscope server
             logger.info("Connecting to microscope server at {}:{}", serverHost, serverPort);
-            MicroscopeSocketClient socketClient = new MicroscopeSocketClient(serverHost, serverPort);
+            socketClient = new MicroscopeSocketClient(serverHost, serverPort);
             socketClient.connect();
 
             logger.info("Sending sunburst calibration command...");
@@ -186,6 +187,16 @@ public class SunburstCalibrationWorkflow {
                 CalibrationResultData errorResult = CalibrationResultData.failure(e.getMessage());
                 CalibrationResultDialog.showResult(errorResult);
             });
+        } finally {
+            // Always disconnect the socket client to free the connection
+            if (socketClient != null) {
+                try {
+                    socketClient.disconnect();
+                    logger.info("Disconnected from microscope server");
+                } catch (Exception e) {
+                    logger.warn("Error disconnecting from microscope server", e);
+                }
+            }
         }
     }
 

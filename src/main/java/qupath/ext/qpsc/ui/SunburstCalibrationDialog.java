@@ -128,18 +128,10 @@ public class SunburstCalibrationDialog {
             TextField outputField = new TextField();
             outputField.setPrefColumnCount(30);
 
-            // Get default output from config
+            // Get default output from preferences (remembers last used folder)
             String configFile = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configFile);
-            String defaultOutput = configManager.getBackgroundCorrectionFolder("ppm");
-
-            if (defaultOutput != null && !defaultOutput.isEmpty()) {
-                File bgFolder = new File(defaultOutput);
-                File calibFolder = new File(bgFolder.getParent(), "calibration");
-                defaultOutput = calibFolder.getAbsolutePath();
-            } else {
-                defaultOutput = System.getProperty("user.home");
-            }
+            String defaultOutput = QPPreferenceDialog.getDefaultCalibrationFolder();
             outputField.setText(defaultOutput);
 
             Button browseBtn = new Button("Browse...");
@@ -360,8 +352,13 @@ public class SunburstCalibrationDialog {
             dialog.setResultConverter(button -> {
                 if (button == okType) {
                     String name = nameField.getText().trim();
+                    String folderPath = outputField.getText().trim();
+
+                    // Remember the folder for next time
+                    QPPreferenceDialog.setLastCalibrationFolder(folderPath);
+
                     return new SunburstCalibrationParams(
-                            outputField.getText().trim(),
+                            folderPath,
                             modalityCombo.getSelectionModel().getSelectedItem(),
                             rectanglesSpinner.getValue(),
                             saturationSpinner.getValue(),

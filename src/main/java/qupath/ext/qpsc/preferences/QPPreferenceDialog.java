@@ -118,6 +118,11 @@ public class QPPreferenceDialog {
     private static final StringProperty jaiWhiteBalanceModeProperty =
             PathPrefs.createPersistentPreference("jaiWhiteBalanceMode", "SIMPLE");
 
+    // Last used calibration folder for sunburst/PPM reference calibration
+    // Remembers the folder from the most recent calibration workflow
+    private static final StringProperty lastCalibrationFolderProperty =
+            PathPrefs.createPersistentPreference("lastCalibrationFolder", "");
+
     /**
      * Register all preferences in QuPath's PreferencePane. Call once during extension installation.
      */
@@ -495,5 +500,56 @@ public class QPPreferenceDialog {
      */
     public static boolean isJaiWhiteBalancePerAngle() {
         return "PPM".equalsIgnoreCase(jaiWhiteBalanceModeProperty.get());
+    }
+
+    /**
+     * Gets the last used calibration folder path.
+     * Used by sunburst/PPM reference calibration workflow.
+     *
+     * @return Last used calibration folder path, or empty string if not set
+     */
+    public static String getLastCalibrationFolder() {
+        return lastCalibrationFolderProperty.get();
+    }
+
+    /**
+     * Sets the last used calibration folder path.
+     * Called when user selects a folder in the calibration dialog.
+     *
+     * @param folderPath The folder path to remember
+     */
+    public static void setLastCalibrationFolder(String folderPath) {
+        lastCalibrationFolderProperty.set(folderPath);
+    }
+
+    /**
+     * Gets the default calibration folder based on configuration directory.
+     * Falls back to last used folder, then to configurations directory.
+     *
+     * @return Default calibration folder path
+     */
+    public static String getDefaultCalibrationFolder() {
+        // First check if we have a remembered folder
+        String lastFolder = getLastCalibrationFolder();
+        if (lastFolder != null && !lastFolder.isEmpty()) {
+            java.io.File folder = new java.io.File(lastFolder);
+            if (folder.exists() && folder.isDirectory()) {
+                return lastFolder;
+            }
+        }
+
+        // Fall back to configurations directory / calibration
+        String configPath = getMicroscopeConfigFileProperty();
+        if (configPath != null && !configPath.isEmpty()) {
+            java.io.File configFile = new java.io.File(configPath);
+            java.io.File configDir = configFile.getParentFile();
+            if (configDir != null && configDir.exists()) {
+                java.io.File calibDir = new java.io.File(configDir, "calibration");
+                return calibDir.getAbsolutePath();
+            }
+        }
+
+        // Last resort - user home
+        return System.getProperty("user.home");
     }
 }
