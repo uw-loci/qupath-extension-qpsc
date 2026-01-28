@@ -54,6 +54,19 @@ public class CameraControlController {
         PPM_ANGLES.put("negative", -7.0);
     }
 
+    /** JAI analog gain limits per channel */
+    private static final double GAIN_RED_MIN = 0.47;
+    private static final double GAIN_RED_MAX = 4.0;
+    private static final double GAIN_GREEN_MIN = 1.0;
+    private static final double GAIN_GREEN_MAX = 64.0;
+    private static final double GAIN_BLUE_MIN = 0.47;
+    private static final double GAIN_BLUE_MAX = 4.0;
+
+    /** Style for invalid input fields */
+    private static final String STYLE_INVALID = "-fx-border-color: red; -fx-border-width: 2px;";
+    private static final String STYLE_WARNING = "-fx-border-color: orange; -fx-border-width: 2px;";
+    private static final String STYLE_NORMAL = "";
+
     /**
      * Displays the camera control dialog for viewing and applying camera settings.
      *
@@ -334,13 +347,10 @@ public class CameraControlController {
             gainLabel.setTooltip(new Tooltip("JAI analog gain ranges:\nR: 0.47-4.0\nG: 1.0-64.0\nB: 0.47-4.0"));
             anglesGrid.add(gainLabel, 0, row);
 
-            // Gain fields (no "all" field for gain) - with tooltips showing valid ranges
-            TextField gainRField = createSmallField("1.0");
-            gainRField.setTooltip(new Tooltip("Red gain (valid: 0.47-4.0)"));
-            TextField gainGField = createSmallField("1.0");
-            gainGField.setTooltip(new Tooltip("Green gain (valid: 1.0-64.0)"));
-            TextField gainBField = createSmallField("1.0");
-            gainBField.setTooltip(new Tooltip("Blue gain (valid: 0.47-4.0)"));
+            // Gain fields (no "all" field for gain) - with live validation and tooltips
+            TextField gainRField = createGainField("1.0", GAIN_RED_MIN, GAIN_RED_MAX, "Red");
+            TextField gainGField = createGainField("1.0", GAIN_GREEN_MIN, GAIN_GREEN_MAX, "Green");
+            TextField gainBField = createGainField("1.0", GAIN_BLUE_MIN, GAIN_BLUE_MAX, "Blue");
 
             anglesGrid.add(gainRField, 4, row);
             anglesGrid.add(gainGField, 6, row);
@@ -427,6 +437,49 @@ public class CameraControlController {
     }
 
     /**
+     * Creates a gain text field with live validation.
+     * Shows red border if value is outside valid range.
+     *
+     * @param initialValue Initial value
+     * @param minVal Minimum valid value
+     * @param maxVal Maximum valid value
+     * @param channelName Channel name for tooltip (e.g., "Red")
+     * @return TextField with validation
+     */
+    private static TextField createGainField(String initialValue, double minVal, double maxVal, String channelName) {
+        TextField field = new TextField(initialValue);
+        field.setPrefWidth(55);
+        field.setMaxWidth(55);
+        field.setTooltip(new Tooltip(String.format("%s gain (valid: %.2f-%.1f)", channelName, minVal, maxVal)));
+
+        // Add live validation on text change
+        field.textProperty().addListener((obs, oldVal, newVal) -> {
+            validateGainField(field, minVal, maxVal);
+        });
+
+        // Initial validation
+        validateGainField(field, minVal, maxVal);
+
+        return field;
+    }
+
+    /**
+     * Validates a gain field value and updates its style.
+     */
+    private static void validateGainField(TextField field, double minVal, double maxVal) {
+        try {
+            double value = Double.parseDouble(field.getText());
+            if (value < minVal || value > maxVal) {
+                field.setStyle(STYLE_INVALID);
+            } else {
+                field.setStyle(STYLE_NORMAL);
+            }
+        } catch (NumberFormatException e) {
+            field.setStyle(STYLE_INVALID);
+        }
+    }
+
+    /**
      * Applies camera settings for an angle, handling live mode automatically.
      * If live mode is running, it will be turned off, settings applied, then turned back on.
      */
@@ -449,6 +502,21 @@ public class CameraControlController {
                     Float.parseFloat(fields.gainG.getText()),
                     Float.parseFloat(fields.gainB.getText())
             };
+
+            // Check for out-of-range gains and build warning message
+            StringBuilder gainWarnings = new StringBuilder();
+            if (gains[0] < GAIN_RED_MIN || gains[0] > GAIN_RED_MAX) {
+                gainWarnings.append(String.format("R gain %.2f clamped to %.2f-%.1f; ",
+                        gains[0], GAIN_RED_MIN, GAIN_RED_MAX));
+            }
+            if (gains[1] < GAIN_GREEN_MIN || gains[1] > GAIN_GREEN_MAX) {
+                gainWarnings.append(String.format("G gain %.2f clamped to %.1f-%.1f; ",
+                        gains[1], GAIN_GREEN_MIN, GAIN_GREEN_MAX));
+            }
+            if (gains[2] < GAIN_BLUE_MIN || gains[2] > GAIN_BLUE_MAX) {
+                gainWarnings.append(String.format("B gain %.2f clamped to %.2f-%.1f; ",
+                        gains[2], GAIN_BLUE_MIN, GAIN_BLUE_MAX));
+            }
 
             // Check if live mode is running
             boolean wasLive = false;
@@ -483,9 +551,17 @@ public class CameraControlController {
                 }
             }
 
-            statusLabel.setText(String.format(res.getString("camera.status.applied"), angleName, angleDegrees));
-            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
-            logger.info("Applied settings for angle {} at {} degrees", angleName, angleDegrees);
+            // Show status with any gain warnings
+            if (gainWarnings.length() > 0) {
+                statusLabel.setText(String.format("Applied %s (%.0f deg) - WARNING: %s",
+                        angleName, angleDegrees, gainWarnings.toString()));
+                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: orange;");
+                logger.warn("Applied settings for {} with clamped gains: {}", angleName, gainWarnings);
+            } else {
+                statusLabel.setText(String.format(res.getString("camera.status.applied"), angleName, angleDegrees));
+                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
+                logger.info("Applied settings for angle {} at {} degrees", angleName, angleDegrees);
+            }
 
         } catch (NumberFormatException ex) {
             statusLabel.setText("Invalid number format");
