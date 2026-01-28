@@ -267,6 +267,21 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 			}
 		});
 
+		// Starburst Calibration (Hue-to-Angle)
+		MenuItem starburstCalibrationOption = new MenuItem(res.getString("menu.starburstCalibration"));
+		starburstCalibrationOption.setDisable(!configValid);
+		setMenuItemTooltip(starburstCalibrationOption,
+				"Create a hue-to-angle calibration from a starburst calibration slide. " +
+				"Acquires an image of oriented rectangles and creates a linear regression mapping " +
+				"hue values to orientation angles for use in PPM analysis.");
+		starburstCalibrationOption.setOnAction(e -> {
+			try {
+				QPScopeController.getInstance().startWorkflow("starburstCalibration");
+			} catch (IOException ex) {
+				throw new RuntimeException(ex);
+			}
+		});
+
 		// Autofocus settings editor
 		MenuItem autofocusEditorOption = new MenuItem(res.getString("menu.autofocusEditor"));
 		autofocusEditorOption.setDisable(!configValid);
@@ -348,10 +363,10 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 				new SeparatorMenuItem(),
 				backgroundCollectionOption,
 				whiteBalanceOption,
-				cameraControlOption,
 				polarizerCalibrationOption,
 				ppmSensitivityTestOption,
 				birefringenceOptimizationOption,
+				starburstCalibrationOption,
 				autofocusEditorOption,
 				autofocusBenchmarkOption,
 				new SeparatorMenuItem(),
@@ -364,6 +379,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 				existingImageOption,
 				new SeparatorMenuItem(),
 				stageControlOption,
+				cameraControlOption,
 				new SeparatorMenuItem(),
 				utilitiesMenu
 		);

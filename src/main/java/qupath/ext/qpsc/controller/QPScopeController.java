@@ -32,6 +32,7 @@ import qupath.ext.qpsc.ui.StageMovementController;
  *   <li><strong>backgroundCollection</strong> - Simplified workflow for acquiring flat field correction backgrounds</li>
  *   <li><strong>polarizerCalibration</strong> - PPM rotation stage calibration workflow</li>
  *   <li><strong>birefringenceOptimization</strong> - PPM birefringence angle optimization test</li>
+ *   <li><strong>starburstCalibration</strong> - Hue-to-angle calibration from starburst slide</li>
  *   <li><strong>autofocusEditor</strong> - Per-objective autofocus settings editor</li>
  *   <li><strong>basicStageInterface</strong> - Manual stage movement and testing interface</li>
  *   <li><strong>cameraControl</strong> - View and apply camera exposure/gain settings</li>
@@ -164,6 +165,10 @@ public class QPScopeController {
             case "birefringenceOptimization" -> {
                 logger.debug("Launching birefringence optimization workflow");
                 BirefringenceOptimizationWorkflow.run();
+            }
+            case "starburstCalibration" -> {
+                logger.debug("Launching starburst calibration workflow");
+                StarburstCalibrationWorkflow.run();
             }
             case "autofocusEditor" -> {
                 logger.debug("Launching autofocus settings editor");

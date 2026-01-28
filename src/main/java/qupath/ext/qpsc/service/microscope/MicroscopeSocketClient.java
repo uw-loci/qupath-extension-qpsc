@@ -141,6 +141,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         AFBENCH("afbench_"),
         /** PPM birefringence maximization test */
         PPMBIREF("ppmbiref"),
+        /** Starburst calibration for hue-to-angle mapping */
+        SBCALIB("sbcalib_"),
         /** Simple white balance calibration at single exposure */
         WBSIMPLE("wbsimple"),
         /** PPM white balance calibration at 4 angles */
@@ -1754,6 +1756,125 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 logger.error("Error during birefringence optimization", e);
                 handleIOException(new IOException("Birefringence optimization error", e));
                 throw new IOException("Birefringence optimization error: " + e.getMessage(), e);
+            } finally {
+                // Restore original timeout
+                if (socket != null) {
+                    try {
+                        socket.setSoTimeout(originalTimeout);
+                        logger.debug("Restored socket timeout to {}ms", originalTimeout);
+                    } catch (IOException e) {
+                        logger.warn("Failed to restore original socket timeout", e);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Runs starburst calibration for hue-to-angle mapping.
+     * This method uses the SBCALIB command to acquire a calibration slide image
+     * and run SunburstCalibrator to create a linear regression model.
+     *
+     * @param yamlPath Path to microscope configuration YAML file
+     * @param outputPath Output directory for calibration results
+     * @param modality Modality name for exposure lookup (e.g., "ppm_20x")
+     * @param expectedRectangles Number of rectangles expected on calibration slide (typically 16)
+     * @param saturationThreshold Minimum saturation for foreground detection (0-1)
+     * @param valueThreshold Minimum brightness for foreground detection (0-1)
+     * @param calibrationName Optional name for output files (auto-generated if null)
+     * @return JSON string with calibration results
+     * @throws IOException if communication fails
+     */
+    public String runStarburstCalibration(String yamlPath, String outputPath, String modality,
+                                          int expectedRectangles, double saturationThreshold,
+                                          double valueThreshold, String calibrationName) throws IOException {
+
+        // Build SBCALIB-specific command message
+        StringBuilder messageBuilder = new StringBuilder();
+        messageBuilder.append("--yaml ").append(yamlPath)
+                     .append(" --output ").append(outputPath)
+                     .append(" --modality ").append(modality)
+                     .append(" --rectangles ").append(expectedRectangles)
+                     .append(" --saturation ").append(saturationThreshold)
+                     .append(" --value ").append(valueThreshold);
+
+        if (calibrationName != null && !calibrationName.isEmpty()) {
+            messageBuilder.append(" --name ").append(calibrationName);
+        }
+
+        messageBuilder.append(" ").append(END_MARKER);
+
+        String message = messageBuilder.toString();
+        byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
+
+        logger.info("Sending starburst calibration command:");
+        logger.info("  Message length: {} bytes", messageBytes.length);
+        logger.info("  Message content: {}", message);
+
+        synchronized (socketLock) {
+            ensureConnected();
+
+            // Store original timeout
+            int originalTimeout = 0;
+            try {
+                originalTimeout = socket.getSoTimeout();
+                // Calibration should be quick (single image), but allow 5 minutes for processing
+                socket.setSoTimeout(300000); // 5 minutes
+                logger.debug("Increased socket timeout to 5 minutes for starburst calibration");
+            } catch (IOException e) {
+                logger.warn("Failed to adjust socket timeout", e);
+            }
+
+            try {
+                OutputStream output = socket.getOutputStream();
+                InputStream input = socket.getInputStream();
+
+                // Send command
+                output.write(Command.SBCALIB.getValue());
+                output.write(messageBytes);
+                output.flush();
+
+                logger.info("Command sent, waiting for server response...");
+
+                // Read initial response (STARTED or FAILED)
+                byte[] buffer = new byte[8192];
+                int bytesRead = input.read(buffer);
+                if (bytesRead > 0) {
+                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                    logger.info("Received initial server response: {}", response);
+
+                    if (response.startsWith("FAILED:")) {
+                        throw new IOException("Server rejected starburst calibration: " + response);
+                    } else if (!response.startsWith("STARTED:")) {
+                        logger.warn("Unexpected initial server response: {}", response);
+                    }
+                }
+
+                // Wait for final response (SUCCESS with JSON or FAILED)
+                logger.info("Waiting for starburst calibration to complete...");
+                bytesRead = input.read(buffer);
+                if (bytesRead <= 0) {
+                    throw new IOException("No response received from server");
+                }
+
+                String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+
+                if (response.startsWith("FAILED:")) {
+                    throw new IOException("Starburst calibration failed: " + response.substring(7));
+                } else if (response.startsWith("SUCCESS:")) {
+                    // Extract JSON result
+                    String resultJson = response.substring(8).trim();
+                    logger.info("Starburst calibration successful");
+                    return resultJson;
+                } else {
+                    logger.warn("Unexpected response: {}", response);
+                    throw new IOException("Unexpected server response: " + response);
+                }
+
+            } catch (IOException e) {
+                logger.error("Error during starburst calibration", e);
+                handleIOException(new IOException("Starburst calibration error", e));
+                throw new IOException("Starburst calibration error: " + e.getMessage(), e);
             } finally {
                 // Restore original timeout
                 if (socket != null) {
