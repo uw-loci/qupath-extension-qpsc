@@ -38,6 +38,7 @@ public class CalibrationResultDialog {
             String plotPath,
             String calibrationPath,
             String imagePath,
+            String maskPath,
             List<String> warnings,
             String errorMessage
     ) {
@@ -46,16 +47,23 @@ public class CalibrationResultDialog {
          */
         public static CalibrationResultData success(double rSquared, int rectanglesDetected,
                                                     String plotPath, String calibrationPath,
-                                                    String imagePath, List<String> warnings) {
+                                                    String imagePath, String maskPath, List<String> warnings) {
             return new CalibrationResultData(true, rSquared, rectanglesDetected,
-                    plotPath, calibrationPath, imagePath, warnings, null);
+                    plotPath, calibrationPath, imagePath, maskPath, warnings, null);
         }
 
         /**
-         * Create a failure result.
+         * Create a failure result with optional debug paths.
+         */
+        public static CalibrationResultData failure(String errorMessage, String imagePath, String maskPath) {
+            return new CalibrationResultData(false, 0, 0, null, null, imagePath, maskPath, List.of(), errorMessage);
+        }
+
+        /**
+         * Create a failure result without debug paths.
          */
         public static CalibrationResultData failure(String errorMessage) {
-            return new CalibrationResultData(false, 0, 0, null, null, null, List.of(), errorMessage);
+            return failure(errorMessage, null, null);
         }
     }
 
@@ -249,6 +257,85 @@ public class CalibrationResultDialog {
 
         contentBox.getChildren().add(new Separator());
 
+        // Debug images section (if available)
+        boolean hasDebugImages = (result.imagePath() != null || result.maskPath() != null);
+        String debugFolderPath = null;
+
+        if (hasDebugImages) {
+            Label debugLabel = new Label("Debug Images (for troubleshooting):");
+            debugLabel.setStyle("-fx-font-weight: bold;");
+            contentBox.getChildren().add(debugLabel);
+
+            // Show segmentation mask if available (most useful for debugging)
+            if (result.maskPath() != null) {
+                try {
+                    File maskFile = new File(result.maskPath());
+                    if (maskFile.exists()) {
+                        debugFolderPath = maskFile.getParent();
+
+                        Label maskLabel = new Label("Segmentation Mask:");
+                        maskLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+                        contentBox.getChildren().add(maskLabel);
+
+                        Image maskImage = new Image(new FileInputStream(maskFile));
+                        ImageView maskView = new ImageView(maskImage);
+
+                        // Scale to fit dialog
+                        double maxWidth = 650;
+                        double maxHeight = 400;
+                        double scale = Math.min(maxWidth / maskImage.getWidth(),
+                                               maxHeight / maskImage.getHeight());
+                        if (scale < 1.0) {
+                            maskView.setFitWidth(maskImage.getWidth() * scale);
+                            maskView.setFitHeight(maskImage.getHeight() * scale);
+                        }
+                        maskView.setPreserveRatio(true);
+
+                        HBox maskBox = new HBox(maskView);
+                        maskBox.setAlignment(Pos.CENTER);
+                        contentBox.getChildren().add(maskBox);
+
+                        Label maskHint = new Label(
+                            "The mask shows detected foreground (colored) pixels.\n" +
+                            "If no rectangles appear, try lowering the saturation/value thresholds."
+                        );
+                        maskHint.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888;");
+                        maskHint.setWrapText(true);
+                        contentBox.getChildren().add(maskHint);
+                    } else {
+                        Label noMaskLabel = new Label("(Mask file not found: " + result.maskPath() + ")");
+                        noMaskLabel.setStyle("-fx-text-fill: gray; -fx-font-size: 10px;");
+                        contentBox.getChildren().add(noMaskLabel);
+                    }
+                } catch (Exception e) {
+                    logger.error("Failed to load mask image", e);
+                    Label errorMaskLabel = new Label("(Failed to load mask: " + e.getMessage() + ")");
+                    errorMaskLabel.setStyle("-fx-text-fill: gray; -fx-font-size: 10px;");
+                    contentBox.getChildren().add(errorMaskLabel);
+                }
+            }
+
+            // Show file paths for reference
+            if (result.imagePath() != null) {
+                File imgFile = new File(result.imagePath());
+                if (debugFolderPath == null && imgFile.getParent() != null) {
+                    debugFolderPath = imgFile.getParent();
+                }
+                Label imgPathLabel = new Label("Captured image: " + result.imagePath());
+                imgPathLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #888888;");
+                imgPathLabel.setWrapText(true);
+                contentBox.getChildren().add(imgPathLabel);
+            }
+            if (result.maskPath() != null) {
+                Label maskPathLabel = new Label("Segmentation mask: " + result.maskPath());
+                maskPathLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #888888;");
+                maskPathLabel.setWrapText(true);
+                contentBox.getChildren().add(maskPathLabel);
+            }
+
+            contentBox.getChildren().add(new Separator());
+        }
+
         // Troubleshooting tips
         Label tipsLabel = new Label("Troubleshooting Tips:");
         tipsLabel.setStyle("-fx-font-weight: bold;");
@@ -265,11 +352,36 @@ public class CalibrationResultDialog {
         tipsText.setStyle("-fx-font-size: 11px;");
         contentBox.getChildren().add(tipsText);
 
-        dialog.getDialogPane().setContent(contentBox);
-        dialog.getDialogPane().setPrefWidth(500);
+        // Wrap in scroll pane for potentially large content with images
+        ScrollPane scrollPane = new ScrollPane(contentBox);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setPrefViewportHeight(hasDebugImages ? 600 : 300);
+        scrollPane.setPrefViewportWidth(hasDebugImages ? 700 : 500);
 
-        // Button
-        ButtonType closeType = new ButtonType("Close", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().add(closeType);
+        dialog.getDialogPane().setContent(scrollPane);
+
+        // Buttons
+        final String folderToOpen = debugFolderPath;
+        if (folderToOpen != null) {
+            ButtonType openFolderType = new ButtonType("Open Debug Folder", ButtonBar.ButtonData.LEFT);
+            ButtonType closeType = new ButtonType("Close", ButtonBar.ButtonData.OK_DONE);
+            dialog.getDialogPane().getButtonTypes().addAll(openFolderType, closeType);
+
+            Button openFolderButton = (Button) dialog.getDialogPane().lookupButton(openFolderType);
+            openFolderButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+                try {
+                    File folder = new File(folderToOpen);
+                    if (folder.exists()) {
+                        Desktop.getDesktop().open(folder);
+                    }
+                } catch (Exception e) {
+                    logger.error("Failed to open debug folder", e);
+                }
+                event.consume();  // Don't close dialog
+            });
+        } else {
+            ButtonType closeType = new ButtonType("Close", ButtonBar.ButtonData.OK_DONE);
+            dialog.getDialogPane().getButtonTypes().add(closeType);
+        }
     }
 }

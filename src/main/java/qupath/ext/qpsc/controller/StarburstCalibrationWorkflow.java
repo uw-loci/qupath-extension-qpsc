@@ -203,6 +203,12 @@ public class StarburstCalibrationWorkflow {
 
             boolean success = result.has("success") && result.get("success").getAsBoolean();
 
+            // Always extract image and mask paths for debugging
+            String imagePath = result.has("image_path") && !result.get("image_path").isJsonNull() ?
+                    result.get("image_path").getAsString() : null;
+            String maskPath = result.has("mask_path") && !result.get("mask_path").isJsonNull() ?
+                    result.get("mask_path").getAsString() : null;
+
             if (success) {
                 double rSquared = result.has("r_squared") ?
                         result.get("r_squared").getAsDouble() : 0.0;
@@ -212,8 +218,6 @@ public class StarburstCalibrationWorkflow {
                         result.get("plot_path").getAsString() : null;
                 String calibrationPath = result.has("calibration_path") ?
                         result.get("calibration_path").getAsString() : null;
-                String imagePath = result.has("image_path") ?
-                        result.get("image_path").getAsString() : null;
 
                 List<String> warnings = new ArrayList<>();
                 if (result.has("warnings") && result.get("warnings").isJsonArray()) {
@@ -224,11 +228,11 @@ public class StarburstCalibrationWorkflow {
                 }
 
                 return CalibrationResultData.success(rSquared, rectanglesDetected,
-                        plotPath, calibrationPath, imagePath, warnings);
+                        plotPath, calibrationPath, imagePath, maskPath, warnings);
             } else {
                 String error = result.has("error") ?
                         result.get("error").getAsString() : "Unknown error";
-                return CalibrationResultData.failure(error);
+                return CalibrationResultData.failure(error, imagePath, maskPath);
             }
         } catch (Exception e) {
             logger.error("Failed to parse calibration result JSON", e);
