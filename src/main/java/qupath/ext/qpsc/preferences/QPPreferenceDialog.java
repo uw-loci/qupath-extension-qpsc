@@ -548,13 +548,13 @@ public class QPPreferenceDialog {
             }
         }
 
-        // Fall back to configurations directory / calibration
+        // Fall back to configurations directory / ppm_reference_slide
         String configPath = getMicroscopeConfigFileProperty();
         if (configPath != null && !configPath.isEmpty()) {
             java.io.File configFile = new java.io.File(configPath);
             java.io.File configDir = configFile.getParentFile();
             if (configDir != null && configDir.exists()) {
-                java.io.File calibDir = new java.io.File(configDir, "calibration");
+                java.io.File calibDir = new java.io.File(configDir, "ppm_reference_slide");
                 return calibDir.getAbsolutePath();
             }
         }
