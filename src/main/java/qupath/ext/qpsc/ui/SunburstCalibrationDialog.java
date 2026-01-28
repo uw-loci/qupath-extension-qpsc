@@ -17,22 +17,22 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Dialog for Starburst Calibration parameters.
+ * Dialog for Sunburst Calibration parameters.
  *
  * This dialog collects parameters for creating a hue-to-angle calibration
- * from a starburst/sunburst calibration slide with oriented rectangles.
+ * from a PPM reference slide with sunburst pattern (oriented rectangles).
  *
  * @author Mike Nelson
  * @since 1.0
  */
-public class StarburstCalibrationDialog {
+public class SunburstCalibrationDialog {
 
-    private static final Logger logger = LoggerFactory.getLogger(StarburstCalibrationDialog.class);
+    private static final Logger logger = LoggerFactory.getLogger(SunburstCalibrationDialog.class);
 
     /**
-     * Parameters for starburst calibration.
+     * Parameters for sunburst calibration.
      */
-    public record StarburstCalibrationParams(
+    public record SunburstCalibrationParams(
             String outputFolder,
             String modality,
             int expectedRectangles,
@@ -67,26 +67,26 @@ public class StarburstCalibrationDialog {
     }
 
     /**
-     * Shows the starburst calibration dialog.
+     * Shows the sunburst calibration dialog.
      *
      * @return CompletableFuture with calibration parameters or null if cancelled
      */
-    public static CompletableFuture<StarburstCalibrationParams> showDialog() {
-        CompletableFuture<StarburstCalibrationParams> future = new CompletableFuture<>();
+    public static CompletableFuture<SunburstCalibrationParams> showDialog() {
+        CompletableFuture<SunburstCalibrationParams> future = new CompletableFuture<>();
 
         Platform.runLater(() -> {
-            Dialog<StarburstCalibrationParams> dialog = new Dialog<>();
+            Dialog<SunburstCalibrationParams> dialog = new Dialog<>();
             dialog.initModality(Modality.APPLICATION_MODAL);
-            dialog.setTitle("Starburst Calibration");
+            dialog.setTitle("PPM Reference Slide Calibration");
 
             // Header with instructions
             VBox headerBox = new VBox(10);
             headerBox.setPadding(new Insets(10));
-            Label headerLabel = new Label("Create Hue-to-Angle Calibration from Starburst Slide");
+            Label headerLabel = new Label("Create Hue-to-Angle Calibration from PPM Reference Slide");
             headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
 
             Label instructionLabel = new Label(
-                "Position the calibration slide (starburst/sunburst pattern with colored rectangles)\n" +
+                "Position the PPM reference slide (sunburst pattern with colored rectangles)\n" +
                 "under the microscope and ensure it is properly focused.\n\n" +
                 "This workflow will:\n" +
                 "  1. Acquire an image using the selected modality's exposure settings\n" +
@@ -209,7 +209,7 @@ public class StarburstCalibrationDialog {
             HBox rectanglesLabelBox = createLabelWithTooltip("Expected Rectangles:",
                 "Number of colored rectangles on your calibration slide.\n\n" +
                 "Common values:\n" +
-                "  - 16: Standard starburst slides (22.5 deg spacing)\n" +
+                "  - 16: Standard sunburst slides (22.5 deg spacing)\n" +
                 "  - 12: Some older slides (30 deg spacing)\n" +
                 "  - 8: Simplified slides (45 deg spacing)\n\n" +
                 "Valid range: 4-32\n\n" +
@@ -276,7 +276,7 @@ public class StarburstCalibrationDialog {
             HBox nameLabelBox = createLabelWithTooltip("Calibration Name:",
                 "Optional custom name for the calibration files.\n\n" +
                 "If left empty, an automatic name is generated:\n" +
-                "  starburst_cal_YYYYMMDD_HHMMSS\n\n" +
+                "  sunburst_cal_YYYYMMDD_HHMMSS\n\n" +
                 "Custom names can help identify calibrations:\n" +
                 "  - slide_batch1\n" +
                 "  - before_realignment\n" +
@@ -360,7 +360,7 @@ public class StarburstCalibrationDialog {
             dialog.setResultConverter(button -> {
                 if (button == okType) {
                     String name = nameField.getText().trim();
-                    return new StarburstCalibrationParams(
+                    return new SunburstCalibrationParams(
                             outputField.getText().trim(),
                             modalityCombo.getSelectionModel().getSelectedItem(),
                             rectanglesSpinner.getValue(),
@@ -372,7 +372,7 @@ public class StarburstCalibrationDialog {
                 return null;
             });
 
-            Optional<StarburstCalibrationParams> result = dialog.showAndWait();
+            Optional<SunburstCalibrationParams> result = dialog.showAndWait();
             if (result.isPresent()) {
                 future.complete(result.get());
             } else {

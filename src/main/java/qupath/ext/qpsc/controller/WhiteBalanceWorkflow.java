@@ -223,6 +223,9 @@ public class WhiteBalanceWorkflow {
                         advanced.gainThresholdRatio(),
                         advanced.maxIterations(),
                         advanced.calibrateBlackLevel(),
+                        advanced.baseGain(),
+                        advanced.exposureSoftCapMs(),
+                        advanced.boostedMaxGainDb(),
                         yamlPath,
                         params.objective(),
                         params.detector()
@@ -300,6 +303,9 @@ public class WhiteBalanceWorkflow {
                         advanced.gainThresholdRatio(),
                         advanced.maxIterations(),
                         advanced.calibrateBlackLevel(),
+                        advanced.baseGain(),
+                        advanced.exposureSoftCapMs(),
+                        advanced.boostedMaxGainDb(),
                         yamlPath,
                         params.objective(),
                         params.detector()

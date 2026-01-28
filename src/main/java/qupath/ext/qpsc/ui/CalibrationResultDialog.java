@@ -76,7 +76,7 @@ public class CalibrationResultDialog {
         Platform.runLater(() -> {
             Dialog<Void> dialog = new Dialog<>();
             dialog.initModality(Modality.APPLICATION_MODAL);
-            dialog.setTitle("Starburst Calibration Results");
+            dialog.setTitle("PPM Reference Slide Calibration Results");
 
             if (result.success()) {
                 showSuccessDialog(dialog, result);

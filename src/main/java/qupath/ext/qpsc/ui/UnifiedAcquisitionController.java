@@ -53,6 +53,9 @@ public class UnifiedAcquisitionController {
 
     /**
      * Result record containing all user selections from the unified dialog.
+     * <p>
+     * Note: Exposure times are not included here because PPM modality uses per-angle
+     * exposures from configuration via PPMPreferences, not a single exposure value.
      */
     public record UnifiedAcquisitionResult(
             String sampleName,
@@ -60,7 +63,6 @@ public class UnifiedAcquisitionController {
             String modality,
             String objective,
             String detector,
-            double exposureMs,
             double x1, double y1,
             double x2, double y2,
             Map<String, Double> angleOverrides,
@@ -114,7 +116,6 @@ public class UnifiedAcquisitionController {
         private ComboBox<String> modalityBox;
         private ComboBox<String> objectiveBox;
         private ComboBox<String> detectorBox;
-        private Spinner<Double> exposureSpinner;
 
         // UI Components - Region Section
         private TextField startXField;
@@ -408,18 +409,6 @@ public class UnifiedAcquisitionController {
 
             grid.add(new Label("Detector:"), 0, row);
             grid.add(detectorBox, 1, row);
-            row++;
-
-            // Exposure setting
-            exposureSpinner = new Spinner<>(0.1, 5000.0, 25.0, 0.1);
-            exposureSpinner.setEditable(true);
-            exposureSpinner.setPrefWidth(120);
-            exposureSpinner.setTooltip(new Tooltip("Base exposure time in milliseconds"));
-            // Update preview when exposure changes
-            exposureSpinner.valueProperty().addListener((obs, old, newVal) -> triggerPreviewUpdate());
-
-            grid.add(new Label("Exposure (ms):"), 0, row);
-            grid.add(exposureSpinner, 1, row);
 
             hardwarePane = new TitledPane("HARDWARE CONFIGURATION", grid);
             hardwarePane.setExpanded(true);
@@ -1196,21 +1185,19 @@ public class UnifiedAcquisitionController {
                     }
                 }
 
-                double exposureMs = exposureSpinner.getValue();
-
                 // Get white balance settings (only relevant for JAI cameras)
                 boolean enableWhiteBalance = enableWhiteBalanceCheckBox.isSelected();
                 boolean perAngleWhiteBalance = perAngleWhiteBalanceCheckBox.isSelected() &&
                         perAngleWhiteBalanceCheckBox.isVisible();  // Only if checkbox is visible (PPM mode)
 
                 logger.info("Created unified acquisition result: sample={}, modality={}, " +
-                           "objective={}, detector={}, exposure={}ms, bounds=({},{}) to ({},{}), " +
+                           "objective={}, detector={}, bounds=({},{}) to ({},{}), " +
                            "enableWB={}, perAngleWB={}",
-                        sampleName, modality, objective, detector, exposureMs, x1, y1, x2, y2,
+                        sampleName, modality, objective, detector, x1, y1, x2, y2,
                         enableWhiteBalance, perAngleWhiteBalance);
 
                 return new UnifiedAcquisitionResult(
-                        sampleName, projectsFolder, modality, objective, detector, exposureMs,
+                        sampleName, projectsFolder, modality, objective, detector,
                         x1, y1, x2, y2, angleOverrides, enableWhiteBalance, perAngleWhiteBalance
                 );
 

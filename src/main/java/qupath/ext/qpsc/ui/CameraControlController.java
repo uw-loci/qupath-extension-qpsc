@@ -101,6 +101,19 @@ public class CameraControlController {
         content.setPadding(new Insets(15));
         content.setPrefWidth(550);
 
+        // --- Warning Labels ---
+        Label viewerWarning = new Label(res.getString("camera.warning.multipleViewers"));
+        viewerWarning.setStyle("-fx-font-weight: bold; -fx-text-fill: #cc3300;");
+        viewerWarning.setWrapText(true);
+
+        Label liveViewWarning = new Label(res.getString("camera.warning.liveView"));
+        liveViewWarning.setStyle("-fx-font-weight: bold; -fx-text-fill: #cc3300;");
+        liveViewWarning.setWrapText(true);
+
+        VBox warningBox = new VBox(3, viewerWarning, liveViewWarning);
+        warningBox.setStyle("-fx-padding: 0 0 10 0;");
+        content.getChildren().add(warningBox);
+
         // --- Camera Info Section ---
         Label cameraLabel = new Label();
         try {

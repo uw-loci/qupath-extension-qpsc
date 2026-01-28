@@ -1,15 +1,21 @@
 package qupath.ext.qpsc.controller.workflow;
 
 import javafx.application.Platform;
-import javafx.scene.control.Alert;
-import javafx.scene.control.ButtonType;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.projects.ProjectImageEntry;
 import qupath.fx.dialogs.Dialogs;
@@ -19,7 +25,6 @@ import qupath.lib.objects.PathObject;
 import java.awt.geom.AffineTransform;
 import java.io.IOException;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -207,8 +212,8 @@ public class SingleTileRefinement {
         // Wait for stage to settle
         Thread.sleep(500);
 
-        // Show refinement dialog
-        showRefinementDialog(tileCoords, initialTransform, selectedTile, future);
+        // Show refinement dialog (non-modal so user can interact with QuPath)
+        showRefinementDialog(gui, tileCoords, initialTransform, selectedTile, future);
     }
 
 
@@ -230,47 +235,77 @@ public class SingleTileRefinement {
     }
 
     /**
-     * Shows the refinement dialog for user interaction.
+     * Shows a non-modal refinement dialog for user interaction.
      *
-     * <p>Presents options to:
+     * <p>The dialog is non-modal so the user can interact with QuPath while
+     * adjusting the stage position. Presents options to:
      * <ul>
+     *   <li>Restore the target tile selection if accidentally changed</li>
      *   <li>Save the refined position after manual adjustment</li>
      *   <li>Skip refinement and use initial transform</li>
      *   <li>Create entirely new alignment</li>
      * </ul>
      *
+     * @param gui QuPath GUI instance for restoring tile selection
      * @param tileCoords Original tile coordinates in QuPath
      * @param initialTransform Initial transform
      * @param selectedTile The tile that was selected for refinement
      * @param future Future to complete with result
-     * @throws IOException if stage position cannot be read
      */
     private static void showRefinementDialog(
+            QuPathGUI gui,
             double[] tileCoords,
             AffineTransform initialTransform,
             PathObject selectedTile,
-            CompletableFuture<RefinementResult> future) throws IOException {
+            CompletableFuture<RefinementResult> future) {
 
-        Alert dialog = new Alert(Alert.AlertType.CONFIRMATION);
-        dialog.setTitle("Refine Alignment");
-        dialog.setHeaderText("Alignment Refinement");
-        dialog.setContentText(
+        // Create non-modal stage
+        Stage dialogStage = new Stage();
+        dialogStage.setTitle("Refine Alignment");
+        dialogStage.initModality(Modality.NONE); // Non-modal - allows QuPath interaction
+        dialogStage.setResizable(false);
+        dialogStage.setAlwaysOnTop(true);
+
+        // Main content
+        VBox content = new VBox(15);
+        content.setPadding(new Insets(20));
+        content.setAlignment(Pos.CENTER_LEFT);
+        content.setPrefWidth(500);
+
+        // Instructions
+        Label headerLabel = new Label("Alignment Refinement");
+        headerLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+
+        Label instructionLabel = new Label(
                 "The microscope has moved to the estimated position for the selected tile.\n\n" +
-                        "Please use the microscope controls to adjust the stage position so that\n" +
-                        "the live view matches the selected tile in QuPath.\n\n" +
-                        "When the alignment is correct, click 'Save Refined Position'."
+                "Please use the microscope controls (or Stage Control dialog) to adjust\n" +
+                "the stage position so that the live view matches the selected tile in QuPath.\n\n" +
+                "When the alignment is correct, click 'Save Refined Position'."
         );
+        instructionLabel.setWrapText(true);
 
-        ButtonType saveButton = new ButtonType("Save Refined Position");
-        ButtonType skipButton = new ButtonType("Skip Refinement");
-        ButtonType newAlignmentButton = new ButtonType("Create New Alignment");
+        // Tile info label
+        String tileName = selectedTile.getName() != null ? selectedTile.getName() : "unnamed tile";
+        Label tileInfoLabel = new Label("Target tile: " + tileName);
+        tileInfoLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
 
-        dialog.getButtonTypes().setAll(saveButton, skipButton, newAlignmentButton);
+        // Restore tile button
+        Button restoreButton = new Button("Restore Target Tile Selection");
+        restoreButton.setTooltip(new javafx.scene.control.Tooltip(
+                "Re-select and center view on the original target tile\n" +
+                "if you accidentally changed the selection."
+        ));
+        restoreButton.setOnAction(e -> {
+            // Restore selection and center view
+            centerViewerOnTile(gui, selectedTile);
+            logger.info("Restored target tile selection: {}", tileName);
+        });
 
-        Optional<ButtonType> result = dialog.showAndWait();
-
-        if (result.isPresent()) {
-            if (result.get() == saveButton) {
+        // Action buttons
+        Button saveButton = new Button("Save Refined Position");
+        saveButton.setDefaultButton(true);
+        saveButton.setOnAction(e -> {
+            try {
                 // Get refined position
                 double[] refinedStageCoords = MicroscopeController.getInstance().getStagePositionXY();
                 logger.info("Refined stage position: ({}, {})",
@@ -287,19 +322,51 @@ public class SingleTileRefinement {
                         "The alignment has been refined and saved for this slide."
                 );
 
+                dialogStage.close();
                 future.complete(new RefinementResult(refinedTransform, selectedTile));
-
-            } else if (result.get() == skipButton) {
-                logger.info("User skipped refinement");
-                future.complete(new RefinementResult(initialTransform, selectedTile));
-
-            } else if (result.get() == newAlignmentButton) {
-                logger.info("User requested new alignment");
-                future.complete(new RefinementResult(null, selectedTile)); // Signal to switch to manual alignment
+            } catch (IOException ex) {
+                logger.error("Failed to get stage position", ex);
+                Dialogs.showErrorMessage("Error", "Failed to read stage position: " + ex.getMessage());
             }
-        } else {
-            // Dialog closed without selection
+        });
+
+        Button skipButton = new Button("Skip Refinement");
+        skipButton.setOnAction(e -> {
+            logger.info("User skipped refinement");
+            dialogStage.close();
             future.complete(new RefinementResult(initialTransform, selectedTile));
-        }
+        });
+
+        Button newAlignmentButton = new Button("Create New Alignment");
+        newAlignmentButton.setOnAction(e -> {
+            logger.info("User requested new alignment");
+            dialogStage.close();
+            future.complete(new RefinementResult(null, selectedTile)); // Signal to switch to manual alignment
+        });
+
+        // Layout
+        HBox restoreBox = new HBox(restoreButton);
+        restoreBox.setAlignment(Pos.CENTER_LEFT);
+
+        HBox buttonBox = new HBox(10, saveButton, skipButton, newAlignmentButton);
+        buttonBox.setAlignment(Pos.CENTER_RIGHT);
+
+        content.getChildren().addAll(
+                headerLabel,
+                instructionLabel,
+                tileInfoLabel,
+                restoreBox,
+                buttonBox
+        );
+
+        // Handle window close (X button)
+        dialogStage.setOnCloseRequest(e -> {
+            logger.info("Refinement dialog closed without selection");
+            future.complete(new RefinementResult(initialTransform, selectedTile));
+        });
+
+        Scene scene = new Scene(content);
+        dialogStage.setScene(scene);
+        dialogStage.show();
     }
 }

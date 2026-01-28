@@ -141,7 +141,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         AFBENCH("afbench_"),
         /** PPM birefringence maximization test */
         PPMBIREF("ppmbiref"),
-        /** Starburst calibration for hue-to-angle mapping */
+        /** Sunburst calibration for hue-to-angle mapping */
         SBCALIB("sbcalib_"),
         /** Simple white balance calibration at single exposure */
         WBSIMPLE("wbsimple"),
@@ -1771,7 +1771,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
-     * Runs starburst calibration for hue-to-angle mapping.
+     * Runs sunburst calibration for hue-to-angle mapping.
      * This method uses the SBCALIB command to acquire a calibration slide image
      * and run SunburstCalibrator to create a linear regression model.
      *
@@ -1785,7 +1785,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @return JSON string with calibration results
      * @throws IOException if communication fails
      */
-    public String runStarburstCalibration(String yamlPath, String outputPath, String modality,
+    public String runSunburstCalibration(String yamlPath, String outputPath, String modality,
                                           int expectedRectangles, double saturationThreshold,
                                           double valueThreshold, String calibrationName) throws IOException {
 
@@ -1807,7 +1807,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         String message = messageBuilder.toString();
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
 
-        logger.info("Sending starburst calibration command:");
+        logger.info("Sending sunburst calibration command:");
         logger.info("  Message length: {} bytes", messageBytes.length);
         logger.info("  Message content: {}", message);
 
@@ -1820,7 +1820,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 originalTimeout = socket.getSoTimeout();
                 // Calibration should be quick (single image), but allow 5 minutes for processing
                 socket.setSoTimeout(300000); // 5 minutes
-                logger.debug("Increased socket timeout to 5 minutes for starburst calibration");
+                logger.debug("Increased socket timeout to 5 minutes for sunburst calibration");
             } catch (IOException e) {
                 logger.warn("Failed to adjust socket timeout", e);
             }
@@ -1844,14 +1844,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     logger.info("Received initial server response: {}", response);
 
                     if (response.startsWith("FAILED:")) {
-                        throw new IOException("Server rejected starburst calibration: " + response);
+                        throw new IOException("Server rejected sunburst calibration: " + response);
                     } else if (!response.startsWith("STARTED:")) {
                         logger.warn("Unexpected initial server response: {}", response);
                     }
                 }
 
                 // Wait for final response (SUCCESS with JSON or FAILED)
-                logger.info("Waiting for starburst calibration to complete...");
+                logger.info("Waiting for sunburst calibration to complete...");
                 bytesRead = input.read(buffer);
                 if (bytesRead <= 0) {
                     throw new IOException("No response received from server");
@@ -1860,11 +1860,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
 
                 if (response.startsWith("FAILED:")) {
-                    throw new IOException("Starburst calibration failed: " + response.substring(7));
+                    throw new IOException("Sunburst calibration failed: " + response.substring(7));
                 } else if (response.startsWith("SUCCESS:")) {
                     // Extract JSON result
                     String resultJson = response.substring(8).trim();
-                    logger.info("Starburst calibration successful");
+                    logger.info("Sunburst calibration successful");
                     return resultJson;
                 } else {
                     logger.warn("Unexpected response: {}", response);
@@ -1872,9 +1872,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 }
 
             } catch (IOException e) {
-                logger.error("Error during starburst calibration", e);
-                handleIOException(new IOException("Starburst calibration error", e));
-                throw new IOException("Starburst calibration error: " + e.getMessage(), e);
+                logger.error("Error during sunburst calibration", e);
+                handleIOException(new IOException("Sunburst calibration error", e));
+                throw new IOException("Sunburst calibration error: " + e.getMessage(), e);
             } finally {
                 // Restore original timeout
                 if (socket != null) {
@@ -2630,6 +2630,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double gainThresholdRatio,
             int maxIterations,
             boolean calibrateBlackLevel,
+            double baseGain,
+            double exposureSoftCapMs,
+            double boostedMaxGainDb,
             String yamlPath,
             String objective,
             String detector) throws IOException {
@@ -2653,6 +2656,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         message.append(" --gain_threshold ").append(gainThresholdRatio);
         message.append(" --max_iterations ").append(maxIterations);
         message.append(" --calibrate_black_level ").append(calibrateBlackLevel ? "true" : "false");
+        message.append(" --base_gain ").append(baseGain);
+        message.append(" --exposure_soft_cap_ms ").append(exposureSoftCapMs);
+        message.append(" --boosted_max_gain_db ").append(boostedMaxGainDb);
         message.append(" ").append(END_MARKER);
 
         byte[] messageBytes = message.toString().getBytes(StandardCharsets.UTF_8);
@@ -2664,6 +2670,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         logger.info("  Tolerance: {}", tolerance);
         logger.info("  Advanced: maxGain={}dB, gainThreshold={}, maxIter={}, calibrateBL={}",
                 maxGainDb, gainThresholdRatio, maxIterations, calibrateBlackLevel);
+        logger.info("  Gain algo: baseGain={}, exposureSoftCap={}ms, boostedMaxGain={}dB",
+                baseGain, exposureSoftCapMs, boostedMaxGainDb);
 
         synchronized (socketLock) {
             ensureConnected();
@@ -2775,6 +2783,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double gainThresholdRatio,
             int maxIterations,
             boolean calibrateBlackLevel,
+            double baseGain,
+            double exposureSoftCapMs,
+            double boostedMaxGainDb,
             String yamlPath,
             String objective,
             String detector) throws IOException {
@@ -2809,6 +2820,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         message.append(" --gain_threshold ").append(gainThresholdRatio);
         message.append(" --max_iterations ").append(maxIterations);
         message.append(" --calibrate_black_level ").append(calibrateBlackLevel ? "true" : "false");
+        message.append(" --base_gain ").append(baseGain);
+        message.append(" --exposure_soft_cap_ms ").append(exposureSoftCapMs);
+        message.append(" --boosted_max_gain_db ").append(boostedMaxGainDb);
         message.append(" ").append(END_MARKER);
 
         byte[] messageBytes = message.toString().getBytes(StandardCharsets.UTF_8);
@@ -2822,6 +2836,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         logger.info("  Default target: {}, Tolerance: {}", targetIntensity, tolerance);
         logger.info("  Advanced: maxGain={}dB, gainThreshold={}, maxIter={}, calibrateBL={}",
                 maxGainDb, gainThresholdRatio, maxIterations, calibrateBlackLevel);
+        logger.info("  Gain algo: baseGain={}, exposureSoftCap={}ms, boostedMaxGain={}dB",
+                baseGain, exposureSoftCapMs, boostedMaxGainDb);
 
         synchronized (socketLock) {
             ensureConnected();

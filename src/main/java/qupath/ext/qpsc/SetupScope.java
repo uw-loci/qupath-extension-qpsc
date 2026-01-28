@@ -267,16 +267,16 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 			}
 		});
 
-		// Starburst Calibration (Hue-to-Angle)
-		MenuItem starburstCalibrationOption = new MenuItem(res.getString("menu.starburstCalibration"));
-		starburstCalibrationOption.setDisable(!configValid);
-		setMenuItemTooltip(starburstCalibrationOption,
-				"Create a hue-to-angle calibration from a starburst calibration slide. " +
+		// PPM Reference Slide (Hue-to-Angle calibration using sunburst pattern)
+		MenuItem ppmReferenceSlideOption = new MenuItem(res.getString("menu.ppmReferenceSlide"));
+		ppmReferenceSlideOption.setDisable(!configValid);
+		setMenuItemTooltip(ppmReferenceSlideOption,
+				"Create a hue-to-angle calibration from a PPM reference slide with sunburst pattern. " +
 				"Acquires an image of oriented rectangles and creates a linear regression mapping " +
 				"hue values to orientation angles for use in PPM analysis.");
-		starburstCalibrationOption.setOnAction(e -> {
+		ppmReferenceSlideOption.setOnAction(e -> {
 			try {
-				QPScopeController.getInstance().startWorkflow("starburstCalibration");
+				QPScopeController.getInstance().startWorkflow("sunburstCalibration");
 			} catch (IOException ex) {
 				throw new RuntimeException(ex);
 			}
@@ -356,20 +356,27 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 			}
 		});
 
-		// Add items to utilities submenu
+		// Add items to utilities submenu (grouped by function)
 		utilitiesMenu.getItems().addAll(
+				// Navigation tools
 				alignmentOption,
 				stageMapOption,
 				new SeparatorMenuItem(),
+				// Camera calibration
 				backgroundCollectionOption,
 				whiteBalanceOption,
-				polarizerCalibrationOption,
-				ppmSensitivityTestOption,
-				birefringenceOptimizationOption,
-				starburstCalibrationOption,
+				new SeparatorMenuItem(),
+				// Autofocus tools
 				autofocusEditorOption,
 				autofocusBenchmarkOption,
 				new SeparatorMenuItem(),
+				// PPM-specific tools
+				polarizerCalibrationOption,
+				ppmSensitivityTestOption,
+				birefringenceOptimizationOption,
+				ppmReferenceSlideOption,
+				new SeparatorMenuItem(),
+				// Server settings
 				serverConnectionOption
 		);
 

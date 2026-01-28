@@ -394,7 +394,11 @@ public class ExistingAlignmentPath {
         Project<BufferedImage> project = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
 
         // Get the actual image file name (not metadata name which may be project name)
+        // Strip extension for consistency with base_image metadata lookups
         String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+        if (imageName != null) {
+            imageName = qupath.lib.common.GeneralTools.stripExtension(imageName);
+        }
 
         if (imageName == null) {
             logger.error("Cannot save slide alignment - no image name available");
@@ -406,7 +410,7 @@ public class ExistingAlignmentPath {
 
         AffineTransformManager.saveSlideAlignment(
                 project,
-                imageName,  // Use image name instead of sample name
+                imageName,  // Use image name without extension for base_image compatibility
                 state.sample.modality(),
                 state.transform,
                 processedMacroImage

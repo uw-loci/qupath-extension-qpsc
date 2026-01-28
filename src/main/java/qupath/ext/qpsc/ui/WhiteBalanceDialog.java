@@ -92,6 +92,17 @@ public class WhiteBalanceDialog {
     // Whether to perform black level calibration
     private static final BooleanProperty calibrateBlackLevelProperty =
             PathPrefs.createPersistentPreference("wb.advanced.calibrateBlackLevel", true);
+    // Base gain to start calibration with (reduces exposure requirements)
+    // Default 5.0 = ~14 dB, allows ~5x reduction in exposure time
+    private static final DoubleProperty baseGainProperty =
+            PathPrefs.createPersistentPreference("wb.advanced.baseGain", 5.0);
+    // Exposure soft cap threshold in ms - beyond this, gain can boost past maxGainDb
+    private static final DoubleProperty exposureSoftCapMsProperty =
+            PathPrefs.createPersistentPreference("wb.advanced.exposureSoftCapMs", 50.0);
+    // Maximum analog gain in dB when exposure exceeds soft cap (boosted mode)
+    // 12 dB = 4x linear gain
+    private static final DoubleProperty boostedMaxGainDbProperty =
+            PathPrefs.createPersistentPreference("wb.advanced.boostedMaxGainDb", 12.0);
 
     // Objective selection for PPM WB (objective-specific exposures)
     private static final StringProperty ppmObjectiveProperty =
@@ -110,7 +121,10 @@ public class WhiteBalanceDialog {
             double maxGainDb,           // Max analog gain in dB (default 3.0)
             double gainThresholdRatio,  // Exposure ratio before using gain (default 2.0)
             int maxIterations,          // Max calibration iterations (default 30)
-            boolean calibrateBlackLevel // Whether to calibrate black level (default true)
+            boolean calibrateBlackLevel, // Whether to calibrate black level (default true)
+            double baseGain,            // Starting gain for all channels (default 5.0)
+            double exposureSoftCapMs,   // Max exposure before gain boost (default 50.0)
+            double boostedMaxGainDb     // Max gain when past soft cap (default 12.0)
     ) {}
 
     /**
@@ -272,6 +286,10 @@ public class WhiteBalanceDialog {
                 Spinner<?> gainThresholdSpinner = (Spinner<?>) advancedPane.getContent().lookup("#gainThresholdRatio");
                 Spinner<?> maxIterSpinner = (Spinner<?>) advancedPane.getContent().lookup("#maxIterations");
                 CheckBox blackLevelCheck = (CheckBox) advancedPane.getContent().lookup("#calibrateBlackLevel");
+                // New gain algorithm settings
+                Spinner<?> baseGainSpinner = (Spinner<?>) advancedPane.getContent().lookup("#baseGain");
+                Spinner<?> exposureSoftCapSpinner = (Spinner<?>) advancedPane.getContent().lookup("#exposureSoftCapMs");
+                Spinner<?> boostedMaxGainSpinner = (Spinner<?>) advancedPane.getContent().lookup("#boostedMaxGainDb");
 
                 // Validation for PPM button
                 Button ppmBtn = (Button) dialog.getDialogPane().lookupButton(runPPMButton);
@@ -322,6 +340,10 @@ public class WhiteBalanceDialog {
                     double gainThreshold = (Double) gainThresholdSpinner.getValue();
                     int maxIter = (Integer) maxIterSpinner.getValue();
                     boolean calibrateBL = blackLevelCheck.isSelected();
+                    // New gain algorithm settings
+                    double baseGain = (Double) baseGainSpinner.getValue();
+                    double exposureSoftCap = (Double) exposureSoftCapSpinner.getValue();
+                    double boostedMaxGain = (Double) boostedMaxGainSpinner.getValue();
 
                     // Get objective and derive detector (shared by both modes)
                     String selectedObjective = objectiveCombo.getValue() != null ?
@@ -356,9 +378,14 @@ public class WhiteBalanceDialog {
                     gainThresholdRatioProperty.set(gainThreshold);
                     maxIterationsProperty.set(maxIter);
                     calibrateBlackLevelProperty.set(calibrateBL);
+                    // Save new gain algorithm preferences
+                    baseGainProperty.set(baseGain);
+                    exposureSoftCapMsProperty.set(exposureSoftCap);
+                    boostedMaxGainDbProperty.set(boostedMaxGain);
 
                     AdvancedWBParams advanced = new AdvancedWBParams(
-                            maxGain, gainThreshold, maxIter, calibrateBL
+                            maxGain, gainThreshold, maxIter, calibrateBL,
+                            baseGain, exposureSoftCap, boostedMaxGain
                     );
 
                     if (buttonType == runSimpleButton) {
@@ -372,6 +399,8 @@ public class WhiteBalanceDialog {
                         logger.info("  Target: {}, Tolerance: {}", target, tolerance);
                         logger.info("  Advanced: maxGain={}dB, gainThreshold={}, maxIter={}, calibrateBL={}",
                                 maxGain, gainThreshold, maxIter, calibrateBL);
+                        logger.info("  Gain algo: baseGain={}, exposureSoftCap={}ms, boostedMaxGain={}dB",
+                                baseGain, exposureSoftCap, boostedMaxGain);
 
                         return WBDialogResult.simple(new SimpleWBParams(
                                 outPath, camera, selectedObjective, selectedDetector,
@@ -412,6 +441,8 @@ public class WhiteBalanceDialog {
                         logger.info("  Default target: {}, Tolerance: {}", target, tolerance);
                         logger.info("  Advanced: maxGain={}dB, gainThreshold={}, maxIter={}, calibrateBL={}",
                                 maxGain, gainThreshold, maxIter, calibrateBL);
+                        logger.info("  Gain algo: baseGain={}, exposureSoftCap={}ms, boostedMaxGain={}dB",
+                                baseGain, exposureSoftCap, boostedMaxGain);
 
                         return WBDialogResult.ppm(new PPMWBParams(
                                 outPath, camera, selectedObjective, selectedDetector,
@@ -857,6 +888,103 @@ public class WhiteBalanceDialog {
         grid.add(blackLevelLabel, 0, row);
         grid.add(blackLevelCheck, 1, row);
         grid.add(blackLevelNote, 2, row);
+        row++;
+
+        // Separator for new gain settings
+        Separator gainSeparator = new Separator();
+        gainSeparator.setPadding(new Insets(5, 0, 5, 0));
+        grid.add(gainSeparator, 0, row, 3, 1);
+        row++;
+
+        // Help button with tooltip explaining the gain algorithm
+        Label gainAlgoLabel = new Label("Gain Algorithm Settings");
+        gainAlgoLabel.setStyle("-fx-font-weight: bold;");
+        Button helpButton = new Button("?");
+        helpButton.setStyle("-fx-font-size: 10px; -fx-padding: 2 6 2 6;");
+        helpButton.setTooltip(new Tooltip(
+                "HOW GAIN COMPENSATION WORKS:\n\n" +
+                "1. BASE GAIN: Calibration starts with a base gain applied to all channels.\n" +
+                "   A higher base gain (e.g., 5x) allows shorter exposure times,\n" +
+                "   reducing calibration time and preventing overexposure.\n\n" +
+                "2. EXPOSURE SOFT CAP: When exposures stay below this threshold,\n" +
+                "   the gain is limited to 'Max Gain (dB)' to minimize noise.\n\n" +
+                "3. BOOSTED MODE: If ANY channel's exposure exceeds the soft cap,\n" +
+                "   gain is allowed to increase up to 'Boosted Max Gain' to\n" +
+                "   prevent extremely long exposure times.\n\n" +
+                "EXAMPLE with default settings (Base=5x, SoftCap=50ms, Boost=12dB):\n" +
+                "- If blue channel needs 40ms exposure -> gain stays at 5x (below soft cap)\n" +
+                "- If blue channel needs 80ms exposure -> gain can boost to 16x (12dB)\n" +
+                "  to bring exposure back down\n\n" +
+                "This prevents the 10x longer exposure times seen when using\n" +
+                "per-channel exposure mode without gain compensation."
+        ));
+        HBox gainAlgoHeader = new HBox(10, gainAlgoLabel, helpButton);
+        gainAlgoHeader.setAlignment(Pos.CENTER_LEFT);
+        grid.add(gainAlgoHeader, 0, row, 3, 1);
+        row++;
+
+        // Base Gain
+        Label baseGainLabel = new Label("Base Gain:");
+        baseGainLabel.setPrefWidth(160);
+
+        Spinner<Double> baseGainSpinner = new Spinner<>(1.0, 20.0, baseGainProperty.get(), 0.5);
+        baseGainSpinner.setId("baseGain");
+        baseGainSpinner.setEditable(true);
+        baseGainSpinner.setPrefWidth(100);
+        baseGainSpinner.setTooltip(new Tooltip(
+                "Starting gain applied to ALL channels at calibration start.\n" +
+                "Higher values = shorter exposure times but more noise.\n" +
+                "Default 5.0x (~14 dB) provides good balance."
+        ));
+
+        Label baseGainNote = new Label("(starting gain for all channels)");
+        baseGainNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        grid.add(baseGainLabel, 0, row);
+        grid.add(baseGainSpinner, 1, row);
+        grid.add(baseGainNote, 2, row);
+        row++;
+
+        // Exposure Soft Cap
+        Label exposureSoftCapLabel = new Label("Exposure Soft Cap (ms):");
+
+        Spinner<Double> exposureSoftCapSpinner = new Spinner<>(10.0, 500.0, exposureSoftCapMsProperty.get(), 10.0);
+        exposureSoftCapSpinner.setId("exposureSoftCapMs");
+        exposureSoftCapSpinner.setEditable(true);
+        exposureSoftCapSpinner.setPrefWidth(100);
+        exposureSoftCapSpinner.setTooltip(new Tooltip(
+                "Maximum exposure time before gain boost is enabled.\n" +
+                "When ANY channel exceeds this, gain can increase to Boosted Max.\n" +
+                "Default 50ms keeps calibration fast."
+        ));
+
+        Label exposureSoftCapNote = new Label("(max exposure before gain boost)");
+        exposureSoftCapNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        grid.add(exposureSoftCapLabel, 0, row);
+        grid.add(exposureSoftCapSpinner, 1, row);
+        grid.add(exposureSoftCapNote, 2, row);
+        row++;
+
+        // Boosted Max Gain
+        Label boostedMaxGainLabel = new Label("Boosted Max Gain (dB):");
+
+        Spinner<Double> boostedMaxGainSpinner = new Spinner<>(3.0, 36.0, boostedMaxGainDbProperty.get(), 1.0);
+        boostedMaxGainSpinner.setId("boostedMaxGainDb");
+        boostedMaxGainSpinner.setEditable(true);
+        boostedMaxGainSpinner.setPrefWidth(100);
+        boostedMaxGainSpinner.setTooltip(new Tooltip(
+                "Maximum gain allowed when exposures exceed the soft cap.\n" +
+                "12 dB = 4x linear gain, 18 dB = 8x, 24 dB = 16x.\n" +
+                "Default 12 dB prevents extremely long exposures."
+        ));
+
+        Label boostedMaxGainNote = new Label("(max gain when past soft cap)");
+        boostedMaxGainNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        grid.add(boostedMaxGainLabel, 0, row);
+        grid.add(boostedMaxGainSpinner, 1, row);
+        grid.add(boostedMaxGainNote, 2, row);
 
         TitledPane pane = new TitledPane("Advanced Settings", grid);
         pane.setCollapsible(true);

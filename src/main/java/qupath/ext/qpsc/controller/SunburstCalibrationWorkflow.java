@@ -14,20 +14,19 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.CalibrationResultDialog;
 import qupath.ext.qpsc.ui.CalibrationResultDialog.CalibrationResultData;
-import qupath.ext.qpsc.ui.StarburstCalibrationDialog;
-import qupath.ext.qpsc.ui.StarburstCalibrationDialog.StarburstCalibrationParams;
+import qupath.ext.qpsc.ui.SunburstCalibrationDialog;
+import qupath.ext.qpsc.ui.SunburstCalibrationDialog.SunburstCalibrationParams;
 import qupath.fx.dialogs.Dialogs;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * StarburstCalibrationWorkflow - Create hue-to-angle calibration from a starburst slide.
+ * SunburstCalibrationWorkflow - Create hue-to-angle calibration from a PPM reference slide.
  *
  * This workflow provides a way to calibrate PPM hue-to-angle mapping using a
- * starburst/sunburst calibration slide with oriented colored rectangles:
+ * PPM reference slide with sunburst pattern (oriented colored rectangles):
  * <ol>
  *   <li>User positions calibration slide under microscope</li>
  *   <li>Dialog collects parameters (modality, detection thresholds)</li>
@@ -44,41 +43,41 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author Mike Nelson
  * @since 1.0
  */
-public class StarburstCalibrationWorkflow {
+public class SunburstCalibrationWorkflow {
 
-    private static final Logger logger = LoggerFactory.getLogger(StarburstCalibrationWorkflow.class);
+    private static final Logger logger = LoggerFactory.getLogger(SunburstCalibrationWorkflow.class);
 
     /**
-     * Main entry point for starburst calibration workflow.
+     * Main entry point for sunburst calibration workflow.
      * Shows UI for parameter input, then executes calibration.
      */
     public static void run() {
-        logger.info("Starting starburst calibration workflow");
+        logger.info("Starting sunburst calibration workflow");
 
         Platform.runLater(() -> {
             try {
                 // Show dialog and collect parameters
-                StarburstCalibrationDialog.showDialog()
+                SunburstCalibrationDialog.showDialog()
                     .thenAccept(params -> {
                         if (params != null) {
-                            logger.info("Starburst calibration parameters received");
+                            logger.info("Sunburst calibration parameters received");
                             // Start calibration with progress dialog (all on FX thread initially)
                             startCalibrationWithProgress(params);
                         } else {
-                            logger.info("Starburst calibration cancelled by user");
+                            logger.info("Sunburst calibration cancelled by user");
                         }
                     })
                     .exceptionally(ex -> {
-                        logger.error("Error in starburst calibration dialog", ex);
+                        logger.error("Error in sunburst calibration dialog", ex);
                         Platform.runLater(() -> Dialogs.showErrorMessage("Calibration Error",
                                 "Failed to show calibration dialog: " + ex.getMessage()));
                         return null;
                     });
 
             } catch (Exception e) {
-                logger.error("Failed to start starburst calibration workflow", e);
+                logger.error("Failed to start sunburst calibration workflow", e);
                 Dialogs.showErrorMessage("Calibration Error",
-                        "Failed to start starburst calibration: " + e.getMessage());
+                        "Failed to start sunburst calibration: " + e.getMessage());
             }
         });
     }
@@ -89,11 +88,11 @@ public class StarburstCalibrationWorkflow {
      *
      * @param params Calibration parameters from dialog
      */
-    private static void startCalibrationWithProgress(StarburstCalibrationParams params) {
+    private static void startCalibrationWithProgress(SunburstCalibrationParams params) {
         // Must be called on FX thread - create progress dialog here
         Alert progressDialog = new Alert(Alert.AlertType.INFORMATION);
         progressDialog.setTitle("Calibration In Progress");
-        progressDialog.setHeaderText("Starburst Calibration Running");
+        progressDialog.setHeaderText("PPM Reference Slide Calibration");
 
         Label progressLabel = new Label(
                 "Acquiring calibration image and processing...\n\n" +
@@ -115,10 +114,10 @@ public class StarburstCalibrationWorkflow {
         CompletableFuture.runAsync(() -> {
             executeCalibration(params, progressDialog);
         }).exceptionally(ex -> {
-            logger.error("Starburst calibration failed", ex);
+            logger.error("Sunburst calibration failed", ex);
             Platform.runLater(() -> {
                 progressDialog.close();
-                Dialogs.showErrorMessage("Starburst Calibration Error",
+                Dialogs.showErrorMessage("PPM Calibration Error",
                         "Failed to execute calibration: " + ex.getMessage());
             });
             return null;
@@ -126,14 +125,14 @@ public class StarburstCalibrationWorkflow {
     }
 
     /**
-     * Executes the starburst calibration via socket communication.
+     * Executes the sunburst calibration via socket communication.
      * Called from background thread - all UI updates must use Platform.runLater.
      *
      * @param params Calibration parameters from dialog
      * @param progressDialog Progress dialog to close when done (created on FX thread)
      */
-    private static void executeCalibration(StarburstCalibrationParams params, Alert progressDialog) {
-        logger.info("Executing starburst calibration:");
+    private static void executeCalibration(SunburstCalibrationParams params, Alert progressDialog) {
+        logger.info("Executing sunburst calibration:");
         logger.info("  Output folder: {}", params.outputFolder());
         logger.info("  Modality: {}", params.modality());
         logger.info("  Expected rectangles: {}", params.expectedRectangles());
@@ -154,10 +153,10 @@ public class StarburstCalibrationWorkflow {
             MicroscopeSocketClient socketClient = new MicroscopeSocketClient(serverHost, serverPort);
             socketClient.connect();
 
-            logger.info("Sending starburst calibration command...");
+            logger.info("Sending sunburst calibration command...");
 
             // Call the socket client method
-            String resultJson = socketClient.runStarburstCalibration(
+            String resultJson = socketClient.runSunburstCalibration(
                     configFileLocation,
                     params.outputFolder(),
                     params.modality(),
@@ -179,7 +178,7 @@ public class StarburstCalibrationWorkflow {
             });
 
         } catch (Exception e) {
-            logger.error("Starburst calibration failed", e);
+            logger.error("Sunburst calibration failed", e);
 
             // Close progress dialog and show error (on FX thread)
             Platform.runLater(() -> {

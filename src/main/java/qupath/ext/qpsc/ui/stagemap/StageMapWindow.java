@@ -754,10 +754,17 @@ public class StageMapWindow {
         // First try: actual image file name (how alignments are typically saved)
         String imageName = QPProjectFunctions.getActualImageFileName(imageData);
         if (imageName != null && !imageName.isEmpty()) {
-            // Check if alignment exists for this name
+            // Check if alignment exists for this name (with extension - legacy format)
             if (AffineTransformManager.loadSlideAlignment(project, imageName) != null) {
                 logger.debug("Found alignment using image name: {}", imageName);
                 return imageName;
+            }
+            // Also try without extension (new format for base_image compatibility)
+            String strippedName = qupath.lib.common.GeneralTools.stripExtension(imageName);
+            if (!strippedName.equals(imageName) &&
+                    AffineTransformManager.loadSlideAlignment(project, strippedName) != null) {
+                logger.debug("Found alignment using stripped image name: {}", strippedName);
+                return strippedName;
             }
         }
 
