@@ -208,9 +208,9 @@ public class CalibrationResultDialog {
 
         dialog.getDialogPane().setContent(scrollPane);
 
-        // Buttons
+        // Buttons - use CANCEL_CLOSE for Close button so X button works
         ButtonType openFolderType = new ButtonType("Open Folder", ButtonBar.ButtonData.LEFT);
-        ButtonType closeType = new ButtonType("Close", ButtonBar.ButtonData.OK_DONE);
+        ButtonType closeType = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
         dialog.getDialogPane().getButtonTypes().addAll(openFolderType, closeType);
 
         // Handle open folder button
@@ -364,7 +364,7 @@ public class CalibrationResultDialog {
         final String folderToOpen = debugFolderPath;
         if (folderToOpen != null) {
             ButtonType openFolderType = new ButtonType("Open Debug Folder", ButtonBar.ButtonData.LEFT);
-            ButtonType closeType = new ButtonType("Close", ButtonBar.ButtonData.OK_DONE);
+            ButtonType closeType = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
             dialog.getDialogPane().getButtonTypes().addAll(openFolderType, closeType);
 
             Button openFolderButton = (Button) dialog.getDialogPane().lookupButton(openFolderType);
@@ -380,7 +380,7 @@ public class CalibrationResultDialog {
                 event.consume();  // Don't close dialog
             });
         } else {
-            ButtonType closeType = new ButtonType("Close", ButtonBar.ButtonData.OK_DONE);
+            ButtonType closeType = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
             dialog.getDialogPane().getButtonTypes().add(closeType);
         }
     }
