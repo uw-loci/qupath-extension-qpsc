@@ -331,12 +331,16 @@ public class CameraControlController {
             // Gain row for this angle
             Label gainLabel = new Label(res.getString("camera.label.gain"));
             gainLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+            gainLabel.setTooltip(new Tooltip("JAI analog gain ranges:\nR: 0.47-4.0\nG: 1.0-64.0\nB: 0.47-4.0"));
             anglesGrid.add(gainLabel, 0, row);
 
-            // Gain fields (no "all" field for gain)
+            // Gain fields (no "all" field for gain) - with tooltips showing valid ranges
             TextField gainRField = createSmallField("1.0");
+            gainRField.setTooltip(new Tooltip("Red gain (valid: 0.47-4.0)"));
             TextField gainGField = createSmallField("1.0");
+            gainGField.setTooltip(new Tooltip("Green gain (valid: 1.0-64.0)"));
             TextField gainBField = createSmallField("1.0");
+            gainBField.setTooltip(new Tooltip("Blue gain (valid: 0.47-4.0)"));
 
             anglesGrid.add(gainRField, 4, row);
             anglesGrid.add(gainGField, 6, row);
