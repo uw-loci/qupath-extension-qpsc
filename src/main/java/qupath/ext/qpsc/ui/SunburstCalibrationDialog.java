@@ -9,8 +9,8 @@ import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
+import qupath.ext.qpsc.ui.CameraControlController;
 
 import java.io.File;
 import java.util.Optional;
@@ -89,7 +89,7 @@ public class SunburstCalibrationDialog {
                 "Position the PPM reference slide (sunburst pattern with colored rectangles)\n" +
                 "under the microscope and ensure it is properly focused.\n\n" +
                 "This workflow will:\n" +
-                "  1. Acquire an image using the selected modality's exposure settings\n" +
+                "  1. Acquire an image using the current camera settings\n" +
                 "  2. Detect oriented rectangles and extract their hue values\n" +
                 "  3. Create a linear regression mapping hue to orientation angle (0-180 deg)\n" +
                 "  4. Save the calibration for use in PPM analysis\n\n" +
@@ -98,7 +98,16 @@ public class SunburstCalibrationDialog {
             instructionLabel.setWrapText(true);
             instructionLabel.setStyle("-fx-font-size: 11px;");
 
-            headerBox.getChildren().addAll(headerLabel, new Separator(), instructionLabel);
+            // Important note about angle settings
+            Label angleNote = new Label(
+                "IMPORTANT: Use low-angle PPM settings (e.g., 7, 0, or -7 degrees) for calibration.\n" +
+                "These angles provide the best color saturation for detecting the rectangles.\n" +
+                "Use the Camera Control button below to set the camera to the correct angle."
+            );
+            angleNote.setWrapText(true);
+            angleNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #cc6600; -fx-font-weight: bold;");
+
+            headerBox.getChildren().addAll(headerLabel, new Separator(), instructionLabel, angleNote);
             dialog.getDialogPane().setHeader(headerBox);
 
             // Buttons
@@ -129,8 +138,6 @@ public class SunburstCalibrationDialog {
             outputField.setPrefColumnCount(30);
 
             // Get default output from preferences (remembers last used folder)
-            String configFile = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configFile);
             String defaultOutput = QPPreferenceDialog.getDefaultCalibrationFolder();
             outputField.setText(defaultOutput);
 
@@ -158,40 +165,26 @@ public class SunburstCalibrationDialog {
             grid.add(new Separator(), 0, row, 3, 1);
             row++;
 
-            // === Modality selection ===
-            HBox modalityLabelBox = createLabelWithTooltip("Modality:",
-                "The PPM modality determines camera exposure settings.\n\n" +
-                "The calibration will use the 90-degree (uncrossed) exposure\n" +
-                "from this modality's profile, which typically provides\n" +
-                "good signal for detecting the colored rectangles.\n\n" +
-                "Different objectives may need separate calibrations\n" +
-                "if their optical properties differ significantly."
+            // === Camera Setup Section ===
+            Label cameraSetupLabel = new Label("Camera Setup");
+            cameraSetupLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px;");
+            grid.add(cameraSetupLabel, 0, row, 3, 1);
+            row++;
+
+            Label cameraInstructions = new Label(
+                "Open Camera Control to set the polarizer to a low angle (7, 0, or -7 deg)\n" +
+                "and verify the camera settings before running calibration."
             );
-            modalityLabelBox.getChildren().get(0).setStyle("-fx-font-weight: bold;");
+            cameraInstructions.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
+            cameraInstructions.setWrapText(true);
+            grid.add(cameraInstructions, 0, row, 3, 1);
+            row++;
 
-            ComboBox<String> modalityCombo = new ComboBox<>();
-
-            var modalities = configManager.getAvailableModalities();
-            if (modalities != null && !modalities.isEmpty()) {
-                for (String mod : modalities) {
-                    if (mod.toLowerCase().startsWith("ppm")) {
-                        modalityCombo.getItems().add(mod);
-                    }
-                }
-            }
-            if (modalityCombo.getItems().isEmpty()) {
-                modalityCombo.getItems().add("ppm_20x");
-            }
-            // Select last used modality if available, otherwise select first
-            String lastModality = QPPreferenceDialog.getSunburstLastModality();
-            if (lastModality != null && !lastModality.isEmpty() && modalityCombo.getItems().contains(lastModality)) {
-                modalityCombo.getSelectionModel().select(lastModality);
-            } else {
-                modalityCombo.getSelectionModel().selectFirst();
-            }
-
-            grid.add(modalityLabelBox, 0, row);
-            grid.add(modalityCombo, 1, row);
+            Button cameraControlBtn = new Button("Open Camera Control...");
+            cameraControlBtn.setOnAction(e -> {
+                CameraControlController.showCameraControlDialog();
+            });
+            grid.add(cameraControlBtn, 1, row);
             row++;
 
             grid.add(new Separator(), 0, row, 3, 1);
@@ -334,13 +327,6 @@ public class SunburstCalibrationDialog {
                     return;
                 }
 
-                if (modalityCombo.getSelectionModel().getSelectedItem() == null) {
-                    Dialogs.showErrorMessage("No Modality Selected",
-                            "Please select a modality for exposure settings.");
-                    event.consume();
-                    return;
-                }
-
                 if (rectanglesSpinner.getValue() < 4) {
                     Dialogs.showErrorMessage("Invalid Rectangle Count",
                             "Expected rectangles must be at least 4.");
@@ -362,21 +348,20 @@ public class SunburstCalibrationDialog {
                 if (button == okType) {
                     String name = nameField.getText().trim();
                     String folderPath = outputField.getText().trim();
-                    String selectedModality = modalityCombo.getSelectionModel().getSelectedItem();
                     int rectangles = rectanglesSpinner.getValue();
                     double saturation = saturationSpinner.getValue();
                     double value = valueSpinner.getValue();
 
                     // Remember all settings for next time
                     QPPreferenceDialog.setLastCalibrationFolder(folderPath);
-                    QPPreferenceDialog.setSunburstLastModality(selectedModality);
                     QPPreferenceDialog.setSunburstExpectedRectangles(rectangles);
                     QPPreferenceDialog.setSunburstSaturationThreshold(saturation);
                     QPPreferenceDialog.setSunburstValueThreshold(value);
 
+                    // Modality is always "ppm" for this calibration
                     return new SunburstCalibrationParams(
                             folderPath,
-                            selectedModality,
+                            "ppm",
                             rectangles,
                             saturation,
                             value,
