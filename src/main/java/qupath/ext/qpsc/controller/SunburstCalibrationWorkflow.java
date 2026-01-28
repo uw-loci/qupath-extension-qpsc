@@ -142,17 +142,19 @@ public class SunburstCalibrationWorkflow {
             logger.info("  Calibration name: {}", params.calibrationName());
         }
 
-        MicroscopeSocketClient socketClient = null;
         try {
             // Get microscope configuration
             String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            String serverHost = QPPreferenceDialog.getMicroscopeServerHost();
-            int serverPort = QPPreferenceDialog.getMicroscopeServerPort();
 
-            // Connect to microscope server
-            logger.info("Connecting to microscope server at {}:{}", serverHost, serverPort);
-            socketClient = new MicroscopeSocketClient(serverHost, serverPort);
-            socketClient.connect();
+            // Use shared MicroscopeController connection (don't create new one)
+            // This avoids CONFIG conflicts with existing connections
+            MicroscopeSocketClient socketClient = MicroscopeController.getInstance().getSocketClient();
+
+            // Ensure we're connected
+            if (!MicroscopeController.getInstance().isConnected()) {
+                logger.info("Not connected to microscope server, connecting...");
+                MicroscopeController.getInstance().connect();
+            }
 
             logger.info("Sending sunburst calibration command...");
 
@@ -187,17 +189,8 @@ public class SunburstCalibrationWorkflow {
                 CalibrationResultData errorResult = CalibrationResultData.failure(e.getMessage());
                 CalibrationResultDialog.showResult(errorResult);
             });
-        } finally {
-            // Always disconnect the socket client to free the connection
-            if (socketClient != null) {
-                try {
-                    socketClient.disconnect();
-                    logger.info("Disconnected from microscope server");
-                } catch (Exception e) {
-                    logger.warn("Error disconnecting from microscope server", e);
-                }
-            }
         }
+        // Note: Don't disconnect - we're using the shared MicroscopeController connection
     }
 
     /**
