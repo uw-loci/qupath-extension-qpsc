@@ -37,6 +37,7 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 - [YAML Configuration](#yaml-configuration)
 - [Future Plans](#future-plans)
 - [Troubleshooting](#troubleshooting)
+- [Detailed Documentation](#detailed-documentation)
 - [Getting Help](#getting-help)
 
 ---
@@ -814,6 +815,19 @@ The following features and improvements are planned for upcoming releases:
 - Error message reference
 - Configuration validation tips
 - Log file interpretation guide
+
+---
+
+## Detailed Documentation
+
+For comprehensive guides with all options explained:
+
+| Document | Description |
+|----------|-------------|
+| **[Utilities Reference](documentation/UTILITIES.md)** | Stage Control, Calibration tools, Background Collection, and all utilities with checkboxes and options explained |
+| **[Workflows Guide](documentation/WORKFLOWS.md)** | Step-by-step documentation for Bounding Box, Existing Image, and Microscope Alignment workflows |
+| **[Preferences Reference](documentation/PREFERENCES.md)** | All QPSC preferences explained with recommendations |
+| **[Troubleshooting Guide](documentation/TROUBLESHOOTING.md)** | Comprehensive FAQ, error messages, and diagnostic procedures |
 
 ---
 
