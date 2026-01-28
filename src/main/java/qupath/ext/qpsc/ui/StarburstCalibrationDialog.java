@@ -13,7 +13,6 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 
 import java.io.File;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -142,7 +141,7 @@ public class StarburstCalibrationDialog {
             ComboBox<String> modalityCombo = new ComboBox<>();
 
             // Get available PPM modalities from config
-            List<String> modalities = configManager.getAvailableModalities();
+            var modalities = configManager.getAvailableModalities();
             if (modalities != null && !modalities.isEmpty()) {
                 // Filter to PPM modalities
                 for (String mod : modalities) {
