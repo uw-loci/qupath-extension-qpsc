@@ -245,7 +245,12 @@ public class CameraControlController {
         settingsNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
         settingsNote.setWrapText(true);
 
-        content.getChildren().addAll(new Separator(), settingsHeader, settingsNote);
+        // Note about stage rotation
+        Label rotationNote = new Label("Note: Clicking 'Apply & Go' will rotate the polarization stage to the selected angle.");
+        rotationNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #cc6600; -fx-font-weight: bold;");
+        rotationNote.setWrapText(true);
+
+        content.getChildren().addAll(new Separator(), settingsHeader, settingsNote, rotationNote);
 
         // Store field references for reload functionality
         Map<String, AngleFields> angleFieldsMap = new HashMap<>();
@@ -262,11 +267,12 @@ public class CameraControlController {
 
         // Column constraints for better layout
         ColumnConstraints labelCol = new ColumnConstraints();
-        labelCol.setPrefWidth(80);
+        labelCol.setMinWidth(130);
+        labelCol.setPrefWidth(140);
         ColumnConstraints fieldCol = new ColumnConstraints();
         fieldCol.setPrefWidth(55);
         ColumnConstraints buttonCol = new ColumnConstraints();
-        buttonCol.setPrefWidth(100);
+        buttonCol.setPrefWidth(120);
 
         anglesGrid.getColumnConstraints().addAll(
                 labelCol,  // Angle name
@@ -309,8 +315,10 @@ public class CameraControlController {
             anglesGrid.add(expGField, 6, row);
             anglesGrid.add(expBField, 8, row);
 
-            // Apply button for this angle
-            Button applyButton = new Button(res.getString("camera.button.apply"));
+            // Apply button for this angle - makes clear that stage will rotate
+            Button applyButton = new Button("Apply & Go");
+            applyButton.setTooltip(new Tooltip(String.format(
+                    "Apply camera settings and rotate polarizer to %.0f deg", angleDegrees)));
             applyButton.setOnAction(e -> applySettingsWithLiveModeHandling(
                     controller, angleName, angleDegrees,
                     expRField, expGField, expBField,
