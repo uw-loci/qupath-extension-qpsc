@@ -140,7 +140,6 @@ public class SunburstCalibrationWorkflow {
         logger.info("  Value threshold: {}", params.valueThreshold());
         logger.info("  Radius inner: {}", params.radiusInner());
         logger.info("  Radius outer: {}", params.radiusOuter());
-        logger.info("  Rotation search: {}", params.rotationSearch());
         if (params.calibrationName() != null) {
             logger.info("  Calibration name: {}", params.calibrationName());
         }
@@ -171,8 +170,7 @@ public class SunburstCalibrationWorkflow {
                     params.valueThreshold(),
                     params.calibrationName(),
                     params.radiusInner(),
-                    params.radiusOuter(),
-                    params.rotationSearch()
+                    params.radiusOuter()
             );
 
             logger.info("Received calibration result JSON");

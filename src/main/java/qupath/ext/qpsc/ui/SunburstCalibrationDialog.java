@@ -40,8 +40,7 @@ public class SunburstCalibrationDialog {
             double valueThreshold,
             String calibrationName,
             int radiusInner,
-            int radiusOuter,
-            double rotationSearch
+            int radiusOuter
     ) {}
 
     /**
@@ -129,11 +128,9 @@ public class SunburstCalibrationDialog {
 
             // === Output folder ===
             HBox outputLabelBox = createLabelWithTooltip("Calibration Folder:",
-                "Root folder where calibration files will be saved.\n\n" +
-                "Files are organized by modality:\n" +
-                "  {folder}/{modality}/calibration_files\n\n" +
-                "This allows multiple calibrations for different objectives\n" +
-                "to coexist in the same parent folder."
+                "Folder where calibration files will be saved.\n\n" +
+                "All calibration output files are saved directly\n" +
+                "into this folder."
             );
             outputLabelBox.getChildren().get(0).setStyle("-fx-font-weight: bold;");
 
@@ -312,21 +309,6 @@ public class SunburstCalibrationDialog {
             outerRadiusSpinner.setPrefWidth(100);
             advGrid.add(outerRadiusLabelBox, 0, advRow);
             advGrid.add(outerRadiusSpinner, 1, advRow);
-            advRow++;
-
-            // Rotation search
-            HBox rotSearchLabelBox = createLabelWithTooltip("Rotation Search (deg):",
-                "Search range (+/- degrees) to find optimal spoke alignment.\n\n" +
-                "The calibrator searches within this range to find the rotation\n" +
-                "offset that best aligns the radial sampling lines with the\n" +
-                "actual spoke directions on the slide.\n\n" +
-                "Default: 5.0, Range: 1.0-15.0"
-            );
-            Spinner<Double> rotSearchSpinner = new Spinner<>(1.0, 15.0, 5.0, 0.5);
-            rotSearchSpinner.setEditable(true);
-            rotSearchSpinner.setPrefWidth(100);
-            advGrid.add(rotSearchLabelBox, 0, advRow);
-            advGrid.add(rotSearchSpinner, 1, advRow);
 
             advancedPane.setContent(advGrid);
             grid.add(advancedPane, 0, row, 3, 1);
@@ -362,7 +344,7 @@ public class SunburstCalibrationDialog {
 
             // === Output info ===
             Label outputInfoLabel = new Label(
-                "Output files saved to: {folder}/{modality}/\n" +
+                "Output files saved to: {folder}/\n" +
                 "  - {name}_image.tif    Acquired calibration image\n" +
                 "  - {name}.npz          Calibration data (used by PPM analysis)\n" +
                 "  - {name}_plot.png     Visual verification of calibration fit"
@@ -371,8 +353,17 @@ public class SunburstCalibrationDialog {
             outputInfoLabel.setWrapText(true);
             grid.add(outputInfoLabel, 0, row, 3, 1);
 
-            dialog.getDialogPane().setContent(grid);
+            // Wrap in ScrollPane so expanding Advanced Settings doesn't
+            // push content into the button row
+            ScrollPane scrollPane = new ScrollPane(grid);
+            scrollPane.setFitToWidth(true);
+            scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+            scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+            scrollPane.setPrefViewportHeight(420);
+
+            dialog.getDialogPane().setContent(scrollPane);
             dialog.getDialogPane().setPrefWidth(620);
+            dialog.setResizable(true);
 
             // Handle restore defaults button
             Button restoreButton = (Button) dialog.getDialogPane().lookupButton(restoreDefaultsType);
@@ -382,7 +373,6 @@ public class SunburstCalibrationDialog {
                 valueSpinner.getValueFactory().setValue(0.1);
                 innerRadiusSpinner.getValueFactory().setValue(30);
                 outerRadiusSpinner.getValueFactory().setValue(150);
-                rotSearchSpinner.getValueFactory().setValue(5.0);
                 nameField.clear();
                 event.consume();
             });
@@ -425,7 +415,6 @@ public class SunburstCalibrationDialog {
                     double value = valueSpinner.getValue();
                     int innerRadius = innerRadiusSpinner.getValue();
                     int outerRadius = outerRadiusSpinner.getValue();
-                    double rotSearch = rotSearchSpinner.getValue();
 
                     // Remember all settings for next time
                     QPPreferenceDialog.setLastCalibrationFolder(folderPath);
@@ -442,8 +431,7 @@ public class SunburstCalibrationDialog {
                             value,
                             name.isEmpty() ? null : name,
                             innerRadius,
-                            outerRadius,
-                            rotSearch
+                            outerRadius
                     );
                 }
                 return null;

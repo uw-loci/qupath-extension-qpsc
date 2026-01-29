@@ -1790,15 +1790,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param calibrationName Optional name for output files (auto-generated if null)
      * @param radiusInner Inner sampling radius in pixels from center
      * @param radiusOuter Outer sampling radius in pixels from center
-     * @param rotationSearch Search range +/- degrees for spoke alignment
      * @return JSON string with calibration results
      * @throws IOException if communication fails
      */
     public String runSunburstCalibration(String yamlPath, String outputPath, String modality,
                                           int expectedRectangles, double saturationThreshold,
                                           double valueThreshold, String calibrationName,
-                                          int radiusInner, int radiusOuter,
-                                          double rotationSearch) throws IOException {
+                                          int radiusInner, int radiusOuter) throws IOException {
 
         // Build SBCALIB-specific command message
         StringBuilder messageBuilder = new StringBuilder();
@@ -1814,8 +1812,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
 
         messageBuilder.append(" --radius_inner ").append(radiusInner)
-                     .append(" --radius_outer ").append(radiusOuter)
-                     .append(" --rotation_search ").append(rotationSearch);
+                     .append(" --radius_outer ").append(radiusOuter);
 
         messageBuilder.append(" ").append(END_MARKER);
 
