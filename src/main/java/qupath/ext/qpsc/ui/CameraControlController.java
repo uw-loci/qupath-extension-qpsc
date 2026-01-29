@@ -276,110 +276,142 @@ public class CameraControlController {
         Label statusLabel = new Label();
         statusLabel.setStyle("-fx-font-size: 11px;");
 
-        // Create a flat grid with all angles visible
-        GridPane anglesGrid = new GridPane();
-        anglesGrid.setHgap(8);
-        anglesGrid.setVgap(8);
-        anglesGrid.setPadding(new Insets(10, 0, 10, 0));
+        // Styles for row differentiation
+        final String EXPOSURE_ROW_STYLE = "-fx-background-color: #f0f7ff; -fx-padding: 4px;";  // Light blue
+        final String GAIN_ROW_STYLE = "-fx-background-color: #fff7f0; -fx-padding: 4px;";      // Light peach
+        final String ANGLE_HEADER_STYLE = "-fx-background-color: #e8e8e8; -fx-padding: 6px;";
 
-        // Column constraints for better layout
-        ColumnConstraints labelCol = new ColumnConstraints();
-        labelCol.setMinWidth(130);
-        labelCol.setPrefWidth(140);
-        ColumnConstraints fieldCol = new ColumnConstraints();
-        fieldCol.setPrefWidth(55);
-        ColumnConstraints buttonCol = new ColumnConstraints();
-        buttonCol.setPrefWidth(120);
+        // Use VBox with individual angle "cards" for clearer grouping
+        VBox anglesContainer = new VBox(10);
+        anglesContainer.setPadding(new Insets(10, 0, 10, 0));
 
-        anglesGrid.getColumnConstraints().addAll(
-                labelCol,  // Angle name
-                new ColumnConstraints(), fieldCol,  // All
-                new ColumnConstraints(), fieldCol,  // R
-                new ColumnConstraints(), fieldCol,  // G
-                new ColumnConstraints(), fieldCol,  // B
-                buttonCol  // Apply button
-        );
-
-        // Header row
-        int row = 0;
-        Label expHeader = new Label(res.getString("camera.label.exposureMs"));
-        expHeader.setStyle("-fx-font-weight: bold;");
-        anglesGrid.add(expHeader, 0, row);
-        anglesGrid.add(new Label(res.getString("camera.label.all")), 1, row);
-        anglesGrid.add(new Label(res.getString("camera.label.r")), 3, row);
-        anglesGrid.add(new Label(res.getString("camera.label.g")), 5, row);
-        anglesGrid.add(new Label(res.getString("camera.label.b")), 7, row);
-        row++;
-
-        // Create rows for each angle
         for (Map.Entry<String, Double> angleEntry : PPM_ANGLES.entrySet()) {
             String angleName = angleEntry.getKey();
             double angleDegrees = angleEntry.getValue();
 
-            // Angle label
-            Label angleLabel = new Label(String.format("%s (%.0f deg)", capitalize(angleName), angleDegrees));
-            angleLabel.setStyle("-fx-font-weight: bold;");
-            anglesGrid.add(angleLabel, 0, row);
+            // Create a bordered VBox for each angle "card"
+            VBox angleCard = new VBox(0);
+            angleCard.setStyle("-fx-border-color: #cccccc; -fx-border-width: 1px; -fx-border-radius: 4px; -fx-background-radius: 4px;");
 
-            // Exposure fields
+            // --- Angle Header Row with Apply Button ---
+            HBox headerRow = new HBox(10);
+            headerRow.setAlignment(Pos.CENTER_LEFT);
+            headerRow.setStyle(ANGLE_HEADER_STYLE);
+            headerRow.setPadding(new Insets(6, 10, 6, 10));
+
+            Label angleLabel = new Label(String.format("%s (%.0f deg)", capitalize(angleName), angleDegrees));
+            angleLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px;");
+            HBox.setHgrow(angleLabel, Priority.ALWAYS);
+
+            Button applyButton = new Button("Apply & Go");
+            applyButton.setTooltip(new Tooltip(String.format(
+                    "Apply camera settings and rotate polarizer to %.0f deg", angleDegrees)));
+
+            headerRow.getChildren().addAll(angleLabel, applyButton);
+            angleCard.getChildren().add(headerRow);
+
+            // --- Values Grid with column headers ---
+            GridPane valuesGrid = new GridPane();
+            valuesGrid.setHgap(8);
+            valuesGrid.setVgap(0);
+            valuesGrid.setPadding(new Insets(4, 10, 4, 10));
+
+            // Column constraints
+            ColumnConstraints typeCol = new ColumnConstraints();
+            typeCol.setMinWidth(100);
+            typeCol.setPrefWidth(110);
+            ColumnConstraints valCol = new ColumnConstraints();
+            valCol.setPrefWidth(55);
+
+            valuesGrid.getColumnConstraints().addAll(typeCol, valCol, valCol, valCol, valCol);
+
+            // Column header row
+            int gridRow = 0;
+            Label colAll = new Label(res.getString("camera.label.all"));
+            colAll.setStyle("-fx-font-weight: bold; -fx-font-size: 10px; -fx-text-fill: #666666;");
+            Label colR = new Label(res.getString("camera.label.r"));
+            colR.setStyle("-fx-font-weight: bold; -fx-font-size: 10px; -fx-text-fill: #666666;");
+            Label colG = new Label(res.getString("camera.label.g"));
+            colG.setStyle("-fx-font-weight: bold; -fx-font-size: 10px; -fx-text-fill: #666666;");
+            Label colB = new Label(res.getString("camera.label.b"));
+            colB.setStyle("-fx-font-weight: bold; -fx-font-size: 10px; -fx-text-fill: #666666;");
+
+            valuesGrid.add(new Label(""), 0, gridRow);
+            valuesGrid.add(colAll, 1, gridRow);
+            valuesGrid.add(colR, 2, gridRow);
+            valuesGrid.add(colG, 3, gridRow);
+            valuesGrid.add(colB, 4, gridRow);
+            gridRow++;
+
+            // --- Exposure Row (with colored background) ---
+            Label expLabel = new Label(res.getString("camera.label.exposureMs"));
+            expLabel.setStyle("-fx-font-weight: bold;");
+            expLabel.setMinWidth(100);
+
             TextField expAllField = createSmallField("0");
             TextField expRField = createSmallField("0");
             TextField expGField = createSmallField("0");
             TextField expBField = createSmallField("0");
 
-            anglesGrid.add(expAllField, 2, row);
-            anglesGrid.add(expRField, 4, row);
-            anglesGrid.add(expGField, 6, row);
-            anglesGrid.add(expBField, 8, row);
+            // Create HBox for exposure row with background color
+            HBox expRow = new HBox(8);
+            expRow.setStyle(EXPOSURE_ROW_STYLE);
+            expRow.setAlignment(Pos.CENTER_LEFT);
+            expRow.setPadding(new Insets(4, 10, 4, 10));
+            expLabel.setMinWidth(100);
+            expAllField.setMaxWidth(55);
+            expRField.setMaxWidth(55);
+            expGField.setMaxWidth(55);
+            expBField.setMaxWidth(55);
+            expRow.getChildren().addAll(expLabel, expAllField, expRField, expGField, expBField);
 
-            // Apply button for this angle - makes clear that stage will rotate
-            Button applyButton = new Button("Apply & Go");
-            applyButton.setTooltip(new Tooltip(String.format(
-                    "Apply camera settings and rotate polarizer to %.0f deg", angleDegrees)));
-            applyButton.setOnAction(e -> applySettingsWithLiveModeHandling(
-                    controller, angleName, angleDegrees,
-                    expRField, expGField, expBField,
-                    angleFieldsMap.get(angleName),
-                    statusLabel, res));
-            anglesGrid.add(applyButton, 9, row);
-
-            row++;
-
-            // Gain row for this angle
+            // --- Gain Row (with colored background) ---
             Label gainLabel = new Label(res.getString("camera.label.gain"));
-            gainLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+            gainLabel.setStyle("-fx-font-weight: bold;");
+            gainLabel.setMinWidth(100);
             gainLabel.setTooltip(new Tooltip("JAI analog gain ranges:\nR: 0.47-4.0\nG: 1.0-64.0\nB: 0.47-4.0"));
-            anglesGrid.add(gainLabel, 0, row);
 
-            // Unified gain field (used when gain mode is unified)
             TextField gainAllField = createSmallField("1.0");
             gainAllField.setTooltip(new Tooltip("Unified gain (applies to all channels)"));
-            anglesGrid.add(gainAllField, 2, row);
 
-            // Per-channel gain fields with live validation and tooltips
             TextField gainRField = createGainField("1.0", GAIN_RED_MIN, GAIN_RED_MAX, "Red");
             TextField gainGField = createGainField("1.0", GAIN_GREEN_MIN, GAIN_GREEN_MAX, "Green");
             TextField gainBField = createGainField("1.0", GAIN_BLUE_MIN, GAIN_BLUE_MAX, "Blue");
 
-            anglesGrid.add(gainRField, 4, row);
-            anglesGrid.add(gainGField, 6, row);
-            anglesGrid.add(gainBField, 8, row);
+            // Create HBox for gain row with background color
+            HBox gainRow = new HBox(8);
+            gainRow.setStyle(GAIN_ROW_STYLE);
+            gainRow.setAlignment(Pos.CENTER_LEFT);
+            gainRow.setPadding(new Insets(4, 10, 4, 10));
+            gainLabel.setMinWidth(100);
+            gainAllField.setMaxWidth(55);
+            gainRField.setMaxWidth(55);
+            gainGField.setMaxWidth(55);
+            gainBField.setMaxWidth(55);
+            gainRow.getChildren().addAll(gainLabel, gainAllField, gainRField, gainGField, gainBField);
+
+            // Add rows to card
+            angleCard.getChildren().addAll(expRow, gainRow);
 
             // Store fields for this angle
             AngleFields fields = new AngleFields(expAllField, expRField, expGField, expBField,
                     gainAllField, gainRField, gainGField, gainBField);
             angleFieldsMap.put(angleName, fields);
 
-            row++;
+            // Wire up Apply button
+            final TextField finalExpRField = expRField;
+            final TextField finalExpGField = expGField;
+            final TextField finalExpBField = expBField;
+            applyButton.setOnAction(e -> applySettingsWithLiveModeHandling(
+                    controller, angleName, angleDegrees,
+                    finalExpRField, finalExpGField, finalExpBField,
+                    angleFieldsMap.get(angleName),
+                    statusLabel, res));
 
-            // Add a small separator between angles
-            Separator sep = new Separator();
-            sep.setPadding(new Insets(3, 0, 3, 0));
-            anglesGrid.add(sep, 0, row, 10, 1);
-            row++;
+            anglesContainer.getChildren().add(angleCard);
         }
 
-        content.getChildren().add(anglesGrid);
+        content.getChildren().add(anglesContainer);
 
         // Status label
         content.getChildren().add(statusLabel);
