@@ -7,7 +7,6 @@ import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
-import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -88,7 +87,6 @@ public class CalibrationResultDialog {
     public static void showResult(CalibrationResultData result, Runnable onRedo) {
         Platform.runLater(() -> {
             Dialog<ButtonType> dialog = new Dialog<>();
-            dialog.initModality(Modality.APPLICATION_MODAL);
             dialog.setTitle("PPM Reference Slide Calibration Results");
 
             if (result.success()) {

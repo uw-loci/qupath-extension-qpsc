@@ -5,7 +5,6 @@ import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.DirectoryChooser;
-import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -78,7 +77,6 @@ public class SunburstCalibrationDialog {
 
         Platform.runLater(() -> {
             Dialog<SunburstCalibrationParams> dialog = new Dialog<>();
-            dialog.initModality(Modality.APPLICATION_MODAL);
             dialog.setTitle("PPM Reference Slide Calibration");
 
             // Header with instructions
