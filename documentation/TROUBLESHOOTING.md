@@ -369,6 +369,46 @@ To fix permanently:
 - Old version normalized each tile separately causing brightness mismatch
 - New version uses consistent scaling across entire mosaic
 
+### PPM Reference Slide Calibration
+
+#### Q: Calibration fails with "no rectangles detected"
+
+**A:** The detection thresholds may not match your camera output. Check the debug mask image in the failure dialog:
+- **All BLACK mask:** Thresholds are too high. Lower saturation threshold (try 0.05) and/or value threshold (try 0.05).
+- **All WHITE mask:** Thresholds are too low. Raise saturation threshold (try 0.2) and/or value threshold (try 0.2).
+- **Partial mask but wrong shapes:** Slide may not be properly positioned or focused.
+
+Use the "Open Folder" button in the failure dialog to inspect the saved debug images.
+
+#### Q: Detection works on sample data but fails on live camera images
+
+**A:** Camera output characteristics may differ from test data:
+1. Check camera exposure -- overexposed or underexposed images produce poor hue detection
+2. Verify you are using a low polarizer angle (7, 0, or -7 degrees) for best color saturation
+3. Camera white balance or gain settings may shift hue values
+4. Try saving the camera image and running detection offline to isolate the issue
+
+#### Q: Where are calibration files saved?
+
+**A:** Files are saved to: `{calibration_folder}/ppm/{name}_*`
+
+Default calibration folder is set in Edit > Preferences > QPSC under "Default calibration folder". The default location is a `ppm_reference_slide` subfolder under your microscope configuration directory.
+
+Output files:
+- `{name}_image.tif` -- Acquired calibration image
+- `{name}.npz` -- Calibration data for PPM analysis
+- `{name}_plot.png` -- Visual verification plot
+- `{name}_mask.png` -- Debug segmentation mask (on failure)
+
+#### Q: R-squared value is low (below 0.95)
+
+**A:** A low R-squared indicates poor calibration fit:
+1. Ensure the slide is flat and properly focused
+2. Try a different polarizer angle
+3. Check for dust, scratches, or damage on the calibration slide
+4. Verify the expected rectangle count matches your slide
+5. Check the calibration plot for outlier points
+
 ### Background Collection
 
 #### Q: What are background images and do I need them?

@@ -573,8 +573,8 @@ This integration allows you to set the rotation stage to the optimal angle befor
 | Parameter | Default | Range | Description |
 |-----------|---------|-------|-------------|
 | Expected Rectangles | 16 | 4-32 | Number of rectangles on your calibration slide |
-| Saturation Threshold | 0.1 | 0.01-0.5 | Minimum HSV saturation for foreground detection |
-| Value Threshold | 0.1 | 0.01-0.5 | Minimum HSV brightness for foreground detection |
+| Saturation Threshold | 0.1 | 0.01-0.5 | Minimum HSV saturation for foreground detection. In the debug mask: WHITE = detected, BLACK = background |
+| Value Threshold | 0.1 | 0.01-0.5 | Minimum HSV brightness for foreground detection. In the debug mask: WHITE = detected, BLACK = background |
 
 **Common slide configurations:**
 - 16 rectangles: Standard sunburst slides (22.5 degree spacing)
@@ -594,17 +594,31 @@ Optional custom name for calibration files. If empty, an auto-generated timestam
 | `{name}.npz` | Calibration data (used by PPM analysis) |
 | `{name}_plot.png` | Visual verification of calibration fit |
 
+### Result Dialogs
+
+**Success dialog** shows R-squared value, rectangles detected, calibration file path, and the calibration plot image. An "Open Folder" button navigates to the output directory.
+
+**Failure dialog** shows the error message, debug images (segmentation mask if available), and troubleshooting tips. An "Open Folder" button navigates to the debug/output directory for inspecting saved images and masks.
+
+**Debug mask interpretation:**
+- **WHITE pixels** = detected foreground (pixels above both saturation and value thresholds)
+- **BLACK pixels** = background (pixels below threshold)
+- All black mask: thresholds too high -- lower saturation/value thresholds
+- All white mask: thresholds too low -- raise saturation/value thresholds
+
 ### Troubleshooting
 
 **Rectangles not detected:**
-- Lower the saturation threshold (try 0.05)
-- Lower the value threshold (try 0.05)
+- Check the debug mask in the failure dialog to understand what the detector sees
+- If mask is all BLACK: lower saturation and/or value thresholds (try 0.05)
+- If mask is all WHITE: raise saturation and/or value thresholds (try 0.2-0.3)
 - Ensure slide is properly illuminated
 - Check that polarizer is at a low angle (7 deg) for best color contrast
 
 **Wrong rectangle count:**
 - Verify the expected rectangles matches your slide
 - Adjust thresholds to exclude noise or include faint rectangles
+- Use the "Open Folder" button in the result dialog to inspect debug images
 
 **Poor calibration fit:**
 - Ensure slide is flat and in focus
