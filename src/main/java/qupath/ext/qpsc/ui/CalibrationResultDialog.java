@@ -39,6 +39,7 @@ public class CalibrationResultDialog {
             String calibrationPath,
             String imagePath,
             String maskPath,
+            String outputFolder,
             List<String> warnings,
             String errorMessage
     ) {
@@ -49,21 +50,23 @@ public class CalibrationResultDialog {
                                                     String plotPath, String calibrationPath,
                                                     String imagePath, String maskPath, List<String> warnings) {
             return new CalibrationResultData(true, rSquared, rectanglesDetected,
-                    plotPath, calibrationPath, imagePath, maskPath, warnings, null);
+                    plotPath, calibrationPath, imagePath, maskPath, null, warnings, null);
         }
 
         /**
-         * Create a failure result with optional debug paths.
+         * Create a failure result with optional debug paths and output folder.
          */
-        public static CalibrationResultData failure(String errorMessage, String imagePath, String maskPath) {
-            return new CalibrationResultData(false, 0, 0, null, null, imagePath, maskPath, List.of(), errorMessage);
+        public static CalibrationResultData failure(String errorMessage, String imagePath,
+                                                     String maskPath, String outputFolder) {
+            return new CalibrationResultData(false, 0, 0, null, null, imagePath, maskPath,
+                    outputFolder, List.of(), errorMessage);
         }
 
         /**
          * Create a failure result without debug paths.
          */
         public static CalibrationResultData failure(String errorMessage) {
-            return failure(errorMessage, null, null);
+            return failure(errorMessage, null, null, null);
         }
     }
 
@@ -73,22 +76,37 @@ public class CalibrationResultDialog {
      * @param result The calibration result data to display
      */
     public static void showResult(CalibrationResultData result) {
+        showResult(result, null);
+    }
+
+    /**
+     * Shows the calibration result dialog with optional redo callback.
+     *
+     * @param result The calibration result data to display
+     * @param onRedo Callback to invoke when user clicks "Go Back and Redo" (null to hide button)
+     */
+    public static void showResult(CalibrationResultData result, Runnable onRedo) {
         Platform.runLater(() -> {
-            Dialog<Void> dialog = new Dialog<>();
+            Dialog<ButtonType> dialog = new Dialog<>();
             dialog.initModality(Modality.APPLICATION_MODAL);
             dialog.setTitle("PPM Reference Slide Calibration Results");
 
             if (result.success()) {
-                showSuccessDialog(dialog, result);
+                showSuccessDialog(dialog, result, onRedo);
             } else {
-                showErrorDialog(dialog, result);
+                showErrorDialog(dialog, result, onRedo);
             }
 
-            dialog.showAndWait();
+            dialog.showAndWait().ifPresent(btn -> {
+                if ("REDO".equals(btn.getText()) && onRedo != null) {
+                    onRedo.run();
+                }
+            });
         });
     }
 
-    private static void showSuccessDialog(Dialog<Void> dialog, CalibrationResultData result) {
+    private static void showSuccessDialog(Dialog<ButtonType> dialog, CalibrationResultData result,
+                                             Runnable onRedo) {
         // Header
         VBox headerBox = new VBox(10);
         headerBox.setPadding(new Insets(10));
@@ -213,6 +231,14 @@ public class CalibrationResultDialog {
         ButtonType closeType = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
         dialog.getDialogPane().getButtonTypes().addAll(openFolderType, closeType);
 
+        // Add redo button if callback is provided
+        if (onRedo != null) {
+            ButtonType redoType = new ButtonType("REDO", ButtonBar.ButtonData.BACK_PREVIOUS);
+            dialog.getDialogPane().getButtonTypes().add(redoType);
+            Button redoButton = (Button) dialog.getDialogPane().lookupButton(redoType);
+            redoButton.setText("Go Back and Redo");
+        }
+
         // Handle open folder button
         Button openFolderButton = (Button) dialog.getDialogPane().lookupButton(openFolderType);
         openFolderButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
@@ -229,7 +255,8 @@ public class CalibrationResultDialog {
         });
     }
 
-    private static void showErrorDialog(Dialog<Void> dialog, CalibrationResultData result) {
+    private static void showErrorDialog(Dialog<ButtonType> dialog, CalibrationResultData result,
+                                            Runnable onRedo) {
         // Header
         VBox headerBox = new VBox(10);
         headerBox.setPadding(new Insets(10));
@@ -296,8 +323,10 @@ public class CalibrationResultDialog {
                         contentBox.getChildren().add(maskBox);
 
                         Label maskHint = new Label(
-                            "The mask shows detected foreground (colored) pixels.\n" +
-                            "If no rectangles appear, try lowering the saturation/value thresholds."
+                            "White pixels = detected foreground (colored regions above threshold).\n" +
+                            "Black pixels = background (below threshold).\n" +
+                            "All black: thresholds too high - lower saturation/value thresholds.\n" +
+                            "All white: thresholds too low - raise saturation/value thresholds."
                         );
                         maskHint.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888;");
                         maskHint.setWrapText(true);
@@ -360,28 +389,46 @@ public class CalibrationResultDialog {
 
         dialog.getDialogPane().setContent(scrollPane);
 
-        // Buttons
-        final String folderToOpen = debugFolderPath;
+        // Determine folder to open - prefer debug folder, fall back to output folder
+        String folderPath = debugFolderPath;
+        if (folderPath == null && result.outputFolder() != null) {
+            folderPath = result.outputFolder();
+        }
+        final String folderToOpen = folderPath;
+
+        // Always show Open Folder button when we have a folder path
+        ButtonType closeType = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
         if (folderToOpen != null) {
-            ButtonType openFolderType = new ButtonType("Open Debug Folder", ButtonBar.ButtonData.LEFT);
-            ButtonType closeType = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
+            String buttonLabel = hasDebugImages ? "Open Debug Folder" : "Open Output Folder";
+            ButtonType openFolderType = new ButtonType(buttonLabel, ButtonBar.ButtonData.LEFT);
             dialog.getDialogPane().getButtonTypes().addAll(openFolderType, closeType);
 
             Button openFolderButton = (Button) dialog.getDialogPane().lookupButton(openFolderType);
             openFolderButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
                 try {
                     File folder = new File(folderToOpen);
-                    if (folder.exists()) {
+                    // Open parent if folder doesn't exist yet (calibration may not have created it)
+                    if (!folder.exists()) {
+                        folder = folder.getParentFile();
+                    }
+                    if (folder != null && folder.exists()) {
                         Desktop.getDesktop().open(folder);
                     }
                 } catch (Exception e) {
-                    logger.error("Failed to open debug folder", e);
+                    logger.error("Failed to open folder", e);
                 }
                 event.consume();  // Don't close dialog
             });
         } else {
-            ButtonType closeType = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
             dialog.getDialogPane().getButtonTypes().add(closeType);
+        }
+
+        // Add redo button if callback is provided
+        if (onRedo != null) {
+            ButtonType redoType = new ButtonType("REDO", ButtonBar.ButtonData.BACK_PREVIOUS);
+            dialog.getDialogPane().getButtonTypes().add(redoType);
+            Button redoButton = (Button) dialog.getDialogPane().lookupButton(redoType);
+            redoButton.setText("Go Back and Redo");
         }
     }
 }
