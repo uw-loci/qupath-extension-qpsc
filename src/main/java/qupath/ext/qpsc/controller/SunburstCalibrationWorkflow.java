@@ -26,12 +26,12 @@ import java.util.concurrent.CompletableFuture;
  * SunburstCalibrationWorkflow - Create hue-to-angle calibration from a PPM reference slide.
  *
  * This workflow provides a way to calibrate PPM hue-to-angle mapping using a
- * PPM reference slide with sunburst pattern (oriented colored rectangles):
+ * PPM reference slide with sunburst/fan pattern:
  * <ol>
  *   <li>User positions calibration slide under microscope</li>
- *   <li>Dialog collects parameters (modality, detection thresholds)</li>
+ *   <li>Dialog collects parameters (modality, detection thresholds, radial sampling)</li>
  *   <li>Single image acquired using modality's exposure settings</li>
- *   <li>ppm_library's SunburstCalibrator detects rectangles and fits regression</li>
+ *   <li>ppm_library's RadialCalibrator samples along spokes and fits regression</li>
  *   <li>Results displayed with R-squared metric and visualization plot</li>
  *   <li>Calibration saved for use in PPM analysis</li>
  * </ol>
@@ -135,9 +135,12 @@ public class SunburstCalibrationWorkflow {
         logger.info("Executing sunburst calibration:");
         logger.info("  Output folder: {}", params.outputFolder());
         logger.info("  Modality: {}", params.modality());
-        logger.info("  Expected rectangles: {}", params.expectedRectangles());
+        logger.info("  Number of spokes: {}", params.expectedRectangles());
         logger.info("  Saturation threshold: {}", params.saturationThreshold());
         logger.info("  Value threshold: {}", params.valueThreshold());
+        logger.info("  Radius inner: {}", params.radiusInner());
+        logger.info("  Radius outer: {}", params.radiusOuter());
+        logger.info("  Rotation search: {}", params.rotationSearch());
         if (params.calibrationName() != null) {
             logger.info("  Calibration name: {}", params.calibrationName());
         }
@@ -166,7 +169,10 @@ public class SunburstCalibrationWorkflow {
                     params.expectedRectangles(),
                     params.saturationThreshold(),
                     params.valueThreshold(),
-                    params.calibrationName()
+                    params.calibrationName(),
+                    params.radiusInner(),
+                    params.radiusOuter(),
+                    params.rotationSearch()
             );
 
             logger.info("Received calibration result JSON");
@@ -175,9 +181,11 @@ public class SunburstCalibrationWorkflow {
             CalibrationResultData resultData = parseCalibrationResult(resultJson);
 
             // Close progress dialog and show results (on FX thread)
+            // Pass redo callback to re-launch the workflow from the parameter dialog
             Platform.runLater(() -> {
                 progressDialog.close();
-                CalibrationResultDialog.showResult(resultData);
+                CalibrationResultDialog.showResult(resultData,
+                        SunburstCalibrationWorkflow::run);
             });
 
         } catch (Exception e) {
@@ -186,8 +194,10 @@ public class SunburstCalibrationWorkflow {
             // Close progress dialog and show error (on FX thread)
             Platform.runLater(() -> {
                 progressDialog.close();
-                CalibrationResultData errorResult = CalibrationResultData.failure(e.getMessage());
-                CalibrationResultDialog.showResult(errorResult);
+                CalibrationResultData errorResult = CalibrationResultData.failure(
+                        e.getMessage(), null, null, params.outputFolder());
+                CalibrationResultDialog.showResult(errorResult,
+                        SunburstCalibrationWorkflow::run);
             });
         }
         // Note: Don't disconnect - we're using the shared MicroscopeController connection
@@ -235,11 +245,15 @@ public class SunburstCalibrationWorkflow {
             } else {
                 String error = result.has("error") ?
                         result.get("error").getAsString() : "Unknown error";
-                return CalibrationResultData.failure(error, imagePath, maskPath);
+                String outputFolder = result.has("output_folder") &&
+                        !result.get("output_folder").isJsonNull() ?
+                        result.get("output_folder").getAsString() : null;
+                return CalibrationResultData.failure(error, imagePath, maskPath, outputFolder);
             }
         } catch (Exception e) {
             logger.error("Failed to parse calibration result JSON", e);
-            return CalibrationResultData.failure("Failed to parse server response: " + e.getMessage());
+            return CalibrationResultData.failure("Failed to parse server response: " + e.getMessage(),
+                    null, null, null);
         }
     }
 }

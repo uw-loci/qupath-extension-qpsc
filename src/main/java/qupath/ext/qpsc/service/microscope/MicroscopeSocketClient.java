@@ -1779,21 +1779,26 @@ public class MicroscopeSocketClient implements AutoCloseable {
     /**
      * Runs sunburst calibration for hue-to-angle mapping.
      * This method uses the SBCALIB command to acquire a calibration slide image
-     * and run SunburstCalibrator to create a linear regression model.
+     * and run RadialCalibrator to create a linear regression model.
      *
      * @param yamlPath Path to microscope configuration YAML file
      * @param outputPath Output directory for calibration results
      * @param modality Modality name for exposure lookup (e.g., "ppm_20x")
-     * @param expectedRectangles Number of rectangles expected on calibration slide (typically 16)
+     * @param expectedRectangles Number of spokes in sunburst pattern (typically 16)
      * @param saturationThreshold Minimum saturation for foreground detection (0-1)
      * @param valueThreshold Minimum brightness for foreground detection (0-1)
      * @param calibrationName Optional name for output files (auto-generated if null)
+     * @param radiusInner Inner sampling radius in pixels from center
+     * @param radiusOuter Outer sampling radius in pixels from center
+     * @param rotationSearch Search range +/- degrees for spoke alignment
      * @return JSON string with calibration results
      * @throws IOException if communication fails
      */
     public String runSunburstCalibration(String yamlPath, String outputPath, String modality,
                                           int expectedRectangles, double saturationThreshold,
-                                          double valueThreshold, String calibrationName) throws IOException {
+                                          double valueThreshold, String calibrationName,
+                                          int radiusInner, int radiusOuter,
+                                          double rotationSearch) throws IOException {
 
         // Build SBCALIB-specific command message
         StringBuilder messageBuilder = new StringBuilder();
@@ -1807,6 +1812,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if (calibrationName != null && !calibrationName.isEmpty()) {
             messageBuilder.append(" --name ").append(calibrationName);
         }
+
+        messageBuilder.append(" --radius_inner ").append(radiusInner)
+                     .append(" --radius_outer ").append(radiusOuter)
+                     .append(" --rotation_search ").append(rotationSearch);
 
         messageBuilder.append(" ").append(END_MARKER);
 

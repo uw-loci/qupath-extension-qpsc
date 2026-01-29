@@ -38,7 +38,10 @@ public class SunburstCalibrationDialog {
             int expectedRectangles,
             double saturationThreshold,
             double valueThreshold,
-            String calibrationName
+            String calibrationName,
+            int radiusInner,
+            int radiusOuter,
+            double rotationSearch
     ) {}
 
     /**
@@ -86,11 +89,11 @@ public class SunburstCalibrationDialog {
             headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
 
             Label instructionLabel = new Label(
-                "Position the PPM reference slide (sunburst pattern with colored rectangles)\n" +
+                "Position the PPM reference slide (sunburst/fan pattern)\n" +
                 "under the microscope and ensure it is properly focused.\n\n" +
                 "This workflow will:\n" +
                 "  1. Acquire an image using the current camera settings\n" +
-                "  2. Detect oriented rectangles and extract their hue values\n" +
+                "  2. Sample hue values along radial spokes from the pattern center\n" +
                 "  3. Create a linear regression mapping hue to orientation angle (0-180 deg)\n" +
                 "  4. Save the calibration for use in PPM analysis\n\n" +
                 "Hover over (?) icons for detailed parameter descriptions."
@@ -196,17 +199,16 @@ public class SunburstCalibrationDialog {
             grid.add(detectionLabel, 0, row, 3, 1);
             row++;
 
-            // Expected rectangles
-            HBox rectanglesLabelBox = createLabelWithTooltip("Expected Rectangles:",
-                "Number of colored rectangles on your calibration slide.\n\n" +
+            // Number of spokes
+            HBox rectanglesLabelBox = createLabelWithTooltip("Number of Spokes:",
+                "Number of radial spokes (unique orientations) in the sunburst pattern.\n\n" +
                 "Common values:\n" +
-                "  - 16: Standard sunburst slides (22.5 deg spacing)\n" +
-                "  - 12: Some older slides (30 deg spacing)\n" +
-                "  - 8: Simplified slides (45 deg spacing)\n\n" +
+                "  - 16: Standard sunburst slides (11.25 deg spacing)\n" +
+                "  - 12: Some older slides (15 deg spacing)\n" +
+                "  - 8: Simplified slides (22.5 deg spacing)\n\n" +
                 "Valid range: 4-32\n\n" +
-                "If detection finds a different count, a warning will\n" +
-                "be shown but calibration will proceed. Large mismatches\n" +
-                "may indicate slide positioning or threshold issues."
+                "The calibrator samples hue values along radial lines\n" +
+                "at each spoke angle to build the hue-to-angle mapping."
             );
 
             int savedRectangles = QPPreferenceDialog.getSunburstExpectedRectangles();
@@ -225,10 +227,13 @@ public class SunburstCalibrationDialog {
                 "In HSV color space, saturation measures color intensity:\n" +
                 "  - 0.0 = grayscale (no color)\n" +
                 "  - 1.0 = fully saturated color\n\n" +
+                "In the debug mask image:\n" +
+                "  WHITE = detected foreground (above threshold)\n" +
+                "  BLACK = background (below threshold)\n\n" +
                 "Lower values (0.05-0.1): Include more pixels, may pick up noise\n" +
                 "Higher values (0.2-0.3): Stricter, may miss pale rectangles\n\n" +
-                "If rectangles are not detected, try lowering this value.\n" +
-                "If too much background is included, try raising it."
+                "If mask is all BLACK -> lower this value (threshold too high)\n" +
+                "If mask is all WHITE -> raise this value (threshold too low)"
             );
 
             double savedSaturation = QPPreferenceDialog.getSunburstSaturationThreshold();
@@ -248,10 +253,13 @@ public class SunburstCalibrationDialog {
                 "  - 0.0 = black\n" +
                 "  - 1.0 = maximum brightness\n\n" +
                 "This helps exclude dark regions (slide edges, shadows).\n\n" +
+                "In the debug mask image:\n" +
+                "  WHITE = detected foreground (above threshold)\n" +
+                "  BLACK = background (below threshold)\n\n" +
                 "Lower values (0.05-0.1): Include dimmer pixels\n" +
                 "Higher values (0.2-0.3): Only bright pixels\n\n" +
-                "If rectangles near slide edges aren't detected,\n" +
-                "try lowering this value."
+                "If mask is all BLACK -> lower this value (threshold too high)\n" +
+                "If mask is all WHITE -> raise this value (threshold too low)"
             );
 
             double savedValue = QPPreferenceDialog.getSunburstValueThreshold();
@@ -261,6 +269,67 @@ public class SunburstCalibrationDialog {
 
             grid.add(valueLabelBox, 0, row);
             grid.add(valueSpinner, 1, row);
+            row++;
+
+            grid.add(new Separator(), 0, row, 3, 1);
+            row++;
+
+            // === Advanced Detection Settings (collapsible) ===
+            TitledPane advancedPane = new TitledPane();
+            advancedPane.setText("Advanced Radial Detection Settings");
+            advancedPane.setExpanded(false);
+
+            GridPane advGrid = new GridPane();
+            advGrid.setHgap(10);
+            advGrid.setVgap(10);
+            advGrid.setPadding(new Insets(10));
+
+            int advRow = 0;
+
+            // Inner radius
+            HBox innerRadiusLabelBox = createLabelWithTooltip("Inner Radius (px):",
+                "Inner radius for radial sampling, in pixels from pattern center.\n\n" +
+                "Sampling starts at this distance from the detected center.\n" +
+                "Increase to skip noisy/dark pixels near the center of the pattern.\n\n" +
+                "Default: 30, Range: 10-200"
+            );
+            Spinner<Integer> innerRadiusSpinner = new Spinner<>(10, 200, 30, 5);
+            innerRadiusSpinner.setEditable(true);
+            innerRadiusSpinner.setPrefWidth(100);
+            advGrid.add(innerRadiusLabelBox, 0, advRow);
+            advGrid.add(innerRadiusSpinner, 1, advRow);
+            advRow++;
+
+            // Outer radius
+            HBox outerRadiusLabelBox = createLabelWithTooltip("Outer Radius (px):",
+                "Outer radius for radial sampling, in pixels from pattern center.\n\n" +
+                "Sampling ends at this distance. Should reach into the colored\n" +
+                "spokes but not extend past them into the background.\n\n" +
+                "Default: 150, Range: 50-500"
+            );
+            Spinner<Integer> outerRadiusSpinner = new Spinner<>(50, 500, 150, 10);
+            outerRadiusSpinner.setEditable(true);
+            outerRadiusSpinner.setPrefWidth(100);
+            advGrid.add(outerRadiusLabelBox, 0, advRow);
+            advGrid.add(outerRadiusSpinner, 1, advRow);
+            advRow++;
+
+            // Rotation search
+            HBox rotSearchLabelBox = createLabelWithTooltip("Rotation Search (deg):",
+                "Search range (+/- degrees) to find optimal spoke alignment.\n\n" +
+                "The calibrator searches within this range to find the rotation\n" +
+                "offset that best aligns the radial sampling lines with the\n" +
+                "actual spoke directions on the slide.\n\n" +
+                "Default: 5.0, Range: 1.0-15.0"
+            );
+            Spinner<Double> rotSearchSpinner = new Spinner<>(1.0, 15.0, 5.0, 0.5);
+            rotSearchSpinner.setEditable(true);
+            rotSearchSpinner.setPrefWidth(100);
+            advGrid.add(rotSearchLabelBox, 0, advRow);
+            advGrid.add(rotSearchSpinner, 1, advRow);
+
+            advancedPane.setContent(advGrid);
+            grid.add(advancedPane, 0, row, 3, 1);
             row++;
 
             grid.add(new Separator(), 0, row, 3, 1);
@@ -311,6 +380,9 @@ public class SunburstCalibrationDialog {
                 rectanglesSpinner.getValueFactory().setValue(16);
                 saturationSpinner.getValueFactory().setValue(0.1);
                 valueSpinner.getValueFactory().setValue(0.1);
+                innerRadiusSpinner.getValueFactory().setValue(30);
+                outerRadiusSpinner.getValueFactory().setValue(150);
+                rotSearchSpinner.getValueFactory().setValue(5.0);
                 nameField.clear();
                 event.consume();
             });
@@ -351,6 +423,9 @@ public class SunburstCalibrationDialog {
                     int rectangles = rectanglesSpinner.getValue();
                     double saturation = saturationSpinner.getValue();
                     double value = valueSpinner.getValue();
+                    int innerRadius = innerRadiusSpinner.getValue();
+                    int outerRadius = outerRadiusSpinner.getValue();
+                    double rotSearch = rotSearchSpinner.getValue();
 
                     // Remember all settings for next time
                     QPPreferenceDialog.setLastCalibrationFolder(folderPath);
@@ -365,7 +440,10 @@ public class SunburstCalibrationDialog {
                             rectangles,
                             saturation,
                             value,
-                            name.isEmpty() ? null : name
+                            name.isEmpty() ? null : name,
+                            innerRadius,
+                            outerRadius,
+                            rotSearch
                     );
                 }
                 return null;
