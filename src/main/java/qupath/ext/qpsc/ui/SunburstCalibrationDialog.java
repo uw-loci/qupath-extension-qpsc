@@ -19,7 +19,7 @@ import java.util.concurrent.CompletableFuture;
  * Dialog for Sunburst Calibration parameters.
  *
  * This dialog collects parameters for creating a hue-to-angle calibration
- * from a PPM reference slide with sunburst pattern (oriented rectangles).
+ * from a PPM reference slide with sunburst/fan pattern (radial spokes).
  *
  * @author Mike Nelson
  * @since 1.0
@@ -101,7 +101,7 @@ public class SunburstCalibrationDialog {
             // Important note about angle settings
             Label angleNote = new Label(
                 "IMPORTANT: Use low-angle PPM settings (e.g., 7, 0, or -7 degrees) for calibration.\n" +
-                "These angles provide the best color saturation for detecting the rectangles.\n" +
+                "These angles provide the best color saturation for detecting the spokes.\n" +
                 "Use the Camera Control button below to set the camera to the correct angle."
             );
             angleNote.setWrapText(true);
@@ -226,7 +226,7 @@ public class SunburstCalibrationDialog {
                 "  WHITE = detected foreground (above threshold)\n" +
                 "  BLACK = background (below threshold)\n\n" +
                 "Lower values (0.05-0.1): Include more pixels, may pick up noise\n" +
-                "Higher values (0.2-0.3): Stricter, may miss pale rectangles\n\n" +
+                "Higher values (0.2-0.3): Stricter, may miss pale spokes\n\n" +
                 "If mask is all BLACK -> lower this value (threshold too high)\n" +
                 "If mask is all WHITE -> raise this value (threshold too low)"
             );
@@ -288,7 +288,8 @@ public class SunburstCalibrationDialog {
                 "Increase to skip noisy/dark pixels near the center of the pattern.\n\n" +
                 "Default: 30, Range: 10-200"
             );
-            Spinner<Integer> innerRadiusSpinner = new Spinner<>(10, 200, 30, 5);
+            int savedInnerRadius = QPPreferenceDialog.getSunburstRadiusInner();
+            Spinner<Integer> innerRadiusSpinner = new Spinner<>(10, 200, savedInnerRadius, 5);
             innerRadiusSpinner.setEditable(true);
             innerRadiusSpinner.setPrefWidth(100);
             advGrid.add(innerRadiusLabelBox, 0, advRow);
@@ -302,7 +303,8 @@ public class SunburstCalibrationDialog {
                 "spokes but not extend past them into the background.\n\n" +
                 "Default: 150, Range: 50-500"
             );
-            Spinner<Integer> outerRadiusSpinner = new Spinner<>(50, 500, 150, 10);
+            int savedOuterRadius = QPPreferenceDialog.getSunburstRadiusOuter();
+            Spinner<Integer> outerRadiusSpinner = new Spinner<>(50, 500, savedOuterRadius, 10);
             outerRadiusSpinner.setEditable(true);
             outerRadiusSpinner.setPrefWidth(100);
             advGrid.add(outerRadiusLabelBox, 0, advRow);
@@ -388,8 +390,8 @@ public class SunburstCalibrationDialog {
                 }
 
                 if (rectanglesSpinner.getValue() < 4) {
-                    Dialogs.showErrorMessage("Invalid Rectangle Count",
-                            "Expected rectangles must be at least 4.");
+                    Dialogs.showErrorMessage("Invalid Spoke Count",
+                            "Number of spokes must be at least 4.");
                     event.consume();
                     return;
                 }
@@ -419,6 +421,8 @@ public class SunburstCalibrationDialog {
                     QPPreferenceDialog.setSunburstExpectedRectangles(rectangles);
                     QPPreferenceDialog.setSunburstSaturationThreshold(saturation);
                     QPPreferenceDialog.setSunburstValueThreshold(value);
+                    QPPreferenceDialog.setSunburstRadiusInner(innerRadius);
+                    QPPreferenceDialog.setSunburstRadiusOuter(outerRadius);
 
                     // Modality is always "ppm" for this calibration
                     return new SunburstCalibrationParams(

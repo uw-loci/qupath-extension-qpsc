@@ -132,6 +132,10 @@ public class QPPreferenceDialog {
             PathPrefs.createPersistentPreference("sunburstSaturationThreshold", 0.1);
     private static final DoubleProperty sunburstValueThresholdProperty =
             PathPrefs.createPersistentPreference("sunburstValueThreshold", 0.1);
+    private static final IntegerProperty sunburstRadiusInnerProperty =
+            PathPrefs.createPersistentPreference("sunburstRadiusInner", 30);
+    private static final IntegerProperty sunburstRadiusOuterProperty =
+            PathPrefs.createPersistentPreference("sunburstRadiusOuter", 150);
 
     /**
      * Register all preferences in QuPath's PreferencePane. Call once during extension installation.
@@ -619,5 +623,33 @@ public class QPPreferenceDialog {
      */
     public static void setSunburstValueThreshold(double threshold) {
         sunburstValueThresholdProperty.set(threshold);
+    }
+
+    /**
+     * Gets the inner radius for sunburst radial sampling.
+     */
+    public static int getSunburstRadiusInner() {
+        return sunburstRadiusInnerProperty.get();
+    }
+
+    /**
+     * Sets the inner radius for sunburst radial sampling.
+     */
+    public static void setSunburstRadiusInner(int radius) {
+        sunburstRadiusInnerProperty.set(radius);
+    }
+
+    /**
+     * Gets the outer radius for sunburst radial sampling.
+     */
+    public static int getSunburstRadiusOuter() {
+        return sunburstRadiusOuterProperty.get();
+    }
+
+    /**
+     * Sets the outer radius for sunburst radial sampling.
+     */
+    public static void setSunburstRadiusOuter(int radius) {
+        sunburstRadiusOuterProperty.set(radius);
     }
 }
