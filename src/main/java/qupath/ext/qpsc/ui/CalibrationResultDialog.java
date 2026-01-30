@@ -3,10 +3,14 @@ package qupath.ext.qpsc.ui;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Cursor;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +30,20 @@ import java.util.List;
 public class CalibrationResultDialog {
 
     private static final Logger logger = LoggerFactory.getLogger(CalibrationResultDialog.class);
+
+    /**
+     * Callback for retrying calibration with a manually selected center point.
+     */
+    @FunctionalInterface
+    public interface CenterRetryCallback {
+        /**
+         * Retry calibration with the specified center coordinates.
+         *
+         * @param centerY Y pixel coordinate of the selected center
+         * @param centerX X pixel coordinate of the selected center
+         */
+        void retry(int centerY, int centerX);
+    }
 
     /**
      * Calibration result data to display.
@@ -85,14 +103,26 @@ public class CalibrationResultDialog {
      * @param onRedo Callback to invoke when user clicks "Go Back and Redo" (null to hide button)
      */
     public static void showResult(CalibrationResultData result, Runnable onRedo) {
+        showResult(result, onRedo, null);
+    }
+
+    /**
+     * Shows the calibration result dialog with optional redo and center-retry callbacks.
+     *
+     * @param result The calibration result data to display
+     * @param onRedo Callback to invoke when user clicks "Go Back and Redo" (null to hide button)
+     * @param onCenterRetry Callback to retry with manually selected center (null to hide section)
+     */
+    public static void showResult(CalibrationResultData result, Runnable onRedo,
+                                   CenterRetryCallback onCenterRetry) {
         Platform.runLater(() -> {
             Dialog<ButtonType> dialog = new Dialog<>();
             dialog.setTitle("PPM Reference Slide Calibration Results");
 
             if (result.success()) {
-                showSuccessDialog(dialog, result, onRedo);
+                showSuccessDialog(dialog, result, onRedo, onCenterRetry);
             } else {
-                showErrorDialog(dialog, result, onRedo);
+                showErrorDialog(dialog, result, onRedo, onCenterRetry);
             }
 
             dialog.showAndWait().ifPresent(btn -> {
@@ -104,7 +134,7 @@ public class CalibrationResultDialog {
     }
 
     private static void showSuccessDialog(Dialog<ButtonType> dialog, CalibrationResultData result,
-                                             Runnable onRedo) {
+                                             Runnable onRedo, CenterRetryCallback onCenterRetry) {
         // Header
         VBox headerBox = new VBox(10);
         headerBox.setPadding(new Insets(10));
@@ -216,6 +246,11 @@ public class CalibrationResultDialog {
             }
         }
 
+        // Center selection section (if callback provided and image available)
+        if (onCenterRetry != null) {
+            addCenterSelectionSection(contentBox, dialog, result, onCenterRetry);
+        }
+
         // Wrap in scroll pane for large content
         ScrollPane scrollPane = new ScrollPane(contentBox);
         scrollPane.setFitToWidth(true);
@@ -254,7 +289,7 @@ public class CalibrationResultDialog {
     }
 
     private static void showErrorDialog(Dialog<ButtonType> dialog, CalibrationResultData result,
-                                            Runnable onRedo) {
+                                            Runnable onRedo, CenterRetryCallback onCenterRetry) {
         // Header
         VBox headerBox = new VBox(10);
         headerBox.setPadding(new Insets(10));
@@ -363,6 +398,11 @@ public class CalibrationResultDialog {
             contentBox.getChildren().add(new Separator());
         }
 
+        // Center selection section (if callback provided and image available)
+        if (onCenterRetry != null) {
+            addCenterSelectionSection(contentBox, dialog, result, onCenterRetry);
+        }
+
         // Troubleshooting tips
         Label tipsLabel = new Label("Troubleshooting Tips:");
         tipsLabel.setStyle("-fx-font-weight: bold;");
@@ -427,6 +467,138 @@ public class CalibrationResultDialog {
             dialog.getDialogPane().getButtonTypes().add(redoType);
             Button redoButton = (Button) dialog.getDialogPane().lookupButton(redoType);
             redoButton.setText("Go Back and Redo");
+        }
+    }
+
+    /**
+     * Adds a clickable image section for manual center point selection.
+     * Displays the original calibration image with a crosshair overlay that follows clicks.
+     * A "Retry with Selected Center" button becomes enabled after the user clicks on the image.
+     */
+    private static void addCenterSelectionSection(VBox contentBox, Dialog<ButtonType> dialog,
+                                                   CalibrationResultData result,
+                                                   CenterRetryCallback onCenterRetry) {
+        if (result.imagePath() == null) {
+            return;
+        }
+
+        File imageFile = new File(result.imagePath());
+        if (!imageFile.exists()) {
+            logger.warn("Calibration image not found for center selection: {}", result.imagePath());
+            return;
+        }
+
+        try {
+            Image originalImage = new Image(new FileInputStream(imageFile));
+            double imgW = originalImage.getWidth();
+            double imgH = originalImage.getHeight();
+
+            contentBox.getChildren().add(new Separator());
+
+            Label sectionLabel = new Label("Manual Center Selection:");
+            sectionLabel.setStyle("-fx-font-weight: bold;");
+            contentBox.getChildren().add(sectionLabel);
+
+            Label instructionLabel = new Label(
+                "Click on the center of the sunburst pattern to manually select the center point, "
+                + "then press \"Retry with Selected Center\" to re-run calibration."
+            );
+            instructionLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #555555;");
+            instructionLabel.setWrapText(true);
+            contentBox.getChildren().add(instructionLabel);
+
+            // Scale the image to fit within the dialog
+            double maxDisplayWidth = 600;
+            double maxDisplayHeight = 450;
+            double scale = Math.min(maxDisplayWidth / imgW, maxDisplayHeight / imgH);
+            if (scale > 1.0) {
+                scale = 1.0;
+            }
+            double displayW = imgW * scale;
+            double displayH = imgH * scale;
+            final double finalScale = scale;
+
+            ImageView imageView = new ImageView(originalImage);
+            imageView.setFitWidth(displayW);
+            imageView.setFitHeight(displayH);
+            imageView.setPreserveRatio(true);
+
+            // Canvas overlay for crosshair
+            Canvas crosshairCanvas = new Canvas(displayW, displayH);
+            crosshairCanvas.setCursor(Cursor.CROSSHAIR);
+
+            StackPane imageStack = new StackPane(imageView, crosshairCanvas);
+            imageStack.setAlignment(Pos.CENTER);
+            imageStack.setMaxWidth(displayW);
+            imageStack.setMaxHeight(displayH);
+
+            // Coordinate display and retry button
+            Label coordLabel = new Label("Selected: (none)");
+            coordLabel.setStyle("-fx-font-size: 11px; -fx-font-family: monospace;");
+
+            Button retryButton = new Button("Retry with Selected Center");
+            retryButton.setDisable(true);
+            retryButton.setStyle("-fx-font-weight: bold;");
+
+            // Track selected pixel coordinates
+            final int[] selectedCenter = {-1, -1};
+
+            crosshairCanvas.setOnMouseClicked(event -> {
+                double clickX = event.getX();
+                double clickY = event.getY();
+
+                // Convert display coordinates to pixel coordinates
+                int pixelX = (int) Math.round(clickX / finalScale);
+                int pixelY = (int) Math.round(clickY / finalScale);
+
+                // Clamp to image bounds
+                pixelX = Math.max(0, Math.min(pixelX, (int) imgW - 1));
+                pixelY = Math.max(0, Math.min(pixelY, (int) imgH - 1));
+
+                selectedCenter[0] = pixelY;
+                selectedCenter[1] = pixelX;
+
+                // Draw crosshair
+                GraphicsContext gc = crosshairCanvas.getGraphicsContext2D();
+                gc.clearRect(0, 0, displayW, displayH);
+
+                gc.setStroke(Color.RED);
+                gc.setLineWidth(2);
+                // Horizontal line
+                gc.strokeLine(0, clickY, displayW, clickY);
+                // Vertical line
+                gc.strokeLine(clickX, 0, clickX, displayH);
+
+                // Center circle
+                gc.setStroke(Color.YELLOW);
+                gc.setLineWidth(2);
+                gc.strokeOval(clickX - 10, clickY - 10, 20, 20);
+
+                coordLabel.setText(String.format("Selected: Y=%d, X=%d (pixel coordinates)", pixelY, pixelX));
+                retryButton.setDisable(false);
+            });
+
+            retryButton.setOnAction(event -> {
+                if (selectedCenter[0] >= 0 && selectedCenter[1] >= 0) {
+                    dialog.close();
+                    onCenterRetry.retry(selectedCenter[0], selectedCenter[1]);
+                }
+            });
+
+            HBox imageBox = new HBox(imageStack);
+            imageBox.setAlignment(Pos.CENTER);
+            contentBox.getChildren().add(imageBox);
+
+            HBox controlsBox = new HBox(15, coordLabel, retryButton);
+            controlsBox.setAlignment(Pos.CENTER);
+            controlsBox.setPadding(new Insets(5, 0, 0, 0));
+            contentBox.getChildren().add(controlsBox);
+
+        } catch (Exception e) {
+            logger.error("Failed to load calibration image for center selection", e);
+            Label errorLabel = new Label("(Failed to load image for center selection: " + e.getMessage() + ")");
+            errorLabel.setStyle("-fx-text-fill: gray; -fx-font-size: 10px;");
+            contentBox.getChildren().add(errorLabel);
         }
     }
 }

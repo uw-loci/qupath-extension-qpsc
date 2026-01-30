@@ -170,7 +170,8 @@ public class SunburstCalibrationWorkflow {
                     params.valueThreshold(),
                     params.calibrationName(),
                     params.radiusInner(),
-                    params.radiusOuter()
+                    params.radiusOuter(),
+                    null, null, null
             );
 
             logger.info("Received calibration result JSON");
@@ -178,12 +179,20 @@ public class SunburstCalibrationWorkflow {
             // Parse JSON result
             CalibrationResultData resultData = parseCalibrationResult(resultJson);
 
+            // Build center retry callback if we have an image path
+            String resultImagePath = resultData.imagePath();
+            CalibrationResultDialog.CenterRetryCallback centerRetryCallback = null;
+            if (resultImagePath != null) {
+                centerRetryCallback = (cy, cx) -> retryWithCenter(params, resultImagePath, cy, cx);
+            }
+
             // Close progress dialog and show results (on FX thread)
             // Pass redo callback to re-launch the workflow from the parameter dialog
+            final CalibrationResultDialog.CenterRetryCallback finalCenterRetry = centerRetryCallback;
             Platform.runLater(() -> {
                 progressDialog.close();
                 CalibrationResultDialog.showResult(resultData,
-                        SunburstCalibrationWorkflow::run);
+                        SunburstCalibrationWorkflow::run, finalCenterRetry);
             });
 
         } catch (Exception e) {
@@ -195,10 +204,103 @@ public class SunburstCalibrationWorkflow {
                 CalibrationResultData errorResult = CalibrationResultData.failure(
                         e.getMessage(), null, null, params.outputFolder());
                 CalibrationResultDialog.showResult(errorResult,
-                        SunburstCalibrationWorkflow::run);
+                        SunburstCalibrationWorkflow::run, null);
             });
         }
         // Note: Don't disconnect - we're using the shared MicroscopeController connection
+    }
+
+    /**
+     * Retries calibration using the same image but with a manually selected center point.
+     * Shows a progress dialog while re-analyzing, then displays results with the same callbacks.
+     *
+     * @param params Original calibration parameters
+     * @param imagePath Path to the existing calibration image
+     * @param centerY Y pixel coordinate of the manually selected center
+     * @param centerX X pixel coordinate of the manually selected center
+     */
+    private static void retryWithCenter(SunburstCalibrationParams params, String imagePath,
+                                         int centerY, int centerX) {
+        logger.info("Retrying calibration with manual center: Y={}, X={}, image={}", centerY, centerX, imagePath);
+
+        Platform.runLater(() -> {
+            Alert progressDialog = new Alert(Alert.AlertType.INFORMATION);
+            progressDialog.setTitle("Re-analyzing Calibration");
+            progressDialog.setHeaderText("PPM Reference Slide Calibration");
+
+            Label progressLabel = new Label(
+                    String.format("Re-analyzing with manually selected center (Y=%d, X=%d)...",
+                            centerY, centerX)
+            );
+            progressLabel.setStyle("-fx-font-size: 12px;");
+
+            VBox content = new VBox(10);
+            content.getChildren().add(progressLabel);
+            progressDialog.getDialogPane().setContent(content);
+
+            progressDialog.getButtonTypes().clear();
+            progressDialog.getButtonTypes().add(ButtonType.CANCEL);
+
+            progressDialog.show();
+
+            CompletableFuture.runAsync(() -> {
+                try {
+                    String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                    MicroscopeSocketClient socketClient = MicroscopeController.getInstance().getSocketClient();
+
+                    if (!MicroscopeController.getInstance().isConnected()) {
+                        MicroscopeController.getInstance().connect();
+                    }
+
+                    String resultJson = socketClient.runSunburstCalibration(
+                            configFileLocation,
+                            params.outputFolder(),
+                            params.modality(),
+                            params.expectedRectangles(),
+                            params.saturationThreshold(),
+                            params.valueThreshold(),
+                            params.calibrationName(),
+                            params.radiusInner(),
+                            params.radiusOuter(),
+                            imagePath, centerY, centerX
+                    );
+
+                    CalibrationResultData resultData = parseCalibrationResult(resultJson);
+
+                    // Build center retry callback for further retries
+                    String resultImagePath = resultData.imagePath() != null ?
+                            resultData.imagePath() : imagePath;
+                    CalibrationResultDialog.CenterRetryCallback centerRetryCallback =
+                            (cy, cx) -> retryWithCenter(params, resultImagePath, cy, cx);
+
+                    Platform.runLater(() -> {
+                        progressDialog.close();
+                        CalibrationResultDialog.showResult(resultData,
+                                SunburstCalibrationWorkflow::run, centerRetryCallback);
+                    });
+
+                } catch (Exception e) {
+                    logger.error("Center retry calibration failed", e);
+                    Platform.runLater(() -> {
+                        progressDialog.close();
+                        CalibrationResultData errorResult = CalibrationResultData.failure(
+                                e.getMessage(), imagePath, null, params.outputFolder());
+                        CalibrationResultDialog.CenterRetryCallback retryCallback =
+                                (cy, cx) -> retryWithCenter(params, imagePath, cy, cx);
+                        CalibrationResultDialog.showResult(errorResult,
+                                SunburstCalibrationWorkflow::run, retryCallback);
+                    });
+                }
+            }).exceptionally(ex -> {
+                logger.error("Center retry calibration failed unexpectedly", ex);
+                Platform.runLater(() -> {
+                    progressDialog.close();
+                    Dialogs.showErrorMessage("PPM Calibration Error",
+                            "Failed to retry calibration: " + ex.getMessage());
+                });
+                return null;
+            });
+        });
     }
 
     /**
