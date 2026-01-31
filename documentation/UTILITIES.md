@@ -535,17 +535,16 @@ Create a hue-to-angle calibration from a PPM reference slide with a sunburst pat
 **Extensions > QP Scope > Utilities > PPM Reference Slide...**
 
 ### Prerequisites
-- PPM reference slide (sunburst pattern with colored rectangles at known orientations)
+- PPM reference slide (sunburst pattern with colored spokes at known orientations)
 - Microscope positioned and focused on the calibration slide
 - Camera settings configured for PPM imaging
 
 ### Workflow Overview
 
 1. Acquire an image using current camera settings
-2. Detect oriented rectangles in the sunburst pattern
-3. Extract hue values from each detected rectangle
-4. Create a linear regression mapping hue to orientation angle (0-180 degrees)
-5. Save calibration data for use in PPM analysis
+2. Sample hue values along radial spokes from the pattern center
+3. Create a linear regression mapping hue to orientation angle (0-180 degrees)
+4. Save calibration data for use in PPM analysis
 
 ### Dialog Options
 
@@ -556,7 +555,7 @@ Create a hue-to-angle calibration from a PPM reference slide with a sunburst pat
 | Calibration Folder | Root folder for calibration files |
 | Browse... | Select output folder |
 
-Files are organized as: `{folder}/{modality}/calibration_files`
+Files are saved directly into this folder.
 
 #### Camera Setup
 
@@ -572,14 +571,23 @@ This integration allows you to set the rotation stage to the optimal angle befor
 
 | Parameter | Default | Range | Description |
 |-----------|---------|-------|-------------|
-| Expected Rectangles | 16 | 4-32 | Number of rectangles on your calibration slide |
+| Expected Spokes | 16 | 4-32 | Number of spokes on your calibration slide |
 | Saturation Threshold | 0.1 | 0.01-0.5 | Minimum HSV saturation for foreground detection. In the debug mask: WHITE = detected, BLACK = background |
 | Value Threshold | 0.1 | 0.01-0.5 | Minimum HSV brightness for foreground detection. In the debug mask: WHITE = detected, BLACK = background |
 
 **Common slide configurations:**
-- 16 rectangles: Standard sunburst slides (22.5 degree spacing)
-- 12 rectangles: Some older slides (30 degree spacing)
-- 8 rectangles: Simplified slides (45 degree spacing)
+- 16 spokes: Standard sunburst slides (11.25 degree spacing)
+- 12 spokes: Some older slides (15 degree spacing)
+- 8 spokes: Simplified slides (22.5 degree spacing)
+
+#### Advanced Radial Detection Settings
+
+Expand the "Advanced Radial Detection Settings" section for fine-tuning:
+
+| Parameter | Default | Range | Description |
+|-----------|---------|-------|-------------|
+| Inner Radius (px) | 30 | 10-200 | Inner radius for radial sampling from pattern center. Increase to skip noisy pixels near center |
+| Outer Radius (px) | 150 | 50-500 | Outer radius for radial sampling. Should reach into the colored spokes but not extend past them |
 
 #### Calibration Name
 Optional custom name for calibration files. If empty, an auto-generated timestamp name is used.
@@ -596,7 +604,7 @@ Optional custom name for calibration files. If empty, an auto-generated timestam
 
 ### Result Dialogs
 
-**Success dialog** shows R-squared value, rectangles detected, calibration file path, and the calibration plot image. An "Open Folder" button navigates to the output directory.
+**Success dialog** shows R-squared value, spokes detected, calibration file path, and the calibration plot image. An "Open Folder" button navigates to the output directory.
 
 **Failure dialog** shows the error message, debug images (segmentation mask if available), and troubleshooting tips. An "Open Folder" button navigates to the debug/output directory for inspecting saved images and masks.
 
@@ -606,18 +614,22 @@ Optional custom name for calibration files. If empty, an auto-generated timestam
 - All black mask: thresholds too high -- lower saturation/value thresholds
 - All white mask: thresholds too low -- raise saturation/value thresholds
 
+**Manual center selection:** Both success and failure dialogs include a "Manual Center Selection" section showing the captured calibration image. Click on the center of the sunburst pattern to manually specify the center point, then press "Retry with Selected Center" to re-run calibration without re-acquiring the image.
+
+**"Go Back and Redo" button:** Re-opens the parameter dialog so you can adjust settings and re-acquire a new image.
+
 ### Troubleshooting
 
-**Rectangles not detected:**
+**Spokes not detected:**
 - Check the debug mask in the failure dialog to understand what the detector sees
 - If mask is all BLACK: lower saturation and/or value thresholds (try 0.05)
 - If mask is all WHITE: raise saturation and/or value thresholds (try 0.2-0.3)
 - Ensure slide is properly illuminated
 - Check that polarizer is at a low angle (7 deg) for best color contrast
 
-**Wrong rectangle count:**
-- Verify the expected rectangles matches your slide
-- Adjust thresholds to exclude noise or include faint rectangles
+**Wrong spoke count:**
+- Verify the expected spokes setting matches your slide
+- Adjust thresholds to exclude noise or include faint spokes
 - Use the "Open Folder" button in the result dialog to inspect debug images
 
 **Poor calibration fit:**

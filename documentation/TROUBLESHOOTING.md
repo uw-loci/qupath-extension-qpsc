@@ -371,7 +371,7 @@ To fix permanently:
 
 ### PPM Reference Slide Calibration
 
-#### Q: Calibration fails with "no rectangles detected"
+#### Q: Calibration fails with "no spokes detected"
 
 **A:** The detection thresholds may not match your camera output. Check the debug mask image in the failure dialog:
 - **All BLACK mask:** Thresholds are too high. Lower saturation threshold (try 0.05) and/or value threshold (try 0.05).
@@ -406,7 +406,7 @@ Output files:
 1. Ensure the slide is flat and properly focused
 2. Try a different polarizer angle
 3. Check for dust, scratches, or damage on the calibration slide
-4. Verify the expected rectangle count matches your slide
+4. Verify the expected spoke count matches your slide
 5. Check the calibration plot for outlier points
 
 ### Background Collection
