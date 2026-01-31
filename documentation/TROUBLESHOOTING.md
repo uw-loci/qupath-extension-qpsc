@@ -409,6 +409,42 @@ Output files:
 4. Verify the expected spoke count matches your slide
 5. Check the calibration plot for outlier points
 
+### White Balance Calibration (JAI Camera)
+
+#### Q: Calibration fails at 40x -- channels stuck at max exposure
+
+**A:** At higher magnifications (40x, 60x), less light reaches the sensor, particularly at polarizer angles far from uncrossed. The calibration algorithm may hit the configured max exposure without reaching target intensity.
+
+**What happens:** The algorithm detects channels stuck at the exposure ceiling and takes corrective action:
+1. **Gain boost:** If analog gain has headroom, gain is increased and exposure reduced proportionally.
+2. **Exposure extension:** If gain is already at hardware max (4.0x for R/B, 64.0x for green), the max exposure limit is automatically extended up to the hardware ceiling (7900ms).
+3. **Early termination:** If channels remain stuck at both hardware max gain AND hardware max exposure for 3 consecutive checks, calibration stops early with a clear message.
+
+**If you see the warning "Extending max exposure to Xms":** This is normal behavior. The algorithm is adapting to low-light conditions.
+
+**If you see "hardware limits reached":** The scene is too dim for the camera to achieve target intensity even at maximum settings. Try:
+- Using a brighter light source or increasing lamp intensity
+- Moving to an area with more signal (tissue vs. empty glass)
+- Lowering the target intensity value in the calibration dialog
+- Reducing the base_gain setting if R/B channels are clamped (check logs for "clamped" warnings)
+
+#### Q: What do "base gain clamped" warnings mean?
+
+**A:** The JAI camera has different analog gain ranges per channel:
+- Red: 0.47x - 4.0x
+- Green: 1.0x - 64.0x
+- Blue: 0.47x - 4.0x
+
+If `base_gain` is set higher than 4.0, the R/B channels are clamped to 4.0x while green uses the full requested value. This is expected behavior. The calibration algorithm tracks the actual clamped values and compensates accordingly.
+
+#### Q: Where are white balance calibration files saved?
+
+**A:** Calibration diagnostics are saved to the output path specified in the dialog. Files include:
+- `convergence_log.csv` -- Per-iteration data showing exposure, gain, and intensity values
+- `white_balance_settings.yml` -- Final calibration settings (can be reloaded)
+- `white_balance_verification.tif` -- Image captured with final calibrated settings
+- `intensity_histograms.png` -- Visual histogram and convergence plots
+
 ### Background Collection
 
 #### Q: What are background images and do I need them?
