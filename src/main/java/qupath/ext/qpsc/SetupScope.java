@@ -272,7 +272,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 		ppmReferenceSlideOption.setDisable(!configValid);
 		setMenuItemTooltip(ppmReferenceSlideOption,
 				"Create a hue-to-angle calibration from a PPM reference slide with sunburst pattern. " +
-				"Acquires an image of oriented rectangles and creates a linear regression mapping " +
+				"Acquires an image of radial spokes and creates a linear regression mapping " +
 				"hue values to orientation angles for use in PPM analysis.");
 		ppmReferenceSlideOption.setOnAction(e -> {
 			try {

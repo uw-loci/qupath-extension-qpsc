@@ -1784,7 +1784,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param yamlPath Path to microscope configuration YAML file
      * @param outputPath Output directory for calibration results
      * @param modality Modality name for exposure lookup (e.g., "ppm_20x")
-     * @param expectedRectangles Number of spokes in sunburst pattern (typically 16)
+     * @param expectedSpokes Number of spokes in sunburst pattern (typically 16)
      * @param saturationThreshold Minimum saturation for foreground detection (0-1)
      * @param valueThreshold Minimum brightness for foreground detection (0-1)
      * @param calibrationName Optional name for output files (auto-generated if null)
@@ -1797,7 +1797,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if communication fails
      */
     public String runSunburstCalibration(String yamlPath, String outputPath, String modality,
-                                          int expectedRectangles, double saturationThreshold,
+                                          int expectedSpokes, double saturationThreshold,
                                           double valueThreshold, String calibrationName,
                                           int radiusInner, int radiusOuter,
                                           String imagePath, Integer centerY,
@@ -1808,7 +1808,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         messageBuilder.append("--yaml ").append(yamlPath)
                      .append(" --output ").append(outputPath)
                      .append(" --modality ").append(modality)
-                     .append(" --rectangles ").append(expectedRectangles)
+                     .append(" --spokes ").append(expectedSpokes)
                      .append(" --saturation ").append(saturationThreshold)
                      .append(" --value ").append(valueThreshold);
 

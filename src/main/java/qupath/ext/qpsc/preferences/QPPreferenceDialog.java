@@ -126,7 +126,7 @@ public class QPPreferenceDialog {
     // Sunburst calibration dialog settings - remembered between sessions
     private static final StringProperty sunburstLastModalityProperty =
             PathPrefs.createPersistentPreference("sunburstLastModality", "");
-    private static final IntegerProperty sunburstExpectedRectanglesProperty =
+    private static final IntegerProperty sunburstExpectedSpokesProperty =
             PathPrefs.createPersistentPreference("sunburstExpectedRectangles", 16);
     private static final DoubleProperty sunburstSaturationThresholdProperty =
             PathPrefs.createPersistentPreference("sunburstSaturationThreshold", 0.1);
@@ -584,17 +584,17 @@ public class QPPreferenceDialog {
     }
 
     /**
-     * Gets the expected rectangles count for sunburst calibration.
+     * Gets the expected spokes count for sunburst calibration.
      */
-    public static int getSunburstExpectedRectangles() {
-        return sunburstExpectedRectanglesProperty.get();
+    public static int getSunburstExpectedSpokes() {
+        return sunburstExpectedSpokesProperty.get();
     }
 
     /**
-     * Sets the expected rectangles count for sunburst calibration.
+     * Sets the expected spokes count for sunburst calibration.
      */
-    public static void setSunburstExpectedRectangles(int count) {
-        sunburstExpectedRectanglesProperty.set(count);
+    public static void setSunburstExpectedSpokes(int count) {
+        sunburstExpectedSpokesProperty.set(count);
     }
 
     /**

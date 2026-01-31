@@ -14,10 +14,14 @@ import javafx.scene.paint.Color;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javafx.embed.swing.SwingFXUtils;
+
 import java.awt.Desktop;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileInputStream;
 import java.util.List;
+import javax.imageio.ImageIO;
 
 /**
  * Dialog for displaying calibration results.
@@ -51,7 +55,7 @@ public class CalibrationResultDialog {
     public record CalibrationResultData(
             boolean success,
             double rSquared,
-            int rectanglesDetected,
+            int spokesDetected,
             String plotPath,
             String calibrationPath,
             String imagePath,
@@ -63,10 +67,10 @@ public class CalibrationResultDialog {
         /**
          * Create a success result.
          */
-        public static CalibrationResultData success(double rSquared, int rectanglesDetected,
+        public static CalibrationResultData success(double rSquared, int spokesDetected,
                                                     String plotPath, String calibrationPath,
                                                     String imagePath, String maskPath, List<String> warnings) {
-            return new CalibrationResultData(true, rSquared, rectanglesDetected,
+            return new CalibrationResultData(true, rSquared, spokesDetected,
                     plotPath, calibrationPath, imagePath, maskPath, null, warnings, null);
         }
 
@@ -168,12 +172,12 @@ public class CalibrationResultDialog {
         resultsGrid.add(rSquaredValue, 1, row);
         row++;
 
-        // Rectangles detected
-        Label rectanglesLabel = new Label("Rectangles Detected:");
-        rectanglesLabel.setStyle("-fx-font-weight: bold;");
-        Label rectanglesValue = new Label(String.valueOf(result.rectanglesDetected()));
-        resultsGrid.add(rectanglesLabel, 0, row);
-        resultsGrid.add(rectanglesValue, 1, row);
+        // Spokes detected
+        Label spokesLabel = new Label("Spokes Detected:");
+        spokesLabel.setStyle("-fx-font-weight: bold;");
+        Label spokesValue = new Label(String.valueOf(result.spokesDetected()));
+        resultsGrid.add(spokesLabel, 0, row);
+        resultsGrid.add(spokesValue, 1, row);
         row++;
 
         // Calibration file path
@@ -410,7 +414,7 @@ public class CalibrationResultDialog {
 
         String tips =
             "1. Ensure the calibration slide is properly positioned and focused\n" +
-            "2. Check that the slide has visible colored rectangles\n" +
+            "2. Check that the slide has visible colored spokes\n" +
             "3. Try adjusting saturation/value thresholds if detection is failing\n" +
             "4. Verify the microscope server is running and connected\n" +
             "5. Check the server log for detailed error information";
@@ -471,9 +475,41 @@ public class CalibrationResultDialog {
     }
 
     /**
+     * Loads an image file as a JavaFX Image.
+     * Tries JavaFX native loading first, then falls back to ImageIO (which supports TIFF).
+     *
+     * @param imageFile the image file to load
+     * @return the loaded Image, or null if loading fails
+     */
+    private static Image loadImageWithFallback(File imageFile) {
+        // Try JavaFX native loading first (supports PNG, JPEG, GIF, BMP)
+        try {
+            Image image = new Image(new FileInputStream(imageFile));
+            if (!image.isError() && image.getWidth() > 0 && image.getHeight() > 0) {
+                return image;
+            }
+        } catch (Exception e) {
+            logger.debug("JavaFX native image loading failed for {}, trying ImageIO", imageFile.getName());
+        }
+
+        // Fall back to ImageIO (supports TIFF and other formats)
+        try {
+            BufferedImage buffered = ImageIO.read(imageFile);
+            if (buffered != null) {
+                return SwingFXUtils.toFXImage(buffered, null);
+            }
+        } catch (Exception e) {
+            logger.debug("ImageIO loading also failed for {}", imageFile.getName());
+        }
+
+        return null;
+    }
+
+    /**
      * Adds a clickable image section for manual center point selection.
      * Displays the original calibration image with a crosshair overlay that follows clicks.
      * A "Retry with Selected Center" button becomes enabled after the user clicks on the image.
+     * If the image cannot be loaded, the section is not shown at all.
      */
     private static void addCenterSelectionSection(VBox contentBox, Dialog<ButtonType> dialog,
                                                    CalibrationResultData result,
@@ -488,117 +524,115 @@ public class CalibrationResultDialog {
             return;
         }
 
-        try {
-            Image originalImage = new Image(new FileInputStream(imageFile));
-            double imgW = originalImage.getWidth();
-            double imgH = originalImage.getHeight();
-
-            contentBox.getChildren().add(new Separator());
-
-            Label sectionLabel = new Label("Manual Center Selection:");
-            sectionLabel.setStyle("-fx-font-weight: bold;");
-            contentBox.getChildren().add(sectionLabel);
-
-            Label instructionLabel = new Label(
-                "Click on the center of the sunburst pattern to manually select the center point, "
-                + "then press \"Retry with Selected Center\" to re-run calibration."
-            );
-            instructionLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #555555;");
-            instructionLabel.setWrapText(true);
-            contentBox.getChildren().add(instructionLabel);
-
-            // Scale the image to fit within the dialog
-            double maxDisplayWidth = 600;
-            double maxDisplayHeight = 450;
-            double scale = Math.min(maxDisplayWidth / imgW, maxDisplayHeight / imgH);
-            if (scale > 1.0) {
-                scale = 1.0;
-            }
-            double displayW = imgW * scale;
-            double displayH = imgH * scale;
-            final double finalScale = scale;
-
-            ImageView imageView = new ImageView(originalImage);
-            imageView.setFitWidth(displayW);
-            imageView.setFitHeight(displayH);
-            imageView.setPreserveRatio(true);
-
-            // Canvas overlay for crosshair
-            Canvas crosshairCanvas = new Canvas(displayW, displayH);
-            crosshairCanvas.setCursor(Cursor.CROSSHAIR);
-
-            StackPane imageStack = new StackPane(imageView, crosshairCanvas);
-            imageStack.setAlignment(Pos.CENTER);
-            imageStack.setMaxWidth(displayW);
-            imageStack.setMaxHeight(displayH);
-
-            // Coordinate display and retry button
-            Label coordLabel = new Label("Selected: (none)");
-            coordLabel.setStyle("-fx-font-size: 11px; -fx-font-family: monospace;");
-
-            Button retryButton = new Button("Retry with Selected Center");
-            retryButton.setDisable(true);
-            retryButton.setStyle("-fx-font-weight: bold;");
-
-            // Track selected pixel coordinates
-            final int[] selectedCenter = {-1, -1};
-
-            crosshairCanvas.setOnMouseClicked(event -> {
-                double clickX = event.getX();
-                double clickY = event.getY();
-
-                // Convert display coordinates to pixel coordinates
-                int pixelX = (int) Math.round(clickX / finalScale);
-                int pixelY = (int) Math.round(clickY / finalScale);
-
-                // Clamp to image bounds
-                pixelX = Math.max(0, Math.min(pixelX, (int) imgW - 1));
-                pixelY = Math.max(0, Math.min(pixelY, (int) imgH - 1));
-
-                selectedCenter[0] = pixelY;
-                selectedCenter[1] = pixelX;
-
-                // Draw crosshair
-                GraphicsContext gc = crosshairCanvas.getGraphicsContext2D();
-                gc.clearRect(0, 0, displayW, displayH);
-
-                gc.setStroke(Color.RED);
-                gc.setLineWidth(2);
-                // Horizontal line
-                gc.strokeLine(0, clickY, displayW, clickY);
-                // Vertical line
-                gc.strokeLine(clickX, 0, clickX, displayH);
-
-                // Center circle
-                gc.setStroke(Color.YELLOW);
-                gc.setLineWidth(2);
-                gc.strokeOval(clickX - 10, clickY - 10, 20, 20);
-
-                coordLabel.setText(String.format("Selected: Y=%d, X=%d (pixel coordinates)", pixelY, pixelX));
-                retryButton.setDisable(false);
-            });
-
-            retryButton.setOnAction(event -> {
-                if (selectedCenter[0] >= 0 && selectedCenter[1] >= 0) {
-                    dialog.close();
-                    onCenterRetry.retry(selectedCenter[0], selectedCenter[1]);
-                }
-            });
-
-            HBox imageBox = new HBox(imageStack);
-            imageBox.setAlignment(Pos.CENTER);
-            contentBox.getChildren().add(imageBox);
-
-            HBox controlsBox = new HBox(15, coordLabel, retryButton);
-            controlsBox.setAlignment(Pos.CENTER);
-            controlsBox.setPadding(new Insets(5, 0, 0, 0));
-            contentBox.getChildren().add(controlsBox);
-
-        } catch (Exception e) {
-            logger.error("Failed to load calibration image for center selection", e);
-            Label errorLabel = new Label("(Failed to load image for center selection: " + e.getMessage() + ")");
-            errorLabel.setStyle("-fx-text-fill: gray; -fx-font-size: 10px;");
-            contentBox.getChildren().add(errorLabel);
+        // Load image first - only show the section if loading succeeds
+        Image originalImage = loadImageWithFallback(imageFile);
+        if (originalImage == null) {
+            logger.warn("Could not load calibration image for center selection: {}", result.imagePath());
+            return;
         }
+
+        double imgW = originalImage.getWidth();
+        double imgH = originalImage.getHeight();
+
+        contentBox.getChildren().add(new Separator());
+
+        Label sectionLabel = new Label("Manual Center Selection:");
+        sectionLabel.setStyle("-fx-font-weight: bold;");
+        contentBox.getChildren().add(sectionLabel);
+
+        Label instructionLabel = new Label(
+            "Click on the center of the sunburst pattern to manually select the center point, "
+            + "then press \"Retry with Selected Center\" to re-run calibration."
+        );
+        instructionLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #555555;");
+        instructionLabel.setWrapText(true);
+        contentBox.getChildren().add(instructionLabel);
+
+        // Scale the image to fit within the dialog
+        double maxDisplayWidth = 600;
+        double maxDisplayHeight = 450;
+        double scale = Math.min(maxDisplayWidth / imgW, maxDisplayHeight / imgH);
+        if (scale > 1.0) {
+            scale = 1.0;
+        }
+        double displayW = imgW * scale;
+        double displayH = imgH * scale;
+        final double finalScale = scale;
+
+        ImageView imageView = new ImageView(originalImage);
+        imageView.setFitWidth(displayW);
+        imageView.setFitHeight(displayH);
+        imageView.setPreserveRatio(true);
+
+        // Canvas overlay for crosshair
+        Canvas crosshairCanvas = new Canvas(displayW, displayH);
+        crosshairCanvas.setCursor(Cursor.CROSSHAIR);
+
+        StackPane imageStack = new StackPane(imageView, crosshairCanvas);
+        imageStack.setAlignment(Pos.CENTER);
+        imageStack.setMaxWidth(displayW);
+        imageStack.setMaxHeight(displayH);
+
+        // Coordinate display and retry button
+        Label coordLabel = new Label("Selected: (none)");
+        coordLabel.setStyle("-fx-font-size: 11px; -fx-font-family: monospace;");
+
+        Button retryButton = new Button("Retry with Selected Center");
+        retryButton.setDisable(true);
+        retryButton.setStyle("-fx-font-weight: bold;");
+
+        // Track selected pixel coordinates
+        final int[] selectedCenter = {-1, -1};
+
+        crosshairCanvas.setOnMouseClicked(event -> {
+            double clickX = event.getX();
+            double clickY = event.getY();
+
+            // Convert display coordinates to pixel coordinates
+            int pixelX = (int) Math.round(clickX / finalScale);
+            int pixelY = (int) Math.round(clickY / finalScale);
+
+            // Clamp to image bounds
+            pixelX = Math.max(0, Math.min(pixelX, (int) imgW - 1));
+            pixelY = Math.max(0, Math.min(pixelY, (int) imgH - 1));
+
+            selectedCenter[0] = pixelY;
+            selectedCenter[1] = pixelX;
+
+            // Draw crosshair
+            GraphicsContext gc = crosshairCanvas.getGraphicsContext2D();
+            gc.clearRect(0, 0, displayW, displayH);
+
+            gc.setStroke(Color.RED);
+            gc.setLineWidth(2);
+            // Horizontal line
+            gc.strokeLine(0, clickY, displayW, clickY);
+            // Vertical line
+            gc.strokeLine(clickX, 0, clickX, displayH);
+
+            // Center circle
+            gc.setStroke(Color.YELLOW);
+            gc.setLineWidth(2);
+            gc.strokeOval(clickX - 10, clickY - 10, 20, 20);
+
+            coordLabel.setText(String.format("Selected: Y=%d, X=%d (pixel coordinates)", pixelY, pixelX));
+            retryButton.setDisable(false);
+        });
+
+        retryButton.setOnAction(event -> {
+            if (selectedCenter[0] >= 0 && selectedCenter[1] >= 0) {
+                dialog.close();
+                onCenterRetry.retry(selectedCenter[0], selectedCenter[1]);
+            }
+        });
+
+        HBox imageBox = new HBox(imageStack);
+        imageBox.setAlignment(Pos.CENTER);
+        contentBox.getChildren().add(imageBox);
+
+        HBox controlsBox = new HBox(15, coordLabel, retryButton);
+        controlsBox.setAlignment(Pos.CENTER);
+        controlsBox.setPadding(new Insets(5, 0, 0, 0));
+        contentBox.getChildren().add(controlsBox);
     }
 }

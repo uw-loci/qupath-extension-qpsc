@@ -34,7 +34,7 @@ public class SunburstCalibrationDialog {
     public record SunburstCalibrationParams(
             String outputFolder,
             String modality,
-            int expectedRectangles,
+            int expectedSpokes,
             double saturationThreshold,
             double valueThreshold,
             String calibrationName,
@@ -195,7 +195,7 @@ public class SunburstCalibrationDialog {
             row++;
 
             // Number of spokes
-            HBox rectanglesLabelBox = createLabelWithTooltip("Number of Spokes:",
+            HBox spokesLabelBox = createLabelWithTooltip("Number of Spokes:",
                 "Number of radial spokes (unique orientations) in the sunburst pattern.\n\n" +
                 "Common values:\n" +
                 "  - 16: Standard sunburst slides (11.25 deg spacing)\n" +
@@ -206,13 +206,13 @@ public class SunburstCalibrationDialog {
                 "at each spoke angle to build the hue-to-angle mapping."
             );
 
-            int savedRectangles = QPPreferenceDialog.getSunburstExpectedRectangles();
-            Spinner<Integer> rectanglesSpinner = new Spinner<>(4, 32, savedRectangles, 4);
-            rectanglesSpinner.setEditable(true);
-            rectanglesSpinner.setPrefWidth(100);
+            int savedSpokes = QPPreferenceDialog.getSunburstExpectedSpokes();
+            Spinner<Integer> spokesSpinner = new Spinner<>(4, 32, savedSpokes, 4);
+            spokesSpinner.setEditable(true);
+            spokesSpinner.setPrefWidth(100);
 
-            grid.add(rectanglesLabelBox, 0, row);
-            grid.add(rectanglesSpinner, 1, row);
+            grid.add(spokesLabelBox, 0, row);
+            grid.add(spokesSpinner, 1, row);
             row++;
 
             // Saturation threshold
@@ -368,7 +368,7 @@ public class SunburstCalibrationDialog {
             // Handle restore defaults button
             Button restoreButton = (Button) dialog.getDialogPane().lookupButton(restoreDefaultsType);
             restoreButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
-                rectanglesSpinner.getValueFactory().setValue(16);
+                spokesSpinner.getValueFactory().setValue(16);
                 saturationSpinner.getValueFactory().setValue(0.1);
                 valueSpinner.getValueFactory().setValue(0.1);
                 innerRadiusSpinner.getValueFactory().setValue(30);
@@ -389,7 +389,7 @@ public class SunburstCalibrationDialog {
                     return;
                 }
 
-                if (rectanglesSpinner.getValue() < 4) {
+                if (spokesSpinner.getValue() < 4) {
                     Dialogs.showErrorMessage("Invalid Spoke Count",
                             "Number of spokes must be at least 4.");
                     event.consume();
@@ -410,7 +410,7 @@ public class SunburstCalibrationDialog {
                 if (button == okType) {
                     String name = nameField.getText().trim();
                     String folderPath = outputField.getText().trim();
-                    int rectangles = rectanglesSpinner.getValue();
+                    int spokes = spokesSpinner.getValue();
                     double saturation = saturationSpinner.getValue();
                     double value = valueSpinner.getValue();
                     int innerRadius = innerRadiusSpinner.getValue();
@@ -418,7 +418,7 @@ public class SunburstCalibrationDialog {
 
                     // Remember all settings for next time
                     QPPreferenceDialog.setLastCalibrationFolder(folderPath);
-                    QPPreferenceDialog.setSunburstExpectedRectangles(rectangles);
+                    QPPreferenceDialog.setSunburstExpectedSpokes(spokes);
                     QPPreferenceDialog.setSunburstSaturationThreshold(saturation);
                     QPPreferenceDialog.setSunburstValueThreshold(value);
                     QPPreferenceDialog.setSunburstRadiusInner(innerRadius);
@@ -428,7 +428,7 @@ public class SunburstCalibrationDialog {
                     return new SunburstCalibrationParams(
                             folderPath,
                             "ppm",
-                            rectangles,
+                            spokes,
                             saturation,
                             value,
                             name.isEmpty() ? null : name,

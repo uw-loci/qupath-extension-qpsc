@@ -135,7 +135,7 @@ public class SunburstCalibrationWorkflow {
         logger.info("Executing sunburst calibration:");
         logger.info("  Output folder: {}", params.outputFolder());
         logger.info("  Modality: {}", params.modality());
-        logger.info("  Number of spokes: {}", params.expectedRectangles());
+        logger.info("  Number of spokes: {}", params.expectedSpokes());
         logger.info("  Saturation threshold: {}", params.saturationThreshold());
         logger.info("  Value threshold: {}", params.valueThreshold());
         logger.info("  Radius inner: {}", params.radiusInner());
@@ -165,7 +165,7 @@ public class SunburstCalibrationWorkflow {
                     configFileLocation,
                     params.outputFolder(),
                     params.modality(),
-                    params.expectedRectangles(),
+                    params.expectedSpokes(),
                     params.saturationThreshold(),
                     params.valueThreshold(),
                     params.calibrationName(),
@@ -256,7 +256,7 @@ public class SunburstCalibrationWorkflow {
                             configFileLocation,
                             params.outputFolder(),
                             params.modality(),
-                            params.expectedRectangles(),
+                            params.expectedSpokes(),
                             params.saturationThreshold(),
                             params.valueThreshold(),
                             params.calibrationName(),
@@ -325,8 +325,8 @@ public class SunburstCalibrationWorkflow {
             if (success) {
                 double rSquared = result.has("r_squared") ?
                         result.get("r_squared").getAsDouble() : 0.0;
-                int rectanglesDetected = result.has("rectangles_detected") ?
-                        result.get("rectangles_detected").getAsInt() : 0;
+                int spokesDetected = result.has("spokes_detected") ?
+                        result.get("spokes_detected").getAsInt() : 0;
                 String plotPath = result.has("plot_path") ?
                         result.get("plot_path").getAsString() : null;
                 String calibrationPath = result.has("calibration_path") ?
@@ -340,7 +340,7 @@ public class SunburstCalibrationWorkflow {
                     }
                 }
 
-                return CalibrationResultData.success(rSquared, rectanglesDetected,
+                return CalibrationResultData.success(rSquared, spokesDetected,
                         plotPath, calibrationPath, imagePath, maskPath, warnings);
             } else {
                 String error = result.has("error") ?
