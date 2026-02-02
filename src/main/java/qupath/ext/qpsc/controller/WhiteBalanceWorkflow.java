@@ -357,35 +357,9 @@ public class WhiteBalanceWorkflow {
 
         alert.setContentText(content.toString());
 
-        // Add Open Folder button
-        ButtonType openFolderButton = new ButtonType("Open Folder", ButtonBar.ButtonData.LEFT);
-        alert.getButtonTypes().add(openFolderButton);
-
-        alert.showAndWait().ifPresent(response -> {
-            if (response == openFolderButton) {
-                openFolder(outputPath);
-            }
-        });
-    }
-
-    /**
-     * Opens a folder in the system file explorer.
-     */
-    private static void openFolder(String path) {
-        try {
-            File folder = new File(path);
-            if (folder.exists()) {
-                if (Desktop.isDesktopSupported()) {
-                    Desktop.getDesktop().open(folder);
-                } else {
-                    logger.warn("Desktop not supported, cannot open folder");
-                }
-            } else {
-                logger.warn("Folder does not exist: {}", path);
-            }
-        } catch (IOException e) {
-            logger.error("Failed to open folder: {}", path, e);
-        }
+        // Non-modal so user can reference results while continuing work
+        configureResultDialog(alert, outputPath);
+        alert.show();
     }
 
     /**
@@ -453,15 +427,51 @@ public class WhiteBalanceWorkflow {
         // Use a monospace font for the table
         alert.getDialogPane().lookup(".content.label").setStyle("-fx-font-family: monospace;");
 
-        // Add Open Folder button
+        // Non-modal so user can reference results while continuing work
+        configureResultDialog(alert, outputPath);
+        alert.show();
+    }
+
+    /**
+     * Configures a WB result dialog to be non-modal with Close and Open Folder buttons.
+     * The X (close) button works because CLOSE is in the button types.
+     */
+    private static void configureResultDialog(Alert alert, String outputPath) {
+        alert.initModality(javafx.stage.Modality.NONE);
+
+        // CLOSE button type enables the window X button
+        alert.getButtonTypes().setAll(ButtonType.CLOSE);
+
+        // Add Open Folder as a secondary action
         ButtonType openFolderButton = new ButtonType("Open Folder", ButtonBar.ButtonData.LEFT);
         alert.getButtonTypes().add(openFolderButton);
 
-        alert.showAndWait().ifPresent(response -> {
-            if (response == openFolderButton) {
-                openFolder(outputPath);
+        // Handle Open Folder without closing the dialog
+        alert.getDialogPane().lookupButton(openFolderButton).addEventFilter(
+                javafx.event.ActionEvent.ACTION, event -> {
+                    event.consume(); // Prevent dialog from closing
+                    openFolder(outputPath);
+                });
+    }
+
+    /**
+     * Opens a folder in the system file explorer.
+     */
+    private static void openFolder(String path) {
+        try {
+            File folder = new File(path);
+            if (folder.exists()) {
+                if (Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(folder);
+                } else {
+                    logger.warn("Desktop not supported, cannot open folder");
+                }
+            } else {
+                logger.warn("Folder does not exist: {}", path);
             }
-        });
+        } catch (IOException e) {
+            logger.error("Failed to open folder: {}", path, e);
+        }
     }
 
     /**
