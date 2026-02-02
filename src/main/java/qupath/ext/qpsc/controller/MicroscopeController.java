@@ -618,4 +618,58 @@ public class MicroscopeController {
             throw new IOException("Failed to set live mode via socket", e);
         }
     }
+
+    /**
+     * Wraps a camera operation with live mode stop/restart handling.
+     *
+     * <p>If live mode is running, it will be stopped before the operation executes
+     * and restored afterward. This is required for JAI camera property changes
+     * (e.g., ExposureIsIndividual, GainIsIndividual) that cannot be modified
+     * during live streaming (error 11018).
+     *
+     * @param operation The camera operation to execute
+     * @throws IOException if the operation itself fails
+     */
+    public void withLiveModeHandling(IORunnable operation) throws IOException {
+        boolean wasLive = false;
+        try {
+            wasLive = isLiveModeRunning();
+            if (wasLive) {
+                logger.info("Live mode is running - turning off for camera operation");
+                setLiveMode(false);
+                Thread.sleep(100);
+            }
+        } catch (IOException e) {
+            logger.warn("Could not check/set live mode: {} - proceeding", e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        try {
+            operation.run();
+        } finally {
+            if (wasLive) {
+                try {
+                    Thread.sleep(100);
+                    setLiveMode(true);
+                    logger.info("Live mode restored after camera operation");
+                } catch (IOException | InterruptedException e) {
+                    logger.warn("Could not restore live mode: {}", e.getMessage());
+                    if (e instanceof InterruptedException) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Functional interface for IO operations that may throw IOException.
+     * Used with {@link #withLiveModeHandling(IORunnable)} to wrap camera
+     * operations that require live mode to be stopped.
+     */
+    @FunctionalInterface
+    public interface IORunnable {
+        void run() throws IOException;
+    }
 }

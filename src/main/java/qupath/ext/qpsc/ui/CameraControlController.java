@@ -218,9 +218,12 @@ public class CameraControlController {
                 try {
                     boolean expInd = expIndividualRb.isSelected();
                     boolean gainInd = gainIndividualRb.isSelected();
-                    controller.setCameraMode(expInd, gainInd);
+                    controller.withLiveModeHandling(() ->
+                            controller.setCameraMode(expInd, gainInd));
                     updateAllFieldStates(angleFieldsMap, expInd, gainInd);
                 } catch (IOException ex) {
+                    revertRadioButtonsToCamera(controller, expIndividualRb, expUnifiedRb,
+                            gainIndividualRb, gainUnifiedRb, angleFieldsMap);
                     UIFunctions.notifyUserOfError("Failed to set exposure mode: " + ex.getMessage(), "Error");
                 }
             });
@@ -228,9 +231,12 @@ public class CameraControlController {
                 try {
                     boolean expInd = expIndividualRb.isSelected();
                     boolean gainInd = gainIndividualRb.isSelected();
-                    controller.setCameraMode(expInd, gainInd);
+                    controller.withLiveModeHandling(() ->
+                            controller.setCameraMode(expInd, gainInd));
                     updateAllFieldStates(angleFieldsMap, expInd, gainInd);
                 } catch (IOException ex) {
+                    revertRadioButtonsToCamera(controller, expIndividualRb, expUnifiedRb,
+                            gainIndividualRb, gainUnifiedRb, angleFieldsMap);
                     UIFunctions.notifyUserOfError("Failed to set exposure mode: " + ex.getMessage(), "Error");
                 }
             });
@@ -238,9 +244,12 @@ public class CameraControlController {
                 try {
                     boolean expInd = expIndividualRb.isSelected();
                     boolean gainInd = gainIndividualRb.isSelected();
-                    controller.setCameraMode(expInd, gainInd);
+                    controller.withLiveModeHandling(() ->
+                            controller.setCameraMode(expInd, gainInd));
                     updateAllFieldStates(angleFieldsMap, expInd, gainInd);
                 } catch (IOException ex) {
+                    revertRadioButtonsToCamera(controller, expIndividualRb, expUnifiedRb,
+                            gainIndividualRb, gainUnifiedRb, angleFieldsMap);
                     UIFunctions.notifyUserOfError("Failed to set gain mode: " + ex.getMessage(), "Error");
                 }
             });
@@ -248,9 +257,12 @@ public class CameraControlController {
                 try {
                     boolean expInd = expIndividualRb.isSelected();
                     boolean gainInd = gainIndividualRb.isSelected();
-                    controller.setCameraMode(expInd, gainInd);
+                    controller.withLiveModeHandling(() ->
+                            controller.setCameraMode(expInd, gainInd));
                     updateAllFieldStates(angleFieldsMap, expInd, gainInd);
                 } catch (IOException ex) {
+                    revertRadioButtonsToCamera(controller, expIndividualRb, expUnifiedRb,
+                            gainIndividualRb, gainUnifiedRb, angleFieldsMap);
                     UIFunctions.notifyUserOfError("Failed to set gain mode: " + ex.getMessage(), "Error");
                 }
             });
@@ -596,38 +608,10 @@ public class CameraControlController {
                 }
             }
 
-            // Check if live mode is running
-            boolean wasLive = false;
-            try {
-                wasLive = controller.isLiveModeRunning();
-                if (wasLive) {
-                    logger.info("Live mode is running - turning off for settings change");
-                    controller.setLiveMode(false);
-                    // Small delay to let the camera settle
-                    Thread.sleep(100);
-                }
-            } catch (IOException e) {
-                logger.warn("Could not check/set live mode: {} - proceeding anyway", e.getMessage());
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-
-            // Apply the settings
-            controller.applyCameraSettingsForAngle(angleName, exposures, gains, angleDegrees);
-
-            // Turn live mode back on if it was running
-            if (wasLive) {
-                try {
-                    // Small delay to let settings take effect
-                    Thread.sleep(100);
-                    controller.setLiveMode(true);
-                    logger.info("Live mode restored after settings change");
-                } catch (IOException e) {
-                    logger.warn("Could not restore live mode: {}", e.getMessage());
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
+            // Apply settings with live mode handling - stops live mode if running,
+            // applies settings, then restores live mode
+            controller.withLiveModeHandling(() ->
+                    controller.applyCameraSettingsForAngle(angleName, exposures, gains, angleDegrees));
 
             // Show status with any gain warnings
             if (gainWarnings.length() > 0) {
@@ -778,16 +762,21 @@ public class CameraControlController {
                 gainIndividualRb.setSelected(targetGainIndividual);
                 gainUnifiedRb.setSelected(!targetGainIndividual);
 
-                // Send mode change to camera
-                controller.setCameraMode(targetExpIndividual, targetGainIndividual);
-
-                // Update field enabled/disabled states
-                updateAllFieldStates(angleFieldsMap, targetExpIndividual, targetGainIndividual);
+                // Send mode change to camera, wrapping with live mode handling
+                // to avoid JAI error 11018 if live streaming is active
+                controller.withLiveModeHandling(() ->
+                        controller.setCameraMode(targetExpIndividual, targetGainIndividual));
             }
+
+            // Always update field states to match the detected mode, even if the camera
+            // was already in the correct mode. Fields start all-enabled by default, so
+            // skipping this when modeChanged==false leaves fields in the wrong state.
+            updateAllFieldStates(angleFieldsMap, targetExpIndividual, targetGainIndividual);
 
         } catch (Exception e) {
             logger.warn("Could not detect/set mode from YAML: {}", e.getMessage());
-            // Non-fatal - user can still set mode manually
+            // Non-fatal - still update field states based on current radio button selections
+            updateAllFieldStates(angleFieldsMap, expIndividualRb.isSelected(), gainIndividualRb.isSelected());
         }
     }
 
@@ -933,6 +922,36 @@ public class CameraControlController {
             gainR.setStyle(gainIndividual ? enabledStyle : disabledStyle);
             gainG.setStyle(gainIndividual ? enabledStyle : disabledStyle);
             gainB.setStyle(gainIndividual ? enabledStyle : disabledStyle);
+        }
+    }
+
+    /**
+     * Reverts radio buttons and field states to match the actual camera mode.
+     * Called when a setCameraMode call fails (e.g., due to live mode error)
+     * to keep UI in sync with the real camera state.
+     *
+     * @param controller MicroscopeController to query actual camera mode
+     * @param expIndividualRb Exposure individual radio button
+     * @param expUnifiedRb Exposure unified radio button
+     * @param gainIndividualRb Gain individual radio button
+     * @param gainUnifiedRb Gain unified radio button
+     * @param angleFieldsMap Map of angle name to UI fields
+     */
+    private static void revertRadioButtonsToCamera(MicroscopeController controller,
+                                                    RadioButton expIndividualRb, RadioButton expUnifiedRb,
+                                                    RadioButton gainIndividualRb, RadioButton gainUnifiedRb,
+                                                    Map<String, AngleFields> angleFieldsMap) {
+        try {
+            MicroscopeSocketClient.CameraModeResult mode = controller.getCameraMode();
+            expIndividualRb.setSelected(mode.exposureIndividual());
+            expUnifiedRb.setSelected(!mode.exposureIndividual());
+            gainIndividualRb.setSelected(mode.gainIndividual());
+            gainUnifiedRb.setSelected(!mode.gainIndividual());
+            updateAllFieldStates(angleFieldsMap, mode.exposureIndividual(), mode.gainIndividual());
+            logger.info("Reverted radio buttons to camera state: exp_individual={}, gain_individual={}",
+                    mode.exposureIndividual(), mode.gainIndividual());
+        } catch (IOException ex) {
+            logger.warn("Could not query camera mode for revert: {}", ex.getMessage());
         }
     }
 
