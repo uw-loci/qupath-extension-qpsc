@@ -62,6 +62,10 @@ public class CameraControlController {
     private static final double GAIN_BLUE_MIN = 0.47;
     private static final double GAIN_BLUE_MAX = 4.0;
 
+    /** JAI unified gain limits (applied equally to all channels) */
+    private static final double GAIN_UNIFIED_MIN = 1.0;
+    private static final double GAIN_UNIFIED_MAX = 8.0;
+
     /** Style for invalid input fields */
     private static final String STYLE_INVALID = "-fx-border-color: red; -fx-border-width: 2px;";
     private static final String STYLE_WARNING = "-fx-border-color: orange; -fx-border-width: 2px;";
@@ -270,6 +274,40 @@ public class CameraControlController {
 
         content.getChildren().add(modeBox);
 
+        // --- White Balance Mode Section (JAI only) ---
+        VBox wbModeBox = new VBox(5);
+        wbModeBox.setPadding(new Insets(5, 0, 5, 0));
+
+        ComboBox<String> wbModeCombo = new ComboBox<>();
+        wbModeCombo.getItems().addAll("Off", "Continuous", "Once");
+        wbModeCombo.setValue("Off");
+
+        Button applyWbModeButton = new Button("Apply WB Mode");
+        applyWbModeButton.setOnAction(e -> {
+            String selected = wbModeCombo.getValue();
+            int mode = switch (selected) {
+                case "Continuous" -> 1;
+                case "Once" -> 2;
+                default -> 0;
+            };
+            try {
+                controller.withLiveModeHandling(() ->
+                        controller.setWhiteBalanceMode(mode));
+                logger.info("Applied WB mode: {}", selected);
+            } catch (IOException ex) {
+                UIFunctions.notifyUserOfError("Failed to set WB mode: " + ex.getMessage(), "Error");
+                logger.error("Failed to set WB mode: {}", ex.getMessage());
+            }
+        });
+
+        HBox wbModeRow = new HBox(10, new Label("White Balance Mode:"), wbModeCombo, applyWbModeButton);
+        wbModeRow.setAlignment(Pos.CENTER_LEFT);
+        wbModeBox.getChildren().add(wbModeRow);
+
+        if (isJAI) {
+            content.getChildren().add(wbModeBox);
+        }
+
         // --- Per-Angle Settings Section (Flat Layout) ---
         Label settingsHeader = new Label(res.getString("camera.label.perAngleSettings"));
         settingsHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
@@ -282,7 +320,12 @@ public class CameraControlController {
         rotationNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #cc6600; -fx-font-weight: bold;");
         rotationNote.setWrapText(true);
 
-        content.getChildren().addAll(new Separator(), settingsHeader, settingsNote, rotationNote);
+        // WB method provenance label - shows which calibration method produced current settings
+        Label wbMethodLabel = new Label("WB: No calibration loaded");
+        wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
+        wbMethodLabel.setWrapText(true);
+
+        content.getChildren().addAll(new Separator(), settingsHeader, settingsNote, rotationNote, wbMethodLabel);
 
         // Global status label
         Label statusLabel = new Label();
@@ -436,7 +479,8 @@ public class CameraControlController {
             if (objective != null && detector != null) {
                 reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res,
                         isJAIFinal ? controller : null,
-                        expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb);
+                        expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb,
+                        wbMethodLabel);
             }
         });
 
@@ -447,7 +491,8 @@ public class CameraControlController {
             if (objective != null && detector != null) {
                 reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res,
                         isJAIFinal ? controller : null,
-                        expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb);
+                        expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb,
+                        wbMethodLabel);
             }
         });
         detectorCombo.setOnAction(e -> {
@@ -456,7 +501,8 @@ public class CameraControlController {
             if (objective != null && detector != null) {
                 reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res,
                         isJAIFinal ? controller : null,
-                        expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb);
+                        expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb,
+                        wbMethodLabel);
             }
         });
 
@@ -466,7 +512,8 @@ public class CameraControlController {
         if (objective != null && detector != null) {
             reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res,
                     isJAI ? controller : null,
-                    expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb);
+                    expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb,
+                    wbMethodLabel);
         }
 
         // Finalize dialog
@@ -571,9 +618,10 @@ public class CameraControlController {
             // Parse gain values - use unified field if individual fields are disabled
             float[] gains;
             if (fields.gainR.isDisabled()) {
-                // Unified gain mode - use the "All" field value for all channels
+                // Unified gain mode - send length-1 array so Python server
+                // calls set_unified_gain() instead of set_analog_gains()
                 float gainAll = Float.parseFloat(fields.gainAll.getText());
-                gains = new float[]{gainAll, gainAll, gainAll};
+                gains = new float[]{gainAll};
             } else {
                 // Individual gain mode - use per-channel fields
                 gains = new float[]{
@@ -587,10 +635,10 @@ public class CameraControlController {
             StringBuilder gainWarnings = new StringBuilder();
             boolean unifiedGainMode = fields.gainR.isDisabled();
             if (unifiedGainMode) {
-                // In unified mode, check against the most restrictive range (R/B: 0.47-4.0)
-                if (gains[0] < GAIN_RED_MIN || gains[0] > GAIN_RED_MAX) {
-                    gainWarnings.append(String.format("Gain %.2f clamped to %.2f-%.1f for R/B channels; ",
-                            gains[0], GAIN_RED_MIN, GAIN_RED_MAX));
+                // In unified mode, check against unified gain range (1.0-8.0)
+                if (gains[0] < GAIN_UNIFIED_MIN || gains[0] > GAIN_UNIFIED_MAX) {
+                    gainWarnings.append(String.format("Unified gain %.2f outside valid range %.1f-%.1f; ",
+                            gains[0], GAIN_UNIFIED_MIN, GAIN_UNIFIED_MAX));
                 }
             } else {
                 // In individual mode, check each channel separately
@@ -655,13 +703,15 @@ public class CameraControlController {
      * @param expUnifiedRb Exposure unified radio button
      * @param gainIndividualRb Gain individual radio button
      * @param gainUnifiedRb Gain unified radio button
+     * @param wbMethodLabel Label to display WB method provenance (null to skip)
      */
     @SuppressWarnings("unchecked")
     private static void reloadAllAnglesFromYAML(MicroscopeConfigManager mgr, String objective, String detector,
                                                 Map<String, AngleFields> angleFieldsMap, Label statusLabel,
                                                 ResourceBundle res, MicroscopeController controller,
                                                 RadioButton expIndividualRb, RadioButton expUnifiedRb,
-                                                RadioButton gainIndividualRb, RadioButton gainUnifiedRb) {
+                                                RadioButton gainIndividualRb, RadioButton gainUnifiedRb,
+                                                Label wbMethodLabel) {
         logger.info("Reloading all angles from YAML for objective={}, detector={}", objective, detector);
 
         // Re-read the YAML files from disk so we pick up any changes made by
@@ -691,9 +741,18 @@ public class CameraControlController {
                         expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb,
                         angleFieldsMap, statusLabel);
             }
+
+            // Update WB method provenance label from YAML gains data
+            if (wbMethodLabel != null) {
+                updateWbMethodLabel(mgr, objective, detector, wbMethodLabel);
+            }
         } else {
             statusLabel.setText(String.format(res.getString("camera.error.noCalibration"), objective, detector));
             statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: orange;");
+            if (wbMethodLabel != null) {
+                wbMethodLabel.setText("WB: No calibration loaded");
+                wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
+            }
         }
     }
 
@@ -858,6 +917,45 @@ public class CameraControlController {
                 statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
             }
             return false;
+        }
+    }
+
+    /**
+     * Updates the WB method provenance label by reading wb_method from the first
+     * available angle in the gains section of the imaging profile.
+     */
+    @SuppressWarnings("unchecked")
+    private static void updateWbMethodLabel(MicroscopeConfigManager mgr, String objective, String detector,
+                                             Label wbMethodLabel) {
+        String wbMethod = null;
+        for (String angleName : PPM_ANGLES.keySet()) {
+            Object gainsObj = mgr.getProfileSetting("ppm", objective, detector, "gains", angleName);
+            if (gainsObj instanceof Map<?, ?>) {
+                Map<String, Object> gainValues = (Map<String, Object>) gainsObj;
+                Object method = gainValues.get("wb_method");
+                if (method != null) {
+                    wbMethod = method.toString();
+                }
+                break; // Only need to check one angle
+            }
+        }
+
+        if (wbMethod == null || wbMethod.equals("unknown")) {
+            wbMethodLabel.setText("WB: Method unknown");
+            wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
+        } else if (wbMethod.startsWith("manual_")) {
+            String displayName = wbMethod.equals("manual_simple") ? "Manual simple" : "Manual PPM";
+            wbMethodLabel.setText("WB: " + displayName + " calibration (reproducible)");
+            wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green; -fx-font-weight: bold;");
+        } else if (wbMethod.equals("continuous")) {
+            wbMethodLabel.setText("WB: Continuous auto (not reproducible)");
+            wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: orange; -fx-font-weight: bold;");
+        } else if (wbMethod.equals("once")) {
+            wbMethodLabel.setText("WB: One-shot auto (not reproducible)");
+            wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: orange; -fx-font-weight: bold;");
+        } else {
+            wbMethodLabel.setText("WB: " + wbMethod);
+            wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
         }
     }
 

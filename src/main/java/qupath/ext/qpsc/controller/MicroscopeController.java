@@ -556,6 +556,19 @@ public class MicroscopeController {
     public void applyCameraSettingsForAngle(String angleName, float[] exposures, float[] gains, double rotationDegrees) throws IOException {
         logger.info("Applying camera settings for angle '{}' at {} degrees", angleName, rotationDegrees);
 
+        // Set camera mode to match the array lengths being sent.
+        // This ensures the camera is in the correct mode even when called
+        // outside the Camera Control dialog context (e.g., from acquisition workflows).
+        boolean exposureIndividual = (exposures.length == 3);
+        boolean gainIndividual = (gains.length == 3);
+        try {
+            socketClient.setCameraMode(exposureIndividual, gainIndividual);
+            logger.info("Set camera mode: exposure_individual={}, gain_individual={}", exposureIndividual, gainIndividual);
+        } catch (IOException e) {
+            logger.error("Failed to set camera mode: {}", e.getMessage());
+            throw new IOException("Failed to set camera mode for " + angleName, e);
+        }
+
         // First move the rotation stage
         try {
             socketClient.moveStageR(rotationDegrees);
@@ -565,25 +578,44 @@ public class MicroscopeController {
             throw new IOException("Failed to move rotation stage to " + rotationDegrees + " degrees", e);
         }
 
-        // Set exposures (this will auto-enable individual mode if needed)
+        // Set exposures
         try {
             socketClient.setExposures(exposures);
-            logger.info("Set exposures for {}: R={}, G={}, B={}", angleName, exposures[0], exposures[1], exposures[2]);
+            logger.info("Set exposures for {}: {}", angleName, java.util.Arrays.toString(exposures));
         } catch (IOException e) {
             logger.error("Failed to set exposures: {}", e.getMessage());
             throw new IOException("Failed to set exposures for " + angleName, e);
         }
 
-        // Set gains (this will auto-enable individual mode if needed)
+        // Set gains
         try {
             socketClient.setGains(gains);
-            logger.info("Set gains for {}: R={}, G={}, B={}", angleName, gains[0], gains[1], gains[2]);
+            logger.info("Set gains for {}: {}", angleName, java.util.Arrays.toString(gains));
         } catch (IOException e) {
             logger.error("Failed to set gains: {}", e.getMessage());
             throw new IOException("Failed to set gains for " + angleName, e);
         }
 
         logger.info("Camera settings applied successfully for angle '{}'", angleName);
+    }
+
+    // ==================== White Balance Mode Control ====================
+
+    /**
+     * Sets the camera's white balance mode.
+     *
+     * @param mode 0=Off, 1=Continuous, 2=Once (one-shot auto)
+     * @throws IOException if communication fails
+     */
+    public void setWhiteBalanceMode(int mode) throws IOException {
+        try {
+            socketClient.setWhiteBalanceMode(mode);
+            String[] modeNames = {"Off", "Continuous", "Once"};
+            logger.info("Set white balance mode to: {}", modeNames[mode]);
+        } catch (IOException e) {
+            logger.error("Failed to set white balance mode: {}", e.getMessage());
+            throw new IOException("Failed to set white balance mode via socket", e);
+        }
     }
 
     // ==================== Live Mode Control Methods ====================

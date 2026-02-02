@@ -164,6 +164,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         /** Set gain values */
         SETGAIN("setgain_"),
 
+        // White Balance Mode Control
+        /** Set camera white balance mode (0=Off, 1=Continuous, 2=Once) */
+        SETWBMD("setwbmd_"),
+
         // Live Mode Control Commands
         /** Check if live mode is currently running */
         GETLIVE("getlive_"),
@@ -3358,6 +3362,34 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
 
         logger.info("Gain set successfully: {}", java.util.Arrays.toString(gains));
+    }
+
+    // ==================== White Balance Mode Control ====================
+
+    /**
+     * Sets the camera's white balance mode.
+     *
+     * @param mode 0=Off, 1=Continuous, 2=Once (one-shot auto)
+     * @throws IOException if communication fails
+     */
+    public void setWhiteBalanceMode(int mode) throws IOException {
+        if (mode < 0 || mode > 2) {
+            throw new IllegalArgumentException("WB mode must be 0 (Off), 1 (Continuous), or 2 (Once)");
+        }
+
+        byte[] payload = new byte[]{(byte) mode};
+        byte[] response = executeCommand(Command.SETWBMD, payload, 8);
+        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+
+        if (!responseStr.startsWith("ACK")) {
+            if (responseStr.startsWith("ERR_NJAI")) {
+                throw new IOException("White balance mode requires JAI camera");
+            }
+            throw new IOException("Failed to set WB mode: " + responseStr);
+        }
+
+        String[] modeNames = {"Off", "Continuous", "Once"};
+        logger.info("White balance mode set to: {}", modeNames[mode]);
     }
 
     // ==================== Live Mode Control Methods ====================
