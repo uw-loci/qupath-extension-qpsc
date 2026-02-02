@@ -656,6 +656,12 @@ public class CameraControlController {
                                                 ResourceBundle res) {
         logger.info("Reloading all angles from YAML for objective={}, detector={}", objective, detector);
 
+        // Re-read the YAML files from disk so we pick up any changes made by
+        // external processes (e.g., Python white balance calibration writes to
+        // imageprocessing_PPM.yml while Java keeps a cached copy in memory).
+        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        mgr.reload(configPath);
+
         boolean anyLoaded = false;
         for (String angleName : PPM_ANGLES.keySet()) {
             AngleFields fields = angleFieldsMap.get(angleName);
@@ -720,6 +726,9 @@ public class CameraControlController {
             if (gainsObj instanceof Map<?, ?>) {
                 Map<String, Object> gainValues = (Map<String, Object>) gainsObj;
 
+                if (gainValues.containsKey("unified_gain")) {
+                    fields.gainAll.setText(String.valueOf(gainValues.get("unified_gain")));
+                }
                 if (gainValues.containsKey("r")) {
                     fields.gainR.setText(String.valueOf(gainValues.get("r")));
                 }
@@ -730,8 +739,9 @@ public class CameraControlController {
                     fields.gainB.setText(String.valueOf(gainValues.get("b")));
                 }
 
-                logger.debug("Loaded gains for {}: r={}, g={}, b={}",
-                        angleName, gainValues.get("r"), gainValues.get("g"), gainValues.get("b"));
+                logger.debug("Loaded gains for {}: unified={}, r={}, g={}, b={}",
+                        angleName, gainValues.get("unified_gain"),
+                        gainValues.get("r"), gainValues.get("g"), gainValues.get("b"));
             }
 
             if (statusLabel != null) {
