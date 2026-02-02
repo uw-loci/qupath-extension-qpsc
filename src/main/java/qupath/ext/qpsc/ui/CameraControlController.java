@@ -417,11 +417,14 @@ public class CameraControlController {
         content.getChildren().add(statusLabel);
 
         // Reload all button action
+        final boolean isJAIFinal = isJAI;
         reloadAllButton.setOnAction(e -> {
             String objective = objectiveCombo.getValue();
             String detector = detectorCombo.getValue();
             if (objective != null && detector != null) {
-                reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res);
+                reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res,
+                        isJAIFinal ? controller : null,
+                        expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb);
             }
         });
 
@@ -430,27 +433,28 @@ public class CameraControlController {
             String objective = objectiveCombo.getValue();
             String detector = detectorCombo.getValue();
             if (objective != null && detector != null) {
-                reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res);
+                reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res,
+                        isJAIFinal ? controller : null,
+                        expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb);
             }
         });
         detectorCombo.setOnAction(e -> {
             String objective = objectiveCombo.getValue();
             String detector = detectorCombo.getValue();
             if (objective != null && detector != null) {
-                reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res);
+                reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res,
+                        isJAIFinal ? controller : null,
+                        expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb);
             }
         });
 
-        // Initial load of values
+        // Initial load of values (sets mode radio buttons and field states from YAML)
         String objective = objectiveCombo.getValue();
         String detector = detectorCombo.getValue();
         if (objective != null && detector != null) {
-            reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res);
-        }
-
-        // Set initial field states based on current mode (JAI only)
-        if (isJAI) {
-            updateAllFieldStates(angleFieldsMap, expIndividualRb.isSelected(), gainIndividualRb.isSelected());
+            reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res,
+                    isJAI ? controller : null,
+                    expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb);
         }
 
         // Finalize dialog
@@ -650,10 +654,30 @@ public class CameraControlController {
 
     /**
      * Reloads calibration values for all angles from YAML configuration.
+     *
+     * <p>Re-reads the YAML from disk, loads all angle values, and sets the
+     * exposure/gain mode radio buttons to match what the calibration profile
+     * contains (per-channel exposures = individual exposure mode,
+     * unified_gain present = unified gain mode).
+     *
+     * @param mgr Config manager
+     * @param objective Objective ID
+     * @param detector Detector ID
+     * @param angleFieldsMap Map of angle name to UI fields
+     * @param statusLabel Status label to update
+     * @param res Resource bundle
+     * @param controller MicroscopeController for setting camera mode (null to skip mode changes)
+     * @param expIndividualRb Exposure individual radio button
+     * @param expUnifiedRb Exposure unified radio button
+     * @param gainIndividualRb Gain individual radio button
+     * @param gainUnifiedRb Gain unified radio button
      */
+    @SuppressWarnings("unchecked")
     private static void reloadAllAnglesFromYAML(MicroscopeConfigManager mgr, String objective, String detector,
                                                 Map<String, AngleFields> angleFieldsMap, Label statusLabel,
-                                                ResourceBundle res) {
+                                                ResourceBundle res, MicroscopeController controller,
+                                                RadioButton expIndividualRb, RadioButton expUnifiedRb,
+                                                RadioButton gainIndividualRb, RadioButton gainUnifiedRb) {
         logger.info("Reloading all angles from YAML for objective={}, detector={}", objective, detector);
 
         // Re-read the YAML files from disk so we pick up any changes made by
@@ -674,9 +698,96 @@ public class CameraControlController {
         if (anyLoaded) {
             statusLabel.setText(res.getString("camera.status.reloaded"));
             statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
+
+            // Detect the correct camera mode from the YAML profile structure and
+            // set radio buttons + camera mode accordingly. This ensures "Apply & Go"
+            // reads the correct fields (e.g., unified gain instead of per-channel).
+            if (controller != null) {
+                detectAndSetModeFromYAML(mgr, objective, detector, controller,
+                        expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb,
+                        angleFieldsMap, statusLabel);
+            }
         } else {
             statusLabel.setText(String.format(res.getString("camera.error.noCalibration"), objective, detector));
             statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: orange;");
+        }
+    }
+
+    /**
+     * Detects the appropriate camera mode from YAML profile structure and sets
+     * radio buttons and camera mode to match.
+     *
+     * <p>WB calibration writes per-channel exposures (r/g/b) with a unified_gain.
+     * This method inspects the first available angle to detect:
+     * <ul>
+     *   <li>Per-channel exposures (r/g/b keys) -> exposure individual mode</li>
+     *   <li>unified_gain key present -> gain unified mode</li>
+     * </ul>
+     */
+    @SuppressWarnings("unchecked")
+    private static void detectAndSetModeFromYAML(MicroscopeConfigManager mgr, String objective, String detector,
+                                                  MicroscopeController controller,
+                                                  RadioButton expIndividualRb, RadioButton expUnifiedRb,
+                                                  RadioButton gainIndividualRb, RadioButton gainUnifiedRb,
+                                                  Map<String, AngleFields> angleFieldsMap, Label statusLabel) {
+        try {
+            // Check exposure structure from first available angle
+            boolean hasPerChannelExposures = false;
+            boolean hasUnifiedGain = false;
+
+            Map<String, Object> exposuresMap = mgr.getModalityExposures("ppm", objective, detector);
+            if (exposuresMap != null) {
+                for (String angleName : PPM_ANGLES.keySet()) {
+                    Object angleExp = exposuresMap.get(angleName);
+                    if (angleExp instanceof Map<?, ?>) {
+                        Map<String, Object> expValues = (Map<String, Object>) angleExp;
+                        if (expValues.containsKey("r") && expValues.containsKey("g") && expValues.containsKey("b")) {
+                            hasPerChannelExposures = true;
+                        }
+                        break; // Only need to check one angle
+                    }
+                }
+            }
+
+            // Check gain structure from first available angle
+            for (String angleName : PPM_ANGLES.keySet()) {
+                Object gainsObj = mgr.getProfileSetting("ppm", objective, detector, "gains", angleName);
+                if (gainsObj instanceof Map<?, ?>) {
+                    Map<String, Object> gainValues = (Map<String, Object>) gainsObj;
+                    if (gainValues.containsKey("unified_gain")) {
+                        hasUnifiedGain = true;
+                    }
+                    break; // Only need to check one angle
+                }
+            }
+
+            // Determine target mode
+            boolean targetExpIndividual = hasPerChannelExposures;
+            boolean targetGainIndividual = !hasUnifiedGain;
+
+            boolean modeChanged = (expIndividualRb.isSelected() != targetExpIndividual)
+                    || (gainIndividualRb.isSelected() != targetGainIndividual);
+
+            if (modeChanged) {
+                logger.info("Setting camera mode from YAML profile: exposure_individual={}, gain_individual={}",
+                        targetExpIndividual, targetGainIndividual);
+
+                // Update radio buttons (setSelected does not fire onAction)
+                expIndividualRb.setSelected(targetExpIndividual);
+                expUnifiedRb.setSelected(!targetExpIndividual);
+                gainIndividualRb.setSelected(targetGainIndividual);
+                gainUnifiedRb.setSelected(!targetGainIndividual);
+
+                // Send mode change to camera
+                controller.setCameraMode(targetExpIndividual, targetGainIndividual);
+
+                // Update field enabled/disabled states
+                updateAllFieldStates(angleFieldsMap, targetExpIndividual, targetGainIndividual);
+            }
+
+        } catch (Exception e) {
+            logger.warn("Could not detect/set mode from YAML: {}", e.getMessage());
+            // Non-fatal - user can still set mode manually
         }
     }
 
