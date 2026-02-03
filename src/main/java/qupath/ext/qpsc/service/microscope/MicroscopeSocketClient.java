@@ -172,7 +172,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
         /** Check if live mode is currently running */
         GETLIVE("getlive_"),
         /** Set live mode on (1) or off (0) */
-        SETLIVE("setlive_");
+        SETLIVE("setlive_"),
+
+        // Live Viewer Commands
+        /** Get latest frame from MM circular buffer (for live viewer) */
+        GETFRAME("getframe");
 
         private final byte[] value;
 
@@ -3429,6 +3433,68 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
 
         logger.info("Live mode set to: {}", enable ? "ON" : "OFF");
+    }
+
+    // ==================== Live Viewer Methods ====================
+
+    /**
+     * Gets the latest frame from MM's circular buffer.
+     * This reads from the buffer (near-instant) rather than triggering a new exposure.
+     * Camera must be in live mode for frames to be available.
+     *
+     * <p>Protocol:
+     * <ul>
+     *   <li>Send 8-byte GETFRAME command</li>
+     *   <li>Read 20-byte header: width, height, channels, bytesPerPixel, dataLength (big-endian int32s)</li>
+     *   <li>If width==0: no frame available, return null</li>
+     *   <li>Read dataLength bytes of raw pixel data</li>
+     * </ul>
+     *
+     * @return FrameData record, or null if no frame is available
+     * @throws IOException if communication fails
+     */
+    public qupath.ext.qpsc.ui.liveviewer.FrameData getFrame() throws IOException {
+        synchronized (socketLock) {
+            ensureConnected();
+
+            try {
+                // Send command
+                output.write(Command.GETFRAME.getValue());
+                output.flush();
+                lastActivityTime.set(System.currentTimeMillis());
+
+                // Read 20-byte header (5 big-endian int32s)
+                byte[] header = new byte[20];
+                input.readFully(header);
+                lastActivityTime.set(System.currentTimeMillis());
+
+                ByteBuffer headerBuf = ByteBuffer.wrap(header).order(ByteOrder.BIG_ENDIAN);
+                int width = headerBuf.getInt();
+                int height = headerBuf.getInt();
+                int channels = headerBuf.getInt();
+                int bytesPerPixel = headerBuf.getInt();
+                int dataLength = headerBuf.getInt();
+
+                // Zero header means no frame available
+                if (width == 0) {
+                    return null;
+                }
+
+                // Read pixel data
+                byte[] pixelData = new byte[dataLength];
+                input.readFully(pixelData);
+                lastActivityTime.set(System.currentTimeMillis());
+
+                return new qupath.ext.qpsc.ui.liveviewer.FrameData(
+                        width, height, channels, bytesPerPixel,
+                        pixelData, System.currentTimeMillis()
+                );
+
+            } catch (IOException e) {
+                handleIOException(e);
+                throw e;
+            }
+        }
     }
 
 }

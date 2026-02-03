@@ -652,6 +652,17 @@ public class MicroscopeController {
     }
 
     /**
+     * Gets the latest frame from MM's circular buffer for live viewing.
+     * Camera must be in live mode for frames to be available.
+     *
+     * @return FrameData record, or null if no frame is available
+     * @throws IOException if communication fails
+     */
+    public qupath.ext.qpsc.ui.liveviewer.FrameData getFrame() throws IOException {
+        return socketClient.getFrame();
+    }
+
+    /**
      * Wraps a camera operation with live mode stop/restart handling.
      *
      * <p>If live mode is running, it will be stopped before the operation executes

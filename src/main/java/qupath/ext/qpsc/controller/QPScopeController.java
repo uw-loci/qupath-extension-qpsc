@@ -7,7 +7,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.ui.CameraControlController;
 import qupath.ext.qpsc.ui.ServerConnectionController;
 import qupath.ext.qpsc.ui.StageMovementController;
-import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
+
 
 /**
  * QPScopeController - Main orchestrator for QuPath-side workflows
@@ -193,7 +193,7 @@ public class QPScopeController {
             }
             case "liveViewer" -> {
                 logger.debug("Launching live viewer window");
-                LiveViewerWindow.show();
+                qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.show();
             }
             case "serverConnection" -> {
                 logger.debug("Launching server connection dialog");
