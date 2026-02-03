@@ -45,13 +45,13 @@ public class CameraControlController {
 
     private static final Logger logger = LoggerFactory.getLogger(CameraControlController.class);
 
-    /** PPM angle names and their rotation values in degrees */
-    private static final Map<String, Double> PPM_ANGLES = new LinkedHashMap<>();
+    /** Default PPM angle names and their rotation values, used when config is unavailable */
+    private static final Map<String, Double> DEFAULT_PPM_ANGLES = new LinkedHashMap<>();
     static {
-        PPM_ANGLES.put("uncrossed", 90.0);
-        PPM_ANGLES.put("crossed", 0.0);
-        PPM_ANGLES.put("positive", 7.0);
-        PPM_ANGLES.put("negative", -7.0);
+        DEFAULT_PPM_ANGLES.put("uncrossed", 90.0);
+        DEFAULT_PPM_ANGLES.put("crossed", 0.0);
+        DEFAULT_PPM_ANGLES.put("positive", 7.0);
+        DEFAULT_PPM_ANGLES.put("negative", -7.0);
     }
 
     /** JAI analog gain limits per channel */
@@ -336,11 +336,14 @@ public class CameraControlController {
         final String GAIN_ROW_STYLE = "-fx-background-color: #fff7f0; -fx-padding: 4px;";      // Light peach
         final String ANGLE_HEADER_STYLE = "-fx-background-color: #e8e8e8; -fx-padding: 6px;";
 
+        // Load PPM angles from YAML config (falls back to defaults)
+        Map<String, Double> ppmAngles = loadPpmAngles(mgr);
+
         // Use VBox with individual angle "cards" for clearer grouping
         VBox anglesContainer = new VBox(10);
         anglesContainer.setPadding(new Insets(10, 0, 10, 0));
 
-        for (Map.Entry<String, Double> angleEntry : PPM_ANGLES.entrySet()) {
+        for (Map.Entry<String, Double> angleEntry : ppmAngles.entrySet()) {
             String angleName = angleEntry.getKey();
             double angleDegrees = angleEntry.getValue();
 
@@ -721,7 +724,7 @@ public class CameraControlController {
         mgr.reload(configPath);
 
         boolean anyLoaded = false;
-        for (String angleName : PPM_ANGLES.keySet()) {
+        for (String angleName : angleFieldsMap.keySet()) {
             AngleFields fields = angleFieldsMap.get(angleName);
             if (fields != null) {
                 boolean loaded = loadAngleFromYAML(mgr, objective, detector, angleName, fields, null, res);
@@ -780,7 +783,7 @@ public class CameraControlController {
 
             Map<String, Object> exposuresMap = mgr.getModalityExposures("ppm", objective, detector);
             if (exposuresMap != null) {
-                for (String angleName : PPM_ANGLES.keySet()) {
+                for (String angleName : angleFieldsMap.keySet()) {
                     Object angleExp = exposuresMap.get(angleName);
                     if (angleExp instanceof Map<?, ?>) {
                         Map<String, Object> expValues = (Map<String, Object>) angleExp;
@@ -793,7 +796,7 @@ public class CameraControlController {
             }
 
             // Check gain structure from first available angle
-            for (String angleName : PPM_ANGLES.keySet()) {
+            for (String angleName : angleFieldsMap.keySet()) {
                 Object gainsObj = mgr.getProfileSetting("ppm", objective, detector, "gains", angleName);
                 if (gainsObj instanceof Map<?, ?>) {
                     Map<String, Object> gainValues = (Map<String, Object>) gainsObj;
@@ -928,7 +931,8 @@ public class CameraControlController {
     private static void updateWbMethodLabel(MicroscopeConfigManager mgr, String objective, String detector,
                                              Label wbMethodLabel) {
         String wbMethod = null;
-        for (String angleName : PPM_ANGLES.keySet()) {
+        Map<String, Double> angles = loadPpmAngles(mgr);
+        for (String angleName : angles.keySet()) {
             Object gainsObj = mgr.getProfileSetting("ppm", objective, detector, "gains", angleName);
             if (gainsObj instanceof Map<?, ?>) {
                 Map<String, Object> gainValues = (Map<String, Object>) gainsObj;
@@ -957,6 +961,39 @@ public class CameraControlController {
             wbMethodLabel.setText("WB: " + wbMethod);
             wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
         }
+    }
+
+    /**
+     * Loads PPM rotation angles from the YAML configuration.
+     * Falls back to defaults if the config is unavailable or has no angles.
+     *
+     * @param mgr MicroscopeConfigManager instance
+     * @return ordered map of angle name to tick value in degrees
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Double> loadPpmAngles(MicroscopeConfigManager mgr) {
+        try {
+            List<Map<String, Object>> rotationAngles = mgr.getRotationAngles("ppm");
+            if (rotationAngles != null && !rotationAngles.isEmpty()) {
+                Map<String, Double> angles = new LinkedHashMap<>();
+                for (Map<String, Object> angle : rotationAngles) {
+                    String name = (String) angle.get("name");
+                    Number tick = (Number) angle.get("tick");
+                    if (name != null && tick != null) {
+                        angles.put(name, tick.doubleValue());
+                    }
+                }
+                if (!angles.isEmpty()) {
+                    logger.info("Loaded {} PPM angles from config: {}", angles.size(), angles.keySet());
+                    return angles;
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to load PPM angles from config: {}", e.getMessage());
+        }
+
+        logger.warn("No rotation angles found in config, using defaults");
+        return new LinkedHashMap<>(DEFAULT_PPM_ANGLES);
     }
 
     /**

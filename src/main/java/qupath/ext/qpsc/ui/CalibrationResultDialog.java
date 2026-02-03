@@ -4,6 +4,7 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
+import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.*;
@@ -11,8 +12,11 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.lib.gui.QuPathGUI;
 
 import javafx.embed.swing.SwingFXUtils;
 
@@ -24,9 +28,10 @@ import java.util.List;
 import javax.imageio.ImageIO;
 
 /**
- * Dialog for displaying calibration results.
+ * Non-modal window for displaying calibration results.
  *
  * Shows the calibration metrics, any warnings, and displays the calibration plot image.
+ * The window is non-modal so the user can interact with QuPath while viewing results.
  *
  * @author Mike Nelson
  * @since 1.0
@@ -119,39 +124,57 @@ public class CalibrationResultDialog {
      */
     public static void showResult(CalibrationResultData result, Runnable onRedo,
                                    CenterRetryCallback onCenterRetry) {
-        Platform.runLater(() -> {
-            Dialog<ButtonType> dialog = new Dialog<>();
-            dialog.setTitle("PPM Reference Slide Calibration Results");
+        showResult(result, onRedo, onCenterRetry, null);
+    }
 
-            if (result.success()) {
-                showSuccessDialog(dialog, result, onRedo, onCenterRetry);
-            } else {
-                showErrorDialog(dialog, result, onRedo, onCenterRetry);
+    /**
+     * Shows the calibration result dialog with optional redo, center-retry, and threshold tuning callbacks.
+     *
+     * @param result The calibration result data to display
+     * @param onRedo Callback to invoke when user clicks "Go Back and Redo" (null to hide button)
+     * @param onCenterRetry Callback to retry with manually selected center (null to hide section)
+     * @param onTuneThresholds Callback to open threshold tuning preview (null to hide button)
+     */
+    public static void showResult(CalibrationResultData result, Runnable onRedo,
+                                   CenterRetryCallback onCenterRetry, Runnable onTuneThresholds) {
+        Platform.runLater(() -> {
+            Stage stage = new Stage();
+            stage.setTitle("PPM Reference Slide Calibration Results");
+            stage.initModality(Modality.NONE);
+
+            QuPathGUI gui = QuPathGUI.getInstance();
+            if (gui != null && gui.getStage() != null) {
+                stage.initOwner(gui.getStage());
             }
 
-            dialog.showAndWait().ifPresent(btn -> {
-                if ("REDO".equals(btn.getText()) && onRedo != null) {
-                    onRedo.run();
-                }
-            });
+            VBox root = new VBox(10);
+            root.setPadding(new Insets(10));
+
+            if (result.success()) {
+                buildSuccessContent(root, stage, result, onRedo, onCenterRetry, onTuneThresholds);
+            } else {
+                buildErrorContent(root, stage, result, onRedo, onCenterRetry, onTuneThresholds);
+            }
+
+            ScrollPane scrollPane = new ScrollPane(root);
+            scrollPane.setFitToWidth(true);
+            scrollPane.setPrefViewportHeight(650);
+            scrollPane.setPrefViewportWidth(750);
+
+            Scene scene = new Scene(scrollPane);
+            stage.setScene(scene);
+            stage.setResizable(true);
+            stage.show();
         });
     }
 
-    private static void showSuccessDialog(Dialog<ButtonType> dialog, CalibrationResultData result,
-                                             Runnable onRedo, CenterRetryCallback onCenterRetry) {
+    private static void buildSuccessContent(VBox root, Stage stage, CalibrationResultData result,
+                                             Runnable onRedo, CenterRetryCallback onCenterRetry,
+                                             Runnable onTuneThresholds) {
         // Header
-        VBox headerBox = new VBox(10);
-        headerBox.setPadding(new Insets(10));
-
         Label headerLabel = new Label("Calibration Completed Successfully");
         headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: green;");
-
-        headerBox.getChildren().add(headerLabel);
-        dialog.getDialogPane().setHeader(headerBox);
-
-        // Main content
-        VBox contentBox = new VBox(15);
-        contentBox.setPadding(new Insets(20));
+        root.getChildren().add(headerLabel);
 
         // Results section
         GridPane resultsGrid = new GridPane();
@@ -190,31 +213,31 @@ public class CalibrationResultDialog {
         resultsGrid.add(calibPathValue, 1, row);
         row++;
 
-        contentBox.getChildren().add(resultsGrid);
+        root.getChildren().add(resultsGrid);
 
         // Warnings section (if any)
         if (result.warnings() != null && !result.warnings().isEmpty()) {
-            contentBox.getChildren().add(new Separator());
+            root.getChildren().add(new Separator());
 
             Label warningsHeader = new Label("Warnings:");
             warningsHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: orange;");
-            contentBox.getChildren().add(warningsHeader);
+            root.getChildren().add(warningsHeader);
 
             for (String warning : result.warnings()) {
                 Label warningLabel = new Label("  - " + warning);
                 warningLabel.setStyle("-fx-text-fill: orange; -fx-font-size: 11px;");
                 warningLabel.setWrapText(true);
-                contentBox.getChildren().add(warningLabel);
+                root.getChildren().add(warningLabel);
             }
         }
 
-        contentBox.getChildren().add(new Separator());
+        root.getChildren().add(new Separator());
 
         // Plot image
         if (result.plotPath() != null) {
             Label plotLabel = new Label("Calibration Plot:");
             plotLabel.setStyle("-fx-font-weight: bold;");
-            contentBox.getChildren().add(plotLabel);
+            root.getChildren().add(plotLabel);
 
             try {
                 File plotFile = new File(result.plotPath());
@@ -236,90 +259,53 @@ public class CalibrationResultDialog {
                     // Center the image
                     HBox imageBox = new HBox(imageView);
                     imageBox.setAlignment(Pos.CENTER);
-                    contentBox.getChildren().add(imageBox);
+                    root.getChildren().add(imageBox);
                 } else {
                     Label noPlotLabel = new Label("(Plot image not found: " + result.plotPath() + ")");
                     noPlotLabel.setStyle("-fx-text-fill: gray;");
-                    contentBox.getChildren().add(noPlotLabel);
+                    root.getChildren().add(noPlotLabel);
                 }
             } catch (Exception e) {
                 logger.error("Failed to load plot image", e);
                 Label errorLabel = new Label("(Failed to load plot image: " + e.getMessage() + ")");
                 errorLabel.setStyle("-fx-text-fill: red;");
-                contentBox.getChildren().add(errorLabel);
+                root.getChildren().add(errorLabel);
             }
         }
 
         // Center selection section (if callback provided and image available)
         if (onCenterRetry != null) {
-            addCenterSelectionSection(contentBox, dialog, result, onCenterRetry);
+            addCenterSelectionSection(root, stage, result, onCenterRetry);
         }
 
-        // Wrap in scroll pane for large content
-        ScrollPane scrollPane = new ScrollPane(contentBox);
-        scrollPane.setFitToWidth(true);
-        scrollPane.setPrefViewportHeight(600);
-        scrollPane.setPrefViewportWidth(750);
+        root.getChildren().add(new Separator());
 
-        dialog.getDialogPane().setContent(scrollPane);
-
-        // Buttons - use CANCEL_CLOSE for Close button so X button works
-        ButtonType openFolderType = new ButtonType("Open Folder", ButtonBar.ButtonData.LEFT);
-        ButtonType closeType = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
-        dialog.getDialogPane().getButtonTypes().addAll(openFolderType, closeType);
-
-        // Add redo button if callback is provided
-        if (onRedo != null) {
-            ButtonType redoType = new ButtonType("REDO", ButtonBar.ButtonData.BACK_PREVIOUS);
-            dialog.getDialogPane().getButtonTypes().add(redoType);
-            Button redoButton = (Button) dialog.getDialogPane().lookupButton(redoType);
-            redoButton.setText("Go Back and Redo");
-        }
-
-        // Handle open folder button
-        Button openFolderButton = (Button) dialog.getDialogPane().lookupButton(openFolderType);
-        openFolderButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
-            try {
-                File calibFile = new File(result.calibrationPath());
-                File parentDir = calibFile.getParentFile();
-                if (parentDir != null && parentDir.exists()) {
-                    Desktop.getDesktop().open(parentDir);
-                }
-            } catch (Exception e) {
-                logger.error("Failed to open folder", e);
-            }
-            event.consume();  // Don't close dialog
-        });
+        // Button bar
+        HBox buttonBar = buildButtonBar(stage, result, onRedo, onTuneThresholds, true);
+        root.getChildren().add(buttonBar);
     }
 
-    private static void showErrorDialog(Dialog<ButtonType> dialog, CalibrationResultData result,
-                                            Runnable onRedo, CenterRetryCallback onCenterRetry) {
+    private static void buildErrorContent(VBox root, Stage stage, CalibrationResultData result,
+                                            Runnable onRedo, CenterRetryCallback onCenterRetry,
+                                            Runnable onTuneThresholds) {
         // Header
-        VBox headerBox = new VBox(10);
-        headerBox.setPadding(new Insets(10));
-
         Label headerLabel = new Label("Calibration Failed");
         headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: red;");
+        root.getChildren().add(headerLabel);
 
-        headerBox.getChildren().add(headerLabel);
-        dialog.getDialogPane().setHeader(headerBox);
-
-        // Main content
-        VBox contentBox = new VBox(15);
-        contentBox.setPadding(new Insets(20));
-
+        // Error details
         Label errorLabel = new Label("Error:");
         errorLabel.setStyle("-fx-font-weight: bold;");
-        contentBox.getChildren().add(errorLabel);
+        root.getChildren().add(errorLabel);
 
         TextArea errorText = new TextArea(result.errorMessage());
         errorText.setEditable(false);
         errorText.setWrapText(true);
         errorText.setPrefRowCount(4);
         errorText.setStyle("-fx-font-family: monospace;");
-        contentBox.getChildren().add(errorText);
+        root.getChildren().add(errorText);
 
-        contentBox.getChildren().add(new Separator());
+        root.getChildren().add(new Separator());
 
         // Debug images section (if available)
         boolean hasDebugImages = (result.imagePath() != null || result.maskPath() != null);
@@ -328,7 +314,7 @@ public class CalibrationResultDialog {
         if (hasDebugImages) {
             Label debugLabel = new Label("Debug Images (for troubleshooting):");
             debugLabel.setStyle("-fx-font-weight: bold;");
-            contentBox.getChildren().add(debugLabel);
+            root.getChildren().add(debugLabel);
 
             // Show segmentation mask if available (most useful for debugging)
             if (result.maskPath() != null) {
@@ -339,7 +325,7 @@ public class CalibrationResultDialog {
 
                         Label maskLabel = new Label("Segmentation Mask:");
                         maskLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
-                        contentBox.getChildren().add(maskLabel);
+                        root.getChildren().add(maskLabel);
 
                         Image maskImage = new Image(new FileInputStream(maskFile));
                         ImageView maskView = new ImageView(maskImage);
@@ -357,7 +343,7 @@ public class CalibrationResultDialog {
 
                         HBox maskBox = new HBox(maskView);
                         maskBox.setAlignment(Pos.CENTER);
-                        contentBox.getChildren().add(maskBox);
+                        root.getChildren().add(maskBox);
 
                         Label maskHint = new Label(
                             "White pixels = detected foreground (colored regions above threshold).\n" +
@@ -367,17 +353,17 @@ public class CalibrationResultDialog {
                         );
                         maskHint.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888;");
                         maskHint.setWrapText(true);
-                        contentBox.getChildren().add(maskHint);
+                        root.getChildren().add(maskHint);
                     } else {
                         Label noMaskLabel = new Label("(Mask file not found: " + result.maskPath() + ")");
                         noMaskLabel.setStyle("-fx-text-fill: gray; -fx-font-size: 10px;");
-                        contentBox.getChildren().add(noMaskLabel);
+                        root.getChildren().add(noMaskLabel);
                     }
                 } catch (Exception e) {
                     logger.error("Failed to load mask image", e);
                     Label errorMaskLabel = new Label("(Failed to load mask: " + e.getMessage() + ")");
                     errorMaskLabel.setStyle("-fx-text-fill: gray; -fx-font-size: 10px;");
-                    contentBox.getChildren().add(errorMaskLabel);
+                    root.getChildren().add(errorMaskLabel);
                 }
             }
 
@@ -390,27 +376,27 @@ public class CalibrationResultDialog {
                 Label imgPathLabel = new Label("Captured image: " + result.imagePath());
                 imgPathLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #888888;");
                 imgPathLabel.setWrapText(true);
-                contentBox.getChildren().add(imgPathLabel);
+                root.getChildren().add(imgPathLabel);
             }
             if (result.maskPath() != null) {
                 Label maskPathLabel = new Label("Segmentation mask: " + result.maskPath());
                 maskPathLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #888888;");
                 maskPathLabel.setWrapText(true);
-                contentBox.getChildren().add(maskPathLabel);
+                root.getChildren().add(maskPathLabel);
             }
 
-            contentBox.getChildren().add(new Separator());
+            root.getChildren().add(new Separator());
         }
 
         // Center selection section (if callback provided and image available)
         if (onCenterRetry != null) {
-            addCenterSelectionSection(contentBox, dialog, result, onCenterRetry);
+            addCenterSelectionSection(root, stage, result, onCenterRetry);
         }
 
         // Troubleshooting tips
         Label tipsLabel = new Label("Troubleshooting Tips:");
         tipsLabel.setStyle("-fx-font-weight: bold;");
-        contentBox.getChildren().add(tipsLabel);
+        root.getChildren().add(tipsLabel);
 
         String tips =
             "1. Ensure the calibration slide is properly positioned and focused\n" +
@@ -421,35 +407,27 @@ public class CalibrationResultDialog {
 
         Label tipsText = new Label(tips);
         tipsText.setStyle("-fx-font-size: 11px;");
-        contentBox.getChildren().add(tipsText);
+        root.getChildren().add(tipsText);
 
-        // Wrap in scroll pane for potentially large content with images
-        ScrollPane scrollPane = new ScrollPane(contentBox);
-        scrollPane.setFitToWidth(true);
-        scrollPane.setPrefViewportHeight(hasDebugImages ? 600 : 300);
-        scrollPane.setPrefViewportWidth(hasDebugImages ? 700 : 500);
-
-        dialog.getDialogPane().setContent(scrollPane);
+        root.getChildren().add(new Separator());
 
         // Determine folder to open - prefer debug folder, fall back to output folder
         String folderPath = debugFolderPath;
         if (folderPath == null && result.outputFolder() != null) {
             folderPath = result.outputFolder();
         }
-        final String folderToOpen = folderPath;
 
-        // Always show Open Folder button when we have a folder path
-        ButtonType closeType = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
-        if (folderToOpen != null) {
+        // Button bar
+        HBox buttonBar = buildButtonBar(stage, result, onRedo, onTuneThresholds, false);
+
+        // Add open folder button if we have a folder path
+        if (folderPath != null) {
             String buttonLabel = hasDebugImages ? "Open Debug Folder" : "Open Output Folder";
-            ButtonType openFolderType = new ButtonType(buttonLabel, ButtonBar.ButtonData.LEFT);
-            dialog.getDialogPane().getButtonTypes().addAll(openFolderType, closeType);
-
-            Button openFolderButton = (Button) dialog.getDialogPane().lookupButton(openFolderType);
-            openFolderButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            Button openFolderButton = new Button(buttonLabel);
+            final String folderToOpen = folderPath;
+            openFolderButton.setOnAction(event -> {
                 try {
                     File folder = new File(folderToOpen);
-                    // Open parent if folder doesn't exist yet (calibration may not have created it)
                     if (!folder.exists()) {
                         folder = folder.getParentFile();
                     }
@@ -459,19 +437,75 @@ public class CalibrationResultDialog {
                 } catch (Exception e) {
                     logger.error("Failed to open folder", e);
                 }
-                event.consume();  // Don't close dialog
             });
-        } else {
-            dialog.getDialogPane().getButtonTypes().add(closeType);
+            // Insert at beginning of button bar
+            buttonBar.getChildren().add(0, openFolderButton);
         }
 
-        // Add redo button if callback is provided
-        if (onRedo != null) {
-            ButtonType redoType = new ButtonType("REDO", ButtonBar.ButtonData.BACK_PREVIOUS);
-            dialog.getDialogPane().getButtonTypes().add(redoType);
-            Button redoButton = (Button) dialog.getDialogPane().lookupButton(redoType);
-            redoButton.setText("Go Back and Redo");
+        root.getChildren().add(buttonBar);
+    }
+
+    /**
+     * Builds the button bar for the results window.
+     */
+    private static HBox buildButtonBar(Stage stage, CalibrationResultData result,
+                                        Runnable onRedo, Runnable onTuneThresholds,
+                                        boolean isSuccess) {
+        HBox buttonBar = new HBox(10);
+        buttonBar.setAlignment(Pos.CENTER_RIGHT);
+        buttonBar.setPadding(new Insets(10, 0, 0, 0));
+
+        // Open Folder button (success path only - error path adds its own)
+        if (isSuccess && result.calibrationPath() != null) {
+            Button openFolderButton = new Button("Open Folder");
+            openFolderButton.setOnAction(event -> {
+                try {
+                    File calibFile = new File(result.calibrationPath());
+                    File parentDir = calibFile.getParentFile();
+                    if (parentDir != null && parentDir.exists()) {
+                        Desktop.getDesktop().open(parentDir);
+                    }
+                } catch (Exception e) {
+                    logger.error("Failed to open folder", e);
+                }
+            });
+            buttonBar.getChildren().add(openFolderButton);
         }
+
+        // Tune Thresholds button
+        if (onTuneThresholds != null) {
+            Button tuneButton = new Button("Tune Thresholds...");
+            tuneButton.setTooltip(new Tooltip(
+                "Open interactive threshold preview to adjust saturation/value\n" +
+                "thresholds with a live mask preview before re-running calibration."));
+            tuneButton.setOnAction(event -> {
+                stage.close();
+                onTuneThresholds.run();
+            });
+            buttonBar.getChildren().add(tuneButton);
+        }
+
+        // Spacer to push close/redo to the right
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        buttonBar.getChildren().add(spacer);
+
+        // Redo button
+        if (onRedo != null) {
+            Button redoButton = new Button("Go Back and Redo");
+            redoButton.setOnAction(event -> {
+                stage.close();
+                onRedo.run();
+            });
+            buttonBar.getChildren().add(redoButton);
+        }
+
+        // Close button
+        Button closeButton = new Button("Close");
+        closeButton.setOnAction(event -> stage.close());
+        buttonBar.getChildren().add(closeButton);
+
+        return buttonBar;
     }
 
     /**
@@ -481,7 +515,7 @@ public class CalibrationResultDialog {
      * @param imageFile the image file to load
      * @return the loaded Image, or null if loading fails
      */
-    private static Image loadImageWithFallback(File imageFile) {
+    static Image loadImageWithFallback(File imageFile) {
         // Try JavaFX native loading first (supports PNG, JPEG, GIF, BMP)
         try {
             Image image = new Image(new FileInputStream(imageFile));
@@ -506,12 +540,33 @@ public class CalibrationResultDialog {
     }
 
     /**
+     * Loads an image file as a BufferedImage.
+     * Tries ImageIO first (supports TIFF), then JavaFX native loading as fallback.
+     *
+     * @param imageFile the image file to load
+     * @return the loaded BufferedImage, or null if loading fails
+     */
+    static BufferedImage loadBufferedImageWithFallback(File imageFile) {
+        // Try ImageIO first (supports TIFF and other formats)
+        try {
+            BufferedImage buffered = ImageIO.read(imageFile);
+            if (buffered != null) {
+                return buffered;
+            }
+        } catch (Exception e) {
+            logger.debug("ImageIO loading failed for {}", imageFile.getName());
+        }
+
+        return null;
+    }
+
+    /**
      * Adds a clickable image section for manual center point selection.
      * Displays the original calibration image with a crosshair overlay that follows clicks.
      * A "Retry with Selected Center" button becomes enabled after the user clicks on the image.
      * If the image cannot be loaded, the section is not shown at all.
      */
-    private static void addCenterSelectionSection(VBox contentBox, Dialog<ButtonType> dialog,
+    private static void addCenterSelectionSection(VBox contentBox, Stage ownerStage,
                                                    CalibrationResultData result,
                                                    CenterRetryCallback onCenterRetry) {
         if (result.imagePath() == null) {
@@ -621,7 +676,7 @@ public class CalibrationResultDialog {
 
         retryButton.setOnAction(event -> {
             if (selectedCenter[0] >= 0 && selectedCenter[1] >= 0) {
-                dialog.close();
+                ownerStage.close();
                 onCenterRetry.retry(selectedCenter[0], selectedCenter[1]);
             }
         });

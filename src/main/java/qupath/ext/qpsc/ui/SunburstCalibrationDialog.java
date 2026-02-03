@@ -124,7 +124,7 @@ public class SunburstCalibrationDialog {
 
             // Important note about angle settings
             Label angleNote = new Label(
-                "IMPORTANT: Use low-angle PPM settings (e.g., 7, 0, or -7 degrees) for calibration.\n" +
+                "IMPORTANT: Use low-angle PPM settings (crossed or near-crossed angles) for calibration.\n" +
                 "These angles provide the best color saturation for detecting the spokes.\n" +
                 "Use the Camera Control button below to set the camera to the correct angle."
             );
@@ -187,7 +187,7 @@ public class SunburstCalibrationDialog {
             row++;
 
             Label cameraInstructions = new Label(
-                "Open Camera Control to set the polarizer to a low angle (7, 0, or -7 deg)\n" +
+                "Open Camera Control to set the polarizer to a low angle (crossed or near-crossed)\n" +
                 "and verify the camera settings before running calibration."
             );
             cameraInstructions.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");

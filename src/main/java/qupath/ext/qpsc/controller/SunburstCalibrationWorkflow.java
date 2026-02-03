@@ -16,6 +16,7 @@ import qupath.ext.qpsc.ui.CalibrationResultDialog;
 import qupath.ext.qpsc.ui.CalibrationResultDialog.CalibrationResultData;
 import qupath.ext.qpsc.ui.SunburstCalibrationDialog;
 import qupath.ext.qpsc.ui.SunburstCalibrationDialog.SunburstCalibrationParams;
+import qupath.ext.qpsc.ui.ThresholdPreviewDialog;
 import qupath.fx.dialogs.Dialogs;
 
 import java.util.ArrayList;
@@ -186,13 +187,20 @@ public class SunburstCalibrationWorkflow {
                 centerRetryCallback = (cy, cx) -> retryWithCenter(params, resultImagePath, cy, cx);
             }
 
+            // Build threshold tuning callback if we have an image path
+            Runnable tuneThresholdsCallback = null;
+            if (resultImagePath != null) {
+                tuneThresholdsCallback = buildTuneThresholdsCallback(params, resultImagePath);
+            }
+
             // Close progress dialog and show results (on FX thread)
             // Pass redo callback to re-launch the workflow from the parameter dialog
             final CalibrationResultDialog.CenterRetryCallback finalCenterRetry = centerRetryCallback;
+            final Runnable finalTuneThresholds = tuneThresholdsCallback;
             Platform.runLater(() -> {
                 progressDialog.close();
                 CalibrationResultDialog.showResult(resultData,
-                        SunburstCalibrationWorkflow::run, finalCenterRetry);
+                        SunburstCalibrationWorkflow::run, finalCenterRetry, finalTuneThresholds);
             });
 
         } catch (Exception e) {
@@ -204,10 +212,150 @@ public class SunburstCalibrationWorkflow {
                 CalibrationResultData errorResult = CalibrationResultData.failure(
                         e.getMessage(), null, null, params.outputFolder());
                 CalibrationResultDialog.showResult(errorResult,
-                        SunburstCalibrationWorkflow::run, null);
+                        SunburstCalibrationWorkflow::run, null, null);
             });
         }
         // Note: Don't disconnect - we're using the shared MicroscopeController connection
+    }
+
+    /**
+     * Builds a callback that opens the ThresholdPreviewDialog and re-runs calibration
+     * with the tuned thresholds using the existing image (no re-acquisition needed).
+     *
+     * @param params Original calibration parameters
+     * @param imagePath Path to the existing calibration image
+     * @return Runnable callback for the "Tune Thresholds" button
+     */
+    private static Runnable buildTuneThresholdsCallback(SunburstCalibrationParams params, String imagePath) {
+        return () -> {
+            ThresholdPreviewDialog.showDialog(
+                    imagePath,
+                    params.saturationThreshold(),
+                    params.valueThreshold()
+            ).thenAccept(thresholdResult -> {
+                if (thresholdResult == null) {
+                    logger.info("Threshold tuning cancelled");
+                    return;
+                }
+
+                logger.info("Re-running calibration with tuned thresholds: sat={}, val={}",
+                        thresholdResult.saturationThreshold(), thresholdResult.valueThreshold());
+
+                // Create updated params with new thresholds
+                SunburstCalibrationParams updatedParams = new SunburstCalibrationParams(
+                        params.outputFolder(),
+                        params.modality(),
+                        params.expectedSpokes(),
+                        thresholdResult.saturationThreshold(),
+                        thresholdResult.valueThreshold(),
+                        params.calibrationName(),
+                        params.radiusInner(),
+                        params.radiusOuter()
+                );
+
+                // Run calibration with existing image (skip acquisition)
+                Platform.runLater(() -> {
+                    Alert progressDialog = new Alert(Alert.AlertType.INFORMATION);
+                    progressDialog.setTitle("Re-analyzing Calibration");
+                    progressDialog.setHeaderText("PPM Reference Slide Calibration");
+
+                    Label progressLabel = new Label(
+                            String.format("Re-analyzing with tuned thresholds (sat=%.3f, val=%.3f)...",
+                                    thresholdResult.saturationThreshold(),
+                                    thresholdResult.valueThreshold())
+                    );
+                    progressLabel.setStyle("-fx-font-size: 12px;");
+
+                    VBox content = new VBox(10);
+                    content.getChildren().add(progressLabel);
+                    progressDialog.getDialogPane().setContent(content);
+                    progressDialog.getButtonTypes().clear();
+                    progressDialog.getButtonTypes().add(ButtonType.CANCEL);
+                    progressDialog.show();
+
+                    CompletableFuture.runAsync(() -> {
+                        executeCalibrationWithExistingImage(updatedParams, imagePath, progressDialog);
+                    }).exceptionally(ex -> {
+                        logger.error("Threshold-tuned calibration failed", ex);
+                        Platform.runLater(() -> {
+                            progressDialog.close();
+                            Dialogs.showErrorMessage("PPM Calibration Error",
+                                    "Failed to re-run calibration: " + ex.getMessage());
+                        });
+                        return null;
+                    });
+                });
+            }).exceptionally(ex -> {
+                logger.error("Threshold preview dialog failed", ex);
+                return null;
+            });
+        };
+    }
+
+    /**
+     * Executes calibration using an existing image (skips acquisition).
+     * Called from background thread - all UI updates must use Platform.runLater.
+     *
+     * @param params Calibration parameters (with updated thresholds)
+     * @param imagePath Path to the existing calibration image
+     * @param progressDialog Progress dialog to close when done
+     */
+    private static void executeCalibrationWithExistingImage(SunburstCalibrationParams params,
+                                                             String imagePath, Alert progressDialog) {
+        try {
+            String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeSocketClient socketClient = MicroscopeController.getInstance().getSocketClient();
+
+            if (!MicroscopeController.getInstance().isConnected()) {
+                MicroscopeController.getInstance().connect();
+            }
+
+            // Pass the existing image path so the server skips acquisition
+            String resultJson = socketClient.runSunburstCalibration(
+                    configFileLocation,
+                    params.outputFolder(),
+                    params.modality(),
+                    params.expectedSpokes(),
+                    params.saturationThreshold(),
+                    params.valueThreshold(),
+                    params.calibrationName(),
+                    params.radiusInner(),
+                    params.radiusOuter(),
+                    imagePath, null, null
+            );
+
+            CalibrationResultData resultData = parseCalibrationResult(resultJson);
+
+            // Build callbacks for the new result
+            String resultImagePath = resultData.imagePath() != null ?
+                    resultData.imagePath() : imagePath;
+
+            CalibrationResultDialog.CenterRetryCallback centerRetryCallback =
+                    (cy, cx) -> retryWithCenter(params, resultImagePath, cy, cx);
+
+            Runnable tuneThresholdsCallback = buildTuneThresholdsCallback(params, resultImagePath);
+
+            Platform.runLater(() -> {
+                progressDialog.close();
+                CalibrationResultDialog.showResult(resultData,
+                        SunburstCalibrationWorkflow::run, centerRetryCallback, tuneThresholdsCallback);
+            });
+
+        } catch (Exception e) {
+            logger.error("Calibration with existing image failed", e);
+            Platform.runLater(() -> {
+                progressDialog.close();
+                CalibrationResultData errorResult = CalibrationResultData.failure(
+                        e.getMessage(), imagePath, null, params.outputFolder());
+
+                Runnable tuneCallback = buildTuneThresholdsCallback(params, imagePath);
+                CalibrationResultDialog.CenterRetryCallback retryCallback =
+                        (cy, cx) -> retryWithCenter(params, imagePath, cy, cx);
+
+                CalibrationResultDialog.showResult(errorResult,
+                        SunburstCalibrationWorkflow::run, retryCallback, tuneCallback);
+            });
+        }
     }
 
     /**
@@ -267,16 +415,17 @@ public class SunburstCalibrationWorkflow {
 
                     CalibrationResultData resultData = parseCalibrationResult(resultJson);
 
-                    // Build center retry callback for further retries
+                    // Build callbacks for further retries
                     String resultImagePath = resultData.imagePath() != null ?
                             resultData.imagePath() : imagePath;
                     CalibrationResultDialog.CenterRetryCallback centerRetryCallback =
                             (cy, cx) -> retryWithCenter(params, resultImagePath, cy, cx);
+                    Runnable tuneThresholdsCallback = buildTuneThresholdsCallback(params, resultImagePath);
 
                     Platform.runLater(() -> {
                         progressDialog.close();
                         CalibrationResultDialog.showResult(resultData,
-                                SunburstCalibrationWorkflow::run, centerRetryCallback);
+                                SunburstCalibrationWorkflow::run, centerRetryCallback, tuneThresholdsCallback);
                     });
 
                 } catch (Exception e) {
@@ -287,8 +436,9 @@ public class SunburstCalibrationWorkflow {
                                 e.getMessage(), imagePath, null, params.outputFolder());
                         CalibrationResultDialog.CenterRetryCallback retryCallback =
                                 (cy, cx) -> retryWithCenter(params, imagePath, cy, cx);
+                        Runnable tuneCallback = buildTuneThresholdsCallback(params, imagePath);
                         CalibrationResultDialog.showResult(errorResult,
-                                SunburstCalibrationWorkflow::run, retryCallback);
+                                SunburstCalibrationWorkflow::run, retryCallback, tuneCallback);
                     });
                 }
             }).exceptionally(ex -> {
