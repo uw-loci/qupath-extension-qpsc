@@ -2,24 +2,32 @@ package qupath.ext.qpsc.ui;
 
 import javafx.application.Platform;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.DirectoryChooser;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.fx.dialogs.Dialogs;
-import qupath.ext.qpsc.ui.CameraControlController;
+import qupath.lib.gui.QuPathGUI;
 
 import java.io.File;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Dialog for Sunburst Calibration parameters.
+ * Non-modal window for Sunburst Calibration parameters.
  *
- * This dialog collects parameters for creating a hue-to-angle calibration
+ * <p>This window collects parameters for creating a hue-to-angle calibration
  * from a PPM reference slide with sunburst/fan pattern (radial spokes).
+ *
+ * <p>The window is non-modal so the user can interact with QuPath and the
+ * Camera Control dialog while it is open. It uses the QuPath main window
+ * as its owner so it stays on top of QuPath but not on top of other
+ * applications.
  *
  * @author Mike Nelson
  * @since 1.0
@@ -63,12 +71,15 @@ public class SunburstCalibrationDialog {
         Tooltip.install(helpIndicator, tooltip);
 
         HBox container = new HBox(mainLabel, helpIndicator);
-        container.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        container.setAlignment(Pos.CENTER_LEFT);
         return container;
     }
 
     /**
-     * Shows the sunburst calibration dialog.
+     * Shows the sunburst calibration window (non-modal).
+     *
+     * <p>The window stays on top of QuPath's main window but does not block
+     * interaction with QuPath or the Camera Control dialog.
      *
      * @return CompletableFuture with calibration parameters or null if cancelled
      */
@@ -76,12 +87,25 @@ public class SunburstCalibrationDialog {
         CompletableFuture<SunburstCalibrationParams> future = new CompletableFuture<>();
 
         Platform.runLater(() -> {
-            Dialog<SunburstCalibrationParams> dialog = new Dialog<>();
-            dialog.setTitle("PPM Reference Slide Calibration");
+            Stage stage = new Stage();
+            stage.setTitle("PPM Reference Slide Calibration");
+            stage.initModality(Modality.NONE);
+
+            // Set owner to QuPath main window so it stays on top of QuPath
+            // but not on top of other applications
+            QuPathGUI gui = QuPathGUI.getInstance();
+            if (gui != null && gui.getStage() != null) {
+                stage.initOwner(gui.getStage());
+                logger.debug("Calibration window owner set to QuPath main window");
+            } else {
+                logger.warn("Could not get QuPath main stage for calibration window");
+            }
+
+            // Build the content
+            VBox root = new VBox(10);
+            root.setPadding(new Insets(15));
 
             // Header with instructions
-            VBox headerBox = new VBox(10);
-            headerBox.setPadding(new Insets(10));
             Label headerLabel = new Label("Create Hue-to-Angle Calibration from PPM Reference Slide");
             headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
 
@@ -107,20 +131,13 @@ public class SunburstCalibrationDialog {
             angleNote.setWrapText(true);
             angleNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #cc6600; -fx-font-weight: bold;");
 
-            headerBox.getChildren().addAll(headerLabel, new Separator(), instructionLabel, angleNote);
-            dialog.getDialogPane().setHeader(headerBox);
-
-            // Buttons
-            ButtonType okType = new ButtonType("Start Calibration", ButtonBar.ButtonData.OK_DONE);
-            ButtonType restoreDefaultsType = new ButtonType("Restore Defaults", ButtonBar.ButtonData.LEFT);
-            ButtonType cancelType = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
-            dialog.getDialogPane().getButtonTypes().addAll(okType, restoreDefaultsType, cancelType);
+            root.getChildren().addAll(headerLabel, new Separator(), instructionLabel, angleNote, new Separator());
 
             // Main content layout
             GridPane grid = new GridPane();
             grid.setHgap(10);
             grid.setVgap(10);
-            grid.setPadding(new Insets(20));
+            grid.setPadding(new Insets(10));
 
             int row = 0;
 
@@ -149,7 +166,7 @@ public class SunburstCalibrationDialog {
                 } else if (current.getParentFile() != null && current.getParentFile().exists()) {
                     chooser.setInitialDirectory(current.getParentFile());
                 }
-                File chosen = chooser.showDialog(dialog.getOwner());
+                File chosen = chooser.showDialog(stage);
                 if (chosen != null) {
                     outputField.setText(chosen.getAbsolutePath());
                 }
@@ -353,46 +370,54 @@ public class SunburstCalibrationDialog {
             outputInfoLabel.setWrapText(true);
             grid.add(outputInfoLabel, 0, row, 3, 1);
 
-            // Wrap in ScrollPane so expanding Advanced Settings doesn't
-            // push content into the button row
+            // Wrap in ScrollPane
             ScrollPane scrollPane = new ScrollPane(grid);
             scrollPane.setFitToWidth(true);
             scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
             scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
             scrollPane.setPrefViewportHeight(420);
 
-            dialog.getDialogPane().setContent(scrollPane);
-            dialog.getDialogPane().setPrefWidth(620);
-            dialog.setResizable(true);
+            root.getChildren().add(scrollPane);
 
-            // Handle restore defaults button
-            Button restoreButton = (Button) dialog.getDialogPane().lookupButton(restoreDefaultsType);
-            restoreButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            // === Button bar ===
+            Button startBtn = new Button("Start Calibration");
+            startBtn.setDefaultButton(true);
+            Button restoreBtn = new Button("Restore Defaults");
+            Button cancelBtn = new Button("Cancel");
+            cancelBtn.setCancelButton(true);
+
+            // Push Start and Cancel to the right, Restore Defaults to the left
+            Region spacer = new Region();
+            HBox.setHgrow(spacer, Priority.ALWAYS);
+            HBox buttonBar = new HBox(10, restoreBtn, spacer, startBtn, cancelBtn);
+            buttonBar.setAlignment(Pos.CENTER_RIGHT);
+            buttonBar.setPadding(new Insets(10, 0, 0, 0));
+
+            root.getChildren().add(buttonBar);
+
+            // Restore defaults action
+            restoreBtn.setOnAction(e -> {
                 spokesSpinner.getValueFactory().setValue(16);
                 saturationSpinner.getValueFactory().setValue(0.1);
                 valueSpinner.getValueFactory().setValue(0.1);
                 innerRadiusSpinner.getValueFactory().setValue(30);
                 outerRadiusSpinner.getValueFactory().setValue(150);
                 nameField.clear();
-                event.consume();
             });
 
-            // Validation
-            Button okButton = (Button) dialog.getDialogPane().lookupButton(okType);
-            okButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            // Start calibration action with validation
+            startBtn.setOnAction(e -> {
                 String output = outputField.getText().trim();
 
                 if (output.isEmpty()) {
                     Dialogs.showErrorMessage("Invalid Output Folder",
                             "Please specify an output folder for calibration files.");
-                    event.consume();
                     return;
                 }
 
                 if (spokesSpinner.getValue() < 4) {
                     Dialogs.showErrorMessage("Invalid Spoke Count",
                             "Number of spokes must be at least 4.");
-                    event.consume();
                     return;
                 }
 
@@ -400,51 +425,56 @@ public class SunburstCalibrationDialog {
                 if (!name.isEmpty() && !name.matches("[a-zA-Z0-9_\\-]+")) {
                     Dialogs.showErrorMessage("Invalid Calibration Name",
                             "Calibration name can only contain letters, numbers, underscores, and hyphens.");
-                    event.consume();
                     return;
                 }
+
+                // Save preferences
+                String folderPath = outputField.getText().trim();
+                int spokes = spokesSpinner.getValue();
+                double saturation = saturationSpinner.getValue();
+                double value = valueSpinner.getValue();
+                int innerRadius = innerRadiusSpinner.getValue();
+                int outerRadius = outerRadiusSpinner.getValue();
+
+                QPPreferenceDialog.setLastCalibrationFolder(folderPath);
+                QPPreferenceDialog.setSunburstExpectedSpokes(spokes);
+                QPPreferenceDialog.setSunburstSaturationThreshold(saturation);
+                QPPreferenceDialog.setSunburstValueThreshold(value);
+                QPPreferenceDialog.setSunburstRadiusInner(innerRadius);
+                QPPreferenceDialog.setSunburstRadiusOuter(outerRadius);
+
+                SunburstCalibrationParams params = new SunburstCalibrationParams(
+                        folderPath,
+                        "ppm",
+                        spokes,
+                        saturation,
+                        value,
+                        name.isEmpty() ? null : name,
+                        innerRadius,
+                        outerRadius
+                );
+
+                stage.close();
+                future.complete(params);
             });
 
-            // Result converter
-            dialog.setResultConverter(button -> {
-                if (button == okType) {
-                    String name = nameField.getText().trim();
-                    String folderPath = outputField.getText().trim();
-                    int spokes = spokesSpinner.getValue();
-                    double saturation = saturationSpinner.getValue();
-                    double value = valueSpinner.getValue();
-                    int innerRadius = innerRadiusSpinner.getValue();
-                    int outerRadius = outerRadiusSpinner.getValue();
-
-                    // Remember all settings for next time
-                    QPPreferenceDialog.setLastCalibrationFolder(folderPath);
-                    QPPreferenceDialog.setSunburstExpectedSpokes(spokes);
-                    QPPreferenceDialog.setSunburstSaturationThreshold(saturation);
-                    QPPreferenceDialog.setSunburstValueThreshold(value);
-                    QPPreferenceDialog.setSunburstRadiusInner(innerRadius);
-                    QPPreferenceDialog.setSunburstRadiusOuter(outerRadius);
-
-                    // Modality is always "ppm" for this calibration
-                    return new SunburstCalibrationParams(
-                            folderPath,
-                            "ppm",
-                            spokes,
-                            saturation,
-                            value,
-                            name.isEmpty() ? null : name,
-                            innerRadius,
-                            outerRadius
-                    );
-                }
-                return null;
-            });
-
-            Optional<SunburstCalibrationParams> result = dialog.showAndWait();
-            if (result.isPresent()) {
-                future.complete(result.get());
-            } else {
+            // Cancel action
+            cancelBtn.setOnAction(e -> {
+                stage.close();
                 future.complete(null);
-            }
+            });
+
+            // Handle window close (X button) as cancel
+            stage.setOnCloseRequest(e -> {
+                if (!future.isDone()) {
+                    future.complete(null);
+                }
+            });
+
+            Scene scene = new Scene(root, 650, 700);
+            stage.setScene(scene);
+            stage.setResizable(true);
+            stage.show();
         });
 
         return future;
