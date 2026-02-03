@@ -8,6 +8,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
@@ -211,7 +212,8 @@ public class ApplyGoSnapTestWorkflow {
     @SuppressWarnings("unchecked")
     private static Map<String, Double> loadPpmAngles() {
         try {
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance();
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
             List<Map<String, Object>> rotationAngles = mgr.getRotationAngles("ppm");
             if (rotationAngles != null && !rotationAngles.isEmpty()) {
                 Map<String, Double> angles = new LinkedHashMap<>();
