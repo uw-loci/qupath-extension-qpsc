@@ -9,7 +9,6 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 import java.io.IOException;
@@ -25,19 +24,17 @@ import java.util.Map;
  *
  * <p>The crash occurs when running calibration twice in a row:
  * <ol>
- *   <li>Apply and Go for positive angle (e.g., +7 degrees)</li>
- *   <li>Snap image (triggers studio.live().set_live_mode(False))</li>
- *   <li>Apply and Go for negative angle (e.g., -7 degrees)</li>
- *   <li>Snap image -- crash occurs here at set_live_mode(False)</li>
+ *   <li>Apply and Go for positive angle (sets per-channel exposures + unified gain)</li>
+ *   <li>Snap image (calls hardware.snap_image() which does set_live_mode(False) + core.snap_image())</li>
+ *   <li>Apply and Go for negative angle (sets per-channel exposures + unified gain)</li>
+ *   <li>Snap image -- crash occurs here in snap_image()</li>
  * </ol>
  *
- * <p>This test uses setLiveMode(true) then setLiveMode(false) as a snap proxy,
- * since the crash is in the same code path (studio.live().set_live_mode(False)).
- * If this does not crash MM, the issue is deeper in pycromanager's core.snap_image()
- * and would need escalation to using the full SBCALIB command.
+ * <p>Uses the actual SNAP socket command to trigger the real snap_image() code path
+ * on the Python server. Loads per-angle calibration values from YAML config to match
+ * exactly what the real calibration workflow sends (3-channel exposures + unified gain 5.0).
  *
- * <p>No user input needed beyond clicking the menu item. Reads current camera
- * state from the server and rotation angles from YAML config.
+ * <p>Assumes JAI camera with 40x objective (LOCI_DETECTOR_JAI_001 / LOCI_OBJECTIVE_OLYMPUS_40X_POL_001).
  *
  * @author Mike Nelson
  */
@@ -45,6 +42,10 @@ public class ApplyGoSnapTestWorkflow {
 
     private static final Logger logger = LoggerFactory.getLogger(ApplyGoSnapTestWorkflow.class);
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
+
+    // Hardcoded for this debug test -- JAI camera + 40x objective
+    private static final String OBJECTIVE = "LOCI_OBJECTIVE_OLYMPUS_40X_POL_001";
+    private static final String DETECTOR = "LOCI_DETECTOR_JAI_001";
 
     /**
      * Entry point -- shows log dialog and starts the test on a background thread.
@@ -57,19 +58,20 @@ public class ApplyGoSnapTestWorkflow {
             TextArea logArea = new TextArea();
             logArea.setEditable(false);
             logArea.setWrapText(true);
-            logArea.setPrefRowCount(20);
-            logArea.setPrefColumnCount(60);
+            logArea.setPrefRowCount(25);
+            logArea.setPrefColumnCount(70);
             logArea.setStyle("-fx-font-family: monospace; -fx-font-size: 12px;");
 
             VBox root = new VBox(10, logArea);
             root.setPadding(new Insets(10));
 
-            stage.setScene(new Scene(root, 600, 400));
+            stage.setScene(new Scene(root, 700, 500));
             stage.show();
 
             log(logArea, "=== Apply & Go Snap Crash Reproduction Test ===");
-            log(logArea, "Purpose: Reproduce MM crash on second live mode toggle");
-            log(logArea, "Sequence: Apply+Go(pos) -> snap proxy -> Apply+Go(neg) -> snap proxy");
+            log(logArea, "Purpose: Reproduce MM crash on second snap_image() call");
+            log(logArea, "Sequence: Apply+Go(pos) -> SNAP -> Apply+Go(neg) -> SNAP");
+            log(logArea, "Hardware: " + OBJECTIVE + " / " + DETECTOR);
             log(logArea, "");
 
             Thread testThread = new Thread(() -> executeTest(logArea), "ApplyGoSnapTest");
@@ -81,14 +83,17 @@ public class ApplyGoSnapTestWorkflow {
     /**
      * Runs the 4-step crash reproduction sequence on a background thread.
      */
+    @SuppressWarnings("unchecked")
     private static void executeTest(TextArea logArea) {
         MicroscopeController controller = MicroscopeController.getInstance();
+        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
 
         // --- Load rotation angles from config ---
         log(logArea, "Loading PPM rotation angles from config...");
-        Map<String, Double> angles = loadPpmAngles();
+        Map<String, Double> angles = loadPpmAngles(mgr);
         if (angles.isEmpty()) {
-            log(logArea, "[FAIL] No rotation angles found in config. Cannot run test.");
+            log(logArea, "[FAIL] No rotation angles found in config.");
             return;
         }
 
@@ -102,58 +107,39 @@ public class ApplyGoSnapTestWorkflow {
         log(logArea, "  positive = " + positiveDegrees + " deg");
         log(logArea, "  negative = " + negativeDegrees + " deg");
 
-        // --- Read current camera state from server ---
-        // The real crash scenario uses 3 individual exposures + 1 unified gain.
-        // applyCameraSettingsForAngle uses array length to set camera mode:
-        //   exposures.length == 3 -> individual exposure mode
-        //   gains.length == 1    -> unified gain mode
-        // This mode switching is key to reproducing the crash.
-        log(logArea, "Reading current camera exposures and gains from server...");
-        float[] exposures;
-        float[] gains;
-        try {
-            MicroscopeSocketClient.ExposuresResult expResult = controller.getExposures();
-            MicroscopeSocketClient.GainsResult gainResult = controller.getGains();
+        // --- Load per-angle calibration exposures and gains from YAML ---
+        log(logArea, "Loading calibration values from YAML for " + OBJECTIVE + " / " + DETECTOR + "...");
 
-            // Always use 3 per-channel exposures to match real calibration behavior.
-            // If server returns unified, replicate to 3 channels.
-            if (expResult.isPerChannel()) {
-                exposures = new float[]{
-                        (float) expResult.red(),
-                        (float) expResult.green(),
-                        (float) expResult.blue()
-                };
-            } else {
-                float exp = (float) expResult.unified();
-                exposures = new float[]{exp, exp, exp};
-            }
+        float[] positiveExposures = loadExposuresForAngle(mgr, "positive");
+        float[] negativeExposures = loadExposuresForAngle(mgr, "negative");
+        float[] positiveGains = loadGainsForAngle(mgr, "positive");
+        float[] negativeGains = loadGainsForAngle(mgr, "negative");
 
-            // Always use 1 unified gain to match real calibration behavior.
-            // If server returns per-channel, use red as representative value.
-            if (gainResult.isPerChannel()) {
-                gains = new float[]{(float) gainResult.red()};
-            } else {
-                gains = new float[]{(float) gainResult.red()};
-            }
-
-            log(logArea, "  Exposures (3-channel): " + Arrays.toString(exposures) + " ms");
-            log(logArea, "  Gains (unified): " + Arrays.toString(gains));
-            log(logArea, "  This forces exp_individual=true, gain_individual=false (matches calibration)");
-        } catch (IOException e) {
-            log(logArea, "[FAIL] Could not read camera state: " + e.getMessage());
-            logger.error("Failed to read camera state for snap test", e);
+        if (positiveExposures == null || negativeExposures == null) {
+            log(logArea, "[FAIL] Could not load per-channel exposures from YAML.");
+            return;
+        }
+        if (positiveGains == null || negativeGains == null) {
+            log(logArea, "[FAIL] Could not load gains from YAML.");
             return;
         }
 
+        log(logArea, "  positive exposures: " + Arrays.toString(positiveExposures) + " ms");
+        log(logArea, "  positive gains (unified): " + Arrays.toString(positiveGains));
+        log(logArea, "  negative exposures: " + Arrays.toString(negativeExposures) + " ms");
+        log(logArea, "  negative gains (unified): " + Arrays.toString(negativeGains));
+
         log(logArea, "");
         log(logArea, "--- Starting crash reproduction sequence ---");
+        log(logArea, "  Camera mode: exp_individual=true, gain_individual=false");
         log(logArea, "");
 
         // === Step 1: Apply & Go for positive angle ===
         log(logArea, "STEP 1: Apply & Go -> positive (" + positiveDegrees + " deg)");
+        log(logArea, "  Exposures: " + Arrays.toString(positiveExposures) + " | Gains: " + Arrays.toString(positiveGains));
         try {
             controller.withLiveModeHandling(() ->
-                    controller.applyCameraSettingsForAngle("positive", exposures, gains, positiveDegrees));
+                    controller.applyCameraSettingsForAngle("positive", positiveExposures, positiveGains, positiveDegrees));
             log(logArea, "  [PASS] Apply & Go positive completed");
         } catch (Exception e) {
             log(logArea, "  [FAIL] Apply & Go positive failed: " + e.getMessage());
@@ -161,27 +147,23 @@ public class ApplyGoSnapTestWorkflow {
             return;
         }
 
-        // === Step 2: Snap proxy (live mode toggle) ===
-        log(logArea, "STEP 2: Snap proxy (setLiveMode true -> wait -> setLiveMode false)");
+        // === Step 2: Raw snap (calls hardware.snap_image() without resetting camera mode) ===
+        log(logArea, "STEP 2: RAWSNAP (calls hardware.snap_image() - no mode reset)");
         try {
-            controller.setLiveMode(true);
-            log(logArea, "  Live mode ON");
-            Thread.sleep(500);
-            controller.setLiveMode(false);
-            log(logArea, "  Live mode OFF");
-            Thread.sleep(200);
-            log(logArea, "  [PASS] First snap proxy completed");
+            String result = controller.rawSnap();
+            log(logArea, "  [PASS] First snap completed: " + result);
         } catch (Exception e) {
-            log(logArea, "  [FAIL] First snap proxy failed: " + e.getMessage());
+            log(logArea, "  [FAIL] First snap failed: " + e.getMessage());
             logger.error("Step 2 failed", e);
             return;
         }
 
         // === Step 3: Apply & Go for negative angle ===
         log(logArea, "STEP 3: Apply & Go -> negative (" + negativeDegrees + " deg)");
+        log(logArea, "  Exposures: " + Arrays.toString(negativeExposures) + " | Gains: " + Arrays.toString(negativeGains));
         try {
             controller.withLiveModeHandling(() ->
-                    controller.applyCameraSettingsForAngle("negative", exposures, gains, negativeDegrees));
+                    controller.applyCameraSettingsForAngle("negative", negativeExposures, negativeGains, negativeDegrees));
             log(logArea, "  [PASS] Apply & Go negative completed");
         } catch (Exception e) {
             log(logArea, "  [FAIL] Apply & Go negative failed: " + e.getMessage());
@@ -189,27 +171,74 @@ public class ApplyGoSnapTestWorkflow {
             return;
         }
 
-        // === Step 4: Snap proxy again -- this is the expected crash point ===
-        log(logArea, "STEP 4: Snap proxy (CRASH EXPECTED HERE - second live mode toggle)");
+        // === Step 4: Second raw snap -- this is the expected crash point ===
+        log(logArea, "STEP 4: RAWSNAP (CRASH EXPECTED HERE - second snap_image() call)");
         try {
-            controller.setLiveMode(true);
-            log(logArea, "  Live mode ON");
-            Thread.sleep(500);
-            controller.setLiveMode(false);
-            log(logArea, "  Live mode OFF");
-            Thread.sleep(200);
-            log(logArea, "  [PASS] Second snap proxy completed");
+            String result = controller.rawSnap();
+            log(logArea, "  [PASS] Second snap completed: " + result);
         } catch (Exception e) {
-            log(logArea, "  [FAIL] Second snap proxy failed: " + e.getMessage());
+            log(logArea, "  [FAIL] Second snap failed: " + e.getMessage());
             logger.error("Step 4 failed", e);
             return;
         }
 
         log(logArea, "");
         log(logArea, "=== ALL 4 STEPS PASSED ===");
-        log(logArea, "The crash is NOT in the Apply & Go + live toggle path.");
-        log(logArea, "Next step: escalate to using full SBCALIB command to isolate");
-        log(logArea, "whether the crash is in pycromanager's core.snap_image() call.");
+        log(logArea, "The crash did not occur. Per-channel mode was active during snap_image().");
+        log(logArea, "The crash may be specific to the SBCALIB workflow context.");
+    }
+
+    /**
+     * Loads per-channel exposures [R, G, B] for a specific angle from YAML config.
+     * Returns a 3-element float array for per-channel, or null if not found.
+     */
+    @SuppressWarnings("unchecked")
+    private static float[] loadExposuresForAngle(MicroscopeConfigManager mgr, String angleName) {
+        try {
+            Map<String, Object> exposuresMap = mgr.getModalityExposures("ppm", OBJECTIVE, DETECTOR);
+            if (exposuresMap == null) return null;
+
+            Object angleExposures = exposuresMap.get(angleName);
+            if (angleExposures instanceof Map<?, ?>) {
+                Map<String, Object> expValues = (Map<String, Object>) angleExposures;
+                Number r = (Number) expValues.get("r");
+                Number g = (Number) expValues.get("g");
+                Number b = (Number) expValues.get("b");
+                if (r != null && g != null && b != null) {
+                    return new float[]{r.floatValue(), g.floatValue(), b.floatValue()};
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to load exposures for angle {}: {}", angleName, e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Loads gains for a specific angle from YAML config.
+     * Returns a 1-element float array with unified_gain value if present,
+     * matching the real calibration behavior (unified gain mode).
+     */
+    @SuppressWarnings("unchecked")
+    private static float[] loadGainsForAngle(MicroscopeConfigManager mgr, String angleName) {
+        try {
+            Object gainsObj = mgr.getProfileSetting("ppm", OBJECTIVE, DETECTOR, "gains", angleName);
+            if (gainsObj instanceof Map<?, ?>) {
+                Map<String, Object> gainValues = (Map<String, Object>) gainsObj;
+                Number unifiedGain = (Number) gainValues.get("unified_gain");
+                if (unifiedGain != null) {
+                    return new float[]{unifiedGain.floatValue()};
+                }
+                // Fallback: use first available value
+                Number r = (Number) gainValues.get("r");
+                if (r != null) {
+                    return new float[]{r.floatValue()};
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to load gains for angle {}: {}", angleName, e.getMessage());
+        }
+        return null;
     }
 
     /**
@@ -217,10 +246,8 @@ public class ApplyGoSnapTestWorkflow {
      * Returns a map of angle name to tick value in degrees.
      */
     @SuppressWarnings("unchecked")
-    private static Map<String, Double> loadPpmAngles() {
+    private static Map<String, Double> loadPpmAngles(MicroscopeConfigManager mgr) {
         try {
-            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
             List<Map<String, Object>> rotationAngles = mgr.getRotationAngles("ppm");
             if (rotationAngles != null && !rotationAngles.isEmpty()) {
                 Map<String, Double> angles = new LinkedHashMap<>();
