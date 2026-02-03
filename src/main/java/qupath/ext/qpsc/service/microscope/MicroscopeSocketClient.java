@@ -175,8 +175,6 @@ public class MicroscopeSocketClient implements AutoCloseable {
         SETLIVE("setlive_"),
         /** Simple snap with fixed exposure (no adaptive) */
         SNAP("snap____"),
-        /** Raw snap_image() without resetting camera mode (for crash testing) */
-        RAWSNAP("rawsnap_"),
 
         // Live Viewer Commands
         /** Get latest frame from MM circular buffer (for live viewer) */
@@ -3437,58 +3435,6 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
 
         logger.info("Live mode set to: {}", enable ? "ON" : "OFF");
-    }
-
-    /**
-     * Sends a RAWSNAP command to call hardware.snap_image() on the server
-     * WITHOUT resetting camera mode. This matches the code path that SBCALIB uses
-     * (sunburst_workflow.py calls snap_image() directly without touching per-channel mode).
-     *
-     * <p>Used for crash reproduction testing. The crash occurs in snap_image() at
-     * studio.live().set_live_mode(False) when per-channel mode is active.
-     *
-     * @return server response string (e.g., "shape=(H,W,C),median=X.X")
-     * @throws IOException if communication fails or snap fails
-     */
-    public String rawSnap() throws IOException {
-        synchronized (socketLock) {
-            ensureConnected();
-
-            try {
-                socket.setSoTimeout(30000); // 30 seconds for snap
-
-                output.write(Command.RAWSNAP.getValue());
-                output.flush();
-                lastActivityTime.set(System.currentTimeMillis());
-
-                logger.info("RAWSNAP command sent");
-
-                // Read variable-length response
-                byte[] buffer = new byte[4096];
-                int bytesRead = input.read(buffer);
-                if (bytesRead <= 0) {
-                    throw new IOException("No response from server for RAWSNAP");
-                }
-
-                String responseStr = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8).trim();
-                logger.info("RAWSNAP response: {}", responseStr);
-
-                if (responseStr.startsWith("SUCCESS:")) {
-                    return responseStr.substring("SUCCESS:".length());
-                } else if (responseStr.startsWith("FAILED:")) {
-                    throw new IOException("RAWSNAP failed: " + responseStr.substring("FAILED:".length()));
-                } else {
-                    throw new IOException("Unexpected RAWSNAP response: " + responseStr);
-                }
-            } catch (IOException e) {
-                handleIOException(e);
-                throw e;
-            } finally {
-                try {
-                    socket.setSoTimeout(readTimeout);
-                } catch (IOException ignored) {}
-            }
-        }
     }
 
     // ==================== Live Viewer Methods ====================

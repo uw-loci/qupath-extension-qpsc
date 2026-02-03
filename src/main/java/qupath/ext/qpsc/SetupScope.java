@@ -296,20 +296,6 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 			}
 		});
 
-		// Apply & Go Snap Test (MicroManager crash reproduction)
-		MenuItem applyGoSnapTestOption = new MenuItem(res.getString("menu.applyGoSnapTest"));
-		applyGoSnapTestOption.setDisable(!configValid);
-		setMenuItemTooltip(applyGoSnapTestOption,
-				"Test Apply & Go + snap sequence to reproduce MicroManager crash. " +
-				"Automated - no user input needed.");
-		applyGoSnapTestOption.setOnAction(e -> {
-			try {
-				QPScopeController.getInstance().startWorkflow("applyGoSnapTest");
-			} catch (IOException ex) {
-				throw new RuntimeException(ex);
-			}
-		});
-
 		// Server Connection Settings
 		MenuItem serverConnectionOption = new MenuItem(res.getString("menu.serverConnection"));
 		setMenuItemTooltip(serverConnectionOption,
@@ -403,9 +389,6 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 				ppmSensitivityTestOption,
 				birefringenceOptimizationOption,
 				ppmReferenceSlideOption,
-				new SeparatorMenuItem(),
-				// Debug/test tools
-				applyGoSnapTestOption,
 				new SeparatorMenuItem(),
 				// Server settings
 				serverConnectionOption

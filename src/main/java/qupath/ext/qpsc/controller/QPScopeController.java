@@ -203,10 +203,6 @@ public class QPScopeController {
                             return null;
                         });
             }
-            case "applyGoSnapTest" -> {
-                logger.debug("Launching Apply & Go snap crash test");
-                ApplyGoSnapTestWorkflow.run();
-            }
             default -> {
                 logger.warn("Unknown workflow mode: {}", mode);
             }

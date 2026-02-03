@@ -652,23 +652,6 @@ public class MicroscopeController {
     }
 
     /**
-     * Calls hardware.snap_image() on the server WITHOUT resetting camera mode.
-     * This matches the SBCALIB code path where snap_image() is called while
-     * per-channel mode may still be active. Used for crash reproduction testing.
-     *
-     * @return server response with image info
-     * @throws IOException if communication or snap fails
-     */
-    public String rawSnap() throws IOException {
-        try {
-            return socketClient.rawSnap();
-        } catch (IOException e) {
-            logger.error("Failed to raw snap: {}", e.getMessage());
-            throw new IOException("Failed to raw snap via socket", e);
-        }
-    }
-
-    /**
      * Gets the latest frame from MM's circular buffer for live viewing.
      * Camera must be in live mode for frames to be available.
      *
