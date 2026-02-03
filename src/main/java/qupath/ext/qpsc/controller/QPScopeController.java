@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.ui.CameraControlController;
 import qupath.ext.qpsc.ui.ServerConnectionController;
 import qupath.ext.qpsc.ui.StageMovementController;
+import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 
 /**
  * QPScopeController - Main orchestrator for QuPath-side workflows
@@ -190,6 +191,10 @@ public class QPScopeController {
                 logger.debug("Launching camera control dialog");
                 CameraControlController.showCameraControlDialog();
             }
+            case "liveViewer" -> {
+                logger.debug("Launching live viewer window");
+                LiveViewerWindow.show();
+            }
             case "serverConnection" -> {
                 logger.debug("Launching server connection dialog");
                 ServerConnectionController.showDialog()
@@ -197,6 +202,10 @@ public class QPScopeController {
                             logger.error("Server connection dialog error: {}", ex.getMessage(), ex);
                             return null;
                         });
+            }
+            case "applyGoSnapTest" -> {
+                logger.debug("Launching Apply & Go snap crash test");
+                ApplyGoSnapTestWorkflow.run();
             }
             default -> {
                 logger.warn("Unknown workflow mode: {}", mode);

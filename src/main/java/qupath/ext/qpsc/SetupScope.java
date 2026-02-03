@@ -296,6 +296,20 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 			}
 		});
 
+		// Apply & Go Snap Test (MicroManager crash reproduction)
+		MenuItem applyGoSnapTestOption = new MenuItem(res.getString("menu.applyGoSnapTest"));
+		applyGoSnapTestOption.setDisable(!configValid);
+		setMenuItemTooltip(applyGoSnapTestOption,
+				"Test Apply & Go + snap sequence to reproduce MicroManager crash. " +
+				"Automated - no user input needed.");
+		applyGoSnapTestOption.setOnAction(e -> {
+			try {
+				QPScopeController.getInstance().startWorkflow("applyGoSnapTest");
+			} catch (IOException ex) {
+				throw new RuntimeException(ex);
+			}
+		});
+
 		// Server Connection Settings
 		MenuItem serverConnectionOption = new MenuItem(res.getString("menu.serverConnection"));
 		setMenuItemTooltip(serverConnectionOption,
@@ -356,6 +370,20 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 			}
 		});
 
+		// Live Viewer (live camera feed from microscope)
+		MenuItem liveViewerOption = new MenuItem(res.getString("menu.liveViewer"));
+		setMenuItemTooltip(liveViewerOption,
+				"Open a live camera feed window. Streams frames from the microscope " +
+				"with adjustable contrast and a luminance histogram. " +
+				"Uses MM's live mode and circular buffer for minimal latency.");
+		liveViewerOption.setOnAction(e -> {
+			try {
+				QPScopeController.getInstance().startWorkflow("liveViewer");
+			} catch (IOException ex) {
+				throw new RuntimeException(ex);
+			}
+		});
+
 		// Add items to utilities submenu (grouped by function)
 		utilitiesMenu.getItems().addAll(
 				// Navigation tools
@@ -376,6 +404,9 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 				birefringenceOptimizationOption,
 				ppmReferenceSlideOption,
 				new SeparatorMenuItem(),
+				// Debug/test tools
+				applyGoSnapTestOption,
+				new SeparatorMenuItem(),
 				// Server settings
 				serverConnectionOption
 		);
@@ -387,6 +418,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 				new SeparatorMenuItem(),
 				stageControlOption,
 				cameraControlOption,
+				liveViewerOption,
 				new SeparatorMenuItem(),
 				utilitiesMenu
 		);
