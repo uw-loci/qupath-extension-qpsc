@@ -4,6 +4,7 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.PixelFormat;
@@ -11,6 +12,7 @@ import javafx.scene.image.WritableImage;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -53,8 +55,12 @@ public class LiveViewerWindow {
     private Stage stage;
     private ImageView imageView;
     private Label statusLabel;
+    private Button liveToggleButton;
     private HistogramView histogramView;
     private final ContrastSettings contrastSettings = new ContrastSettings();
+
+    // Live mode state (camera streaming on/off, independent of window visibility)
+    private volatile boolean liveActive = false;
 
     // Frame rendering state
     private WritableImage writableImage;
@@ -132,6 +138,19 @@ public class LiveViewerWindow {
             stage.initOwner(gui.getStage());
         }
 
+        // Toolbar with Live toggle button
+        liveToggleButton = new Button("Live: OFF");
+        liveToggleButton.setStyle("-fx-font-weight: bold;");
+        updateLiveButtonStyle(false);
+        liveToggleButton.setOnAction(e -> toggleLiveMode());
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        HBox toolbar = new HBox(8, liveToggleButton, spacer);
+        toolbar.setPadding(new Insets(4, 8, 4, 8));
+        toolbar.setAlignment(Pos.CENTER_LEFT);
+
         // Image display
         imageView = new ImageView();
         imageView.setPreserveRatio(true);
@@ -147,7 +166,7 @@ public class LiveViewerWindow {
         histogramView = new HistogramView(contrastSettings);
 
         // Status bar
-        statusLabel = new Label("Connecting...");
+        statusLabel = new Label("Ready - press Live to start");
         statusLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11;");
         HBox statusBar = new HBox(statusLabel);
         statusBar.setPadding(new Insets(4));
@@ -157,6 +176,7 @@ public class LiveViewerWindow {
         VBox bottomPane = new VBox(histogramView, statusBar);
 
         BorderPane root = new BorderPane();
+        root.setTop(toolbar);
         root.setCenter(imageContainer);
         root.setBottom(bottomPane);
 
@@ -169,25 +189,61 @@ public class LiveViewerWindow {
         stage.setOnCloseRequest(e -> stopAndDispose());
     }
 
+    /**
+     * Toggles continuous acquisition on/off. Called by the Live button.
+     * Uses core-level sequence acquisition -- does NOT interact with MM's
+     * studio live mode or live window.
+     */
+    private void toggleLiveMode() {
+        MicroscopeController controller = MicroscopeController.getInstance();
+        if (controller == null) {
+            updateStatus("Not connected to microscope");
+            return;
+        }
+
+        boolean newState = !liveActive;
+        try {
+            if (newState) {
+                controller.startContinuousAcquisition();
+            } else {
+                controller.stopContinuousAcquisition();
+            }
+            liveActive = newState;
+            updateLiveButtonStyle(newState);
+            logger.info("Continuous acquisition toggled to: {}", newState ? "ON" : "OFF");
+
+            if (newState) {
+                updateStatus("Live ON - streaming...");
+                // Reset FPS counter on start
+                frameCount.set(0);
+                fpsWindowStart.set(System.currentTimeMillis());
+                currentFps = 0;
+            } else {
+                updateStatus("Live OFF");
+            }
+        } catch (IOException e) {
+            logger.error("Failed to toggle continuous acquisition: {}", e.getMessage());
+            updateStatus("Error: " + e.getMessage());
+        }
+    }
+
+    private void updateLiveButtonStyle(boolean active) {
+        if (active) {
+            liveToggleButton.setText("Live: ON");
+            liveToggleButton.setStyle("-fx-font-weight: bold; -fx-base: #4CAF50;");
+        } else {
+            liveToggleButton.setText("Live: OFF");
+            liveToggleButton.setStyle("-fx-font-weight: bold; -fx-base: #9E9E9E;");
+        }
+    }
+
+    /**
+     * Starts the polling threads. Does NOT start live mode -- user controls
+     * live mode via the toggle button.
+     */
     private void startLiveViewing() {
         if (polling) return;
         polling = true;
-
-        // Start live mode on the microscope
-        try {
-            MicroscopeController controller = MicroscopeController.getInstance();
-            if (controller == null) {
-                updateStatus("Not connected to microscope");
-                return;
-            }
-            controller.setLiveMode(true);
-            logger.info("Live mode started for live viewer");
-        } catch (IOException e) {
-            logger.error("Failed to start live mode: {}", e.getMessage());
-            updateStatus("Failed to start live mode: " + e.getMessage());
-            polling = false;
-            return;
-        }
 
         // Frame poller thread
         framePoller = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -204,7 +260,7 @@ public class LiveViewerWindow {
         });
 
         framePoller.scheduleWithFixedDelay(this::pollFrame, 0, POLL_INTERVAL_MS, TimeUnit.MILLISECONDS);
-        logger.info("Live viewer frame polling started");
+        logger.info("Live viewer polling started (live mode controlled by button)");
     }
 
     private void pollFrame() {
@@ -352,15 +408,18 @@ public class LiveViewerWindow {
             histogramExecutor = null;
         }
 
-        // Stop live mode
-        try {
-            MicroscopeController controller = MicroscopeController.getInstance();
-            if (controller != null) {
-                controller.setLiveMode(false);
-                logger.info("Live mode stopped");
+        // Stop continuous acquisition if it was active
+        if (liveActive) {
+            try {
+                MicroscopeController controller = MicroscopeController.getInstance();
+                if (controller != null) {
+                    controller.stopContinuousAcquisition();
+                    logger.info("Continuous acquisition stopped on window close");
+                }
+            } catch (IOException e) {
+                logger.warn("Failed to stop continuous acquisition: {}", e.getMessage());
             }
-        } catch (IOException e) {
-            logger.warn("Failed to stop live mode: {}", e.getMessage());
+            liveActive = false;
         }
 
         // Close window

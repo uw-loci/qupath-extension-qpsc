@@ -653,13 +653,33 @@ public class MicroscopeController {
 
     /**
      * Gets the latest frame from MM's circular buffer for live viewing.
-     * Camera must be in live mode for frames to be available.
+     * Requires continuous acquisition to be running (via startContinuousAcquisition).
      *
      * @return FrameData record, or null if no frame is available
      * @throws IOException if communication fails
      */
     public qupath.ext.qpsc.ui.liveviewer.FrameData getFrame() throws IOException {
         return socketClient.getFrame();
+    }
+
+    /**
+     * Starts continuous sequence acquisition at the MM Core level.
+     * This bypasses MM's studio/live window -- the camera fills the circular
+     * buffer at its native frame rate without any MM UI involvement.
+     *
+     * @throws IOException if communication fails
+     */
+    public void startContinuousAcquisition() throws IOException {
+        socketClient.startContinuousAcquisition();
+    }
+
+    /**
+     * Stops continuous sequence acquisition at the MM Core level.
+     *
+     * @throws IOException if communication fails
+     */
+    public void stopContinuousAcquisition() throws IOException {
+        socketClient.stopContinuousAcquisition();
     }
 
     /**

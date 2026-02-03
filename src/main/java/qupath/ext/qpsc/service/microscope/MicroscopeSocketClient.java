@@ -176,9 +176,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
         /** Simple snap with fixed exposure (no adaptive) */
         SNAP("snap____"),
 
-        // Live Viewer Commands
-        /** Get latest frame from MM circular buffer (for live viewer) */
-        GETFRAME("getframe");
+        // Live Viewer Commands (core-level, bypasses MM studio/live window)
+        /** Get latest frame from MM circular buffer */
+        GETFRAME("getframe"),
+        /** Start continuous sequence acquisition (core-level) */
+        STRTSEQ("strtseq_"),
+        /** Stop continuous sequence acquisition (core-level) */
+        STOPSEQ("stopseq_");
 
         private final byte[] value;
 
@@ -3497,6 +3501,36 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 throw e;
             }
         }
+    }
+
+    /**
+     * Starts continuous sequence acquisition at the MM Core level.
+     * This bypasses MM's studio/live window entirely -- the camera fills
+     * the circular buffer at its native frame rate.
+     *
+     * @throws IOException if communication fails or the command is rejected
+     */
+    public void startContinuousAcquisition() throws IOException {
+        byte[] response = executeCommand(Command.STRTSEQ, null, 8);
+        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+        if (!responseStr.startsWith("ACK")) {
+            throw new IOException("Failed to start continuous acquisition: " + responseStr);
+        }
+        logger.info("Continuous sequence acquisition started (core-level)");
+    }
+
+    /**
+     * Stops continuous sequence acquisition at the MM Core level.
+     *
+     * @throws IOException if communication fails or the command is rejected
+     */
+    public void stopContinuousAcquisition() throws IOException {
+        byte[] response = executeCommand(Command.STOPSEQ, null, 8);
+        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+        if (!responseStr.startsWith("ACK")) {
+            throw new IOException("Failed to stop continuous acquisition: " + responseStr);
+        }
+        logger.info("Continuous sequence acquisition stopped (core-level)");
     }
 
 }
