@@ -158,8 +158,8 @@ public class CalibrationResultDialog {
 
             ScrollPane scrollPane = new ScrollPane(root);
             scrollPane.setFitToWidth(true);
-            scrollPane.setPrefViewportHeight(650);
-            scrollPane.setPrefViewportWidth(750);
+            scrollPane.setPrefViewportHeight(1200);
+            scrollPane.setPrefViewportWidth(1400);
 
             Scene scene = new Scene(scrollPane);
             stage.setScene(scene);
@@ -246,8 +246,8 @@ public class CalibrationResultDialog {
                     ImageView imageView = new ImageView(plotImage);
 
                     // Scale image to fit dialog while maintaining aspect ratio
-                    double maxWidth = 700;
-                    double maxHeight = 500;
+                    double maxWidth = 1300;
+                    double maxHeight = 900;
                     double scale = Math.min(maxWidth / plotImage.getWidth(),
                                            maxHeight / plotImage.getHeight());
                     if (scale < 1.0) {
@@ -331,8 +331,8 @@ public class CalibrationResultDialog {
                         ImageView maskView = new ImageView(maskImage);
 
                         // Scale to fit dialog
-                        double maxWidth = 650;
-                        double maxHeight = 400;
+                        double maxWidth = 1300;
+                        double maxHeight = 900;
                         double scale = Math.min(maxWidth / maskImage.getWidth(),
                                                maxHeight / maskImage.getHeight());
                         if (scale < 1.0) {
