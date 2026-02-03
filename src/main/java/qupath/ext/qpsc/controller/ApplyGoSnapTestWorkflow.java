@@ -103,6 +103,11 @@ public class ApplyGoSnapTestWorkflow {
         log(logArea, "  negative = " + negativeDegrees + " deg");
 
         // --- Read current camera state from server ---
+        // The real crash scenario uses 3 individual exposures + 1 unified gain.
+        // applyCameraSettingsForAngle uses array length to set camera mode:
+        //   exposures.length == 3 -> individual exposure mode
+        //   gains.length == 1    -> unified gain mode
+        // This mode switching is key to reproducing the crash.
         log(logArea, "Reading current camera exposures and gains from server...");
         float[] exposures;
         float[] gains;
@@ -110,6 +115,8 @@ public class ApplyGoSnapTestWorkflow {
             MicroscopeSocketClient.ExposuresResult expResult = controller.getExposures();
             MicroscopeSocketClient.GainsResult gainResult = controller.getGains();
 
+            // Always use 3 per-channel exposures to match real calibration behavior.
+            // If server returns unified, replicate to 3 channels.
             if (expResult.isPerChannel()) {
                 exposures = new float[]{
                         (float) expResult.red(),
@@ -117,21 +124,21 @@ public class ApplyGoSnapTestWorkflow {
                         (float) expResult.blue()
                 };
             } else {
-                exposures = new float[]{(float) expResult.unified()};
+                float exp = (float) expResult.unified();
+                exposures = new float[]{exp, exp, exp};
             }
 
+            // Always use 1 unified gain to match real calibration behavior.
+            // If server returns per-channel, use red as representative value.
             if (gainResult.isPerChannel()) {
-                gains = new float[]{
-                        (float) gainResult.red(),
-                        (float) gainResult.green(),
-                        (float) gainResult.blue()
-                };
+                gains = new float[]{(float) gainResult.red()};
             } else {
                 gains = new float[]{(float) gainResult.red()};
             }
 
-            log(logArea, "  Exposures: " + Arrays.toString(exposures) + " ms");
-            log(logArea, "  Gains: " + Arrays.toString(gains));
+            log(logArea, "  Exposures (3-channel): " + Arrays.toString(exposures) + " ms");
+            log(logArea, "  Gains (unified): " + Arrays.toString(gains));
+            log(logArea, "  This forces exp_individual=true, gain_individual=false (matches calibration)");
         } catch (IOException e) {
             log(logArea, "[FAIL] Could not read camera state: " + e.getMessage());
             logger.error("Failed to read camera state for snap test", e);
