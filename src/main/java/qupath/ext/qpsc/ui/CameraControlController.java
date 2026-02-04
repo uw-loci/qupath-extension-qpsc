@@ -282,25 +282,37 @@ public class CameraControlController {
         wbModeCombo.getItems().addAll("Off", "Continuous", "Once");
         wbModeCombo.setValue("Off");
 
-        Button applyWbModeButton = new Button("Apply WB Mode");
-        applyWbModeButton.setOnAction(e -> {
+        // Apply WB mode immediately on selection change, disabling the combo box
+        // while the command executes to prevent rapid repeated changes
+        wbModeCombo.setOnAction(e -> {
             String selected = wbModeCombo.getValue();
+            if (selected == null) return;
+
             int mode = switch (selected) {
                 case "Continuous" -> 1;
                 case "Once" -> 2;
                 default -> 0;
             };
-            try {
-                controller.withLiveModeHandling(() ->
-                        controller.setWhiteBalanceMode(mode));
-                logger.info("Applied WB mode: {}", selected);
-            } catch (IOException ex) {
-                UIFunctions.notifyUserOfError("Failed to set WB mode: " + ex.getMessage(), "Error");
-                logger.error("Failed to set WB mode: {}", ex.getMessage());
-            }
+
+            wbModeCombo.setDisable(true);
+            Thread thread = new Thread(() -> {
+                try {
+                    controller.withLiveModeHandling(() ->
+                            controller.setWhiteBalanceMode(mode));
+                    logger.info("Applied WB mode: {}", selected);
+                } catch (IOException ex) {
+                    Platform.runLater(() ->
+                            UIFunctions.notifyUserOfError("Failed to set WB mode: " + ex.getMessage(), "Error"));
+                    logger.error("Failed to set WB mode: {}", ex.getMessage());
+                } finally {
+                    Platform.runLater(() -> wbModeCombo.setDisable(false));
+                }
+            });
+            thread.setDaemon(true);
+            thread.start();
         });
 
-        HBox wbModeRow = new HBox(10, new Label("White Balance Mode:"), wbModeCombo, applyWbModeButton);
+        HBox wbModeRow = new HBox(10, new Label("White Balance Mode:"), wbModeCombo);
         wbModeRow.setAlignment(Pos.CENTER_LEFT);
         wbModeBox.getChildren().add(wbModeRow);
 
