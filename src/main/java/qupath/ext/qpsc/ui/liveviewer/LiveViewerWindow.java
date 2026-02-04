@@ -5,6 +5,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.PixelFormat;
@@ -81,10 +82,14 @@ public class LiveViewerWindow {
     private volatile boolean polling = false;
     private volatile String lastFrameInfo = "";
 
+    // Display scale: fraction of native resolution to render
+    // 0.5 = half resolution (faster), 1.0 = full, 2.0 = double (pixel-doubled)
+    private volatile double displayScale = 0.5;
+
     // Configuration
     private static final long POLL_INTERVAL_MS = 100;  // ~10 FPS max
-    private static final double WINDOW_WIDTH = 520;
-    private static final double WINDOW_HEIGHT = 600;
+    private static final double WINDOW_WIDTH = 660;
+    private static final double WINDOW_HEIGHT = 720;
 
     private LiveViewerWindow() {
         buildUI();
@@ -138,16 +143,35 @@ public class LiveViewerWindow {
             stage.initOwner(gui.getStage());
         }
 
-        // Toolbar with Live toggle button
+        // Toolbar with Live toggle button and display scale selector
         liveToggleButton = new Button("Live: OFF");
         liveToggleButton.setStyle("-fx-font-weight: bold;");
         updateLiveButtonStyle(false);
         liveToggleButton.setOnAction(e -> toggleLiveMode());
 
+        // Display scale selector
+        Label scaleLabel = new Label("Display:");
+        ComboBox<String> scaleCombo = new ComboBox<>();
+        scaleCombo.getItems().addAll("25%", "50%", "100%");
+        scaleCombo.setValue("50%");
+        scaleCombo.setPrefWidth(75);
+        scaleCombo.setOnAction(e -> {
+            String selected = scaleCombo.getValue();
+            switch (selected) {
+                case "25%" -> displayScale = 0.25;
+                case "50%" -> displayScale = 0.5;
+                case "100%" -> displayScale = 1.0;
+            }
+            // Force recreation of WritableImage on next frame
+            lastFrameWidth = 0;
+            lastFrameHeight = 0;
+            logger.info("Display scale changed to {}", selected);
+        });
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        HBox toolbar = new HBox(8, liveToggleButton, spacer);
+        HBox toolbar = new HBox(8, liveToggleButton, spacer, scaleLabel, scaleCombo);
         toolbar.setPadding(new Insets(4, 8, 4, 8));
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
@@ -316,22 +340,27 @@ public class LiveViewerWindow {
     }
 
     private void renderFrame(FrameData frame) {
-        int w = frame.width();
-        int h = frame.height();
+        int srcW = frame.width();
+        int srcH = frame.height();
+        double scale = displayScale;
 
-        // Recreate WritableImage if dimensions changed
-        if (w != lastFrameWidth || h != lastFrameHeight) {
-            writableImage = new WritableImage(w, h);
-            argbBuffer = new int[w * h];
-            lastFrameWidth = w;
-            lastFrameHeight = h;
+        // Compute display dimensions based on scale
+        int dstW = Math.max(1, (int) (srcW * scale));
+        int dstH = Math.max(1, (int) (srcH * scale));
+
+        // Recreate WritableImage if display dimensions changed
+        if (dstW != lastFrameWidth || dstH != lastFrameHeight) {
+            writableImage = new WritableImage(dstW, dstH);
+            argbBuffer = new int[dstW * dstH];
+            lastFrameWidth = dstW;
+            lastFrameHeight = dstH;
             imageView.setImage(writableImage);
 
-            // Apply full range for new dimensions/bit depth
+            // Apply full range for new bit depth
             contrastSettings.applyFullRange(frame);
         }
 
-        // Apply contrast mapping and convert to ARGB
+        // Apply contrast mapping and convert to ARGB with subsampling
         int min = contrastSettings.getDisplayMin();
         int max = contrastSettings.getDisplayMax();
         int range = Math.max(1, max - min);
@@ -340,47 +369,55 @@ public class LiveViewerWindow {
         int bpp = frame.bytesPerPixel();
         int channels = frame.channels();
 
-        if (channels == 1) {
-            // Grayscale
-            for (int i = 0; i < w * h; i++) {
-                int val;
-                if (bpp == 1) {
-                    val = raw[i] & 0xFF;
+        for (int dy = 0; dy < dstH; dy++) {
+            // Map display row to source row
+            int sy = (int) (dy / scale);
+            if (sy >= srcH) sy = srcH - 1;
+
+            for (int dx = 0; dx < dstW; dx++) {
+                // Map display col to source col
+                int sx = (int) (dx / scale);
+                if (sx >= srcW) sx = srcW - 1;
+
+                int srcIdx = sy * srcW + sx;
+
+                if (channels == 1) {
+                    int val;
+                    if (bpp == 1) {
+                        val = raw[srcIdx] & 0xFF;
+                    } else {
+                        int byteOff = srcIdx * 2;
+                        val = ((raw[byteOff] & 0xFF) << 8) | (raw[byteOff + 1] & 0xFF);
+                    }
+                    int mapped = clamp((val - min) * 255 / range, 0, 255);
+                    argbBuffer[dy * dstW + dx] = 0xFF000000 | (mapped << 16) | (mapped << 8) | mapped;
                 } else {
-                    int offset = i * 2;
-                    val = ((raw[offset] & 0xFF) << 8) | (raw[offset + 1] & 0xFF);
+                    int bytesPerSample = bpp;
+                    int stride = channels * bytesPerSample;
+                    int byteOff = srcIdx * stride;
+                    int r, g, b;
+                    if (bpp == 1) {
+                        r = raw[byteOff] & 0xFF;
+                        g = raw[byteOff + 1] & 0xFF;
+                        b = raw[byteOff + 2] & 0xFF;
+                    } else {
+                        r = ((raw[byteOff] & 0xFF) << 8) | (raw[byteOff + 1] & 0xFF);
+                        g = ((raw[byteOff + 2] & 0xFF) << 8) | (raw[byteOff + 3] & 0xFF);
+                        b = ((raw[byteOff + 4] & 0xFF) << 8) | (raw[byteOff + 5] & 0xFF);
+                    }
+                    r = clamp((r - min) * 255 / range, 0, 255);
+                    g = clamp((g - min) * 255 / range, 0, 255);
+                    b = clamp((b - min) * 255 / range, 0, 255);
+                    argbBuffer[dy * dstW + dx] = 0xFF000000 | (r << 16) | (g << 8) | b;
                 }
-                int mapped = clamp((val - min) * 255 / range, 0, 255);
-                argbBuffer[i] = 0xFF000000 | (mapped << 16) | (mapped << 8) | mapped;
-            }
-        } else {
-            // RGB
-            int bytesPerSample = bpp;
-            int stride = channels * bytesPerSample;
-            for (int i = 0; i < w * h; i++) {
-                int offset = i * stride;
-                int r, g, b;
-                if (bpp == 1) {
-                    r = raw[offset] & 0xFF;
-                    g = raw[offset + 1] & 0xFF;
-                    b = raw[offset + 2] & 0xFF;
-                } else {
-                    r = ((raw[offset] & 0xFF) << 8) | (raw[offset + 1] & 0xFF);
-                    g = ((raw[offset + 2] & 0xFF) << 8) | (raw[offset + 3] & 0xFF);
-                    b = ((raw[offset + 4] & 0xFF) << 8) | (raw[offset + 5] & 0xFF);
-                }
-                r = clamp((r - min) * 255 / range, 0, 255);
-                g = clamp((g - min) * 255 / range, 0, 255);
-                b = clamp((b - min) * 255 / range, 0, 255);
-                argbBuffer[i] = 0xFF000000 | (r << 16) | (g << 8) | b;
             }
         }
 
         // Batch write to WritableImage
         writableImage.getPixelWriter().setPixels(
-                0, 0, w, h,
+                0, 0, dstW, dstH,
                 PixelFormat.getIntArgbInstance(),
-                argbBuffer, 0, w
+                argbBuffer, 0, dstW
         );
 
         updateStatus(lastFrameInfo);

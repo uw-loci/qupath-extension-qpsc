@@ -8,24 +8,29 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.Slider;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 
 /**
  * Histogram display with min/max contrast sliders and FullRange/AutoScale buttons.
  * <p>
+ * The histogram canvas is aligned directly above the slider tracks, with
+ * labels placed to the left so the visual elements line up vertically.
+ * <p>
  * Features:
  * <ul>
  *   <li>256-bin luminance histogram with log-scale Y axis</li>
- *   <li>Min/max contrast range sliders</li>
+ *   <li>Min/max contrast range sliders aligned under the histogram</li>
  *   <li>Full Range and Auto Scale buttons</li>
  *   <li>Visual overlay showing active contrast range</li>
  * </ul>
  */
 public class HistogramView extends VBox {
 
-    private static final int HIST_WIDTH = 256;
     private static final int HIST_HEIGHT = 80;
+    // Label column width -- keeps histogram and sliders aligned
+    private static final double LABEL_WIDTH = 70;
 
     private final Canvas canvas;
     private final Slider minSlider;
@@ -44,33 +49,47 @@ public class HistogramView extends VBox {
     public HistogramView(ContrastSettings contrastSettings) {
         this.contrastSettings = contrastSettings;
 
-        setSpacing(4);
-        setPadding(new Insets(4));
+        setSpacing(2);
+        setPadding(new Insets(4, 8, 4, 8));
 
-        // Histogram canvas
-        canvas = new Canvas(HIST_WIDTH, HIST_HEIGHT);
+        // --- Row 1: Label spacer + Histogram canvas ---
+        // The canvas sits in an HBox with a fixed-width spacer on the left
+        // so it lines up with the slider tracks (which also have labels on the left).
+        Label histSpacer = new Label();
+        histSpacer.setMinWidth(LABEL_WIDTH);
+        histSpacer.setMaxWidth(LABEL_WIDTH);
+
+        canvas = new Canvas(256, HIST_HEIGHT);
         drawHistogram();
 
-        // Min/Max sliders
-        minSlider = new Slider(0, 255, 0);
-        maxSlider = new Slider(0, 255, 255);
-        minSlider.setPrefWidth(HIST_WIDTH);
-        maxSlider.setPrefWidth(HIST_WIDTH);
+        HBox histRow = new HBox(4, histSpacer, canvas);
+        histRow.setAlignment(Pos.CENTER_LEFT);
 
+        // --- Row 2: Min label + slider ---
         minLabel = new Label("Min: 0");
-        maxLabel = new Label("Max: 255");
-        minLabel.setMinWidth(70);
-        maxLabel.setMinWidth(70);
+        minLabel.setMinWidth(LABEL_WIDTH);
+        minLabel.setMaxWidth(LABEL_WIDTH);
+
+        minSlider = new Slider(0, 255, 0);
+        HBox.setHgrow(minSlider, Priority.ALWAYS);
 
         HBox minRow = new HBox(4, minLabel, minSlider);
         minRow.setAlignment(Pos.CENTER_LEFT);
+
+        // --- Row 3: Max label + slider ---
+        maxLabel = new Label("Max: 255");
+        maxLabel.setMinWidth(LABEL_WIDTH);
+        maxLabel.setMaxWidth(LABEL_WIDTH);
+
+        maxSlider = new Slider(0, 255, 255);
+        HBox.setHgrow(maxSlider, Priority.ALWAYS);
+
         HBox maxRow = new HBox(4, maxLabel, maxSlider);
         maxRow.setAlignment(Pos.CENTER_LEFT);
 
-        // Slider listeners
+        // --- Slider listeners ---
         minSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
             int min = newVal.intValue();
-            // Scale slider (0-255) to actual pixel range
             int scaledMin = min * currentMaxValue / 255;
             contrastSettings.setDisplayMin(scaledMin);
             contrastSettings.setAutoScale(false);
@@ -87,7 +106,7 @@ public class HistogramView extends VBox {
             drawHistogram();
         });
 
-        // Buttons
+        // --- Row 4: Buttons ---
         Button fullRangeBtn = new Button("Full Range");
         Button autoScaleBtn = new Button("Auto Scale");
 
@@ -109,8 +128,9 @@ public class HistogramView extends VBox {
 
         HBox buttonRow = new HBox(8, fullRangeBtn, autoScaleBtn);
         buttonRow.setAlignment(Pos.CENTER);
+        buttonRow.setPadding(new Insets(2, 0, 0, 0));
 
-        getChildren().addAll(canvas, minRow, maxRow, buttonRow);
+        getChildren().addAll(histRow, minRow, maxRow, buttonRow);
     }
 
     /**
@@ -193,11 +213,12 @@ public class HistogramView extends VBox {
     }
 
     private void drawHistogram() {
+        double canvasWidth = canvas.getWidth();
         GraphicsContext gc = canvas.getGraphicsContext2D();
 
         // Clear
         gc.setFill(Color.BLACK);
-        gc.fillRect(0, 0, HIST_WIDTH, HIST_HEIGHT);
+        gc.fillRect(0, 0, canvasWidth, HIST_HEIGHT);
 
         // Find max for log scale normalization
         double maxLog = 0;
@@ -213,8 +234,9 @@ public class HistogramView extends VBox {
         // Draw contrast range shading
         int rangeMin = contrastSettings.getDisplayMin() * 255 / Math.max(1, currentMaxValue);
         int rangeMax = contrastSettings.getDisplayMax() * 255 / Math.max(1, currentMaxValue);
+        double barWidth = canvasWidth / 256.0;
         gc.setFill(Color.rgb(40, 40, 80));
-        gc.fillRect(rangeMin, 0, rangeMax - rangeMin, HIST_HEIGHT);
+        gc.fillRect(rangeMin * barWidth, 0, (rangeMax - rangeMin) * barWidth, HIST_HEIGHT);
 
         // Draw histogram bars
         gc.setFill(Color.LIGHTGRAY);
@@ -222,14 +244,14 @@ public class HistogramView extends VBox {
             if (currentHistogram[i] > 0) {
                 double logVal = Math.log1p(currentHistogram[i]);
                 double barHeight = (logVal / maxLog) * (HIST_HEIGHT - 2);
-                gc.fillRect(i, HIST_HEIGHT - barHeight, 1, barHeight);
+                gc.fillRect(i * barWidth, HIST_HEIGHT - barHeight, Math.max(barWidth, 1), barHeight);
             }
         }
 
         // Draw min/max lines
         gc.setStroke(Color.CYAN);
         gc.setLineWidth(1);
-        gc.strokeLine(rangeMin, 0, rangeMin, HIST_HEIGHT);
-        gc.strokeLine(rangeMax, 0, rangeMax, HIST_HEIGHT);
+        gc.strokeLine(rangeMin * barWidth, 0, rangeMin * barWidth, HIST_HEIGHT);
+        gc.strokeLine(rangeMax * barWidth, 0, rangeMax * barWidth, HIST_HEIGHT);
     }
 }
