@@ -1,6 +1,7 @@
 package qupath.ext.qpsc.ui;
 
 import javafx.application.Platform;
+import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -9,6 +10,7 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import org.slf4j.Logger;
@@ -266,6 +268,92 @@ public class StageMovementController {
             };
             xyStepField.setTextFormatter(new TextFormatter<>(integerFilter));
 
+            // --- FOV-based step size dropdown ---
+            logger.debug("Creating FOV-based step size controls");
+            double[] cachedFovUm = {0, 0};
+            ComboBox<String> fovStepCombo = new ComboBox<>(FXCollections.observableArrayList(
+                    "1 FOV", "0.5 FOV", "0.25 FOV", "0.1 FOV", res.getString("stageMovement.fov.value")));
+            fovStepCombo.setValue(res.getString("stageMovement.fov.value"));
+            fovStepCombo.setPrefWidth(100);
+
+            Label fovInfoLabel = new Label(res.getString("stageMovement.fov.unavailable"));
+            fovInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
+
+            Button refreshFovBtn = new Button("R");
+            refreshFovBtn.setStyle("-fx-font-size: 10px; -fx-min-width: 24px; -fx-min-height: 24px; -fx-padding: 2;");
+            Tooltip.install(refreshFovBtn, new Tooltip(res.getString("stageMovement.fov.refreshTooltip")));
+
+            // Virtual joystick for continuous movement
+            VirtualJoystick joystick = new VirtualJoystick(55);
+
+            // Helper to query FOV from hardware and cache it
+            Runnable queryFov = () -> {
+                try {
+                    double[] fov = MicroscopeController.getInstance().getCameraFOV();
+                    cachedFovUm[0] = fov[0];
+                    cachedFovUm[1] = fov[1];
+                    fovInfoLabel.setText(String.format(res.getString("stageMovement.fov.format"), fov[0], fov[1]));
+                    logger.debug("Queried camera FOV: {} x {} um", fov[0], fov[1]);
+                } catch (Exception ex) {
+                    logger.warn("Failed to query camera FOV: {}", ex.getMessage());
+                    cachedFovUm[0] = 0;
+                    cachedFovUm[1] = 0;
+                    fovInfoLabel.setText(res.getString("stageMovement.fov.unavailable"));
+                    // Fall back to Value mode
+                    fovStepCombo.setValue(res.getString("stageMovement.fov.value"));
+                    xyStepField.setDisable(false);
+                }
+            };
+
+            // Helper to apply FOV-based step size
+            Runnable applyFovStep = () -> {
+                String selection = fovStepCombo.getValue();
+                if (selection == null || selection.equals(res.getString("stageMovement.fov.value"))) {
+                    xyStepField.setDisable(false);
+                    return;
+                }
+                // Parse multiplier from selection (e.g., "0.5 FOV" -> 0.5)
+                try {
+                    double multiplier = Double.parseDouble(selection.split(" ")[0]);
+                    double minDim = Math.min(cachedFovUm[0], cachedFovUm[1]);
+                    if (minDim <= 0) {
+                        // FOV not yet queried, fetch it
+                        queryFov.run();
+                        minDim = Math.min(cachedFovUm[0], cachedFovUm[1]);
+                    }
+                    if (minDim > 0) {
+                        int stepValue = (int) Math.round(minDim * multiplier);
+                        xyStepField.setTextFormatter(null); // temporarily remove to set text
+                        xyStepField.setText(String.valueOf(stepValue));
+                        xyStepField.setTextFormatter(new TextFormatter<>(integerFilter));
+                        xyStepField.setDisable(true);
+                        // Update joystick max step: half the selected step per tick at full deflection
+                        joystick.setMaxStepUm(stepValue * 0.5);
+                        logger.debug("FOV step set to {} um ({} x min FOV {})", stepValue, multiplier, minDim);
+                    }
+                } catch (NumberFormatException ex) {
+                    logger.warn("Failed to parse FOV multiplier from: {}", selection);
+                }
+            };
+
+            fovStepCombo.setOnAction(e -> applyFovStep.run());
+            refreshFovBtn.setOnAction(e -> {
+                queryFov.run();
+                applyFovStep.run();
+            });
+
+            // Update joystick max step when manual value changes
+            xyStepField.textProperty().addListener((obs, oldVal, newVal) -> {
+                if (!xyStepField.isDisabled()) {
+                    try {
+                        double step = Double.parseDouble(newVal.replace(",", ""));
+                        joystick.setMaxStepUm(step);
+                    } catch (NumberFormatException ignored) {
+                        // Incomplete input, ignore
+                    }
+                }
+            });
+
             Button upBtn = new Button("\u2191");  // Up arrow
             Button downBtn = new Button("\u2193");  // Down arrow
             Button leftBtn = new Button("\u2190");  // Left arrow
@@ -277,17 +365,6 @@ public class StageMovementController {
             downBtn.setStyle(arrowBtnStyle);
             leftBtn.setStyle(arrowBtnStyle);
             rightBtn.setStyle(arrowBtnStyle);
-
-            // Helper to move XY by delta and update fields
-            Runnable updateXYFieldsFromHardware = () -> {
-                try {
-                    double[] xy = MicroscopeController.getInstance().getStagePositionXY();
-                    xField.setText(String.format("%.2f", xy[0]));
-                    yField.setText(String.format("%.2f", xy[1]));
-                } catch (Exception ex) {
-                    logger.warn("Failed to update XY fields from hardware: {}", ex.getMessage());
-                }
-            };
 
             // Sample movement checkbox - inverts Y direction when checked
             CheckBox sampleMovementCheckbox = new CheckBox("Sample movement");
@@ -407,7 +484,57 @@ public class StageMovementController {
 
             VBox arrowGrid = new VBox(2);
             arrowGrid.setAlignment(Pos.CENTER);
-            arrowGrid.getChildren().addAll(arrowRow, arrowLabel, keyboardHint, sampleMovementCheckbox);
+            arrowGrid.getChildren().addAll(arrowRow, arrowLabel, keyboardHint);
+
+            // --- FOV controls row ---
+            Label stepLabel = new Label(res.getString("stageMovement.label.step"));
+            HBox fovControlsRow = new HBox(5, stepLabel, fovStepCombo, refreshFovBtn, fovInfoLabel);
+            fovControlsRow.setAlignment(Pos.CENTER_LEFT);
+
+            // --- Wire joystick movement callback ---
+            joystick.setMovementCallback((deltaX, deltaY) -> {
+                try {
+                    double currentX = Double.parseDouble(xField.getText().replace(",", ""));
+                    double currentY = Double.parseDouble(yField.getText().replace(",", ""));
+
+                    // Invert Y for sample movement mode
+                    double yDir = sampleMovementCheckbox.isSelected() ? -1 : 1;
+                    double targetX = currentX + deltaX;
+                    double targetY = currentY + (deltaY * yDir);
+
+                    if (!mgr.isWithinStageBounds(targetX, targetY)) {
+                        Platform.runLater(() -> xyStatus.setText(res.getString("stageMovement.joystick.boundary")));
+                        return;
+                    }
+
+                    MicroscopeController.getInstance().moveStageXY(targetX, targetY);
+                    Platform.runLater(() -> {
+                        xField.setText(String.format("%.2f", targetX));
+                        yField.setText(String.format("%.2f", targetY));
+                        xyStatus.setText(String.format("Joystick -> (%.0f, %.0f)", targetX, targetY));
+                    });
+                } catch (Exception ex) {
+                    logger.warn("Joystick movement failed: {}", ex.getMessage());
+                    Platform.runLater(() -> xyStatus.setText("Joystick move failed"));
+                }
+            });
+
+            Label joystickLabel = new Label(res.getString("stageMovement.joystick.label"));
+            joystickLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #666666;");
+
+            VBox joystickBox = new VBox(4);
+            joystickBox.setAlignment(Pos.CENTER);
+            joystickBox.getChildren().addAll(joystick, joystickLabel);
+
+            // --- Navigation section: arrows + joystick side by side ---
+            Region spacer = new Region();
+            spacer.setPrefWidth(15);
+            HBox navigationRow = new HBox(5, arrowGrid, spacer, joystickBox);
+            navigationRow.setAlignment(Pos.CENTER);
+
+            VBox navigationSection = new VBox(8);
+            navigationSection.setAlignment(Pos.CENTER_LEFT);
+            navigationSection.getChildren().addAll(fovControlsRow, navigationRow, sampleMovementCheckbox);
 
             // --- Z Scroll Control ---
             logger.debug("Adding Z scroll wheel control");
@@ -698,10 +825,20 @@ public class StageMovementController {
             });
 
             grid.add(goToCentroidBtn, 0, 8, 2, 1);
-            grid.add(arrowGrid, 2, 8, 2, 1);  // Arrow grid next to centroid button
-            grid.add(centroidStatus, 0, 9, 4, 1);
+            grid.add(navigationSection, 0, 9, 4, 1);
+            grid.add(centroidStatus, 2, 8, 2, 1);
             grid.add(availableLabel, 0, 10, 4, 1);
             grid.add(alignmentListView, 0, 11, 4, 1);
+
+            // Try to pre-fetch FOV on dialog open (non-blocking)
+            try {
+                double[] fov = MicroscopeController.getInstance().getCameraFOV();
+                cachedFovUm[0] = fov[0];
+                cachedFovUm[1] = fov[1];
+                fovInfoLabel.setText(String.format(res.getString("stageMovement.fov.format"), fov[0], fov[1]));
+            } catch (Exception fovEx) {
+                logger.debug("FOV pre-fetch failed (microscope may not be connected): {}", fovEx.getMessage());
+            }
 
             // Wrap grid in VBox with warning at top
             VBox contentBox = new VBox(5);
@@ -711,6 +848,9 @@ public class StageMovementController {
             dlg.getDialogPane().setContent(contentBox);
             dlg.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
             dlg.initModality(Modality.NONE);
+            if (gui != null && gui.getStage() != null) {
+                dlg.initOwner(gui.getStage());
+            }
 
             // Add WASD and arrow key support for XY movement
             // Using event filter to capture keys before text fields consume them
@@ -762,10 +902,17 @@ public class StageMovementController {
                     };
                 gui.imageDataProperty().addListener(imageChangeListener);
 
-                // Remove listener when dialog closes to prevent memory leak
+                // Remove listener and stop joystick when dialog closes to prevent leaks
                 dlg.setOnHidden(event -> {
                     gui.imageDataProperty().removeListener(imageChangeListener);
-                    logger.debug("Removed image change listener from dialog");
+                    joystick.stop();
+                    logger.debug("Removed image change listener and stopped joystick on dialog close");
+                });
+            } else {
+                // Still stop joystick on close even without GUI
+                dlg.setOnHidden(event -> {
+                    joystick.stop();
+                    logger.debug("Stopped joystick on dialog close");
                 });
             }
 
