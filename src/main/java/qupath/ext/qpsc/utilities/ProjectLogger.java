@@ -5,9 +5,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.projects.Project;
 
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+
 import java.io.File;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 /**
  * Utility for managing project-specific logging.
@@ -39,7 +40,7 @@ import java.nio.file.Paths;
  * } // Automatically cleaned up
  * }</pre>
  *
- * <p>The project-specific log is saved as: {@code <project-directory>/acquisition.log}</p>
+ * <p>The project-specific log is saved as: {@code <project-directory>/logs/acquisition.log}</p>
  *
  * @author Mike Nelson
  * @since 0.2.1
@@ -53,7 +54,7 @@ public class ProjectLogger {
 
     /**
      * Enables project-specific logging for the given QuPath project.
-     * Logs will be written to: {@code <project-directory>/acquisition.log}
+     * Logs will be written to: {@code <project-directory>/logs/acquisition.log}
      *
      * @param project The QuPath project to log for
      * @return true if successfully enabled, false otherwise
@@ -70,12 +71,14 @@ public class ProjectLogger {
             return false;
         }
 
-        return enable(projectPath.toFile());
+        // project.getPath() returns the .qpproj file - use parent directory
+        File projectDir = projectPath.toFile().getParentFile();
+        return enable(projectDir);
     }
 
     /**
      * Enables project-specific logging for the given directory.
-     * Logs will be written to: {@code <directory>/acquisition.log}
+     * Logs will be written to: {@code <directory>/logs/acquisition.log}
      *
      * @param projectDir The directory to save logs in
      * @return true if successfully enabled, false otherwise
@@ -90,8 +93,41 @@ public class ProjectLogger {
     }
 
     /**
+     * Enables logging using the microscope config file location as a fallback.
+     *
+     * <p>When no QuPath project is open, this method reads the config file path from
+     * {@link QPPreferenceDialog#getMicroscopeConfigFileProperty()} and enables logging
+     * in the config file's parent directory. Logs will be written to:
+     * {@code <config_parent>/logs/acquisition.log}</p>
+     *
+     * @return true if successfully enabled, false otherwise
+     */
+    public static boolean enableFromConfig() {
+        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        if (configPath == null || configPath.trim().isEmpty()) {
+            logger.warn("Cannot enable config-based logging: no microscope config file set in preferences");
+            return false;
+        }
+
+        File configFile = new File(configPath);
+        if (!configFile.exists()) {
+            logger.warn("Cannot enable config-based logging: config file does not exist: {}", configPath);
+            return false;
+        }
+
+        File configDir = configFile.getParentFile();
+        if (configDir == null || !configDir.exists() || !configDir.isDirectory()) {
+            logger.warn("Cannot enable config-based logging: invalid config directory for: {}", configPath);
+            return false;
+        }
+
+        logger.info("No project available - using config directory for logging: {}", configDir);
+        return enable(configDir.getAbsolutePath());
+    }
+
+    /**
      * Enables project-specific logging for the given directory path.
-     * Logs will be written to: {@code <path>/acquisition.log}
+     * Logs will be written to: {@code <path>/logs/acquisition.log}
      *
      * @param projectPath The directory path to save logs in
      * @return true if successfully enabled, false otherwise
@@ -109,14 +145,23 @@ public class ProjectLogger {
             return false;
         }
 
-        // Set system property for logback
+        // Create logs/ subdirectory if it doesn't exist
+        File logsDir = new File(dir, "logs");
+        if (!logsDir.exists()) {
+            if (!logsDir.mkdirs()) {
+                logger.warn("Cannot enable project logging: failed to create logs directory: {}", logsDir);
+                return false;
+            }
+        }
+
+        // Set system property for logback (logback.xml appends /logs/acquisition.log)
         System.setProperty(PROPERTY_NAME, projectPath);
         currentProjectPath.set(projectPath);
 
         // Reconfigure logback to pick up the new property
         reconfigureLogback();
 
-        logger.info("Project-specific logging enabled: {}/acquisition.log", projectPath);
+        logger.info("Project-specific logging enabled: {}/logs/acquisition.log", projectPath);
         return true;
     }
 
@@ -128,7 +173,7 @@ public class ProjectLogger {
         String path = currentProjectPath.get();
 
         if (path != null) {
-            logger.info("Project-specific logging disabled: {}/acquisition.log", path);
+            logger.info("Project-specific logging disabled: {}/logs/acquisition.log", path);
             currentProjectPath.remove();
         }
 

@@ -50,7 +50,7 @@
          ======================================== -->
     <appender name="PROJECT_LOG" class="ch.qos.logback.core.FileAppender">
         <!-- File path set dynamically via system property -->
-        <file>${PROJECT_LOG_DIR}/acquisition.log</file>
+        <file>${PROJECT_LOG_DIR}/logs/acquisition.log</file>
 
         <!-- Readable format with timestamps -->
         <encoder>
