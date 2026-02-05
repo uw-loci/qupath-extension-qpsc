@@ -89,8 +89,19 @@ public class LiveViewerWindow {
 
     // Configuration
     private static final long POLL_INTERVAL_MS = 100;  // ~10 FPS max
-    private static final double WINDOW_WIDTH = 660;
-    private static final double WINDOW_HEIGHT = 720;
+    private static final double DEFAULT_WINDOW_WIDTH = 660;
+    private static final double DEFAULT_WINDOW_HEIGHT = 720;
+
+    // Initial sizing: resize window to fit first frame
+    private volatile boolean initialSizingDone = false;
+
+    // UI chrome heights (approximate, for initial sizing calculation)
+    private static final double TOOLBAR_HEIGHT = 40;
+    private static final double HISTOGRAM_HEIGHT = 120;
+    private static final double NOISE_PANEL_COLLAPSED_HEIGHT = 30;
+    private static final double STATUS_BAR_HEIGHT = 30;
+    private static final double WINDOW_CHROME_HEIGHT = TOOLBAR_HEIGHT + HISTOGRAM_HEIGHT
+            + NOISE_PANEL_COLLAPSED_HEIGHT + STATUS_BAR_HEIGHT;
 
     private LiveViewerWindow() {
         buildUI();
@@ -211,10 +222,13 @@ public class LiveViewerWindow {
         root.setCenter(imageContainer);
         root.setBottom(bottomPane);
 
-        Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
+        Scene scene = new Scene(root, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
         stage.setScene(scene);
         stage.setMinWidth(320);
         stage.setMinHeight(400);
+
+        // Reset initial sizing flag (will resize to fit first frame)
+        initialSizingDone = false;
 
         // Clean shutdown on close
         stage.setOnCloseRequest(e -> stopAndDispose());
@@ -376,6 +390,12 @@ public class LiveViewerWindow {
 
             // Apply full range for new bit depth
             contrastSettings.applyFullRange(frame);
+
+            // On first frame, resize window to fit the image
+            if (!initialSizingDone) {
+                initialSizingDone = true;
+                resizeWindowToFitImage(dstW, dstH);
+            }
         }
 
         // Apply contrast mapping and convert to ARGB with subsampling
@@ -447,6 +467,37 @@ public class LiveViewerWindow {
 
     private void updateStatus(String text) {
         statusLabel.setText(text);
+    }
+
+    /**
+     * Resizes the window to fit the image dimensions plus UI chrome.
+     * Called once after the first frame is received, so we know the actual image size.
+     *
+     * @param imageWidth  the scaled image width in pixels
+     * @param imageHeight the scaled image height in pixels
+     */
+    private void resizeWindowToFitImage(int imageWidth, int imageHeight) {
+        // Calculate required window size
+        // Add some padding for borders and margins
+        double targetWidth = Math.max(320, imageWidth + 20);
+        double targetHeight = Math.max(400, imageHeight + WINDOW_CHROME_HEIGHT + 20);
+
+        // Get screen bounds to avoid making window larger than screen
+        javafx.geometry.Rectangle2D screenBounds = javafx.stage.Screen.getPrimary().getVisualBounds();
+        double maxWidth = screenBounds.getWidth() * 0.9;
+        double maxHeight = screenBounds.getHeight() * 0.9;
+
+        targetWidth = Math.min(targetWidth, maxWidth);
+        targetHeight = Math.min(targetHeight, maxHeight);
+
+        stage.setWidth(targetWidth);
+        stage.setHeight(targetHeight);
+
+        // Center on screen after resize
+        stage.centerOnScreen();
+
+        logger.info("Live Viewer resized to fit {}x{} image: window {}x{}",
+                imageWidth, imageHeight, (int) targetWidth, (int) targetHeight);
     }
 
     private void stopAndDispose() {
