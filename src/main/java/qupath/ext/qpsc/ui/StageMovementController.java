@@ -75,6 +75,9 @@ public class StageMovementController {
 
     private static final Logger logger = LoggerFactory.getLogger(StageMovementController.class);
 
+    /** Singleton instance tracking - ensures only one dialog is open at a time */
+    private static Dialog<Void> activeDialog = null;
+
     /**
      * Displays the stage movement control dialog for manual microscope positioning.
      * 
@@ -99,9 +102,19 @@ public class StageMovementController {
     public static void showTestStageMovementDialog() {
         logger.info("Initiating stage movement dialog display");
         Platform.runLater(() -> {
+            // Check if dialog is already showing - bring to front instead of creating duplicate
+            if (activeDialog != null && activeDialog.isShowing()) {
+                logger.info("Stage movement dialog already open - bringing to front");
+                Stage stage = (Stage) activeDialog.getDialogPane().getScene().getWindow();
+                stage.toFront();
+                stage.requestFocus();
+                return;
+            }
+
             logger.debug("Creating stage movement dialog on JavaFX Application Thread");
             ResourceBundle res = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings");
             Dialog<Void> dlg = new Dialog<>();
+            activeDialog = dlg;  // Track the active dialog
             dlg.setTitle(res.getString("stageMovement.title"));
             dlg.setHeaderText(res.getString("stageMovement.header"));
             logger.debug("Dialog created with title: {}", res.getString("stageMovement.title"));
@@ -978,12 +991,14 @@ public class StageMovementController {
                 dlg.setOnHidden(event -> {
                     gui.imageDataProperty().removeListener(imageChangeListener);
                     joystick.stop();
+                    activeDialog = null;  // Clear singleton reference
                     logger.debug("Removed image change listener and stopped joystick on dialog close");
                 });
             } else {
                 // Still stop joystick on close even without GUI
                 dlg.setOnHidden(event -> {
                     joystick.stop();
+                    activeDialog = null;  // Clear singleton reference
                     logger.debug("Stopped joystick on dialog close");
                 });
             }

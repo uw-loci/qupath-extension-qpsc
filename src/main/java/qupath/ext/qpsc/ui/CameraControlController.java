@@ -45,6 +45,9 @@ public class CameraControlController {
 
     private static final Logger logger = LoggerFactory.getLogger(CameraControlController.class);
 
+    /** Singleton instance tracking - ensures only one dialog is open at a time */
+    private static Dialog<Void> activeDialog = null;
+
     /** Default PPM angle names and their rotation values, used when config is unavailable */
     private static final Map<String, Double> DEFAULT_PPM_ANGLES = new LinkedHashMap<>();
     static {
@@ -81,6 +84,15 @@ public class CameraControlController {
         logger.info("Initiating camera control dialog display");
 
         Platform.runLater(() -> {
+            // Check if dialog is already showing - bring to front instead of creating duplicate
+            if (activeDialog != null && activeDialog.isShowing()) {
+                logger.info("Camera control dialog already open - bringing to front");
+                Stage stage = (Stage) activeDialog.getDialogPane().getScene().getWindow();
+                stage.toFront();
+                stage.requestFocus();
+                return;
+            }
+
             // Check connection first
             MicroscopeController controller = MicroscopeController.getInstance();
             if (!controller.isConnected()) {
@@ -104,8 +116,15 @@ public class CameraControlController {
         ResourceBundle res = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings");
 
         Dialog<Void> dlg = new Dialog<>();
+        activeDialog = dlg;  // Track the active dialog
         dlg.setTitle(res.getString("camera.dialog.title"));
         dlg.setHeaderText(res.getString("camera.dialog.header"));
+
+        // Clear singleton reference when dialog closes
+        dlg.setOnHidden(event -> {
+            activeDialog = null;
+            logger.debug("Camera control dialog closed");
+        });
 
         // Get controller and config
         MicroscopeController controller = MicroscopeController.getInstance();
