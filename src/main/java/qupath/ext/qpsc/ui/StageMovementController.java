@@ -451,8 +451,12 @@ public class StageMovementController {
                 try {
                     double step = Double.parseDouble(xyStepField.getText().replace(",", ""));
                     double currentX = Double.parseDouble(xField.getText().replace(",", ""));
-                    double newX = currentX - step;
+                    // Invert X direction if sample movement is checked
+                    boolean sampleMode = sampleMovementCheckbox.isSelected();
+                    double xDirection = sampleMode ? -1 : 1;
+                    double newX = currentX - (step * xDirection);
                     double currentY = Double.parseDouble(yField.getText().replace(",", ""));
+                    logger.debug("LEFT button: sampleMovement={}, xDirection={}", sampleMode, xDirection);
 
                     if (!mgr.isWithinStageBounds(newX, currentY)) {
                         xyStatus.setText("X- move out of bounds");
@@ -473,8 +477,12 @@ public class StageMovementController {
                 try {
                     double step = Double.parseDouble(xyStepField.getText().replace(",", ""));
                     double currentX = Double.parseDouble(xField.getText().replace(",", ""));
-                    double newX = currentX + step;
+                    // Invert X direction if sample movement is checked
+                    boolean sampleMode = sampleMovementCheckbox.isSelected();
+                    double xDirection = sampleMode ? -1 : 1;
+                    double newX = currentX + (step * xDirection);
                     double currentY = Double.parseDouble(yField.getText().replace(",", ""));
+                    logger.debug("RIGHT button: sampleMovement={}, xDirection={}", sampleMode, xDirection);
 
                     if (!mgr.isWithinStageBounds(newX, currentY)) {
                         xyStatus.setText("X+ move out of bounds");
@@ -562,12 +570,12 @@ public class StageMovementController {
                     double currentX = current[0];
                     double currentY = current[1];
 
-                    // Invert Y for sample movement mode (read from atomic flag, not JavaFX control)
+                    // Invert X for sample movement mode (read from atomic flag, not JavaFX control)
                     boolean sampleMode = sampleMovementMode.get();
-                    double yDir = sampleMode ? -1 : 1;
-                    logger.debug("Joystick: sampleMovement={}, yDir={}", sampleMode, yDir);
-                    double targetX = currentX + deltaX;
-                    double targetY = currentY + (deltaY * yDir);
+                    double xDir = sampleMode ? -1 : 1;
+                    logger.debug("Joystick: sampleMovement={}, xDir={}", sampleMode, xDir);
+                    double targetX = currentX + (deltaX * xDir);
+                    double targetY = currentY + deltaY;
 
                     if (!mgr.isWithinStageBounds(targetX, targetY)) {
                         Platform.runLater(() -> xyStatus.setText(res.getString("stageMovement.joystick.boundary")));
