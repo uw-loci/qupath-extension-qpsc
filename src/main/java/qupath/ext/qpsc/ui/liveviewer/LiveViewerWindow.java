@@ -181,11 +181,14 @@ public class LiveViewerWindow {
         imageView.setPreserveRatio(true);
         imageView.setSmooth(false);  // Nearest-neighbor for microscopy
 
-        // Bind image size to container
-        BorderPane imageContainer = new BorderPane(imageView);
+        // Container for image - use StackPane to center, bind ImageView to container size
+        javafx.scene.layout.StackPane imageContainer = new javafx.scene.layout.StackPane(imageView);
         imageContainer.setStyle("-fx-background-color: black;");
+        imageContainer.setAlignment(Pos.CENTER);
+
+        // Bind image fit size to container size (ImageView scales to fit while preserving ratio)
         imageView.fitWidthProperty().bind(imageContainer.widthProperty());
-        imageView.fitHeightProperty().bind(imageContainer.heightProperty().subtract(200));
+        imageView.fitHeightProperty().bind(imageContainer.heightProperty());
 
         // Histogram + contrast controls
         histogramView = new HistogramView(contrastSettings);
