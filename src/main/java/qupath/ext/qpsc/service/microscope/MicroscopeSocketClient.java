@@ -1602,14 +1602,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
                                 int current = Integer.parseInt(parts[0].trim());
                                 int total = Integer.parseInt(parts[1].trim());
                                 String stage = parts.length > 2 ? parts[2].trim() : "";
-                                String message = parts.length > 3 ? parts[3].trim() : "";
+                                String statusMsg = parts.length > 3 ? parts[3].trim() : "";
 
                                 // Log progress periodically (every 10 positions or when stage changes)
                                 boolean stageChanged = !stage.equals(lastProgressStage);
                                 if (stageChanged || current % 10 == 0 || current == total) {
                                     double percent = total > 0 ? (current * 100.0 / total) : 0;
                                     logger.info("Calibration progress: {}/{} ({}%) - {} {}",
-                                            current, total, String.format("%.1f", percent), stage, message);
+                                            current, total, String.format("%.1f", percent), stage, statusMsg);
                                 }
                                 lastProgressCurrent = current;
                                 lastProgressStage = stage;
