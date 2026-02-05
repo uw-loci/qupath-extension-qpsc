@@ -1546,14 +1546,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
             int originalTimeout = 0;
             try {
                 originalTimeout = socket.getSoTimeout();
-                // Increase timeout for calibration - this is a VERY long operation!
-                // With stability check (3 runs) and fine steps, actual time can exceed 2 hours:
-                // - PI Stage: 1000 encoder counts/deg, ~360k count sweep per run
-                // - Each position requires move, settle, capture (~2-5 sec on slow hardware)
-                // - 3 runs x (73 coarse + 4x~100 fine positions) = ~1500 total operations
-                // Note: POLCAL does not send progress updates, so use very generous timeout
-                socket.setSoTimeout(14400000); // 4 hours (240 minutes)
-                logger.debug("Increased socket timeout to 4 hours for calibration");
+                // Timeout between messages (progress updates or final result)
+                // Progress updates are sent after each position (~every few seconds)
+                // so 5 minutes is a very generous safety margin
+                socket.setSoTimeout(300000); // 5 minutes between progress updates
+                logger.debug("Set socket timeout to 5 minutes for calibration progress updates");
             } catch (IOException e) {
                 logger.warn("Failed to adjust socket timeout", e);
             }
@@ -1611,8 +1608,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
                                 boolean stageChanged = !stage.equals(lastProgressStage);
                                 if (stageChanged || current % 10 == 0 || current == total) {
                                     double percent = total > 0 ? (current * 100.0 / total) : 0;
-                                    logger.info("Calibration progress: {}/{} ({:.1f}%) - {} {}",
-                                            current, total, percent, stage, message);
+                                    logger.info("Calibration progress: {}/{} ({}%) - {} {}",
+                                            current, total, String.format("%.1f", percent), stage, message);
                                 }
                                 lastProgressCurrent = current;
                                 lastProgressStage = stage;

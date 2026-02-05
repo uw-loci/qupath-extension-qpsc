@@ -254,6 +254,11 @@ public class AutofocusEditorWorkflow {
 
         // Create dialog
         Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initModality(javafx.stage.Modality.NONE);
+        qupath.lib.gui.QuPathGUI gui = qupath.lib.gui.QuPathGUI.getInstance();
+        if (gui != null && gui.getStage() != null) {
+            dialog.initOwner(gui.getStage());
+        }
         dialog.setTitle("Autofocus Configuration Editor");
         dialog.setHeaderText("Edit autofocus parameters for " + microscopeName + " microscope\n" +
                 "Settings will be saved to: " + autofocusFile.getName());

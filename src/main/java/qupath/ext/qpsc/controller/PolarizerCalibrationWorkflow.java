@@ -22,7 +22,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * PolarizerCalibrationWorkflow - Calibrate PPM rotation stage to find crossed polarizer positions
@@ -65,18 +64,8 @@ public class PolarizerCalibrationWorkflow {
                     .thenAccept(params -> {
                         if (params != null) {
                             logger.info("Polarizer calibration parameters received");
-
-                            // Execute calibration
-                            CompletableFuture.runAsync(() -> {
-                                executeCalibration(params);
-                            }).exceptionally(ex -> {
-                                logger.error("Polarizer calibration failed", ex);
-                                Platform.runLater(() -> {
-                                    Dialogs.showErrorMessage("Polarizer Calibration Error",
-                                            "Failed to execute calibration: " + ex.getMessage());
-                                });
-                                return null;
-                            });
+                            // Start calibration with progress dialog (all on FX thread initially)
+                            startCalibrationWithProgress(params);
                         } else {
                             logger.info("Polarizer calibration cancelled by user");
                         }
@@ -106,7 +95,11 @@ public class PolarizerCalibrationWorkflow {
 
         Platform.runLater(() -> {
             Dialog<CalibrationParams> dialog = new Dialog<>();
-            dialog.initModality(Modality.APPLICATION_MODAL);
+            dialog.initModality(Modality.NONE);
+            qupath.lib.gui.QuPathGUI gui = qupath.lib.gui.QuPathGUI.getInstance();
+            if (gui != null && gui.getStage() != null) {
+                dialog.initOwner(gui.getStage());
+            }
             dialog.setTitle("Polarizer Calibration (PPM)");
 
             // Header with instructions
@@ -302,61 +295,69 @@ public class PolarizerCalibrationWorkflow {
     }
 
     /**
-     * Executes the polarizer calibration via socket communication.
+     * Creates progress dialog on FX thread, then runs calibration on background thread.
+     * This ensures all UI components are created on the correct thread and eliminates
+     * the race condition from the previous AtomicReference pattern.
      *
      * @param params Calibration parameters from dialog
      */
-    private static void executeCalibration(CalibrationParams params) {
+    private static void startCalibrationWithProgress(CalibrationParams params) {
+        // Must be called on FX thread - create progress dialog here
+        Alert progressDialog = new Alert(Alert.AlertType.INFORMATION);
+        progressDialog.setTitle("Calibration In Progress");
+        progressDialog.setHeaderText("Polarizer Calibration Running");
+
+        Label progressLabel = new Label(
+                "Calibration is in progress. This may take several minutes (typically 5-10 minutes).\n\n" +
+                "IMPORTANT: Check the Python server logs for detailed progress information.\n" +
+                "The logs will show:\n" +
+                "  - Coarse sweep progress (finding approximate minima)\n" +
+                "  - Fine sweep progress (refining exact positions)\n" +
+                "  - Stability check results (if enabled)\n\n" +
+                "Please wait for the calibration to complete.\n" +
+                "This dialog will close automatically when finished."
+        );
+        progressLabel.setWrapText(true);
+
+        javafx.scene.control.ProgressIndicator progressIndicator = new javafx.scene.control.ProgressIndicator();
+        progressIndicator.setProgress(-1); // Indeterminate
+
+        VBox content = new VBox(15);
+        content.setPadding(new Insets(20));
+        content.setAlignment(Pos.CENTER_LEFT);
+        content.getChildren().addAll(progressIndicator, progressLabel);
+        progressDialog.getDialogPane().setContent(content);
+
+        progressDialog.getButtonTypes().clear();
+        progressDialog.getButtonTypes().add(ButtonType.CANCEL);
+
+        // Show progress dialog (non-blocking)
+        progressDialog.show();
+
+        // Now run the actual calibration on a background thread
+        CompletableFuture.runAsync(() -> {
+            executeCalibration(params, progressDialog);
+        }).exceptionally(ex -> {
+            logger.error("Polarizer calibration failed", ex);
+            Platform.runLater(() -> {
+                progressDialog.close();
+                Dialogs.showErrorMessage("Polarizer Calibration Error",
+                        "Failed to execute calibration: " + ex.getMessage());
+            });
+            return null;
+        });
+    }
+
+    /**
+     * Executes the polarizer calibration via socket communication.
+     * Called from background thread - all UI updates must use Platform.runLater.
+     *
+     * @param params Calibration parameters from dialog
+     * @param progressDialog Progress dialog to close when done (created on FX thread)
+     */
+    private static void executeCalibration(CalibrationParams params, Alert progressDialog) {
         logger.info("Executing polarizer calibration: {} to {} deg, step {}",
                 params.startAngle(), params.endAngle(), params.stepSize());
-
-        // Create and show progress dialog on JavaFX thread
-        // Use AtomicReference to hold the Stage reference since we're on a background thread
-        AtomicReference<javafx.stage.Stage> progressStageRef = new AtomicReference<>();
-
-        Platform.runLater(() -> {
-            // Use a Stage instead of Alert for proper close behavior
-            javafx.stage.Stage progressStage = new javafx.stage.Stage();
-            progressStage.initModality(Modality.APPLICATION_MODAL);
-            progressStage.setTitle("Calibration In Progress");
-
-            VBox content = new VBox(15);
-            content.setPadding(new Insets(20));
-            content.setAlignment(Pos.CENTER_LEFT);
-
-            Label headerLabel = new Label("Polarizer Calibration Running");
-            headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
-
-            Label messageLabel = new Label(
-                    "Calibration is in progress. This may take several minutes (typically 5-10 minutes).\n\n" +
-                    "IMPORTANT: Check the Python server logs for detailed progress information.\n" +
-                    "The logs will show:\n" +
-                    "  - Coarse sweep progress (finding approximate minima)\n" +
-                    "  - Fine sweep progress (refining exact positions)\n" +
-                    "  - Stability check results (if enabled)\n\n" +
-                    "Please wait for the calibration to complete.\n" +
-                    "This dialog will close automatically when finished."
-            );
-            messageLabel.setWrapText(true);
-
-            javafx.scene.control.ProgressIndicator progressIndicator = new javafx.scene.control.ProgressIndicator();
-            progressIndicator.setProgress(-1); // Indeterminate
-
-            content.getChildren().addAll(headerLabel, progressIndicator, messageLabel);
-
-            javafx.scene.Scene scene = new javafx.scene.Scene(content, 550, 300);
-            progressStage.setScene(scene);
-            progressStage.setResizable(false);
-
-            // Prevent user from closing during calibration (they can still use window manager)
-            progressStage.setOnCloseRequest(event -> {
-                // Allow close but log it
-                logger.info("User closed progress dialog during calibration");
-            });
-
-            progressStageRef.set(progressStage);
-            progressStage.show();
-        });
 
         try {
             // Get socket client
@@ -391,16 +392,10 @@ public class PolarizerCalibrationWorkflow {
             logger.info("Polarizer calibration completed successfully");
             logger.info("Report saved to: {}", reportPath);
 
-            // Close progress dialog and show success
+            // Close progress dialog and show success (on FX thread)
             Platform.runLater(() -> {
-                javafx.stage.Stage progressStage = progressStageRef.get();
-                if (progressStage != null) {
-                    progressStage.close();
-                }
-            });
+                progressDialog.close();
 
-            // Show success and offer to open report
-            Platform.runLater(() -> {
                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
                 alert.setTitle("Calibration Complete");
                 alert.setHeaderText("Polarizer calibration completed successfully!");
@@ -442,16 +437,14 @@ public class PolarizerCalibrationWorkflow {
         } catch (Exception e) {
             logger.error("Polarizer calibration failed", e);
 
-            // Close progress dialog and show error
+            // Close progress dialog and show error (on FX thread)
             Platform.runLater(() -> {
-                javafx.stage.Stage progressStage = progressStageRef.get();
-                if (progressStage != null) {
-                    progressStage.close();
-                }
+                progressDialog.close();
                 Dialogs.showErrorMessage("Calibration Failed",
                         "Failed to complete polarizer calibration:\n" + e.getMessage());
             });
         }
+        // Note: Don't disconnect - we're using the shared MicroscopeController connection
     }
 
     /**

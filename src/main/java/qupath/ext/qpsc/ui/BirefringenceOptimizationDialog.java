@@ -52,7 +52,11 @@ public class BirefringenceOptimizationDialog {
 
         Platform.runLater(() -> {
             Dialog<BirefringenceParams> dialog = new Dialog<>();
-            dialog.initModality(Modality.APPLICATION_MODAL);
+            dialog.initModality(Modality.NONE);
+            qupath.lib.gui.QuPathGUI gui = qupath.lib.gui.QuPathGUI.getInstance();
+            if (gui != null && gui.getStage() != null) {
+                dialog.initOwner(gui.getStage());
+            }
             dialog.setTitle("PPM Birefringence Optimization");
 
             // Header with instructions

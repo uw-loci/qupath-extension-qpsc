@@ -86,7 +86,11 @@ public class AutofocusBenchmarkDialog {
             try {
                 // Create dialog
                 Dialog<BenchmarkParams> dialog = new Dialog<>();
-                dialog.initModality(Modality.APPLICATION_MODAL);
+                dialog.initModality(Modality.NONE);
+                qupath.lib.gui.QuPathGUI gui = qupath.lib.gui.QuPathGUI.getInstance();
+                if (gui != null && gui.getStage() != null) {
+                    dialog.initOwner(gui.getStage());
+                }
                 dialog.setTitle("Autofocus Parameter Benchmark");
                 dialog.setHeaderText("Configure autofocus parameter testing");
                 dialog.setResizable(true);

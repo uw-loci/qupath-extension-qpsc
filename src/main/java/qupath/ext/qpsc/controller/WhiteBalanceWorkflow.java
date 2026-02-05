@@ -182,7 +182,11 @@ public class WhiteBalanceWorkflow {
                                              WhiteBalanceDialog.SimpleWBParams params) {
         // Show progress dialog
         Stage progressStage = new Stage();
-        progressStage.initModality(Modality.APPLICATION_MODAL);
+        progressStage.initModality(Modality.NONE);
+        qupath.lib.gui.QuPathGUI gui = qupath.lib.gui.QuPathGUI.getInstance();
+        if (gui != null && gui.getStage() != null) {
+            progressStage.initOwner(gui.getStage());
+        }
         progressStage.setTitle("Simple White Balance");
         progressStage.setResizable(false);
 
@@ -257,7 +261,11 @@ public class WhiteBalanceWorkflow {
                                           WhiteBalanceDialog.PPMWBParams params) {
         // Show progress dialog
         Stage progressStage = new Stage();
-        progressStage.initModality(Modality.APPLICATION_MODAL);
+        progressStage.initModality(Modality.NONE);
+        qupath.lib.gui.QuPathGUI guiPPM = qupath.lib.gui.QuPathGUI.getInstance();
+        if (guiPPM != null && guiPPM.getStage() != null) {
+            progressStage.initOwner(guiPPM.getStage());
+        }
         progressStage.setTitle("PPM White Balance");
         progressStage.setResizable(false);
 

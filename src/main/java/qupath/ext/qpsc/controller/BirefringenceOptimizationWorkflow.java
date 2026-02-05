@@ -3,6 +3,8 @@ package qupath.ext.qpsc.controller;
 import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.Label;
+import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -64,18 +66,8 @@ public class BirefringenceOptimizationWorkflow {
                     .thenAccept(params -> {
                         if (params != null) {
                             logger.info("Birefringence optimization parameters received");
-
-                            // Execute test
-                            CompletableFuture.runAsync(() -> {
-                                executeOptimization(params);
-                            }).exceptionally(ex -> {
-                                logger.error("Birefringence optimization failed", ex);
-                                Platform.runLater(() -> {
-                                    Dialogs.showErrorMessage("Birefringence Optimization Error",
-                                            "Failed to execute optimization: " + ex.getMessage());
-                                });
-                                return null;
-                            });
+                            // Start optimization with progress dialog (all on FX thread initially)
+                            startOptimizationWithProgress(params);
                         } else {
                             logger.info("Birefringence optimization cancelled by user");
                         }
@@ -96,49 +88,76 @@ public class BirefringenceOptimizationWorkflow {
     }
 
     /**
-     * Executes the birefringence optimization via socket communication with progress updates.
+     * Creates progress dialog on FX thread, then runs optimization on background thread.
+     * This ensures all UI components are created on the correct thread.
      *
      * @param params Optimization parameters from dialog
      */
-    private static void executeOptimization(BirefringenceOptimizationDialog.BirefringenceParams params) {
-        logger.info("Executing birefringence optimization: {} to {} deg, step {}",
-                params.minAngle(), params.maxAngle(), params.angleStep());
-
-        // Create progress dialog with percentage display
+    private static void startOptimizationWithProgress(BirefringenceOptimizationDialog.BirefringenceParams params) {
+        // Must be called on FX thread - create progress dialog here
         Alert progressDialog = new Alert(Alert.AlertType.INFORMATION);
         progressDialog.setTitle("Optimization In Progress");
         progressDialog.setHeaderText("PPM Birefringence Optimization Running");
 
         // Create a VBox with progress info that can be updated
-        javafx.scene.control.Label progressLabel = new javafx.scene.control.Label("Starting optimization...");
+        Label progressLabel = new Label("Starting optimization...");
         progressLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
 
-        javafx.scene.control.Label infoLabel = new javafx.scene.control.Label(
+        Label infoLabel = new Label(
                 "The test acquires paired images at symmetric angles (+theta, -theta)\n" +
                 "to measure birefringence signal strength across the angle range.\n\n" +
                 "The dialog will close automatically when the test completes."
         );
 
-        javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(10);
+        VBox content = new VBox(10);
         content.getChildren().addAll(progressLabel, infoLabel);
         progressDialog.getDialogPane().setContent(content);
 
         progressDialog.getButtonTypes().clear();
         progressDialog.getButtonTypes().add(ButtonType.CANCEL);
 
-        // Show progress dialog
-        Platform.runLater(() -> progressDialog.show());
+        // Show progress dialog (non-blocking)
+        progressDialog.show();
+
+        // Now run the actual optimization on a background thread
+        CompletableFuture.runAsync(() -> {
+            executeOptimization(params, progressDialog, progressLabel);
+        }).exceptionally(ex -> {
+            logger.error("Birefringence optimization failed", ex);
+            Platform.runLater(() -> {
+                progressDialog.close();
+                Dialogs.showErrorMessage("Birefringence Optimization Error",
+                        "Failed to execute optimization: " + ex.getMessage());
+            });
+            return null;
+        });
+    }
+
+    /**
+     * Executes the birefringence optimization via socket communication with progress updates.
+     * Called from background thread - all UI updates must use Platform.runLater.
+     *
+     * @param params Optimization parameters from dialog
+     * @param progressDialog Progress dialog to close when done (created on FX thread)
+     * @param progressLabel Label to update with progress (created on FX thread)
+     */
+    private static void executeOptimization(BirefringenceOptimizationDialog.BirefringenceParams params,
+                                            Alert progressDialog, Label progressLabel) {
+        logger.info("Executing birefringence optimization: {} to {} deg, step {}",
+                params.minAngle(), params.maxAngle(), params.angleStep());
 
         try {
             // Get microscope configuration
             String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            String serverHost = QPPreferenceDialog.getMicroscopeServerHost();
-            int serverPort = QPPreferenceDialog.getMicroscopeServerPort();
 
-            // Connect to microscope server
-            logger.info("Connecting to microscope server at {}:{}", serverHost, serverPort);
-            MicroscopeSocketClient socketClient = new MicroscopeSocketClient(serverHost, serverPort);
-            socketClient.connect();
+            // Use shared MicroscopeController connection (don't create new one)
+            MicroscopeSocketClient socketClient = MicroscopeController.getInstance().getSocketClient();
+
+            // Ensure we're connected
+            if (!MicroscopeController.getInstance().isConnected()) {
+                logger.info("Not connected to microscope server, connecting...");
+                MicroscopeController.getInstance().connect();
+            }
 
             logger.info("Sending birefringence optimization command:");
             logger.info("  Config: {}", configFileLocation);
@@ -175,11 +194,10 @@ public class BirefringenceOptimizationWorkflow {
             logger.info("Birefringence optimization completed successfully");
             logger.info("Results saved to: {}", resultPath);
 
-            // Close progress dialog
-            Platform.runLater(() -> progressDialog.close());
-
-            // Show success dialog with results
+            // Close progress dialog and show success (on FX thread)
             Platform.runLater(() -> {
+                progressDialog.close();
+
                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
                 alert.setTitle("Optimization Complete");
                 alert.setHeaderText("Birefringence optimization completed successfully!");
@@ -217,14 +235,13 @@ public class BirefringenceOptimizationWorkflow {
         } catch (Exception e) {
             logger.error("Birefringence optimization failed", e);
 
-            // Close progress dialog
-            Platform.runLater(() -> progressDialog.close());
-
-            // Show error
+            // Close progress dialog and show error (on FX thread)
             Platform.runLater(() -> {
+                progressDialog.close();
                 Dialogs.showErrorMessage("Optimization Failed",
                         "Failed to complete birefringence optimization:\n" + e.getMessage());
             });
         }
+        // Note: Don't disconnect - we're using the shared MicroscopeController connection
     }
 }

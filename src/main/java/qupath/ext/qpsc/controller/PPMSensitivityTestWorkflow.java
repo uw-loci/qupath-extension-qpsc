@@ -13,7 +13,6 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
-import qupath.lib.gui.prefs.PathPrefs;
 
 import java.io.File;
 import java.io.IOException;
@@ -68,18 +67,8 @@ public class PPMSensitivityTestWorkflow {
                     .thenAccept(params -> {
                         if (params != null) {
                             logger.info("PPM sensitivity test parameters received");
-
-                            // Execute test
-                            CompletableFuture.runAsync(() -> {
-                                executeTest(params);
-                            }).exceptionally(ex -> {
-                                logger.error("PPM sensitivity test failed", ex);
-                                Platform.runLater(() -> {
-                                    Dialogs.showErrorMessage("PPM Sensitivity Test Error",
-                                            "Failed to execute test: " + ex.getMessage());
-                                });
-                                return null;
-                            });
+                            // Start test with progress dialog (all on FX thread initially)
+                            startTestWithProgress(params);
                         } else {
                             logger.info("PPM sensitivity test cancelled by user");
                         }
@@ -109,7 +98,11 @@ public class PPMSensitivityTestWorkflow {
 
         Platform.runLater(() -> {
             Dialog<TestParams> dialog = new Dialog<>();
-            dialog.initModality(Modality.APPLICATION_MODAL);
+            dialog.initModality(Modality.NONE);
+            qupath.lib.gui.QuPathGUI gui = qupath.lib.gui.QuPathGUI.getInstance();
+            if (gui != null && gui.getStage() != null) {
+                dialog.initOwner(gui.getStage());
+            }
             dialog.setTitle("PPM Rotation Sensitivity Test");
 
             // Header with instructions
@@ -123,11 +116,11 @@ public class PPMSensitivityTestWorkflow {
                 "This test analyzes the impact of angular deviations on image quality and birefringence.\n\n" +
                 "IMPORTANT: Position microscope at a representative tissue area before starting.\n\n" +
                 "Test types:\n" +
-                "  • Comprehensive - Runs all tests (recommended for thorough analysis)\n" +
-                "  • Standard - Tests all standard angles (0, 7, 14, ..., 91 deg)\n" +
-                "  • Deviation - Fine angular deviations around base angle\n" +
-                "  • Repeatability - Mechanical repeatability test (N repetitions)\n" +
-                "  • Calibration - Compare current vs optimal calibration angles"
+                "  - Comprehensive - Runs all tests (recommended for thorough analysis)\n" +
+                "  - Standard - Tests all standard angles (0, 7, 14, ..., 91 deg)\n" +
+                "  - Deviation - Fine angular deviations around base angle\n" +
+                "  - Repeatability - Mechanical repeatability test (N repetitions)\n" +
+                "  - Calibration - Compare current vs optimal calibration angles"
             );
             instructionLabel.setWrapText(true);
             instructionLabel.setStyle("-fx-font-size: 11px;");
@@ -414,15 +407,13 @@ public class PPMSensitivityTestWorkflow {
     }
 
     /**
-     * Executes the PPM sensitivity test via socket communication.
+     * Creates progress dialog on FX thread, then runs test on background thread.
+     * This ensures all UI components are created on the correct thread.
      *
      * @param params Test parameters from dialog
      */
-    private static void executeTest(TestParams params) {
-        logger.info("Executing PPM sensitivity test: type={}, base_angle={}, repeats={}",
-                params.testType(), params.baseAngle(), params.nRepeats());
-
-        // Create progress dialog
+    private static void startTestWithProgress(TestParams params) {
+        // Must be called on FX thread - create progress dialog here
         Alert progressDialog = new Alert(Alert.AlertType.INFORMATION);
         progressDialog.setTitle("Test In Progress");
         progressDialog.setHeaderText("PPM Rotation Sensitivity Test Running");
@@ -438,10 +429,36 @@ public class PPMSensitivityTestWorkflow {
                 "This dialog will close automatically when finished."
         );
         progressDialog.getDialogPane().setMinWidth(500);
-        progressDialog.getButtonTypes().clear(); // Remove buttons - dialog stays open until test completes
+        progressDialog.getButtonTypes().clear();
+        progressDialog.getButtonTypes().add(ButtonType.CANCEL);
 
-        // Show progress dialog on JavaFX thread
-        Platform.runLater(() -> progressDialog.show());
+        // Show progress dialog (non-blocking)
+        progressDialog.show();
+
+        // Now run the actual test on a background thread
+        CompletableFuture.runAsync(() -> {
+            executeTest(params, progressDialog);
+        }).exceptionally(ex -> {
+            logger.error("PPM sensitivity test failed", ex);
+            Platform.runLater(() -> {
+                progressDialog.close();
+                Dialogs.showErrorMessage("PPM Sensitivity Test Error",
+                        "Failed to execute test: " + ex.getMessage());
+            });
+            return null;
+        });
+    }
+
+    /**
+     * Executes the PPM sensitivity test via socket communication.
+     * Called from background thread - all UI updates must use Platform.runLater.
+     *
+     * @param params Test parameters from dialog
+     * @param progressDialog Progress dialog to close when done (created on FX thread)
+     */
+    private static void executeTest(TestParams params, Alert progressDialog) {
+        logger.info("Executing PPM sensitivity test: type={}, base_angle={}, repeats={}",
+                params.testType(), params.baseAngle(), params.nRepeats());
 
         try {
             // Get socket client
@@ -480,21 +497,20 @@ public class PPMSensitivityTestWorkflow {
             logger.info("PPM sensitivity test completed successfully");
             logger.info("Results saved to: {}", resultDir);
 
-            // Close progress dialog
-            Platform.runLater(() -> progressDialog.close());
-
-            // Show success and offer to open results
+            // Close progress dialog and show success (on FX thread)
             Platform.runLater(() -> {
+                progressDialog.close();
+
                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
                 alert.setTitle("Test Complete");
                 alert.setHeaderText("PPM sensitivity test completed successfully!");
                 alert.setContentText(
                         "Test results saved to:\n" + resultDir + "\n\n" +
                         "The output directory contains:\n" +
-                        "  • Test summary report (JSON format)\n" +
-                        "  • Analysis plots and statistics\n" +
-                        "  • Acquired images (if retention enabled)\n" +
-                        "  • Detailed logs\n\n" +
+                        "  - Test summary report (JSON format)\n" +
+                        "  - Analysis plots and statistics\n" +
+                        "  - Acquired images (if retention enabled)\n" +
+                        "  - Detailed logs\n\n" +
                         "Would you like to open the results folder?"
                 );
 
@@ -525,15 +541,14 @@ public class PPMSensitivityTestWorkflow {
         } catch (Exception e) {
             logger.error("PPM sensitivity test failed", e);
 
-            // Close progress dialog
-            Platform.runLater(() -> progressDialog.close());
-
-            // Show error
+            // Close progress dialog and show error (on FX thread)
             Platform.runLater(() -> {
+                progressDialog.close();
                 Dialogs.showErrorMessage("Test Failed",
                         "Failed to complete PPM sensitivity test:\n" + e.getMessage());
             });
         }
+        // Note: Don't disconnect - we're using the shared MicroscopeController connection
     }
 
     /**

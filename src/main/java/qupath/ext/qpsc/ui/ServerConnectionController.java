@@ -100,6 +100,11 @@ public class ServerConnectionController {
      */
     private void createDialog() {
         dialog = new Dialog<>();
+        dialog.initModality(javafx.stage.Modality.NONE);
+        qupath.lib.gui.QuPathGUI gui = qupath.lib.gui.QuPathGUI.getInstance();
+        if (gui != null && gui.getStage() != null) {
+            dialog.initOwner(gui.getStage());
+        }
         dialog.setTitle(res.getString("server.dialog.title"));
         dialog.setHeaderText(res.getString("server.dialog.header"));
         dialog.setResizable(true);
