@@ -32,6 +32,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ResourceBundle;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
 
@@ -373,6 +374,13 @@ public class StageMovementController {
                     "When checked, controls move the sample rather than the stage.\n" +
                     "This inverts the Y direction to match visual expectations."));
 
+            // Thread-safe flag for sample movement mode (used by joystick callback on background thread)
+            final AtomicBoolean sampleMovementMode = new AtomicBoolean(false);
+            sampleMovementCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+                sampleMovementMode.set(newVal);
+                logger.debug("Sample movement mode: {}", newVal);
+            });
+
             upBtn.setOnAction(e -> {
                 try {
                     double step = Double.parseDouble(xyStepField.getText().replace(",", ""));
@@ -525,8 +533,8 @@ public class StageMovementController {
                     double currentX = current[0];
                     double currentY = current[1];
 
-                    // Invert Y for sample movement mode
-                    double yDir = sampleMovementCheckbox.isSelected() ? -1 : 1;
+                    // Invert Y for sample movement mode (read from atomic flag, not JavaFX control)
+                    double yDir = sampleMovementMode.get() ? -1 : 1;
                     double targetX = currentX + deltaX;
                     double targetY = currentY + (deltaY * yDir);
 
