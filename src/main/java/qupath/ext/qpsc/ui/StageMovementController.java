@@ -32,6 +32,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ResourceBundle;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
 
 /**
@@ -492,10 +493,37 @@ public class StageMovementController {
             fovControlsRow.setAlignment(Pos.CENTER_LEFT);
 
             // --- Wire joystick movement callback ---
+            // Track position atomically to avoid race conditions between background executor and JavaFX thread
+            double initialX, initialY;
+            try {
+                initialX = Double.parseDouble(xField.getText().replace(",", ""));
+                initialY = Double.parseDouble(yField.getText().replace(",", ""));
+            } catch (NumberFormatException e) {
+                initialX = 0;
+                initialY = 0;
+            }
+            final AtomicReference<double[]> joystickPosition = new AtomicReference<>(
+                    new double[]{initialX, initialY});
+
+            // Sync position from text fields when user starts dragging
+            // This ensures the joystick picks up from wherever the stage actually is
+            joystick.setStartCallback(() -> {
+                try {
+                    double x = Double.parseDouble(xField.getText().replace(",", ""));
+                    double y = Double.parseDouble(yField.getText().replace(",", ""));
+                    joystickPosition.set(new double[]{x, y});
+                    logger.debug("Joystick position synced to: ({}, {})", x, y);
+                } catch (NumberFormatException e) {
+                    logger.warn("Failed to sync joystick position from text fields");
+                }
+            });
+
             joystick.setMovementCallback((deltaX, deltaY) -> {
                 try {
-                    double currentX = Double.parseDouble(xField.getText().replace(",", ""));
-                    double currentY = Double.parseDouble(yField.getText().replace(",", ""));
+                    // Read current position atomically (thread-safe)
+                    double[] current = joystickPosition.get();
+                    double currentX = current[0];
+                    double currentY = current[1];
 
                     // Invert Y for sample movement mode
                     double yDir = sampleMovementCheckbox.isSelected() ? -1 : 1;
@@ -506,6 +534,9 @@ public class StageMovementController {
                         Platform.runLater(() -> xyStatus.setText(res.getString("stageMovement.joystick.boundary")));
                         return;
                     }
+
+                    // Update atomic position BEFORE sending command (latest-wins semantics)
+                    joystickPosition.set(new double[]{targetX, targetY});
 
                     MicroscopeController.getInstance().moveStageXY(targetX, targetY);
                     Platform.runLater(() -> {

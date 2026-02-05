@@ -10,6 +10,10 @@ import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 
 /**
@@ -18,6 +22,10 @@ import java.util.function.BiConsumer;
  * <p>The joystick provides a drag-based interface where displacement from center
  * controls both direction and speed of stage movement. A quadratic response curve
  * gives fine control near center and full speed at the edge.
+ *
+ * <p>Movement commands are throttled using a "latest-target-wins" strategy to prevent
+ * command flooding. When moves are requested faster than the hardware can execute them,
+ * intermediate positions are skipped and only the most recent target is sent.
  *
  * <p>Movement ticks are fired on a 150ms interval via a JavaFX Timeline while
  * the knob is displaced beyond the dead zone (10% of radius).
@@ -36,10 +44,27 @@ public class VirtualJoystick extends Pane {
     private final Circle knob;
     private final Timeline movementTimer;
 
+    // Minimum delay between move commands (ms). The server takes ~500ms per move,
+    // so we rate-limit to prevent flooding. This value can be tuned if needed.
+    private static final long MIN_MOVE_INTERVAL_MS = 400;
+
+    // Throttling: single-threaded executor ensures moves are sequential
+    private final ExecutorService moveExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "Joystick-Move-Executor");
+        t.setDaemon(true);
+        return t;
+    });
+
+    // Pending target for latest-wins semantics
+    private final AtomicReference<double[]> pendingTarget = new AtomicReference<>(null);
+    private final AtomicBoolean moveInProgress = new AtomicBoolean(false);
+    private volatile long lastMoveTime = 0;
+
     private double knobOffsetX = 0;
     private double knobOffsetY = 0;
     private double maxStepUm = 100;
     private BiConsumer<Double, Double> movementCallback;
+    private Runnable startCallback;
 
     /**
      * Creates a virtual joystick with the specified outer radius.
@@ -85,6 +110,14 @@ public class VirtualJoystick extends Pane {
 
         // Mouse interaction
         setOnMousePressed(event -> {
+            // Notify listener that joystick started (for position sync)
+            if (startCallback != null) {
+                try {
+                    startCallback.run();
+                } catch (Exception e) {
+                    logger.warn("Joystick start callback failed: {}", e.getMessage());
+                }
+            }
             updateKnobPosition(event.getX() - cx, event.getY() - cy);
             movementTimer.play();
         });
@@ -139,11 +172,75 @@ public class VirtualJoystick extends Pane {
         double deltaX = Math.cos(angle) * scaledMagnitude;
         double deltaY = Math.sin(angle) * scaledMagnitude;
 
-        try {
-            movementCallback.accept(deltaX, deltaY);
-        } catch (Exception e) {
-            logger.warn("Joystick movement callback failed: {}", e.getMessage());
+        // Store the latest delta request
+        pendingTarget.set(new double[]{deltaX, deltaY});
+
+        // If no move is in progress, start one
+        if (moveInProgress.compareAndSet(false, true)) {
+            executeNextMove();
         }
+        // Otherwise, the pending target will be picked up when current move completes
+    }
+
+    /**
+     * Executes the next pending move on a background thread.
+     * Uses latest-target-wins semantics: if multiple deltas were queued while
+     * a move was in progress, only the most recent one is executed.
+     *
+     * <p>Rate-limits commands to prevent server flooding, since the server
+     * does not send acknowledgments for move commands.
+     */
+    private void executeNextMove() {
+        moveExecutor.submit(() -> {
+            try {
+                // Get the latest pending target (may be newer than what triggered this call)
+                double[] target = pendingTarget.getAndSet(null);
+                if (target == null) {
+                    // Nothing pending, we're done
+                    moveInProgress.set(false);
+                    return;
+                }
+
+                // Rate-limit: wait until minimum interval has passed since last move
+                long now = System.currentTimeMillis();
+                long elapsed = now - lastMoveTime;
+                if (elapsed < MIN_MOVE_INTERVAL_MS) {
+                    long sleepTime = MIN_MOVE_INTERVAL_MS - elapsed;
+                    try {
+                        Thread.sleep(sleepTime);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        moveInProgress.set(false);
+                        return;
+                    }
+                    // After sleeping, check if a newer target arrived
+                    double[] newerTarget = pendingTarget.getAndSet(null);
+                    if (newerTarget != null) {
+                        target = newerTarget; // Use the newer position
+                    }
+                }
+
+                // Execute the move (note: this returns immediately, server handles async)
+                try {
+                    movementCallback.accept(target[0], target[1]);
+                    lastMoveTime = System.currentTimeMillis();
+                } catch (Exception e) {
+                    logger.warn("Joystick movement callback failed: {}", e.getMessage());
+                }
+
+                // Check if another target was queued while we were moving
+                if (pendingTarget.get() != null) {
+                    // More work to do, execute next move
+                    executeNextMove();
+                } else {
+                    // No more pending moves
+                    moveInProgress.set(false);
+                }
+            } catch (Exception e) {
+                logger.error("Error in joystick move executor: {}", e.getMessage());
+                moveInProgress.set(false);
+            }
+        });
     }
 
     /**
@@ -156,6 +253,16 @@ public class VirtualJoystick extends Pane {
     }
 
     /**
+     * Sets a callback invoked when the user starts dragging the joystick.
+     * This is useful for syncing the position tracking before movement begins.
+     *
+     * @param callback called on mouse press before movement starts
+     */
+    public void setStartCallback(Runnable callback) {
+        this.startCallback = callback;
+    }
+
+    /**
      * Sets the maximum displacement per tick at full deflection.
      *
      * @param maxStepUm maximum step in micrometers
@@ -165,10 +272,15 @@ public class VirtualJoystick extends Pane {
     }
 
     /**
-     * Stops the movement timer. Call on dialog close to prevent leaks.
+     * Stops the movement timer and executor. Call on dialog close to prevent leaks.
      */
     public void stop() {
         movementTimer.stop();
+
+        // Clear any pending moves and shut down executor
+        pendingTarget.set(null);
+        moveExecutor.shutdownNow();
+
         double cx = getPrefWidth() / 2;
         double cy = getPrefHeight() / 2;
         resetKnob(cx, cy);
