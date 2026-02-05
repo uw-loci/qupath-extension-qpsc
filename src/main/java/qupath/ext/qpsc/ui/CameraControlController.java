@@ -54,13 +54,11 @@ public class CameraControlController {
         DEFAULT_PPM_ANGLES.put("negative", -7.0);
     }
 
-    /** JAI analog gain limits per channel */
-    private static final double GAIN_RED_MIN = 0.47;
-    private static final double GAIN_RED_MAX = 4.0;
-    private static final double GAIN_GREEN_MIN = 1.0;
-    private static final double GAIN_GREEN_MAX = 64.0;
-    private static final double GAIN_BLUE_MIN = 0.47;
-    private static final double GAIN_BLUE_MAX = 4.0;
+    /** JAI R/B analog gain limits (green is reference channel, not adjusted) */
+    private static final double GAIN_ANALOG_RED_MIN = 0.47;
+    private static final double GAIN_ANALOG_RED_MAX = 4.0;
+    private static final double GAIN_ANALOG_BLUE_MIN = 0.47;
+    private static final double GAIN_ANALOG_BLUE_MAX = 4.0;
 
     /** JAI unified gain limits (applied equally to all channels) */
     private static final double GAIN_UNIFIED_MIN = 1.0;
@@ -167,6 +165,7 @@ public class CameraControlController {
         content.getChildren().add(selectionGrid);
 
         // --- Mode Toggles (JAI only) ---
+        // Only exposure mode is togglable; gain is always unified with R/B analog adjustment.
         VBox modeBox = new VBox(5);
         modeBox.setPadding(new Insets(10, 0, 10, 0));
 
@@ -176,21 +175,11 @@ public class CameraControlController {
         expIndividualRb.setToggleGroup(exposureModeGroup);
         expUnifiedRb.setToggleGroup(exposureModeGroup);
 
-        ToggleGroup gainModeGroup = new ToggleGroup();
-        RadioButton gainIndividualRb = new RadioButton(res.getString("camera.label.individual"));
-        RadioButton gainUnifiedRb = new RadioButton(res.getString("camera.label.unified"));
-        gainIndividualRb.setToggleGroup(gainModeGroup);
-        gainUnifiedRb.setToggleGroup(gainModeGroup);
-
         HBox expModeRow = new HBox(10, new Label(res.getString("camera.label.exposureMode")),
                 expIndividualRb, expUnifiedRb);
         expModeRow.setAlignment(Pos.CENTER_LEFT);
 
-        HBox gainModeRow = new HBox(10, new Label(res.getString("camera.label.gainMode")),
-                gainIndividualRb, gainUnifiedRb);
-        gainModeRow.setAlignment(Pos.CENTER_LEFT);
-
-        modeBox.getChildren().addAll(expModeRow, gainModeRow);
+        modeBox.getChildren().add(expModeRow);
 
         // Check camera type and set initial mode
         boolean isJAI = false;
@@ -200,8 +189,6 @@ public class CameraControlController {
             if (isJAI) {
                 expIndividualRb.setSelected(modeResult.exposureIndividual());
                 expUnifiedRb.setSelected(!modeResult.exposureIndividual());
-                gainIndividualRb.setSelected(modeResult.gainIndividual());
-                gainUnifiedRb.setSelected(!modeResult.gainIndividual());
             } else {
                 // Non-JAI camera - hide mode toggles
                 modeBox.setVisible(false);
@@ -216,58 +203,28 @@ public class CameraControlController {
         // Store field references for reload functionality (need to declare early for closures)
         final Map<String, AngleFields> angleFieldsMap = new HashMap<>();
 
-        // Mode change listeners (JAI only)
+        // Exposure mode change listeners (JAI only)
         if (isJAI) {
             expIndividualRb.setOnAction(e -> {
                 try {
                     boolean expInd = expIndividualRb.isSelected();
-                    boolean gainInd = gainIndividualRb.isSelected();
                     controller.withLiveModeHandling(() ->
-                            controller.setCameraMode(expInd, gainInd));
-                    updateAllFieldStates(angleFieldsMap, expInd, gainInd);
+                            controller.setCameraMode(expInd));
+                    updateAllFieldStates(angleFieldsMap, expInd);
                 } catch (IOException ex) {
-                    revertRadioButtonsToCamera(controller, expIndividualRb, expUnifiedRb,
-                            gainIndividualRb, gainUnifiedRb, angleFieldsMap);
+                    revertRadioButtonsToCamera(controller, expIndividualRb, expUnifiedRb, angleFieldsMap);
                     UIFunctions.notifyUserOfError("Failed to set exposure mode: " + ex.getMessage(), "Error");
                 }
             });
             expUnifiedRb.setOnAction(e -> {
                 try {
                     boolean expInd = expIndividualRb.isSelected();
-                    boolean gainInd = gainIndividualRb.isSelected();
                     controller.withLiveModeHandling(() ->
-                            controller.setCameraMode(expInd, gainInd));
-                    updateAllFieldStates(angleFieldsMap, expInd, gainInd);
+                            controller.setCameraMode(expInd));
+                    updateAllFieldStates(angleFieldsMap, expInd);
                 } catch (IOException ex) {
-                    revertRadioButtonsToCamera(controller, expIndividualRb, expUnifiedRb,
-                            gainIndividualRb, gainUnifiedRb, angleFieldsMap);
+                    revertRadioButtonsToCamera(controller, expIndividualRb, expUnifiedRb, angleFieldsMap);
                     UIFunctions.notifyUserOfError("Failed to set exposure mode: " + ex.getMessage(), "Error");
-                }
-            });
-            gainIndividualRb.setOnAction(e -> {
-                try {
-                    boolean expInd = expIndividualRb.isSelected();
-                    boolean gainInd = gainIndividualRb.isSelected();
-                    controller.withLiveModeHandling(() ->
-                            controller.setCameraMode(expInd, gainInd));
-                    updateAllFieldStates(angleFieldsMap, expInd, gainInd);
-                } catch (IOException ex) {
-                    revertRadioButtonsToCamera(controller, expIndividualRb, expUnifiedRb,
-                            gainIndividualRb, gainUnifiedRb, angleFieldsMap);
-                    UIFunctions.notifyUserOfError("Failed to set gain mode: " + ex.getMessage(), "Error");
-                }
-            });
-            gainUnifiedRb.setOnAction(e -> {
-                try {
-                    boolean expInd = expIndividualRb.isSelected();
-                    boolean gainInd = gainIndividualRb.isSelected();
-                    controller.withLiveModeHandling(() ->
-                            controller.setCameraMode(expInd, gainInd));
-                    updateAllFieldStates(angleFieldsMap, expInd, gainInd);
-                } catch (IOException ex) {
-                    revertRadioButtonsToCamera(controller, expIndividualRb, expUnifiedRb,
-                            gainIndividualRb, gainUnifiedRb, angleFieldsMap);
-                    UIFunctions.notifyUserOfError("Failed to set gain mode: " + ex.getMessage(), "Error");
                 }
             });
         }
@@ -436,17 +393,17 @@ public class CameraControlController {
             expRow.getChildren().addAll(expLabel, expAllField, expRField, expGField, expBField);
 
             // --- Gain Row (with colored background) ---
+            // New gain model: Unified gain + R/B analog gains (green is reference, not adjusted)
             Label gainLabel = new Label(res.getString("camera.label.gain"));
             gainLabel.setStyle("-fx-font-weight: bold;");
             gainLabel.setMinWidth(100);
-            gainLabel.setTooltip(new Tooltip("JAI analog gain ranges:\nR: 0.47-4.0\nG: 1.0-64.0\nB: 0.47-4.0"));
+            gainLabel.setTooltip(new Tooltip("Unified gain: 1.0-8.0\nAnalog Red: 0.47-4.0\nAnalog Blue: 0.47-4.0\n(Green is reference channel)"));
 
-            TextField gainAllField = createSmallField("1.0");
-            gainAllField.setTooltip(new Tooltip("Unified gain (applies to all channels)"));
+            TextField gainUnifiedField = createGainField("1.0", GAIN_UNIFIED_MIN, GAIN_UNIFIED_MAX, "Unified");
+            gainUnifiedField.setTooltip(new Tooltip("Unified gain (1.0-8.0, applies to all channels)"));
 
-            TextField gainRField = createGainField("1.0", GAIN_RED_MIN, GAIN_RED_MAX, "Red");
-            TextField gainGField = createGainField("1.0", GAIN_GREEN_MIN, GAIN_GREEN_MAX, "Green");
-            TextField gainBField = createGainField("1.0", GAIN_BLUE_MIN, GAIN_BLUE_MAX, "Blue");
+            TextField gainRField = createGainField("1.0", GAIN_ANALOG_RED_MIN, GAIN_ANALOG_RED_MAX, "Analog Red");
+            TextField gainBField = createGainField("1.0", GAIN_ANALOG_BLUE_MIN, GAIN_ANALOG_BLUE_MAX, "Analog Blue");
 
             // Create HBox for gain row with background color
             HBox gainRow = new HBox(8);
@@ -454,18 +411,27 @@ public class CameraControlController {
             gainRow.setAlignment(Pos.CENTER_LEFT);
             gainRow.setPadding(new Insets(4, 10, 4, 10));
             gainLabel.setMinWidth(100);
-            gainAllField.setMaxWidth(55);
+            gainUnifiedField.setMaxWidth(55);
             gainRField.setMaxWidth(55);
-            gainGField.setMaxWidth(55);
             gainBField.setMaxWidth(55);
-            gainRow.getChildren().addAll(gainLabel, gainAllField, gainRField, gainGField, gainBField);
+            // Labels for gain columns
+            Label gainUnifiedLabel = new Label("Unified");
+            gainUnifiedLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #666666;");
+            Label gainRedLabel = new Label("Red");
+            gainRedLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #666666;");
+            Label gainBlueLabel = new Label("Blue");
+            gainBlueLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #666666;");
+            VBox gainUnifiedBox = new VBox(1, gainUnifiedLabel, gainUnifiedField);
+            VBox gainRedBox = new VBox(1, gainRedLabel, gainRField);
+            VBox gainBlueBox = new VBox(1, gainBlueLabel, gainBField);
+            gainRow.getChildren().addAll(gainLabel, gainUnifiedBox, gainRedBox, gainBlueBox);
 
             // Add rows to card
             angleCard.getChildren().addAll(expRow, gainRow);
 
             // Store fields for this angle
             AngleFields fields = new AngleFields(expAllField, expRField, expGField, expBField,
-                    gainAllField, gainRField, gainGField, gainBField);
+                    gainUnifiedField, gainRField, gainBField);
             angleFieldsMap.put(angleName, fields);
 
             // Wire up Apply button
@@ -494,7 +460,7 @@ public class CameraControlController {
             if (objective != null && detector != null) {
                 reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res,
                         isJAIFinal ? controller : null,
-                        expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb,
+                        expIndividualRb, expUnifiedRb,
                         wbMethodLabel);
             }
         });
@@ -506,7 +472,7 @@ public class CameraControlController {
             if (objective != null && detector != null) {
                 reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res,
                         isJAIFinal ? controller : null,
-                        expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb,
+                        expIndividualRb, expUnifiedRb,
                         wbMethodLabel);
             }
         });
@@ -516,7 +482,7 @@ public class CameraControlController {
             if (objective != null && detector != null) {
                 reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res,
                         isJAIFinal ? controller : null,
-                        expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb,
+                        expIndividualRb, expUnifiedRb,
                         wbMethodLabel);
             }
         });
@@ -527,7 +493,7 @@ public class CameraControlController {
         if (objective != null && detector != null) {
             reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res,
                     isJAI ? controller : null,
-                    expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb,
+                    expIndividualRb, expUnifiedRb,
                     wbMethodLabel);
         }
 
@@ -539,6 +505,10 @@ public class CameraControlController {
         dlg.getDialogPane().setContent(scrollPane);
         dlg.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
         dlg.initModality(Modality.NONE);
+        qupath.lib.gui.QuPathGUI gui = qupath.lib.gui.QuPathGUI.getInstance();
+        if (gui != null && gui.getStage() != null) {
+            dlg.initOwner(gui.getStage());
+        }
 
         // Make dialog always on top
         dlg.setOnShown(event -> {
@@ -606,6 +576,7 @@ public class CameraControlController {
     /**
      * Applies camera settings for an angle, handling live mode automatically.
      * If live mode is running, it will be turned off, settings applied, then turned back on.
+     * Gains are always sent as 3 floats: [unified_gain, analog_red, analog_blue].
      */
     private static void applySettingsWithLiveModeHandling(
             MicroscopeController controller,
@@ -630,45 +601,25 @@ public class CameraControlController {
                 };
             }
 
-            // Parse gain values - use unified field if individual fields are disabled
-            float[] gains;
-            if (fields.gainR.isDisabled()) {
-                // Unified gain mode - send length-1 array so Python server
-                // calls set_unified_gain() instead of set_analog_gains()
-                float gainAll = Float.parseFloat(fields.gainAll.getText());
-                gains = new float[]{gainAll};
-            } else {
-                // Individual gain mode - use per-channel fields
-                gains = new float[]{
-                        Float.parseFloat(fields.gainR.getText()),
-                        Float.parseFloat(fields.gainG.getText()),
-                        Float.parseFloat(fields.gainB.getText())
-                };
-            }
+            // Parse gain values - always 3 floats: [unified, analog_red, analog_blue]
+            float gainUnified = Float.parseFloat(fields.gainUnified.getText());
+            float analogRed = Float.parseFloat(fields.gainR.getText());
+            float analogBlue = Float.parseFloat(fields.gainB.getText());
+            float[] gains = new float[]{gainUnified, analogRed, analogBlue};
 
             // Check for out-of-range gains and build warning message
             StringBuilder gainWarnings = new StringBuilder();
-            boolean unifiedGainMode = fields.gainR.isDisabled();
-            if (unifiedGainMode) {
-                // In unified mode, check against unified gain range (1.0-8.0)
-                if (gains[0] < GAIN_UNIFIED_MIN || gains[0] > GAIN_UNIFIED_MAX) {
-                    gainWarnings.append(String.format("Unified gain %.2f outside valid range %.1f-%.1f; ",
-                            gains[0], GAIN_UNIFIED_MIN, GAIN_UNIFIED_MAX));
-                }
-            } else {
-                // In individual mode, check each channel separately
-                if (gains[0] < GAIN_RED_MIN || gains[0] > GAIN_RED_MAX) {
-                    gainWarnings.append(String.format("R gain %.2f clamped to %.2f-%.1f; ",
-                            gains[0], GAIN_RED_MIN, GAIN_RED_MAX));
-                }
-                if (gains[1] < GAIN_GREEN_MIN || gains[1] > GAIN_GREEN_MAX) {
-                    gainWarnings.append(String.format("G gain %.2f clamped to %.1f-%.1f; ",
-                            gains[1], GAIN_GREEN_MIN, GAIN_GREEN_MAX));
-                }
-                if (gains[2] < GAIN_BLUE_MIN || gains[2] > GAIN_BLUE_MAX) {
-                    gainWarnings.append(String.format("B gain %.2f clamped to %.2f-%.1f; ",
-                            gains[2], GAIN_BLUE_MIN, GAIN_BLUE_MAX));
-                }
+            if (gainUnified < GAIN_UNIFIED_MIN || gainUnified > GAIN_UNIFIED_MAX) {
+                gainWarnings.append(String.format("Unified gain %.2f outside valid range %.1f-%.1f; ",
+                        gainUnified, GAIN_UNIFIED_MIN, GAIN_UNIFIED_MAX));
+            }
+            if (analogRed < GAIN_ANALOG_RED_MIN || analogRed > GAIN_ANALOG_RED_MAX) {
+                gainWarnings.append(String.format("Analog Red %.2f outside valid range %.2f-%.1f; ",
+                        analogRed, GAIN_ANALOG_RED_MIN, GAIN_ANALOG_RED_MAX));
+            }
+            if (analogBlue < GAIN_ANALOG_BLUE_MIN || analogBlue > GAIN_ANALOG_BLUE_MAX) {
+                gainWarnings.append(String.format("Analog Blue %.2f outside valid range %.2f-%.1f; ",
+                        analogBlue, GAIN_ANALOG_BLUE_MIN, GAIN_ANALOG_BLUE_MAX));
             }
 
             // Apply settings with live mode handling - stops live mode if running,
@@ -703,9 +654,9 @@ public class CameraControlController {
      * Reloads calibration values for all angles from YAML configuration.
      *
      * <p>Re-reads the YAML from disk, loads all angle values, and sets the
-     * exposure/gain mode radio buttons to match what the calibration profile
-     * contains (per-channel exposures = individual exposure mode,
-     * unified_gain present = unified gain mode).
+     * exposure mode radio button to match what the calibration profile
+     * contains (per-channel exposures = individual exposure mode).
+     * Gain mode is always unified.
      *
      * @param mgr Config manager
      * @param objective Objective ID
@@ -716,8 +667,6 @@ public class CameraControlController {
      * @param controller MicroscopeController for setting camera mode (null to skip mode changes)
      * @param expIndividualRb Exposure individual radio button
      * @param expUnifiedRb Exposure unified radio button
-     * @param gainIndividualRb Gain individual radio button
-     * @param gainUnifiedRb Gain unified radio button
      * @param wbMethodLabel Label to display WB method provenance (null to skip)
      */
     @SuppressWarnings("unchecked")
@@ -725,7 +674,6 @@ public class CameraControlController {
                                                 Map<String, AngleFields> angleFieldsMap, Label statusLabel,
                                                 ResourceBundle res, MicroscopeController controller,
                                                 RadioButton expIndividualRb, RadioButton expUnifiedRb,
-                                                RadioButton gainIndividualRb, RadioButton gainUnifiedRb,
                                                 Label wbMethodLabel) {
         logger.info("Reloading all angles from YAML for objective={}, detector={}", objective, detector);
 
@@ -748,12 +696,11 @@ public class CameraControlController {
             statusLabel.setText(res.getString("camera.status.reloaded"));
             statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
 
-            // Detect the correct camera mode from the YAML profile structure and
-            // set radio buttons + camera mode accordingly. This ensures "Apply & Go"
-            // reads the correct fields (e.g., unified gain instead of per-channel).
+            // Detect the correct exposure mode from the YAML profile structure and
+            // set radio buttons + camera mode accordingly.
             if (controller != null) {
                 detectAndSetModeFromYAML(mgr, objective, detector, controller,
-                        expIndividualRb, expUnifiedRb, gainIndividualRb, gainUnifiedRb,
+                        expIndividualRb, expUnifiedRb,
                         angleFieldsMap, statusLabel);
             }
 
@@ -772,26 +719,22 @@ public class CameraControlController {
     }
 
     /**
-     * Detects the appropriate camera mode from YAML profile structure and sets
+     * Detects the appropriate exposure mode from YAML profile structure and sets
      * radio buttons and camera mode to match.
      *
      * <p>WB calibration writes per-channel exposures (r/g/b) with a unified_gain.
-     * This method inspects the first available angle to detect:
-     * <ul>
-     *   <li>Per-channel exposures (r/g/b keys) -> exposure individual mode</li>
-     *   <li>unified_gain key present -> gain unified mode</li>
-     * </ul>
+     * This method inspects the first available angle to detect per-channel exposures
+     * (r/g/b keys) and sets exposure individual mode accordingly.
+     * Gain mode is always unified.
      */
     @SuppressWarnings("unchecked")
     private static void detectAndSetModeFromYAML(MicroscopeConfigManager mgr, String objective, String detector,
                                                   MicroscopeController controller,
                                                   RadioButton expIndividualRb, RadioButton expUnifiedRb,
-                                                  RadioButton gainIndividualRb, RadioButton gainUnifiedRb,
                                                   Map<String, AngleFields> angleFieldsMap, Label statusLabel) {
         try {
             // Check exposure structure from first available angle
             boolean hasPerChannelExposures = false;
-            boolean hasUnifiedGain = false;
 
             Map<String, Object> exposuresMap = mgr.getModalityExposures("ppm", objective, detector);
             if (exposuresMap != null) {
@@ -807,50 +750,31 @@ public class CameraControlController {
                 }
             }
 
-            // Check gain structure from first available angle
-            for (String angleName : angleFieldsMap.keySet()) {
-                Object gainsObj = mgr.getProfileSetting("ppm", objective, detector, "gains", angleName);
-                if (gainsObj instanceof Map<?, ?>) {
-                    Map<String, Object> gainValues = (Map<String, Object>) gainsObj;
-                    if (gainValues.containsKey("unified_gain")) {
-                        hasUnifiedGain = true;
-                    }
-                    break; // Only need to check one angle
-                }
-            }
-
-            // Determine target mode
             boolean targetExpIndividual = hasPerChannelExposures;
-            boolean targetGainIndividual = !hasUnifiedGain;
 
-            boolean modeChanged = (expIndividualRb.isSelected() != targetExpIndividual)
-                    || (gainIndividualRb.isSelected() != targetGainIndividual);
-
-            if (modeChanged) {
-                logger.info("Setting camera mode from YAML profile: exposure_individual={}, gain_individual={}",
-                        targetExpIndividual, targetGainIndividual);
+            if (expIndividualRb.isSelected() != targetExpIndividual) {
+                logger.info("Setting camera mode from YAML profile: exposure_individual={}, gain=unified",
+                        targetExpIndividual);
 
                 // Update radio buttons (setSelected does not fire onAction)
                 expIndividualRb.setSelected(targetExpIndividual);
                 expUnifiedRb.setSelected(!targetExpIndividual);
-                gainIndividualRb.setSelected(targetGainIndividual);
-                gainUnifiedRb.setSelected(!targetGainIndividual);
 
                 // Send mode change to camera, wrapping with live mode handling
                 // to avoid JAI error 11018 if live streaming is active
                 controller.withLiveModeHandling(() ->
-                        controller.setCameraMode(targetExpIndividual, targetGainIndividual));
+                        controller.setCameraMode(targetExpIndividual));
             }
 
             // Always update field states to match the detected mode, even if the camera
             // was already in the correct mode. Fields start all-enabled by default, so
             // skipping this when modeChanged==false leaves fields in the wrong state.
-            updateAllFieldStates(angleFieldsMap, targetExpIndividual, targetGainIndividual);
+            updateAllFieldStates(angleFieldsMap, targetExpIndividual);
 
         } catch (Exception e) {
             logger.warn("Could not detect/set mode from YAML: {}", e.getMessage());
             // Non-fatal - still update field states based on current radio button selections
-            updateAllFieldStates(angleFieldsMap, expIndividualRb.isSelected(), gainIndividualRb.isSelected());
+            updateAllFieldStates(angleFieldsMap, expIndividualRb.isSelected());
         }
     }
 
@@ -901,21 +825,28 @@ public class CameraControlController {
                 Map<String, Object> gainValues = (Map<String, Object>) gainsObj;
 
                 if (gainValues.containsKey("unified_gain")) {
-                    fields.gainAll.setText(String.valueOf(gainValues.get("unified_gain")));
+                    fields.gainUnified.setText(String.valueOf(gainValues.get("unified_gain")));
                 }
-                if (gainValues.containsKey("r")) {
+
+                // New format: analog_red / analog_blue
+                if (gainValues.containsKey("analog_red")) {
+                    fields.gainR.setText(String.valueOf(gainValues.get("analog_red")));
+                } else if (gainValues.containsKey("r")) {
+                    // Backward compat: old format used "r" for analog red
                     fields.gainR.setText(String.valueOf(gainValues.get("r")));
                 }
-                if (gainValues.containsKey("g")) {
-                    fields.gainG.setText(String.valueOf(gainValues.get("g")));
-                }
-                if (gainValues.containsKey("b")) {
+
+                if (gainValues.containsKey("analog_blue")) {
+                    fields.gainB.setText(String.valueOf(gainValues.get("analog_blue")));
+                } else if (gainValues.containsKey("b")) {
+                    // Backward compat: old format used "b" for analog blue
                     fields.gainB.setText(String.valueOf(gainValues.get("b")));
                 }
 
-                logger.debug("Loaded gains for {}: unified={}, r={}, g={}, b={}",
+                logger.debug("Loaded gains for {}: unified={}, analog_red={}, analog_blue={}",
                         angleName, gainValues.get("unified_gain"),
-                        gainValues.get("r"), gainValues.get("g"), gainValues.get("b"));
+                        gainValues.getOrDefault("analog_red", gainValues.get("r")),
+                        gainValues.getOrDefault("analog_blue", gainValues.get("b")));
             }
 
             if (statusLabel != null) {
@@ -1018,33 +949,34 @@ public class CameraControlController {
 
     /**
      * Container for angle-specific text fields.
+     * Gain fields: unified gain + R/B analog gains (green is reference, not adjustable).
+     * All gain fields are always enabled (no gain mode toggle).
      */
     private static class AngleFields {
         final TextField expAll;
         final TextField expR;
         final TextField expG;
         final TextField expB;
-        final TextField gainAll;
-        final TextField gainR;
-        final TextField gainG;
-        final TextField gainB;
+        final TextField gainUnified;  // Unified digital gain (1.0-8.0)
+        final TextField gainR;        // Analog red gain (0.47-4.0)
+        final TextField gainB;        // Analog blue gain (0.47-4.0)
 
         AngleFields(TextField expAll, TextField expR, TextField expG, TextField expB,
-                    TextField gainAll, TextField gainR, TextField gainG, TextField gainB) {
+                    TextField gainUnified, TextField gainR, TextField gainB) {
             this.expAll = expAll;
             this.expR = expR;
             this.expG = expG;
             this.expB = expB;
-            this.gainAll = gainAll;
+            this.gainUnified = gainUnified;
             this.gainR = gainR;
-            this.gainG = gainG;
             this.gainB = gainB;
         }
 
         /**
-         * Updates field enabled/disabled state based on exposure and gain modes.
+         * Updates field enabled/disabled state based on exposure mode.
+         * Gain fields are always enabled (gain mode is always unified).
          */
-        void updateFieldStates(boolean expIndividual, boolean gainIndividual) {
+        void updateFieldStates(boolean expIndividual) {
             // Exposure fields
             expAll.setDisable(expIndividual);
             expR.setDisable(!expIndividual);
@@ -1059,16 +991,7 @@ public class CameraControlController {
             expG.setStyle(expIndividual ? enabledStyle : disabledStyle);
             expB.setStyle(expIndividual ? enabledStyle : disabledStyle);
 
-            // Gain fields
-            gainAll.setDisable(gainIndividual);
-            gainR.setDisable(!gainIndividual);
-            gainG.setDisable(!gainIndividual);
-            gainB.setDisable(!gainIndividual);
-
-            gainAll.setStyle(gainIndividual ? disabledStyle : enabledStyle);
-            gainR.setStyle(gainIndividual ? enabledStyle : disabledStyle);
-            gainG.setStyle(gainIndividual ? enabledStyle : disabledStyle);
-            gainB.setStyle(gainIndividual ? enabledStyle : disabledStyle);
+            // Gain fields are always enabled - no mode toggle
         }
     }
 
@@ -1080,35 +1003,31 @@ public class CameraControlController {
      * @param controller MicroscopeController to query actual camera mode
      * @param expIndividualRb Exposure individual radio button
      * @param expUnifiedRb Exposure unified radio button
-     * @param gainIndividualRb Gain individual radio button
-     * @param gainUnifiedRb Gain unified radio button
      * @param angleFieldsMap Map of angle name to UI fields
      */
     private static void revertRadioButtonsToCamera(MicroscopeController controller,
                                                     RadioButton expIndividualRb, RadioButton expUnifiedRb,
-                                                    RadioButton gainIndividualRb, RadioButton gainUnifiedRb,
                                                     Map<String, AngleFields> angleFieldsMap) {
         try {
             MicroscopeSocketClient.CameraModeResult mode = controller.getCameraMode();
             expIndividualRb.setSelected(mode.exposureIndividual());
             expUnifiedRb.setSelected(!mode.exposureIndividual());
-            gainIndividualRb.setSelected(mode.gainIndividual());
-            gainUnifiedRb.setSelected(!mode.gainIndividual());
-            updateAllFieldStates(angleFieldsMap, mode.exposureIndividual(), mode.gainIndividual());
-            logger.info("Reverted radio buttons to camera state: exp_individual={}, gain_individual={}",
-                    mode.exposureIndividual(), mode.gainIndividual());
+            updateAllFieldStates(angleFieldsMap, mode.exposureIndividual());
+            logger.info("Reverted radio buttons to camera state: exp_individual={}, gain=unified",
+                    mode.exposureIndividual());
         } catch (IOException ex) {
             logger.warn("Could not query camera mode for revert: {}", ex.getMessage());
         }
     }
 
     /**
-     * Updates all angle fields based on current mode settings.
+     * Updates all angle fields based on current exposure mode setting.
+     * Gain fields are always enabled (gain mode is always unified).
      */
     private static void updateAllFieldStates(Map<String, AngleFields> angleFieldsMap,
-                                              boolean expIndividual, boolean gainIndividual) {
+                                              boolean expIndividual) {
         for (AngleFields fields : angleFieldsMap.values()) {
-            fields.updateFieldStates(expIndividual, gainIndividual);
+            fields.updateFieldStates(expIndividual);
         }
     }
 }

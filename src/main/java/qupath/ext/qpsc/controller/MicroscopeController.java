@@ -464,16 +464,16 @@ public class MicroscopeController {
     }
 
     /**
-     * Sets the camera mode (individual vs unified exposure/gain).
+     * Sets the camera exposure mode (individual vs unified).
+     * Gain mode is always unified; R/B analog gains are adjusted separately.
      *
      * @param exposureIndividual True to enable per-channel exposure control
-     * @param gainIndividual True to enable per-channel gain control
      * @throws IOException if communication fails or camera doesn't support individual mode
      */
-    public void setCameraMode(boolean exposureIndividual, boolean gainIndividual) throws IOException {
+    public void setCameraMode(boolean exposureIndividual) throws IOException {
         try {
-            socketClient.setCameraMode(exposureIndividual, gainIndividual);
-            logger.info("Set camera mode: exposure_individual={}, gain_individual={}", exposureIndividual, gainIndividual);
+            socketClient.setCameraMode(exposureIndividual);
+            logger.info("Set camera mode: exposure_individual={}, gain=unified", exposureIndividual);
         } catch (IOException e) {
             logger.error("Failed to set camera mode: {}", e.getMessage());
             throw new IOException("Failed to set camera mode via socket", e);
@@ -529,7 +529,8 @@ public class MicroscopeController {
     /**
      * Sets gain values on the camera.
      *
-     * @param gains Array of gain values. Length 1 for unified, 3 for per-channel (R, G, B)
+     * @param gains Array of gain values. Length 1 for unified gain only,
+     *              or length 3 for [unified_gain, analog_red, analog_blue]
      * @throws IOException if communication fails
      */
     public void setGains(float[] gains) throws IOException {
@@ -549,21 +550,18 @@ public class MicroscopeController {
      *
      * @param angleName The angle name (e.g., "uncrossed", "crossed", "positive", "negative")
      * @param exposures Per-channel exposures [R, G, B] in ms
-     * @param gains Per-channel gains [R, G, B]
+     * @param gains Gain values: length 1 for unified only, or length 3 for [unified, analog_red, analog_blue]
      * @param rotationDegrees The rotation angle in degrees to move to
      * @throws IOException if communication fails
      */
     public void applyCameraSettingsForAngle(String angleName, float[] exposures, float[] gains, double rotationDegrees) throws IOException {
         logger.info("Applying camera settings for angle '{}' at {} degrees", angleName, rotationDegrees);
 
-        // Set camera mode to match the array lengths being sent.
-        // This ensures the camera is in the correct mode even when called
-        // outside the Camera Control dialog context (e.g., from acquisition workflows).
+        // Set camera exposure mode. Gain is always unified (R/B analog adjusted separately).
         boolean exposureIndividual = (exposures.length == 3);
-        boolean gainIndividual = (gains.length == 3);
         try {
-            socketClient.setCameraMode(exposureIndividual, gainIndividual);
-            logger.info("Set camera mode: exposure_individual={}, gain_individual={}", exposureIndividual, gainIndividual);
+            socketClient.setCameraMode(exposureIndividual);
+            logger.info("Set camera mode: exposure_individual={}, gain=unified", exposureIndividual);
         } catch (IOException e) {
             logger.error("Failed to set camera mode: {}", e.getMessage());
             throw new IOException("Failed to set camera mode for " + angleName, e);
@@ -615,6 +613,24 @@ public class MicroscopeController {
         } catch (IOException e) {
             logger.error("Failed to set white balance mode: {}", e.getMessage());
             throw new IOException("Failed to set white balance mode via socket", e);
+        }
+    }
+
+    // ==================== Noise Measurement Methods ====================
+
+    /**
+     * Gets per-channel noise statistics from multi-frame temporal analysis.
+     *
+     * @param numFrames Number of frames to capture (1-255)
+     * @return NoiseResult with per-channel mean, stddev, and SNR
+     * @throws IOException if communication fails
+     */
+    public MicroscopeSocketClient.NoiseResult getNoise(int numFrames) throws IOException {
+        try {
+            return socketClient.getNoise(numFrames);
+        } catch (IOException e) {
+            logger.error("Failed to get noise stats: {}", e.getMessage());
+            throw new IOException("Failed to get noise stats via socket", e);
         }
     }
 

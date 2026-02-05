@@ -58,6 +58,7 @@ public class LiveViewerWindow {
     private Label statusLabel;
     private Button liveToggleButton;
     private HistogramView histogramView;
+    private NoiseStatsPanel noiseStatsPanel;
     private final ContrastSettings contrastSettings = new ContrastSettings();
 
     // Live mode state (camera streaming on/off, independent of window visibility)
@@ -189,6 +190,9 @@ public class LiveViewerWindow {
         // Histogram + contrast controls
         histogramView = new HistogramView(contrastSettings);
 
+        // Noise stats panel (collapsible, below histogram)
+        noiseStatsPanel = new NoiseStatsPanel();
+
         // Status bar
         statusLabel = new Label("Ready - press Live to start");
         statusLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11;");
@@ -197,7 +201,7 @@ public class LiveViewerWindow {
         statusBar.setAlignment(Pos.CENTER_LEFT);
 
         // Layout
-        VBox bottomPane = new VBox(histogramView, statusBar);
+        VBox bottomPane = new VBox(histogramView, noiseStatsPanel, statusBar);
 
         BorderPane root = new BorderPane();
         root.setTop(toolbar);
@@ -327,6 +331,17 @@ public class LiveViewerWindow {
                     logger.debug("Histogram update failed: {}", e.getMessage());
                 }
             });
+
+            // Update noise stats (throttled internally to ~2Hz)
+            if (noiseStatsPanel.isExpanded()) {
+                histogramExecutor.submit(() -> {
+                    try {
+                        noiseStatsPanel.updateFromFrame(frame);
+                    } catch (Exception e) {
+                        logger.debug("Noise stats update failed: {}", e.getMessage());
+                    }
+                });
+            }
 
             // Render frame on FX thread
             Platform.runLater(() -> renderFrame(frame));

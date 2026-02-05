@@ -175,6 +175,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         SETLIVE("setlive_"),
         /** Simple snap with fixed exposure (no adaptive) */
         SNAP("snap____"),
+        /** Get per-channel noise stats (multi-frame temporal analysis) */
+        GETNOISE("getnoise"),
 
         // Live Viewer Commands (core-level, bypasses MM studio/live window)
         /** Get latest frame from MM circular buffer */
@@ -1544,11 +1546,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
             int originalTimeout = 0;
             try {
                 originalTimeout = socket.getSoTimeout();
-                // Increase timeout for calibration (can take several minutes)
-                // With stability check (3 runs) and fine steps, allow plenty of time
-                // Note: POLCAL does not send progress updates, so use generous total timeout
-                socket.setSoTimeout(3600000); // 60 minutes
-                logger.debug("Increased socket timeout to 60 minutes for calibration");
+                // Increase timeout for calibration - this is a VERY long operation!
+                // With stability check (3 runs) and fine steps, actual time can exceed 2 hours:
+                // - PI Stage: 1000 encoder counts/deg, ~360k count sweep per run
+                // - Each position requires move, settle, capture (~2-5 sec on slow hardware)
+                // - 3 runs x (73 coarse + 4x~100 fine positions) = ~1500 total operations
+                // Note: POLCAL does not send progress updates, so use very generous timeout
+                socket.setSoTimeout(14400000); // 4 hours (240 minutes)
+                logger.debug("Increased socket timeout to 4 hours for calibration");
             } catch (IOException e) {
                 logger.warn("Failed to adjust socket timeout", e);
             }
@@ -1578,26 +1583,60 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     }
                 }
 
-                // Wait for final SUCCESS/FAILED response
+                // Wait for SUCCESS/FAILED response, handling PROGRESS updates in between
+                // PROGRESS updates keep the connection alive during long calibration runs
                 logger.info("Waiting for polarizer calibration to complete...");
-                bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String finalResponse = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received final server response: {}", finalResponse);
+                int lastProgressCurrent = -1;
+                String lastProgressStage = "";
 
-                    if (finalResponse.startsWith("FAILED:")) {
-                        throw new IOException("Polarizer calibration failed: " + finalResponse.substring(7));
-                    } else if (finalResponse.startsWith("SUCCESS:")) {
+                while (true) {
+                    bytesRead = input.read(buffer);
+                    if (bytesRead <= 0) {
+                        throw new IOException("No response received from server");
+                    }
+
+                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+
+                    // Handle PROGRESS updates - format: PROGRESS:current:total:stage:message
+                    if (response.startsWith("PROGRESS:")) {
+                        try {
+                            String[] parts = response.substring(9).split(":", 4);
+                            if (parts.length >= 2) {
+                                int current = Integer.parseInt(parts[0].trim());
+                                int total = Integer.parseInt(parts[1].trim());
+                                String stage = parts.length > 2 ? parts[2].trim() : "";
+                                String message = parts.length > 3 ? parts[3].trim() : "";
+
+                                // Log progress periodically (every 10 positions or when stage changes)
+                                boolean stageChanged = !stage.equals(lastProgressStage);
+                                if (stageChanged || current % 10 == 0 || current == total) {
+                                    double percent = total > 0 ? (current * 100.0 / total) : 0;
+                                    logger.info("Calibration progress: {}/{} ({:.1f}%) - {} {}",
+                                            current, total, percent, stage, message);
+                                }
+                                lastProgressCurrent = current;
+                                lastProgressStage = stage;
+                            }
+                        } catch (NumberFormatException e) {
+                            logger.debug("Failed to parse progress message: {}", response);
+                        }
+                        continue; // Keep reading for next message
+                    }
+
+                    // Handle final responses
+                    logger.info("Received final server response: {}", response);
+
+                    if (response.startsWith("FAILED:")) {
+                        throw new IOException("Polarizer calibration failed: " + response.substring(7));
+                    } else if (response.startsWith("SUCCESS:")) {
                         // Extract report path from SUCCESS response
-                        String reportPath = finalResponse.substring(8).trim();
+                        String reportPath = response.substring(8).trim();
                         logger.info("Polarizer calibration successful. Report: {}", reportPath);
                         return reportPath;
                     } else {
-                        throw new IOException("Unexpected final response: " + finalResponse);
+                        throw new IOException("Unexpected final response: " + response);
                     }
                 }
-
-                throw new IOException("No response received from server");
 
             } catch (IOException e) {
                 logger.error("Error during polarizer calibration", e);
@@ -3062,13 +3101,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
     // ==================== Camera Control Methods ====================
 
     /**
-     * Result of getCameraMode() containing exposure and gain mode flags.
+     * Result of getCameraMode() containing exposure mode flag.
+     * Gain is always unified (R/B analog gains are adjusted separately).
      *
      * @param isJAI True if this is a JAI 3-CCD camera with per-channel control
      * @param exposureIndividual True if per-channel exposure control is enabled
-     * @param gainIndividual True if per-channel gain control is enabled
      */
-    public record CameraModeResult(boolean isJAI, boolean exposureIndividual, boolean gainIndividual) {}
+    public record CameraModeResult(boolean isJAI, boolean exposureIndividual) {}
 
     /**
      * Result of getExposures() containing exposure values.
@@ -3090,22 +3129,32 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
-     * Result of getGains() containing gain values.
+     * Result of getGains() containing unified gain and R/B analog gain values.
+     * The new gain model always uses unified gain mode with separate R/B analog
+     * gain adjustments (green is the reference channel, not adjusted).
      *
-     * @param red Red channel analog gain
-     * @param green Green channel analog gain
-     * @param blue Blue channel analog gain
-     * @param isPerChannel True if per-channel values are valid
+     * @param unifiedGain Unified digital gain (1.0-8.0)
+     * @param analogRed Red channel analog gain (0.47-4.0)
+     * @param analogBlue Blue channel analog gain (0.47-4.0)
      */
-    public record GainsResult(double red, double green, double blue, boolean isPerChannel) {
-        public static GainsResult unified(double value) {
-            return new GainsResult(value, value, value, false);
-        }
+    public record GainsResult(double unifiedGain, double analogRed, double analogBlue) {}
 
-        public static GainsResult perChannel(double r, double g, double b) {
-            return new GainsResult(r, g, b, true);
-        }
-    }
+    /**
+     * Result of getNoise() containing per-channel noise statistics.
+     *
+     * @param redMean Red channel mean intensity
+     * @param greenMean Green channel mean intensity
+     * @param blueMean Blue channel mean intensity
+     * @param redStdDev Red channel temporal standard deviation
+     * @param greenStdDev Green channel temporal standard deviation
+     * @param blueStdDev Blue channel temporal standard deviation
+     * @param redSNR Red channel signal-to-noise ratio
+     * @param greenSNR Green channel signal-to-noise ratio
+     * @param blueSNR Blue channel signal-to-noise ratio
+     */
+    public record NoiseResult(double redMean, double greenMean, double blueMean,
+                              double redStdDev, double greenStdDev, double blueStdDev,
+                              double redSNR, double greenSNR, double blueSNR) {}
 
     /**
      * Gets the current camera name from the microscope Core.
@@ -3147,33 +3196,33 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         if (modeStr.startsWith("UNIFIED")) {
             // Not a JAI camera - unified mode only
-            return new CameraModeResult(false, false, false);
+            return new CameraModeResult(false, false);
         }
 
         if (modeStr.startsWith("JAI_EXP:")) {
             // Parse JAI mode: "JAI_EXP:X_GAIN:Y"
+            // Gain mode is always unified now (GAIN:0), ignore the gain flag
             boolean expIndividual = modeStr.contains("EXP:1");
-            boolean gainIndividual = modeStr.contains("GAIN:1");
-            return new CameraModeResult(true, expIndividual, gainIndividual);
+            return new CameraModeResult(true, expIndividual);
         }
 
         // Default to unified mode
         logger.warn("Unknown camera mode format: {}", modeStr);
-        return new CameraModeResult(false, false, false);
+        return new CameraModeResult(false, false);
     }
 
     /**
-     * Sets the camera mode (individual vs unified exposure/gain).
+     * Sets the camera exposure mode (individual vs unified).
+     * Gain mode is always unified; R/B analog gains are adjusted separately.
      * Only works for JAI 3-CCD cameras.
      *
      * @param exposureIndividual True to enable per-channel exposure control
-     * @param gainIndividual True to enable per-channel gain control
      * @throws IOException if communication fails or camera doesn't support individual mode
      */
-    public void setCameraMode(boolean exposureIndividual, boolean gainIndividual) throws IOException {
+    public void setCameraMode(boolean exposureIndividual) throws IOException {
         byte[] modeData = new byte[2];
         modeData[0] = (byte) (exposureIndividual ? 1 : 0);
-        modeData[1] = (byte) (gainIndividual ? 1 : 0);
+        modeData[1] = (byte) 0;  // Gain always unified
 
         byte[] response = executeCommand(Command.SETMODE, modeData, 8);
         String responseStr = new String(response, StandardCharsets.UTF_8).trim();
@@ -3185,7 +3234,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throw new IOException("Failed to set camera mode: " + responseStr);
         }
 
-        logger.info("Camera mode set: exposure_individual={}, gain_individual={}", exposureIndividual, gainIndividual);
+        logger.info("Camera mode set: exposure_individual={}, gain=unified", exposureIndividual);
     }
 
     /**
@@ -3284,73 +3333,40 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
     /**
      * Gets current gain values from the camera.
+     * Always returns 3 floats: [unified_gain, analog_red, analog_blue].
      *
-     * @return GainsResult with gain values
+     * @return GainsResult with unified gain and R/B analog gains
      * @throws IOException if communication fails
      */
     public GainsResult getGains() throws IOException {
-        synchronized (socketLock) {
-            ensureConnected();
+        // Server always sends 3 floats (12 bytes): unified, analog_red, analog_blue
+        byte[] response = executeCommand(Command.GETGAIN, null, 12);
 
-            try {
-                // Send command
-                output.write(Command.GETGAIN.getValue());
-                output.flush();
-                lastActivityTime.set(System.currentTimeMillis());
+        ByteBuffer buffer = ByteBuffer.wrap(response);
+        buffer.order(ByteOrder.BIG_ENDIAN);
 
-                // First read 4 bytes
-                byte[] firstFloat = new byte[4];
-                input.readFully(firstFloat);
+        float unifiedGain = buffer.getFloat();
+        float analogRed = buffer.getFloat();
+        float analogBlue = buffer.getFloat();
 
-                ByteBuffer buffer = ByteBuffer.wrap(firstFloat);
-                buffer.order(ByteOrder.BIG_ENDIAN);
-                float firstValue = buffer.getFloat();
-
-                if (firstValue < 0) {
-                    throw new IOException("Failed to get gain values");
-                }
-
-                // Check if there's more data (per-channel mode sends 12 bytes total)
-                Thread.sleep(20);
-                int available = input.available();
-
-                if (available >= 8) {
-                    // Per-channel mode: 3 floats (R, G, B)
-                    byte[] remaining = new byte[8];
-                    input.readFully(remaining);
-
-                    ByteBuffer remainingBuffer = ByteBuffer.wrap(remaining);
-                    remainingBuffer.order(ByteOrder.BIG_ENDIAN);
-
-                    float green = remainingBuffer.getFloat();
-                    float blue = remainingBuffer.getFloat();
-
-                    logger.debug("Got per-channel gains: R={}, G={}, B={}", firstValue, green, blue);
-                    return GainsResult.perChannel(firstValue, green, blue);
-                } else {
-                    // Unified mode: just 1 float
-                    logger.debug("Got unified gain: {}", firstValue);
-                    return GainsResult.unified(firstValue);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IOException("Interrupted while getting gain", e);
-            } catch (IOException e) {
-                handleIOException(e);
-                throw e;
-            }
+        if (unifiedGain < 0) {
+            throw new IOException("Failed to get gain values");
         }
+
+        logger.debug("Got gains: unified={}, analog_red={}, analog_blue={}", unifiedGain, analogRed, analogBlue);
+        return new GainsResult(unifiedGain, analogRed, analogBlue);
     }
 
     /**
      * Sets gain values on the camera.
      *
-     * @param gains Array of gain values. Length 1 for unified, 3 for per-channel (R, G, B)
+     * @param gains Array of gain values. Length 1 for unified gain only,
+     *              or length 3 for [unified_gain, analog_red, analog_blue]
      * @throws IOException if communication fails
      */
     public void setGains(float[] gains) throws IOException {
         if (gains == null || (gains.length != 1 && gains.length != 3)) {
-            throw new IllegalArgumentException("Gains must have length 1 (unified) or 3 (R, G, B)");
+            throw new IllegalArgumentException("Gains must have length 1 (unified only) or 3 (unified, analog_red, analog_blue)");
         }
 
         // Build payload: 1 byte count + N floats
@@ -3366,7 +3382,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         if (!responseStr.startsWith("ACK")) {
             if (responseStr.startsWith("ERR_NJAI")) {
-                throw new IOException("Per-channel gain requires JAI camera");
+                throw new IOException("Gain control requires JAI camera");
             }
             throw new IOException("Failed to set gain: " + responseStr);
         }
@@ -3400,6 +3416,50 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         String[] modeNames = {"Off", "Continuous", "Once"};
         logger.info("White balance mode set to: {}", modeNames[mode]);
+    }
+
+    // ==================== Noise Measurement Methods ====================
+
+    /**
+     * Gets per-channel noise statistics from multi-frame temporal analysis.
+     * The server captures multiple frames and computes temporal mean, stddev, and SNR
+     * per channel (R, G, B).
+     *
+     * @param numFrames Number of frames to capture for noise analysis (default 10)
+     * @return NoiseResult with per-channel noise statistics
+     * @throws IOException if communication fails
+     */
+    public NoiseResult getNoise(int numFrames) throws IOException {
+        if (numFrames < 1 || numFrames > 255) {
+            throw new IllegalArgumentException("numFrames must be between 1 and 255");
+        }
+
+        byte[] payload = new byte[]{(byte) numFrames};
+        // Response: 9 big-endian floats (36 bytes)
+        byte[] response = executeCommand(Command.GETNOISE, payload, 36);
+
+        ByteBuffer buffer = ByteBuffer.wrap(response);
+        buffer.order(ByteOrder.BIG_ENDIAN);
+
+        double redMean = buffer.getFloat();
+        double greenMean = buffer.getFloat();
+        double blueMean = buffer.getFloat();
+        double redStdDev = buffer.getFloat();
+        double greenStdDev = buffer.getFloat();
+        double blueStdDev = buffer.getFloat();
+        double redSNR = buffer.getFloat();
+        double greenSNR = buffer.getFloat();
+        double blueSNR = buffer.getFloat();
+
+        // Check for error (negative mean indicates failure)
+        if (redMean < 0) {
+            throw new IOException("Failed to get noise statistics");
+        }
+
+        logger.debug("Noise stats: R(mean={}, std={}, snr={}), G(mean={}, std={}, snr={}), B(mean={}, std={}, snr={})",
+                redMean, redStdDev, redSNR, greenMean, greenStdDev, greenSNR, blueMean, blueStdDev, blueSNR);
+
+        return new NoiseResult(redMean, greenMean, blueMean, redStdDev, greenStdDev, blueStdDev, redSNR, greenSNR, blueSNR);
     }
 
     // ==================== Live Mode Control Methods ====================
