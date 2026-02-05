@@ -392,6 +392,25 @@ public class PolarizerCalibrationWorkflow {
             logger.info("Polarizer calibration completed successfully");
             logger.info("Report saved to: {}", reportPath);
 
+            // Read report file to extract key results
+            String reportContent = "";
+            String resultsSection = "";
+            try {
+                reportContent = Files.readString(Paths.get(reportPath));
+                // Extract just the results section (up to CONFIG_PPM.YML UPDATE)
+                int configSectionStart = reportContent.indexOf("CONFIG_PPM.YML UPDATE");
+                if (configSectionStart > 0) {
+                    resultsSection = reportContent.substring(0, configSectionStart).trim();
+                } else {
+                    resultsSection = reportContent;
+                }
+            } catch (IOException e) {
+                logger.warn("Could not read report file for display: {}", e.getMessage());
+                resultsSection = "Could not read report file.";
+            }
+
+            final String displayResults = resultsSection;
+
             // Close progress dialog and show success (on FX thread)
             Platform.runLater(() -> {
                 progressDialog.close();
@@ -399,20 +418,34 @@ public class PolarizerCalibrationWorkflow {
                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
                 alert.setTitle("Calibration Complete");
                 alert.setHeaderText("Polarizer calibration completed successfully!");
-                alert.setContentText(
-                        "Calibration report saved to:\n" + reportPath + "\n\n" +
-                        "The report contains:\n" +
-                        "  - Calibration Results: Crossed polarizer positions found\n" +
-                        "  - Config Recommendations: Values to update in config_PPM.yml\n" +
-                        "  - Calibration Metadata: Parameters and conditions used\n" +
-                        "  - Raw Data: Complete measurement data for verification\n\n" +
-                        "Would you like to open the report folder?"
-                );
+
+                // Create scrollable content with results
+                VBox content = new VBox(10);
+                content.setPadding(new Insets(10));
+
+                Label pathLabel = new Label("Report saved to: " + reportPath);
+                pathLabel.setWrapText(true);
+                pathLabel.setStyle("-fx-font-size: 11px;");
+
+                Label resultsLabel = new Label("Calibration Results:");
+                resultsLabel.setStyle("-fx-font-weight: bold;");
+
+                // Scrollable text area for results
+                javafx.scene.control.TextArea resultsArea = new javafx.scene.control.TextArea(displayResults);
+                resultsArea.setEditable(false);
+                resultsArea.setWrapText(false);
+                resultsArea.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
+                resultsArea.setPrefRowCount(18);
+                resultsArea.setPrefColumnCount(70);
+
+                content.getChildren().addAll(pathLabel, new Separator(), resultsLabel, resultsArea);
+
+                alert.getDialogPane().setContent(content);
 
                 // Make dialog resizable and larger
                 alert.setResizable(true);
-                alert.getDialogPane().setPrefWidth(650);
-                alert.getDialogPane().setPrefHeight(300);
+                alert.getDialogPane().setPrefWidth(700);
+                alert.getDialogPane().setPrefHeight(500);
 
                 ButtonType openFolderBtn = new ButtonType("Open Folder");
                 ButtonType closeBtn = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
