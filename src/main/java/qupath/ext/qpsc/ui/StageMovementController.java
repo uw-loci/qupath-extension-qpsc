@@ -387,18 +387,22 @@ public class StageMovementController {
                     "This inverts the Y direction to match visual expectations."));
 
             // Thread-safe flag for sample movement mode (used by joystick callback on background thread)
-            final AtomicBoolean sampleMovementMode = new AtomicBoolean(false);
+            // Initialize from checkbox's current state and keep in sync via listener
+            final AtomicBoolean sampleMovementMode = new AtomicBoolean(sampleMovementCheckbox.isSelected());
             sampleMovementCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
                 sampleMovementMode.set(newVal);
-                logger.debug("Sample movement mode: {}", newVal);
+                logger.info("Sample movement mode changed: {} -> {}", oldVal, newVal);
             });
+            logger.debug("Sample movement checkbox initialized, selected={}", sampleMovementCheckbox.isSelected());
 
             upBtn.setOnAction(e -> {
                 try {
                     double step = Double.parseDouble(xyStepField.getText().replace(",", ""));
                     double currentY = Double.parseDouble(yField.getText().replace(",", ""));
                     // Invert Y direction if sample movement is checked
-                    double yDirection = sampleMovementCheckbox.isSelected() ? -1 : 1;
+                    boolean sampleMode = sampleMovementCheckbox.isSelected();
+                    double yDirection = sampleMode ? -1 : 1;
+                    logger.debug("UP button: sampleMovement={}, yDirection={}", sampleMode, yDirection);
                     double newY = currentY + (step * yDirection);
                     double currentX = Double.parseDouble(xField.getText().replace(",", ""));
 
@@ -422,7 +426,9 @@ public class StageMovementController {
                     double step = Double.parseDouble(xyStepField.getText().replace(",", ""));
                     double currentY = Double.parseDouble(yField.getText().replace(",", ""));
                     // Invert Y direction if sample movement is checked
-                    double yDirection = sampleMovementCheckbox.isSelected() ? -1 : 1;
+                    boolean sampleMode = sampleMovementCheckbox.isSelected();
+                    double yDirection = sampleMode ? -1 : 1;
+                    logger.debug("DOWN button: sampleMovement={}, yDirection={}", sampleMode, yDirection);
                     double newY = currentY - (step * yDirection);
                     double currentX = Double.parseDouble(xField.getText().replace(",", ""));
 
@@ -557,7 +563,9 @@ public class StageMovementController {
                     double currentY = current[1];
 
                     // Invert Y for sample movement mode (read from atomic flag, not JavaFX control)
-                    double yDir = sampleMovementMode.get() ? -1 : 1;
+                    boolean sampleMode = sampleMovementMode.get();
+                    double yDir = sampleMode ? -1 : 1;
+                    logger.debug("Joystick: sampleMovement={}, yDir={}", sampleMode, yDir);
                     double targetX = currentX + deltaX;
                     double targetY = currentY + (deltaY * yDir);
 
