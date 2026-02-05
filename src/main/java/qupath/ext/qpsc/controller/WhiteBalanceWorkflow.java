@@ -212,6 +212,10 @@ public class WhiteBalanceWorkflow {
 
         // Run calibration in background thread
         Thread calibrationThread = new Thread(() -> {
+            // Stop all live viewing before starting calibration
+            MicroscopeController.LiveViewState liveViewState =
+                    MicroscopeController.getInstance().stopAllLiveViewing();
+
             try {
                 var advanced = params.advanced();
                 String yamlPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
@@ -247,6 +251,9 @@ public class WhiteBalanceWorkflow {
                     Dialogs.showErrorMessage("White Balance Failed",
                             "Calibration failed: " + e.getMessage());
                 });
+            } finally {
+                // Restore live viewing state after calibration completes
+                MicroscopeController.getInstance().restoreLiveViewState(liveViewState);
             }
             // Don't close client - it's the singleton's shared connection
         }, "WhiteBalanceCalibration");
@@ -293,6 +300,10 @@ public class WhiteBalanceWorkflow {
 
         // Run calibration in background thread
         Thread calibrationThread = new Thread(() -> {
+            // Stop all live viewing before starting calibration
+            MicroscopeController.LiveViewState liveViewState =
+                    MicroscopeController.getInstance().stopAllLiveViewing();
+
             try {
                 var advanced = params.advanced();
                 String yamlPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
@@ -331,6 +342,9 @@ public class WhiteBalanceWorkflow {
                     Dialogs.showErrorMessage("PPM White Balance Failed",
                             "Calibration failed: " + e.getMessage());
                 });
+            } finally {
+                // Restore live viewing state after calibration completes
+                MicroscopeController.getInstance().restoreLiveViewState(liveViewState);
             }
             // Don't close client - it's the singleton's shared connection
         }, "PPMWhiteBalanceCalibration");

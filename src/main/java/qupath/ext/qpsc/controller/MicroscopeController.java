@@ -15,6 +15,7 @@ import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 
@@ -751,4 +752,121 @@ public class MicroscopeController {
     public interface IORunnable {
         void run() throws IOException;
     }
+
+    // ==================== Unified Live Viewing Control ====================
+
+    /**
+     * Stops all live viewing modes (both MM studio live mode and QPSC Live Viewer).
+     * This should be called before any operation that requires exclusive camera access,
+     * such as white balance calibration, acquisition workflows, etc.
+     *
+     * <p>This method:
+     * <ul>
+     *   <li>Hides the QPSC Live Viewer window (which stops its continuous acquisition)</li>
+     *   <li>Stops MM's studio live mode if running</li>
+     * </ul>
+     *
+     * @return A LiveViewState record containing the previous state, which can be passed
+     *         to {@link #restoreLiveViewState(LiveViewState)} to restore the state after
+     *         the operation completes.
+     */
+    public LiveViewState stopAllLiveViewing() {
+        boolean qpscLiveViewerWasVisible = false;
+        boolean mmLiveModeWasRunning = false;
+
+        // Stop QPSC Live Viewer
+        if (LiveViewerWindow.isVisible()) {
+            qpscLiveViewerWasVisible = true;
+            logger.info("Stopping QPSC Live Viewer for exclusive camera access");
+            LiveViewerWindow.hide();
+            // Give it a moment to fully stop
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        // Stop MM studio live mode
+        try {
+            mmLiveModeWasRunning = isLiveModeRunning();
+            if (mmLiveModeWasRunning) {
+                logger.info("Stopping MM live mode for exclusive camera access");
+                setLiveMode(false);
+                Thread.sleep(100);
+            }
+        } catch (IOException e) {
+            logger.warn("Could not check/stop MM live mode: {}", e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        logger.info("All live viewing stopped - QPSC was visible: {}, MM was running: {}",
+                qpscLiveViewerWasVisible, mmLiveModeWasRunning);
+
+        return new LiveViewState(qpscLiveViewerWasVisible, mmLiveModeWasRunning);
+    }
+
+    /**
+     * Restores live viewing modes to a previously saved state.
+     *
+     * @param state The state returned by {@link #stopAllLiveViewing()}
+     */
+    public void restoreLiveViewState(LiveViewState state) {
+        if (state == null) {
+            return;
+        }
+
+        // Restore MM studio live mode first (faster to start)
+        if (state.mmLiveModeWasRunning()) {
+            try {
+                setLiveMode(true);
+                logger.info("Restored MM live mode");
+            } catch (IOException e) {
+                logger.warn("Could not restore MM live mode: {}", e.getMessage());
+            }
+        }
+
+        // Restore QPSC Live Viewer
+        if (state.qpscLiveViewerWasVisible()) {
+            logger.info("Restoring QPSC Live Viewer");
+            LiveViewerWindow.show();
+        }
+    }
+
+    /**
+     * Wraps a camera operation with unified live viewing stop/restart handling.
+     *
+     * <p>This method stops ALL live viewing (both MM studio live mode and QPSC Live Viewer)
+     * before the operation, and restores the previous state afterward. This is more
+     * comprehensive than {@link #withLiveModeHandling(IORunnable)} which only handles
+     * MM's studio live mode.
+     *
+     * <p>Use this method for operations that require exclusive camera access, such as:
+     * <ul>
+     *   <li>White balance calibration</li>
+     *   <li>Camera property changes that can't be made during streaming</li>
+     *   <li>Acquisition workflows</li>
+     * </ul>
+     *
+     * @param operation The camera operation to execute
+     * @throws IOException if the operation itself fails
+     */
+    public void withAllLiveViewingOff(IORunnable operation) throws IOException {
+        LiveViewState previousState = stopAllLiveViewing();
+
+        try {
+            operation.run();
+        } finally {
+            restoreLiveViewState(previousState);
+        }
+    }
+
+    /**
+     * Record to store the state of live viewing modes before they were stopped.
+     *
+     * @param qpscLiveViewerWasVisible True if the QPSC Live Viewer window was visible
+     * @param mmLiveModeWasRunning True if MM's studio live mode was running
+     */
+    public record LiveViewState(boolean qpscLiveViewerWasVisible, boolean mmLiveModeWasRunning) {}
 }
