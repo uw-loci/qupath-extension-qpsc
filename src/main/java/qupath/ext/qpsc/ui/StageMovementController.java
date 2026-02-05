@@ -2,8 +2,10 @@ package qupath.ext.qpsc.ui;
 
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
+import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.geometry.VPos;
 import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
@@ -252,12 +254,8 @@ public class StageMovementController {
                 }
             });
 
-            // --- XY Arrow Controls ---
-            logger.debug("Creating XY arrow navigation controls");
-            TextField xyStepField = new TextField("100");
-            xyStepField.setPrefWidth(70);
-            xyStepField.setAlignment(Pos.CENTER);
-            Tooltip.install(xyStepField, new Tooltip("Step size in micrometers (integers only)"));
+            // --- Step size controls (shared by arrows and joystick) ---
+            logger.debug("Creating step size controls");
 
             // Input validation: only allow digits and commas (no decimals)
             UnaryOperator<TextFormatter.Change> integerFilter = change -> {
@@ -268,10 +266,18 @@ public class StageMovementController {
                 }
                 return null;
             };
-            xyStepField.setTextFormatter(new TextFormatter<>(integerFilter));
 
-            // --- FOV-based step size dropdown ---
-            logger.debug("Creating FOV-based step size controls");
+            // Value field (only shown when "Value" is selected in dropdown)
+            TextField xyStepField = new TextField("100");
+            xyStepField.setPrefWidth(70);
+            xyStepField.setAlignment(Pos.CENTER);
+            xyStepField.setTextFormatter(new TextFormatter<>(integerFilter));
+            Label valueUmLabel = new Label("um");
+            valueUmLabel.setStyle("-fx-font-size: 10px;");
+            HBox valueRow = new HBox(5, xyStepField, valueUmLabel);
+            valueRow.setAlignment(Pos.CENTER_LEFT);
+
+            // FOV-based step size dropdown
             double[] cachedFovUm = {0, 0};
             ComboBox<String> fovStepCombo = new ComboBox<>(FXCollections.observableArrayList(
                     "1 FOV", "0.5 FOV", "0.25 FOV", "0.1 FOV", res.getString("stageMovement.fov.value")));
@@ -285,8 +291,8 @@ public class StageMovementController {
             refreshFovBtn.setStyle("-fx-font-size: 10px; -fx-min-width: 24px; -fx-min-height: 24px; -fx-padding: 2;");
             Tooltip.install(refreshFovBtn, new Tooltip(res.getString("stageMovement.fov.refreshTooltip")));
 
-            // Virtual joystick for continuous movement
-            VirtualJoystick joystick = new VirtualJoystick(55);
+            // Virtual joystick for continuous movement (larger for arrows around it)
+            VirtualJoystick joystick = new VirtualJoystick(50);
 
             // Helper to query FOV from hardware and cache it
             Runnable queryFov = () -> {
@@ -310,7 +316,13 @@ public class StageMovementController {
             // Helper to apply FOV-based step size
             Runnable applyFovStep = () -> {
                 String selection = fovStepCombo.getValue();
-                if (selection == null || selection.equals(res.getString("stageMovement.fov.value"))) {
+                boolean isValueMode = selection == null || selection.equals(res.getString("stageMovement.fov.value"));
+
+                // Show/hide value row based on selection
+                valueRow.setVisible(isValueMode);
+                valueRow.setManaged(isValueMode);
+
+                if (isValueMode) {
                     xyStepField.setDisable(false);
                     return;
                 }
@@ -361,8 +373,8 @@ public class StageMovementController {
             Button leftBtn = new Button("\u2190");  // Left arrow
             Button rightBtn = new Button("\u2192");  // Right arrow
 
-            // Style arrow buttons
-            String arrowBtnStyle = "-fx-font-size: 14px; -fx-min-width: 30px; -fx-min-height: 30px;";
+            // Style arrow buttons (smaller to fit around joystick)
+            String arrowBtnStyle = "-fx-font-size: 12px; -fx-min-width: 28px; -fx-min-height: 28px; -fx-padding: 2;";
             upBtn.setStyle(arrowBtnStyle);
             downBtn.setStyle(arrowBtnStyle);
             leftBtn.setStyle(arrowBtnStyle);
@@ -473,32 +485,43 @@ public class StageMovementController {
                 }
             });
 
-            // Arrange arrows in a cross pattern with step field in center
-            // Use VBox for up/down to center them over the step field
-            VBox upDownBox = new VBox(2);
-            upDownBox.setAlignment(Pos.CENTER);
-            upDownBox.getChildren().addAll(upBtn, xyStepField, downBtn);
+            // --- Step Settings Section (applies to both arrows and joystick) ---
+            Label stepSettingsLabel = new Label("XY Step Settings");
+            stepSettingsLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
 
-            // Create horizontal row with left arrow, center column, right arrow
-            HBox arrowRow = new HBox(2);
-            arrowRow.setAlignment(Pos.CENTER);
-            arrowRow.getChildren().addAll(leftBtn, upDownBox, rightBtn);
-
-            // Add "um" label and keyboard hint below
-            Label arrowLabel = new Label("um");
-            arrowLabel.setStyle("-fx-font-size: 10px;");
-
-            Label keyboardHint = new Label("WASD / Arrow keys");
-            keyboardHint.setStyle("-fx-font-size: 9px; -fx-text-fill: #666666;");
-
-            VBox arrowGrid = new VBox(2);
-            arrowGrid.setAlignment(Pos.CENTER);
-            arrowGrid.getChildren().addAll(arrowRow, arrowLabel, keyboardHint);
-
-            // --- FOV controls row ---
             Label stepLabel = new Label(res.getString("stageMovement.label.step"));
             HBox fovControlsRow = new HBox(5, stepLabel, fovStepCombo, refreshFovBtn, fovInfoLabel);
             fovControlsRow.setAlignment(Pos.CENTER_LEFT);
+
+            VBox stepSettingsSection = new VBox(4);
+            stepSettingsSection.setAlignment(Pos.CENTER_LEFT);
+            stepSettingsSection.getChildren().addAll(stepSettingsLabel, fovControlsRow, valueRow, sampleMovementCheckbox);
+            stepSettingsSection.setStyle("-fx-padding: 5; -fx-border-color: #cccccc; -fx-border-radius: 3; -fx-background-color: #f8f8f8; -fx-background-radius: 3;");
+
+            // --- Navigation Control: arrows around joystick ---
+            Label navLabel = new Label("XY Navigation");
+            navLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
+
+            Label keyboardHint = new Label("WASD / Arrow keys / Drag joystick");
+            keyboardHint.setStyle("-fx-font-size: 9px; -fx-text-fill: #666666;");
+
+            // Arrange arrows around the joystick using GridPane
+            GridPane navGrid = new GridPane();
+            navGrid.setAlignment(Pos.CENTER);
+            navGrid.setHgap(2);
+            navGrid.setVgap(2);
+            // Row 0: up button centered
+            navGrid.add(upBtn, 1, 0);
+            GridPane.setHalignment(upBtn, HPos.CENTER);
+            // Row 1: left, joystick, right
+            navGrid.add(leftBtn, 0, 1);
+            GridPane.setValignment(leftBtn, VPos.CENTER);
+            navGrid.add(joystick, 1, 1);
+            navGrid.add(rightBtn, 2, 1);
+            GridPane.setValignment(rightBtn, VPos.CENTER);
+            // Row 2: down button centered
+            navGrid.add(downBtn, 1, 2);
+            GridPane.setHalignment(downBtn, HPos.CENTER);
 
             // --- Wire joystick movement callback ---
             // Track position atomically to avoid race conditions between background executor and JavaFX thread
@@ -558,22 +581,16 @@ public class StageMovementController {
                 }
             });
 
-            Label joystickLabel = new Label(res.getString("stageMovement.joystick.label"));
-            joystickLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #666666;");
+            // Navigation section with arrows around joystick
+            VBox navigationSection = new VBox(6);
+            navigationSection.setAlignment(Pos.CENTER);
+            navigationSection.getChildren().addAll(navLabel, navGrid, keyboardHint);
+            navigationSection.setStyle("-fx-padding: 5; -fx-border-color: #cccccc; -fx-border-radius: 3; -fx-background-color: #f8f8f8; -fx-background-radius: 3;");
 
-            VBox joystickBox = new VBox(4);
-            joystickBox.setAlignment(Pos.CENTER);
-            joystickBox.getChildren().addAll(joystick, joystickLabel);
-
-            // --- Navigation section: arrows + joystick side by side ---
-            Region spacer = new Region();
-            spacer.setPrefWidth(15);
-            HBox navigationRow = new HBox(5, arrowGrid, spacer, joystickBox);
-            navigationRow.setAlignment(Pos.CENTER);
-
-            VBox navigationSection = new VBox(8);
-            navigationSection.setAlignment(Pos.CENTER_LEFT);
-            navigationSection.getChildren().addAll(fovControlsRow, navigationRow, sampleMovementCheckbox);
+            // Combined XY controls section
+            VBox xyControlsSection = new VBox(10);
+            xyControlsSection.setAlignment(Pos.CENTER_LEFT);
+            xyControlsSection.getChildren().addAll(stepSettingsSection, navigationSection);
 
             // --- Z Scroll Control ---
             logger.debug("Adding Z scroll wheel control");
@@ -864,7 +881,7 @@ public class StageMovementController {
             });
 
             grid.add(goToCentroidBtn, 0, 8, 2, 1);
-            grid.add(navigationSection, 0, 9, 4, 1);
+            grid.add(xyControlsSection, 0, 9, 4, 1);
             grid.add(centroidStatus, 2, 8, 2, 1);
             grid.add(availableLabel, 0, 10, 4, 1);
             grid.add(alignmentListView, 0, 11, 4, 1);
