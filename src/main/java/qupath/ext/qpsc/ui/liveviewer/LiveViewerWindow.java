@@ -7,6 +7,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.PixelFormat;
 import javafx.scene.image.WritableImage;
@@ -14,6 +15,7 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -83,25 +85,18 @@ public class LiveViewerWindow {
     private volatile boolean polling = false;
     private volatile String lastFrameInfo = "";
 
-    // Display scale: fraction of native resolution to render
-    // 0.5 = half resolution (faster), 1.0 = full, 2.0 = double (pixel-doubled)
-    private volatile double displayScale = 0.5;
+    // Display mode state
+    // fitToContainer = true: image scales to fill container (no scrollbars)
+    // fitToContainer = false: image renders at explicitScale, scrollbars appear as needed
+    private volatile boolean fitToContainer = true;
+    private volatile double explicitScale = 1.0;
+    private ScrollPane scrollPane;  // Store reference for mode switching
+    private StackPane imageContainer;  // Inner container for centering
 
     // Configuration
     private static final long POLL_INTERVAL_MS = 100;  // ~10 FPS max
-    private static final double DEFAULT_WINDOW_WIDTH = 660;
-    private static final double DEFAULT_WINDOW_HEIGHT = 720;
-
-    // Initial sizing: resize window to fit first frame
-    private volatile boolean initialSizingDone = false;
-
-    // UI chrome heights (approximate, for initial sizing calculation)
-    private static final double TOOLBAR_HEIGHT = 40;
-    private static final double HISTOGRAM_HEIGHT = 120;
-    private static final double NOISE_PANEL_COLLAPSED_HEIGHT = 30;
-    private static final double STATUS_BAR_HEIGHT = 30;
-    private static final double WINDOW_CHROME_HEIGHT = TOOLBAR_HEIGHT + HISTOGRAM_HEIGHT
-            + NOISE_PANEL_COLLAPSED_HEIGHT + STATUS_BAR_HEIGHT;
+    private static final double WINDOW_WIDTH = 660;
+    private static final double WINDOW_HEIGHT = 720;
 
     private LiveViewerWindow() {
         buildUI();
@@ -164,20 +159,39 @@ public class LiveViewerWindow {
         // Display scale selector
         Label scaleLabel = new Label("Display:");
         ComboBox<String> scaleCombo = new ComboBox<>();
-        scaleCombo.getItems().addAll("25%", "50%", "100%");
-        scaleCombo.setValue("50%");
+        scaleCombo.getItems().addAll("Fit", "25%", "50%", "100%");
+        scaleCombo.setValue("Fit");  // Default to Fit mode
         scaleCombo.setPrefWidth(75);
         scaleCombo.setOnAction(e -> {
             String selected = scaleCombo.getValue();
-            switch (selected) {
-                case "25%" -> displayScale = 0.25;
-                case "50%" -> displayScale = 0.5;
-                case "100%" -> displayScale = 1.0;
+            fitToContainer = "Fit".equals(selected);
+
+            if (fitToContainer) {
+                // Fit mode: image scales to fill container, hide scrollbars
+                scrollPane.setFitToWidth(true);
+                scrollPane.setFitToHeight(true);
+                imageView.fitWidthProperty().bind(scrollPane.widthProperty().subtract(2));
+                imageView.fitHeightProperty().bind(scrollPane.heightProperty().subtract(2));
+            } else {
+                // Explicit scale mode: unbind, show scrollbars as needed
+                scrollPane.setFitToWidth(false);
+                scrollPane.setFitToHeight(false);
+                imageView.fitWidthProperty().unbind();
+                imageView.fitHeightProperty().unbind();
+                imageView.setFitWidth(0);
+                imageView.setFitHeight(0);
+
+                switch (selected) {
+                    case "25%" -> explicitScale = 0.25;
+                    case "50%" -> explicitScale = 0.5;
+                    case "100%" -> explicitScale = 1.0;
+                }
             }
-            // Force recreation of WritableImage on next frame
+
+            // Force frame redraw with new settings
             lastFrameWidth = 0;
             lastFrameHeight = 0;
-            logger.info("Display scale changed to {}", selected);
+            logger.info("Display mode changed to {}", selected);
         });
 
         Region spacer = new Region();
@@ -192,14 +206,24 @@ public class LiveViewerWindow {
         imageView.setPreserveRatio(true);
         imageView.setSmooth(false);  // Nearest-neighbor for microscopy
 
-        // Container for image - use StackPane to center
-        // ImageView size is NOT bound to container - it displays at its natural size based on displayScale
-        javafx.scene.layout.StackPane imageContainer = new javafx.scene.layout.StackPane(imageView);
+        // Container with scroll support for large images at explicit scale
+        scrollPane = new ScrollPane();
+        scrollPane.setStyle("-fx-background-color: black;");
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setPannable(true);  // Allow drag-to-pan
+
+        // Inner container for centering when image is smaller than viewport
+        imageContainer = new StackPane(imageView);
         imageContainer.setStyle("-fx-background-color: black;");
         imageContainer.setAlignment(Pos.CENTER);
+        scrollPane.setContent(imageContainer);
 
-        // Don't bind fit properties - let the image display at its scaled size
-        // The fitWidth/fitHeight will be set in renderFrame() based on displayScale
+        // Default to Fit mode: image scales to fill container
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        imageView.fitWidthProperty().bind(scrollPane.widthProperty().subtract(2));
+        imageView.fitHeightProperty().bind(scrollPane.heightProperty().subtract(2));
 
         // Histogram + contrast controls
         histogramView = new HistogramView(contrastSettings);
@@ -219,16 +243,13 @@ public class LiveViewerWindow {
 
         BorderPane root = new BorderPane();
         root.setTop(toolbar);
-        root.setCenter(imageContainer);
+        root.setCenter(scrollPane);  // ScrollPane wraps the image container
         root.setBottom(bottomPane);
 
-        Scene scene = new Scene(root, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
+        Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
         stage.setScene(scene);
         stage.setMinWidth(320);
         stage.setMinHeight(400);
-
-        // Reset initial sizing flag (will resize to fit first frame)
-        initialSizingDone = false;
 
         // Clean shutdown on close
         stage.setOnCloseRequest(e -> stopAndDispose());
@@ -374,11 +395,20 @@ public class LiveViewerWindow {
     private void renderFrame(FrameData frame) {
         int srcW = frame.width();
         int srcH = frame.height();
-        double scale = displayScale;
 
-        // Compute display dimensions based on scale
-        int dstW = Math.max(1, (int) (srcW * scale));
-        int dstH = Math.max(1, (int) (srcH * scale));
+        int dstW, dstH;
+        if (fitToContainer) {
+            // Fit mode: render at full resolution, ImageView scales it down via binding
+            dstW = srcW;
+            dstH = srcH;
+        } else {
+            // Explicit scale mode: render at scaled resolution
+            dstW = Math.max(1, (int) (srcW * explicitScale));
+            dstH = Math.max(1, (int) (srcH * explicitScale));
+        }
+
+        // Compute scale for pixel mapping (for explicit scale mode)
+        double scale = fitToContainer ? 1.0 : explicitScale;
 
         // Recreate WritableImage if display dimensions changed
         if (dstW != lastFrameWidth || dstH != lastFrameHeight) {
@@ -388,19 +418,8 @@ public class LiveViewerWindow {
             lastFrameHeight = dstH;
             imageView.setImage(writableImage);
 
-            // Set ImageView to display at its natural size (the scaled dimensions)
-            // Setting fitWidth/fitHeight to 0 means use intrinsic image size
-            imageView.setFitWidth(0);
-            imageView.setFitHeight(0);
-
             // Apply full range for new bit depth
             contrastSettings.applyFullRange(frame);
-
-            // On first frame, resize window to fit the image
-            if (!initialSizingDone) {
-                initialSizingDone = true;
-                resizeWindowToFitImage(dstW, dstH);
-            }
         }
 
         // Apply contrast mapping and convert to ARGB with subsampling
@@ -472,37 +491,6 @@ public class LiveViewerWindow {
 
     private void updateStatus(String text) {
         statusLabel.setText(text);
-    }
-
-    /**
-     * Resizes the window to fit the image dimensions plus UI chrome.
-     * Called once after the first frame is received, so we know the actual image size.
-     *
-     * @param imageWidth  the scaled image width in pixels
-     * @param imageHeight the scaled image height in pixels
-     */
-    private void resizeWindowToFitImage(int imageWidth, int imageHeight) {
-        // Calculate required window size
-        // Add some padding for borders and margins
-        double targetWidth = Math.max(320, imageWidth + 20);
-        double targetHeight = Math.max(400, imageHeight + WINDOW_CHROME_HEIGHT + 20);
-
-        // Get screen bounds to avoid making window larger than screen
-        javafx.geometry.Rectangle2D screenBounds = javafx.stage.Screen.getPrimary().getVisualBounds();
-        double maxWidth = screenBounds.getWidth() * 0.9;
-        double maxHeight = screenBounds.getHeight() * 0.9;
-
-        targetWidth = Math.min(targetWidth, maxWidth);
-        targetHeight = Math.min(targetHeight, maxHeight);
-
-        stage.setWidth(targetWidth);
-        stage.setHeight(targetHeight);
-
-        // Center on screen after resize
-        stage.centerOnScreen();
-
-        logger.info("Live Viewer resized to fit {}x{} image: window {}x{}",
-                imageWidth, imageHeight, (int) targetWidth, (int) targetHeight);
     }
 
     private void stopAndDispose() {
