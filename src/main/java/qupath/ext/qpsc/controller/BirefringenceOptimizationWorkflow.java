@@ -1,20 +1,28 @@
 package qupath.ext.qpsc.controller;
 
 import javafx.application.Platform;
-import javafx.scene.control.Alert;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.BirefringenceOptimizationDialog;
 import qupath.fx.dialogs.Dialogs;
+import qupath.lib.gui.QuPathGUI;
 
 import java.awt.Desktop;
 import java.io.File;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * BirefringenceOptimizationWorkflow - Find optimal polarizer angle for maximum birefringence signal
@@ -88,44 +96,64 @@ public class BirefringenceOptimizationWorkflow {
     }
 
     /**
-     * Creates progress dialog on FX thread, then runs optimization on background thread.
-     * This ensures all UI components are created on the correct thread.
+     * Creates non-modal progress window on FX thread, then runs optimization on background thread.
+     * The progress window does NOT block other dialogs, allowing users to use Stage Control.
      *
      * @param params Optimization parameters from dialog
      */
     private static void startOptimizationWithProgress(BirefringenceOptimizationDialog.BirefringenceParams params) {
-        // Must be called on FX thread - create progress dialog here
-        Alert progressDialog = new Alert(Alert.AlertType.INFORMATION);
-        progressDialog.setTitle("Optimization In Progress");
-        progressDialog.setHeaderText("PPM Birefringence Optimization Running");
+        // Must be called on FX thread - create non-modal progress window
+        Stage progressStage = new Stage();
+        progressStage.setTitle("Birefringence Optimization");
+        progressStage.initModality(Modality.NONE);  // Non-modal - allows other dialogs
 
-        // Create a VBox with progress info that can be updated
+        // Set owner to QuPath main window
+        QuPathGUI gui = QuPathGUI.getInstance();
+        if (gui != null && gui.getStage() != null) {
+            progressStage.initOwner(gui.getStage());
+        }
+
+        // Create progress UI
+        Label headerLabel = new Label("PPM Birefringence Optimization");
+        headerLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+
         Label progressLabel = new Label("Starting optimization...");
-        progressLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        progressLabel.setStyle("-fx-font-size: 14px;");
+
+        Label statusLabel = new Label("");
+        statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: gray;");
 
         Label infoLabel = new Label(
-                "The test acquires paired images at symmetric angles (+theta, -theta)\n" +
-                "to measure birefringence signal strength across the angle range.\n\n" +
-                "The dialog will close automatically when the test completes."
+                "This window will update as the test progresses.\n" +
+                "You can use Stage Control and other windows while waiting."
         );
+        infoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
 
-        VBox content = new VBox(10);
-        content.getChildren().addAll(progressLabel, infoLabel);
-        progressDialog.getDialogPane().setContent(content);
+        Button cancelButton = new Button("Cancel");
+        AtomicBoolean cancelled = new AtomicBoolean(false);
+        cancelButton.setOnAction(e -> {
+            cancelled.set(true);
+            progressStage.close();
+            logger.info("Birefringence optimization cancelled by user");
+        });
 
-        progressDialog.getButtonTypes().clear();
-        progressDialog.getButtonTypes().add(ButtonType.CANCEL);
+        VBox content = new VBox(15);
+        content.setPadding(new Insets(20));
+        content.setAlignment(Pos.CENTER_LEFT);
+        content.getChildren().addAll(headerLabel, progressLabel, statusLabel, infoLabel, cancelButton);
 
-        // Show progress dialog (non-blocking)
-        progressDialog.show();
+        Scene scene = new Scene(content, 450, 200);
+        progressStage.setScene(scene);
+        progressStage.setResizable(false);
+        progressStage.show();
 
         // Now run the actual optimization on a background thread
         CompletableFuture.runAsync(() -> {
-            executeOptimization(params, progressDialog, progressLabel);
+            executeOptimization(params, progressStage, progressLabel, statusLabel, cancelled);
         }).exceptionally(ex -> {
             logger.error("Birefringence optimization failed", ex);
             Platform.runLater(() -> {
-                progressDialog.close();
+                progressStage.close();
                 Dialogs.showErrorMessage("Birefringence Optimization Error",
                         "Failed to execute optimization: " + ex.getMessage());
             });
@@ -138,11 +166,14 @@ public class BirefringenceOptimizationWorkflow {
      * Called from background thread - all UI updates must use Platform.runLater.
      *
      * @param params Optimization parameters from dialog
-     * @param progressDialog Progress dialog to close when done (created on FX thread)
+     * @param progressStage Progress window to close when done (created on FX thread)
      * @param progressLabel Label to update with progress (created on FX thread)
+     * @param statusLabel Label to update with status messages (created on FX thread)
+     * @param cancelled AtomicBoolean flag that is set to true if user cancels
      */
     private static void executeOptimization(BirefringenceOptimizationDialog.BirefringenceParams params,
-                                            Alert progressDialog, Label progressLabel) {
+                                            Stage progressStage, Label progressLabel, Label statusLabel,
+                                            AtomicBoolean cancelled) {
         logger.info("Executing birefringence optimization: {} to {} deg, step {}",
                 params.minAngle(), params.maxAngle(), params.angleStep());
 
@@ -172,13 +203,61 @@ public class BirefringenceOptimizationWorkflow {
 
             // Create progress callback to update the dialog
             java.util.function.BiConsumer<Integer, Integer> progressCallback = (current, total) -> {
+                if (cancelled.get()) return;
                 int percent = (int) ((current * 100.0) / total);
                 Platform.runLater(() -> {
                     progressLabel.setText(String.format("Progress: %d%% (%d/%d angle pairs)", percent, current, total));
                 });
             };
 
-            // Call the socket client method with progress callback
+            // Create status callback
+            java.util.function.Consumer<String> statusCallback = (message) -> {
+                if (cancelled.get()) return;
+                Platform.runLater(() -> statusLabel.setText(message));
+            };
+
+            // Create stage move callback for calibrate mode
+            java.util.function.Supplier<Boolean> stageMoveCallback = () -> {
+                if (cancelled.get()) return false;
+
+                // Use CountDownLatch to wait for user response on FX thread
+                CountDownLatch latch = new CountDownLatch(1);
+                AtomicBoolean userConfirmed = new AtomicBoolean(false);
+
+                Platform.runLater(() -> {
+                    // Show stage move dialog
+                    boolean confirmed = Dialogs.showConfirmDialog(
+                            "Move Stage to Tissue",
+                            "Background calibration is complete!\n\n" +
+                            "Please move the stage to a region with BIREFRINGENT TISSUE\n" +
+                            "(e.g., collagen fibers, crystalline structures).\n\n" +
+                            "You can use the Stage Control window to move the stage.\n\n" +
+                            "Click OK when the stage is positioned on tissue,\n" +
+                            "or Cancel to abort the test."
+                    );
+                    userConfirmed.set(confirmed);
+                    latch.countDown();
+                });
+
+                try {
+                    latch.await();  // Wait for user response
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+
+                return userConfirmed.get();
+            };
+
+            // Update status for calibrate mode
+            if ("calibrate".equals(params.exposureMode())) {
+                Platform.runLater(() -> {
+                    progressLabel.setText("Phase 1: Background Calibration");
+                    statusLabel.setText("Calibrating exposures on background area...");
+                });
+            }
+
+            // Call the socket client method with all callbacks
             String resultPath = socketClient.runBirefringenceOptimization(
                     configFileLocation,
                     params.outputFolder(),
@@ -188,56 +267,58 @@ public class BirefringenceOptimizationWorkflow {
                     params.exposureMode(),
                     params.fixedExposureMs(),
                     params.targetIntensity(),
-                    progressCallback
+                    progressCallback,
+                    stageMoveCallback,
+                    statusCallback
             );
+
+            if (cancelled.get()) {
+                logger.info("Optimization was cancelled by user");
+                return;
+            }
 
             logger.info("Birefringence optimization completed successfully");
             logger.info("Results saved to: {}", resultPath);
 
             // Close progress dialog and show success (on FX thread)
             Platform.runLater(() -> {
-                progressDialog.close();
+                progressStage.close();
 
-                Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setTitle("Optimization Complete");
-                alert.setHeaderText("Birefringence optimization completed successfully!");
-                alert.setContentText(
+                boolean openFolder = Dialogs.showConfirmDialog(
+                        "Optimization Complete",
+                        "Birefringence optimization completed successfully!\n\n" +
                         "Results saved to:\n" + resultPath + "\n\n" +
                         "The results directory contains:\n" +
-                        "  - birefringence_results.json: Optimal angles and signal metrics\n" +
-                        "  - birefringence_analysis.png: Visualization plot\n" +
-                        "  - raw_difference_*.tif: Difference images (if keep_images=true)\n" +
-                        "  - normalized_difference_*.tif: Normalized differences\n\n" +
-                        "Review the JSON file and plot to identify the optimal angle.\n\n" +
+                        "  - birefringence_results.json: Optimal angles and metrics\n" +
+                        "  - birefringence_analysis.png: Visualization plot\n\n" +
                         "Would you like to open the results folder?"
                 );
 
-                ButtonType openFolder = new ButtonType("Open Folder");
-                ButtonType close = new ButtonType("Close");
-                alert.getButtonTypes().setAll(openFolder, close);
-
-                alert.showAndWait().ifPresent(response -> {
-                    if (response == openFolder) {
-                        try {
-                            File resultsDir = new File(resultPath);
-                            if (resultsDir.exists()) {
-                                Desktop.getDesktop().open(resultsDir);
-                            }
-                        } catch (Exception e) {
-                            logger.error("Failed to open results folder", e);
-                            Dialogs.showErrorMessage("Error",
-                                    "Failed to open results folder: " + e.getMessage());
+                if (openFolder) {
+                    try {
+                        File resultsDir = new File(resultPath);
+                        if (resultsDir.exists()) {
+                            Desktop.getDesktop().open(resultsDir);
                         }
+                    } catch (Exception e) {
+                        logger.error("Failed to open results folder", e);
+                        Dialogs.showErrorMessage("Error",
+                                "Failed to open results folder: " + e.getMessage());
                     }
-                });
+                }
             });
 
         } catch (Exception e) {
+            if (cancelled.get()) {
+                logger.info("Optimization was cancelled during execution");
+                return;
+            }
+
             logger.error("Birefringence optimization failed", e);
 
             // Close progress dialog and show error (on FX thread)
             Platform.runLater(() -> {
-                progressDialog.close();
+                progressStage.close();
                 Dialogs.showErrorMessage("Optimization Failed",
                         "Failed to complete birefringence optimization:\n" + e.getMessage());
             });

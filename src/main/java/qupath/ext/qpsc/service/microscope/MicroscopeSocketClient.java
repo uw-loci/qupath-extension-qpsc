@@ -1546,11 +1546,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
             int originalTimeout = 0;
             try {
                 originalTimeout = socket.getSoTimeout();
-                // Timeout between messages (progress updates or final result)
-                // Progress updates are sent after each position (~every few seconds)
-                // so 5 minutes is a very generous safety margin
-                socket.setSoTimeout(300000); // 5 minutes between progress updates
-                logger.debug("Set socket timeout to 5 minutes for calibration progress updates");
+                // Increase timeout for calibration (can take several minutes)
+                // With stability check (3 runs) and fine steps, allow plenty of time
+                // Note: POLCAL does not send progress updates, so use generous total timeout
+                socket.setSoTimeout(3600000); // 60 minutes
+                logger.debug("Increased socket timeout to 60 minutes for calibration");
             } catch (IOException e) {
                 logger.warn("Failed to adjust socket timeout", e);
             }
@@ -1580,60 +1580,26 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     }
                 }
 
-                // Wait for SUCCESS/FAILED response, handling PROGRESS updates in between
-                // PROGRESS updates keep the connection alive during long calibration runs
+                // Wait for final SUCCESS/FAILED response
                 logger.info("Waiting for polarizer calibration to complete...");
-                int lastProgressCurrent = -1;
-                String lastProgressStage = "";
+                bytesRead = input.read(buffer);
+                if (bytesRead > 0) {
+                    String finalResponse = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                    logger.info("Received final server response: {}", finalResponse);
 
-                while (true) {
-                    bytesRead = input.read(buffer);
-                    if (bytesRead <= 0) {
-                        throw new IOException("No response received from server");
-                    }
-
-                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-
-                    // Handle PROGRESS updates - format: PROGRESS:current:total:stage:message
-                    if (response.startsWith("PROGRESS:")) {
-                        try {
-                            String[] parts = response.substring(9).split(":", 4);
-                            if (parts.length >= 2) {
-                                int current = Integer.parseInt(parts[0].trim());
-                                int total = Integer.parseInt(parts[1].trim());
-                                String stage = parts.length > 2 ? parts[2].trim() : "";
-                                String statusMsg = parts.length > 3 ? parts[3].trim() : "";
-
-                                // Log progress periodically (every 10 positions or when stage changes)
-                                boolean stageChanged = !stage.equals(lastProgressStage);
-                                if (stageChanged || current % 10 == 0 || current == total) {
-                                    double percent = total > 0 ? (current * 100.0 / total) : 0;
-                                    logger.info("Calibration progress: {}/{} ({}%) - {} {}",
-                                            current, total, String.format("%.1f", percent), stage, statusMsg);
-                                }
-                                lastProgressCurrent = current;
-                                lastProgressStage = stage;
-                            }
-                        } catch (NumberFormatException e) {
-                            logger.debug("Failed to parse progress message: {}", response);
-                        }
-                        continue; // Keep reading for next message
-                    }
-
-                    // Handle final responses
-                    logger.info("Received final server response: {}", response);
-
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("Polarizer calibration failed: " + response.substring(7));
-                    } else if (response.startsWith("SUCCESS:")) {
+                    if (finalResponse.startsWith("FAILED:")) {
+                        throw new IOException("Polarizer calibration failed: " + finalResponse.substring(7));
+                    } else if (finalResponse.startsWith("SUCCESS:")) {
                         // Extract report path from SUCCESS response
-                        String reportPath = response.substring(8).trim();
+                        String reportPath = finalResponse.substring(8).trim();
                         logger.info("Polarizer calibration successful. Report: {}", reportPath);
                         return reportPath;
                     } else {
-                        throw new IOException("Unexpected final response: " + response);
+                        throw new IOException("Unexpected final response: " + finalResponse);
                     }
                 }
+
+                throw new IOException("No response received from server");
 
             } catch (IOException e) {
                 logger.error("Error during polarizer calibration", e);
@@ -1698,6 +1664,35 @@ public class MicroscopeSocketClient implements AutoCloseable {
                                                String exposureMode, Double fixedExposureMs,
                                                int targetIntensity,
                                                java.util.function.BiConsumer<Integer, Integer> progressCallback) throws IOException {
+        return runBirefringenceOptimization(yamlPath, outputPath, minAngle, maxAngle, angleStep,
+                exposureMode, fixedExposureMs, targetIntensity, progressCallback, null, null);
+    }
+
+    /**
+     * Runs PPM birefringence optimization test with progress and stage move callbacks.
+     * This overload supports real-time progress updates and stage move prompts for calibrate mode.
+     *
+     * @param yamlPath Path to microscope configuration YAML file
+     * @param outputPath Output directory for test results and plots
+     * @param minAngle Minimum angle to test (degrees)
+     * @param maxAngle Maximum angle to test (degrees)
+     * @param angleStep Step size for angle sweep (degrees)
+     * @param exposureMode Exposure mode: "interpolate", "calibrate", or "fixed"
+     * @param fixedExposureMs Fixed exposure in ms (required if mode="fixed", null otherwise)
+     * @param targetIntensity Target intensity for calibrate mode (0-255)
+     * @param progressCallback Callback receiving (current, total) progress updates (can be null)
+     * @param stageMoveCallback Callback for calibrate mode stage move prompt. Returns true to continue, false to abort. (can be null)
+     * @param statusCallback Callback for status messages like "Calibrating..." or "Acquiring..." (can be null)
+     * @return Path to the results directory
+     * @throws IOException if communication fails
+     */
+    public String runBirefringenceOptimization(String yamlPath, String outputPath,
+                                               double minAngle, double maxAngle, double angleStep,
+                                               String exposureMode, Double fixedExposureMs,
+                                               int targetIntensity,
+                                               java.util.function.BiConsumer<Integer, Integer> progressCallback,
+                                               java.util.function.Supplier<Boolean> stageMoveCallback,
+                                               java.util.function.Consumer<String> statusCallback) throws IOException {
 
         // Build PPMBIREF-specific command message
         StringBuilder messageBuilder = new StringBuilder();
@@ -1790,6 +1785,34 @@ public class MicroscopeSocketClient implements AutoCloseable {
                             }
                         } catch (NumberFormatException e) {
                             logger.warn("Failed to parse progress message: {}", response);
+                        }
+                        continue; // Keep reading for next message
+                    }
+
+                    // Handle STAGEMOVE request (calibrate mode - background calibration complete)
+                    if (response.startsWith("STAGEMOVE:")) {
+                        String message = response.substring(10);
+                        logger.info("Stage move requested: {}", message);
+
+                        // Update status if callback provided
+                        if (statusCallback != null) {
+                            statusCallback.accept("Background calibration complete - move stage to tissue");
+                        }
+
+                        // Call stage move callback to show dialog and wait for user
+                        boolean shouldContinue = true;
+                        if (stageMoveCallback != null) {
+                            shouldContinue = stageMoveCallback.get();
+                        }
+
+                        // Send response back to server
+                        String responseMsg = shouldContinue ? "CONTINUE" : "ABORT";
+                        output.write(responseMsg.getBytes(StandardCharsets.UTF_8));
+                        output.flush();
+                        logger.info("Sent {} response for stage move", responseMsg);
+
+                        if (!shouldContinue) {
+                            throw new IOException("Birefringence optimization aborted by user");
                         }
                         continue; // Keep reading for next message
                     }
