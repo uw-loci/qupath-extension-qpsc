@@ -5,8 +5,8 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
-import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -225,18 +225,67 @@ public class BirefringenceOptimizationWorkflow {
                 AtomicBoolean userConfirmed = new AtomicBoolean(false);
 
                 Platform.runLater(() -> {
-                    // Show stage move dialog
-                    boolean confirmed = Dialogs.showConfirmDialog(
-                            "Move Stage to Tissue",
-                            "Background calibration is complete!\n\n" +
+                    // Create NON-MODAL stage move dialog (allows using Stage Control)
+                    Stage stageMoveStage = new Stage();
+                    stageMoveStage.setTitle("Move Stage to Tissue");
+                    stageMoveStage.initModality(Modality.NONE);  // Non-modal!
+
+                    // Set owner to QuPath main window
+                    QuPathGUI gui = QuPathGUI.getInstance();
+                    if (gui != null && gui.getStage() != null) {
+                        stageMoveStage.initOwner(gui.getStage());
+                    }
+
+                    // Create content
+                    Label headerLabel = new Label("Background Calibration Complete!");
+                    headerLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+
+                    Label instructionLabel = new Label(
                             "Please move the stage to a region with BIREFRINGENT TISSUE\n" +
                             "(e.g., collagen fibers, crystalline structures).\n\n" +
                             "You can use the Stage Control window to move the stage.\n\n" +
-                            "Click OK when the stage is positioned on tissue,\n" +
-                            "or Cancel to abort the test."
+                            "Click Continue when positioned on tissue, or Cancel to abort."
                     );
-                    userConfirmed.set(confirmed);
-                    latch.countDown();
+                    instructionLabel.setStyle("-fx-font-size: 13px;");
+                    instructionLabel.setWrapText(true);
+
+                    Button continueButton = new Button("Continue");
+                    continueButton.setDefaultButton(true);
+                    continueButton.setOnAction(e -> {
+                        userConfirmed.set(true);
+                        stageMoveStage.close();
+                        latch.countDown();
+                    });
+
+                    Button cancelButton = new Button("Cancel");
+                    cancelButton.setCancelButton(true);
+                    cancelButton.setOnAction(e -> {
+                        userConfirmed.set(false);
+                        stageMoveStage.close();
+                        latch.countDown();
+                    });
+
+                    HBox buttonBox = new HBox(10);
+                    buttonBox.setAlignment(Pos.CENTER_RIGHT);
+                    buttonBox.getChildren().addAll(cancelButton, continueButton);
+
+                    VBox content = new VBox(15);
+                    content.setPadding(new Insets(20));
+                    content.setAlignment(Pos.CENTER_LEFT);
+                    content.getChildren().addAll(headerLabel, instructionLabel, buttonBox);
+
+                    Scene scene = new Scene(content, 450, 200);
+                    stageMoveStage.setScene(scene);
+                    stageMoveStage.setResizable(false);
+
+                    // Handle window close (X button) as cancel
+                    stageMoveStage.setOnCloseRequest(e -> {
+                        userConfirmed.set(false);
+                        latch.countDown();
+                    });
+
+                    stageMoveStage.show();
+                    stageMoveStage.toFront();  // Bring to front
                 });
 
                 try {
