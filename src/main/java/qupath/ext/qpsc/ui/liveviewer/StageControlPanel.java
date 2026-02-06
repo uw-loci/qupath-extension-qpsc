@@ -12,6 +12,8 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.Separator;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.control.TitledPane;
@@ -193,37 +195,40 @@ public class StageControlPanel extends TitledPane {
     }
 
     private VBox buildContent() {
-        VBox content = new VBox(6);
-        content.setPadding(new Insets(8));
+        VBox content = new VBox(4);
+        content.setPadding(new Insets(4));
 
-        // --- Row 1: X/Y fields and Move XY button ---
-        HBox xyRow = new HBox(4);
-        xyRow.setAlignment(Pos.CENTER_LEFT);
-        xField.setPrefWidth(80);
-        yField.setPrefWidth(80);
+        // Create TabPane with two tabs
+        TabPane tabPane = new TabPane();
+        tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+
+        // ============ TAB 1: POSITION (Move to specific coordinates) ============
+        Tab positionTab = new Tab("Position");
+        VBox positionContent = new VBox(6);
+        positionContent.setPadding(new Insets(8));
+
+        // X/Y fields and Move XY button
         Label xLabel = new Label("X:");
         xLabel.setStyle("-fx-font-size: 10px;");
+        xField.setPrefWidth(70);
         Label yLabel = new Label("Y:");
         yLabel.setStyle("-fx-font-size: 10px;");
+        yField.setPrefWidth(70);
         Button moveXYBtn = new Button("Move XY");
         moveXYBtn.setStyle("-fx-font-size: 10px;");
-        xyRow.getChildren().addAll(xLabel, xField, yLabel, yField, moveXYBtn);
-
-        // XY status
+        HBox xyRow = new HBox(4, xLabel, xField, yLabel, yField, moveXYBtn);
+        xyRow.setAlignment(Pos.CENTER_LEFT);
         xyStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
 
-        // --- Row 2: Z field, Move Z, step control ---
-        HBox zRow = new HBox(4);
-        zRow.setAlignment(Pos.CENTER_LEFT);
-        zField.setPrefWidth(80);
+        // Z field, Move Z button, Z step control
         Label zLabel = new Label("Z:");
         zLabel.setStyle("-fx-font-size: 10px;");
+        zField.setPrefWidth(70);
         Button moveZBtn = new Button("Move Z");
         moveZBtn.setStyle("-fx-font-size: 10px;");
 
-        // Z step control
         TextField zStepField = new TextField("10");
-        zStepField.setPrefWidth(50);
+        zStepField.setPrefWidth(45);
         zStepField.setAlignment(Pos.CENTER);
         zStepField.setTextFormatter(new TextFormatter<>(change -> {
             String newText = change.getControlNewText();
@@ -232,38 +237,57 @@ public class StageControlPanel extends TitledPane {
             }
             return null;
         }));
-        Label zStepLabel = new Label("Z step:");
+        Label zStepLabel = new Label("step:");
         zStepLabel.setStyle("-fx-font-size: 10px;");
         Label zUmLabel = new Label("um");
         zUmLabel.setStyle("-fx-font-size: 10px;");
 
-        zRow.getChildren().addAll(zLabel, zField, moveZBtn, zStepLabel, zStepField, zUmLabel);
+        HBox zRow = new HBox(4, zLabel, zField, moveZBtn, zStepLabel, zStepField, zUmLabel);
+        zRow.setAlignment(Pos.CENTER_LEFT);
+        zStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
 
         // Z scroll handler
-        javafx.event.EventHandler<ScrollEvent> zScrollHandler = event -> {
-            handleZScroll(event, zStepField);
-        };
+        javafx.event.EventHandler<ScrollEvent> zScrollHandler = event -> handleZScroll(event, zStepField);
         zField.setOnScroll(zScrollHandler);
         moveZBtn.setOnScroll(zScrollHandler);
         zStepField.setOnScroll(zScrollHandler);
 
-        // Z status
-        zStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
-
-        // --- Row 3: R field and Move R button ---
-        HBox rRow = new HBox(4);
-        rRow.setAlignment(Pos.CENTER_LEFT);
-        rField.setPrefWidth(80);
+        // R field and Move R button
         Label rLabel = new Label("R:");
         rLabel.setStyle("-fx-font-size: 10px;");
+        rField.setPrefWidth(70);
         Button moveRBtn = new Button("Move R");
         moveRBtn.setStyle("-fx-font-size: 10px;");
-        rRow.getChildren().addAll(rLabel, rField, moveRBtn);
-
-        // R status
+        HBox rRow = new HBox(4, rLabel, rField, moveRBtn);
+        rRow.setAlignment(Pos.CENTER_LEFT);
         rStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
 
-        // --- Step settings row ---
+        // Wire up move button handlers
+        moveXYBtn.setOnAction(e -> handleMoveXY());
+        moveZBtn.setOnAction(e -> handleMoveZ());
+        moveRBtn.setOnAction(e -> handleMoveR());
+
+        // Go to centroid section
+        HBox centroidRow = new HBox(6, goToCentroidBtn, centroidStatus);
+        centroidRow.setAlignment(Pos.CENTER_LEFT);
+        VBox centroidSection = new VBox(4, new Separator(), centroidRow, availableLabel, alignmentListView);
+
+        positionContent.getChildren().addAll(
+                xyRow, xyStatus,
+                zRow, zStatus,
+                rRow, rStatus,
+                centroidSection
+        );
+        positionTab.setContent(positionContent);
+
+        // ============ TAB 2: NAVIGATE (Arrows, joystick, step controls) ============
+        Tab navigateTab = new Tab("Navigate");
+        VBox navigateContent = new VBox(8);
+        navigateContent.setPadding(new Insets(8));
+
+        // Step size settings
+        Label stepLabel = new Label("Step:");
+        stepLabel.setStyle("-fx-font-size: 10px;");
         Label valueUmLabel = new Label("um");
         valueUmLabel.setStyle("-fx-font-size: 10px;");
         HBox valueRow = new HBox(4, xyStepField, valueUmLabel);
@@ -277,12 +301,13 @@ public class StageControlPanel extends TitledPane {
             applyFovStep();
         });
 
-        HBox stepRow = new HBox(4, new Label("Step:"), fovStepCombo, refreshFovBtn, valueRow, sampleMovementCheckbox);
-        stepRow.setAlignment(Pos.CENTER_LEFT);
-        ((Label) stepRow.getChildren().get(0)).setStyle("-fx-font-size: 10px;");
+        HBox stepRow1 = new HBox(4, stepLabel, fovStepCombo, refreshFovBtn);
+        stepRow1.setAlignment(Pos.CENTER_LEFT);
+        HBox stepRow2 = new HBox(4, valueRow, sampleMovementCheckbox);
+        stepRow2.setAlignment(Pos.CENTER_LEFT);
 
-        // --- Navigation grid: arrows around joystick ---
-        String arrowBtnStyle = "-fx-font-size: 11px; -fx-min-width: 26px; -fx-min-height: 26px; -fx-padding: 1;";
+        // Navigation grid: arrows around joystick
+        String arrowBtnStyle = "-fx-font-size: 12px; -fx-min-width: 28px; -fx-min-height: 28px; -fx-padding: 2;";
         upBtn.setStyle(arrowBtnStyle);
         downBtn.setStyle(arrowBtnStyle);
         leftBtn.setStyle(arrowBtnStyle);
@@ -302,38 +327,30 @@ public class StageControlPanel extends TitledPane {
         navGrid.add(downBtn, 1, 2);
         GridPane.setHalignment(downBtn, HPos.CENTER);
 
-        Label keyboardHint = new Label("WASD / Arrows / Drag");
+        Label keyboardHint = new Label("WASD / Arrows / Drag joystick");
         keyboardHint.setStyle("-fx-font-size: 9px; -fx-text-fill: #666666;");
 
         VBox navSection = new VBox(4, navGrid, keyboardHint);
         navSection.setAlignment(Pos.CENTER);
 
-        // --- Go to centroid section ---
-        HBox centroidRow = new HBox(6, goToCentroidBtn, centroidStatus);
-        centroidRow.setAlignment(Pos.CENTER_LEFT);
+        // XY status shown in navigate tab too
+        Label navXyStatus = new Label();
+        navXyStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
+        // Bind to xyStatus text
+        navXyStatus.textProperty().bind(xyStatus.textProperty());
 
-        VBox centroidSection = new VBox(4, centroidRow, availableLabel, alignmentListView);
-
-        // --- Wire up move button handlers ---
-        moveXYBtn.setOnAction(e -> handleMoveXY());
-        moveZBtn.setOnAction(e -> handleMoveZ());
-        moveRBtn.setOnAction(e -> handleMoveR());
-
-        // Combine sections with separators
-        Separator sep1 = new Separator();
-        Separator sep2 = new Separator();
-
-        content.getChildren().addAll(
-                xyRow, xyStatus,
-                zRow, zStatus,
-                rRow, rStatus,
-                sep1,
-                stepRow, fovInfoLabel,
+        navigateContent.getChildren().addAll(
+                stepRow1, stepRow2, fovInfoLabel,
+                new Separator(),
                 navSection,
-                sep2,
-                centroidSection
+                navXyStatus
         );
+        navigateTab.setContent(navigateContent);
 
+        // Add tabs to TabPane
+        tabPane.getTabs().addAll(positionTab, navigateTab);
+
+        content.getChildren().add(tabPane);
         return content;
     }
 
