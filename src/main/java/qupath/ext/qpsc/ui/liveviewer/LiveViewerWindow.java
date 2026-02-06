@@ -100,8 +100,8 @@ public class LiveViewerWindow {
 
     // Configuration
     private static final long POLL_INTERVAL_MS = 100;  // ~10 FPS max
-    private static final double WINDOW_WIDTH = 660;
-    private static final double WINDOW_HEIGHT = 800;  // Increased to accommodate stage control panel
+    private static final double WINDOW_WIDTH = 900;   // Wider to accommodate side panel
+    private static final double WINDOW_HEIGHT = 720;
 
     private LiveViewerWindow() {
         buildUI();
@@ -230,8 +230,18 @@ public class LiveViewerWindow {
         imageView.fitWidthProperty().bind(scrollPane.widthProperty().subtract(2));
         imageView.fitHeightProperty().bind(scrollPane.heightProperty().subtract(2));
 
-        // Stage control panel (collapsible, collapsed by default)
+        // Stage control panel (on left side, expanded by default for visibility)
         stageControlPanel = new StageControlPanel();
+        stageControlPanel.setExpanded(true);  // Start expanded so user sees controls
+
+        // Wrap in ScrollPane to handle overflow when window is short
+        ScrollPane stageScrollPane = new ScrollPane(stageControlPanel);
+        stageScrollPane.setFitToWidth(true);
+        stageScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        stageScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        stageScrollPane.setStyle("-fx-background-color: transparent;");
+        stageScrollPane.setPrefWidth(280);
+        stageScrollPane.setMinWidth(250);
 
         // Histogram + contrast controls (wrapped in collapsible TitledPane)
         histogramView = new HistogramView(contrastSettings);
@@ -249,18 +259,19 @@ public class LiveViewerWindow {
         statusBar.setPadding(new Insets(4));
         statusBar.setAlignment(Pos.CENTER_LEFT);
 
-        // Layout: Stage Control -> Histogram -> Noise Stats -> Status Bar
-        VBox bottomPane = new VBox(stageControlPanel, histogramPane, noiseStatsPanel, statusBar);
+        // Bottom pane: Histogram, Noise Stats, Status Bar
+        VBox bottomPane = new VBox(histogramPane, noiseStatsPanel, statusBar);
 
         BorderPane root = new BorderPane();
         root.setTop(toolbar);
-        root.setCenter(scrollPane);  // ScrollPane wraps the image container
+        root.setLeft(stageScrollPane);  // Stage control on left side
+        root.setCenter(scrollPane);      // Live image in center
         root.setBottom(bottomPane);
 
         Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
         stage.setScene(scene);
-        stage.setMinWidth(320);
-        stage.setMinHeight(500);
+        stage.setMinWidth(500);
+        stage.setMinHeight(400);
 
         // Keyboard event handler for WASD/arrow stage movement
         scene.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
