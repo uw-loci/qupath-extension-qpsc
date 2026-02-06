@@ -1791,8 +1791,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
                     // Handle STAGEMOVE request (calibrate mode - background calibration complete)
                     if (response.startsWith("STAGEMOVE:")) {
-                        String message = response.substring(10);
-                        logger.info("Stage move requested: {}", message);
+                        String stageMessage = response.substring(10);
+                        logger.info("Stage move requested: {}", stageMessage);
 
                         // Update status if callback provided
                         if (statusCallback != null) {
