@@ -30,7 +30,7 @@ public class HistogramView extends VBox {
 
     private static final int HIST_HEIGHT = 80;
     // Label column width -- keeps histogram and sliders aligned
-    private static final double LABEL_WIDTH = 70;
+    private static final double LABEL_WIDTH = 50;
 
     private final Canvas canvas;
     private final Slider minSlider;
@@ -52,18 +52,24 @@ public class HistogramView extends VBox {
         setSpacing(2);
         setPadding(new Insets(4, 8, 4, 8));
 
-        // --- Row 1: Label spacer + Histogram canvas ---
-        // The canvas sits in an HBox with a fixed-width spacer on the left
-        // so it lines up with the slider tracks (which also have labels on the left).
-        Label histSpacer = new Label();
-        histSpacer.setMinWidth(LABEL_WIDTH);
-        histSpacer.setMaxWidth(LABEL_WIDTH);
-
+        // --- Row 1: Histogram canvas (full width) ---
+        // Canvas stretches to fill available width
         canvas = new Canvas(256, HIST_HEIGHT);
-        drawHistogram();
 
-        HBox histRow = new HBox(4, histSpacer, canvas);
+        HBox histRow = new HBox(canvas);
         histRow.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(histRow, Priority.ALWAYS);
+
+        // Bind canvas width to its parent HBox width (minus padding)
+        histRow.widthProperty().addListener((obs, oldVal, newVal) -> {
+            double newWidth = newVal.doubleValue();
+            if (newWidth > 0) {
+                canvas.setWidth(newWidth);
+                drawHistogram();
+            }
+        });
+
+        drawHistogram();
 
         // --- Row 2: Min label + slider ---
         minLabel = new Label("Min: 0");

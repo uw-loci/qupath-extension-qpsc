@@ -230,7 +230,7 @@ public class LiveViewerWindow {
         imageView.fitWidthProperty().bind(scrollPane.widthProperty().subtract(2));
         imageView.fitHeightProperty().bind(scrollPane.heightProperty().subtract(2));
 
-        // Stage control panel (on left side, expanded by default for visibility)
+        // Stage control panel (on right side, expanded by default for visibility)
         stageControlPanel = new StageControlPanel();
         stageControlPanel.setExpanded(true);  // Start expanded so user sees controls
 
@@ -264,7 +264,7 @@ public class LiveViewerWindow {
 
         BorderPane root = new BorderPane();
         root.setTop(toolbar);
-        root.setLeft(stageScrollPane);  // Stage control on left side
+        root.setRight(stageScrollPane);  // Stage control on right side
         root.setCenter(scrollPane);      // Live image in center
         root.setBottom(bottomPane);
 

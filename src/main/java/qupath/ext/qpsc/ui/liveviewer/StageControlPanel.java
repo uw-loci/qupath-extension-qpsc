@@ -21,6 +21,7 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.ScrollEvent;
+import javafx.util.Duration;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -88,6 +89,7 @@ public class StageControlPanel extends TitledPane {
 
     // Step size controls
     private final TextField xyStepField;
+    private final TextField zStepField;  // Shared between Position and Navigate tabs
     private final ComboBox<String> fovStepCombo;
     private final Label fovInfoLabel;
     private final double[] cachedFovUm = {0, 0};
@@ -157,10 +159,30 @@ public class StageControlPanel extends TitledPane {
         sampleMovementCheckbox = new CheckBox("Sample mvmt");
         sampleMovementCheckbox.setSelected(PersistentPreferences.getStageControlSampleMovement());
         sampleMovementCheckbox.setStyle("-fx-font-size: 10px;");
-        Tooltip.install(sampleMovementCheckbox, new Tooltip(
+        Tooltip sampleMvmtTooltip = new Tooltip(
                 "When checked, controls move the sample rather than the stage.\n" +
-                "This inverts the X direction to match visual expectations."));
+                "The sample appears to move in the direction you push.");
+        sampleMvmtTooltip.setShowDelay(Duration.millis(300));
+        Tooltip.install(sampleMovementCheckbox, sampleMvmtTooltip);
         sampleMovementMode.set(sampleMovementCheckbox.isSelected());
+
+        // Initialize shared Z step field
+        zStepField = new TextField("10");
+        zStepField.setPrefWidth(45);
+        zStepField.setAlignment(Pos.CENTER);
+        zStepField.setTextFormatter(new TextFormatter<>(change -> {
+            String newText = change.getControlNewText();
+            if (newText.matches("[0-9,]*")) {
+                return change;
+            }
+            return null;
+        }));
+        Tooltip zStepTooltip = new Tooltip(
+                "Z step size in micrometers.\n" +
+                "Use mouse scroll wheel over this field, Z field,\n" +
+                "or Move Z button to adjust focus.");
+        zStepTooltip.setShowDelay(Duration.millis(300));
+        Tooltip.install(zStepField, zStepTooltip);
 
         // Virtual joystick
         joystick = new VirtualJoystick(40);
@@ -220,29 +242,43 @@ public class StageControlPanel extends TitledPane {
         xyRow.setAlignment(Pos.CENTER_LEFT);
         xyStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
 
-        // Z field, Move Z button, Z step control
+        // Z field, Move Z button, Z step control (uses shared zStepField)
         Label zLabel = new Label("Z:");
         zLabel.setStyle("-fx-font-size: 10px;");
         zField.setPrefWidth(70);
+        Tooltip zFieldTooltip = new Tooltip(
+                "Current Z position in micrometers.\n" +
+                "Use mouse scroll wheel to adjust focus.");
+        zFieldTooltip.setShowDelay(Duration.millis(300));
+        Tooltip.install(zField, zFieldTooltip);
+
         Button moveZBtn = new Button("Move Z");
         moveZBtn.setStyle("-fx-font-size: 10px;");
 
-        TextField zStepField = new TextField("10");
-        zStepField.setPrefWidth(45);
-        zStepField.setAlignment(Pos.CENTER);
-        zStepField.setTextFormatter(new TextFormatter<>(change -> {
-            String newText = change.getControlNewText();
-            if (newText.matches("[0-9,]*")) {
-                return change;
-            }
-            return null;
-        }));
         Label zStepLabel = new Label("step:");
         zStepLabel.setStyle("-fx-font-size: 10px;");
         Label zUmLabel = new Label("um");
         zUmLabel.setStyle("-fx-font-size: 10px;");
 
-        HBox zRow = new HBox(4, zLabel, zField, moveZBtn, zStepLabel, zStepField, zUmLabel);
+        // Help button for Z scroll behavior
+        Button zHelpBtn = new Button("?");
+        zHelpBtn.setStyle("-fx-font-size: 9px; -fx-min-width: 18px; -fx-min-height: 18px; -fx-padding: 0;");
+        Tooltip zHelpTooltip = new Tooltip(
+                "Z Focus Control via Mouse Scroll Wheel\n" +
+                "=========================================\n\n" +
+                "Hover your mouse over any of these controls and scroll:\n" +
+                "  - Z position field\n" +
+                "  - Step size field\n" +
+                "  - Move Z button\n\n" +
+                "Scroll UP = Move Z up (toward sample)\n" +
+                "Scroll DOWN = Move Z down (away from sample)\n\n" +
+                "The step size determines how much Z moves per scroll tick.");
+        zHelpTooltip.setShowDelay(Duration.ZERO);
+        zHelpTooltip.setShowDuration(Duration.INDEFINITE);
+        zHelpTooltip.setHideDelay(Duration.millis(200));
+        Tooltip.install(zHelpBtn, zHelpTooltip);
+
+        HBox zRow = new HBox(4, zLabel, zField, moveZBtn, zStepLabel, zStepField, zUmLabel, zHelpBtn);
         zRow.setAlignment(Pos.CENTER_LEFT);
         zStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
 
@@ -285,11 +321,20 @@ public class StageControlPanel extends TitledPane {
         VBox navigateContent = new VBox(8);
         navigateContent.setPadding(new Insets(8));
 
-        // Step size settings
+        // Step size settings with tooltips
         Label stepLabel = new Label("Step:");
         stepLabel.setStyle("-fx-font-size: 10px;");
         Label valueUmLabel = new Label("um");
         valueUmLabel.setStyle("-fx-font-size: 10px;");
+
+        // Add tooltip to xyStepField
+        Tooltip xyStepTooltip = new Tooltip(
+                "Step size in micrometers for arrow keys and joystick movement.\n" +
+                "Arrow buttons move exactly this distance.\n" +
+                "Joystick uses this as the max speed at full deflection.");
+        xyStepTooltip.setShowDelay(Duration.millis(300));
+        Tooltip.install(xyStepField, xyStepTooltip);
+
         HBox valueRow = new HBox(4, xyStepField, valueUmLabel);
         valueRow.setAlignment(Pos.CENTER_LEFT);
 
@@ -301,7 +346,36 @@ public class StageControlPanel extends TitledPane {
             applyFovStep();
         });
 
-        HBox stepRow1 = new HBox(4, stepLabel, fovStepCombo, refreshFovBtn);
+        // Help button for step controls
+        Button stepHelpBtn = new Button("?");
+        stepHelpBtn.setStyle("-fx-font-size: 9px; -fx-min-width: 18px; -fx-min-height: 18px; -fx-padding: 0;");
+        Tooltip stepHelpTooltip = new Tooltip(
+                "XY Step Size Controls\n" +
+                "======================\n\n" +
+                "FOV Presets:\n" +
+                "  - 1 FOV: Move one full field of view\n" +
+                "  - 0.5 FOV: Half field (for overlap)\n" +
+                "  - 0.25 FOV: Quarter field (fine positioning)\n" +
+                "  - 0.1 FOV: Fine movement\n" +
+                "  - Value: Enter custom step size\n\n" +
+                "Controls:\n" +
+                "  - Arrow buttons: Move exactly one step\n" +
+                "  - WASD/Arrow keys: Move exactly one step\n" +
+                "  - Joystick: Continuous movement, speed scales with deflection");
+        stepHelpTooltip.setShowDelay(Duration.ZERO);
+        stepHelpTooltip.setShowDuration(Duration.INDEFINITE);
+        stepHelpTooltip.setHideDelay(Duration.millis(200));
+        Tooltip.install(stepHelpBtn, stepHelpTooltip);
+
+        // Add tooltip to FOV combo
+        Tooltip fovComboTooltip = new Tooltip(
+                "Select step size based on camera field of view.\n" +
+                "Choose a fraction of FOV for consistent tile spacing,\n" +
+                "or 'Value' to enter a custom step size.");
+        fovComboTooltip.setShowDelay(Duration.millis(300));
+        Tooltip.install(fovStepCombo, fovComboTooltip);
+
+        HBox stepRow1 = new HBox(4, stepLabel, fovStepCombo, refreshFovBtn, stepHelpBtn);
         stepRow1.setAlignment(Pos.CENTER_LEFT);
         HBox stepRow2 = new HBox(4, valueRow, sampleMovementCheckbox);
         stepRow2.setAlignment(Pos.CENTER_LEFT);
@@ -312,6 +386,19 @@ public class StageControlPanel extends TitledPane {
         downBtn.setStyle(arrowBtnStyle);
         leftBtn.setStyle(arrowBtnStyle);
         rightBtn.setStyle(arrowBtnStyle);
+
+        // Add tooltips to arrow buttons
+        Tooltip arrowTooltip = new Tooltip("Click or use WASD/Arrow keys to move by the step amount.");
+        arrowTooltip.setShowDelay(Duration.millis(500));
+        Tooltip.install(upBtn, arrowTooltip);
+        Tooltip.install(downBtn, arrowTooltip);
+        Tooltip.install(leftBtn, arrowTooltip);
+        Tooltip.install(rightBtn, arrowTooltip);
+
+        // Add tooltip to joystick
+        Tooltip joystickTooltip = new Tooltip("Drag to move stage continuously.\nSpeed scales with deflection from center.");
+        joystickTooltip.setShowDelay(Duration.millis(500));
+        Tooltip.install(joystick, joystickTooltip);
 
         GridPane navGrid = new GridPane();
         navGrid.setAlignment(Pos.CENTER);
@@ -333,6 +420,70 @@ public class StageControlPanel extends TitledPane {
         VBox navSection = new VBox(4, navGrid, keyboardHint);
         navSection.setAlignment(Pos.CENTER);
 
+        // Z scroll section for Navigate tab (shares zField and zStepField with Position tab)
+        Label navZLabel = new Label("Z (scroll):");
+        navZLabel.setStyle("-fx-font-size: 10px;");
+
+        // Create a display-only field that mirrors zField
+        TextField navZField = new TextField();
+        navZField.setPrefWidth(70);
+        navZField.textProperty().bindBidirectional(zField.textProperty());
+        Tooltip navZFieldTooltip = new Tooltip(
+                "Current Z position. Scroll mouse wheel here to adjust focus.\n" +
+                "Step size is controlled by the step field to the right.");
+        navZFieldTooltip.setShowDelay(Duration.millis(300));
+        Tooltip.install(navZField, navZFieldTooltip);
+
+        Label navZStepLabel = new Label("step:");
+        navZStepLabel.setStyle("-fx-font-size: 10px;");
+
+        // Create a display-only field that mirrors zStepField
+        TextField navZStepFieldMirror = new TextField();
+        navZStepFieldMirror.setPrefWidth(45);
+        navZStepFieldMirror.setAlignment(Pos.CENTER);
+        navZStepFieldMirror.textProperty().bindBidirectional(zStepField.textProperty());
+        Tooltip navZStepTooltip = new Tooltip(
+                "Z step size in micrometers.\n" +
+                "Scroll mouse wheel over Z controls to adjust focus.");
+        navZStepTooltip.setShowDelay(Duration.millis(300));
+        Tooltip.install(navZStepFieldMirror, navZStepTooltip);
+
+        Label navZUmLabel = new Label("um");
+        navZUmLabel.setStyle("-fx-font-size: 10px;");
+
+        // Help button for Z in Navigate tab
+        Button navZHelpBtn = new Button("?");
+        navZHelpBtn.setStyle("-fx-font-size: 9px; -fx-min-width: 18px; -fx-min-height: 18px; -fx-padding: 0;");
+        Tooltip navZHelpTooltip = new Tooltip(
+                "Z Focus Control via Mouse Scroll Wheel\n" +
+                "=========================================\n\n" +
+                "Hover your mouse over any of these controls and scroll:\n" +
+                "  - Z position field\n" +
+                "  - Step size field\n\n" +
+                "Scroll UP = Move Z up (toward sample)\n" +
+                "Scroll DOWN = Move Z down (away from sample)\n\n" +
+                "The step size determines how much Z moves per scroll tick.");
+        navZHelpTooltip.setShowDelay(Duration.ZERO);
+        navZHelpTooltip.setShowDuration(Duration.INDEFINITE);
+        navZHelpTooltip.setHideDelay(Duration.millis(200));
+        Tooltip.install(navZHelpBtn, navZHelpTooltip);
+
+        HBox navZRow = new HBox(4, navZLabel, navZField, navZStepLabel, navZStepFieldMirror, navZUmLabel, navZHelpBtn);
+        navZRow.setAlignment(Pos.CENTER_LEFT);
+
+        // Z scroll handler for navigate tab
+        javafx.event.EventHandler<ScrollEvent> navZScrollHandler = event -> handleZScroll(event, zStepField);
+        navZField.setOnScroll(navZScrollHandler);
+        navZStepFieldMirror.setOnScroll(navZScrollHandler);
+
+        // Z status for navigate tab (bound to main zStatus)
+        Label navZStatus = new Label();
+        navZStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
+        navZStatus.textProperty().bind(zStatus.textProperty());
+
+        VBox navZSection = new VBox(2, navZRow);
+        navZSection.setAlignment(Pos.CENTER_LEFT);
+
         // XY status shown in navigate tab too
         Label navXyStatus = new Label();
         navXyStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
@@ -343,12 +494,16 @@ public class StageControlPanel extends TitledPane {
                 stepRow1, stepRow2, fovInfoLabel,
                 new Separator(),
                 navSection,
-                navXyStatus
+                navXyStatus,
+                new Separator(),
+                navZSection,
+                navZStatus
         );
         navigateTab.setContent(navigateContent);
 
-        // Add tabs to TabPane
+        // Add tabs to TabPane and default to Navigate tab
         tabPane.getTabs().addAll(positionTab, navigateTab);
+        tabPane.getSelectionModel().select(navigateTab);
 
         content.getChildren().add(tabPane);
         return content;
@@ -598,12 +753,15 @@ public class StageControlPanel extends TitledPane {
             double currentX = Double.parseDouble(xField.getText().replace(",", ""));
             double currentY = Double.parseDouble(yField.getText().replace(",", ""));
 
-            // Invert X direction if sample movement mode
+            // Y is inverted by default to match Micro-Manager's stage convention.
+            // In sample movement mode, both X and Y are flipped so the sample
+            // appears to move in the direction of the arrow/joystick.
             boolean sampleMode = sampleMovementCheckbox.isSelected();
             double xMult = sampleMode ? -1 : 1;
+            double yMult = sampleMode ? 1 : -1;
 
             double newX = currentX + (step * xDir * xMult);
-            double newY = currentY + (step * yDir);
+            double newY = currentY + (step * yDir * yMult);
 
             if (!mgr.isWithinStageBounds(newX, newY)) {
                 xyStatus.setText("Move out of bounds");
@@ -627,10 +785,14 @@ public class StageControlPanel extends TitledPane {
             double currentX = current[0];
             double currentY = current[1];
 
+            // Y is inverted by default to match Micro-Manager's stage convention.
+            // In sample movement mode, both X and Y are flipped so the sample
+            // appears to move in the direction of the arrow/joystick.
             boolean sampleMode = sampleMovementMode.get();
-            double xDir = sampleMode ? -1 : 1;
-            double targetX = currentX + (deltaX * xDir);
-            double targetY = currentY + deltaY;
+            double xMult = sampleMode ? -1 : 1;
+            double yMult = sampleMode ? 1 : -1;
+            double targetX = currentX + (deltaX * xMult);
+            double targetY = currentY + (deltaY * yMult);
 
             if (!mgr.isWithinStageBounds(targetX, targetY)) {
                 Platform.runLater(() -> xyStatus.setText(res.getString("stageMovement.joystick.boundary")));
