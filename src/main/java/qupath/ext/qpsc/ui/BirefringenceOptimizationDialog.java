@@ -66,7 +66,6 @@ public class BirefringenceOptimizationDialog {
             headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
 
             Label instructionLabel = new Label(
-                "Position microscope on a tissue sample with visible birefringence.\n\n" +
                 "This test systematically scans polarizer angles to find the optimal angle\n" +
                 "that maximizes birefringence signal contrast (difference between +theta and -theta).\n\n" +
                 "IMPORTANT: Review exposure mode options before starting.\n" +
@@ -294,6 +293,35 @@ public class BirefringenceOptimizationDialog {
             grid.add(targetIntensityHelper, 0, row, 3, 1);
             row++;
 
+            // Stage positioning instruction - changes based on mode
+            Label positioningLabel = new Label();
+            positioningLabel.setWrapText(true);
+            positioningLabel.setStyle("-fx-font-size: 11px; -fx-padding: 8 0 0 0;");
+
+            VBox positioningBox = new VBox(4);
+            Label positioningHeader = new Label("Stage Positioning:");
+            positioningHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
+            positioningBox.getChildren().addAll(positioningHeader, positioningLabel);
+
+            Runnable updatePositioningLabel = () -> {
+                if (exposureModeGroup.getSelectedToggle() == calibrateMode) {
+                    positioningLabel.setText(
+                        "CALIBRATE MODE: Position stage on a BLANK/BACKGROUND area first!\n" +
+                        "The test will calibrate exposures on background, then prompt you to move to tissue."
+                    );
+                    positioningLabel.setStyle("-fx-font-size: 11px; -fx-padding: 8 0 0 0; -fx-text-fill: #cc6600; -fx-font-weight: bold;");
+                } else {
+                    positioningLabel.setText(
+                        "Position stage on tissue with visible birefringence (e.g., collagen fibers)."
+                    );
+                    positioningLabel.setStyle("-fx-font-size: 11px; -fx-padding: 8 0 0 0;");
+                }
+            };
+            updatePositioningLabel.run();
+
+            grid.add(positioningBox, 0, row, 3, 1);
+            row++;
+
             // Enable/disable fields based on exposure mode
             exposureModeGroup.selectedToggleProperty().addListener((obs, old, selected) -> {
                 if (selected == fixedMode) {
@@ -306,6 +334,7 @@ public class BirefringenceOptimizationDialog {
                     fixedExposureSpinner.setDisable(true);
                     targetIntensitySlider.setDisable(true);
                 }
+                updatePositioningLabel.run();
             });
 
             grid.add(new Separator(), 0, row, 3, 1);
@@ -412,6 +441,25 @@ public class BirefringenceOptimizationDialog {
                     if (fixedExposureSpinner.getValue() <= 0) {
                         Dialogs.showErrorMessage("Invalid Exposure",
                                 "Fixed exposure must be greater than 0 ms.");
+                        event.consume();
+                        return;
+                    }
+                }
+
+                // Calibrate mode confirmation - ensure user knows to position on blank area
+                if (exposureModeGroup.getSelectedToggle() == calibrateMode) {
+                    boolean confirmed = Dialogs.showConfirmDialog(
+                            "Calibrate Mode - Stage Positioning",
+                            "CALIBRATE MODE requires TWO-PHASE positioning:\n\n" +
+                            "PHASE 1 (Background Calibration):\n" +
+                            "   The stage must be on a BLANK/BACKGROUND area NOW.\n" +
+                            "   This allows the system to calibrate exposures.\n\n" +
+                            "PHASE 2 (Tissue Acquisition):\n" +
+                            "   After calibration, you will be prompted to move\n" +
+                            "   the stage to tissue with visible birefringence.\n\n" +
+                            "Is the stage currently positioned on a BLANK area?"
+                    );
+                    if (!confirmed) {
                         event.consume();
                         return;
                     }
