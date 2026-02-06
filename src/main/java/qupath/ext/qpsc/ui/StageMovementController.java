@@ -19,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import javafx.stage.Stage;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -281,7 +282,8 @@ public class StageMovementController {
             };
 
             // Value field (only shown when "Value" is selected in dropdown)
-            TextField xyStepField = new TextField("100");
+            // Initialize from saved preference
+            TextField xyStepField = new TextField(PersistentPreferences.getStageControlStepSize());
             xyStepField.setPrefWidth(70);
             xyStepField.setAlignment(Pos.CENTER);
             xyStepField.setTextFormatter(new TextFormatter<>(integerFilter));
@@ -290,11 +292,24 @@ public class StageMovementController {
             HBox valueRow = new HBox(5, xyStepField, valueUmLabel);
             valueRow.setAlignment(Pos.CENTER_LEFT);
 
-            // FOV-based step size dropdown
+            // Save step size when changed
+            xyStepField.textProperty().addListener((obs, oldVal, newVal) -> {
+                if (newVal != null && !newVal.isEmpty()) {
+                    PersistentPreferences.setStageControlStepSize(newVal);
+                }
+            });
+
+            // FOV-based step size dropdown - initialize from saved preference
             double[] cachedFovUm = {0, 0};
             ComboBox<String> fovStepCombo = new ComboBox<>(FXCollections.observableArrayList(
                     "1 FOV", "0.5 FOV", "0.25 FOV", "0.1 FOV", res.getString("stageMovement.fov.value")));
-            fovStepCombo.setValue(res.getString("stageMovement.fov.value"));
+            String savedFovSelection = PersistentPreferences.getStageControlFovSelection();
+            // Map saved value back to localized string if needed
+            if (savedFovSelection.equals("Value")) {
+                fovStepCombo.setValue(res.getString("stageMovement.fov.value"));
+            } else {
+                fovStepCombo.setValue(savedFovSelection);
+            }
             fovStepCombo.setPrefWidth(100);
 
             Label fovInfoLabel = new Label(res.getString("stageMovement.fov.unavailable"));
@@ -363,7 +378,19 @@ public class StageMovementController {
                 }
             };
 
-            fovStepCombo.setOnAction(e -> applyFovStep.run());
+            fovStepCombo.setOnAction(e -> {
+                applyFovStep.run();
+                // Save FOV selection preference
+                String selection = fovStepCombo.getValue();
+                if (selection != null) {
+                    // Store simplified version (map localized "Value" back to "Value")
+                    if (selection.equals(res.getString("stageMovement.fov.value"))) {
+                        PersistentPreferences.setStageControlFovSelection("Value");
+                    } else {
+                        PersistentPreferences.setStageControlFovSelection(selection);
+                    }
+                }
+            });
             refreshFovBtn.setOnAction(e -> {
                 queryFov.run();
                 applyFovStep.run();
@@ -381,6 +408,9 @@ public class StageMovementController {
                 }
             });
 
+            // Initialize UI state from saved preferences (show/hide value row based on FOV selection)
+            applyFovStep.run();
+
             Button upBtn = new Button("\u2191");  // Up arrow
             Button downBtn = new Button("\u2193");  // Down arrow
             Button leftBtn = new Button("\u2190");  // Left arrow
@@ -393,17 +423,20 @@ public class StageMovementController {
             leftBtn.setStyle(arrowBtnStyle);
             rightBtn.setStyle(arrowBtnStyle);
 
-            // Sample movement checkbox - inverts Y direction when checked
+            // Sample movement checkbox - inverts X direction when checked
+            // Initialize from saved preference
             CheckBox sampleMovementCheckbox = new CheckBox("Sample movement");
+            sampleMovementCheckbox.setSelected(PersistentPreferences.getStageControlSampleMovement());
             Tooltip.install(sampleMovementCheckbox, new Tooltip(
                     "When checked, controls move the sample rather than the stage.\n" +
-                    "This inverts the Y direction to match visual expectations."));
+                    "This inverts the X direction to match visual expectations."));
 
             // Thread-safe flag for sample movement mode (used by joystick callback on background thread)
             // Initialize from checkbox's current state and keep in sync via listener
             final AtomicBoolean sampleMovementMode = new AtomicBoolean(sampleMovementCheckbox.isSelected());
             sampleMovementCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
                 sampleMovementMode.set(newVal);
+                PersistentPreferences.setStageControlSampleMovement(newVal);  // Save preference
                 logger.info("Sample movement mode changed: {} -> {}", oldVal, newVal);
             });
             logger.debug("Sample movement checkbox initialized, selected={}", sampleMovementCheckbox.isSelected());
@@ -412,11 +445,8 @@ public class StageMovementController {
                 try {
                     double step = Double.parseDouble(xyStepField.getText().replace(",", ""));
                     double currentY = Double.parseDouble(yField.getText().replace(",", ""));
-                    // Invert Y direction if sample movement is checked
-                    boolean sampleMode = sampleMovementCheckbox.isSelected();
-                    double yDirection = sampleMode ? -1 : 1;
-                    logger.debug("UP button: sampleMovement={}, yDirection={}", sampleMode, yDirection);
-                    double newY = currentY + (step * yDirection);
+                    // Y direction is NOT inverted for sample movement (only X is)
+                    double newY = currentY + step;
                     double currentX = Double.parseDouble(xField.getText().replace(",", ""));
 
                     if (!mgr.isWithinStageBounds(currentX, newY)) {
@@ -438,11 +468,8 @@ public class StageMovementController {
                 try {
                     double step = Double.parseDouble(xyStepField.getText().replace(",", ""));
                     double currentY = Double.parseDouble(yField.getText().replace(",", ""));
-                    // Invert Y direction if sample movement is checked
-                    boolean sampleMode = sampleMovementCheckbox.isSelected();
-                    double yDirection = sampleMode ? -1 : 1;
-                    logger.debug("DOWN button: sampleMovement={}, yDirection={}", sampleMode, yDirection);
-                    double newY = currentY - (step * yDirection);
+                    // Y direction is NOT inverted for sample movement (only X is)
+                    double newY = currentY - step;
                     double currentX = Double.parseDouble(xField.getText().replace(",", ""));
 
                     if (!mgr.isWithinStageBounds(currentX, newY)) {

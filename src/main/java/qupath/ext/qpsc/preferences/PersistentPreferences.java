@@ -778,4 +778,63 @@ public class PersistentPreferences {
         timingSampleCountSaved.setValue("0");
         lastTimingConfigSaved.setValue("");
     }
+
+    // ================== STAGE CONTROL SETTINGS ==================
+
+    private static final StringProperty stageControlSampleMovementSaved =
+            PathPrefs.createPersistentPreference("stageControlSampleMovement", "false");
+
+    private static final StringProperty stageControlStepSizeSaved =
+            PathPrefs.createPersistentPreference("stageControlStepSize", "100");
+
+    private static final StringProperty stageControlFovSelectionSaved =
+            PathPrefs.createPersistentPreference("stageControlFovSelection", "Value");
+
+    /**
+     * Gets the saved sample movement checkbox state.
+     * @return true if sample movement mode was enabled
+     */
+    public static boolean getStageControlSampleMovement() {
+        return Boolean.parseBoolean(stageControlSampleMovementSaved.getValue());
+    }
+
+    /**
+     * Sets the sample movement checkbox state.
+     * @param enabled true to enable sample movement mode
+     */
+    public static void setStageControlSampleMovement(boolean enabled) {
+        stageControlSampleMovementSaved.setValue(String.valueOf(enabled));
+    }
+
+    /**
+     * Gets the saved step size value.
+     * @return step size in um as string
+     */
+    public static String getStageControlStepSize() {
+        return stageControlStepSizeSaved.getValue();
+    }
+
+    /**
+     * Sets the step size value.
+     * @param stepSize step size in um
+     */
+    public static void setStageControlStepSize(String stepSize) {
+        stageControlStepSizeSaved.setValue(stepSize);
+    }
+
+    /**
+     * Gets the saved FOV dropdown selection.
+     * @return the selected FOV option (e.g., "1 FOV", "0.5 FOV", "Value")
+     */
+    public static String getStageControlFovSelection() {
+        return stageControlFovSelectionSaved.getValue();
+    }
+
+    /**
+     * Sets the FOV dropdown selection.
+     * @param selection the FOV option to save
+     */
+    public static void setStageControlFovSelection(String selection) {
+        stageControlFovSelectionSaved.setValue(selection);
+    }
 }
