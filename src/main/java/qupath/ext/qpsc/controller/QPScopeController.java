@@ -6,7 +6,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.ui.CameraControlController;
 import qupath.ext.qpsc.ui.ServerConnectionController;
-import qupath.ext.qpsc.ui.StageMovementController;
 
 
 /**
@@ -35,7 +34,7 @@ import qupath.ext.qpsc.ui.StageMovementController;
  *   <li><strong>birefringenceOptimization</strong> - PPM birefringence angle optimization test</li>
  *   <li><strong>sunburstCalibration</strong> - Hue-to-angle calibration from PPM reference slide</li>
  *   <li><strong>autofocusEditor</strong> - Per-objective autofocus settings editor</li>
- *   <li><strong>basicStageInterface</strong> - Manual stage movement and testing interface</li>
+ *   <li><strong>liveViewer</strong> - Live camera feed with integrated stage controls</li>
  *   <li><strong>cameraControl</strong> - View and apply camera exposure/gain settings</li>
  *   <li><strong>serverConnection</strong> - Connection testing and server communication diagnostics</li>
  * </ol>
@@ -146,10 +145,6 @@ public class QPScopeController {
             case "existingImage" -> {
                 logger.debug("Launching existing image acquisition workflow");
                 ExistingImageWorkflowV2.start();
-            }
-            case "basicStageInterface" -> {
-                logger.debug("Launching stage movement interface");
-                StageMovementController.showTestStageMovementDialog();
             }
             case "microscopeAlignment" -> {
                 logger.debug("Launching microscope alignment workflow");

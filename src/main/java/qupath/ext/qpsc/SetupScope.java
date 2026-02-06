@@ -184,26 +184,28 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 			}
 		});
 
-		// 4) Stage Control - manual stage movement interface
-		MenuItem stageControlOption = new MenuItem(res.getString("menu.stagecontrol"));
-		setMenuItemTooltip(stageControlOption,
-				"Open a simple interface to manually move the microscope stage to specific X, Y, Z positions. " +
-				"Useful for testing connectivity and exploring the slide.");
-		stageControlOption.setOnAction(e -> {
-			try {
-				QPScopeController.getInstance().startWorkflow("basicStageInterface");
-			} catch (IOException ex) {
-				throw new RuntimeException(ex);
-			}
-		});
-
-		// 5) Stage Map - visual stage position display
+		// 4) Stage Map - visual stage position display
 		MenuItem stageMapOption = new MenuItem(res.getString("menu.stageMap"));
 		setMenuItemTooltip(stageMapOption,
 				"Open a visual map showing the stage insert with slide positions and current objective location. " +
 				"The map updates in real-time and allows double-click navigation to move the objective. " +
 				"Use the dropdown to switch between different insert configurations (single slide, multi-slide).");
 		stageMapOption.setOnAction(e -> StageMapWindow.show());
+
+		// 5) Live Viewer (live camera feed with integrated stage controls)
+		MenuItem liveViewerOption = new MenuItem(res.getString("menu.liveViewer"));
+		setMenuItemTooltip(liveViewerOption,
+				"Open a live camera feed window with integrated stage controls. " +
+				"Streams frames from the microscope with adjustable contrast and histogram. " +
+				"Expand the Stage Control section for X/Y/Z/R positioning, joystick navigation, " +
+				"and keyboard controls (WASD/arrows).");
+		liveViewerOption.setOnAction(e -> {
+			try {
+				QPScopeController.getInstance().startWorkflow("liveViewer");
+			} catch (IOException ex) {
+				throw new RuntimeException(ex);
+			}
+		});
 
 		// === UTILITIES SUBMENU ===
 		Menu utilitiesMenu = new Menu("Utilities");
@@ -356,20 +358,6 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 			}
 		});
 
-		// Live Viewer (live camera feed from microscope)
-		MenuItem liveViewerOption = new MenuItem(res.getString("menu.liveViewer"));
-		setMenuItemTooltip(liveViewerOption,
-				"Open a live camera feed window. Streams frames from the microscope " +
-				"with adjustable contrast and a luminance histogram. " +
-				"Uses MM's live mode and circular buffer for minimal latency.");
-		liveViewerOption.setOnAction(e -> {
-			try {
-				QPScopeController.getInstance().startWorkflow("liveViewer");
-			} catch (IOException ex) {
-				throw new RuntimeException(ex);
-			}
-		});
-
 		// Add items to utilities submenu (grouped by function)
 		utilitiesMenu.getItems().addAll(
 				// Navigation tools
@@ -399,9 +387,8 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 				boundedAcquisitionOption,
 				existingImageOption,
 				new SeparatorMenuItem(),
-				stageControlOption,
-				cameraControlOption,
 				liveViewerOption,
+				cameraControlOption,
 				new SeparatorMenuItem(),
 				utilitiesMenu
 		);

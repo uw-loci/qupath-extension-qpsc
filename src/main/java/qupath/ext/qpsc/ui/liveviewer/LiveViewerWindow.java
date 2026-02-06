@@ -8,9 +8,12 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TitledPane;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.PixelFormat;
 import javafx.scene.image.WritableImage;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -60,7 +63,9 @@ public class LiveViewerWindow {
     private Label statusLabel;
     private Button liveToggleButton;
     private HistogramView histogramView;
+    private TitledPane histogramPane;
     private NoiseStatsPanel noiseStatsPanel;
+    private StageControlPanel stageControlPanel;
     private final ContrastSettings contrastSettings = new ContrastSettings();
 
     // Live mode state (camera streaming on/off, independent of window visibility)
@@ -96,7 +101,7 @@ public class LiveViewerWindow {
     // Configuration
     private static final long POLL_INTERVAL_MS = 100;  // ~10 FPS max
     private static final double WINDOW_WIDTH = 660;
-    private static final double WINDOW_HEIGHT = 720;
+    private static final double WINDOW_HEIGHT = 800;  // Increased to accommodate stage control panel
 
     private LiveViewerWindow() {
         buildUI();
@@ -225,8 +230,14 @@ public class LiveViewerWindow {
         imageView.fitWidthProperty().bind(scrollPane.widthProperty().subtract(2));
         imageView.fitHeightProperty().bind(scrollPane.heightProperty().subtract(2));
 
-        // Histogram + contrast controls
+        // Stage control panel (collapsible, collapsed by default)
+        stageControlPanel = new StageControlPanel();
+
+        // Histogram + contrast controls (wrapped in collapsible TitledPane)
         histogramView = new HistogramView(contrastSettings);
+        histogramPane = new TitledPane("Histogram & Contrast", histogramView);
+        histogramPane.setExpanded(true);
+        histogramPane.setAnimated(false);
 
         // Noise stats panel (collapsible, below histogram)
         noiseStatsPanel = new NoiseStatsPanel();
@@ -238,8 +249,8 @@ public class LiveViewerWindow {
         statusBar.setPadding(new Insets(4));
         statusBar.setAlignment(Pos.CENTER_LEFT);
 
-        // Layout
-        VBox bottomPane = new VBox(histogramView, noiseStatsPanel, statusBar);
+        // Layout: Stage Control -> Histogram -> Noise Stats -> Status Bar
+        VBox bottomPane = new VBox(stageControlPanel, histogramPane, noiseStatsPanel, statusBar);
 
         BorderPane root = new BorderPane();
         root.setTop(toolbar);
@@ -249,7 +260,18 @@ public class LiveViewerWindow {
         Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
         stage.setScene(scene);
         stage.setMinWidth(320);
-        stage.setMinHeight(400);
+        stage.setMinHeight(500);
+
+        // Keyboard event handler for WASD/arrow stage movement
+        scene.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            // Only handle if not focused on a text field
+            if (event.getTarget() instanceof TextField) {
+                return;
+            }
+            if (stageControlPanel.handleKeyEvent(event)) {
+                event.consume();
+            }
+        });
 
         // Clean shutdown on close
         stage.setOnCloseRequest(e -> stopAndDispose());
@@ -505,6 +527,11 @@ public class LiveViewerWindow {
         if (histogramExecutor != null) {
             histogramExecutor.shutdownNow();
             histogramExecutor = null;
+        }
+
+        // Stop stage control panel (joystick executor)
+        if (stageControlPanel != null) {
+            stageControlPanel.stop();
         }
 
         // Stop continuous acquisition if it was active

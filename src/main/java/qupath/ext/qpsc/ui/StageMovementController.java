@@ -41,11 +41,11 @@ import java.util.function.UnaryOperator;
 
 /**
  * StageMovementController - Manual microscope stage control interface
- * 
- * <p>This controller provides a dialog interface for manual stage control, allowing users to move 
- * X/Y, Z, and R (polarizer) axes independently while enforcing configured safety limits. It 
+ *
+ * <p>This controller provides a dialog interface for manual stage control, allowing users to move
+ * X/Y, Z, and R (polarizer) axes independently while enforcing configured safety limits. It
  * validates movements against stage boundaries and provides real-time feedback on position updates.
- * 
+ *
  * <p>Key features:
  * <ul>
  *   <li>Independent control of X/Y stage positioning with bounds validation</li>
@@ -55,7 +55,7 @@ import java.util.function.UnaryOperator;
  *   <li>Safety validation against configured stage boundaries</li>
  *   <li>Error handling and user notification for invalid operations</li>
  * </ul>
- * 
+ *
  * <p>Dialog operation flow:
  * <ol>
  *   <li>Initialize dialog with current stage positions from hardware</li>
@@ -65,13 +65,18 @@ import java.util.function.UnaryOperator;
  *   <li>Execute stage movements via MicroscopeController</li>
  *   <li>Update status labels with movement confirmation or error messages</li>
  * </ol>
- * 
- * <p>The dialog remains open for multiple movements, allowing users to perform sequential 
+ *
+ * <p>The dialog remains open for multiple movements, allowing users to perform sequential
  * positioning operations without reopening the interface.
- * 
+ *
  * @author Mike Nelson
  * @since 1.0
+ * @deprecated Stage control functionality has been integrated into the Live Viewer window.
+ *             Use {@link qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow} and its embedded
+ *             {@link qupath.ext.qpsc.ui.liveviewer.StageControlPanel} instead.
+ *             This class is retained for reference but is no longer accessible from the menu.
  */
+@Deprecated
 public class StageMovementController {
 
     private static final Logger logger = LoggerFactory.getLogger(StageMovementController.class);
