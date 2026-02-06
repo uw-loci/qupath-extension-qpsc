@@ -97,20 +97,28 @@ public class BirefringenceOptimizationDialog {
             TextField outputField = new TextField();
             outputField.setPrefColumnCount(30);
 
-            // Get default output from config
+            // Default to configurations folder (same location as config file)
+            // A timestamped subfolder will be created automatically
             String configFile = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configFile);
-            String defaultOutput = configManager.getBackgroundCorrectionFolder("ppm");
-
+            String defaultOutput = null;
+            if (configFile != null && !configFile.isEmpty()) {
+                File configDir = new File(configFile).getParentFile();
+                if (configDir != null && configDir.exists()) {
+                    defaultOutput = configDir.getAbsolutePath();
+                }
+            }
             if (defaultOutput == null || defaultOutput.isEmpty()) {
                 defaultOutput = System.getProperty("user.home");
             }
             outputField.setText(defaultOutput);
 
+            Label outputHint = new Label("A timestamped subfolder (birefringence_YYYYMMDD_HHMMSS) will be created here.");
+            outputHint.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
             Button browseBtn = new Button("Browse...");
             browseBtn.setOnAction(e -> {
                 DirectoryChooser chooser = new DirectoryChooser();
-                chooser.setTitle("Select Output Folder for Test Results");
+                chooser.setTitle("Select Parent Folder for Test Results");
                 File current = new File(outputField.getText());
                 if (current.exists() && current.isDirectory()) {
                     chooser.setInitialDirectory(current);
@@ -124,6 +132,9 @@ public class BirefringenceOptimizationDialog {
             grid.add(outputLabel, 0, row);
             grid.add(outputField, 1, row);
             grid.add(browseBtn, 2, row);
+            row++;
+
+            grid.add(outputHint, 1, row, 2, 1);
             row++;
 
             grid.add(new Separator(), 0, row, 3, 1);
