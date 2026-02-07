@@ -27,6 +27,8 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.lib.gui.QuPathGUI;
 
+import qupath.ext.qpsc.preferences.PersistentPreferences;
+
 import java.io.IOException;
 import java.nio.IntBuffer;
 import java.util.concurrent.Executors;
@@ -76,6 +78,10 @@ public class LiveViewerWindow {
     private int[] argbBuffer;
     private int lastFrameWidth = 0;
     private int lastFrameHeight = 0;
+
+    // Source image dimensions for double-click-to-center coordinate conversion
+    private volatile int sourceImageWidth = 0;
+    private volatile int sourceImageHeight = 0;
 
     // Thread pools
     private ScheduledExecutorService framePoller;
@@ -210,6 +216,13 @@ public class LiveViewerWindow {
         imageView = new ImageView();
         imageView.setPreserveRatio(true);
         imageView.setSmooth(false);  // Nearest-neighbor for microscopy
+
+        // Double-click-to-center: click on image to move stage so that point becomes center
+        imageView.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2) {
+                handleDoubleClickToCenter(event);
+            }
+        });
 
         // Container with scroll support for large images at explicit scale
         scrollPane = new ScrollPane();
@@ -429,6 +442,10 @@ public class LiveViewerWindow {
         int srcW = frame.width();
         int srcH = frame.height();
 
+        // Store for coordinate conversion in double-click handler
+        this.sourceImageWidth = srcW;
+        this.sourceImageHeight = srcH;
+
         int dstW, dstH;
         if (fitToContainer) {
             // Fit mode: render at full resolution, ImageView scales it down via binding
@@ -516,6 +533,84 @@ public class LiveViewerWindow {
         );
 
         updateStatus(lastFrameInfo);
+    }
+
+    /**
+     * Handles double-click on the live image to center that point.
+     * Calculates the offset from click position to image center, converts to microns
+     * using the camera FOV, and moves the stage accordingly.
+     *
+     * @param event The mouse event from the double-click
+     */
+    private void handleDoubleClickToCenter(javafx.scene.input.MouseEvent event) {
+        MicroscopeController controller = MicroscopeController.getInstance();
+        if (controller == null || !controller.isConnected()) {
+            updateStatus("Cannot move: not connected");
+            return;
+        }
+
+        int srcW = sourceImageWidth;
+        int srcH = sourceImageHeight;
+        if (srcW <= 0 || srcH <= 0) {
+            updateStatus("No frame data available");
+            return;
+        }
+
+        try {
+            // Get FOV for pixel-to-micron conversion
+            double[] fov = controller.getCameraFOV();
+            if (fov[0] <= 0 || fov[1] <= 0) {
+                updateStatus("Camera FOV not available");
+                return;
+            }
+
+            // Calculate displayed image dimensions based on display mode
+            double displayWidth, displayHeight;
+            if (fitToContainer) {
+                displayWidth = imageView.getBoundsInLocal().getWidth();
+                displayHeight = imageView.getBoundsInLocal().getHeight();
+            } else {
+                displayWidth = srcW * explicitScale;
+                displayHeight = srcH * explicitScale;
+            }
+
+            // Convert click position to source image coordinates
+            double sourceClickX = event.getX() * (srcW / displayWidth);
+            double sourceClickY = event.getY() * (srcH / displayHeight);
+
+            // Calculate offset from image center (in pixels)
+            double offsetPixelsX = sourceClickX - (srcW / 2.0);
+            double offsetPixelsY = sourceClickY - (srcH / 2.0);
+
+            // Convert to microns using pixel size
+            double pixelSizeX_um = fov[0] / srcW;
+            double pixelSizeY_um = fov[1] / srcH;
+            double offsetUm_X = offsetPixelsX * pixelSizeX_um;
+            double offsetUm_Y = offsetPixelsY * pixelSizeY_um;
+
+            // Get current stage position
+            double[] currentPos = controller.getStagePositionXY();
+
+            // Apply sample movement mode (same logic as StageControlPanel)
+            boolean sampleMode = PersistentPreferences.getStageControlSampleMovement();
+            double xMult = sampleMode ? -1.0 : 1.0;
+            double yMult = sampleMode ? 1.0 : -1.0;  // Y inverted by default (MM convention)
+
+            double newX = currentPos[0] + (offsetUm_X * xMult);
+            double newY = currentPos[1] + (offsetUm_Y * yMult);
+
+            // Move stage (bounds checking handled by controller)
+            controller.moveStageXY(newX, newY);
+
+            updateStatus(String.format("Centering on (%.0f, %.0f)", newX, newY));
+            logger.info("Double-click-to-center: offset ({}, {}) um -> ({}, {})",
+                    String.format("%.1f", offsetUm_X), String.format("%.1f", offsetUm_Y),
+                    String.format("%.1f", newX), String.format("%.1f", newY));
+
+        } catch (IOException e) {
+            logger.warn("Failed to center on click: {}", e.getMessage());
+            updateStatus("Error: " + e.getMessage());
+        }
     }
 
     private static int clamp(int value, int min, int max) {
