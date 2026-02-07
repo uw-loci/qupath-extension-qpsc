@@ -36,6 +36,7 @@ import qupath.ext.qpsc.ui.VirtualJoystick;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
+import qupath.ext.qpsc.utilities.StagePositionManager;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
@@ -43,6 +44,8 @@ import qupath.lib.projects.Project;
 
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -113,6 +116,9 @@ public class StageControlPanel extends TitledPane {
     private final Label centroidStatus;
     private final Label availableLabel;
     private final ListView<String> alignmentListView;
+
+    // Position synchronization listener
+    private PropertyChangeListener positionListener;
 
     /**
      * Creates a new StageControlPanel with all stage control components.
@@ -210,6 +216,11 @@ public class StageControlPanel extends TitledPane {
 
         // Initialize position fields from hardware
         initializeFromHardware();
+
+        // Register for centralized position updates from StagePositionManager
+        positionListener = this::onPositionChanged;
+        StagePositionManager.getInstance().addPropertyChangeListener(positionListener);
+        logger.debug("Registered with StagePositionManager for position updates");
 
         // Pre-fetch FOV
         queryFov();
@@ -602,6 +613,43 @@ public class StageControlPanel extends TitledPane {
         }
     }
 
+    /**
+     * Handles position change events from the StagePositionManager.
+     * Updates the corresponding text field and joystick tracking when positions change.
+     *
+     * @param evt The property change event containing the new position
+     */
+    private void onPositionChanged(PropertyChangeEvent evt) {
+        // Ensure we're on the FX Application Thread for UI updates
+        if (!Platform.isFxApplicationThread()) {
+            Platform.runLater(() -> onPositionChanged(evt));
+            return;
+        }
+
+        Object newValue = evt.getNewValue();
+        if (!(newValue instanceof Double)) {
+            return;
+        }
+        double newVal = (Double) newValue;
+
+        switch (evt.getPropertyName()) {
+            case StagePositionManager.PROP_POS_X -> {
+                xField.setText(String.format("%.2f", newVal));
+                // Update joystick tracking
+                double[] current = joystickPosition.get();
+                joystickPosition.set(new double[]{newVal, current[1]});
+            }
+            case StagePositionManager.PROP_POS_Y -> {
+                yField.setText(String.format("%.2f", newVal));
+                // Update joystick tracking
+                double[] current = joystickPosition.get();
+                joystickPosition.set(new double[]{current[0], newVal});
+            }
+            case StagePositionManager.PROP_POS_Z -> zField.setText(String.format("%.2f", newVal));
+            case StagePositionManager.PROP_POS_R -> rField.setText(String.format("%.2f", newVal));
+        }
+    }
+
     private void queryFov() {
         try {
             double[] fov = MicroscopeController.getInstance().getCameraFOV();
@@ -785,12 +833,14 @@ public class StageControlPanel extends TitledPane {
             double currentX = current[0];
             double currentY = current[1];
 
-            // Y is inverted by default to match Micro-Manager's stage convention.
-            // In sample movement mode, both X and Y are flipped so the sample
-            // appears to move in the direction of the arrow/joystick.
+            // The joystick's deltaY follows screen coordinates (negative = up),
+            // which is opposite from the arrow keys' yDir convention (positive = up).
+            // So the Y multiplier is inverted compared to handleArrowMove.
+            // Default: joystick up (deltaY<0) should decrease Y (match MM convention)
+            // Sample mode: joystick up should increase Y (sample moves with joystick)
             boolean sampleMode = sampleMovementMode.get();
             double xMult = sampleMode ? -1 : 1;
-            double yMult = sampleMode ? 1 : -1;
+            double yMult = sampleMode ? -1 : 1;
             double targetX = currentX + (deltaX * xMult);
             double targetY = currentY + (deltaY * yMult);
 
@@ -1016,6 +1066,14 @@ public class StageControlPanel extends TitledPane {
      */
     public void stop() {
         joystick.stop();
+
+        // Unregister from StagePositionManager to stop position polling
+        if (positionListener != null) {
+            StagePositionManager.getInstance().removePropertyChangeListener(positionListener);
+            positionListener = null;
+            logger.debug("Unregistered from StagePositionManager");
+        }
+
         logger.debug("StageControlPanel stopped");
     }
 
