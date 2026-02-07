@@ -719,15 +719,27 @@ public class StageControlPanel extends TitledPane {
             }
 
             logger.info("Executing XY stage movement to position: X={}, Y={}", x, y);
-            MicroscopeController.getInstance().moveStageXY(x, y);
-            xyStatus.setText(String.format("Moved to (%.0f, %.0f)", x, y));
+            xyStatus.setText("Moving...");
             joystickPosition.set(new double[]{x, y});
+
+            // Run socket operation on background thread to avoid blocking FX thread
+            Thread moveThread = new Thread(() -> {
+                try {
+                    MicroscopeController.getInstance().moveStageXY(x, y);
+                    Platform.runLater(() -> xyStatus.setText(String.format("Moved to (%.0f, %.0f)", x, y)));
+                } catch (Exception ex) {
+                    logger.error("XY stage movement failed: {}", ex.getMessage(), ex);
+                    Platform.runLater(() -> {
+                        xyStatus.setText("Move failed");
+                        UIFunctions.notifyUserOfError(ex.getMessage(), res.getString("stageMovement.title"));
+                    });
+                }
+            }, "StageControl-MoveXY");
+            moveThread.setDaemon(true);
+            moveThread.start();
         } catch (NumberFormatException ex) {
             logger.warn("Invalid XY coordinate format");
             UIFunctions.notifyUserOfError("Invalid coordinate format", res.getString("stageMovement.title"));
-        } catch (Exception ex) {
-            logger.error("XY stage movement failed: {}", ex.getMessage(), ex);
-            UIFunctions.notifyUserOfError(ex.getMessage(), res.getString("stageMovement.title"));
         }
     }
 
@@ -744,14 +756,26 @@ public class StageControlPanel extends TitledPane {
             }
 
             logger.info("Executing Z stage movement to position: {}", z);
-            MicroscopeController.getInstance().moveStageZ(z);
-            zStatus.setText(String.format("Moved Z to %.2f", z));
+            zStatus.setText("Moving...");
+
+            // Run socket operation on background thread to avoid blocking FX thread
+            Thread moveThread = new Thread(() -> {
+                try {
+                    MicroscopeController.getInstance().moveStageZ(z);
+                    Platform.runLater(() -> zStatus.setText(String.format("Moved Z to %.2f", z)));
+                } catch (Exception ex) {
+                    logger.error("Z stage movement failed: {}", ex.getMessage(), ex);
+                    Platform.runLater(() -> {
+                        zStatus.setText("Move failed");
+                        UIFunctions.notifyUserOfError(ex.getMessage(), res.getString("stageMovement.title"));
+                    });
+                }
+            }, "StageControl-MoveZ");
+            moveThread.setDaemon(true);
+            moveThread.start();
         } catch (NumberFormatException ex) {
             logger.warn("Invalid Z coordinate format");
             UIFunctions.notifyUserOfError("Invalid coordinate format", res.getString("stageMovement.title"));
-        } catch (Exception ex) {
-            logger.error("Z stage movement failed: {}", ex.getMessage(), ex);
-            UIFunctions.notifyUserOfError(ex.getMessage(), res.getString("stageMovement.title"));
         }
     }
 
@@ -760,14 +784,26 @@ public class StageControlPanel extends TitledPane {
             double r = Double.parseDouble(rField.getText().replace(",", ""));
 
             logger.info("Executing R stage movement to position: {}", r);
-            MicroscopeController.getInstance().moveStageR(r);
-            rStatus.setText(String.format("Moved R to %.2f", r));
+            rStatus.setText("Moving...");
+
+            // Run socket operation on background thread to avoid blocking FX thread
+            Thread moveThread = new Thread(() -> {
+                try {
+                    MicroscopeController.getInstance().moveStageR(r);
+                    Platform.runLater(() -> rStatus.setText(String.format("Moved R to %.2f", r)));
+                } catch (Exception ex) {
+                    logger.error("R stage movement failed: {}", ex.getMessage(), ex);
+                    Platform.runLater(() -> {
+                        rStatus.setText("Move failed");
+                        UIFunctions.notifyUserOfError(ex.getMessage(), res.getString("stageMovement.title"));
+                    });
+                }
+            }, "StageControl-MoveR");
+            moveThread.setDaemon(true);
+            moveThread.start();
         } catch (NumberFormatException ex) {
             logger.warn("Invalid R coordinate format");
             UIFunctions.notifyUserOfError("Invalid coordinate format", res.getString("stageMovement.title"));
-        } catch (Exception ex) {
-            logger.error("R stage movement failed: {}", ex.getMessage(), ex);
-            UIFunctions.notifyUserOfError(ex.getMessage(), res.getString("stageMovement.title"));
         }
     }
 
@@ -784,10 +820,22 @@ public class StageControlPanel extends TitledPane {
                 return;
             }
 
-            MicroscopeController.getInstance().moveStageZ(newZ);
             zField.setText(String.format("%.2f", newZ));
-            zStatus.setText(String.format("Scrolled Z to %.2f", newZ));
+            zStatus.setText("Moving...");
             logger.debug("Scroll Z movement to: {}", newZ);
+
+            // Run socket operation on background thread to avoid blocking FX thread
+            Thread moveThread = new Thread(() -> {
+                try {
+                    MicroscopeController.getInstance().moveStageZ(newZ);
+                    Platform.runLater(() -> zStatus.setText(String.format("Scrolled Z to %.2f", newZ)));
+                } catch (Exception ex) {
+                    logger.warn("Z scroll movement failed: {}", ex.getMessage());
+                    Platform.runLater(() -> zStatus.setText("Z scroll failed"));
+                }
+            }, "StageControl-ZScroll");
+            moveThread.setDaemon(true);
+            moveThread.start();
         } catch (Exception ex) {
             logger.warn("Scroll Z movement failed: {}", ex.getMessage());
             zStatus.setText("Z scroll failed");
@@ -816,11 +864,25 @@ public class StageControlPanel extends TitledPane {
                 return;
             }
 
-            MicroscopeController.getInstance().moveStageXY(newX, newY);
+            // Update UI immediately with expected position
             xField.setText(String.format("%.2f", newX));
             yField.setText(String.format("%.2f", newY));
             joystickPosition.set(new double[]{newX, newY});
-            xyStatus.setText(String.format("Moved to (%.0f, %.0f)", newX, newY));
+            xyStatus.setText("Moving...");
+
+            // Run socket operation on background thread to avoid blocking FX thread
+            // (which could cause "Not Responding" if socket is held by another operation)
+            Thread moveThread = new Thread(() -> {
+                try {
+                    MicroscopeController.getInstance().moveStageXY(newX, newY);
+                    Platform.runLater(() -> xyStatus.setText(String.format("Moved to (%.0f, %.0f)", newX, newY)));
+                } catch (Exception ex) {
+                    logger.warn("Arrow movement failed: {}", ex.getMessage());
+                    Platform.runLater(() -> xyStatus.setText("Move failed"));
+                }
+            }, "StageControl-ArrowMove");
+            moveThread.setDaemon(true);
+            moveThread.start();
         } catch (Exception ex) {
             logger.warn("Arrow movement failed: {}", ex.getMessage());
             xyStatus.setText("Move failed");
@@ -982,13 +1044,33 @@ public class StageControlPanel extends TitledPane {
                 return;
             }
 
-            MicroscopeController.getInstance().moveStageXY(stageCoords[0], stageCoords[1]);
+            // Update UI immediately with expected position
+            double targetX = stageCoords[0];
+            double targetY = stageCoords[1];
+            xField.setText(String.format("%.2f", targetX));
+            yField.setText(String.format("%.2f", targetY));
+            joystickPosition.set(new double[]{targetX, targetY});
+            centroidStatus.setText("Moving...");
+            xyStatus.setText("Moving to centroid...");
 
-            centroidStatus.setText(String.format("Moved to (%.0f, %.0f)", stageCoords[0], stageCoords[1]));
-            xField.setText(String.format("%.2f", stageCoords[0]));
-            yField.setText(String.format("%.2f", stageCoords[1]));
-            joystickPosition.set(new double[]{stageCoords[0], stageCoords[1]});
-            xyStatus.setText(String.format("Moved to centroid (%.0f, %.0f)", stageCoords[0], stageCoords[1]));
+            // Run socket operation on background thread to avoid blocking FX thread
+            Thread moveThread = new Thread(() -> {
+                try {
+                    MicroscopeController.getInstance().moveStageXY(targetX, targetY);
+                    Platform.runLater(() -> {
+                        centroidStatus.setText(String.format("Moved to (%.0f, %.0f)", targetX, targetY));
+                        xyStatus.setText(String.format("Moved to centroid (%.0f, %.0f)", targetX, targetY));
+                    });
+                } catch (Exception ex) {
+                    logger.error("Failed to move to object centroid: {}", ex.getMessage(), ex);
+                    Platform.runLater(() -> {
+                        centroidStatus.setText("Move failed");
+                        xyStatus.setText("Centroid move failed");
+                    });
+                }
+            }, "StageControl-GoToCentroid");
+            moveThread.setDaemon(true);
+            moveThread.start();
         } catch (Exception ex) {
             logger.error("Failed to move to object centroid: {}", ex.getMessage(), ex);
             centroidStatus.setText("Error: " + ex.getMessage());

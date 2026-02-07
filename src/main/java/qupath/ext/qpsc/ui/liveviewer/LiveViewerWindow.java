@@ -539,6 +539,9 @@ public class LiveViewerWindow {
      * Handles double-click on the live image to center that point.
      * Calculates the offset from click position to image center, converts to microns
      * using the camera FOV, and moves the stage accordingly.
+     * <p>
+     * All socket operations run on a background thread to avoid blocking the FX thread,
+     * which could cause "Not Responding" if the socket is held by another operation.
      *
      * @param event The mouse event from the double-click
      */
@@ -549,6 +552,7 @@ public class LiveViewerWindow {
             return;
         }
 
+        // Capture UI state on FX thread
         int srcW = sourceImageWidth;
         int srcH = sourceImageHeight;
         if (srcW <= 0 || srcH <= 0) {
@@ -556,61 +560,74 @@ public class LiveViewerWindow {
             return;
         }
 
-        try {
-            // Get FOV for pixel-to-micron conversion
-            double[] fov = controller.getCameraFOV();
-            if (fov[0] <= 0 || fov[1] <= 0) {
-                updateStatus("Camera FOV not available");
-                return;
-            }
-
-            // Calculate displayed image dimensions based on display mode
-            double displayWidth, displayHeight;
-            if (fitToContainer) {
-                displayWidth = imageView.getBoundsInLocal().getWidth();
-                displayHeight = imageView.getBoundsInLocal().getHeight();
-            } else {
-                displayWidth = srcW * explicitScale;
-                displayHeight = srcH * explicitScale;
-            }
-
-            // Convert click position to source image coordinates
-            double sourceClickX = event.getX() * (srcW / displayWidth);
-            double sourceClickY = event.getY() * (srcH / displayHeight);
-
-            // Calculate offset from image center (in pixels)
-            double offsetPixelsX = sourceClickX - (srcW / 2.0);
-            double offsetPixelsY = sourceClickY - (srcH / 2.0);
-
-            // Convert to microns using pixel size
-            double pixelSizeX_um = fov[0] / srcW;
-            double pixelSizeY_um = fov[1] / srcH;
-            double offsetUm_X = offsetPixelsX * pixelSizeX_um;
-            double offsetUm_Y = offsetPixelsY * pixelSizeY_um;
-
-            // Get current stage position
-            double[] currentPos = controller.getStagePositionXY();
-
-            // Apply sample movement mode (same logic as StageControlPanel)
-            boolean sampleMode = PersistentPreferences.getStageControlSampleMovement();
-            double xMult = sampleMode ? -1.0 : 1.0;
-            double yMult = sampleMode ? 1.0 : -1.0;  // Y inverted by default (MM convention)
-
-            double newX = currentPos[0] + (offsetUm_X * xMult);
-            double newY = currentPos[1] + (offsetUm_Y * yMult);
-
-            // Move stage (bounds checking handled by controller)
-            controller.moveStageXY(newX, newY);
-
-            updateStatus(String.format("Centering on (%.0f, %.0f)", newX, newY));
-            logger.info("Double-click-to-center: offset ({}, {}) um -> ({}, {})",
-                    String.format("%.1f", offsetUm_X), String.format("%.1f", offsetUm_Y),
-                    String.format("%.1f", newX), String.format("%.1f", newY));
-
-        } catch (IOException e) {
-            logger.warn("Failed to center on click: {}", e.getMessage());
-            updateStatus("Error: " + e.getMessage());
+        // Calculate displayed image dimensions based on display mode (must be on FX thread)
+        double displayWidth, displayHeight;
+        if (fitToContainer) {
+            displayWidth = imageView.getBoundsInLocal().getWidth();
+            displayHeight = imageView.getBoundsInLocal().getHeight();
+        } else {
+            displayWidth = srcW * explicitScale;
+            displayHeight = srcH * explicitScale;
         }
+
+        // Calculate source pixel coordinates from click position
+        double sourceClickX = event.getX() * (srcW / displayWidth);
+        double sourceClickY = event.getY() * (srcH / displayHeight);
+
+        // Calculate offset from image center (in pixels)
+        double offsetPixelsX = sourceClickX - (srcW / 2.0);
+        double offsetPixelsY = sourceClickY - (srcH / 2.0);
+
+        // Capture sample movement mode setting
+        boolean sampleMode = PersistentPreferences.getStageControlSampleMovement();
+
+        // Final variables for use in background thread
+        final int finalSrcW = srcW;
+        final int finalSrcH = srcH;
+
+        updateStatus("Moving stage...");
+
+        // Run socket operations on background thread to avoid blocking FX thread
+        Thread moveThread = new Thread(() -> {
+            try {
+                // Get FOV for pixel-to-micron conversion
+                double[] fov = controller.getCameraFOV();
+                if (fov[0] <= 0 || fov[1] <= 0) {
+                    Platform.runLater(() -> updateStatus("Camera FOV not available"));
+                    return;
+                }
+
+                // Convert to microns using pixel size
+                double pixelSizeX_um = fov[0] / finalSrcW;
+                double pixelSizeY_um = fov[1] / finalSrcH;
+                double offsetUm_X = offsetPixelsX * pixelSizeX_um;
+                double offsetUm_Y = offsetPixelsY * pixelSizeY_um;
+
+                // Get current stage position
+                double[] currentPos = controller.getStagePositionXY();
+
+                // Apply sample movement mode (same logic as StageControlPanel)
+                double xMult = sampleMode ? -1.0 : 1.0;
+                double yMult = sampleMode ? 1.0 : -1.0;  // Y inverted by default (MM convention)
+
+                double newX = currentPos[0] + (offsetUm_X * xMult);
+                double newY = currentPos[1] + (offsetUm_Y * yMult);
+
+                // Move stage (bounds checking handled by controller)
+                controller.moveStageXY(newX, newY);
+
+                Platform.runLater(() -> updateStatus(String.format("Centered on (%.0f, %.0f)", newX, newY)));
+                logger.info("Double-click-to-center: offset ({}, {}) um -> ({}, {})",
+                        String.format("%.1f", offsetUm_X), String.format("%.1f", offsetUm_Y),
+                        String.format("%.1f", newX), String.format("%.1f", newY));
+
+            } catch (IOException e) {
+                logger.warn("Failed to center on click: {}", e.getMessage());
+                Platform.runLater(() -> updateStatus("Error: " + e.getMessage()));
+            }
+        }, "LiveViewer-ClickToCenter");
+        moveThread.setDaemon(true);
+        moveThread.start();
     }
 
     private static int clamp(int value, int min, int max) {
