@@ -410,6 +410,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
     /**
      * Sends configuration on the auxiliary socket.
+     * Uses the same protocol as primary socket: sends CONFIG command with path,
+     * expects CFG___OK (8 bytes) or CFG_FAIL response.
      */
     private void sendConfigOnAuxiliary() throws IOException {
         String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
@@ -418,11 +420,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throw new IllegalStateException("Microscope config file path not set in preferences!");
         }
 
-        // Send CONFIG command
+        // Send CONFIG command (8 bytes)
         auxOutput.write(Command.CONFIG.getValue());
         auxOutput.flush();
 
-        // Send config path length and path
+        // Send config path length (4 bytes, big-endian) and path
         byte[] pathBytes = configPath.getBytes(StandardCharsets.UTF_8);
         ByteBuffer lengthBuffer = ByteBuffer.allocate(4);
         lengthBuffer.order(ByteOrder.BIG_ENDIAN);
@@ -431,16 +433,28 @@ public class MicroscopeSocketClient implements AutoCloseable {
         auxOutput.write(pathBytes);
         auxOutput.flush();
 
-        // Read response
-        byte[] response = new byte[16];
+        // Read response (8 bytes) - same format as primary socket
+        byte[] response = new byte[8];
         auxInput.readFully(response);
-        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+        String responseStr = new String(response, StandardCharsets.UTF_8);
 
-        if (!"OK".equals(responseStr)) {
-            throw new IOException("Auxiliary config failed: " + responseStr);
+        if ("CFG___OK".equals(responseStr)) {
+            logger.debug("Auxiliary connection configured successfully");
+        } else if ("CFG_FAIL".equals(responseStr)) {
+            // Read error message: 4-byte length + message
+            byte[] lengthBytes = new byte[4];
+            auxInput.readFully(lengthBytes);
+            ByteBuffer lengthBuf = ByteBuffer.wrap(lengthBytes);
+            lengthBuf.order(ByteOrder.BIG_ENDIAN);
+            int errorLength = lengthBuf.getInt();
+
+            byte[] errorBytes = new byte[errorLength];
+            auxInput.readFully(errorBytes);
+            String errorMsg = new String(errorBytes, StandardCharsets.UTF_8);
+            throw new IOException("Auxiliary config failed: " + errorMsg);
+        } else {
+            throw new IOException("Unexpected auxiliary config response: " + responseStr);
         }
-
-        logger.debug("Auxiliary connection configured successfully");
     }
 
     /**

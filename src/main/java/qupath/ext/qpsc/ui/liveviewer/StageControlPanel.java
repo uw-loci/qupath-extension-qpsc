@@ -586,31 +586,38 @@ public class StageControlPanel extends TitledPane {
     }
 
     private void initializeFromHardware() {
-        try {
-            double[] xy = MicroscopeController.getInstance().getStagePositionXY();
-            xField.setText(String.format("%.2f", xy[0]));
-            yField.setText(String.format("%.2f", xy[1]));
-            joystickPosition.set(new double[]{xy[0], xy[1]});
-            logger.debug("Initialized XY fields with current position: X={}, Y={}", xy[0], xy[1]);
-        } catch (Exception e) {
-            logger.debug("Failed to retrieve current XY stage position: {}", e.getMessage());
-        }
+        // Run socket operations on background thread to avoid blocking FX thread
+        Thread initThread = new Thread(() -> {
+            try {
+                double[] xy = MicroscopeController.getInstance().getStagePositionXY();
+                Platform.runLater(() -> {
+                    xField.setText(String.format("%.2f", xy[0]));
+                    yField.setText(String.format("%.2f", xy[1]));
+                    joystickPosition.set(new double[]{xy[0], xy[1]});
+                });
+                logger.debug("Initialized XY fields with current position: X={}, Y={}", xy[0], xy[1]);
+            } catch (Exception e) {
+                logger.debug("Failed to retrieve current XY stage position: {}", e.getMessage());
+            }
 
-        try {
-            double z = MicroscopeController.getInstance().getStagePositionZ();
-            zField.setText(String.format("%.2f", z));
-            logger.debug("Initialized Z field with current position: {}", z);
-        } catch (Exception e) {
-            logger.debug("Failed to retrieve current Z stage position: {}", e.getMessage());
-        }
+            try {
+                double z = MicroscopeController.getInstance().getStagePositionZ();
+                Platform.runLater(() -> zField.setText(String.format("%.2f", z)));
+                logger.debug("Initialized Z field with current position: {}", z);
+            } catch (Exception e) {
+                logger.debug("Failed to retrieve current Z stage position: {}", e.getMessage());
+            }
 
-        try {
-            double r = MicroscopeController.getInstance().getStagePositionR();
-            rField.setText(String.format("%.2f", r));
-            logger.debug("Initialized R field with current position: {}", r);
-        } catch (Exception e) {
-            logger.debug("Failed to retrieve current R stage position: {}", e.getMessage());
-        }
+            try {
+                double r = MicroscopeController.getInstance().getStagePositionR();
+                Platform.runLater(() -> rField.setText(String.format("%.2f", r)));
+                logger.debug("Initialized R field with current position: {}", r);
+            } catch (Exception e) {
+                logger.debug("Failed to retrieve current R stage position: {}", e.getMessage());
+            }
+        }, "StageControl-Init");
+        initThread.setDaemon(true);
+        initThread.start();
     }
 
     /**
