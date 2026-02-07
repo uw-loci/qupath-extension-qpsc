@@ -50,11 +50,20 @@ public class MicroscopeSocketClient implements AutoCloseable {
     private final int connectTimeout;
     private final int readTimeout;
 
-    // Socket and streams
+    // Primary socket and streams (used for workflows/acquisitions)
     private Socket socket;
     private DataInputStream input;
     private DataOutputStream output;
     private final Object socketLock = new Object();
+
+    // Auxiliary socket and streams (used for Live Viewer and stage control)
+    // This allows live preview and stage movements to work even when primary socket
+    // is busy with long-running operations (e.g., birefringence optimization)
+    private Socket auxSocket;
+    private DataInputStream auxInput;
+    private DataOutputStream auxOutput;
+    private final Object auxSocketLock = new Object();
+    private final AtomicBoolean auxConnected = new AtomicBoolean(false);
 
     // Connection state
     private final AtomicBoolean connected = new AtomicBoolean(false);
@@ -357,6 +366,159 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
+     * Establishes the auxiliary connection for Live Viewer and stage control.
+     * This connection operates independently of the primary connection, allowing
+     * live preview and stage movements to work during long-running operations.
+     *
+     * @throws IOException if connection fails
+     */
+    public void connectAuxiliary() throws IOException {
+        synchronized (auxSocketLock) {
+            if (auxConnected.get()) {
+                logger.debug("Auxiliary connection already established");
+                return;
+            }
+
+            logger.info("Establishing auxiliary connection to {}:{}", host, port);
+
+            try {
+                auxSocket = new Socket();
+                auxSocket.setSoTimeout(readTimeout);
+                auxSocket.setKeepAlive(true);
+                auxSocket.setTcpNoDelay(true);
+
+                auxSocket.connect(new InetSocketAddress(host, port), connectTimeout);
+
+                auxInput = new DataInputStream(new BufferedInputStream(auxSocket.getInputStream()));
+                auxOutput = new DataOutputStream(new BufferedOutputStream(auxSocket.getOutputStream()));
+
+                auxConnected.set(true);
+
+                logger.info("Auxiliary connection established, sending config...");
+
+                // Send config on auxiliary connection
+                sendConfigOnAuxiliary();
+
+                logger.info("Auxiliary connection ready for Live Viewer and stage control");
+
+            } catch (IOException e) {
+                cleanupAuxiliary();
+                throw new IOException("Failed to establish auxiliary connection: " + e.getMessage(), e);
+            }
+        }
+    }
+
+    /**
+     * Sends configuration on the auxiliary socket.
+     */
+    private void sendConfigOnAuxiliary() throws IOException {
+        String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
+
+        if (configPath == null || configPath.trim().isEmpty()) {
+            throw new IllegalStateException("Microscope config file path not set in preferences!");
+        }
+
+        // Send CONFIG command
+        auxOutput.write(Command.CONFIG.getValue());
+        auxOutput.flush();
+
+        // Send config path length and path
+        byte[] pathBytes = configPath.getBytes(StandardCharsets.UTF_8);
+        ByteBuffer lengthBuffer = ByteBuffer.allocate(4);
+        lengthBuffer.order(ByteOrder.BIG_ENDIAN);
+        lengthBuffer.putInt(pathBytes.length);
+        auxOutput.write(lengthBuffer.array());
+        auxOutput.write(pathBytes);
+        auxOutput.flush();
+
+        // Read response
+        byte[] response = new byte[16];
+        auxInput.readFully(response);
+        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+
+        if (!"OK".equals(responseStr)) {
+            throw new IOException("Auxiliary config failed: " + responseStr);
+        }
+
+        logger.debug("Auxiliary connection configured successfully");
+    }
+
+    /**
+     * Disconnects the auxiliary connection.
+     */
+    public void disconnectAuxiliary() {
+        synchronized (auxSocketLock) {
+            if (!auxConnected.get()) {
+                return;
+            }
+
+            try {
+                auxOutput.write(Command.DISCONNECT.getValue());
+                auxOutput.flush();
+            } catch (Exception e) {
+                logger.debug("Error sending disconnect on auxiliary", e);
+            }
+
+            cleanupAuxiliary();
+            logger.info("Auxiliary connection closed");
+        }
+    }
+
+    /**
+     * Ensures auxiliary connection is established, connecting if necessary.
+     *
+     * @throws IOException if connection cannot be established
+     */
+    private void ensureAuxConnected() throws IOException {
+        if (!auxConnected.get()) {
+            connectAuxiliary();
+        }
+    }
+
+    /**
+     * Cleans up auxiliary socket resources.
+     */
+    private void cleanupAuxiliary() {
+        try {
+            if (auxInput != null) {
+                auxInput.close();
+                auxInput = null;
+            }
+        } catch (Exception e) {
+            logger.debug("Error closing auxiliary input stream", e);
+        }
+
+        try {
+            if (auxOutput != null) {
+                auxOutput.close();
+                auxOutput = null;
+            }
+        } catch (Exception e) {
+            logger.debug("Error closing auxiliary output stream", e);
+        }
+
+        try {
+            if (auxSocket != null && !auxSocket.isClosed()) {
+                auxSocket.close();
+                auxSocket = null;
+            }
+        } catch (Exception e) {
+            logger.debug("Error closing auxiliary socket", e);
+        }
+
+        auxConnected.set(false);
+    }
+
+    /**
+     * Checks if auxiliary connection is established.
+     *
+     * @return true if auxiliary socket is connected
+     */
+    public boolean isAuxConnected() {
+        return auxConnected.get() && auxSocket != null && !auxSocket.isClosed();
+    }
+
+    /**
      * Send microscope configuration file path to server (CONFIG command).
      *
      * CRITICAL: This must be called immediately after connection to configure the server
@@ -455,7 +617,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if communication fails
      */
     public double[] getCameraFOV() throws IOException {
-        byte[] response = executeCommand(Command.GETFOV, null, 8);
+        // Use auxiliary socket for stage control operations
+        byte[] response = executeCommandOnAux(Command.GETFOV, null, 8);
 
         ByteBuffer buffer = ByteBuffer.wrap(response);
         buffer.order(ByteOrder.BIG_ENDIAN);
@@ -477,7 +640,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws MicroscopeHardwareException if hardware error occurs
      */
     public double[] getStageXY() throws IOException {
-        byte[] response = executeCommand(Command.GETXY, null, 8);
+        // Use auxiliary socket for stage control operations
+        byte[] response = executeCommandOnAux(Command.GETXY, null, 8);
 
         // Check for hardware error response
         String responseStr = new String(response, StandardCharsets.UTF_8);
@@ -505,7 +669,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws MicroscopeHardwareException if hardware error occurs
      */
     public double getStageZ() throws IOException {
-        byte[] response = executeCommand(Command.GETZ, null, 4);
+        // Use auxiliary socket for stage control operations
+        byte[] response = executeCommandOnAux(Command.GETZ, null, 4);
 
         // Check for hardware error response
         String responseStr = new String(response, StandardCharsets.UTF_8);
@@ -531,7 +696,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws MicroscopeHardwareException if hardware error occurs
      */
     public double getStageR() throws IOException {
-        byte[] response = executeCommand(Command.GETR, null, 4);
+        // Use auxiliary socket for stage control operations
+        byte[] response = executeCommandOnAux(Command.GETR, null, 4);
 
         // Check for hardware error response
         String responseStr = new String(response, StandardCharsets.UTF_8);
@@ -557,12 +723,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if communication fails
      */
     public void moveStageXY(double x, double y) throws IOException {
+        // Use auxiliary socket for stage control operations
         ByteBuffer buffer = ByteBuffer.allocate(8);
         buffer.order(ByteOrder.BIG_ENDIAN);
         buffer.putFloat((float) x);
         buffer.putFloat((float) y);
 
-        executeCommand(Command.MOVE, buffer.array(), 0);
+        executeCommandOnAux(Command.MOVE, buffer.array(), 0);
         logger.info("Moved stage to XY position: ({}, {})", x, y);
     }
 
@@ -573,11 +740,12 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if communication fails
      */
     public void moveStageZ(double z) throws IOException {
+        // Use auxiliary socket for stage control operations
         ByteBuffer buffer = ByteBuffer.allocate(4);
         buffer.order(ByteOrder.BIG_ENDIAN);
         buffer.putFloat((float) z);
 
-        executeCommand(Command.MOVEZ, buffer.array(), 0);
+        executeCommandOnAux(Command.MOVEZ, buffer.array(), 0);
         logger.info("Moved stage to Z position: {}", z);
     }
 
@@ -588,11 +756,12 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if communication fails
      */
     public void moveStageR(double angle) throws IOException {
+        // Use auxiliary socket for stage control operations
         ByteBuffer buffer = ByteBuffer.allocate(4);
         buffer.order(ByteOrder.BIG_ENDIAN);
         buffer.putFloat((float) angle);
 
-        executeCommand(Command.MOVER, buffer.array(), 0);
+        executeCommandOnAux(Command.MOVER, buffer.array(), 0);
         logger.info("Rotated stage to angle: {}", angle);
     }
 
@@ -2119,9 +2288,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
-     * Cleans up socket resources.
+     * Cleans up socket resources (primary and auxiliary).
      */
     private void cleanup() {
+        // Clean up primary socket
         try {
             if (input != null) {
                 input.close();
@@ -2150,6 +2320,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
 
         connected.set(false);
+
+        // Also clean up auxiliary socket
+        cleanupAuxiliary();
     }
 
     /**
@@ -3540,19 +3713,19 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if communication fails
      */
     public qupath.ext.qpsc.ui.liveviewer.FrameData getFrame() throws IOException {
-        synchronized (socketLock) {
-            ensureConnected();
+        // Use auxiliary socket for Live Viewer operations
+        // This allows frame polling to work even when primary socket is busy
+        synchronized (auxSocketLock) {
+            ensureAuxConnected();
 
             try {
                 // Send command
-                output.write(Command.GETFRAME.getValue());
-                output.flush();
-                lastActivityTime.set(System.currentTimeMillis());
+                auxOutput.write(Command.GETFRAME.getValue());
+                auxOutput.flush();
 
                 // Read 20-byte header (5 big-endian int32s)
                 byte[] header = new byte[20];
-                input.readFully(header);
-                lastActivityTime.set(System.currentTimeMillis());
+                auxInput.readFully(header);
 
                 ByteBuffer headerBuf = ByteBuffer.wrap(header).order(ByteOrder.BIG_ENDIAN);
                 int width = headerBuf.getInt();
@@ -3568,8 +3741,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
                 // Read pixel data
                 byte[] pixelData = new byte[dataLength];
-                input.readFully(pixelData);
-                lastActivityTime.set(System.currentTimeMillis());
+                auxInput.readFully(pixelData);
 
                 return new qupath.ext.qpsc.ui.liveviewer.FrameData(
                         width, height, channels, bytesPerPixel,
@@ -3577,7 +3749,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 );
 
             } catch (IOException e) {
-                handleIOException(e);
+                // If auxiliary fails, clean it up so it can reconnect
+                cleanupAuxiliary();
                 throw e;
             }
         }
@@ -3591,7 +3764,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if communication fails or the command is rejected
      */
     public void startContinuousAcquisition() throws IOException {
-        byte[] response = executeCommand(Command.STRTSEQ, null, 8);
+        // Use auxiliary socket for live mode operations
+        byte[] response = executeCommandOnAux(Command.STRTSEQ, null, 8);
         String responseStr = new String(response, StandardCharsets.UTF_8).trim();
         if (!responseStr.startsWith("ACK")) {
             throw new IOException("Failed to start continuous acquisition: " + responseStr);
@@ -3605,12 +3779,51 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if communication fails or the command is rejected
      */
     public void stopContinuousAcquisition() throws IOException {
-        byte[] response = executeCommand(Command.STOPSEQ, null, 8);
+        // Use auxiliary socket for live mode operations
+        byte[] response = executeCommandOnAux(Command.STOPSEQ, null, 8);
         String responseStr = new String(response, StandardCharsets.UTF_8).trim();
         if (!responseStr.startsWith("ACK")) {
             throw new IOException("Failed to stop continuous acquisition: " + responseStr);
         }
         logger.info("Continuous sequence acquisition stopped (core-level)");
+    }
+
+    /**
+     * Executes a command on the auxiliary socket.
+     * Used for Live Viewer and stage control operations that need to work
+     * independently of long-running operations on the primary socket.
+     *
+     * @param command The command to execute
+     * @param payload Optional payload data (can be null)
+     * @param responseLength Expected response length in bytes
+     * @return Response bytes from server
+     * @throws IOException if communication fails
+     */
+    private byte[] executeCommandOnAux(Command command, byte[] payload, int responseLength) throws IOException {
+        synchronized (auxSocketLock) {
+            ensureAuxConnected();
+
+            try {
+                // Send command
+                auxOutput.write(command.getValue());
+
+                // Send payload if provided
+                if (payload != null && payload.length > 0) {
+                    auxOutput.write(payload);
+                }
+                auxOutput.flush();
+
+                // Read response
+                byte[] response = new byte[responseLength];
+                auxInput.readFully(response);
+
+                return response;
+
+            } catch (IOException e) {
+                cleanupAuxiliary();
+                throw e;
+            }
+        }
     }
 
 }
