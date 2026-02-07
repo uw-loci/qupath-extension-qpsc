@@ -305,6 +305,9 @@ public class LiveViewerWindow {
      * Toggles continuous acquisition on/off. Called by the Live button.
      * Uses core-level sequence acquisition -- does NOT interact with MM's
      * studio live mode or live window.
+     * <p>
+     * Socket operations run on background thread to avoid blocking FX thread
+     * when socket lock is held by another operation (e.g., birefringence optimization).
      */
     private void toggleLiveMode() {
         MicroscopeController controller = MicroscopeController.getInstance();
@@ -314,29 +317,47 @@ public class LiveViewerWindow {
         }
 
         boolean newState = !liveActive;
-        try {
-            if (newState) {
-                controller.startContinuousAcquisition();
-            } else {
-                controller.stopContinuousAcquisition();
-            }
-            liveActive = newState;
-            updateLiveButtonStyle(newState);
-            logger.info("Continuous acquisition toggled to: {}", newState ? "ON" : "OFF");
 
-            if (newState) {
-                updateStatus("Live ON - streaming...");
-                // Reset FPS counter on start
-                frameCount.set(0);
-                fpsWindowStart.set(System.currentTimeMillis());
-                currentFps = 0;
-            } else {
-                updateStatus("Live OFF");
+        // Disable button and show pending state
+        liveToggleButton.setDisable(true);
+        updateStatus(newState ? "Starting live..." : "Stopping live...");
+
+        // Run socket operation on background thread
+        Thread toggleThread = new Thread(() -> {
+            try {
+                if (newState) {
+                    controller.startContinuousAcquisition();
+                } else {
+                    controller.stopContinuousAcquisition();
+                }
+
+                // Update state and UI on FX thread
+                Platform.runLater(() -> {
+                    liveActive = newState;
+                    updateLiveButtonStyle(newState);
+                    liveToggleButton.setDisable(false);
+                    logger.info("Continuous acquisition toggled to: {}", newState ? "ON" : "OFF");
+
+                    if (newState) {
+                        updateStatus("Live ON - streaming...");
+                        // Reset FPS counter on start
+                        frameCount.set(0);
+                        fpsWindowStart.set(System.currentTimeMillis());
+                        currentFps = 0;
+                    } else {
+                        updateStatus("Live OFF");
+                    }
+                });
+            } catch (IOException e) {
+                logger.error("Failed to toggle continuous acquisition: {}", e.getMessage());
+                Platform.runLater(() -> {
+                    liveToggleButton.setDisable(false);
+                    updateStatus("Error: " + e.getMessage());
+                });
             }
-        } catch (IOException e) {
-            logger.error("Failed to toggle continuous acquisition: {}", e.getMessage());
-            updateStatus("Error: " + e.getMessage());
-        }
+        }, "LiveViewer-Toggle");
+        toggleThread.setDaemon(true);
+        toggleThread.start();
     }
 
     private void updateLiveButtonStyle(boolean active) {
