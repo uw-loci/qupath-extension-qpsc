@@ -167,15 +167,15 @@ public class MicroscopeController {
     }
 
     /**
-     * Queries the current rotation angle (in ticks) from the stage.
+     * Queries the current rotation angle (in degrees) from the stage.
      *
-     * @return The rotation angle in ticks
+     * @return The rotation angle in degrees
      * @throws IOException if communication fails
      */
     public double getStagePositionR() throws IOException {
         try {
             double angle = socketClient.getStageR();
-            logger.info("Stage rotation angle: {} ticks", angle);
+            logger.debug("Stage rotation angle: {} degrees", angle);
             return angle;
         } catch (IOException e) {
             logger.error("Failed to get stage rotation angle: {}", e.getMessage());
