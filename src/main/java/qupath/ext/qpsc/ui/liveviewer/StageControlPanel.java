@@ -902,14 +902,14 @@ public class StageControlPanel extends TitledPane {
             double currentX = current[0];
             double currentY = current[1];
 
-            // The joystick's deltaY follows screen coordinates (negative = up),
-            // which is opposite from the arrow keys' yDir convention (positive = up).
-            // So the Y multiplier is inverted compared to handleArrowMove.
-            // Default: joystick up (deltaY<0) should decrease Y (match MM convention)
-            // Sample mode: joystick up should increase Y (sample moves with joystick)
-            boolean sampleMode = sampleMovementMode.get();
-            double xMult = sampleMode ? -1 : 1;
-            double yMult = sampleMode ? -1 : 1;
+            // Joystick uses screen coordinates: deltaY negative = up, deltaX positive = right.
+            // Testing showed the previous sample mode implementation (inverting both X and Y)
+            // was backwards on this microscope. The joystick now always uses direct mapping:
+            // - Right (deltaX > 0) -> X increases
+            // - Up (deltaY < 0) -> Y decreases
+            // Sample movement mode affects arrow keys but not the joystick's direct control.
+            double xMult = 1;
+            double yMult = 1;
             double targetX = currentX + (deltaX * xMult);
             double targetY = currentY + (deltaY * yMult);
 
