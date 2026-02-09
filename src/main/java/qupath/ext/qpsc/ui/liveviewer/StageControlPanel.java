@@ -162,12 +162,12 @@ public class StageControlPanel extends TitledPane {
         fovInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
 
         // Sample movement checkbox
-        sampleMovementCheckbox = new CheckBox("Sample mvmt");
+        sampleMovementCheckbox = new CheckBox("Sample Movement");
         sampleMovementCheckbox.setSelected(PersistentPreferences.getStageControlSampleMovement());
         sampleMovementCheckbox.setStyle("-fx-font-size: 10px;");
         Tooltip sampleMvmtTooltip = new Tooltip(
-                "When checked, controls move the sample rather than the stage.\n" +
-                "The sample appears to move in the direction you push.");
+                "When unchecked, controls match MicroManager stage behavior.\n" +
+                "When checked, inverts X axis so sample appears to move with controls.");
         sampleMvmtTooltip.setShowDelay(Duration.millis(300));
         Tooltip.install(sampleMovementCheckbox, sampleMvmtTooltip);
         sampleMovementMode.set(sampleMovementCheckbox.isSelected());
@@ -856,12 +856,15 @@ public class StageControlPanel extends TitledPane {
             double currentX = Double.parseDouble(xField.getText().replace(",", ""));
             double currentY = Double.parseDouble(yField.getText().replace(",", ""));
 
-            // Y is inverted by default to match Micro-Manager's stage convention.
-            // In sample movement mode, both X and Y are flipped so the sample
-            // appears to move in the direction of the arrow/joystick.
+            // Default (unchecked): Match MicroManager stage controls exactly.
+            //   - Right decreases X, Left increases X
+            //   - Up decreases Y, Down increases Y
+            // Sample Movement (checked): Invert X axis only so sample appears to move with controls.
+            //   - Right increases X, Left decreases X
+            //   - Up decreases Y, Down increases Y (unchanged)
             boolean sampleMode = sampleMovementCheckbox.isSelected();
-            double xMult = sampleMode ? -1 : 1;
-            double yMult = sampleMode ? 1 : -1;
+            double xMult = sampleMode ? 1 : -1;  // Sample: right increases X; Default: right decreases X
+            double yMult = -1;  // Always: up decreases Y (matches MicroManager)
 
             double newX = currentX + (step * xDir * xMult);
             double newY = currentY + (step * yDir * yMult);
@@ -903,13 +906,15 @@ public class StageControlPanel extends TitledPane {
             double currentY = current[1];
 
             // Joystick uses screen coordinates: deltaY negative = up, deltaX positive = right.
-            // Testing showed the previous sample mode implementation (inverting both X and Y)
-            // was backwards on this microscope. The joystick now always uses direct mapping:
-            // - Right (deltaX > 0) -> X increases
-            // - Up (deltaY < 0) -> Y decreases
-            // Sample movement mode affects arrow keys but not the joystick's direct control.
-            double xMult = 1;
-            double yMult = 1;
+            // Default (unchecked): Match MicroManager stage controls exactly.
+            //   - Right (deltaX > 0) -> X decreases
+            //   - Up (deltaY < 0) -> Y decreases
+            // Sample Movement (checked): Invert X axis only.
+            //   - Right (deltaX > 0) -> X increases
+            //   - Up (deltaY < 0) -> Y decreases (unchanged)
+            boolean sampleMode = sampleMovementMode.get();
+            double xMult = sampleMode ? 1 : -1;  // Sample: right increases X; Default: right decreases X
+            double yMult = 1;  // Always: up decreases Y (matches MicroManager)
             double targetX = currentX + (deltaX * xMult);
             double targetY = currentY + (deltaY * yMult);
 

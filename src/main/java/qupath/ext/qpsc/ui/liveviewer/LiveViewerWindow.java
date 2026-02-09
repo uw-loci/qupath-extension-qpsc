@@ -628,8 +628,10 @@ public class LiveViewerWindow {
                 double[] currentPos = controller.getStagePositionXY();
 
                 // Apply sample movement mode (same logic as StageControlPanel)
-                double xMult = sampleMode ? -1.0 : 1.0;
-                double yMult = sampleMode ? 1.0 : -1.0;  // Y inverted by default (MM convention)
+                // Default: Match MicroManager - clicking right of center should decrease X
+                // Sample mode: Invert X axis only
+                double xMult = sampleMode ? 1.0 : -1.0;  // Sample: X increases; Default: X decreases
+                double yMult = 1.0;  // Always: clicking below center increases Y (matches MicroManager)
 
                 double newX = currentPos[0] + (offsetUm_X * xMult);
                 double newY = currentPos[1] + (offsetUm_Y * yMult);
