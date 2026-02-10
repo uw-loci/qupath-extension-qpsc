@@ -837,4 +837,26 @@ public class PersistentPreferences {
     public static void setStageControlFovSelection(String selection) {
         stageControlFovSelectionSaved.setValue(selection);
     }
+
+    // ================== SAVED STAGE POINTS ==================
+
+    private static final StringProperty savedStagePointsProperty =
+            PathPrefs.createPersistentPreference("stageControlSavedPoints", "[]");
+
+    /**
+     * Gets the saved stage points as a JSON array string.
+     * Format: [{"name":"Point 1","x":1234.5,"y":2345.6,"z":100.0}, ...]
+     * @return JSON array string of saved points
+     */
+    public static String getSavedStagePoints() {
+        return savedStagePointsProperty.getValue();
+    }
+
+    /**
+     * Sets the saved stage points from a JSON array string.
+     * @param json JSON array string of saved points
+     */
+    public static void setSavedStagePoints(String json) {
+        savedStagePointsProperty.setValue(json != null ? json : "[]");
+    }
 }

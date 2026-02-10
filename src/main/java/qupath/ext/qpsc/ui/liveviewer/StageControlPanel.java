@@ -6,7 +6,9 @@ import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.VPos;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -16,6 +18,7 @@ import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
+import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.TitledPane;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
@@ -99,10 +102,16 @@ public class StageControlPanel extends TitledPane {
 
     // Navigation components
     private final VirtualJoystick joystick;
+    // Single-step arrows
     private final Button upBtn = new Button("\u2191");
     private final Button downBtn = new Button("\u2193");
     private final Button leftBtn = new Button("\u2190");
     private final Button rightBtn = new Button("\u2192");
+    // Double-step arrows (move 2x distance)
+    private final Button upBtn2x = new Button("\u21C8");      // Double up arrow
+    private final Button downBtn2x = new Button("\u21CA");    // Double down arrow
+    private final Button leftBtn2x = new Button("\u21C7");    // Double left arrow
+    private final Button rightBtn2x = new Button("\u21C9");   // Double right arrow
 
     // Sample movement mode
     private final CheckBox sampleMovementCheckbox;
@@ -119,6 +128,91 @@ public class StageControlPanel extends TitledPane {
 
     // Position synchronization listener
     private PropertyChangeListener positionListener;
+
+    // Saved Points tab components
+    private ListView<SavedPoint> savedPointsListView;
+    private Label savedPointsStatus;
+
+    /**
+     * Represents a saved stage position with name and XYZ coordinates.
+     */
+    public static class SavedPoint {
+        private String name;
+        private double x;
+        private double y;
+        private double z;
+
+        public SavedPoint(String name, double x, double y, double z) {
+            this.name = name;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+
+        public String getName() { return name; }
+        public double getX() { return x; }
+        public double getY() { return y; }
+        public double getZ() { return z; }
+
+        @Override
+        public String toString() {
+            return String.format("%s: X=%.0f, Y=%.0f, Z=%.1f", name, x, y, z);
+        }
+
+        /**
+         * Serializes this point to a JSON object string.
+         */
+        public String toJson() {
+            // Escape quotes in name for JSON safety
+            String escapedName = name.replace("\\", "\\\\").replace("\"", "\\\"");
+            return String.format("{\"name\":\"%s\",\"x\":%.2f,\"y\":%.2f,\"z\":%.2f}",
+                    escapedName, x, y, z);
+        }
+
+        /**
+         * Parses a SavedPoint from a JSON object string.
+         * @param json JSON object string like {"name":"Point 1","x":1234.5,"y":2345.6,"z":100.0}
+         * @return Parsed SavedPoint or null if parsing fails
+         */
+        public static SavedPoint fromJson(String json) {
+            try {
+                // Simple JSON parsing without external library
+                String name = extractJsonString(json, "name");
+                double x = extractJsonDouble(json, "x");
+                double y = extractJsonDouble(json, "y");
+                double z = extractJsonDouble(json, "z");
+                if (name != null) {
+                    return new SavedPoint(name, x, y, z);
+                }
+            } catch (Exception e) {
+                // Parsing failed
+            }
+            return null;
+        }
+
+        private static String extractJsonString(String json, String key) {
+            String pattern = "\"" + key + "\":\"";
+            int start = json.indexOf(pattern);
+            if (start < 0) return null;
+            start += pattern.length();
+            int end = json.indexOf("\"", start);
+            if (end < 0) return null;
+            return json.substring(start, end).replace("\\\"", "\"").replace("\\\\", "\\");
+        }
+
+        private static double extractJsonDouble(String json, String key) {
+            String pattern = "\"" + key + "\":";
+            int start = json.indexOf(pattern);
+            if (start < 0) return 0;
+            start += pattern.length();
+            int end = start;
+            while (end < json.length() && (Character.isDigit(json.charAt(end))
+                    || json.charAt(end) == '.' || json.charAt(end) == '-')) {
+                end++;
+            }
+            return Double.parseDouble(json.substring(start, end));
+        }
+    }
 
     /**
      * Creates a new StageControlPanel with all stage control components.
@@ -392,11 +486,21 @@ public class StageControlPanel extends TitledPane {
         stepRow2.setAlignment(Pos.CENTER_LEFT);
 
         // Navigation grid: arrows around joystick
-        String arrowBtnStyle = "-fx-font-size: 12px; -fx-min-width: 28px; -fx-min-height: 28px; -fx-padding: 2;";
-        upBtn.setStyle(arrowBtnStyle);
-        downBtn.setStyle(arrowBtnStyle);
-        leftBtn.setStyle(arrowBtnStyle);
-        rightBtn.setStyle(arrowBtnStyle);
+        // Single-step buttons: half dimensions (up/down half height, left/right half width)
+        String singleUpDownStyle = "-fx-font-size: 10px; -fx-min-width: 28px; -fx-min-height: 14px; -fx-max-height: 14px; -fx-padding: 0;";
+        String singleLeftRightStyle = "-fx-font-size: 10px; -fx-min-width: 14px; -fx-max-width: 14px; -fx-min-height: 28px; -fx-padding: 0;";
+        upBtn.setStyle(singleUpDownStyle);
+        downBtn.setStyle(singleUpDownStyle);
+        leftBtn.setStyle(singleLeftRightStyle);
+        rightBtn.setStyle(singleLeftRightStyle);
+
+        // Double-step buttons: same half dimensions as single buttons
+        String doubleUpDownStyle = "-fx-font-size: 10px; -fx-min-width: 28px; -fx-min-height: 14px; -fx-max-height: 14px; -fx-padding: 0;";
+        String doubleLeftRightStyle = "-fx-font-size: 10px; -fx-min-width: 14px; -fx-max-width: 14px; -fx-min-height: 28px; -fx-padding: 0;";
+        upBtn2x.setStyle(doubleUpDownStyle);
+        downBtn2x.setStyle(doubleUpDownStyle);
+        leftBtn2x.setStyle(doubleLeftRightStyle);
+        rightBtn2x.setStyle(doubleLeftRightStyle);
 
         // Add tooltips to arrow buttons
         Tooltip arrowTooltip = new Tooltip("Click or use WASD/Arrow keys to move by the step amount.");
@@ -406,24 +510,55 @@ public class StageControlPanel extends TitledPane {
         Tooltip.install(leftBtn, arrowTooltip);
         Tooltip.install(rightBtn, arrowTooltip);
 
+        Tooltip doubleArrowTooltip = new Tooltip("Move 2x the step distance.");
+        doubleArrowTooltip.setShowDelay(Duration.millis(500));
+        Tooltip.install(upBtn2x, doubleArrowTooltip);
+        Tooltip.install(downBtn2x, doubleArrowTooltip);
+        Tooltip.install(leftBtn2x, doubleArrowTooltip);
+        Tooltip.install(rightBtn2x, doubleArrowTooltip);
+
         // Add tooltip to joystick
         Tooltip joystickTooltip = new Tooltip("Drag to move stage continuously.\nSpeed scales with deflection from center.");
         joystickTooltip.setShowDelay(Duration.millis(500));
         Tooltip.install(joystick, joystickTooltip);
 
+        // Layout:
+        //            [upBtn2x]     (row 0, col 2)
+        //             [upBtn]      (row 1, col 2)
+        // [leftBtn2x][leftBtn][joystick][rightBtn][rightBtn2x]  (row 2, cols 0-4)
+        //            [downBtn]     (row 3, col 2)
+        //           [downBtn2x]    (row 4, col 2)
         GridPane navGrid = new GridPane();
         navGrid.setAlignment(Pos.CENTER);
         navGrid.setHgap(2);
         navGrid.setVgap(2);
-        navGrid.add(upBtn, 1, 0);
+
+        // Row 0: 2x up button
+        navGrid.add(upBtn2x, 2, 0);
+        GridPane.setHalignment(upBtn2x, HPos.CENTER);
+
+        // Row 1: 1x up button
+        navGrid.add(upBtn, 2, 1);
         GridPane.setHalignment(upBtn, HPos.CENTER);
-        navGrid.add(leftBtn, 0, 1);
+
+        // Row 2: left buttons, joystick, right buttons
+        navGrid.add(leftBtn2x, 0, 2);
+        GridPane.setValignment(leftBtn2x, VPos.CENTER);
+        navGrid.add(leftBtn, 1, 2);
         GridPane.setValignment(leftBtn, VPos.CENTER);
-        navGrid.add(joystick, 1, 1);
-        navGrid.add(rightBtn, 2, 1);
+        navGrid.add(joystick, 2, 2);
+        navGrid.add(rightBtn, 3, 2);
         GridPane.setValignment(rightBtn, VPos.CENTER);
-        navGrid.add(downBtn, 1, 2);
+        navGrid.add(rightBtn2x, 4, 2);
+        GridPane.setValignment(rightBtn2x, VPos.CENTER);
+
+        // Row 3: 1x down button
+        navGrid.add(downBtn, 2, 3);
         GridPane.setHalignment(downBtn, HPos.CENTER);
+
+        // Row 4: 2x down button
+        navGrid.add(downBtn2x, 2, 4);
+        GridPane.setHalignment(downBtn2x, HPos.CENTER);
 
         Label keyboardHint = new Label("WASD / Arrows / Drag joystick");
         keyboardHint.setStyle("-fx-font-size: 9px; -fx-text-fill: #666666;");
@@ -512,8 +647,77 @@ public class StageControlPanel extends TitledPane {
         );
         navigateTab.setContent(navigateContent);
 
+        // ============ TAB 3: SAVED POINTS ============
+        Tab savedPointsTab = new Tab("Saved Points");
+        VBox savedPointsContent = new VBox(8);
+        savedPointsContent.setPadding(new Insets(8));
+
+        // Add point button
+        Button addPointBtn = new Button("Add Current Point...");
+        addPointBtn.setStyle("-fx-font-size: 10px;");
+        Tooltip addPointTooltip = new Tooltip("Save the current stage position with a custom name.");
+        addPointTooltip.setShowDelay(Duration.millis(300));
+        Tooltip.install(addPointBtn, addPointTooltip);
+
+        // Points list
+        savedPointsListView = new ListView<>();
+        savedPointsListView.setPrefHeight(100);
+
+        // Action buttons
+        Button goToXYBtn = new Button("Go to XY");
+        goToXYBtn.setStyle("-fx-font-size: 10px;");
+        Tooltip goXYTooltip = new Tooltip("Move to selected point's XY position, keeping current Z.");
+        goXYTooltip.setShowDelay(Duration.millis(300));
+        Tooltip.install(goToXYBtn, goXYTooltip);
+
+        Button goToXYZBtn = new Button("Go to XYZ");
+        goToXYZBtn.setStyle("-fx-font-size: 10px;");
+        Tooltip goXYZTooltip = new Tooltip("Move to selected point's full XYZ position.");
+        goXYZTooltip.setShowDelay(Duration.millis(300));
+        Tooltip.install(goToXYZBtn, goXYZTooltip);
+
+        Button removeBtn = new Button("Remove");
+        removeBtn.setStyle("-fx-font-size: 10px;");
+        Tooltip removeTooltip = new Tooltip("Remove the selected point from the list.");
+        removeTooltip.setShowDelay(Duration.millis(300));
+        Tooltip.install(removeBtn, removeTooltip);
+
+        Button clearAllBtn = new Button("Clear All");
+        clearAllBtn.setStyle("-fx-font-size: 10px;");
+        Tooltip clearTooltip = new Tooltip("Remove all saved points.");
+        clearTooltip.setShowDelay(Duration.millis(300));
+        Tooltip.install(clearAllBtn, clearTooltip);
+
+        HBox goButtons = new HBox(4, goToXYBtn, goToXYZBtn);
+        goButtons.setAlignment(Pos.CENTER_LEFT);
+        HBox manageButtons = new HBox(4, removeBtn, clearAllBtn);
+        manageButtons.setAlignment(Pos.CENTER_LEFT);
+
+        // Status label
+        savedPointsStatus = new Label();
+        savedPointsStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
+
+        savedPointsContent.getChildren().addAll(
+                addPointBtn,
+                savedPointsListView,
+                goButtons,
+                manageButtons,
+                savedPointsStatus
+        );
+        savedPointsTab.setContent(savedPointsContent);
+
+        // Wire up Saved Points event handlers
+        addPointBtn.setOnAction(e -> handleAddSavedPoint());
+        goToXYBtn.setOnAction(e -> handleGoToSavedPoint(false));
+        goToXYZBtn.setOnAction(e -> handleGoToSavedPoint(true));
+        removeBtn.setOnAction(e -> handleRemoveSavedPoint());
+        clearAllBtn.setOnAction(e -> handleClearAllSavedPoints());
+
+        // Load saved points from preferences
+        loadSavedPointsFromPrefs();
+
         // Add tabs to TabPane and default to Navigate tab
-        tabPane.getTabs().addAll(positionTab, navigateTab);
+        tabPane.getTabs().addAll(positionTab, navigateTab, savedPointsTab);
         tabPane.getSelectionModel().select(navigateTab);
 
         content.getChildren().add(tabPane);
@@ -556,11 +760,17 @@ public class StageControlPanel extends TitledPane {
             logger.debug("Sample movement mode changed: {} -> {}", oldVal, newVal);
         });
 
-        // Arrow button handlers
+        // Arrow button handlers (single-step)
         upBtn.setOnAction(e -> handleArrowMove(0, 1));
         downBtn.setOnAction(e -> handleArrowMove(0, -1));
         leftBtn.setOnAction(e -> handleArrowMove(-1, 0));
         rightBtn.setOnAction(e -> handleArrowMove(1, 0));
+
+        // Double-step arrow button handlers (move 2x step size)
+        upBtn2x.setOnAction(e -> handleArrowMove(0, 2));
+        downBtn2x.setOnAction(e -> handleArrowMove(0, -2));
+        leftBtn2x.setOnAction(e -> handleArrowMove(-2, 0));
+        rightBtn2x.setOnAction(e -> handleArrowMove(2, 0));
 
         // Joystick callbacks
         joystick.setStartCallback(() -> {
@@ -1087,6 +1297,182 @@ public class StageControlPanel extends TitledPane {
             logger.error("Failed to move to object centroid: {}", ex.getMessage(), ex);
             centroidStatus.setText("Error: " + ex.getMessage());
         }
+    }
+
+    // ============ SAVED POINTS TAB HANDLERS ============
+
+    private void handleAddSavedPoint() {
+        TextInputDialog dialog = new TextInputDialog("Point " + (savedPointsListView.getItems().size() + 1));
+        dialog.setTitle("Add Saved Point");
+        dialog.setHeaderText("Save current position");
+        dialog.setContentText("Point name:");
+
+        dialog.showAndWait().ifPresent(name -> {
+            if (name.trim().isEmpty()) {
+                savedPointsStatus.setText("Name cannot be empty");
+                return;
+            }
+
+            try {
+                double x = Double.parseDouble(xField.getText().replace(",", ""));
+                double y = Double.parseDouble(yField.getText().replace(",", ""));
+                double z = Double.parseDouble(zField.getText().replace(",", ""));
+
+                SavedPoint point = new SavedPoint(name.trim(), x, y, z);
+                savedPointsListView.getItems().add(point);
+                saveSavedPointsToPrefs();
+                savedPointsStatus.setText("Added: " + name.trim());
+                logger.info("Saved stage point '{}' at X={}, Y={}, Z={}", name.trim(), x, y, z);
+            } catch (NumberFormatException ex) {
+                savedPointsStatus.setText("Error: Invalid position values");
+                logger.warn("Failed to add saved point - invalid position values in fields");
+            }
+        });
+    }
+
+    private void handleGoToSavedPoint(boolean includeZ) {
+        SavedPoint selected = savedPointsListView.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            savedPointsStatus.setText("No point selected");
+            return;
+        }
+
+        double targetX = selected.getX();
+        double targetY = selected.getY();
+        Double targetZ = includeZ ? selected.getZ() : null;
+
+        // Validate bounds
+        if (!mgr.isWithinStageBounds(targetX, targetY)) {
+            savedPointsStatus.setText("XY position out of bounds");
+            return;
+        }
+        if (targetZ != null && !mgr.isWithinStageBounds(targetZ)) {
+            savedPointsStatus.setText("Z position out of bounds");
+            return;
+        }
+
+        savedPointsStatus.setText("Moving...");
+        String moveType = includeZ ? "XYZ" : "XY";
+        logger.info("Moving to saved point '{}' ({}) at X={}, Y={}{}", selected.getName(), moveType,
+                targetX, targetY, includeZ ? ", Z=" + targetZ : "");
+
+        Thread moveThread = new Thread(() -> {
+            try {
+                MicroscopeController controller = MicroscopeController.getInstance();
+                controller.moveStageXY(targetX, targetY);
+                if (targetZ != null) {
+                    controller.moveStageZ(targetZ);
+                }
+
+                Platform.runLater(() -> {
+                    xField.setText(String.format("%.2f", targetX));
+                    yField.setText(String.format("%.2f", targetY));
+                    if (targetZ != null) {
+                        zField.setText(String.format("%.2f", targetZ));
+                    }
+                    joystickPosition.set(new double[]{targetX, targetY});
+                    savedPointsStatus.setText(String.format("Moved to %s (%.0f, %.0f%s)",
+                            selected.getName(), targetX, targetY,
+                            targetZ != null ? String.format(", %.1f", targetZ) : ""));
+                    xyStatus.setText(String.format("Moved to saved point (%.0f, %.0f)", targetX, targetY));
+                });
+            } catch (Exception ex) {
+                logger.error("Failed to move to saved point: {}", ex.getMessage());
+                Platform.runLater(() -> savedPointsStatus.setText("Move failed: " + ex.getMessage()));
+            }
+        }, "StageControl-GoToSavedPoint");
+        moveThread.setDaemon(true);
+        moveThread.start();
+    }
+
+    private void handleRemoveSavedPoint() {
+        int selectedIndex = savedPointsListView.getSelectionModel().getSelectedIndex();
+        if (selectedIndex >= 0) {
+            SavedPoint removed = savedPointsListView.getItems().remove(selectedIndex);
+            saveSavedPointsToPrefs();
+            savedPointsStatus.setText("Removed: " + removed.getName());
+            logger.info("Removed saved point '{}'", removed.getName());
+        } else {
+            savedPointsStatus.setText("No point selected");
+        }
+    }
+
+    private void handleClearAllSavedPoints() {
+        if (savedPointsListView.getItems().isEmpty()) {
+            savedPointsStatus.setText("No points to clear");
+            return;
+        }
+
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Clear All Points");
+        confirm.setHeaderText("Remove all saved points?");
+        confirm.setContentText("This cannot be undone.");
+
+        confirm.showAndWait().ifPresent(response -> {
+            if (response == ButtonType.OK) {
+                int count = savedPointsListView.getItems().size();
+                savedPointsListView.getItems().clear();
+                saveSavedPointsToPrefs();
+                savedPointsStatus.setText("Cleared " + count + " point(s)");
+                logger.info("Cleared all {} saved points", count);
+            }
+        });
+    }
+
+    private void loadSavedPointsFromPrefs() {
+        String json = PersistentPreferences.getSavedStagePoints();
+        if (json == null || json.equals("[]") || json.trim().isEmpty()) {
+            return;
+        }
+
+        try {
+            // Parse JSON array manually
+            // Format: [{"name":"...", ...}, {"name":"...", ...}]
+            json = json.trim();
+            if (!json.startsWith("[") || !json.endsWith("]")) {
+                return;
+            }
+
+            // Remove outer brackets
+            String inner = json.substring(1, json.length() - 1).trim();
+            if (inner.isEmpty()) {
+                return;
+            }
+
+            // Split by objects - find each {...} block
+            int depth = 0;
+            int start = 0;
+            for (int i = 0; i < inner.length(); i++) {
+                char c = inner.charAt(i);
+                if (c == '{') {
+                    if (depth == 0) start = i;
+                    depth++;
+                } else if (c == '}') {
+                    depth--;
+                    if (depth == 0) {
+                        String objJson = inner.substring(start, i + 1);
+                        SavedPoint point = SavedPoint.fromJson(objJson);
+                        if (point != null) {
+                            savedPointsListView.getItems().add(point);
+                        }
+                    }
+                }
+            }
+            logger.debug("Loaded {} saved points from preferences", savedPointsListView.getItems().size());
+        } catch (Exception e) {
+            logger.warn("Failed to load saved points from preferences: {}", e.getMessage());
+        }
+    }
+
+    private void saveSavedPointsToPrefs() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < savedPointsListView.getItems().size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append(savedPointsListView.getItems().get(i).toJson());
+        }
+        sb.append("]");
+        PersistentPreferences.setSavedStagePoints(sb.toString());
+        logger.debug("Saved {} points to preferences", savedPointsListView.getItems().size());
     }
 
     private List<String> getAvailableAlignments(Project<BufferedImage> project) {
