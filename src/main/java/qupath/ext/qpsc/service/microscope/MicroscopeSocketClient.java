@@ -1908,10 +1908,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
             try {
                 originalTimeout = socket.getSoTimeout();
                 // Increase timeout for birefringence test (can take many minutes)
-                // With 201 angle pairs (-10 to +10, step 0.1), ~400 images total
-                // At ~1-2s per image = 400-800s = 6-13 minutes. Allow 30 minutes to be safe.
-                socket.setSoTimeout(1800000); // 30 minutes
-                logger.debug("Increased socket timeout to 30 minutes for birefringence optimization");
+                // In calibrate mode, Phase 1 iterates all angles with adaptive exposure
+                // optimization (~12 iterations per angle x 201 angles = potentially 45+ minutes)
+                // Phase 2 then runs paired acquisition. Allow 90 minutes total.
+                socket.setSoTimeout(5400000); // 90 minutes
+                logger.debug("Increased socket timeout to 90 minutes for birefringence optimization");
             } catch (IOException e) {
                 logger.warn("Failed to adjust socket timeout", e);
             }
@@ -1951,6 +1952,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     }
 
                     String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                    lastActivityTime.set(System.currentTimeMillis());
 
                     // Handle PROGRESS updates
                     if (response.startsWith("PROGRESS:")) {

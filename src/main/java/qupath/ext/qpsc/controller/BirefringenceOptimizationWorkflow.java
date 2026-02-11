@@ -206,7 +206,7 @@ public class BirefringenceOptimizationWorkflow {
                 if (cancelled.get()) return;
                 int percent = (int) ((current * 100.0) / total);
                 Platform.runLater(() -> {
-                    progressLabel.setText(String.format("Progress: %d%% (%d/%d angle pairs)", percent, current, total));
+                    progressLabel.setText(String.format("Progress: %d%% (%d/%d angles)", percent, current, total));
                 });
             };
 
