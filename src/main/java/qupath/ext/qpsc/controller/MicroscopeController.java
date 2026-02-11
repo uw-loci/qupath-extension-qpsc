@@ -711,34 +711,72 @@ public class MicroscopeController {
      * @throws IOException if the operation itself fails
      */
     public void withLiveModeHandling(IORunnable operation) throws IOException {
-        boolean wasLive = false;
+        boolean qpscWasStreaming = false;
+        boolean mmWasLive = false;
+
+        // --- Stop all live sources before the operation ---
+        // 1. QPSC Live Viewer (core-level continuous acquisition)
+        if (LiveViewerWindow.isStreamingActive()) {
+            qpscWasStreaming = LiveViewerWindow.stopStreaming();
+            logger.info("QPSC Live Viewer streaming stopped for camera operation");
+        }
+
+        // 2. MM Studio live mode
         try {
-            wasLive = isLiveModeRunning();
-            if (wasLive) {
-                logger.info("Live mode is running - turning off for camera operation");
+            mmWasLive = isLiveModeRunning();
+            if (mmWasLive) {
+                logger.info("MM live mode is running - turning off for camera operation");
                 setLiveMode(false);
-                Thread.sleep(100);
             }
         } catch (IOException e) {
-            logger.warn("Could not check/set live mode: {} - proceeding", e.getMessage());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            logger.warn("Could not check/set MM live mode: {} - proceeding", e.getMessage());
+        }
+
+        // Give camera hardware time to fully release after stopping
+        if (qpscWasStreaming || mmWasLive) {
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+
+            // Verify live mode is actually off
+            try {
+                if (isLiveModeRunning()) {
+                    logger.warn("Live mode still reported as ON after stop - waiting additional 200ms");
+                    Thread.sleep(200);
+                }
+            } catch (IOException e) {
+                logger.debug("Could not verify live mode status: {}", e.getMessage());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         try {
             operation.run();
         } finally {
-            if (wasLive) {
+            // --- Restore live sources after the operation ---
+            if (mmWasLive) {
                 try {
                     Thread.sleep(100);
                     setLiveMode(true);
-                    logger.info("Live mode restored after camera operation");
+                    logger.info("MM live mode restored after camera operation");
                 } catch (IOException | InterruptedException e) {
-                    logger.warn("Could not restore live mode: {}", e.getMessage());
+                    logger.warn("Could not restore MM live mode: {}", e.getMessage());
                     if (e instanceof InterruptedException) {
                         Thread.currentThread().interrupt();
                     }
                 }
+            }
+            if (qpscWasStreaming) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                LiveViewerWindow.restartStreaming();
+                logger.info("QPSC Live Viewer streaming restored after camera operation");
             }
         }
     }

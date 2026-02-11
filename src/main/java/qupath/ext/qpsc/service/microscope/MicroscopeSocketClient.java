@@ -3440,6 +3440,29 @@ public class MicroscopeSocketClient implements AutoCloseable {
             if (responseStr.startsWith("ERR_NJAI")) {
                 throw new IOException("Camera does not support individual mode (not a JAI camera)");
             }
+
+            // ERR_MODE may indicate live streaming interference -- retry once after delay
+            if (responseStr.startsWith("ERR_MODE")) {
+                logger.warn("SETMODE returned ERR_MODE (possible live mode interference) - retrying in 500ms");
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+
+                byte[] retryData = new byte[2];
+                retryData[0] = (byte) (exposureIndividual ? 1 : 0);
+                retryData[1] = (byte) 0;
+                byte[] retryResponse = executeCommand(Command.SETMODE, retryData, 8);
+                String retryStr = new String(retryResponse, StandardCharsets.UTF_8).trim();
+
+                if (!retryStr.startsWith("ACK")) {
+                    throw new IOException("Failed to set camera mode after retry: " + retryStr);
+                }
+                logger.info("Camera mode set on retry: exposure_individual={}, gain=unified", exposureIndividual);
+                return;
+            }
+
             throw new IOException("Failed to set camera mode: " + responseStr);
         }
 

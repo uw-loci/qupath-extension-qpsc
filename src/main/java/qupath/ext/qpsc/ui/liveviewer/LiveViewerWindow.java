@@ -150,6 +150,84 @@ public class LiveViewerWindow {
         return instance != null && instance.stage != null && instance.stage.isShowing();
     }
 
+    /**
+     * Checks whether the QPSC Live Viewer is actively streaming (continuous acquisition).
+     * Thread-safe -- can be called from any thread.
+     *
+     * @return true if the Live Viewer exists and its continuous acquisition is active
+     */
+    public static boolean isStreamingActive() {
+        return instance != null && instance.liveActive;
+    }
+
+    /**
+     * Synchronously stops continuous acquisition without hiding the window.
+     * <p>
+     * This is intended for short-lived camera operations (e.g., property changes)
+     * that need exclusive hardware access. The window stays open and a UI button
+     * update is scheduled via {@code Platform.runLater()} (cosmetic only).
+     * <p>
+     * Thread-safe -- can be called from any thread including the FX thread.
+     *
+     * @return true if streaming was active and was stopped, false if it was already off
+     */
+    public static boolean stopStreaming() {
+        if (instance == null || !instance.liveActive) {
+            return false;
+        }
+        try {
+            MicroscopeController controller = MicroscopeController.getInstance();
+            if (controller != null) {
+                controller.stopContinuousAcquisition();
+            }
+        } catch (IOException e) {
+            logger.warn("Failed to stop QPSC Live Viewer streaming: {}", e.getMessage());
+        }
+        instance.liveActive = false;
+        // Cosmetic UI update -- non-blocking
+        Platform.runLater(() -> {
+            if (instance != null) {
+                instance.updateLiveButtonStyle(false);
+                instance.updateStatus("Live OFF (paused for camera operation)");
+            }
+        });
+        logger.info("QPSC Live Viewer streaming stopped (window stays open)");
+        return true;
+    }
+
+    /**
+     * Re-starts continuous acquisition after a prior {@link #stopStreaming()} call.
+     * <p>
+     * Thread-safe -- can be called from any thread. Schedules a cosmetic UI update
+     * via {@code Platform.runLater()}.
+     */
+    public static void restartStreaming() {
+        if (instance == null) {
+            return;
+        }
+        try {
+            MicroscopeController controller = MicroscopeController.getInstance();
+            if (controller != null) {
+                controller.startContinuousAcquisition();
+                instance.liveActive = true;
+                // Reset FPS counter
+                instance.frameCount.set(0);
+                instance.fpsWindowStart.set(System.currentTimeMillis());
+                instance.currentFps = 0;
+                // Cosmetic UI update
+                Platform.runLater(() -> {
+                    if (instance != null) {
+                        instance.updateLiveButtonStyle(true);
+                        instance.updateStatus("Live ON - streaming...");
+                    }
+                });
+                logger.info("QPSC Live Viewer streaming restarted");
+            }
+        } catch (IOException e) {
+            logger.warn("Failed to restart QPSC Live Viewer streaming: {}", e.getMessage());
+        }
+    }
+
     private void buildUI() {
         stage = new Stage();
         stage.setTitle("Live Viewer");
