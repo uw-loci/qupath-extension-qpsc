@@ -746,6 +746,8 @@ public class StageMapCanvas extends StackPane {
      */
     public void setMacroOverlay(BufferedImage macroImage, AffineTransform transform) {
         if (macroImage == null || transform == null) {
+            logger.info("setMacroOverlay called with null args (image={}, transform={}) - clearing",
+                    macroImage != null, transform != null);
             clearMacroOverlay();
             return;
         }
@@ -755,6 +757,13 @@ public class StageMapCanvas extends StackPane {
         this.macroHeight = macroImage.getHeight();
         this.macroOverlayVisible = true;
 
+        logger.info("Setting macro overlay: {}x{} pixels, transform: scale({}, {}), translate({}, {})",
+                macroWidth, macroHeight,
+                String.format("%.6f", transform.getScaleX()),
+                String.format("%.6f", transform.getScaleY()),
+                String.format("%.1f", transform.getTranslateX()),
+                String.format("%.1f", transform.getTranslateY()));
+
         // Convert BufferedImage to JavaFX Image
         javafx.scene.image.Image fxImage = SwingFXUtils.toFXImage(macroImage, null);
         macroOverlayView.setImage(fxImage);
@@ -763,17 +772,21 @@ public class StageMapCanvas extends StackPane {
         updateMacroOverlayPosition();
         macroOverlayView.setVisible(true);
 
-        logger.debug("Macro overlay set: {}x{} pixels", macroWidth, macroHeight);
+        logger.info("Macro overlay applied and visible (opacity: {})", MACRO_OVERLAY_OPACITY);
     }
 
     /**
      * Clears and hides the macro image overlay.
      */
     public void clearMacroOverlay() {
+        boolean wasVisible = macroOverlayVisible;
         macroOverlayVisible = false;
         macroTransform = null;
         macroOverlayView.setVisible(false);
         macroOverlayView.setImage(null);
+        if (wasVisible) {
+            logger.info("Macro overlay cleared");
+        }
     }
 
     /**
@@ -782,6 +795,10 @@ public class StageMapCanvas extends StackPane {
      */
     private void updateMacroOverlayPosition() {
         if (!macroOverlayVisible || macroTransform == null || currentInsert == null) {
+            if (macroOverlayVisible) {
+                logger.info("Cannot update macro overlay position: transform={}, insert={}",
+                        macroTransform != null, currentInsert != null);
+            }
             return;
         }
 
@@ -798,7 +815,9 @@ public class StageMapCanvas extends StackPane {
         double minScreenY = Double.MAX_VALUE;
         double maxScreenY = -Double.MAX_VALUE;
 
-        for (double[] corner : macroCorners) {
+        int validCorners = 0;
+        for (int i = 0; i < macroCorners.length; i++) {
+            double[] corner = macroCorners[i];
             // Transform macro pixel -> stage microns
             double[] stagePos = new double[2];
             macroTransform.transform(corner, 0, stagePos, 0, 1);
@@ -810,6 +829,15 @@ public class StageMapCanvas extends StackPane {
                 maxScreenX = Math.max(maxScreenX, screenPos[0]);
                 minScreenY = Math.min(minScreenY, screenPos[1]);
                 maxScreenY = Math.max(maxScreenY, screenPos[1]);
+                validCorners++;
+            }
+
+            // Log first corner in detail for diagnostics
+            if (i == 0) {
+                logger.debug("Macro corner (0,0) -> stage ({}, {}) -> screen {}",
+                        String.format("%.1f", stagePos[0]),
+                        String.format("%.1f", stagePos[1]),
+                        screenPos != null ? String.format("(%.1f, %.1f)", screenPos[0], screenPos[1]) : "null");
             }
         }
 
@@ -823,9 +851,18 @@ public class StageMapCanvas extends StackPane {
             macroOverlayView.setFitWidth(screenWidth);
             macroOverlayView.setFitHeight(screenHeight);
 
-            logger.trace("Macro overlay positioned at ({}, {}) size {}x{}",
+            logger.info("Macro overlay positioned: screen ({}, {}) size {}x{} px ({} of 4 corners valid)",
                 String.format("%.1f", minScreenX), String.format("%.1f", minScreenY),
-                String.format("%.1f", screenWidth), String.format("%.1f", screenHeight));
+                String.format("%.1f", screenWidth), String.format("%.1f", screenHeight),
+                validCorners);
+        } else {
+            logger.warn("Macro overlay: no valid screen coordinates from corner transforms " +
+                    "(insert: origin=({}, {}), size={}x{} um, xInv={}, yInv={})",
+                    String.format("%.1f", currentInsert.getOriginXUm()),
+                    String.format("%.1f", currentInsert.getOriginYUm()),
+                    String.format("%.0f", currentInsert.getWidthUm()),
+                    String.format("%.0f", currentInsert.getHeightUm()),
+                    currentInsert.isXAxisInverted(), currentInsert.isYAxisInverted());
         }
     }
 

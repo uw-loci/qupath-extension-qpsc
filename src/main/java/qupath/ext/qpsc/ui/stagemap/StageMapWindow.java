@@ -288,10 +288,18 @@ public class StageMapWindow {
                 "Only available for images with saved alignments."));
         macroOverlayCheckbox.setDisable(true);  // Initially disabled until macro is available
         macroOverlayCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            logger.info("Overlay Macro checkbox toggled: {} -> {}", oldVal, newVal);
             if (canvas != null) {
                 if (newVal && currentMacroImage != null && currentMacroTransform != null) {
+                    logger.info("Applying macro overlay (image: {}x{}, sample: '{}')",
+                            currentMacroImage.getWidth(), currentMacroImage.getHeight(),
+                            currentMacroSampleName);
                     canvas.setMacroOverlay(currentMacroImage, currentMacroTransform);
                 } else {
+                    if (newVal) {
+                        logger.info("Checkbox selected but no macro data available (image={}, transform={})",
+                                currentMacroImage != null, currentMacroTransform != null);
+                    }
                     canvas.clearMacroOverlay();
                 }
             }
@@ -658,13 +666,17 @@ public class StageMapWindow {
         QuPathGUI gui = QuPathGUI.getInstance();
         if (gui != null) {
             imageChangeListener = (obs, oldImage, newImage) -> {
-                logger.debug("Image changed in QuPath, checking macro overlay availability");
+                logger.info("Image changed in QuPath viewer - rechecking macro overlay availability");
                 checkMacroOverlayAvailability();
             };
             gui.imageDataProperty().addListener(imageChangeListener);
+            logger.info("Registered image change listener for macro overlay updates");
 
             // Initial check
+            logger.info("Running initial macro overlay availability check...");
             checkMacroOverlayAvailability();
+        } else {
+            logger.warn("QuPath GUI not available - cannot register image change listener for macro overlay");
         }
     }
 
@@ -686,12 +698,28 @@ public class StageMapWindow {
      */
     private void checkMacroOverlayAvailability() {
         Platform.runLater(() -> {
+            logger.info("Checking macro overlay availability...");
             currentMacroImage = null;
             currentMacroTransform = null;
             currentMacroSampleName = null;
 
             QuPathGUI gui = QuPathGUI.getInstance();
-            if (gui == null || gui.getProject() == null || gui.getImageData() == null) {
+            if (gui == null) {
+                logger.info("Macro overlay: QuPath GUI not available");
+                macroOverlayCheckbox.setDisable(true);
+                macroOverlayCheckbox.setSelected(false);
+                if (canvas != null) canvas.clearMacroOverlay();
+                return;
+            }
+            if (gui.getProject() == null) {
+                logger.info("Macro overlay: no project open");
+                macroOverlayCheckbox.setDisable(true);
+                macroOverlayCheckbox.setSelected(false);
+                if (canvas != null) canvas.clearMacroOverlay();
+                return;
+            }
+            if (gui.getImageData() == null) {
+                logger.info("Macro overlay: no image selected in viewer");
                 macroOverlayCheckbox.setDisable(true);
                 macroOverlayCheckbox.setSelected(false);
                 if (canvas != null) canvas.clearMacroOverlay();
@@ -708,30 +736,45 @@ public class StageMapWindow {
                 macroOverlayCheckbox.setDisable(true);
                 macroOverlayCheckbox.setSelected(false);
                 if (canvas != null) canvas.clearMacroOverlay();
-                logger.debug("No sample name found for current image");
+                logger.info("Macro overlay: no sample name resolved for current image - checkbox disabled");
                 return;
             }
+
+            logger.info("Macro overlay: resolved sample name '{}', loading alignment files...", sampleName);
 
             // Try to load macro image and transform
             BufferedImage macroImage = AffineTransformManager.loadSavedMacroImage(project, sampleName);
             AffineTransform transform = AffineTransformManager.loadSlideAlignment(project, sampleName);
+
+            logger.info("Macro overlay: macroImage={}, transform={}",
+                    macroImage != null ? macroImage.getWidth() + "x" + macroImage.getHeight() : "null",
+                    transform != null ? String.format("scale(%.6f, %.6f) translate(%.1f, %.1f)",
+                            transform.getScaleX(), transform.getScaleY(),
+                            transform.getTranslateX(), transform.getTranslateY()) : "null");
 
             if (macroImage != null && transform != null) {
                 currentMacroImage = macroImage;
                 currentMacroTransform = transform;
                 currentMacroSampleName = sampleName;
                 macroOverlayCheckbox.setDisable(false);
-                logger.info("Macro overlay available for sample: {}", sampleName);
+                logger.info("Macro overlay available for sample '{}' - checkbox enabled", sampleName);
 
                 // If checkbox is already selected, update the overlay
                 if (macroOverlayCheckbox.isSelected()) {
+                    logger.info("Macro overlay checkbox already selected - applying overlay");
                     canvas.setMacroOverlay(currentMacroImage, currentMacroTransform);
                 }
             } else {
                 macroOverlayCheckbox.setDisable(true);
                 macroOverlayCheckbox.setSelected(false);
                 if (canvas != null) canvas.clearMacroOverlay();
-                logger.debug("No macro overlay available for sample: {}", sampleName);
+                if (macroImage == null && transform == null) {
+                    logger.info("Macro overlay: NEITHER alignment image nor transform found for '{}' - checkbox disabled", sampleName);
+                } else if (macroImage == null) {
+                    logger.info("Macro overlay: alignment transform found but NO macro image for '{}' - checkbox disabled", sampleName);
+                } else {
+                    logger.info("Macro overlay: macro image found but NO alignment transform for '{}' - checkbox disabled", sampleName);
+                }
             }
         });
     }
@@ -748,57 +791,74 @@ public class StageMapWindow {
     private String getSampleNameForCurrentImage(QuPathGUI gui, Project<BufferedImage> project) {
         ImageData<BufferedImage> imageData = gui.getImageData();
         if (imageData == null) {
+            logger.info("  Sample name lookup: imageData is null");
             return null;
         }
 
         // First try: actual image file name (how alignments are typically saved)
         String imageName = QPProjectFunctions.getActualImageFileName(imageData);
+        logger.info("  Sample name lookup: image file name = '{}'", imageName);
+
         if (imageName != null && !imageName.isEmpty()) {
             // Check if alignment exists for this name (with extension - legacy format)
+            logger.info("  Trying alignment lookup with full name: '{}'", imageName);
             if (AffineTransformManager.loadSlideAlignment(project, imageName) != null) {
-                logger.debug("Found alignment using image name: {}", imageName);
+                logger.info("  -> Found alignment using image name: '{}'", imageName);
                 return imageName;
             }
             // Also try without extension (new format for base_image compatibility)
             String strippedName = qupath.lib.common.GeneralTools.stripExtension(imageName);
-            if (!strippedName.equals(imageName) &&
-                    AffineTransformManager.loadSlideAlignment(project, strippedName) != null) {
-                logger.debug("Found alignment using stripped image name: {}", strippedName);
-                return strippedName;
+            if (!strippedName.equals(imageName)) {
+                logger.info("  Trying alignment lookup with stripped name: '{}'", strippedName);
+                if (AffineTransformManager.loadSlideAlignment(project, strippedName) != null) {
+                    logger.info("  -> Found alignment using stripped image name: '{}'", strippedName);
+                    return strippedName;
+                }
             }
         }
 
         // Second try: get from project entry metadata
         ProjectImageEntry<BufferedImage> entry = project.getEntry(imageData);
         if (entry != null) {
+            logger.info("  Project entry found (ID: {}), checking metadata...", entry.getID());
+
             // Try sample_name metadata
             String sampleName = ImageMetadataManager.getSampleName(entry);
+            logger.info("  Metadata sample_name = '{}'", sampleName);
             if (sampleName != null && !sampleName.isEmpty()) {
+                logger.info("  Trying alignment lookup with sample_name: '{}'", sampleName);
                 if (AffineTransformManager.loadSlideAlignment(project, sampleName) != null) {
-                    logger.debug("Found alignment using sample_name metadata: {}", sampleName);
+                    logger.info("  -> Found alignment using sample_name metadata: '{}'", sampleName);
                     return sampleName;
                 }
             }
 
             // Try base_image metadata
             String baseImage = ImageMetadataManager.getBaseImage(entry);
+            logger.info("  Metadata base_image = '{}'", baseImage);
             if (baseImage != null && !baseImage.isEmpty()) {
+                logger.info("  Trying alignment lookup with base_image: '{}'", baseImage);
                 if (AffineTransformManager.loadSlideAlignment(project, baseImage) != null) {
-                    logger.debug("Found alignment using base_image metadata: {}", baseImage);
+                    logger.info("  -> Found alignment using base_image metadata: '{}'", baseImage);
                     return baseImage;
                 }
             }
 
             // For flipped images, try original's base_image
-            if (ImageMetadataManager.isFlipped(entry)) {
+            boolean isFlipped = ImageMetadataManager.isFlipped(entry);
+            logger.info("  Image is flipped: {}", isFlipped);
+            if (isFlipped) {
                 String originalId = ImageMetadataManager.getOriginalImageId(entry);
+                logger.info("  Original image ID for flipped image: '{}'", originalId);
                 if (originalId != null) {
                     for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
                         if (originalId.equals(e.getID())) {
                             String origBase = ImageMetadataManager.getBaseImage(e);
+                            logger.info("  Original image's base_image = '{}'", origBase);
                             if (origBase != null && !origBase.isEmpty()) {
+                                logger.info("  Trying alignment lookup with original's base_image: '{}'", origBase);
                                 if (AffineTransformManager.loadSlideAlignment(project, origBase) != null) {
-                                    logger.debug("Found alignment using original image's base_image: {}", origBase);
+                                    logger.info("  -> Found alignment using original image's base_image: '{}'", origBase);
                                     return origBase;
                                 }
                             }
@@ -807,9 +867,12 @@ public class StageMapWindow {
                     }
                 }
             }
+        } else {
+            logger.info("  No project entry found for current imageData");
         }
 
         // Return image name even if no alignment found (for logging purposes)
+        logger.info("  No alignment found via any strategy. Returning image name '{}' as fallback", imageName);
         return imageName;
     }
 }
