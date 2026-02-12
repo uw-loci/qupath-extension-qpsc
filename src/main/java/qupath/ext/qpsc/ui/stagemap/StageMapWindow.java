@@ -856,7 +856,7 @@ public class StageMapWindow {
             }
         }
 
-        // Apply scanner-specific processing (crop + flip) regardless of source
+        // Apply scanner-specific cropping if scanner name is known
         if (scannerName != null) {
             try {
                 MacroImageUtility.CroppedMacroResult cropped =
@@ -865,16 +865,17 @@ public class StageMapWindow {
                 logger.info("Macro overlay: cropped to {}x{} (offset: {}, {})",
                         macroImage.getWidth(), macroImage.getHeight(),
                         cropped.getCropOffsetX(), cropped.getCropOffsetY());
-
-                boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
-                boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
-                if (flipX || flipY) {
-                    macroImage = MacroImageUtility.flipMacroImage(macroImage, flipX, flipY);
-                    logger.info("Macro overlay: flipped (flipX={}, flipY={})", flipX, flipY);
-                }
             } catch (Exception e) {
-                logger.warn("Macro overlay: failed to process macro from {}: {}", source, e.getMessage());
+                logger.warn("Macro overlay: failed to crop macro from {}: {}", source, e.getMessage());
             }
+        }
+
+        // Apply flip per macro preferences (independent of scanner cropping)
+        boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
+        boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+        if (flipX || flipY) {
+            macroImage = MacroImageUtility.flipMacroImage(macroImage, flipX, flipY);
+            logger.info("Macro overlay: flipped (flipX={}, flipY={})", flipX, flipY);
         }
 
         return macroImage;
