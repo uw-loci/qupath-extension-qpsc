@@ -16,6 +16,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.gui.QuPathGUI;
@@ -741,15 +742,12 @@ public class StageMapWindow {
                 return;
             }
 
-            logger.info("Macro overlay: resolved sample name '{}', loading alignment files...", sampleName);
-
-            // Try to load macro image
-            BufferedImage macroImage = AffineTransformManager.loadSavedMacroImage(project, sampleName);
+            logger.info("Macro overlay: resolved sample name '{}', loading data...", sampleName);
 
             // Load the preset transform (macro -> stage) from saved_transforms.json.
-            // The preset IS the macro-to-stage transform - the macro image is the slide,
-            // so the preset that maps macro pixels to stage microns is exactly what we need.
+            // The preset IS the macro-to-stage transform and also tells us which scanner was used.
             AffineTransform overlayTransform = null;
+            String scannerName = null;
             String presetName = PersistentPreferences.getSavedTransformName();
             if (presetName != null && !presetName.isEmpty()) {
                 try {
@@ -759,8 +757,10 @@ public class StageMapWindow {
                     AffineTransformManager.TransformPreset preset = manager.getTransform(presetName);
                     if (preset != null) {
                         overlayTransform = preset.getTransform();
-                        logger.info("Macro overlay: loaded preset '{}' (scale: {} um/px)",
-                                presetName, String.format("%.4f", overlayTransform.getScaleX()));
+                        scannerName = preset.getMountingMethod();
+                        logger.info("Macro overlay: loaded preset '{}' (scanner: {}, scale: {} um/px)",
+                                presetName, scannerName,
+                                String.format("%.4f", overlayTransform.getScaleX()));
                     } else {
                         logger.warn("Macro overlay: preset '{}' not found in saved_transforms.json", presetName);
                     }
@@ -769,6 +769,13 @@ public class StageMapWindow {
                 }
             } else {
                 logger.info("Macro overlay: no preset transform name saved in preferences");
+            }
+
+            // Load macro image. Prefer raw macro from QuPath (process on-the-fly with
+            // scanner-specific cropping + flip), fall back to saved _alignment.png.
+            BufferedImage macroImage = null;
+            if (overlayTransform != null) {
+                macroImage = loadAndProcessMacroImage(gui, project, sampleName, scannerName);
             }
 
             logger.info("Macro overlay: macroImage={}, overlayTransform={}",
@@ -802,6 +809,68 @@ public class StageMapWindow {
                 }
             }
         });
+    }
+
+    /**
+     * Loads and processes the macro image for overlay display.
+     *
+     * <p>Prefers the raw macro from QuPath's associated images, applying scanner-specific
+     * cropping and flip preferences on-the-fly. Falls back to the saved {@code _alignment.png}
+     * if no raw macro is available (e.g., for image formats without embedded macros).
+     *
+     * @param gui         The QuPath GUI instance
+     * @param project     The current project
+     * @param sampleName  The sample name for fallback lookup
+     * @param scannerName The scanner that produced the macro (from the preset), may be null
+     * @return The processed macro image, or null if not available
+     */
+    private BufferedImage loadAndProcessMacroImage(
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            String sampleName,
+            String scannerName) {
+
+        // Strategy 1: Load raw macro from QuPath and process on-the-fly
+        BufferedImage rawMacro = MacroImageUtility.retrieveMacroImage(gui);
+        if (rawMacro != null && scannerName != null) {
+            try {
+                logger.info("Macro overlay: processing raw macro ({}x{}) with scanner '{}'",
+                        rawMacro.getWidth(), rawMacro.getHeight(), scannerName);
+
+                // Crop using scanner-specific slide bounds
+                MacroImageUtility.CroppedMacroResult cropped =
+                        MacroImageUtility.cropToSlideArea(rawMacro, scannerName);
+                BufferedImage processed = cropped.getCroppedImage();
+                logger.info("Macro overlay: cropped to {}x{} (offset: {}, {})",
+                        processed.getWidth(), processed.getHeight(),
+                        cropped.getCropOffsetX(), cropped.getCropOffsetY());
+
+                // Apply flip preferences (must match what alignment workflow does)
+                boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
+                boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+                if (flipX || flipY) {
+                    processed = MacroImageUtility.flipMacroImage(processed, flipX, flipY);
+                    logger.info("Macro overlay: flipped (flipX={}, flipY={})", flipX, flipY);
+                }
+
+                return processed;
+            } catch (Exception e) {
+                logger.warn("Macro overlay: failed to process raw macro: {}", e.getMessage());
+            }
+        } else if (rawMacro != null) {
+            logger.info("Macro overlay: raw macro available but no scanner name - using unprocessed");
+            return rawMacro;
+        }
+
+        // Strategy 2: Fall back to saved _alignment.png (already processed)
+        BufferedImage saved = AffineTransformManager.loadSavedMacroImage(project, sampleName);
+        if (saved != null) {
+            logger.info("Macro overlay: using saved alignment image ({}x{})",
+                    saved.getWidth(), saved.getHeight());
+        } else {
+            logger.info("Macro overlay: no macro image available (no raw macro, no saved alignment)");
+        }
+        return saved;
     }
 
     /**

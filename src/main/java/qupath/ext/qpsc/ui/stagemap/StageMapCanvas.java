@@ -188,6 +188,16 @@ public class StageMapCanvas extends StackPane {
         // Stack layers
         getChildren().addAll(backgroundView, overlayPane);
 
+        // Clip canvas so overlay shapes (crosshair, target lines) don't render
+        // outside the canvas bounds into adjacent UI elements
+        Rectangle clipRect = new Rectangle(width, height);
+        setClip(clipRect);
+        // Update clip when canvas resizes
+        widthProperty().addListener((obs, oldVal, newVal) ->
+                clipRect.setWidth(newVal.doubleValue()));
+        heightProperty().addListener((obs, oldVal, newVal) ->
+                clipRect.setHeight(newVal.doubleValue()));
+
         // Handle mouse events on the overlay pane
         overlayPane.setOnMouseMoved(e -> {
             if (currentInsert != null) {
