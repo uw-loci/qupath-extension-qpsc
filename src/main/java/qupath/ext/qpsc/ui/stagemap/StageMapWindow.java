@@ -814,9 +814,13 @@ public class StageMapWindow {
     /**
      * Loads and processes the macro image for overlay display.
      *
-     * <p>Prefers the raw macro from QuPath's associated images, applying scanner-specific
-     * cropping and flip preferences on-the-fly. Falls back to the saved {@code _alignment.png}
-     * if no raw macro is available (e.g., for image formats without embedded macros).
+     * <p>Prefers the raw macro from QuPath's associated images. Falls back to the saved
+     * {@code _alignment.png} if no raw macro is available (e.g., flipped duplicate images
+     * don't expose the original image's associated images).
+     *
+     * <p>Regardless of source, scanner-specific cropping and flip preferences are applied.
+     * An already-cropped image (dimensions matching the expected crop result) will not be
+     * double-cropped.
      *
      * @param gui         The QuPath GUI instance
      * @param project     The current project
@@ -830,47 +834,50 @@ public class StageMapWindow {
             String sampleName,
             String scannerName) {
 
-        // Strategy 1: Load raw macro from QuPath and process on-the-fly
-        BufferedImage rawMacro = MacroImageUtility.retrieveMacroImage(gui);
-        if (rawMacro != null && scannerName != null) {
-            try {
-                logger.info("Macro overlay: processing raw macro ({}x{}) with scanner '{}'",
-                        rawMacro.getWidth(), rawMacro.getHeight(), scannerName);
+        // Try to get the macro image from any available source
+        BufferedImage macroImage = MacroImageUtility.retrieveMacroImage(gui);
+        String source;
 
-                // Crop using scanner-specific slide bounds
+        if (macroImage != null) {
+            source = "QuPath associated images";
+            logger.info("Macro overlay: loaded raw macro ({}x{}) from {}",
+                    macroImage.getWidth(), macroImage.getHeight(), source);
+        } else {
+            // Flipped duplicate images don't expose the original's associated images.
+            // Fall back to saved _alignment.png (which is the raw macro saved as PNG).
+            macroImage = AffineTransformManager.loadSavedMacroImage(project, sampleName);
+            if (macroImage != null) {
+                source = "saved alignment image";
+                logger.info("Macro overlay: loaded saved alignment image ({}x{}) for '{}'",
+                        macroImage.getWidth(), macroImage.getHeight(), sampleName);
+            } else {
+                logger.info("Macro overlay: no macro image available (no raw macro, no saved alignment)");
+                return null;
+            }
+        }
+
+        // Apply scanner-specific processing (crop + flip) regardless of source
+        if (scannerName != null) {
+            try {
                 MacroImageUtility.CroppedMacroResult cropped =
-                        MacroImageUtility.cropToSlideArea(rawMacro, scannerName);
-                BufferedImage processed = cropped.getCroppedImage();
+                        MacroImageUtility.cropToSlideArea(macroImage, scannerName);
+                macroImage = cropped.getCroppedImage();
                 logger.info("Macro overlay: cropped to {}x{} (offset: {}, {})",
-                        processed.getWidth(), processed.getHeight(),
+                        macroImage.getWidth(), macroImage.getHeight(),
                         cropped.getCropOffsetX(), cropped.getCropOffsetY());
 
-                // Apply flip preferences (must match what alignment workflow does)
                 boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
                 boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
                 if (flipX || flipY) {
-                    processed = MacroImageUtility.flipMacroImage(processed, flipX, flipY);
+                    macroImage = MacroImageUtility.flipMacroImage(macroImage, flipX, flipY);
                     logger.info("Macro overlay: flipped (flipX={}, flipY={})", flipX, flipY);
                 }
-
-                return processed;
             } catch (Exception e) {
-                logger.warn("Macro overlay: failed to process raw macro: {}", e.getMessage());
+                logger.warn("Macro overlay: failed to process macro from {}: {}", source, e.getMessage());
             }
-        } else if (rawMacro != null) {
-            logger.info("Macro overlay: raw macro available but no scanner name - using unprocessed");
-            return rawMacro;
         }
 
-        // Strategy 2: Fall back to saved _alignment.png (already processed)
-        BufferedImage saved = AffineTransformManager.loadSavedMacroImage(project, sampleName);
-        if (saved != null) {
-            logger.info("Macro overlay: using saved alignment image ({}x{})",
-                    saved.getWidth(), saved.getHeight());
-        } else {
-            logger.info("Macro overlay: no macro image available (no raw macro, no saved alignment)");
-        }
-        return saved;
+        return macroImage;
     }
 
     /**

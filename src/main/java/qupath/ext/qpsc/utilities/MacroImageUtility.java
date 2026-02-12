@@ -167,6 +167,15 @@ public class MacroImageUtility {
         int cropWidth = slideXMax - slideXMin;
         int cropHeight = slideYMax - slideYMin;
 
+        // Guard against double-cropping: if the image already matches the expected
+        // crop dimensions (within 2px tolerance), return it unchanged. This happens
+        // when a previously-cropped alignment image is passed through the same pipeline.
+        if (Math.abs(originalWidth - cropWidth) <= 2 && Math.abs(originalHeight - cropHeight) <= 2) {
+            logger.info("Image ({}x{}) already matches crop dimensions ({}x{}) - skipping crop",
+                    originalWidth, originalHeight, cropWidth, cropHeight);
+            return new CroppedMacroResult(macroImage, originalWidth, originalHeight, 0, 0);
+        }
+
         logger.info("Cropping macro image from {}x{} to {}x{} (offset: {}, {})",
                 originalWidth, originalHeight, cropWidth, cropHeight, slideXMin, slideYMin);
 
