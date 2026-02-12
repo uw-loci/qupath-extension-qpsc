@@ -870,13 +870,24 @@ public class StageMapWindow {
             }
         }
 
-        // Apply flip per macro preferences (independent of scanner cropping)
-        boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
-        boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+        // Apply flip for Stage Map display.
+        // The flip preferences correct the macro orientation for QuPath's standard
+        // coordinate system. But the Stage Map has its own axis inversion (detected
+        // from aperture calibration). An inverted axis already visually mirrors that
+        // dimension, so applying the preference flip on top of it creates a double-flip.
+        // XOR the preference with axis inversion to get the correct effective flip.
+        boolean prefFlipX = QPPreferenceDialog.getFlipMacroXProperty();
+        boolean prefFlipY = QPPreferenceDialog.getFlipMacroYProperty();
+        StageInsert insert = insertComboBox.getValue();
+        boolean axisInvertedX = insert != null && insert.isXAxisInverted();
+        boolean axisInvertedY = insert != null && insert.isYAxisInverted();
+        boolean flipX = prefFlipX ^ axisInvertedX;
+        boolean flipY = prefFlipY ^ axisInvertedY;
         if (flipX || flipY) {
             macroImage = MacroImageUtility.flipMacroImage(macroImage, flipX, flipY);
-            logger.info("Macro overlay: flipped (flipX={}, flipY={})", flipX, flipY);
         }
+        logger.info("Macro overlay: flip prefs=({}, {}), axis inverted=({}, {}), effective flip=({}, {})",
+                prefFlipX, prefFlipY, axisInvertedX, axisInvertedY, flipX, flipY);
 
         return macroImage;
     }
