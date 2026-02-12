@@ -408,13 +408,34 @@ public class ExistingAlignmentPath {
         // Get the processed macro image from the state
         BufferedImage processedMacroImage = context.getProcessedMacroImage();
 
+        // Determine the macro-to-stage transform for Stage Map overlay.
+        // The original preset transform is macro-scale if its scale differs from the full-res pixel size.
+        AffineTransform macroTransform = null;
+        try {
+            AffineTransform originalPreset = state.alignmentChoice.selectedTransform().getTransform();
+            double presetScale = Math.abs(originalPreset.getScaleX());
+            double fullResPixelSize = gui.getImageData().getServer()
+                    .getPixelCalibration().getAveragedPixelSizeMicrons();
+
+            if (Math.abs(presetScale - fullResPixelSize) >= 1.0) {
+                // Preset is macro-scale (e.g., ~81 um/px), save it for overlay positioning
+                macroTransform = originalPreset;
+                logger.info("Saving macro-to-stage transform from preset (scale: {} um/px)", presetScale);
+            } else {
+                logger.info("Preset is already full-res scale ({} um/px) - no separate macro transform to save",
+                        presetScale);
+            }
+        } catch (Exception e) {
+            logger.warn("Could not determine macro transform from preset: {}", e.getMessage());
+        }
+
         AffineTransformManager.saveSlideAlignment(
                 project,
                 imageName,  // Use image name without extension for base_image compatibility
                 state.sample.modality(),
                 state.transform,
-                processedMacroImage
-
+                processedMacroImage,
+                macroTransform
         );
         logger.info("Saved slide-specific alignment for image: {}", imageName);
     }

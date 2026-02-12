@@ -742,19 +742,47 @@ public class StageMapWindow {
 
             logger.info("Macro overlay: resolved sample name '{}', loading alignment files...", sampleName);
 
-            // Try to load macro image and transform
+            // Try to load macro image
             BufferedImage macroImage = AffineTransformManager.loadSavedMacroImage(project, sampleName);
-            AffineTransform transform = AffineTransformManager.loadSlideAlignment(project, sampleName);
 
-            logger.info("Macro overlay: macroImage={}, transform={}",
+            // Try to load macro-to-stage transform (preferred for overlay positioning).
+            // Falls back to the full-res transform if macro_transform is not in the JSON
+            // (older alignments saved before this feature was added).
+            AffineTransform macroTransform = AffineTransformManager.loadMacroTransform(project, sampleName);
+            AffineTransform fullResTransform = AffineTransformManager.loadSlideAlignment(project, sampleName);
+
+            // Determine which transform to use for overlay positioning
+            AffineTransform overlayTransform = null;
+            if (macroTransform != null) {
+                overlayTransform = macroTransform;
+                logger.info("Macro overlay: using macro-to-stage transform (scale: {} um/px)",
+                        String.format("%.4f", macroTransform.getScaleX()));
+            } else if (fullResTransform != null && macroImage != null) {
+                // Backward compatibility: check if the full-res transform produces a reasonable
+                // overlay size. If the overlay would be < 5mm in either dimension, the transform
+                // is full-res scale and cannot be used for macro overlay positioning.
+                double overlayWidthUm = Math.abs(fullResTransform.getScaleX()) * macroImage.getWidth();
+                double overlayHeightUm = Math.abs(fullResTransform.getScaleY()) * macroImage.getHeight();
+                if (overlayWidthUm >= 5000 && overlayHeightUm >= 5000) {
+                    overlayTransform = fullResTransform;
+                    logger.info("Macro overlay: using full-res transform as macro scale ({}x{} um footprint)",
+                            String.format("%.0f", overlayWidthUm), String.format("%.0f", overlayHeightUm));
+                } else {
+                    logger.warn("Macro overlay: full-res transform produces {}x{} um footprint " +
+                            "(too small for macro overlay). Re-run alignment to save macro transform.",
+                            String.format("%.0f", overlayWidthUm), String.format("%.0f", overlayHeightUm));
+                }
+            }
+
+            logger.info("Macro overlay: macroImage={}, overlayTransform={}",
                     macroImage != null ? macroImage.getWidth() + "x" + macroImage.getHeight() : "null",
-                    transform != null ? String.format("scale(%.6f, %.6f) translate(%.1f, %.1f)",
-                            transform.getScaleX(), transform.getScaleY(),
-                            transform.getTranslateX(), transform.getTranslateY()) : "null");
+                    overlayTransform != null ? String.format("scale(%.4f, %.4f) translate(%.1f, %.1f)",
+                            overlayTransform.getScaleX(), overlayTransform.getScaleY(),
+                            overlayTransform.getTranslateX(), overlayTransform.getTranslateY()) : "null");
 
-            if (macroImage != null && transform != null) {
+            if (macroImage != null && overlayTransform != null) {
                 currentMacroImage = macroImage;
-                currentMacroTransform = transform;
+                currentMacroTransform = overlayTransform;
                 currentMacroSampleName = sampleName;
                 macroOverlayCheckbox.setDisable(false);
                 logger.info("Macro overlay available for sample '{}' - checkbox enabled", sampleName);
@@ -768,10 +796,13 @@ public class StageMapWindow {
                 macroOverlayCheckbox.setDisable(true);
                 macroOverlayCheckbox.setSelected(false);
                 if (canvas != null) canvas.clearMacroOverlay();
-                if (macroImage == null && transform == null) {
+                if (macroImage == null && fullResTransform == null) {
                     logger.info("Macro overlay: NEITHER alignment image nor transform found for '{}' - checkbox disabled", sampleName);
                 } else if (macroImage == null) {
-                    logger.info("Macro overlay: alignment transform found but NO macro image for '{}' - checkbox disabled", sampleName);
+                    logger.info("Macro overlay: transform found but NO macro image for '{}' - checkbox disabled", sampleName);
+                } else if (overlayTransform == null) {
+                    logger.info("Macro overlay: macro image found but transform is full-res scale (not usable for overlay) " +
+                            "for '{}' - re-run alignment to fix - checkbox disabled", sampleName);
                 } else {
                     logger.info("Macro overlay: macro image found but NO alignment transform for '{}' - checkbox disabled", sampleName);
                 }

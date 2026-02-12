@@ -434,7 +434,33 @@ public class AffineTransformManager {
             String sampleName,
             String modality,
             AffineTransform transform,
-            BufferedImage processedMacroImage) {  // Add this parameter
+            BufferedImage processedMacroImage) {
+        saveSlideAlignment(project, sampleName, modality, transform, processedMacroImage, null);
+    }
+
+    /**
+     * Saves slide-specific alignment with an optional macro-to-stage transform.
+     *
+     * <p>The {@code transform} parameter maps full-resolution image pixels to stage microns.
+     * The optional {@code macroTransform} maps macro image pixels to stage microns and is
+     * used by the Stage Map overlay feature to position the saved macro PNG at the correct
+     * location on the stage.
+     *
+     * @param project           The QuPath project
+     * @param sampleName        The sample/slide identifier
+     * @param modality          The imaging modality
+     * @param transform         Full-resolution to stage transform
+     * @param processedMacroImage The processed macro image (may be null)
+     * @param macroTransform    Macro-to-stage transform for overlay positioning (may be null)
+     * @since 0.4.0
+     */
+    public static void saveSlideAlignment(
+            Project<BufferedImage> project,
+            String sampleName,
+            String modality,
+            AffineTransform transform,
+            BufferedImage processedMacroImage,
+            AffineTransform macroTransform) {
 
         try {
             // Get project folder
@@ -450,7 +476,7 @@ public class AffineTransformManager {
             String filename = sampleName + "_alignment.json";
             File alignmentFile = new File(alignmentDir, filename);
 
-            // Save the transform data as JSON (existing code)
+            // Save the transform data as JSON
             Map<String, Object> alignmentData = new HashMap<>();
             alignmentData.put("sampleName", sampleName);
             alignmentData.put("modality", modality);
@@ -463,6 +489,21 @@ public class AffineTransformManager {
                     transform.getTranslateX(),
                     transform.getTranslateY()
             });
+
+            // Save macro-to-stage transform if provided (used by Stage Map overlay)
+            if (macroTransform != null) {
+                alignmentData.put("macro_transform", new double[] {
+                        macroTransform.getScaleX(),
+                        macroTransform.getShearY(),
+                        macroTransform.getShearX(),
+                        macroTransform.getScaleY(),
+                        macroTransform.getTranslateX(),
+                        macroTransform.getTranslateY()
+                });
+                logger.info("Saving macro-to-stage transform: scale={}, translate=({}, {})",
+                        macroTransform.getScaleX(),
+                        macroTransform.getTranslateX(), macroTransform.getTranslateY());
+            }
 
             // Convert to JSON and save
             Gson gson = new GsonBuilder().setPrettyPrinting().create();
@@ -536,6 +577,68 @@ public class AffineTransformManager {
 
         } catch (Exception e) {
             logger.error("Failed to load slide alignment", e);
+        }
+
+        return null;
+    }
+
+    /**
+     * Loads the macro-to-stage transform from a slide alignment JSON file.
+     *
+     * <p>This transform maps macro image pixels to stage microns and is used by the
+     * Stage Map overlay to position the saved macro PNG correctly. It is saved alongside
+     * the full-resolution transform when the alignment is created via the existing
+     * alignment path.
+     *
+     * <p>Returns null if the alignment file doesn't exist, doesn't contain a macro
+     * transform (e.g., older alignments), or on error.
+     *
+     * @param project    The QuPath project
+     * @param sampleName The sample/slide name used as file prefix
+     * @return The macro-to-stage transform, or null if not available
+     */
+    @SuppressWarnings("unchecked")
+    public static AffineTransform loadMacroTransform(
+            Project<BufferedImage> project,
+            String sampleName) {
+
+        try {
+            File projectDir = project.getPath().toFile().getParentFile();
+            File alignmentDir = new File(projectDir, "alignmentFiles");
+            if (!alignmentDir.exists()) {
+                return null;
+            }
+
+            String filename = sampleName + "_alignment.json";
+            File alignmentFile = new File(alignmentDir, filename);
+            if (!alignmentFile.exists()) {
+                return null;
+            }
+
+            String json = new String(Files.readAllBytes(alignmentFile.toPath()), StandardCharsets.UTF_8);
+            Type mapType = new TypeToken<Map<String, Object>>(){}.getType();
+            Map<String, Object> alignmentData = new Gson().fromJson(json, mapType);
+
+            List<Double> macroValues = (List<Double>) alignmentData.get("macro_transform");
+            if (macroValues != null && macroValues.size() == 6) {
+                AffineTransform macroTransform = new AffineTransform(
+                        macroValues.get(0),  // m00 (scaleX)
+                        macroValues.get(1),  // m10 (shearY)
+                        macroValues.get(2),  // m01 (shearX)
+                        macroValues.get(3),  // m11 (scaleY)
+                        macroValues.get(4),  // m02 (translateX)
+                        macroValues.get(5)   // m12 (translateY)
+                );
+                logger.info("Loaded macro-to-stage transform for '{}': scale={}, translate=({}, {})",
+                        sampleName, macroTransform.getScaleX(),
+                        macroTransform.getTranslateX(), macroTransform.getTranslateY());
+                return macroTransform;
+            }
+
+            logger.debug("No macro_transform field in alignment file for '{}'", sampleName);
+
+        } catch (Exception e) {
+            logger.error("Failed to load macro transform for '{}'", sampleName, e);
         }
 
         return null;
