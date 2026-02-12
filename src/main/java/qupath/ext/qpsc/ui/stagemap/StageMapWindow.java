@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -745,33 +746,29 @@ public class StageMapWindow {
             // Try to load macro image
             BufferedImage macroImage = AffineTransformManager.loadSavedMacroImage(project, sampleName);
 
-            // Try to load macro-to-stage transform (preferred for overlay positioning).
-            // Falls back to the full-res transform if macro_transform is not in the JSON
-            // (older alignments saved before this feature was added).
-            AffineTransform macroTransform = AffineTransformManager.loadMacroTransform(project, sampleName);
-            AffineTransform fullResTransform = AffineTransformManager.loadSlideAlignment(project, sampleName);
-
-            // Determine which transform to use for overlay positioning
+            // Load the preset transform (macro -> stage) from saved_transforms.json.
+            // The preset IS the macro-to-stage transform - the macro image is the slide,
+            // so the preset that maps macro pixels to stage microns is exactly what we need.
             AffineTransform overlayTransform = null;
-            if (macroTransform != null) {
-                overlayTransform = macroTransform;
-                logger.info("Macro overlay: using macro-to-stage transform (scale: {} um/px)",
-                        String.format("%.4f", macroTransform.getScaleX()));
-            } else if (fullResTransform != null && macroImage != null) {
-                // Backward compatibility: check if the full-res transform produces a reasonable
-                // overlay size. If the overlay would be < 5mm in either dimension, the transform
-                // is full-res scale and cannot be used for macro overlay positioning.
-                double overlayWidthUm = Math.abs(fullResTransform.getScaleX()) * macroImage.getWidth();
-                double overlayHeightUm = Math.abs(fullResTransform.getScaleY()) * macroImage.getHeight();
-                if (overlayWidthUm >= 5000 && overlayHeightUm >= 5000) {
-                    overlayTransform = fullResTransform;
-                    logger.info("Macro overlay: using full-res transform as macro scale ({}x{} um footprint)",
-                            String.format("%.0f", overlayWidthUm), String.format("%.0f", overlayHeightUm));
-                } else {
-                    logger.warn("Macro overlay: full-res transform produces {}x{} um footprint " +
-                            "(too small for macro overlay). Re-run alignment to save macro transform.",
-                            String.format("%.0f", overlayWidthUm), String.format("%.0f", overlayHeightUm));
+            String presetName = PersistentPreferences.getSavedTransformName();
+            if (presetName != null && !presetName.isEmpty()) {
+                try {
+                    String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                    AffineTransformManager manager = new AffineTransformManager(
+                            new File(configPath).getParent());
+                    AffineTransformManager.TransformPreset preset = manager.getTransform(presetName);
+                    if (preset != null) {
+                        overlayTransform = preset.getTransform();
+                        logger.info("Macro overlay: loaded preset '{}' (scale: {} um/px)",
+                                presetName, String.format("%.4f", overlayTransform.getScaleX()));
+                    } else {
+                        logger.warn("Macro overlay: preset '{}' not found in saved_transforms.json", presetName);
+                    }
+                } catch (Exception e) {
+                    logger.warn("Macro overlay: failed to load preset '{}': {}", presetName, e.getMessage());
                 }
+            } else {
+                logger.info("Macro overlay: no preset transform name saved in preferences");
             }
 
             logger.info("Macro overlay: macroImage={}, overlayTransform={}",
@@ -796,15 +793,12 @@ public class StageMapWindow {
                 macroOverlayCheckbox.setDisable(true);
                 macroOverlayCheckbox.setSelected(false);
                 if (canvas != null) canvas.clearMacroOverlay();
-                if (macroImage == null && fullResTransform == null) {
-                    logger.info("Macro overlay: NEITHER alignment image nor transform found for '{}' - checkbox disabled", sampleName);
+                if (macroImage == null && overlayTransform == null) {
+                    logger.info("Macro overlay: NEITHER macro image nor preset transform available - checkbox disabled");
                 } else if (macroImage == null) {
-                    logger.info("Macro overlay: transform found but NO macro image for '{}' - checkbox disabled", sampleName);
-                } else if (overlayTransform == null) {
-                    logger.info("Macro overlay: macro image found but transform is full-res scale (not usable for overlay) " +
-                            "for '{}' - re-run alignment to fix - checkbox disabled", sampleName);
+                    logger.info("Macro overlay: preset transform found but NO macro image for '{}' - checkbox disabled", sampleName);
                 } else {
-                    logger.info("Macro overlay: macro image found but NO alignment transform for '{}' - checkbox disabled", sampleName);
+                    logger.info("Macro overlay: macro image found but NO preset transform available - checkbox disabled");
                 }
             }
         });
