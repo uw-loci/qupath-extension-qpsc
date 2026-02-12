@@ -801,79 +801,63 @@ public class StageMapCanvas extends StackPane {
 
     /**
      * Updates the macro overlay position based on the current scale and offset.
+     * <p>
+     * Positions the macro image to cover the slide rectangle in the stage map.
+     * The macro image IS the slide, so it should visually align with the slide outline.
+     * For multi-slide inserts, uses the transform to identify the correct slide;
+     * for single-slide inserts, uses the first (only) slide position.
+     * <p>
      * Called when the canvas resizes or the insert changes.
      */
     private void updateMacroOverlayPosition() {
-        if (!macroOverlayVisible || macroTransform == null || currentInsert == null) {
+        if (!macroOverlayVisible || currentInsert == null) {
             if (macroOverlayVisible) {
-                logger.info("Cannot update macro overlay position: transform={}, insert={}",
-                        macroTransform != null, currentInsert != null);
+                logger.info("Cannot update macro overlay position: insert={}",
+                        currentInsert != null);
             }
             return;
         }
 
-        // Transform the four corners of the macro image to stage coordinates, then to screen
-        double[][] macroCorners = {
-            {0, 0},
-            {macroWidth, 0},
-            {0, macroHeight},
-            {macroWidth, macroHeight}
-        };
+        List<StageInsert.SlidePosition> slides = currentInsert.getSlides();
+        if (slides.isEmpty()) {
+            logger.warn("Macro overlay: no slide positions in insert '{}'", currentInsert.getName());
+            return;
+        }
 
-        double minScreenX = Double.MAX_VALUE;
-        double maxScreenX = -Double.MAX_VALUE;
-        double minScreenY = Double.MAX_VALUE;
-        double maxScreenY = -Double.MAX_VALUE;
+        // Pick the slide to overlay on.
+        // For multi-slide inserts, use the transform to find which slide the macro belongs to.
+        // For single-slide inserts, just use the first slide.
+        StageInsert.SlidePosition targetSlide = slides.get(0);
+        if (slides.size() > 1 && macroTransform != null) {
+            // Transform the macro center to stage coordinates
+            double[] macroCenter = {macroWidth / 2.0, macroHeight / 2.0};
+            double[] stageCenter = new double[2];
+            macroTransform.transform(macroCenter, 0, stageCenter, 0, 1);
 
-        int validCorners = 0;
-        for (int i = 0; i < macroCorners.length; i++) {
-            double[] corner = macroCorners[i];
-            // Transform macro pixel -> stage microns
-            double[] stagePos = new double[2];
-            macroTransform.transform(corner, 0, stagePos, 0, 1);
-
-            // Transform stage microns -> screen pixels
-            double[] screenPos = stageToScreen(stagePos[0], stagePos[1]);
-            if (screenPos != null) {
-                minScreenX = Math.min(minScreenX, screenPos[0]);
-                maxScreenX = Math.max(maxScreenX, screenPos[0]);
-                minScreenY = Math.min(minScreenY, screenPos[1]);
-                maxScreenY = Math.max(maxScreenY, screenPos[1]);
-                validCorners++;
-            }
-
-            // Log first corner in detail for diagnostics
-            if (i == 0) {
-                logger.debug("Macro corner (0,0) -> stage ({}, {}) -> screen {}",
-                        String.format("%.1f", stagePos[0]),
-                        String.format("%.1f", stagePos[1]),
-                        screenPos != null ? String.format("(%.1f, %.1f)", screenPos[0], screenPos[1]) : "null");
+            // Find which slide contains that stage position
+            StageInsert.SlidePosition match = currentInsert.getSlideAtPosition(
+                    stageCenter[0], stageCenter[1]);
+            if (match != null) {
+                targetSlide = match;
+                logger.debug("Macro overlay: matched to slide '{}' via transform", match.getName());
             }
         }
 
-        // Only update if we got valid coordinates
-        if (minScreenX != Double.MAX_VALUE) {
-            double screenWidth = maxScreenX - minScreenX;
-            double screenHeight = maxScreenY - minScreenY;
+        // Position the overlay to match the slide rectangle (same math as renderBackground)
+        double sx = offsetX + targetSlide.getXOffsetUm() * scale;
+        double sy = offsetY + targetSlide.getYOffsetUm() * scale;
+        double sw = targetSlide.getWidthUm() * scale;
+        double sh = targetSlide.getHeightUm() * scale;
 
-            macroOverlayView.setX(minScreenX);
-            macroOverlayView.setY(minScreenY);
-            macroOverlayView.setFitWidth(screenWidth);
-            macroOverlayView.setFitHeight(screenHeight);
+        macroOverlayView.setX(sx);
+        macroOverlayView.setY(sy);
+        macroOverlayView.setFitWidth(sw);
+        macroOverlayView.setFitHeight(sh);
 
-            logger.info("Macro overlay positioned: screen ({}, {}) size {}x{} px ({} of 4 corners valid)",
-                String.format("%.1f", minScreenX), String.format("%.1f", minScreenY),
-                String.format("%.1f", screenWidth), String.format("%.1f", screenHeight),
-                validCorners);
-        } else {
-            logger.warn("Macro overlay: no valid screen coordinates from corner transforms " +
-                    "(insert: origin=({}, {}), size={}x{} um, xInv={}, yInv={})",
-                    String.format("%.1f", currentInsert.getOriginXUm()),
-                    String.format("%.1f", currentInsert.getOriginYUm()),
-                    String.format("%.0f", currentInsert.getWidthUm()),
-                    String.format("%.0f", currentInsert.getHeightUm()),
-                    currentInsert.isXAxisInverted(), currentInsert.isYAxisInverted());
-        }
+        logger.info("Macro overlay positioned on '{}': screen ({}, {}) size {}x{} px",
+                targetSlide.getName(),
+                String.format("%.1f", sx), String.format("%.1f", sy),
+                String.format("%.1f", sw), String.format("%.1f", sh));
     }
 
     // ========== Size Handling ==========

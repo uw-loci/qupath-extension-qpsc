@@ -26,9 +26,6 @@ import java.util.concurrent.ExecutionException;
  * Utility class for retrieving and working with macro images from QuPath projects.
  * Provides centralized access to macro image functionality used across different workflows.
  */
-/**
- * Utility class for retrieving and working with macro images from QuPath projects.
- */
 public class MacroImageUtility {
     private static final Logger logger = LoggerFactory.getLogger(MacroImageUtility.class);
 
@@ -192,13 +189,6 @@ public class MacroImageUtility {
      * @param scannerName The scanner that produced this image (e.g., "Ocus40")
      * @return CroppedMacroResult containing the cropped image and offset information
      */
-    /**
-     * Crops the macro image based on scanner configuration.
-     *
-     * @param macroImage The original macro image
-     * @param scannerName The scanner that produced this image (e.g., "Ocus40")
-     * @return CroppedMacroResult containing the cropped image and offset information
-     */
     public static CroppedMacroResult cropToSlideArea(BufferedImage macroImage, String scannerName) {
         if (macroImage == null) {
             throw new IllegalArgumentException("Macro image cannot be null");
@@ -226,11 +216,11 @@ public class MacroImageUtility {
             return new CroppedMacroResult(macroImage, macroImage.getWidth(), macroImage.getHeight(), 0, 0);
         }
 
-        // Get slide bounds
-        Integer xMin = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_min");
-        Integer xMax = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_max");
-        Integer yMin = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_min");
-        Integer yMax = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_max");
+        // Get slide bounds (YAML uses x_min_px / x_max_px / y_min_px / y_max_px keys)
+        Integer xMin = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_min_px");
+        Integer xMax = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "x_max_px");
+        Integer yMin = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_min_px");
+        Integer yMax = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_max_px");
 
         if (xMin == null || xMax == null || yMin == null || yMax == null) {
             logger.error("Scanner '{}' requires cropping but slide bounds are not properly configured. Using defaults.",
