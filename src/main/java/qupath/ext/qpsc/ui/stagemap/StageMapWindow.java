@@ -85,10 +85,10 @@ public class StageMapWindow {
     // Poll interval for position updates - lower = more responsive but more network traffic
     // 200ms provides smooth tracking without overwhelming the socket connection
     private static final long POLL_INTERVAL_MS = 200;
-    private static final double WINDOW_WIDTH = 420;
-    private static final double WINDOW_HEIGHT = 380;
-    private static final double CANVAS_WIDTH = 380;
-    private static final double CANVAS_HEIGHT = 280;
+    private static final double WINDOW_WIDTH = 840;
+    private static final double WINDOW_HEIGHT = 760;
+    private static final double CANVAS_WIDTH = 760;
+    private static final double CANVAS_HEIGHT = 560;
 
     private StageMapWindow() {
         buildUI();

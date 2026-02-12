@@ -143,7 +143,9 @@ public class StageMapCanvas extends StackPane {
 
         // Create crosshair shapes
         crosshairCircle = new Circle(CROSSHAIR_RADIUS);
-        crosshairCircle.setFill(CROSSHAIR_COLOR);
+        crosshairCircle.setFill(Color.TRANSPARENT);
+        crosshairCircle.setStroke(CROSSHAIR_COLOR);
+        crosshairCircle.setStrokeWidth(1.5);
         crosshairCircle.setVisible(false);
 
         crosshairLineH1 = createCrosshairLine();
@@ -640,7 +642,7 @@ public class StageMapCanvas extends StackPane {
         // Update circle
         crosshairCircle.setCenterX(sx);
         crosshairCircle.setCenterY(sy);
-        crosshairCircle.setFill(color);
+        crosshairCircle.setStroke(color);
         crosshairCircle.setVisible(true);
 
         // Update lines
