@@ -265,9 +265,9 @@ public class WhiteBalanceDialog {
                 ComboBox<?> cameraCombo = (ComboBox<?>) cameraPane.getContent().lookup("#cameraCombo");
                 // Shared settings
                 TextField outputField = (TextField) sharedPane.getContent().lookup("#outputPath");
-                Spinner<?> targetSpinner = (Spinner<?>) sharedPane.getContent().lookup("#targetIntensity");
                 Spinner<?> toleranceSpinner = (Spinner<?>) sharedPane.getContent().lookup("#tolerance");
                 // Simple WB
+                Spinner<?> targetSpinner = (Spinner<?>) simplePane.getContent().lookup("#targetIntensity");
                 Spinner<?> simpleExpSpinner = (Spinner<?>) simplePane.getContent().lookup("#simpleExposure");
                 // PPM WB - exposures
                 Spinner<?> posExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#positiveExposure");
@@ -332,7 +332,6 @@ public class WhiteBalanceDialog {
                 dialog.setResultConverter(buttonType -> {
                     String camera = cameraCombo.getValue() != null ? cameraCombo.getValue().toString() : "JAI AP-3200T-USB";
                     String outPath = outputField.getText();
-                    double target = (Double) targetSpinner.getValue();
                     double tolerance = (Double) toleranceSpinner.getValue();
 
                     // Get advanced settings
@@ -366,7 +365,6 @@ public class WhiteBalanceDialog {
                     }
 
                     // Save shared preferences (output path is auto-derived, not saved)
-                    targetIntensityProperty.set(target);
                     toleranceProperty.set(tolerance);
                     cameraProperty.set(camera);
                     if (selectedObjective != null) {
@@ -390,7 +388,9 @@ public class WhiteBalanceDialog {
 
                     if (buttonType == runSimpleButton) {
                         double exposure = (Double) simpleExpSpinner.getValue();
+                        double target = (Double) targetSpinner.getValue();
                         simpleExposureProperty.set(exposure);
+                        targetIntensityProperty.set(target);
 
                         logger.info("User selected Simple White Balance:");
                         logger.info("  Objective: {}, Detector: {}", selectedObjective, selectedDetector);
@@ -438,11 +438,14 @@ public class WhiteBalanceDialog {
                         logger.info("  Negative ({}deg): {} ms, target={}", NEGATIVE_ANGLE, negExp, negTarget);
                         logger.info("  Crossed ({}deg): {} ms, target={}", CROSSED_ANGLE, crossExp, crossTarget);
                         logger.info("  Uncrossed ({}deg): {} ms, target={}", UNCROSSED_ANGLE, uncrossExp, uncrossTarget);
-                        logger.info("  Default target: {}, Tolerance: {}", target, tolerance);
+                        logger.info("  Tolerance: {}", tolerance);
                         logger.info("  Advanced: maxGain={}dB, gainThreshold={}, maxIter={}, calibrateBL={}",
                                 maxGain, gainThreshold, maxIter, calibrateBL);
                         logger.info("  Gain algo: baseGain={}, exposureSoftCap={}ms, boostedMaxGain={}dB",
                                 baseGain, exposureSoftCap, boostedMaxGain);
+
+                        // Per-angle targets are primary; fallback target from preference for compatibility
+                        double fallbackTarget = targetIntensityProperty.get();
 
                         return WBDialogResult.ppm(new PPMWBParams(
                                 outPath, camera, selectedObjective, selectedDetector,
@@ -450,7 +453,7 @@ public class WhiteBalanceDialog {
                                 NEGATIVE_ANGLE, negExp, negTarget,
                                 CROSSED_ANGLE, crossExp, crossTarget,
                                 UNCROSSED_ANGLE, uncrossExp, uncrossTarget,
-                                target, tolerance, advanced
+                                fallbackTarget, tolerance, advanced
                         ));
                     }
 
@@ -516,25 +519,6 @@ public class WhiteBalanceDialog {
         grid.setPadding(new Insets(10));
 
         int row = 0;
-
-        // Target intensity
-        Label targetLabel = new Label("Target Intensity:");
-        targetLabel.setPrefWidth(120);
-
-        Spinner<Double> targetSpinner = new Spinner<>(0.0, 255.0, targetIntensityProperty.get(), 1.0);
-        targetSpinner.setId("targetIntensity");
-        targetSpinner.setEditable(true);
-        targetSpinner.setPrefWidth(100);
-        targetSpinner.setTooltip(new Tooltip("Target mean intensity for all channels (0-255)"));
-
-        Label targetNote = new Label("(0-255, typically 180 for 70% reflectance)");
-        targetNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
-        targetNote.setTooltip(new Tooltip("0-255, typically 180 for 70% reflectance"));
-
-        grid.add(targetLabel, 0, row);
-        grid.add(targetSpinner, 1, row);
-        grid.add(targetNote, 2, row);
-        row++;
 
         // Tolerance
         Label toleranceLabel = new Label("Tolerance:");
@@ -662,7 +646,25 @@ public class WhiteBalanceDialog {
 
         expBox.getChildren().addAll(expLabel, expSpinner);
 
-        vbox.getChildren().addAll(descLabel, expBox);
+        // Target intensity (Simple WB only - PPM has per-angle targets)
+        HBox targetBox = new HBox(10);
+        targetBox.setAlignment(Pos.CENTER_LEFT);
+
+        Label targetLabel = new Label("Target Intensity:");
+        targetLabel.setPrefWidth(140);
+
+        Spinner<Double> targetSpinner = new Spinner<>(0.0, 255.0, targetIntensityProperty.get(), 1.0);
+        targetSpinner.setId("targetIntensity");
+        targetSpinner.setEditable(true);
+        targetSpinner.setPrefWidth(100);
+        targetSpinner.setTooltip(new Tooltip("Target mean intensity for all channels (0-255)"));
+
+        Label targetNote = new Label("(0-255, typically 180 for 70% reflectance)");
+        targetNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        targetBox.getChildren().addAll(targetLabel, targetSpinner, targetNote);
+
+        vbox.getChildren().addAll(descLabel, expBox, targetBox);
 
         TitledPane pane = new TitledPane("Simple White Balance", vbox);
         pane.setCollapsible(true);
