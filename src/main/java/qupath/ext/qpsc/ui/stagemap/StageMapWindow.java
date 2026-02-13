@@ -85,10 +85,10 @@ public class StageMapWindow {
     // Poll interval for position updates - lower = more responsive but more network traffic
     // 200ms provides smooth tracking without overwhelming the socket connection
     private static final long POLL_INTERVAL_MS = 200;
-    private static final double WINDOW_WIDTH = 840;
-    private static final double WINDOW_HEIGHT = 760;
-    private static final double CANVAS_WIDTH = 760;
-    private static final double CANVAS_HEIGHT = 560;
+    private static final double WINDOW_WIDTH = 560;
+    private static final double WINDOW_HEIGHT = 500;
+    private static final double CANVAS_WIDTH = 500;
+    private static final double CANVAS_HEIGHT = 360;
 
     private StageMapWindow() {
         buildUI();
@@ -181,8 +181,8 @@ public class StageMapWindow {
         }
 
         stage.setResizable(true);
-        stage.setMinWidth(350);
-        stage.setMinHeight(320);
+        stage.setMinWidth(300);
+        stage.setMinHeight(280);
 
         // Main layout
         VBox root = new VBox(8);

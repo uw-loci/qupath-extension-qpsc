@@ -70,6 +70,7 @@ public class StageMapCanvas extends StackPane {
     private static final double CROSSHAIR_LINE_LENGTH = 20;  // pixels
     private static final double CROSSHAIR_GAP = 2;  // pixels gap between circle and lines
     private static final double INSERT_PADDING = 20;  // pixels padding around insert
+    private static final double VIEW_MARGIN_UM = 5000.0;  // 5mm margin around slides in view
 
     // ========== Image Layer ==========
     private WritableImage backgroundImage;
@@ -174,7 +175,7 @@ public class StageMapCanvas extends StackPane {
         // Create macro overlay ImageView (behind other overlays)
         macroOverlayView = new ImageView();
         macroOverlayView.setOpacity(MACRO_OVERLAY_OPACITY);
-        macroOverlayView.setPreserveRatio(false);
+        macroOverlayView.setPreserveRatio(true);
         macroOverlayView.setVisible(false);
         macroOverlayView.setMouseTransparent(true);  // Don't interfere with click events
 
@@ -435,16 +436,22 @@ public class StageMapCanvas extends StackPane {
         double availableWidth = w - 2 * INSERT_PADDING;
         double availableHeight = h - 2 * INSERT_PADDING;
 
-        double scaleX = availableWidth / currentInsert.getWidthUm();
-        double scaleY = availableHeight / currentInsert.getHeightUm();
+        // Use slide-focused view bounds instead of full aperture dimensions
+        double[] viewBounds = currentInsert.getSlideViewBounds(VIEW_MARGIN_UM);
+        double viewX = viewBounds[0];
+        double viewY = viewBounds[1];
+        double viewWidth = viewBounds[2];
+        double viewHeight = viewBounds[3];
+
+        double scaleX = availableWidth / viewWidth;
+        double scaleY = availableHeight / viewHeight;
 
         scale = Math.min(scaleX, scaleY);
 
-        double renderedWidth = currentInsert.getWidthUm() * scale;
-        double renderedHeight = currentInsert.getHeightUm() * scale;
-
-        offsetX = (w - renderedWidth) / 2.0;
-        offsetY = (h - renderedHeight) / 2.0;
+        // Offset centers the view bounds region on screen, not the full aperture.
+        // The view origin (viewX, viewY) is shifted so the slide area is centered.
+        offsetX = (w - viewWidth * scale) / 2.0 - viewX * scale;
+        offsetY = (h - viewHeight * scale) / 2.0 - viewY * scale;
     }
 
     /**
@@ -851,15 +858,27 @@ public class StageMapCanvas extends StackPane {
         double sw = targetSlide.getWidthUm() * scale;
         double sh = targetSlide.getHeightUm() * scale;
 
-        macroOverlayView.setX(sx);
-        macroOverlayView.setY(sy);
+        // Scale macro to match slide width, preserving aspect ratio.
+        // The macro image represents the full physical slide, so width-matching is correct.
+        // Height is determined by the macro's aspect ratio, which may differ from the
+        // calibrated slide height (calibration points are typically slightly inward from
+        // the actual glass edges).
         macroOverlayView.setFitWidth(sw);
-        macroOverlayView.setFitHeight(sh);
+        macroOverlayView.setFitHeight(0);  // Let height be determined by aspect ratio
 
-        logger.info("Macro overlay positioned on '{}': screen ({}, {}) size {}x{} px",
+        // Calculate the actual rendered height based on macro aspect ratio
+        double macroAspect = (double) macroWidth / macroHeight;
+        double renderedHeight = sw / macroAspect;
+
+        // Center vertically relative to the slide rectangle
+        double verticalOffset = (sh - renderedHeight) / 2.0;
+        macroOverlayView.setX(sx);
+        macroOverlayView.setY(sy + verticalOffset);
+
+        logger.info("Macro overlay positioned on '{}': screen ({}, {}) fitWidth={} renderedH={} px",
                 targetSlide.getName(),
-                String.format("%.1f", sx), String.format("%.1f", sy),
-                String.format("%.1f", sw), String.format("%.1f", sh));
+                String.format("%.1f", sx), String.format("%.1f", sy + verticalOffset),
+                String.format("%.1f", sw), String.format("%.1f", renderedHeight));
     }
 
     // ========== Size Handling ==========

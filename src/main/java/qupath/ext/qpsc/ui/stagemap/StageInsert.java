@@ -261,6 +261,55 @@ public class StageInsert {
         return yAxisInverted;
     }
 
+    // ========== View Bounds ==========
+
+    /**
+     * Computes a bounding box focused on all slides plus a margin, for rendering purposes.
+     * <p>
+     * Instead of fitting the entire aperture into the canvas (which wastes space when the
+     * aperture is much larger than the slides), this returns a tighter view rectangle
+     * that shows just the slides with some context around them.
+     * <p>
+     * The returned values are in microns, relative to the insert origin (same coordinate
+     * space used by slide offsets and canvas rendering).
+     *
+     * @param marginUm Padding around the slide bounding box in microns (e.g., 5000 for 5mm)
+     * @return Array of [viewX, viewY, viewWidth, viewHeight] in microns relative to insert origin,
+     *         or the full aperture bounds if no slides are configured
+     */
+    public double[] getSlideViewBounds(double marginUm) {
+        if (slides.isEmpty()) {
+            return new double[]{0, 0, widthUm, heightUm};
+        }
+
+        // Find bounding box of all slides (in insert-relative coordinates)
+        double minX = Double.MAX_VALUE;
+        double minY = Double.MAX_VALUE;
+        double maxX = -Double.MAX_VALUE;
+        double maxY = -Double.MAX_VALUE;
+
+        for (SlidePosition slide : slides) {
+            minX = Math.min(minX, slide.getXOffsetUm());
+            minY = Math.min(minY, slide.getYOffsetUm());
+            maxX = Math.max(maxX, slide.getXOffsetUm() + slide.getWidthUm());
+            maxY = Math.max(maxY, slide.getYOffsetUm() + slide.getHeightUm());
+        }
+
+        // Add margin
+        minX -= marginUm;
+        minY -= marginUm;
+        maxX += marginUm;
+        maxY += marginUm;
+
+        // Clamp to aperture bounds (don't show beyond the aperture)
+        minX = Math.max(0, minX);
+        minY = Math.max(0, minY);
+        maxX = Math.min(widthUm, maxX);
+        maxY = Math.min(heightUm, maxY);
+
+        return new double[]{minX, minY, maxX - minX, maxY - minY};
+    }
+
     // ========== Coordinate Bounds ==========
 
     /**
