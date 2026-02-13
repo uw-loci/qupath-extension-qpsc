@@ -72,6 +72,9 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 		return EXTENSION_REPOSITORY;
 	}
 
+	/** True if any configured detector is a JAI camera. */
+	private boolean hasJAICamera;
+
 	@Override
 	public void installExtension(QuPathGUI qupath) {
 		logger.info("Installing extension: " + EXTENSION_NAME);
@@ -94,7 +97,19 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 			);
 		}
 
-		// 3) Build our menu on the FX thread
+		// 3) Check if any configured detector is a JAI camera
+		hasJAICamera = false;
+		if (configValid) {
+			try {
+				MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(
+						QPPreferenceDialog.getMicroscopeConfigFileProperty());
+				hasJAICamera = mgr.getHardwareDetectors().stream().anyMatch(mgr::isJAICamera);
+			} catch (Exception e) {
+				logger.warn("Could not check for JAI camera: {}", e.getMessage());
+			}
+		}
+
+		// 4) Build our menu on the FX thread
 		Platform.runLater(() -> addMenuItem(qupath));
 	}
 
@@ -327,22 +342,6 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 			}
 		});
 
-		// White balance calibration (JAI camera)
-		MenuItem whiteBalanceOption = new MenuItem(res.getString("menu.whiteBalance"));
-		whiteBalanceOption.setDisable(!configValid);
-		setMenuItemTooltip(whiteBalanceOption,
-				"Calibrate white balance for the JAI 3-CCD camera by adjusting per-channel " +
-				"exposure times. Simple mode calibrates at the current angle. PPM mode calibrates " +
-				"at all 4 standard PPM angles (positive, negative, crossed, uncrossed) with " +
-				"different starting exposures for each angle.");
-		whiteBalanceOption.setOnAction(e -> {
-			try {
-				QPScopeController.getInstance().startWorkflow("whiteBalance");
-			} catch (IOException ex) {
-				throw new RuntimeException(ex);
-			}
-		});
-
 		// Camera control dialog (view and apply camera settings)
 		MenuItem cameraControlOption = new MenuItem(res.getString("menu.cameraControl"));
 		setMenuItemTooltip(cameraControlOption,
@@ -366,7 +365,6 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 				new SeparatorMenuItem(),
 				// Camera calibration
 				backgroundCollectionOption,
-				whiteBalanceOption,
 				new SeparatorMenuItem(),
 				// Autofocus tools
 				autofocusEditorOption,
@@ -381,6 +379,49 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 				// Server settings
 				serverConnectionOption
 		);
+
+		// Conditionally add JAI Camera submenu when a JAI camera is configured
+		if (hasJAICamera) {
+			Menu jaiCameraMenu = new Menu("JAI Camera");
+
+			// JAI White Balance Calibration
+			MenuItem jaiWhiteBalanceOption = new MenuItem(res.getString("menu.jaiWhiteBalance"));
+			jaiWhiteBalanceOption.setDisable(!configValid);
+			setMenuItemTooltip(jaiWhiteBalanceOption,
+					"Calibrate white balance for the JAI 3-CCD camera by adjusting per-channel " +
+					"exposure times. Simple mode calibrates at the current angle. PPM mode calibrates " +
+					"at all 4 standard PPM angles (positive, negative, crossed, uncrossed) with " +
+					"different starting exposures for each angle.");
+			jaiWhiteBalanceOption.setOnAction(e -> {
+				try {
+					QPScopeController.getInstance().startWorkflow("whiteBalance");
+				} catch (IOException ex) {
+					throw new RuntimeException(ex);
+				}
+			});
+
+			// JAI Noise Characterization
+			MenuItem noiseCharOption = new MenuItem(res.getString("menu.jaiNoiseCharacterization"));
+			noiseCharOption.setDisable(!configValid);
+			setMenuItemTooltip(noiseCharOption,
+					"Systematically test the JAI camera's noise performance across a grid of " +
+					"gain and exposure settings. Identifies optimal settings for maximum " +
+					"signal-to-noise ratio. Quick mode (~5 min) or Full mode (~15 min).");
+			noiseCharOption.setOnAction(e -> {
+				try {
+					QPScopeController.getInstance().startWorkflow("noiseCharacterization");
+				} catch (IOException ex) {
+					throw new RuntimeException(ex);
+				}
+			});
+
+			jaiCameraMenu.getItems().addAll(jaiWhiteBalanceOption, noiseCharOption);
+
+			// Insert JAI Camera submenu before the final separator + serverConnection
+			int insertIdx = utilitiesMenu.getItems().size() - 2;
+			utilitiesMenu.getItems().add(insertIdx, new SeparatorMenuItem());
+			utilitiesMenu.getItems().add(insertIdx + 1, jaiCameraMenu);
+		}
 
 		// === BUILD FINAL MENU ===
 		extensionMenu.getItems().addAll(

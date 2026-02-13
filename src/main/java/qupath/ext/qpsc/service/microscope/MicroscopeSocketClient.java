@@ -186,6 +186,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         SNAP("snap____"),
         /** Get per-channel noise stats (multi-frame temporal analysis) */
         GETNOISE("getnoise"),
+        /** JAI noise characterization across gain/exposure grid */
+        NOISCHAR("noischar"),
 
         // Live Viewer Commands (core-level, bypasses MM studio/live window)
         /** Get latest frame from MM circular buffer */
@@ -3305,6 +3307,211 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
 
         return results;
+    }
+
+    // ==================== Noise Characterization Methods ====================
+
+    /**
+     * Result of noise characterization containing summary information.
+     *
+     * @param totalConfigs Number of gain/exposure configurations tested
+     * @param plotsGenerated Whether visualization plots were generated
+     * @param bestGain Unified gain value with the best SNR (unsaturated)
+     * @param bestExposureMs Exposure time in ms with the best SNR (unsaturated)
+     * @param outputPath Path to the results directory
+     */
+    public record NoiseCharacterizationResult(
+            int totalConfigs, boolean plotsGenerated,
+            double bestGain, double bestExposureMs, String outputPath) {}
+
+    /**
+     * Runs JAI noise characterization across a grid of gain and exposure settings.
+     *
+     * <p>This method tests multiple combinations of unified gain and exposure time
+     * to characterize the camera's noise performance and find optimal settings.
+     * The test sends PROGRESS updates during execution for UI feedback.
+     *
+     * @param outputPath Output directory for results (CSV, plots)
+     * @param preset Preset name: "quick", "full", or "custom"
+     * @param gains Custom gain values (required if preset is "custom", null otherwise)
+     * @param exposures Custom exposure values in ms (required if preset is "custom", null otherwise)
+     * @param numFrames Number of frames to average per measurement (default 10)
+     * @param generatePlots Whether to generate visualization plots
+     * @param progressCallback Callback receiving (current, total) progress updates (can be null)
+     * @return NoiseCharacterizationResult with summary data
+     * @throws IOException if communication fails or characterization fails
+     */
+    public NoiseCharacterizationResult runNoiseCharacterization(
+            String outputPath,
+            String preset,
+            List<Double> gains,
+            List<Double> exposures,
+            int numFrames,
+            boolean generatePlots,
+            java.util.function.BiConsumer<Integer, Integer> progressCallback) throws IOException {
+
+        // Build NOISCHAR command message
+        StringBuilder messageBuilder = new StringBuilder();
+        messageBuilder.append("--output ").append(outputPath);
+        messageBuilder.append(" --preset ").append(preset);
+        messageBuilder.append(" --frames ").append(numFrames);
+        messageBuilder.append(" --plots ").append(generatePlots ? "true" : "false");
+
+        if (gains != null && !gains.isEmpty()) {
+            messageBuilder.append(" --gains ");
+            for (int i = 0; i < gains.size(); i++) {
+                if (i > 0) messageBuilder.append(",");
+                messageBuilder.append(gains.get(i));
+            }
+        }
+
+        if (exposures != null && !exposures.isEmpty()) {
+            messageBuilder.append(" --exposures ");
+            for (int i = 0; i < exposures.size(); i++) {
+                if (i > 0) messageBuilder.append(",");
+                messageBuilder.append(exposures.get(i));
+            }
+        }
+
+        messageBuilder.append(" ").append(END_MARKER);
+
+        String message = messageBuilder.toString();
+        byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
+
+        logger.info("Sending JAI noise characterization command:");
+        logger.info("  Output: {}", outputPath);
+        logger.info("  Preset: {}", preset);
+        logger.info("  Frames: {}", numFrames);
+        logger.info("  Generate plots: {}", generatePlots);
+        if (gains != null) logger.info("  Custom gains: {}", gains);
+        if (exposures != null) logger.info("  Custom exposures: {}", exposures);
+
+        synchronized (socketLock) {
+            ensureConnected();
+
+            int originalTimeout = 0;
+            try {
+                originalTimeout = socket.getSoTimeout();
+                // Noise characterization can take up to 20 minutes for full grid
+                socket.setSoTimeout(1200000); // 20 minutes
+                logger.debug("Increased socket timeout to 20 minutes for noise characterization");
+            } catch (IOException e) {
+                logger.warn("Failed to adjust socket timeout", e);
+            }
+
+            try {
+                OutputStream output = socket.getOutputStream();
+                InputStream input = socket.getInputStream();
+
+                // Send NOISCHAR command (8 bytes) + message
+                output.write(Command.NOISCHAR.getValue());
+                output.write(messageBytes);
+                output.flush();
+
+                logger.info("Noise characterization command sent, waiting for server response...");
+
+                // Read initial response (STARTED or FAILED)
+                byte[] buffer = new byte[8192];
+                int bytesRead = input.read(buffer);
+                if (bytesRead > 0) {
+                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                    logger.info("Received initial server response: {}", response);
+
+                    if (response.startsWith("FAILED:")) {
+                        throw new IOException("Server rejected noise characterization: " + response);
+                    } else if (!response.startsWith("STARTED:")) {
+                        logger.warn("Unexpected initial server response: {}", response);
+                    }
+                }
+
+                // Read responses in a loop until SUCCESS or FAILED
+                logger.info("Waiting for noise characterization to complete...");
+                while (true) {
+                    bytesRead = input.read(buffer);
+                    if (bytesRead <= 0) {
+                        throw new IOException("Connection closed during noise characterization");
+                    }
+
+                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                    lastActivityTime.set(System.currentTimeMillis());
+
+                    // Handle PROGRESS updates
+                    if (response.startsWith("PROGRESS:")) {
+                        try {
+                            String[] parts = response.substring(9).split(":");
+                            if (parts.length >= 2) {
+                                int current = Integer.parseInt(parts[0].trim());
+                                int total = Integer.parseInt(parts[1].trim());
+                                logger.debug("Noise characterization progress: {}/{}", current, total);
+
+                                if (progressCallback != null) {
+                                    progressCallback.accept(current, total);
+                                }
+                            }
+                        } catch (NumberFormatException e) {
+                            logger.warn("Failed to parse progress message: {}", response);
+                        }
+                        continue;
+                    }
+
+                    // Handle FAILED
+                    if (response.startsWith("FAILED:")) {
+                        throw new IOException("Noise characterization failed: " + response.substring(7));
+                    }
+
+                    // Handle SUCCESS
+                    // Format: SUCCESS:{path}|{totalConfigs}|{plots}|{bestGain},{bestExp}
+                    if (response.startsWith("SUCCESS:")) {
+                        String data = response.substring(8);
+                        String[] parts = data.split("\\|");
+
+                        String resultPath = parts.length > 0 ? parts[0].trim() : outputPath;
+                        int totalConfigs = 0;
+                        boolean plots = false;
+                        double bestGain = 0;
+                        double bestExp = 0;
+
+                        if (parts.length > 1) {
+                            try { totalConfigs = Integer.parseInt(parts[1].trim()); }
+                            catch (NumberFormatException ignored) {}
+                        }
+                        if (parts.length > 2) {
+                            plots = "true".equals(parts[2].trim());
+                        }
+                        if (parts.length > 3) {
+                            String[] bestParts = parts[3].trim().split(",");
+                            if (bestParts.length >= 2) {
+                                try {
+                                    bestGain = Double.parseDouble(bestParts[0].trim());
+                                    bestExp = Double.parseDouble(bestParts[1].trim());
+                                } catch (NumberFormatException ignored) {}
+                            }
+                        }
+
+                        logger.info("Noise characterization complete: {} configs, best at gain={}, exp={}ms",
+                                totalConfigs, bestGain, bestExp);
+                        return new NoiseCharacterizationResult(totalConfigs, plots, bestGain, bestExp, resultPath);
+                    }
+
+                    // Unknown response - log and continue
+                    logger.warn("Unexpected response during noise characterization: {}", response);
+                }
+
+            } catch (IOException e) {
+                logger.error("Error during noise characterization", e);
+                handleIOException(new IOException("Noise characterization error", e));
+                throw new IOException("Noise characterization error: " + e.getMessage(), e);
+            } finally {
+                if (socket != null) {
+                    try {
+                        socket.setSoTimeout(originalTimeout);
+                        logger.debug("Restored socket timeout to {}ms", originalTimeout);
+                    } catch (IOException e) {
+                        logger.warn("Failed to restore original socket timeout", e);
+                    }
+                }
+            }
+        }
     }
 
     // ==================== Camera Control Methods ====================

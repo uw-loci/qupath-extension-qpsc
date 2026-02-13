@@ -36,6 +36,7 @@ import qupath.ext.qpsc.ui.ServerConnectionController;
  *   <li><strong>autofocusEditor</strong> - Per-objective autofocus settings editor</li>
  *   <li><strong>liveViewer</strong> - Live camera feed with integrated stage controls</li>
  *   <li><strong>cameraControl</strong> - View and apply camera exposure/gain settings</li>
+ *   <li><strong>noiseCharacterization</strong> - JAI camera noise characterization across gain/exposure grid</li>
  *   <li><strong>serverConnection</strong> - Connection testing and server communication diagnostics</li>
  * </ol>
  *
@@ -181,6 +182,10 @@ public class QPScopeController {
             case "whiteBalance" -> {
                 logger.debug("Launching white balance calibration workflow");
                 WhiteBalanceWorkflow.run();
+            }
+            case "noiseCharacterization" -> {
+                logger.debug("Launching JAI noise characterization workflow");
+                NoiseCharacterizationWorkflow.run();
             }
             case "cameraControl" -> {
                 logger.debug("Launching camera control dialog");
