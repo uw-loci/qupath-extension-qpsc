@@ -14,7 +14,6 @@ import qupath.ext.qpsc.modality.ppm.PPMPreferences;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.lib.scripting.QP;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,8 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.UnaryOperator;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -152,108 +149,92 @@ public class PPMAngleSelectionController {
             Dialog<AngleExposureResult> dialog = new Dialog<>();
             dialog.initModality(Modality.APPLICATION_MODAL);
             dialog.setTitle("PPM Angle Selection");
-            dialog.setHeaderText("Select polarization angles (in tick marks) and exposure times for acquisition:");
+            dialog.setHeaderText("Select polarization angles (in tick marks) for acquisition:");
 
             GridPane grid = new GridPane();
             grid.setHgap(10);
             grid.setVgap(10);
             grid.setPadding(new Insets(10));
 
-            UnaryOperator<TextFormatter.Change> doubleFilter = change -> {
-                String newText = change.getControlNewText();
-                if (newText.isEmpty()) return change;
-                try {
-                    double value = Double.parseDouble(newText);
-                    if (value > 0) return change;
-                } catch (NumberFormatException ignored) {}
-                return null;
-            };
-
-            grid.add(new Label("Angle"),0,0);
-            grid.add(new Label("Exposure (ms)"),2,0);
+            grid.add(new Label("Angle"), 0, 0);
 
             CheckBox minusCheck = new CheckBox(String.format("%.1f 'degrees'", minusAngle));
             minusCheck.setSelected(PPMPreferences.getMinusSelected());
-            TextField minusExposure = new TextField(String.valueOf(getDefaultExposureTime(minusAngle, modality, objective, detector)));
-            minusExposure.setTextFormatter(new TextFormatter<>(doubleFilter));
-            minusExposure.setPrefWidth(80);
-            minusExposure.setDisable(!minusCheck.isSelected());
-            grid.add(minusCheck,0,1);
-            grid.add(minusExposure,2,1);
+            grid.add(minusCheck, 0, 1);
 
             CheckBox zeroCheck = new CheckBox("0 'degrees'");
             zeroCheck.setSelected(PPMPreferences.getZeroSelected());
-            TextField zeroExposure = new TextField(String.valueOf(getDefaultExposureTime(0.0, modality, objective, detector)));
-            zeroExposure.setTextFormatter(new TextFormatter<>(doubleFilter));
-            zeroExposure.setPrefWidth(80);
-            zeroExposure.setDisable(!zeroCheck.isSelected());
-            grid.add(zeroCheck,0,2);
-            grid.add(zeroExposure,2,2);
+            grid.add(zeroCheck, 0, 2);
 
             CheckBox plusCheck = new CheckBox(String.format("%.1f 'degrees'", plusAngle));
             plusCheck.setSelected(PPMPreferences.getPlusSelected());
-            TextField plusExposure = new TextField(String.valueOf(getDefaultExposureTime(plusAngle, modality, objective, detector)));
-            plusExposure.setTextFormatter(new TextFormatter<>(doubleFilter));
-            plusExposure.setPrefWidth(80);
-            plusExposure.setDisable(!plusCheck.isSelected());
-            grid.add(plusCheck,0,3);
-            grid.add(plusExposure,2,3);
+            grid.add(plusCheck, 0, 3);
 
             CheckBox uncrossedCheck = new CheckBox(String.format("%.1f 'degrees' (uncrossed)", uncrossedAngle));
             uncrossedCheck.setSelected(PPMPreferences.getUncrossedSelected());
-            TextField uncrossedExposure = new TextField(String.valueOf(getDefaultExposureTime(uncrossedAngle, modality, objective, detector)));
-            uncrossedExposure.setTextFormatter(new TextFormatter<>(doubleFilter));
-            uncrossedExposure.setPrefWidth(80);
-            uncrossedExposure.setDisable(!uncrossedCheck.isSelected());
-            grid.add(uncrossedCheck,0,4);
-            grid.add(uncrossedExposure,2,4);
+            grid.add(uncrossedCheck, 0, 4);
 
-            minusCheck.selectedProperty().addListener((obs,o,s)->{
-                minusExposure.setDisable(!s);
-                if(!s) minusExposure.clear();
+            // Persist checkbox selections to preferences
+            minusCheck.selectedProperty().addListener((obs, o, s) -> {
                 PPMPreferences.setMinusSelected(s);
                 logger.debug("PPM minus tick selection updated to: {}", s);
             });
-            zeroCheck.selectedProperty().addListener((obs,o,s)->{
-                zeroExposure.setDisable(!s);
-                if(!s) zeroExposure.clear();
+            zeroCheck.selectedProperty().addListener((obs, o, s) -> {
                 PPMPreferences.setZeroSelected(s);
                 logger.debug("PPM zero tick selection updated to: {}", s);
             });
-            plusCheck.selectedProperty().addListener((obs,o,s)->{
-                plusExposure.setDisable(!s);
-                if(!s) plusExposure.clear();
+            plusCheck.selectedProperty().addListener((obs, o, s) -> {
                 PPMPreferences.setPlusSelected(s);
                 logger.debug("PPM plus tick selection updated to: {}", s);
             });
-            uncrossedCheck.selectedProperty().addListener((obs,o,s)->{
-                uncrossedExposure.setDisable(!s);
-                if(!s) uncrossedExposure.clear();
+            uncrossedCheck.selectedProperty().addListener((obs, o, s) -> {
                 PPMPreferences.setUncrossedSelected(s);
                 logger.debug("PPM uncrossed tick selection updated to: {}", s);
             });
 
-            minusExposure.textProperty().addListener((obs,o,n)->{ if(!n.isEmpty()) PPMPreferences.setMinusExposureMs(Double.parseDouble(n)); });
-            zeroExposure.textProperty().addListener((obs,o,n)->{ if(!n.isEmpty()) PPMPreferences.setZeroExposureMs(Double.parseDouble(n)); });
-            plusExposure.textProperty().addListener((obs,o,n)->{ if(!n.isEmpty()) PPMPreferences.setPlusExposureMs(Double.parseDouble(n)); });
-            uncrossedExposure.textProperty().addListener((obs,o,n)->{ if(!n.isEmpty()) PPMPreferences.setUncrossedExposureMs(Double.parseDouble(n)); });
-
-            Label info = new Label("Each selected angle will be acquired with the specified exposure time.");
+            Label info = new Label("Exposure times are determined automatically from background/config settings.");
             Button selectAll = new Button("Select All");
             Button selectNone = new Button("Select None");
-            selectAll.setOnAction(e->{minusCheck.setSelected(true);zeroCheck.setSelected(true);plusCheck.setSelected(true);uncrossedCheck.setSelected(true);});
-            selectNone.setOnAction(e->{minusCheck.setSelected(false);zeroCheck.setSelected(false);plusCheck.setSelected(false);uncrossedCheck.setSelected(false);});
+            selectAll.setOnAction(e -> {
+                minusCheck.setSelected(true);
+                zeroCheck.setSelected(true);
+                plusCheck.setSelected(true);
+                uncrossedCheck.setSelected(true);
+            });
+            selectNone.setOnAction(e -> {
+                minusCheck.setSelected(false);
+                zeroCheck.setSelected(false);
+                plusCheck.setSelected(false);
+                uncrossedCheck.setSelected(false);
+            });
             HBox quickButtons = new HBox(10, selectAll, selectNone);
 
-            // Check for missing background images and add warning if needed
-            Node backgroundWarning = createBackgroundWarningIfNeeded(modality, objective, detector);
-            
+            // Dynamic warning area that updates based on checkbox selection
+            VBox warningArea = new VBox(8);
+            warningArea.setPadding(new Insets(5, 0, 5, 0));
+
+            // Map angles to their checkboxes for dynamic warning updates
+            Map<Double, CheckBox> angleCheckboxMap = new HashMap<>();
+            angleCheckboxMap.put(minusAngle, minusCheck);
+            angleCheckboxMap.put(0.0, zeroCheck);
+            angleCheckboxMap.put(plusAngle, plusCheck);
+            angleCheckboxMap.put(uncrossedAngle, uncrossedCheck);
+
+            // Helper to update warnings based on current checkbox state
+            Runnable updateWarnings = () -> updateDynamicWarnings(
+                    warningArea, angleCheckboxMap, modality, objective, detector);
+
+            // Wire checkbox listeners to update warnings
+            minusCheck.selectedProperty().addListener((obs, o, s) -> updateWarnings.run());
+            zeroCheck.selectedProperty().addListener((obs, o, s) -> updateWarnings.run());
+            plusCheck.selectedProperty().addListener((obs, o, s) -> updateWarnings.run());
+            uncrossedCheck.selectedProperty().addListener((obs, o, s) -> updateWarnings.run());
+
+            // Initial warning update
+            updateWarnings.run();
+
             VBox content = new VBox(10);
-            content.getChildren().add(info);
-            if (backgroundWarning != null) {
-                content.getChildren().add(backgroundWarning);
-            }
-            content.getChildren().addAll(grid, new Separator(), quickButtons);
+            content.getChildren().addAll(info, warningArea, grid, new Separator(), quickButtons);
             content.setPadding(new Insets(20));
             dialog.getDialogPane().setContent(content);
 
@@ -262,32 +243,37 @@ public class PPMAngleSelectionController {
             dialog.getDialogPane().getButtonTypes().addAll(okType, cancelType);
             Node okNode = dialog.getDialogPane().lookupButton(okType);
 
-            BooleanBinding valid = Bindings.createBooleanBinding(() -> {
-                boolean any = minusCheck.isSelected() || zeroCheck.isSelected() || plusCheck.isSelected() || uncrossedCheck.isSelected();
-                if(!any) return false;
-                if(uncrossedCheck.isSelected() && !isValidPosDouble(uncrossedExposure.getText())) return false;
-                if(plusCheck.isSelected() && !isValidPosDouble(plusExposure.getText())) return false;
-                if(zeroCheck.isSelected() && !isValidPosDouble(zeroExposure.getText())) return false;
-                if(minusCheck.isSelected() && !isValidPosDouble(minusExposure.getText())) return false;
-
-                return true;
-            }, minusCheck.selectedProperty(), zeroCheck.selectedProperty(), plusCheck.selectedProperty(), uncrossedCheck.selectedProperty(),
-            minusExposure.textProperty(), zeroExposure.textProperty(), plusExposure.textProperty(), uncrossedExposure.textProperty());
+            // OK button enabled when at least one checkbox is selected
+            BooleanBinding valid = Bindings.createBooleanBinding(() ->
+                    minusCheck.isSelected() || zeroCheck.isSelected()
+                            || plusCheck.isSelected() || uncrossedCheck.isSelected(),
+                    minusCheck.selectedProperty(), zeroCheck.selectedProperty(),
+                    plusCheck.selectedProperty(), uncrossedCheck.selectedProperty());
             okNode.disableProperty().bind(valid.not());
-            //TODO MAKE THIS EASIER TO CHANGE IN THE FUTURE AND NOT SET IN THE GUI CODE
+
             dialog.setResultConverter(button -> {
-                if(button==okType){
+                if (button == okType) {
                     // Optimized angle order to minimize rotation stage movement:
                     // 90deg -> +7deg -> 0deg -> -7deg minimizes total rotation distance
-                    // Previous order (90 -> -7 -> 0 -> +7) required 111deg total rotation
-                    // New order (90 -> +7 -> 0 -> -7) requires only 31deg total rotation
                     List<AngleExposure> list = new ArrayList<>();
-                    if(uncrossedCheck.isSelected()) list.add(new AngleExposure(uncrossedAngle,Double.parseDouble(uncrossedExposure.getText())));
-                    if(plusCheck.isSelected()) list.add(new AngleExposure(plusAngle,Double.parseDouble(plusExposure.getText())));
-                    if(zeroCheck.isSelected()) list.add(new AngleExposure(0.0,Double.parseDouble(zeroExposure.getText())));
-                    if(minusCheck.isSelected()) list.add(new AngleExposure(minusAngle,Double.parseDouble(minusExposure.getText())));
+                    if (uncrossedCheck.isSelected()) {
+                        list.add(new AngleExposure(uncrossedAngle,
+                                getDefaultExposureTime(uncrossedAngle, modality, objective, detector)));
+                    }
+                    if (plusCheck.isSelected()) {
+                        list.add(new AngleExposure(plusAngle,
+                                getDefaultExposureTime(plusAngle, modality, objective, detector)));
+                    }
+                    if (zeroCheck.isSelected()) {
+                        list.add(new AngleExposure(0.0,
+                                getDefaultExposureTime(0.0, modality, objective, detector)));
+                    }
+                    if (minusCheck.isSelected()) {
+                        list.add(new AngleExposure(minusAngle,
+                                getDefaultExposureTime(minusAngle, modality, objective, detector)));
+                    }
 
-                    logger.info("PPM angles and exposures selected: {}", list);
+                    logger.info("PPM angles selected with auto-determined exposures: {}", list);
                     return new AngleExposureResult(list);
                 }
                 return null;
@@ -300,6 +286,127 @@ public class PPMAngleSelectionController {
             }, () -> future.cancel(true));
         });
         return future;
+    }
+
+    /**
+     * Updates the dynamic warning area based on which angle checkboxes are selected.
+     * Checks background image availability and white balance status for each selected angle.
+     *
+     * @param warningArea the VBox to populate with warnings
+     * @param angleCheckboxMap map of angle values to their checkboxes
+     * @param modality the modality name
+     * @param objective the objective ID
+     * @param detector the detector ID
+     */
+    private static void updateDynamicWarnings(VBox warningArea, Map<Double, CheckBox> angleCheckboxMap,
+                                              String modality, String objective, String detector) {
+        warningArea.getChildren().clear();
+
+        // Collect selected angles
+        List<Double> selectedAngles = new ArrayList<>();
+        for (Map.Entry<Double, CheckBox> entry : angleCheckboxMap.entrySet()) {
+            if (entry.getValue().isSelected()) {
+                selectedAngles.add(entry.getKey());
+            }
+        }
+
+        if (selectedAngles.isEmpty()) {
+            return;
+        }
+
+        // Skip checks if hardware parameters are missing
+        if (modality == null || objective == null || detector == null) {
+            return;
+        }
+
+        try {
+            String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configFileLocation);
+
+            // Check if background correction is enabled
+            boolean bgEnabled = configManager.isBackgroundCorrectionEnabled(modality);
+
+            if (!bgEnabled) {
+                warningArea.getChildren().add(createBackgroundWarning(
+                        "Background correction disabled",
+                        "Background correction is disabled for this modality in the config.",
+                        "Images will be acquired without background correction.",
+                        false));
+                return;
+            }
+
+            String backgroundFolder = configManager.getBackgroundCorrectionFolder(modality);
+            if (backgroundFolder == null) {
+                warningArea.getChildren().add(createBackgroundWarning(
+                        "No background folder configured",
+                        "Background correction is enabled but no background folder is set.",
+                        "Configure background folder or disable background correction.",
+                        true));
+                return;
+            }
+
+            // Check background settings
+            BackgroundSettingsReader.BackgroundSettings backgroundSettings =
+                    BackgroundSettingsReader.findBackgroundSettings(backgroundFolder, modality, objective, detector);
+
+            if (backgroundSettings == null) {
+                warningArea.getChildren().add(createBackgroundWarning(
+                        "No background images found",
+                        String.format("No background images for %s + %s + %s.",
+                                modality, getObjectiveDisplayName(objective), getDetectorDisplayName(detector)),
+                        "Collect background images before acquisition for optimal quality.",
+                        true));
+                return;
+            }
+
+            // Check per-angle coverage
+            Set<Double> bgAngles = new HashSet<>();
+            for (qupath.ext.qpsc.modality.AngleExposure bgAe : backgroundSettings.angleExposures) {
+                bgAngles.add(bgAe.ticks());
+            }
+
+            List<Double> missingAngles = new ArrayList<>();
+            for (Double angle : selectedAngles) {
+                boolean found = false;
+                for (Double bgAngle : bgAngles) {
+                    if (Math.abs(bgAngle - angle) < 0.001) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    missingAngles.add(angle);
+                }
+            }
+
+            if (!missingAngles.isEmpty()) {
+                String angleList = missingAngles.stream()
+                        .map(a -> String.format("%.1f", a))
+                        .collect(Collectors.joining(", "));
+                warningArea.getChildren().add(createBackgroundWarning(
+                        "Missing background for some angles",
+                        String.format("No background image for angle(s): %s degrees.", angleList),
+                        "Background correction will be skipped for these angles.",
+                        true));
+            }
+
+            // Check white balance status
+            boolean wbEnabled = configManager.isWhiteBalanceEnabled(modality, objective, detector);
+            if (wbEnabled) {
+                Map<String, Map<String, Double>> wbGains =
+                        configManager.getWhiteBalanceGains(modality, objective, detector);
+                if (wbGains == null || wbGains.isEmpty()) {
+                    warningArea.getChildren().add(createBackgroundWarning(
+                            "White balance not calibrated",
+                            "White balance is enabled but no calibration data found.",
+                            "Run white balance calibration for best color accuracy.",
+                            false));
+                }
+            }
+
+        } catch (Exception e) {
+            logger.debug("Error updating dynamic warnings: {}", e.getMessage());
+        }
     }
 
     /**
@@ -873,18 +980,5 @@ public class PPMAngleSelectionController {
         if (detector.contains("BASLER")) return "Basler Camera";
         
         return detector; // Return full name if no pattern matches
-    }
-
-    /**
-     * Validates that a text string represents a positive decimal number.
-     * 
-     * <p>This helper method is used to validate exposure time input fields to ensure
-     * they contain valid positive decimal values before enabling the OK button.</p>
-     * 
-     * @param text the text string to validate
-     * @return {@code true} if the text represents a positive number, {@code false} otherwise
-     */
-    private static boolean isValidPosDouble(String text){
-        try{double v=Double.parseDouble(text);return v>0;}catch(NumberFormatException e){return false;}
     }
 }

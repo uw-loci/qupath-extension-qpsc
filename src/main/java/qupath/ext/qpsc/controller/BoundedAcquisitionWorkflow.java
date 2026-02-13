@@ -270,6 +270,10 @@ public class BoundedAcquisitionWorkflow {
 
                         String boundsMode = "bounds";
 
+                        // Stop live viewing before acquisition starts
+                        MicroscopeController.LiveViewState liveState =
+                                MicroscopeController.getInstance().stopAllLiveViewing();
+
                         // Start socket-based acquisition
                         CompletableFuture<Void> acquisitionFuture = CompletableFuture.runAsync(() -> {
                             try {
@@ -433,6 +437,10 @@ public class BoundedAcquisitionWorkflow {
                                 throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);
                             }
                         });
+
+                        // Restore live viewing when acquisition completes (stitching does not need camera)
+                        acquisitionFuture.whenComplete((ignored0, ex0) ->
+                                MicroscopeController.getInstance().restoreLiveViewState(liveState));
 
                         // Handle stitching after acquisition
                         acquisitionFuture.thenCompose(ignored -> {

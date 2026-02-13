@@ -800,7 +800,7 @@ public class MicroscopeController {
      *
      * <p>This method:
      * <ul>
-     *   <li>Hides the QPSC Live Viewer window (which stops its continuous acquisition)</li>
+     *   <li>Stops QPSC Live Viewer streaming (window stays open for user)</li>
      *   <li>Stops MM's studio live mode if running</li>
      * </ul>
      *
@@ -809,14 +809,13 @@ public class MicroscopeController {
      *         the operation completes.
      */
     public LiveViewState stopAllLiveViewing() {
-        boolean qpscLiveViewerWasVisible = false;
+        boolean qpscLiveViewerWasStreaming = false;
         boolean mmLiveModeWasRunning = false;
 
-        // Stop QPSC Live Viewer
-        if (LiveViewerWindow.isVisible()) {
-            qpscLiveViewerWasVisible = true;
-            logger.info("Stopping QPSC Live Viewer for exclusive camera access");
-            LiveViewerWindow.hide();
+        // Stop QPSC Live Viewer streaming (window stays open)
+        if (LiveViewerWindow.isStreamingActive()) {
+            qpscLiveViewerWasStreaming = LiveViewerWindow.stopStreaming();
+            logger.info("Stopped QPSC Live Viewer streaming for exclusive camera access");
             // Give it a moment to fully stop
             try {
                 Thread.sleep(200);
@@ -839,10 +838,10 @@ public class MicroscopeController {
             Thread.currentThread().interrupt();
         }
 
-        logger.info("All live viewing stopped - QPSC was visible: {}, MM was running: {}",
-                qpscLiveViewerWasVisible, mmLiveModeWasRunning);
+        logger.info("All live viewing stopped - QPSC was streaming: {}, MM was running: {}",
+                qpscLiveViewerWasStreaming, mmLiveModeWasRunning);
 
-        return new LiveViewState(qpscLiveViewerWasVisible, mmLiveModeWasRunning);
+        return new LiveViewState(qpscLiveViewerWasStreaming, mmLiveModeWasRunning);
     }
 
     /**
@@ -865,10 +864,10 @@ public class MicroscopeController {
             }
         }
 
-        // Restore QPSC Live Viewer
-        if (state.qpscLiveViewerWasVisible()) {
-            logger.info("Restoring QPSC Live Viewer");
-            LiveViewerWindow.show();
+        // Restart QPSC Live Viewer streaming (window was kept open)
+        if (state.qpscLiveViewerWasStreaming()) {
+            logger.info("Restarting QPSC Live Viewer streaming");
+            LiveViewerWindow.restartStreaming();
         }
     }
 
@@ -903,8 +902,8 @@ public class MicroscopeController {
     /**
      * Record to store the state of live viewing modes before they were stopped.
      *
-     * @param qpscLiveViewerWasVisible True if the QPSC Live Viewer window was visible
+     * @param qpscLiveViewerWasStreaming True if the QPSC Live Viewer was actively streaming
      * @param mmLiveModeWasRunning True if MM's studio live mode was running
      */
-    public record LiveViewState(boolean qpscLiveViewerWasVisible, boolean mmLiveModeWasRunning) {}
+    public record LiveViewState(boolean qpscLiveViewerWasStreaming, boolean mmLiveModeWasRunning) {}
 }

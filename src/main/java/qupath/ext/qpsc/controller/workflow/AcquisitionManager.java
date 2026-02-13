@@ -396,6 +396,10 @@ public class AcquisitionManager {
             return CompletableFuture.completedFuture(false);
         }
 
+        // Stop live viewing before acquisition starts to prevent hardware conflicts
+        MicroscopeController.LiveViewState liveState =
+                MicroscopeController.getInstance().stopAllLiveViewing();
+
         // Reorder annotations to prioritize the one containing the refinement tile (if any)
         prioritizeRefinementAnnotation();
 
@@ -498,6 +502,9 @@ public class AcquisitionManager {
         }
 
         return acquisitionChain.whenComplete((result, error) -> {
+            // Restore live viewing state now that all acquisitions are done
+            MicroscopeController.getInstance().restoreLiveViewState(liveState);
+
             // Close dual progress dialog when workflow completes or fails
             if (progressDialog != null) {
                 if (error != null) {
