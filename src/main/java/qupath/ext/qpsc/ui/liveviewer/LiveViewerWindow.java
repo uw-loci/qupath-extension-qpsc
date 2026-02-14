@@ -63,6 +63,7 @@ public class LiveViewerWindow {
     private Stage stage;
     private ImageView imageView;
     private Label statusLabel;
+    private Label cursorLabel;
     private Button liveToggleButton;
     private HistogramView histogramView;
     private TitledPane histogramPane;
@@ -82,6 +83,9 @@ public class LiveViewerWindow {
     // Source image dimensions for double-click-to-center coordinate conversion
     private volatile int sourceImageWidth = 0;
     private volatile int sourceImageHeight = 0;
+
+    // Latest frame for cursor pixel readout (works even when not streaming)
+    private volatile FrameData lastFrame;
 
     // Thread pools
     private ScheduledExecutorService framePoller;
@@ -302,6 +306,10 @@ public class LiveViewerWindow {
             }
         });
 
+        // Cursor pixel readout on mouse move
+        imageView.setOnMouseMoved(this::updateCursorPixelInfo);
+        imageView.setOnMouseExited(event -> cursorLabel.setText("Pixel: --"));
+
         // Container with scroll support for large images at explicit scale
         scrollPane = new ScrollPane();
         scrollPane.setStyle("-fx-background-color: black;");
@@ -343,10 +351,14 @@ public class LiveViewerWindow {
         // Noise stats panel (collapsible, below histogram)
         noiseStatsPanel = new NoiseStatsPanel();
 
-        // Status bar
+        // Status bar with cursor pixel readout on the right
         statusLabel = new Label("Ready - press Live to start");
         statusLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11;");
-        HBox statusBar = new HBox(statusLabel);
+        cursorLabel = new Label("Pixel: --");
+        cursorLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11;");
+        Region statusSpacer = new Region();
+        HBox.setHgrow(statusSpacer, Priority.ALWAYS);
+        HBox statusBar = new HBox(8, statusLabel, statusSpacer, cursorLabel);
         statusBar.setPadding(new Insets(4));
         statusBar.setAlignment(Pos.CENTER_LEFT);
 
@@ -489,6 +501,9 @@ public class LiveViewerWindow {
                 // No frame available yet - camera may still be starting
                 return;
             }
+
+            // Store for cursor pixel readout
+            lastFrame = frame;
 
             // Track FPS
             int count = frameCount.incrementAndGet();
@@ -729,6 +744,56 @@ public class LiveViewerWindow {
         }, "LiveViewer-ClickToCenter");
         moveThread.setDaemon(true);
         moveThread.start();
+    }
+
+    /**
+     * Updates the cursor pixel readout label with R,G,B values at the mouse position.
+     * Works even when not streaming, as long as a frame has been displayed.
+     */
+    private void updateCursorPixelInfo(javafx.scene.input.MouseEvent event) {
+        FrameData frame = lastFrame;
+        if (frame == null) return;
+
+        int srcW = frame.width();
+        int srcH = frame.height();
+        if (srcW <= 0 || srcH <= 0) return;
+
+        // Convert display coordinates to source pixel coordinates
+        double displayWidth, displayHeight;
+        if (fitToContainer) {
+            displayWidth = imageView.getBoundsInLocal().getWidth();
+            displayHeight = imageView.getBoundsInLocal().getHeight();
+        } else {
+            displayWidth = srcW * explicitScale;
+            displayHeight = srcH * explicitScale;
+        }
+
+        if (displayWidth <= 0 || displayHeight <= 0) return;
+
+        int srcX = (int) (event.getX() * srcW / displayWidth);
+        int srcY = (int) (event.getY() * srcH / displayHeight);
+
+        // Bounds check
+        if (srcX < 0 || srcX >= srcW || srcY < 0 || srcY >= srcH) {
+            cursorLabel.setText("Pixel: --");
+            return;
+        }
+
+        int channels = frame.channels();
+        int bpp = frame.bytesPerPixel();
+        int pixelIndex = srcY * srcW + srcX;
+
+        if (channels == 1) {
+            int val = frame.readPixelValue(pixelIndex * bpp);
+            cursorLabel.setText(String.format("Pixel [%d, %d]: %d", srcX, srcY, val));
+        } else {
+            int stride = channels * bpp;
+            int byteOffset = pixelIndex * stride;
+            int r = frame.readPixelValue(byteOffset);
+            int g = frame.readPixelValue(byteOffset + bpp);
+            int b = frame.readPixelValue(byteOffset + 2 * bpp);
+            cursorLabel.setText(String.format("Pixel [%d, %d]: R=%d  G=%d  B=%d", srcX, srcY, r, g, b));
+        }
     }
 
     private static int clamp(int value, int min, int max) {

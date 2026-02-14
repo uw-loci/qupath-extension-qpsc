@@ -37,6 +37,7 @@ public class HistogramView extends VBox {
     private final Slider maxSlider;
     private final Label minLabel;
     private final Label maxLabel;
+    private final Label meanLabel;
     private final ContrastSettings contrastSettings;
 
     private int[] currentHistogram = new int[256];
@@ -70,6 +71,11 @@ public class HistogramView extends VBox {
         });
 
         drawHistogram();
+
+        // --- Row 1b: Mean pixel value label ---
+        meanLabel = new Label("Mean: --");
+        meanLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11;");
+        meanLabel.setPadding(new Insets(2, 0, 2, 0));
 
         // --- Row 2: Min label + slider ---
         minLabel = new Label("Min: 0");
@@ -136,7 +142,7 @@ public class HistogramView extends VBox {
         buttonRow.setAlignment(Pos.CENTER);
         buttonRow.setPadding(new Insets(2, 0, 0, 0));
 
-        getChildren().addAll(histRow, minRow, maxRow, buttonRow);
+        getChildren().addAll(histRow, meanLabel, minRow, maxRow, buttonRow);
     }
 
     /**
@@ -159,6 +165,8 @@ public class HistogramView extends VBox {
         int pixelCount = frame.pixelCount();
         byte[] raw = frame.rawPixels();
 
+        long sumR = 0, sumG = 0, sumB = 0;
+
         if (channels == 1) {
             // Grayscale
             for (int i = 0; i < pixelCount; i++) {
@@ -169,6 +177,7 @@ public class HistogramView extends VBox {
                     int offset = i * 2;
                     val = ((raw[offset] & 0xFF) << 8) | (raw[offset + 1] & 0xFF);
                 }
+                sumR += val;
                 int bin = val * 255 / currentMaxValue;
                 bin = Math.min(bin, 255);
                 histogram[bin]++;
@@ -189,6 +198,9 @@ public class HistogramView extends VBox {
                     g = ((raw[offset + 2] & 0xFF) << 8) | (raw[offset + 3] & 0xFF);
                     b = ((raw[offset + 4] & 0xFF) << 8) | (raw[offset + 5] & 0xFF);
                 }
+                sumR += r;
+                sumG += g;
+                sumB += b;
                 int luminance = (int) (0.299 * r + 0.587 * g + 0.114 * b);
                 int bin = luminance * 255 / currentMaxValue;
                 bin = Math.min(bin, 255);
@@ -197,6 +209,18 @@ public class HistogramView extends VBox {
         }
 
         currentHistogram = histogram;
+
+        // Update mean label with raw pixel means
+        if (pixelCount > 0) {
+            if (channels == 1) {
+                meanLabel.setText(String.format("Mean: %.1f", (double) sumR / pixelCount));
+            } else {
+                meanLabel.setText(String.format("Mean: R=%.1f  G=%.1f  B=%.1f",
+                        (double) sumR / pixelCount,
+                        (double) sumG / pixelCount,
+                        (double) sumB / pixelCount));
+            }
+        }
 
         // Auto-scale if enabled
         if (contrastSettings.isAutoScale()) {
