@@ -452,6 +452,17 @@ public class StageMapCanvas extends StackPane {
         // The view origin (viewX, viewY) is shifted so the slide area is centered.
         offsetX = (w - viewWidth * scale) / 2.0 - viewX * scale;
         offsetY = (h - viewHeight * scale) / 2.0 - viewY * scale;
+
+        logger.info("calculateScale: canvas={}x{}, aperture={}x{} um, viewBounds=[{}, {}, {}, {}] um, "
+                        + "scale={}, offset=({}, {}), scaleX={}, scaleY={}",
+                String.format("%.0f", w), String.format("%.0f", h),
+                String.format("%.0f", currentInsert.getWidthUm()),
+                String.format("%.0f", currentInsert.getHeightUm()),
+                String.format("%.0f", viewX), String.format("%.0f", viewY),
+                String.format("%.0f", viewWidth), String.format("%.0f", viewHeight),
+                String.format("%.6f", scale),
+                String.format("%.1f", offsetX), String.format("%.1f", offsetY),
+                String.format("%.6f", scaleX), String.format("%.6f", scaleY));
     }
 
     /**

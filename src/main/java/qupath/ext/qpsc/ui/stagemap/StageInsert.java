@@ -1,5 +1,8 @@
 package qupath.ext.qpsc.ui.stagemap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -17,6 +20,8 @@ import java.util.Map;
  * microscope stage coordinates.
  */
 public class StageInsert {
+
+    private static final Logger logger = LoggerFactory.getLogger(StageInsert.class);
 
     /** Conversion factor from millimeters to microns */
     private static final double MM_TO_UM = 1000.0;
@@ -192,6 +197,15 @@ public class StageInsert {
                                originXUm, originYUm, slideMarginUm, slides);
         insert.xAxisInverted = xInverted;
         insert.yAxisInverted = yInverted;
+
+        logger.info("fromConfigMap '{}': aperture={}x{} mm, origin=({}, {}) um, "
+                        + "xInverted={}, yInverted={}, slideYOffset={} um, slides={}",
+                id,
+                String.format("%.1f", apertureWidthMm), String.format("%.1f", apertureHeightMm),
+                String.format("%.0f", originXUm), String.format("%.0f", originYUm),
+                xInverted, yInverted,
+                String.format("%.0f", slideYOffsetUm), slides.size());
+
         return insert;
     }
 
@@ -279,6 +293,7 @@ public class StageInsert {
      */
     public double[] getSlideViewBounds(double marginUm) {
         if (slides.isEmpty()) {
+            logger.info("getSlideViewBounds: no slides, returning full aperture {}x{} um", widthUm, heightUm);
             return new double[]{0, 0, widthUm, heightUm};
         }
 
@@ -289,11 +304,22 @@ public class StageInsert {
         double maxY = -Double.MAX_VALUE;
 
         for (SlidePosition slide : slides) {
+            logger.info("getSlideViewBounds: slide '{}' offset=({}, {}) size={}x{} um",
+                    slide.getName(),
+                    String.format("%.0f", slide.getXOffsetUm()),
+                    String.format("%.0f", slide.getYOffsetUm()),
+                    String.format("%.0f", slide.getWidthUm()),
+                    String.format("%.0f", slide.getHeightUm()));
             minX = Math.min(minX, slide.getXOffsetUm());
             minY = Math.min(minY, slide.getYOffsetUm());
             maxX = Math.max(maxX, slide.getXOffsetUm() + slide.getWidthUm());
             maxY = Math.max(maxY, slide.getYOffsetUm() + slide.getHeightUm());
         }
+
+        logger.info("getSlideViewBounds: slide bbox [{}, {}] to [{}, {}], margin={} um",
+                String.format("%.0f", minX), String.format("%.0f", minY),
+                String.format("%.0f", maxX), String.format("%.0f", maxY),
+                String.format("%.0f", marginUm));
 
         // Add margin
         minX -= marginUm;
@@ -302,10 +328,19 @@ public class StageInsert {
         maxY += marginUm;
 
         // Clamp to aperture bounds (don't show beyond the aperture)
+        double preClampMinX = minX, preClampMinY = minY, preClampMaxX = maxX, preClampMaxY = maxY;
         minX = Math.max(0, minX);
         minY = Math.max(0, minY);
         maxX = Math.min(widthUm, maxX);
         maxY = Math.min(heightUm, maxY);
+
+        logger.info("getSlideViewBounds: after margin [{}, {}] to [{}, {}], "
+                        + "after clamp [{}, {}] to [{}, {}], aperture={}x{} um",
+                String.format("%.0f", preClampMinX), String.format("%.0f", preClampMinY),
+                String.format("%.0f", preClampMaxX), String.format("%.0f", preClampMaxY),
+                String.format("%.0f", minX), String.format("%.0f", minY),
+                String.format("%.0f", maxX), String.format("%.0f", maxY),
+                String.format("%.0f", widthUm), String.format("%.0f", heightUm));
 
         return new double[]{minX, minY, maxX - minX, maxY - minY};
     }

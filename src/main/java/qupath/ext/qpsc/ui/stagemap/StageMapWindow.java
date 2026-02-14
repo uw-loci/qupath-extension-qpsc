@@ -85,10 +85,10 @@ public class StageMapWindow {
     // Poll interval for position updates - lower = more responsive but more network traffic
     // 200ms provides smooth tracking without overwhelming the socket connection
     private static final long POLL_INTERVAL_MS = 200;
-    private static final double WINDOW_WIDTH = 560;
-    private static final double WINDOW_HEIGHT = 500;
-    private static final double CANVAS_WIDTH = 500;
-    private static final double CANVAS_HEIGHT = 360;
+    private static final double WINDOW_WIDTH = 680;
+    private static final double WINDOW_HEIGHT = 400;
+    private static final double CANVAS_WIDTH = 600;
+    private static final double CANVAS_HEIGHT = 260;
 
     private StageMapWindow() {
         buildUI();
@@ -196,11 +196,23 @@ public class StageMapWindow {
         canvas = new StageMapCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
         canvas.setClickHandler(this::handleCanvasClick);
 
+        // Set minimum canvas size so the slide is always visible at a usable scale.
+        // Below this size, scroll bars appear instead of shrinking further.
+        canvas.setMinSize(350, 200);
+
         // The canvas is now a StackPane that resizes with its container
         // Just place it in a container that grows with the window
         StackPane canvasContainer = new StackPane(canvas);
         canvasContainer.setStyle("-fx-background-color: #1a1a1a; -fx-border-color: #555; -fx-border-width: 1;");
-        VBox.setVgrow(canvasContainer, Priority.ALWAYS);
+
+        // Wrap in ScrollPane so users can scroll when the window is too small
+        ScrollPane scrollPane = new ScrollPane(canvasContainer);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setStyle("-fx-background: #1a1a1a; -fx-background-color: #1a1a1a;");
+        VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
         // Notify canvas when container size changes
         canvasContainer.widthProperty().addListener((obs, oldVal, newVal) -> {
@@ -217,7 +229,7 @@ public class StageMapWindow {
         // Bottom status bar
         HBox bottomBar = buildBottomBar();
 
-        root.getChildren().addAll(topBar, canvasContainer, bottomBar);
+        root.getChildren().addAll(topBar, scrollPane, bottomBar);
 
         Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
         scene.getStylesheets().add(getClass().getResource("/qupath/ext/qpsc/ui/stagemap/stagemap.css") != null
