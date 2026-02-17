@@ -522,7 +522,11 @@ public class LiveViewerWindow {
                     currentFps, frame.width(), frame.height(), colorMode, bitDepth);
 
             // Submit histogram computation (throttled internally)
-            histogramExecutor.submit(() -> {
+            // Capture local ref: stopAndDispose() may null the field concurrently
+            ExecutorService histExec = histogramExecutor;
+            if (histExec == null || histExec.isShutdown()) return;
+
+            histExec.submit(() -> {
                 try {
                     Platform.runLater(() -> histogramView.updateHistogram(frame));
                 } catch (Exception e) {
@@ -532,7 +536,7 @@ public class LiveViewerWindow {
 
             // Update noise stats (throttled internally to ~2Hz)
             if (noiseStatsPanel.isExpanded()) {
-                histogramExecutor.submit(() -> {
+                histExec.submit(() -> {
                     try {
                         noiseStatsPanel.updateFromFrame(frame);
                     } catch (Exception e) {

@@ -59,7 +59,11 @@ public class HistogramView extends VBox {
 
         HBox histRow = new HBox(canvas);
         histRow.setAlignment(Pos.CENTER_LEFT);
-        HBox.setHgrow(histRow, Priority.ALWAYS);
+        // Prevent Canvas (non-resizable) from dictating parent's min width.
+        // Without this, Canvas.minWidth = Canvas.width = parent width, creating
+        // a rigid constraint that propagates up through TitledPane/VBox and causes
+        // the window to slowly expand on every layout pass.
+        histRow.setMinWidth(0);
 
         // Bind canvas width to its parent HBox width (minus padding)
         histRow.widthProperty().addListener((obs, oldVal, newVal) -> {
