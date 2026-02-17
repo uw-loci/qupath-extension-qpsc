@@ -883,19 +883,28 @@ public class StageMapWindow {
         }
 
         // Apply flip for Stage Map display.
-        // The Stage Map's insert-relative coordinate system already accounts for axis
-        // inversion at the rendering level (stageToScreen handles inverted axes).
-        // The macro overlay is placed at the slide rectangle's screen position, which
-        // is in insert-relative space where Y always increases downward. Therefore,
-        // only the user's flip preferences should correct the macro's orientation
-        // (e.g., to match a specific scanner's image convention).
-        // Axis inversion must NOT be XORed in - that would cause a spurious flip.
-        boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
-        boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+        // The macro overlay is placed at the slide rectangle in insert-relative screen
+        // space. The slide rectangle position uses fixed insert-relative offsets that do
+        // not change with axis inversion. However, when an axis is inverted the physical
+        // slide edge that corresponds to a given screen edge is reversed, so the macro
+        // image may need to be mirrored to match the screen layout.
+        //
+        // X axis: XOR the preference with axis inversion -- empirically confirmed that
+        // X inversion requires an X flip to keep the label on the correct side.
+        //
+        // Y axis: Use only the preference -- XORing with Y inversion produces a
+        // spurious Y flip. The Y issue is being investigated separately.
+        boolean prefFlipX = QPPreferenceDialog.getFlipMacroXProperty();
+        boolean prefFlipY = QPPreferenceDialog.getFlipMacroYProperty();
+        StageInsert insert = insertComboBox.getValue();
+        boolean axisInvertedX = insert != null && insert.isXAxisInverted();
+        boolean flipX = prefFlipX ^ axisInvertedX;
+        boolean flipY = prefFlipY;
         if (flipX || flipY) {
             macroImage = MacroImageUtility.flipMacroImage(macroImage, flipX, flipY);
         }
-        logger.info("Macro overlay: flip=({}, {})", flipX, flipY);
+        logger.info("Macro overlay: prefFlip=({}, {}), axisInvertedX={}, effective flip=({}, {})",
+                prefFlipX, prefFlipY, axisInvertedX, flipX, flipY);
 
         return macroImage;
     }
