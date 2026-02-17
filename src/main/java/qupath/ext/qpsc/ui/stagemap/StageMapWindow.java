@@ -883,23 +883,19 @@ public class StageMapWindow {
         }
 
         // Apply flip for Stage Map display.
-        // The flip preferences correct the macro orientation for QuPath's standard
-        // coordinate system. But the Stage Map has its own axis inversion (detected
-        // from aperture calibration). An inverted axis already visually mirrors that
-        // dimension, so applying the preference flip on top of it creates a double-flip.
-        // XOR the preference with axis inversion to get the correct effective flip.
-        boolean prefFlipX = QPPreferenceDialog.getFlipMacroXProperty();
-        boolean prefFlipY = QPPreferenceDialog.getFlipMacroYProperty();
-        StageInsert insert = insertComboBox.getValue();
-        boolean axisInvertedX = insert != null && insert.isXAxisInverted();
-        boolean axisInvertedY = insert != null && insert.isYAxisInverted();
-        boolean flipX = prefFlipX ^ axisInvertedX;
-        boolean flipY = prefFlipY ^ axisInvertedY;
+        // The Stage Map's insert-relative coordinate system already accounts for axis
+        // inversion at the rendering level (stageToScreen handles inverted axes).
+        // The macro overlay is placed at the slide rectangle's screen position, which
+        // is in insert-relative space where Y always increases downward. Therefore,
+        // only the user's flip preferences should correct the macro's orientation
+        // (e.g., to match a specific scanner's image convention).
+        // Axis inversion must NOT be XORed in - that would cause a spurious flip.
+        boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
+        boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
         if (flipX || flipY) {
             macroImage = MacroImageUtility.flipMacroImage(macroImage, flipX, flipY);
         }
-        logger.info("Macro overlay: flip prefs=({}, {}), axis inverted=({}, {}), effective flip=({}, {})",
-                prefFlipX, prefFlipY, axisInvertedX, axisInvertedY, flipX, flipY);
+        logger.info("Macro overlay: flip=({}, {})", flipX, flipY);
 
         return macroImage;
     }
