@@ -308,7 +308,11 @@ public class StageMapWindow {
                     logger.info("Applying macro overlay (image: {}x{}, sample: '{}')",
                             currentMacroImage.getWidth(), currentMacroImage.getHeight(),
                             currentMacroSampleName);
-                    canvas.setMacroOverlay(currentMacroImage, currentMacroTransform);
+                    StageInsert insert = insertComboBox.getValue();
+                    boolean axInvX = insert != null && insert.isXAxisInverted();
+                    boolean axInvY = insert != null && insert.isYAxisInverted();
+                    canvas.setMacroOverlay(currentMacroImage, currentMacroTransform,
+                            axInvX, axInvY);
                 } else {
                     if (newVal) {
                         logger.info("Checkbox selected but no macro data available (image={}, transform={})",
@@ -806,7 +810,11 @@ public class StageMapWindow {
                 // If checkbox is already selected, update the overlay
                 if (macroOverlayCheckbox.isSelected()) {
                     logger.info("Macro overlay checkbox already selected - applying overlay");
-                    canvas.setMacroOverlay(currentMacroImage, currentMacroTransform);
+                    StageInsert ins = insertComboBox.getValue();
+                    boolean axInvX2 = ins != null && ins.isXAxisInverted();
+                    boolean axInvY2 = ins != null && ins.isYAxisInverted();
+                    canvas.setMacroOverlay(currentMacroImage, currentMacroTransform,
+                            axInvX2, axInvY2);
                 }
             } else {
                 macroOverlayCheckbox.setDisable(true);

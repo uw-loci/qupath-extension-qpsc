@@ -93,6 +93,8 @@ public class StageMapCanvas extends StackPane {
     private int macroWidth, macroHeight;
     private boolean macroOverlayVisible = false;
     private static final double MACRO_OVERLAY_OPACITY = 0.3;  // 70% transparency
+    private boolean macroTransformFlipX = false;
+    private boolean macroTransformFlipY = false;
 
     // ========== State ==========
     private StageInsert currentInsert;
@@ -175,7 +177,7 @@ public class StageMapCanvas extends StackPane {
         // Create macro overlay ImageView (behind other overlays)
         macroOverlayView = new ImageView();
         macroOverlayView.setOpacity(MACRO_OVERLAY_OPACITY);
-        macroOverlayView.setPreserveRatio(true);
+        macroOverlayView.setPreserveRatio(false);
         macroOverlayView.setVisible(false);
         macroOverlayView.setMouseTransparent(true);  // Don't interfere with click events
 
@@ -771,10 +773,13 @@ public class StageMapCanvas extends StackPane {
     /**
      * Sets and displays the macro image overlay.
      *
-     * @param macroImage The processed macro image (BufferedImage)
-     * @param transform The AffineTransform mapping macro pixels to stage microns
+     * @param macroImage     The processed macro image (BufferedImage), already display-flipped
+     * @param transform      The AffineTransform mapping unflipped macro pixels to stage microns
+     * @param transformFlipX Whether displayed pixels are X-flipped relative to transform input space
+     * @param transformFlipY Whether displayed pixels are Y-flipped relative to transform input space
      */
-    public void setMacroOverlay(BufferedImage macroImage, AffineTransform transform) {
+    public void setMacroOverlay(BufferedImage macroImage, AffineTransform transform,
+                                boolean transformFlipX, boolean transformFlipY) {
         if (macroImage == null || transform == null) {
             logger.info("setMacroOverlay called with null args (image={}, transform={}) - clearing",
                     macroImage != null, transform != null);
@@ -785,10 +790,13 @@ public class StageMapCanvas extends StackPane {
         this.macroTransform = transform;
         this.macroWidth = macroImage.getWidth();
         this.macroHeight = macroImage.getHeight();
+        this.macroTransformFlipX = transformFlipX;
+        this.macroTransformFlipY = transformFlipY;
         this.macroOverlayVisible = true;
 
-        logger.info("Setting macro overlay: {}x{} pixels, transform: scale({}, {}), translate({}, {})",
-                macroWidth, macroHeight,
+        logger.info("Setting macro overlay: {}x{} pixels, flipCorrection=({}, {}), "
+                        + "transform: scale({}, {}), translate({}, {})",
+                macroWidth, macroHeight, transformFlipX, transformFlipY,
                 String.format("%.6f", transform.getScaleX()),
                 String.format("%.6f", transform.getScaleY()),
                 String.format("%.1f", transform.getTranslateX()),
@@ -820,20 +828,24 @@ public class StageMapCanvas extends StackPane {
     }
 
     /**
-     * Updates the macro overlay position based on the current scale and offset.
+     * Updates the macro overlay position based on the macroTransform.
      * <p>
-     * Positions the macro image to cover the slide rectangle in the stage map.
-     * The macro image IS the slide, so it should visually align with the slide outline.
-     * For multi-slide inserts, uses the transform to identify the correct slide;
-     * for single-slide inserts, uses the first (only) slide position.
+     * Uses the AffineTransform to compute the exact screen position of the macro
+     * by mapping the four displayed corners back to the transform's input space
+     * (undoing the display flip), transforming to stage coordinates, then converting
+     * to screen coordinates. This ensures the macro aligns with the physical slide
+     * regardless of differences between config slide dimensions and actual macro extent.
+     * <p>
+     * For multi-slide inserts, the macro center is still used to identify which
+     * slide the macro belongs to (center point is flip-invariant).
      * <p>
      * Called when the canvas resizes or the insert changes.
      */
     private void updateMacroOverlayPosition() {
-        if (!macroOverlayVisible || currentInsert == null) {
+        if (!macroOverlayVisible || currentInsert == null || macroTransform == null) {
             if (macroOverlayVisible) {
-                logger.info("Cannot update macro overlay position: insert={}",
-                        currentInsert != null);
+                logger.info("Cannot update macro overlay position: insert={}, transform={}",
+                        currentInsert != null, macroTransform != null);
             }
             return;
         }
@@ -844,52 +856,64 @@ public class StageMapCanvas extends StackPane {
             return;
         }
 
-        // Pick the slide to overlay on.
-        // For multi-slide inserts, use the transform to find which slide the macro belongs to.
-        // For single-slide inserts, just use the first slide.
-        StageInsert.SlidePosition targetSlide = slides.get(0);
-        if (slides.size() > 1 && macroTransform != null) {
-            // Transform the macro center to stage coordinates
+        // Multi-slide detection: macro center is flip-invariant (W/2, H/2 in either space)
+        if (slides.size() > 1) {
             double[] macroCenter = {macroWidth / 2.0, macroHeight / 2.0};
             double[] stageCenter = new double[2];
             macroTransform.transform(macroCenter, 0, stageCenter, 0, 1);
 
-            // Find which slide contains that stage position
             StageInsert.SlidePosition match = currentInsert.getSlideAtPosition(
                     stageCenter[0], stageCenter[1]);
             if (match != null) {
-                targetSlide = match;
                 logger.debug("Macro overlay: matched to slide '{}' via transform", match.getName());
             }
         }
 
-        // Position the overlay to match the slide rectangle (same math as renderBackground)
-        double sx = offsetX + targetSlide.getXOffsetUm() * scale;
-        double sy = offsetY + targetSlide.getYOffsetUm() * scale;
-        double sw = targetSlide.getWidthUm() * scale;
-        double sh = targetSlide.getHeightUm() * scale;
+        // The displayed image has been flipped by (macroTransformFlipX, macroTransformFlipY)
+        // relative to the transform's input space. Map displayed TL and BR corners back
+        // to transform input space, then to stage, then to screen.
+        double w = macroWidth;
+        double h = macroHeight;
 
-        // Scale macro to match slide width, preserving aspect ratio.
-        // The macro image represents the full physical slide, so width-matching is correct.
-        // Height is determined by the macro's aspect ratio, which may differ from the
-        // calibrated slide height (calibration points are typically slightly inward from
-        // the actual glass edges).
-        macroOverlayView.setFitWidth(sw);
-        macroOverlayView.setFitHeight(0);  // Let height be determined by aspect ratio
+        // Displayed top-left (0,0) in transform input space
+        double tlTransX = macroTransformFlipX ? w : 0;
+        double tlTransY = macroTransformFlipY ? h : 0;
 
-        // Calculate the actual rendered height based on macro aspect ratio
-        double macroAspect = (double) macroWidth / macroHeight;
-        double renderedHeight = sw / macroAspect;
+        // Displayed bottom-right (W,H) in transform input space
+        double brTransX = macroTransformFlipX ? 0 : w;
+        double brTransY = macroTransformFlipY ? 0 : h;
 
-        // Center vertically relative to the slide rectangle
-        double verticalOffset = (sh - renderedHeight) / 2.0;
-        macroOverlayView.setX(sx);
-        macroOverlayView.setY(sy + verticalOffset);
+        // Transform to stage coordinates
+        double[] tlStage = new double[2];
+        double[] brStage = new double[2];
+        macroTransform.transform(new double[]{tlTransX, tlTransY}, 0, tlStage, 0, 1);
+        macroTransform.transform(new double[]{brTransX, brTransY}, 0, brStage, 0, 1);
 
-        logger.info("Macro overlay positioned on '{}': screen ({}, {}) fitWidth={} renderedH={} px",
-                targetSlide.getName(),
-                String.format("%.1f", sx), String.format("%.1f", sy + verticalOffset),
-                String.format("%.1f", sw), String.format("%.1f", renderedHeight));
+        // Convert to screen coordinates
+        double[] tlScreen = stageToScreen(tlStage[0], tlStage[1]);
+        double[] brScreen = stageToScreen(brStage[0], brStage[1]);
+        if (tlScreen == null || brScreen == null) {
+            logger.warn("Macro overlay: stageToScreen returned null for corners");
+            return;
+        }
+
+        // Screen rectangle (ensure positive width/height)
+        double screenX = Math.min(tlScreen[0], brScreen[0]);
+        double screenY = Math.min(tlScreen[1], brScreen[1]);
+        double screenW = Math.abs(brScreen[0] - tlScreen[0]);
+        double screenH = Math.abs(brScreen[1] - tlScreen[1]);
+
+        macroOverlayView.setX(screenX);
+        macroOverlayView.setY(screenY);
+        macroOverlayView.setFitWidth(screenW);
+        macroOverlayView.setFitHeight(screenH);
+
+        logger.info("Macro overlay positioned: screen ({}, {}) {}x{} px, "
+                        + "stageTL=({}, {}), stageBR=({}, {})",
+                String.format("%.1f", screenX), String.format("%.1f", screenY),
+                String.format("%.1f", screenW), String.format("%.1f", screenH),
+                String.format("%.1f", tlStage[0]), String.format("%.1f", tlStage[1]),
+                String.format("%.1f", brStage[0]), String.format("%.1f", brStage[1]));
     }
 
     // ========== Size Handling ==========
