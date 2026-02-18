@@ -2870,32 +2870,41 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
     /**
      * Result of white balance calibration for a single configuration (angle/exposure).
+     *
+     * <p>Gain model: The JAI camera uses a unified gain (applied to all channels equally)
+     * plus optional per-channel analog R/B gains. Green has no independent analog gain.
+     * <ul>
+     *   <li>{@code unifiedGain} - Applied to all channels (R, G, B) equally for brightness</li>
+     *   <li>{@code analogRed} - Additional analog gain for red channel only (0.47-4.0x)</li>
+     *   <li>{@code analogBlue} - Additional analog gain for blue channel only (0.47-4.0x)</li>
+     * </ul>
+     * Effective gain: R = unified * analogRed, G = unified, B = unified * analogBlue
      */
     public static class WhiteBalanceResult {
         public final double exposureRed;
         public final double exposureGreen;
         public final double exposureBlue;
-        public final double gainRed;
-        public final double gainGreen;
-        public final double gainBlue;
+        public final double unifiedGain;
+        public final double analogRed;
+        public final double analogBlue;
         public final boolean converged;
 
         public WhiteBalanceResult(double exposureRed, double exposureGreen, double exposureBlue,
-                                  double gainRed, double gainGreen, double gainBlue,
+                                  double unifiedGain, double analogRed, double analogBlue,
                                   boolean converged) {
             this.exposureRed = exposureRed;
             this.exposureGreen = exposureGreen;
             this.exposureBlue = exposureBlue;
-            this.gainRed = gainRed;
-            this.gainGreen = gainGreen;
-            this.gainBlue = gainBlue;
+            this.unifiedGain = unifiedGain;
+            this.analogRed = analogRed;
+            this.analogBlue = analogBlue;
             this.converged = converged;
         }
 
         @Override
         public String toString() {
-            return String.format("WhiteBalanceResult[R=%.2f/%.3fx, G=%.2f/%.3fx, B=%.2f/%.3fx, converged=%s]",
-                    exposureRed, gainRed, exposureGreen, gainGreen, exposureBlue, gainBlue, converged);
+            return String.format("WhiteBalanceResult[R=%.2f, G=%.2f, B=%.2f, unified=%.1fx, aR=%.3f, aB=%.3f, conv=%s]",
+                    exposureRed, exposureGreen, exposureBlue, unifiedGain, analogRed, analogBlue, converged);
         }
 
         // Convenience constructor for backward compatibility (gains default to 1.0)
@@ -3220,7 +3229,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         boolean converged = false;
         double expR = 0, expG = 0, expB = 0;
-        double gainR = 1.0, gainG = 1.0, gainB = 1.0;
+        double unifiedGain = 1.0, analogRed = 1.0, analogBlue = 1.0;
 
         if (parts.length >= 2) {
             converged = "CONVERGED".equals(parts[1].trim());
@@ -3244,6 +3253,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
 
         // Parse gain values (parts[3])
+        // Python sends: "unified:<val>,analog_r:<val>,analog_b:<val>"
         if (parts.length >= 4) {
             String gainStr = parts[3].trim();
             String[] gainParts = gainStr.split(",");
@@ -3253,20 +3263,20 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     String key = kv[0].trim();
                     double value = Double.parseDouble(kv[1].trim());
                     switch (key) {
-                        case "gain_r" -> gainR = value;
-                        case "gain_g" -> gainG = value;
-                        case "gain_b" -> gainB = value;
+                        case "unified" -> unifiedGain = value;
+                        case "analog_r" -> analogRed = value;
+                        case "analog_b" -> analogBlue = value;
                     }
                 }
             }
         }
 
-        return new WhiteBalanceResult(expR, expG, expB, gainR, gainG, gainB, converged);
+        return new WhiteBalanceResult(expR, expG, expB, unifiedGain, analogRed, analogBlue, converged);
     }
 
     /**
      * Parse response from WBPPM command.
-     * Format: SUCCESS:/path|name:exp_r,exp_g,exp_b:gain_r,gain_g,gain_b:Y/N|...
+     * Format: SUCCESS:/path|name:exp_r,exp_g,exp_b:unified,analog_r,analog_b:Y/N|...
      */
     private Map<String, WhiteBalanceResult> parsePPMWBResponse(String response) {
         Map<String, WhiteBalanceResult> results = new HashMap<>();
@@ -3283,7 +3293,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             // Format: name:exp_r,exp_g,exp_b:gain_r,gain_g,gain_b:Y/N
             String[] segments = part.split(":");
             if (segments.length >= 4) {
-                // New format with gains
+                // Format with gains: name:exp_r,exp_g,exp_b:unified,analog_r,analog_b:Y/N
                 String name = segments[0].trim();
                 String[] exps = segments[1].split(",");
                 String[] gains = segments[2].split(",");
@@ -3293,10 +3303,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     double expR = Double.parseDouble(exps[0].trim());
                     double expG = Double.parseDouble(exps[1].trim());
                     double expB = Double.parseDouble(exps[2].trim());
-                    double gainR = Double.parseDouble(gains[0].trim());
-                    double gainG = Double.parseDouble(gains[1].trim());
-                    double gainB = Double.parseDouble(gains[2].trim());
-                    results.put(name, new WhiteBalanceResult(expR, expG, expB, gainR, gainG, gainB, converged));
+                    double unifiedGain = Double.parseDouble(gains[0].trim());
+                    double analogRed = Double.parseDouble(gains[1].trim());
+                    double analogBlue = Double.parseDouble(gains[2].trim());
+                    results.put(name, new WhiteBalanceResult(expR, expG, expB, unifiedGain, analogRed, analogBlue, converged));
                 }
             } else if (segments.length >= 3) {
                 // Old format without gains (backward compatibility)

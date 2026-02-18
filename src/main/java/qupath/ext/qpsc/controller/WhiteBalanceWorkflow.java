@@ -498,20 +498,23 @@ public class WhiteBalanceWorkflow {
         alert.setHeaderText(result.converged ? "Calibration Converged" : "Calibration Complete (did not fully converge)");
 
         // Check if any gains are not 1.0 (meaning gain was applied)
-        boolean hasGain = result.gainRed != 1.0 || result.gainGreen != 1.0 || result.gainBlue != 1.0;
+        boolean hasGain = result.unifiedGain != 1.0 || result.analogRed != 1.0 || result.analogBlue != 1.0;
 
         StringBuilder content = new StringBuilder();
-        content.append("Per-Channel Results:\n\n");
-        content.append(String.format("  Red:   %.2f ms", result.exposureRed));
-        if (hasGain) content.append(String.format(" @ %.3fx gain", result.gainRed));
-        content.append("\n");
-        content.append(String.format("  Green: %.2f ms", result.exposureGreen));
-        if (hasGain) content.append(String.format(" @ %.3fx gain", result.gainGreen));
-        content.append("\n");
-        content.append(String.format("  Blue:  %.2f ms", result.exposureBlue));
-        if (hasGain) content.append(String.format(" @ %.3fx gain", result.gainBlue));
-        content.append("\n\n");
-        content.append(String.format("Converged: %s", result.converged ? "Yes" : "No"));
+        content.append("Per-Channel Exposures:\n\n");
+        content.append(String.format("  Red:   %.2f ms\n", result.exposureRed));
+        content.append(String.format("  Green: %.2f ms\n", result.exposureGreen));
+        content.append(String.format("  Blue:  %.2f ms\n", result.exposureBlue));
+
+        if (hasGain) {
+            content.append(String.format("\nGain: %.1fx unified", result.unifiedGain));
+            if (result.analogRed != 1.0 || result.analogBlue != 1.0) {
+                content.append(String.format(", analog R=%.3f B=%.3f", result.analogRed, result.analogBlue));
+            }
+            content.append("\n");
+        }
+
+        content.append(String.format("\nConverged: %s", result.converged ? "Yes" : "No"));
 
         alert.setContentText(content.toString());
 
@@ -535,19 +538,12 @@ public class WhiteBalanceWorkflow {
 
         // Check if any gains are not 1.0
         boolean hasGain = results.values().stream()
-                .anyMatch(r -> r.gainRed != 1.0 || r.gainGreen != 1.0 || r.gainBlue != 1.0);
+                .anyMatch(r -> r.unifiedGain != 1.0 || r.analogRed != 1.0 || r.analogBlue != 1.0);
 
         StringBuilder content = new StringBuilder();
-        if (hasGain) {
-            // Show exposures and gains in separate tables
-            content.append("Exposures (ms):\n");
-            content.append(String.format("%-10s %7s %7s %7s  %s\n", "Angle", "Red", "Green", "Blue", "Conv"));
-            content.append("-".repeat(45)).append("\n");
-        } else {
-            content.append("Per-Channel Exposures (ms):\n\n");
-            content.append(String.format("%-10s %7s %7s %7s  %s\n", "Angle", "Red", "Green", "Blue", "Conv"));
-            content.append("-".repeat(45)).append("\n");
-        }
+        content.append("Per-Channel Exposures (ms):\n");
+        content.append(String.format("%-10s %7s %7s %7s  %s\n", "Angle", "Red", "Green", "Blue", "Conv"));
+        content.append("-".repeat(45)).append("\n");
 
         String[] angleOrder = {"positive", "negative", "crossed", "uncrossed"};
         for (String name : angleOrder) {
@@ -564,17 +560,17 @@ public class WhiteBalanceWorkflow {
         }
 
         if (hasGain) {
-            content.append("\nGains (linear):\n");
-            content.append(String.format("%-10s %7s %7s %7s\n", "Angle", "Red", "Green", "Blue"));
-            content.append("-".repeat(38)).append("\n");
+            content.append("\nGains:\n");
+            content.append(String.format("%-10s %7s %7s %7s\n", "Angle", "Unified", "Ana.Red", "Ana.Blu"));
+            content.append("-".repeat(40)).append("\n");
             for (String name : angleOrder) {
                 MicroscopeSocketClient.WhiteBalanceResult r = results.get(name);
                 if (r != null) {
-                    content.append(String.format("%-10s %7.3f %7.3f %7.3f\n",
+                    content.append(String.format("%-10s %6.1fx %7.3f %7.3f\n",
                             capitalize(name),
-                            r.gainRed,
-                            r.gainGreen,
-                            r.gainBlue
+                            r.unifiedGain,
+                            r.analogRed,
+                            r.analogBlue
                     ));
                 }
             }
