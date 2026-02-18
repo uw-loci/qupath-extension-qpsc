@@ -869,113 +869,43 @@ public class StageMapCanvas extends StackPane {
             }
         }
 
-        // ===== DIAGNOSTIC: log everything for debugging =====
-        double w = macroWidth;
-        double h = macroHeight;
+        // Pick the target slide (multi-slide detection uses transform center)
+        StageInsert.SlidePosition targetSlide = slides.get(0);
+        if (slides.size() > 1 && macroTransform != null) {
+            double[] macroCenter = {macroWidth / 2.0, macroHeight / 2.0};
+            double[] stageCenter = new double[2];
+            macroTransform.transform(macroCenter, 0, stageCenter, 0, 1);
 
-        // Log the transform matrix
-        logger.info("DIAG macro overlay: image={}x{} px, flipCorrection=({}, {})",
-                macroWidth, macroHeight, macroTransformFlipX, macroTransformFlipY);
-        logger.info("DIAG transform matrix: [{}, {}, {}; {}, {}, {}]",
-                String.format("%.6f", macroTransform.getScaleX()),
-                String.format("%.6f", macroTransform.getShearX()),
-                String.format("%.1f", macroTransform.getTranslateX()),
-                String.format("%.6f", macroTransform.getShearY()),
-                String.format("%.6f", macroTransform.getScaleY()),
-                String.format("%.1f", macroTransform.getTranslateY()));
-
-        // Log insert/slide reference dimensions
-        StageInsert.SlidePosition refSlide = slides.get(0);
-        logger.info("DIAG insert: origin=({}, {}), size={}x{} um, inverted=({}, {})",
-                String.format("%.1f", currentInsert.getOriginXUm()),
-                String.format("%.1f", currentInsert.getOriginYUm()),
-                String.format("%.0f", currentInsert.getWidthUm()),
-                String.format("%.0f", currentInsert.getHeightUm()),
-                currentInsert.isXAxisInverted(), currentInsert.isYAxisInverted());
-        logger.info("DIAG slide '{}': offset=({}, {}), size={}x{} um",
-                refSlide.getName(),
-                String.format("%.1f", refSlide.getXOffsetUm()),
-                String.format("%.1f", refSlide.getYOffsetUm()),
-                String.format("%.0f", refSlide.getWidthUm()),
-                String.format("%.0f", refSlide.getHeightUm()));
-        logger.info("DIAG canvas: scale={}, offset=({}, {})",
-                String.format("%.6f", scale),
-                String.format("%.1f", offsetX), String.format("%.1f", offsetY));
-
-        // Transform all 4 corners to stage to see the full picture
-        double[][] corners = {{0, 0}, {w, 0}, {0, h}, {w, h}};
-        String[] cornerNames = {"(0,0)", "(W,0)", "(0,H)", "(W,H)"};
-        for (int i = 0; i < 4; i++) {
-            double[] stageOut = new double[2];
-            macroTransform.transform(corners[i], 0, stageOut, 0, 1);
-            double[] screenOut = stageToScreen(stageOut[0], stageOut[1]);
-            logger.info("DIAG corner {} px={} -> stage=({}, {}) -> screen=({}, {})",
-                    cornerNames[i],
-                    String.format("(%.0f, %.0f)", corners[i][0], corners[i][1]),
-                    String.format("%.1f", stageOut[0]), String.format("%.1f", stageOut[1]),
-                    screenOut != null ? String.format("%.1f", screenOut[0]) : "null",
-                    screenOut != null ? String.format("%.1f", screenOut[1]) : "null");
+            StageInsert.SlidePosition match = currentInsert.getSlideAtPosition(
+                    stageCenter[0], stageCenter[1]);
+            if (match != null) {
+                targetSlide = match;
+                logger.debug("Macro overlay: matched to slide '{}' via transform", match.getName());
+            }
         }
 
-        // Log slide rectangle screen position for comparison
-        double slideScreenX = offsetX + refSlide.getXOffsetUm() * scale;
-        double slideScreenY = offsetY + refSlide.getYOffsetUm() * scale;
-        double slideScreenW = refSlide.getWidthUm() * scale;
-        double slideScreenH = refSlide.getHeightUm() * scale;
-        logger.info("DIAG slide rect on screen: ({}, {}) {}x{} px",
-                String.format("%.1f", slideScreenX), String.format("%.1f", slideScreenY),
-                String.format("%.1f", slideScreenW), String.format("%.1f", slideScreenH));
+        // Position the macro to fill the slide rectangle.
+        // The macro is stretched to match both width and height - the aspect ratios
+        // differ slightly (macro captures some holder material beyond the glass edges)
+        // but the distortion is negligible for a navigation aid overlay.
+        double sx = offsetX + targetSlide.getXOffsetUm() * scale;
+        double sy = offsetY + targetSlide.getYOffsetUm() * scale;
+        double sw = targetSlide.getWidthUm() * scale;
+        double sh = targetSlide.getHeightUm() * scale;
 
-        // ===== Compute macro position =====
+        macroOverlayView.setX(sx);
+        macroOverlayView.setY(sy);
+        macroOverlayView.setFitWidth(sw);
+        macroOverlayView.setFitHeight(sh);
 
-        // The displayed image has been flipped by (macroTransformFlipX, macroTransformFlipY)
-        // relative to the transform's input space. Map displayed TL and BR corners back
-        // to transform input space, then to stage, then to screen.
-
-        // Displayed top-left (0,0) in transform input space
-        double tlTransX = macroTransformFlipX ? w : 0;
-        double tlTransY = macroTransformFlipY ? h : 0;
-
-        // Displayed bottom-right (W,H) in transform input space
-        double brTransX = macroTransformFlipX ? 0 : w;
-        double brTransY = macroTransformFlipY ? 0 : h;
-
-        // Transform to stage coordinates
-        double[] tlStage = new double[2];
-        double[] brStage = new double[2];
-        macroTransform.transform(new double[]{tlTransX, tlTransY}, 0, tlStage, 0, 1);
-        macroTransform.transform(new double[]{brTransX, brTransY}, 0, brStage, 0, 1);
-
-        // Convert to screen coordinates
-        double[] tlScreen = stageToScreen(tlStage[0], tlStage[1]);
-        double[] brScreen = stageToScreen(brStage[0], brStage[1]);
-        if (tlScreen == null || brScreen == null) {
-            logger.warn("Macro overlay: stageToScreen returned null for corners");
-            return;
-        }
-
-        // Screen rectangle (ensure positive width/height)
-        double screenX = Math.min(tlScreen[0], brScreen[0]);
-        double screenY = Math.min(tlScreen[1], brScreen[1]);
-        double screenW = Math.abs(brScreen[0] - tlScreen[0]);
-        double screenH = Math.abs(brScreen[1] - tlScreen[1]);
-
-        logger.info("DIAG macro screen rect: ({}, {}) {}x{} px  "
-                        + "[displayedTL->transform({}, {})->stage({}, {})->screen({}, {})  "
-                        + "displayedBR->transform({}, {})->stage({}, {})->screen({}, {})]",
-                String.format("%.1f", screenX), String.format("%.1f", screenY),
-                String.format("%.1f", screenW), String.format("%.1f", screenH),
-                String.format("%.0f", tlTransX), String.format("%.0f", tlTransY),
-                String.format("%.1f", tlStage[0]), String.format("%.1f", tlStage[1]),
-                String.format("%.1f", tlScreen[0]), String.format("%.1f", tlScreen[1]),
-                String.format("%.0f", brTransX), String.format("%.0f", brTransY),
-                String.format("%.1f", brStage[0]), String.format("%.1f", brStage[1]),
-                String.format("%.1f", brScreen[0]), String.format("%.1f", brScreen[1]));
-
-        macroOverlayView.setX(screenX);
-        macroOverlayView.setY(screenY);
-        macroOverlayView.setFitWidth(screenW);
-        macroOverlayView.setFitHeight(screenH);
+        logger.info("Macro overlay positioned on '{}': screen ({}, {}) {}x{} px, "
+                        + "slide={}x{} um, macro={}x{} px",
+                targetSlide.getName(),
+                String.format("%.1f", sx), String.format("%.1f", sy),
+                String.format("%.1f", sw), String.format("%.1f", sh),
+                String.format("%.0f", targetSlide.getWidthUm()),
+                String.format("%.0f", targetSlide.getHeightUm()),
+                macroWidth, macroHeight);
     }
 
     // ========== Size Handling ==========
