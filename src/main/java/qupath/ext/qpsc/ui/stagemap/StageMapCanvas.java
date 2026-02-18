@@ -95,6 +95,9 @@ public class StageMapCanvas extends StackPane {
     private static final double MACRO_OVERLAY_OPACITY = 0.3;  // 70% transparency
     private boolean macroTransformFlipX = false;
     private boolean macroTransformFlipY = false;
+    private double macroPixelSizeUm = 0;      // physical size per macro pixel (from scanner config)
+    private double macroOverlayXOffsetUm = 0;  // X offset of overlay vs slide rect (from scanner config)
+    private double macroOverlayYOffsetUm = 0;  // Y offset of overlay vs slide rect (from scanner config)
 
     // ========== State ==========
     private StageInsert currentInsert;
@@ -778,8 +781,20 @@ public class StageMapCanvas extends StackPane {
      * @param transformFlipX Whether displayed pixels are X-flipped relative to transform input space
      * @param transformFlipY Whether displayed pixels are Y-flipped relative to transform input space
      */
+    /**
+     * Sets the macro overlay with scanner-specific positioning parameters.
+     *
+     * @param macroImage      The cropped+flipped macro image to display
+     * @param transform       The macro-to-stage AffineTransform (for multi-slide detection)
+     * @param transformFlipX  Whether the display flip needs X correction for transform
+     * @param transformFlipY  Whether the display flip needs Y correction for transform
+     * @param pixelSizeUm     Macro pixel size in microns (from scanner config, 0 = fit to slide rect)
+     * @param xOffsetUm       X offset of overlay relative to slide rect in microns (from scanner config)
+     * @param yOffsetUm       Y offset of overlay relative to slide rect in microns (from scanner config)
+     */
     public void setMacroOverlay(BufferedImage macroImage, AffineTransform transform,
-                                boolean transformFlipX, boolean transformFlipY) {
+                                boolean transformFlipX, boolean transformFlipY,
+                                double pixelSizeUm, double xOffsetUm, double yOffsetUm) {
         if (macroImage == null || transform == null) {
             logger.info("setMacroOverlay called with null args (image={}, transform={}) - clearing",
                     macroImage != null, transform != null);
@@ -792,15 +807,15 @@ public class StageMapCanvas extends StackPane {
         this.macroHeight = macroImage.getHeight();
         this.macroTransformFlipX = transformFlipX;
         this.macroTransformFlipY = transformFlipY;
+        this.macroPixelSizeUm = pixelSizeUm;
+        this.macroOverlayXOffsetUm = xOffsetUm;
+        this.macroOverlayYOffsetUm = yOffsetUm;
         this.macroOverlayVisible = true;
 
-        logger.info("Setting macro overlay: {}x{} pixels, flipCorrection=({}, {}), "
-                        + "transform: scale({}, {}), translate({}, {})",
-                macroWidth, macroHeight, transformFlipX, transformFlipY,
-                String.format("%.6f", transform.getScaleX()),
-                String.format("%.6f", transform.getScaleY()),
-                String.format("%.1f", transform.getTranslateX()),
-                String.format("%.1f", transform.getTranslateY()));
+        logger.info("Setting macro overlay: {}x{} pixels, pixelSize={} um, "
+                        + "offset=({}, {}) um, flipCorrection=({}, {})",
+                macroWidth, macroHeight, pixelSizeUm, xOffsetUm, yOffsetUm,
+                transformFlipX, transformFlipY);
 
         // Convert BufferedImage to JavaFX Image
         javafx.scene.image.Image fxImage = SwingFXUtils.toFXImage(macroImage, null);
@@ -884,37 +899,52 @@ public class StageMapCanvas extends StackPane {
             }
         }
 
-        // Position the macro to match the slide rectangle width, preserving aspect ratio.
-        // The config slide height (18.6mm) is the visible aperture opening, not the full
-        // 25mm slide. The macro covers the full physical slide, so it will extend slightly
-        // above and below the slide rectangle - this is correct (shows edges behind holder).
+        // Slide rectangle screen position and dimensions
         double sx = offsetX + targetSlide.getXOffsetUm() * scale;
         double sy = offsetY + targetSlide.getYOffsetUm() * scale;
         double sw = targetSlide.getWidthUm() * scale;
         double sh = targetSlide.getHeightUm() * scale;
 
-        // Fit to slide width; height from macro aspect ratio
-        double macroAspect = (double) macroWidth / macroHeight;
-        double renderedHeight = sw / macroAspect;
+        double overlayX, overlayY, overlayW, overlayH;
 
-        // Center vertically on the slide rectangle
-        double verticalOffset = (sh - renderedHeight) / 2.0;
+        if (macroPixelSizeUm > 0) {
+            // Scanner-config-driven positioning: use pixel size for physical dimensions
+            // and config offset to position relative to slide rectangle.
+            double macroPhysicalW = macroWidth * macroPixelSizeUm;
+            double macroPhysicalH = macroHeight * macroPixelSizeUm;
 
-        macroOverlayView.setX(sx);
-        macroOverlayView.setY(sy + verticalOffset);
-        macroOverlayView.setFitWidth(sw);
-        macroOverlayView.setFitHeight(renderedHeight);
+            overlayW = macroPhysicalW * scale;
+            overlayH = macroPhysicalH * scale;
+            overlayX = sx + macroOverlayXOffsetUm * scale;
+            overlayY = sy + (sh - overlayH) / 2.0 + macroOverlayYOffsetUm * scale;
 
-        logger.info("Macro overlay positioned on '{}': screen ({}, {}) {}x{} px, "
-                        + "slide={}x{} um, macro={}x{} px (aspect {}, extends {} px beyond slide)",
-                targetSlide.getName(),
-                String.format("%.1f", sx), String.format("%.1f", sy + verticalOffset),
-                String.format("%.1f", sw), String.format("%.1f", renderedHeight),
-                String.format("%.0f", targetSlide.getWidthUm()),
-                String.format("%.0f", targetSlide.getHeightUm()),
-                macroWidth, macroHeight,
-                String.format("%.2f", macroAspect),
-                String.format("%.1f", renderedHeight - sh));
+            logger.info("Macro overlay (config-driven) on '{}': physical {}x{} um, "
+                            + "offset ({}, {}) um, screen ({}, {}) {}x{} px",
+                    targetSlide.getName(),
+                    String.format("%.0f", macroPhysicalW),
+                    String.format("%.0f", macroPhysicalH),
+                    String.format("%.0f", macroOverlayXOffsetUm),
+                    String.format("%.0f", macroOverlayYOffsetUm),
+                    String.format("%.1f", overlayX), String.format("%.1f", overlayY),
+                    String.format("%.1f", overlayW), String.format("%.1f", overlayH));
+        } else {
+            // Fallback: fit macro to slide rectangle width, preserve aspect ratio
+            overlayW = sw;
+            double macroAspect = (double) macroWidth / macroHeight;
+            overlayH = sw / macroAspect;
+            overlayX = sx;
+            overlayY = sy + (sh - overlayH) / 2.0;
+
+            logger.info("Macro overlay (fit-to-slide) on '{}': screen ({}, {}) {}x{} px",
+                    targetSlide.getName(),
+                    String.format("%.1f", overlayX), String.format("%.1f", overlayY),
+                    String.format("%.1f", overlayW), String.format("%.1f", overlayH));
+        }
+
+        macroOverlayView.setX(overlayX);
+        macroOverlayView.setY(overlayY);
+        macroOverlayView.setFitWidth(overlayW);
+        macroOverlayView.setFitHeight(overlayH);
     }
 
     // ========== Size Handling ==========

@@ -18,6 +18,7 @@ import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
@@ -30,6 +31,7 @@ import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -79,6 +81,7 @@ public class StageMapWindow {
     private BufferedImage currentMacroImage = null;
     private AffineTransform currentMacroTransform = null;
     private String currentMacroSampleName = null;
+    private String currentMacroScannerName = null;
     private ChangeListener<ImageData<?>> imageChangeListener = null;
 
     // ========== Configuration ==========
@@ -308,11 +311,7 @@ public class StageMapWindow {
                     logger.info("Applying macro overlay (image: {}x{}, sample: '{}')",
                             currentMacroImage.getWidth(), currentMacroImage.getHeight(),
                             currentMacroSampleName);
-                    StageInsert insert = insertComboBox.getValue();
-                    boolean axInvX = insert != null && insert.isXAxisInverted();
-                    boolean axInvY = insert != null && insert.isYAxisInverted();
-                    canvas.setMacroOverlay(currentMacroImage, currentMacroTransform,
-                            axInvX, axInvY);
+                    applyMacroOverlayToCanvas();
                 } else {
                     if (newVal) {
                         logger.info("Checkbox selected but no macro data available (image={}, transform={})",
@@ -720,6 +719,7 @@ public class StageMapWindow {
             currentMacroImage = null;
             currentMacroTransform = null;
             currentMacroSampleName = null;
+            currentMacroScannerName = null;
 
             QuPathGUI gui = QuPathGUI.getInstance();
             if (gui == null) {
@@ -804,17 +804,14 @@ public class StageMapWindow {
                 currentMacroImage = macroImage;
                 currentMacroTransform = overlayTransform;
                 currentMacroSampleName = sampleName;
+                currentMacroScannerName = scannerName;
                 macroOverlayCheckbox.setDisable(false);
                 logger.info("Macro overlay available for sample '{}' - checkbox enabled", sampleName);
 
                 // If checkbox is already selected, update the overlay
                 if (macroOverlayCheckbox.isSelected()) {
                     logger.info("Macro overlay checkbox already selected - applying overlay");
-                    StageInsert ins = insertComboBox.getValue();
-                    boolean axInvX2 = ins != null && ins.isXAxisInverted();
-                    boolean axInvY2 = ins != null && ins.isYAxisInverted();
-                    canvas.setMacroOverlay(currentMacroImage, currentMacroTransform,
-                            axInvX2, axInvY2);
+                    applyMacroOverlayToCanvas();
                 }
             } else {
                 macroOverlayCheckbox.setDisable(true);
@@ -915,6 +912,68 @@ public class StageMapWindow {
                 prefFlipX, prefFlipY, axisInvertedX, axisInvertedY, flipX, flipY);
 
         return macroImage;
+    }
+
+    /**
+     * Applies the macro overlay to the canvas, loading scanner-specific positioning
+     * parameters from the scanner config file (pixel_size_um, stagemap_overlay offsets).
+     */
+    private void applyMacroOverlayToCanvas() {
+        if (canvas == null || currentMacroImage == null || currentMacroTransform == null) {
+            return;
+        }
+
+        StageInsert insert = insertComboBox.getValue();
+        boolean axInvX = insert != null && insert.isXAxisInverted();
+        boolean axInvY = insert != null && insert.isYAxisInverted();
+
+        // Load scanner-specific overlay positioning from config
+        double pixelSizeUm = 0;
+        double xOffsetUm = 0;
+        double yOffsetUm = 0;
+
+        if (currentMacroScannerName != null) {
+            try {
+                String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                File configDir = new File(configPath).getParentFile();
+                File scannerConfigFile = new File(configDir,
+                        "config_" + currentMacroScannerName + ".yml");
+
+                if (scannerConfigFile.exists()) {
+                    Map<String, Object> scannerConfig =
+                            MinorFunctions.loadYamlFile(scannerConfigFile.getAbsolutePath());
+
+                    Double ps = MinorFunctions.getYamlDouble(scannerConfig, "macro", "pixel_size_um");
+                    if (ps != null && ps > 0) {
+                        pixelSizeUm = ps;
+                    }
+
+                    Double xOff = MinorFunctions.getYamlDouble(scannerConfig,
+                            "macro", "stagemap_overlay", "x_offset_um");
+                    if (xOff != null) {
+                        xOffsetUm = xOff;
+                    }
+
+                    Double yOff = MinorFunctions.getYamlDouble(scannerConfig,
+                            "macro", "stagemap_overlay", "y_offset_um");
+                    if (yOff != null) {
+                        yOffsetUm = yOff;
+                    }
+
+                    logger.info("Macro overlay config for '{}': pixelSize={} um, offset=({}, {}) um",
+                            currentMacroScannerName, pixelSizeUm, xOffsetUm, yOffsetUm);
+                } else {
+                    logger.warn("Scanner config not found for '{}' - using fit-to-slide fallback",
+                            currentMacroScannerName);
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to load scanner overlay config for '{}': {}",
+                        currentMacroScannerName, e.getMessage());
+            }
+        }
+
+        canvas.setMacroOverlay(currentMacroImage, currentMacroTransform,
+                axInvX, axInvY, pixelSizeUm, xOffsetUm, yOffsetUm);
     }
 
     /**
