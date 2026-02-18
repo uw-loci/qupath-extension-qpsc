@@ -77,7 +77,38 @@ public class WhiteBalanceWorkflow {
                         return;
                     }
 
-                    // Validate output directory
+                    // Camera AWB is a special case - no output directory needed
+                    if (result.isCameraAWB()) {
+                        Platform.runLater(() -> {
+                            var params = result.getCameraAWBParams();
+                            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+                            confirm.setTitle("Confirm Camera AWB");
+                            confirm.setHeaderText("Ready to run Camera Auto White Balance");
+                            confirm.setContentText(String.format(
+                                    "Mode: Camera AWB (one-shot auto)\n" +
+                                    "Objective: %s\n" +
+                                    "Rotation: %.1f deg (uncrossed)\n\n" +
+                                    "IMPORTANT: Ensure a neutral gray/white target or blank slide\n" +
+                                    "is in the field of view before continuing.\n\n" +
+                                    "The camera will rotate to uncrossed position,\n" +
+                                    "run auto white balance, then disable AWB.\n" +
+                                    "Estimated time: ~10 seconds",
+                                    params.objective() != null ? params.objective() : "unknown",
+                                    params.rotationAngle()
+                            ));
+
+                            confirm.showAndWait().ifPresent(response -> {
+                                if (response == ButtonType.OK) {
+                                    runCameraAWBCalibration(client, params);
+                                } else {
+                                    logger.info("Camera AWB cancelled by user at confirmation");
+                                }
+                            });
+                        });
+                        return;
+                    }
+
+                    // Validate output directory (for Simple and PPM modes)
                     String outputPath = result.isSimple() ?
                             result.getSimpleParams().outputPath() :
                             result.getPPMParams().outputPath();
@@ -348,6 +379,111 @@ public class WhiteBalanceWorkflow {
             }
             // Don't close client - it's the singleton's shared connection
         }, "PPMWhiteBalanceCalibration");
+        calibrationThread.setDaemon(true);
+        calibrationThread.start();
+    }
+
+    /**
+     * Runs Camera AWB calibration (one-shot auto white balance at uncrossed position).
+     */
+    private static void runCameraAWBCalibration(MicroscopeSocketClient client,
+                                                 WhiteBalanceDialog.CameraAWBParams params) {
+        // Show progress dialog
+        Stage progressStage = new Stage();
+        progressStage.initModality(Modality.NONE);
+        qupath.lib.gui.QuPathGUI gui = qupath.lib.gui.QuPathGUI.getInstance();
+        if (gui != null && gui.getStage() != null) {
+            progressStage.initOwner(gui.getStage());
+        }
+        progressStage.setTitle("Camera AWB");
+        progressStage.setResizable(false);
+
+        VBox root = new VBox(15);
+        root.setPadding(new Insets(20));
+        root.setAlignment(Pos.CENTER);
+        root.setPrefWidth(400);
+
+        Label statusLabel = new Label("Running camera auto white balance...");
+        statusLabel.setStyle("-fx-font-size: 14px;");
+
+        ProgressIndicator progress = new ProgressIndicator();
+        progress.setStyle("-fx-min-width: 50px; -fx-min-height: 50px;");
+
+        Label detailLabel = new Label("Rotating to uncrossed position, then running one-shot AWB");
+        detailLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+
+        root.getChildren().addAll(statusLabel, progress, detailLabel);
+
+        Scene scene = new Scene(root);
+        progressStage.setScene(scene);
+        progressStage.show();
+
+        // Run in background thread
+        Thread calibrationThread = new Thread(() -> {
+            // Stop all live viewing before starting
+            MicroscopeController.LiveViewState liveViewState =
+                    MicroscopeController.getInstance().stopAllLiveViewing();
+
+            try {
+                // Step 1: Rotate to uncrossed position (90deg)
+                logger.info("Camera AWB: Rotating to {} deg (uncrossed)",
+                        params.rotationAngle());
+                Platform.runLater(() -> detailLabel.setText(
+                        "Step 1/3: Rotating to uncrossed position..."));
+                client.moveStageR(params.rotationAngle());
+
+                // Brief pause for rotation to settle
+                Thread.sleep(1000);
+
+                // Step 2: Run one-shot auto white balance (mode=2)
+                logger.info("Camera AWB: Running one-shot auto white balance");
+                Platform.runLater(() -> detailLabel.setText(
+                        "Step 2/3: Running camera auto white balance..."));
+                client.setWhiteBalanceMode(2);  // 2 = Once (one-shot auto)
+
+                // Wait for camera AWB to complete
+                Thread.sleep(2000);
+
+                // Step 3: Disable AWB so it doesn't change during acquisition
+                logger.info("Camera AWB: Disabling auto white balance");
+                Platform.runLater(() -> detailLabel.setText(
+                        "Step 3/3: Disabling auto WB (camera remembers gains)..."));
+                client.setWhiteBalanceMode(0);  // 0 = Off
+
+                logger.info("Camera AWB calibration completed successfully");
+
+                Platform.runLater(() -> {
+                    progressStage.close();
+
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                    alert.setTitle("Camera AWB Complete");
+                    alert.setHeaderText("Camera Auto White Balance Completed");
+                    alert.setContentText(
+                            "Camera AWB has been applied successfully.\n\n" +
+                            "The camera's internal R/B gains have been adjusted\n" +
+                            "based on the current scene at uncrossed position.\n\n" +
+                            "These gains are stored in the camera and will persist\n" +
+                            "until the camera is power-cycled or AWB is run again.\n\n" +
+                            "Note: Camera AWB gains are NOT saved to YAML config.\n" +
+                            "For reproducible results, use Simple or PPM WB instead."
+                    );
+                    alert.initModality(Modality.NONE);
+                    alert.getButtonTypes().setAll(ButtonType.CLOSE);
+                    alert.show();
+                });
+
+            } catch (Exception e) {
+                logger.error("Camera AWB calibration failed", e);
+                Platform.runLater(() -> {
+                    progressStage.close();
+                    Dialogs.showErrorMessage("Camera AWB Failed",
+                            "Auto white balance failed: " + e.getMessage());
+                });
+            } finally {
+                // Restore live viewing state
+                MicroscopeController.getInstance().restoreLiveViewState(liveViewState);
+            }
+        }, "CameraAWBCalibration");
         calibrationThread.setDaemon(true);
         calibrationThread.start();
     }

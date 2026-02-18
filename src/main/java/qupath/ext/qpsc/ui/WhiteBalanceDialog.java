@@ -159,23 +159,39 @@ public class WhiteBalanceDialog {
     ) {}
 
     /**
-     * Result wrapper that contains either Simple or PPM parameters.
+     * Result record for Camera AWB configuration.
+     * Camera AWB uses the camera's built-in auto white balance at 90deg (uncrossed),
+     * then disables auto WB for subsequent captures.
+     */
+    public record CameraAWBParams(
+            String objective,
+            double rotationAngle  // Angle to rotate to for AWB (typically 90deg uncrossed)
+    ) {}
+
+    /**
+     * Result wrapper that contains Simple, PPM, or Camera AWB parameters.
      */
     public static class WBDialogResult {
         private final SimpleWBParams simpleParams;
         private final PPMWBParams ppmParams;
+        private final CameraAWBParams cameraAWBParams;
 
-        private WBDialogResult(SimpleWBParams simpleParams, PPMWBParams ppmParams) {
+        private WBDialogResult(SimpleWBParams simpleParams, PPMWBParams ppmParams, CameraAWBParams cameraAWBParams) {
             this.simpleParams = simpleParams;
             this.ppmParams = ppmParams;
+            this.cameraAWBParams = cameraAWBParams;
         }
 
         public static WBDialogResult simple(SimpleWBParams params) {
-            return new WBDialogResult(params, null);
+            return new WBDialogResult(params, null, null);
         }
 
         public static WBDialogResult ppm(PPMWBParams params) {
-            return new WBDialogResult(null, params);
+            return new WBDialogResult(null, params, null);
+        }
+
+        public static WBDialogResult cameraAWB(CameraAWBParams params) {
+            return new WBDialogResult(null, null, params);
         }
 
         public boolean isSimple() {
@@ -186,12 +202,20 @@ public class WhiteBalanceDialog {
             return ppmParams != null;
         }
 
+        public boolean isCameraAWB() {
+            return cameraAWBParams != null;
+        }
+
         public SimpleWBParams getSimpleParams() {
             return simpleParams;
         }
 
         public PPMWBParams getPPMParams() {
             return ppmParams;
+        }
+
+        public CameraAWBParams getCameraAWBParams() {
+            return cameraAWBParams;
         }
     }
 
@@ -239,6 +263,10 @@ public class WhiteBalanceDialog {
                 TitledPane ppmPane = createPPMWBPane();
                 ppmPane.setExpanded(false);
 
+                // ========== CAMERA AWB SECTION ==========
+                TitledPane cameraAWBPane = createCameraAWBPane();
+                cameraAWBPane.setExpanded(false);
+
                 // ========== ADVANCED SETTINGS SECTION ==========
                 TitledPane advancedPane = createAdvancedSettingsPane();
                 advancedPane.setExpanded(false);
@@ -249,15 +277,17 @@ public class WhiteBalanceDialog {
                         sharedPane,
                         simplePane,
                         ppmPane,
+                        cameraAWBPane,
                         advancedPane
                 );
 
                 // ========== DIALOG BUTTONS ==========
                 ButtonType runSimpleButton = new ButtonType("Run Simple WB", ButtonBar.ButtonData.OK_DONE);
                 ButtonType runPPMButton = new ButtonType("Run PPM WB", ButtonBar.ButtonData.APPLY);
+                ButtonType runCameraAWBButton = new ButtonType("Run Camera AWB", ButtonBar.ButtonData.OTHER);
                 ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
 
-                dialog.getDialogPane().getButtonTypes().addAll(runSimpleButton, runPPMButton, cancelButton);
+                dialog.getDialogPane().getButtonTypes().addAll(runSimpleButton, runPPMButton, runCameraAWBButton, cancelButton);
                 dialog.getDialogPane().setContent(scrollPane);
 
                 // Get references to UI elements for result conversion
@@ -315,9 +345,16 @@ public class WhiteBalanceDialog {
                     simpleBtn.setDisable(!valid);
                 };
 
+                // Validation for Camera AWB button - just needs objective
+                Button cameraAWBBtn = (Button) dialog.getDialogPane().lookupButton(runCameraAWBButton);
+                Runnable validateCameraAWB = () -> {
+                    boolean valid = objectiveCombo.getValue() != null;
+                    cameraAWBBtn.setDisable(!valid);
+                };
+
                 // Set up validation listeners
                 outputField.textProperty().addListener((obs, o, n) -> { validateSimple.run(); validatePPM.run(); });
-                objectiveCombo.valueProperty().addListener((obs, o, n) -> { validateSimple.run(); validatePPM.run(); });
+                objectiveCombo.valueProperty().addListener((obs, o, n) -> { validateSimple.run(); validatePPM.run(); validateCameraAWB.run(); });
                 simpleExpSpinner.valueProperty().addListener((obs, o, n) -> validateSimple.run());
                 posExpSpinner.valueProperty().addListener((obs, o, n) -> validatePPM.run());
                 negExpSpinner.valueProperty().addListener((obs, o, n) -> validatePPM.run());
@@ -327,6 +364,7 @@ public class WhiteBalanceDialog {
                 // Initial validation
                 validateSimple.run();
                 validatePPM.run();
+                validateCameraAWB.run();
 
                 // Convert result
                 dialog.setResultConverter(buttonType -> {
@@ -454,6 +492,19 @@ public class WhiteBalanceDialog {
                                 CROSSED_ANGLE, crossExp, crossTarget,
                                 UNCROSSED_ANGLE, uncrossExp, uncrossTarget,
                                 fallbackTarget, tolerance, advanced
+                        ));
+
+                    } else if (buttonType == runCameraAWBButton) {
+                        logger.info("User selected Camera AWB:");
+                        logger.info("  Objective: {}", selectedObjective);
+                        logger.info("  Rotation angle: {} deg (uncrossed)", UNCROSSED_ANGLE);
+
+                        if (selectedObjective != null) {
+                            ppmObjectiveProperty.set(selectedObjective);
+                        }
+
+                        return WBDialogResult.cameraAWB(new CameraAWBParams(
+                                selectedObjective, UNCROSSED_ANGLE
                         ));
                     }
 
@@ -782,6 +833,36 @@ public class WhiteBalanceDialog {
         vbox.getChildren().addAll(descLabel, grid, noteLabel);
 
         TitledPane pane = new TitledPane("PPM White Balance (4 Angles)", vbox);
+        pane.setCollapsible(true);
+        return pane;
+    }
+
+    /**
+     * Creates the Camera AWB pane.
+     * Camera AWB is the simplest mode - rotates to uncrossed (90deg) and runs one-shot auto WB.
+     */
+    private static TitledPane createCameraAWBPane() {
+        VBox vbox = new VBox(10);
+        vbox.setPadding(new Insets(10));
+
+        Label descLabel = new Label(
+                "Camera Auto White Balance - uses the camera's built-in AWB algorithm.\n\n" +
+                "How it works:\n" +
+                "  1. Rotates polarizer to uncrossed position (90 deg)\n" +
+                "  2. Triggers one-shot auto white balance on the camera\n" +
+                "  3. Camera internally adjusts R/B gain to balance colors\n" +
+                "  4. AWB is then disabled - camera remembers the gains\n\n" +
+                "Pros: Fast, simple, no YAML storage needed\n" +
+                "Cons: Camera internal gains are not saved/reproducible\n\n" +
+                "Use this for quick comparison against calibrated WB modes.\n" +
+                "Ensure a neutral target is in the field of view."
+        );
+        descLabel.setWrapText(true);
+        descLabel.setStyle("-fx-font-size: 11px;");
+
+        vbox.getChildren().add(descLabel);
+
+        TitledPane pane = new TitledPane("Camera AWB (One-Shot Auto)", vbox);
         pane.setCollapsible(true);
         return pane;
     }

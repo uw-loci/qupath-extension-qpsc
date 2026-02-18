@@ -364,11 +364,12 @@ public class ExistingImageWorkflowV2 {
             // Store JAI camera white balance settings
             state.enableWhiteBalance = config.enableWhiteBalance();
             state.perAngleWhiteBalance = config.perAngleWhiteBalance();
+            state.wbMode = config.wbMode();
 
-            logger.info("Config initialized: sample={}, modality={}, useExisting={}, refinement={}, WB={}/perAngle={}",
+            logger.info("Config initialized: sample={}, modality={}, useExisting={}, refinement={}, wbMode={}",
                     config.sampleName(), config.modality(),
                     config.useExistingAlignment(), config.refinementChoice(),
-                    config.enableWhiteBalance(), config.perAngleWhiteBalance());
+                    config.wbMode());
 
             return CompletableFuture.completedFuture(state);
         }
@@ -763,5 +764,6 @@ public class ExistingImageWorkflowV2 {
         // JAI camera white balance settings
         public boolean enableWhiteBalance = true;
         public boolean perAngleWhiteBalance = false;
+        public String wbMode = "per_angle";
     }
 }

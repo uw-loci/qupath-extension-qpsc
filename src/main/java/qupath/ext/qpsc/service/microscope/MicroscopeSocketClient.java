@@ -857,18 +857,25 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param angles Angle values in parentheses format (e.g., "(-5.0,0.0,5.0,90.0)")
      * @param exposures Exposure values in parentheses format (e.g., "(120.0,250.0,60.0,1.2)")
      *                  NOTE: These are ignored by server with adaptive exposure enabled
-     * @param usePerAngleWB Whether to apply per-angle white balance calibration during acquisition
+     * @param wbMode White balance mode: "camera_awb", "simple", "per_angle", or "off"
      * @return Map of angle (degrees) to final exposure time (ms) used by Python server
      * @throws IOException if communication fails
      */
     public Map<Double, Double> startBackgroundAcquisition(String yamlPath, String outputPath, String modality,
-                                           String angles, String exposures, boolean usePerAngleWB) throws IOException {
+                                           String angles, String exposures, String wbMode) throws IOException {
 
         // Build BGACQUIRE-specific command message
-        // Include white balance flag only if enabled (to maintain backward compatibility)
-        String wbFlag = usePerAngleWB ? " --use_per_angle_wb" : "";
+        // Include new --wb-mode flag and legacy --use_per_angle_wb for backward compat
+        String wbFlags = "";
+        if (wbMode != null && !wbMode.isEmpty()) {
+            wbFlags += " --wb-mode " + wbMode;
+        }
+        // Legacy flag for backward compat with older servers
+        if ("per_angle".equals(wbMode)) {
+            wbFlags += " --use_per_angle_wb";
+        }
         String message = String.format("--yaml %s --output %s --modality %s --angles %s --exposures %s%s %s",
-                yamlPath, outputPath, modality, angles, exposures, wbFlag, END_MARKER);
+                yamlPath, outputPath, modality, angles, exposures, wbFlags, END_MARKER);
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
 
         logger.info("Sending background acquisition command:");

@@ -40,6 +40,7 @@ public class AcquisitionCommandBuilder {
     // White balance parameters
     private boolean whiteBalanceEnabled = true;
     private boolean perAngleWhiteBalance = false;
+    private String wbMode = null;  // "camera_awb", "simple", "per_angle", "off"
 
     // Autofocus parameters
     private Integer autofocusNTiles;
@@ -179,6 +180,29 @@ public class AcquisitionCommandBuilder {
         this.perAngleWhiteBalance = perAngle;
         if (enabled && !processingSteps.contains("white_balance")) {
             processingSteps.add("white_balance");
+        }
+        return this;
+    }
+
+    /**
+     * Configure white balance using the new mode-based system.
+     * Valid modes: "camera_awb", "simple", "per_angle", "off".
+     * When set, this takes priority over the boolean whiteBalance flags.
+     *
+     * @param mode White balance mode string
+     */
+    public AcquisitionCommandBuilder wbMode(String mode) {
+        this.wbMode = mode;
+        // Sync boolean fields for backward compat
+        if ("off".equals(mode)) {
+            this.whiteBalanceEnabled = false;
+            this.perAngleWhiteBalance = false;
+        } else {
+            this.whiteBalanceEnabled = true;
+            this.perAngleWhiteBalance = "per_angle".equals(mode);
+            if (!processingSteps.contains("white_balance")) {
+                processingSteps.add("white_balance");
+            }
         }
         return this;
     }
@@ -375,6 +399,11 @@ public class AcquisitionCommandBuilder {
         }
 
         // Add white balance parameters
+        // New --wb-mode flag (preferred by new servers)
+        if (wbMode != null) {
+            args.addAll(Arrays.asList("--wb-mode", wbMode));
+        }
+        // Legacy flags for backward compat with older servers
         args.addAll(Arrays.asList("--white-balance", String.valueOf(whiteBalanceEnabled)));
         if (whiteBalanceEnabled && perAngleWhiteBalance) {
             args.addAll(Arrays.asList("--wb-per-angle", "true"));

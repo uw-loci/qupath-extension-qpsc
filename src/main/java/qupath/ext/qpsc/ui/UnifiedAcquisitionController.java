@@ -67,7 +67,8 @@ public class UnifiedAcquisitionController {
             double x2, double y2,
             Map<String, Double> angleOverrides,
             boolean enableWhiteBalance,
-            boolean perAngleWhiteBalance
+            boolean perAngleWhiteBalance,
+            String wbMode
     ) {}
 
     /**
@@ -147,6 +148,7 @@ public class UnifiedAcquisitionController {
         private VBox whiteBalanceSection;
         private CheckBox enableWhiteBalanceCheckBox;
         private CheckBox perAngleWhiteBalanceCheckBox;
+        private ComboBox<String> wbModeComboBox;
 
         // UI Components - Advanced Section Content
         private VBox advancedContent;
@@ -667,23 +669,41 @@ public class UnifiedAcquisitionController {
             Label wbHeader = new Label("JAI Camera White Balance");
             wbHeader.setStyle("-fx-font-weight: bold;");
 
-            enableWhiteBalanceCheckBox = new CheckBox("Enable white balance correction");
+            // WB mode dropdown - replaces two checkboxes with a single ComboBox
+            wbModeComboBox = new ComboBox<>();
+            wbModeComboBox.getItems().addAll("Off", "Camera AWB", "Simple (90deg)", "Per-angle (PPM)");
+            wbModeComboBox.setValue("Per-angle (PPM)");  // Default for PPM
+            wbModeComboBox.setTooltip(new Tooltip(
+                    "White balance mode:\n" +
+                    "  Off - No white balance correction\n" +
+                    "  Camera AWB - Camera auto white balance at 90deg, then off\n" +
+                    "  Simple (90deg) - Use 90deg R:G:B ratios, uniformly scaled per angle\n" +
+                    "  Per-angle (PPM) - Independent calibration per angle (default)"));
+
+            // Keep legacy checkboxes in sync (hidden, for backward compat with callers)
+            enableWhiteBalanceCheckBox = new CheckBox();
             enableWhiteBalanceCheckBox.setSelected(true);
-            enableWhiteBalanceCheckBox.setTooltip(new Tooltip(
-                    "Apply white balance calibration during acquisition.\n" +
-                    "Requires running White Balance Calibration first."));
-
-            perAngleWhiteBalanceCheckBox = new CheckBox("Use per-angle white balance (PPM)");
+            enableWhiteBalanceCheckBox.setVisible(false);
+            enableWhiteBalanceCheckBox.setManaged(false);
+            perAngleWhiteBalanceCheckBox = new CheckBox();
             perAngleWhiteBalanceCheckBox.setSelected(false);
-            perAngleWhiteBalanceCheckBox.setTooltip(new Tooltip(
-                    "Use different white balance settings for each polarizer angle.\n" +
-                    "If unchecked, uses single white balance at 90 deg (uncrossed).\n\n" +
-                    "Run PPM White Balance calibration first to generate per-angle settings."));
-            // Disable per-angle checkbox when white balance is disabled
-            perAngleWhiteBalanceCheckBox.disableProperty().bind(
-                    enableWhiteBalanceCheckBox.selectedProperty().not());
+            perAngleWhiteBalanceCheckBox.setVisible(false);
+            perAngleWhiteBalanceCheckBox.setManaged(false);
 
-            whiteBalanceSection.getChildren().addAll(wbHeader, enableWhiteBalanceCheckBox, perAngleWhiteBalanceCheckBox);
+            // Sync legacy checkboxes when ComboBox changes
+            wbModeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+                if (newVal != null) {
+                    enableWhiteBalanceCheckBox.setSelected(!"Off".equals(newVal));
+                    perAngleWhiteBalanceCheckBox.setSelected("Per-angle (PPM)".equals(newVal));
+                }
+            });
+
+            javafx.scene.layout.HBox wbModeRow = new javafx.scene.layout.HBox(10);
+            wbModeRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+            Label wbModeLabel = new Label("WB Mode:");
+            wbModeRow.getChildren().addAll(wbModeLabel, wbModeComboBox);
+
+            whiteBalanceSection.getChildren().addAll(wbHeader, wbModeRow);
             whiteBalanceSection.setVisible(false);  // Hidden by default
             whiteBalanceSection.setManaged(false);
 
@@ -830,11 +850,16 @@ public class UnifiedAcquisitionController {
             whiteBalanceSection.setVisible(isJAI);
             whiteBalanceSection.setManaged(isJAI);
 
-            // Per-angle option only makes sense for PPM modality
+            // Adjust ComboBox items based on modality
             String modality = modalityBox.getValue();
             boolean isPPM = modality != null && modality.toLowerCase().startsWith("ppm");
-            perAngleWhiteBalanceCheckBox.setVisible(isPPM);
-            perAngleWhiteBalanceCheckBox.setManaged(isPPM);
+            // All modes are available for PPM; for non-PPM, hide PPM-specific options
+            if (!isPPM && wbModeComboBox != null) {
+                if ("Per-angle (PPM)".equals(wbModeComboBox.getValue()) ||
+                    "Simple (90deg)".equals(wbModeComboBox.getValue())) {
+                    wbModeComboBox.setValue("Off");
+                }
+            }
 
             logger.debug("White balance visibility updated: JAI={}, PPM={}, section visible={}",
                     isJAI, isPPM, whiteBalanceSection.isVisible());
@@ -1185,20 +1210,27 @@ public class UnifiedAcquisitionController {
                     }
                 }
 
-                // Get white balance settings (only relevant for JAI cameras)
-                boolean enableWhiteBalance = enableWhiteBalanceCheckBox.isSelected();
-                boolean perAngleWhiteBalance = perAngleWhiteBalanceCheckBox.isSelected() &&
-                        perAngleWhiteBalanceCheckBox.isVisible();  // Only if checkbox is visible (PPM mode)
+                // Get white balance settings from ComboBox
+                String wbModeDisplay = wbModeComboBox != null ? wbModeComboBox.getValue() : "Per-angle (PPM)";
+                String wbMode = switch (wbModeDisplay) {
+                    case "Off" -> "off";
+                    case "Camera AWB" -> "camera_awb";
+                    case "Simple (90deg)" -> "simple";
+                    default -> "per_angle";
+                };
+                boolean enableWhiteBalance = !"off".equals(wbMode);
+                boolean perAngleWhiteBalance = "per_angle".equals(wbMode);
 
                 logger.info("Created unified acquisition result: sample={}, modality={}, " +
                            "objective={}, detector={}, bounds=({},{}) to ({},{}), " +
-                           "enableWB={}, perAngleWB={}",
+                           "wbMode={}, enableWB={}, perAngleWB={}",
                         sampleName, modality, objective, detector, x1, y1, x2, y2,
-                        enableWhiteBalance, perAngleWhiteBalance);
+                        wbMode, enableWhiteBalance, perAngleWhiteBalance);
 
                 return new UnifiedAcquisitionResult(
                         sampleName, projectsFolder, modality, objective, detector,
-                        x1, y1, x2, y2, angleOverrides, enableWhiteBalance, perAngleWhiteBalance
+                        x1, y1, x2, y2, angleOverrides, enableWhiteBalance, perAngleWhiteBalance,
+                        wbMode
                 );
 
             } catch (Exception e) {

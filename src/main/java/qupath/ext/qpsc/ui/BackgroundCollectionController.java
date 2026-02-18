@@ -49,7 +49,7 @@ public class BackgroundCollectionController {
     private ComboBox<String> modalityComboBox;
     private ComboBox<String> objectiveComboBox;
     private TextField outputPathField;
-    private CheckBox perAngleWhiteBalanceCheckBox;
+    private ComboBox<String> wbModeComboBox;
     private VBox exposureControlsPane;
     private List<AngleExposure> currentAngleExposures = new ArrayList<>();
     private List<TextField> exposureFields = new ArrayList<>();
@@ -224,24 +224,29 @@ public class BackgroundCollectionController {
         // Set default output path
         setDefaultOutputPath();
 
-        // Per-angle white balance checkbox - load from persisted preference
-        perAngleWhiteBalanceCheckBox = new CheckBox("Use per-channel white balance (recommended for JAI)");
-        perAngleWhiteBalanceCheckBox.setSelected(PPMPreferences.getPerAngleWBEnabled());
-        perAngleWhiteBalanceCheckBox.setTooltip(new Tooltip(
-                "RECOMMENDED FOR JAI CAMERAS: When checked, uses calibrated per-channel (R,G,B)\n" +
-                "exposures from white balance calibration. This ensures backgrounds match the\n" +
-                "exact exposure conditions used during acquisition for accurate flat-field correction.\n\n" +
-                "When unchecked, uses unified adaptive exposure (may cause over/under-correction).\n\n" +
-                "Run 'White Balance Calibration' (PPM mode) first to generate per-angle settings.\n" +
-                "This setting is remembered between sessions."
+        // WB mode dropdown - replaces checkbox with full mode selection
+        Label wbModeLabel = new Label("White Balance Mode:");
+        wbModeComboBox = new ComboBox<>();
+        wbModeComboBox.getItems().addAll("Off", "Camera AWB", "Simple (90deg)", "Per-angle (PPM)");
+        wbModeComboBox.setValue("Per-angle (PPM)");  // Default for PPM
+        wbModeComboBox.setTooltip(new Tooltip(
+                "White balance mode for background acquisition:\n" +
+                "  Off - No white balance correction\n" +
+                "  Camera AWB - Camera auto white balance at 90deg, then off\n" +
+                "  Simple (90deg) - Use 90deg R:G:B ratios, uniformly scaled per angle\n" +
+                "  Per-angle (PPM) - Independent calibration per angle (default)\n\n" +
+                "Backgrounds must be collected with the SAME mode used for acquisition."
         ));
 
-        // Listener to reload exposure values when per-angle white balance is toggled
-        perAngleWhiteBalanceCheckBox.selectedProperty().addListener((obs, wasSelected, isSelected) -> {
+        HBox wbModeRow = new HBox(10, wbModeLabel, wbModeComboBox);
+        wbModeRow.setAlignment(Pos.CENTER_LEFT);
+
+        // Listener to reload exposure values when WB mode changes
+        wbModeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
             String modality = modalityComboBox.getValue();
             String objective = objectiveComboBox.getValue();
             if (modality != null && objective != null) {
-                logger.info("Per-angle white balance toggled to: {} - reloading exposure values", isSelected);
+                logger.info("WB mode changed to: {} - reloading exposure values", newVal);
                 updateExposureControlsWithBackground(modality, objective);
             }
         });
@@ -259,7 +264,7 @@ public class BackgroundCollectionController {
                 instructionLabel,
                 new Separator(),
                 modalityPane,
-                perAngleWhiteBalanceCheckBox,
+                wbModeRow,
                 new Separator(),
                 exposureLabel,
                 backgroundValidationLabel,
@@ -349,7 +354,7 @@ public class BackgroundCollectionController {
 
         getBackgroundCollectionDefaults(modality, objective, finalDetector).thenAccept(defaultExposures -> {
             Platform.runLater(() -> {
-                boolean perAngleWbEnabled = perAngleWhiteBalanceCheckBox != null && perAngleWhiteBalanceCheckBox.isSelected();
+                boolean perAngleWbEnabled = isPerAngleWbMode();
                 logger.info("DEBUG: Inside callback - capturedSettings = {}, perAngleWB = {}",
                         capturedSettings != null ? "FOUND" : "NULL", perAngleWbEnabled);
                 logger.debug("Creating exposure controls for {} angles", defaultExposures.size());
@@ -617,15 +622,15 @@ public class BackgroundCollectionController {
                 }
             }
 
-            // Remove the settingsMatchExisting check - it's not relevant for background collection
-            // We're creating new backgrounds, not using them for correction
-            boolean usePerAngleWB = perAngleWhiteBalanceCheckBox.isSelected();
+            // Convert ComboBox selection to protocol string
+            String wbMode = convertWbModeToProtocol(wbModeComboBox.getValue());
+            boolean usePerAngleWB = "per_angle".equals(wbMode);
 
             // Save the preference for next time
             PPMPreferences.setPerAngleWBEnabled(usePerAngleWB);
-            logger.info("Saved per-angle WB preference: {}", usePerAngleWB);
+            logger.info("Saved per-angle WB preference: {}, wbMode: {}", usePerAngleWB, wbMode);
 
-            return new BackgroundCollectionResult(modality, objective, finalExposures, outputPath, usePerAngleWB);
+            return new BackgroundCollectionResult(modality, objective, finalExposures, outputPath, usePerAngleWB, wbMode);
 
         } catch (Exception e) {
             logger.error("Error creating result", e);
@@ -688,7 +693,7 @@ public class BackgroundCollectionController {
      * Priority order: 1. Config file (per-channel if WB enabled), 2. Preferences, 3. Fallback default
      */
     private double getBackgroundExposureDefault(double angle, String modality, String objective, String detector) {
-        boolean perAngleWbEnabled = perAngleWhiteBalanceCheckBox != null && perAngleWhiteBalanceCheckBox.isSelected();
+        boolean perAngleWbEnabled = isPerAngleWbMode();
         logger.debug("Getting background collection exposure default for angle {} with modality={}, objective={}, detector={}, perAngleWB={}",
                 angle, modality, objective, detector, perAngleWbEnabled);
 
@@ -810,6 +815,27 @@ public class BackgroundCollectionController {
         } else {
             return "custom";
         }
+    }
+
+    /**
+     * Check if the current WB mode selection is per-angle (PPM).
+     */
+    private boolean isPerAngleWbMode() {
+        return wbModeComboBox != null && "Per-angle (PPM)".equals(wbModeComboBox.getValue());
+    }
+
+    /**
+     * Convert UI display string to protocol string for socket communication.
+     */
+    private static String convertWbModeToProtocol(String displayValue) {
+        if (displayValue == null) return "per_angle";
+        return switch (displayValue) {
+            case "Off" -> "off";
+            case "Camera AWB" -> "camera_awb";
+            case "Simple (90deg)" -> "simple";
+            case "Per-angle (PPM)" -> "per_angle";
+            default -> "per_angle";
+        };
     }
 
     /**

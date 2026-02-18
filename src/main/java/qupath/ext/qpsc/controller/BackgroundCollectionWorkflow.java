@@ -77,7 +77,7 @@ public class BackgroundCollectionWorkflow {
                             // Execute background acquisition
                             CompletableFuture.runAsync(() -> {
                                 executeBackgroundAcquisition(result.modality(), result.objective(),
-                                        result.angleExposures(), result.outputPath(), result.usePerAngleWhiteBalance());
+                                        result.angleExposures(), result.outputPath(), result.wbMode());
                             }).exceptionally(ex -> {
                                 logger.error("Background acquisition failed", ex);
                                 Platform.runLater(() -> {
@@ -112,12 +112,12 @@ public class BackgroundCollectionWorkflow {
      * @param objective The selected objective
      * @param angleExposures List of angle-exposure pairs
      * @param outputPath Base output path for background images
-     * @param usePerAngleWB Whether to apply per-angle white balance calibration
+     * @param wbMode White balance mode: "camera_awb", "simple", "per_angle", or "off"
      */
     private static void executeBackgroundAcquisition(String modality, String objective, List<AngleExposure> angleExposures,
-                                                     String outputPath, boolean usePerAngleWB) {
-        logger.info("Executing background acquisition for modality '{}' with {} angles, perAngleWB={}",
-                modality, angleExposures.size(), usePerAngleWB);
+                                                     String outputPath, String wbMode) {
+        logger.info("Executing background acquisition for modality '{}' with {} angles, wbMode={}",
+                modality, angleExposures.size(), wbMode);
 
         try {
             // Get socket client from MicroscopeController
@@ -165,7 +165,7 @@ public class BackgroundCollectionWorkflow {
             // Call the synchronous background acquisition method
             // Returns map of final exposures actually used by Python (with adaptive exposure)
             Map<Double, Double> finalExposures = socketClient.startBackgroundAcquisition(
-                    configFileLocation, finalOutputPath, modality, angles, exposures, usePerAngleWB);
+                    configFileLocation, finalOutputPath, modality, angles, exposures, wbMode);
 
             logger.info("Background acquisition completed successfully with {} final exposures",
                     finalExposures.size());
@@ -196,7 +196,8 @@ public class BackgroundCollectionWorkflow {
             String objective,
             List<AngleExposure> angleExposures,
             String outputPath,
-            boolean usePerAngleWhiteBalance
+            boolean usePerAngleWhiteBalance,
+            String wbMode
     ) {}
     
     /**

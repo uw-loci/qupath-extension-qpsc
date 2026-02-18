@@ -301,14 +301,18 @@ public class BoundedAcquisitionWorkflow {
                                         );
 
                                 // Apply user's white balance settings from UI (overrides config defaults)
-                                config.commandBuilder().whiteBalance(
-                                        result.enableWhiteBalance(),
-                                        result.perAngleWhiteBalance()
-                                );
+                                if (result.wbMode() != null) {
+                                    config.commandBuilder().wbMode(result.wbMode());
+                                } else {
+                                    config.commandBuilder().whiteBalance(
+                                            result.enableWhiteBalance(),
+                                            result.perAngleWhiteBalance()
+                                    );
+                                }
 
-                                logger.info("Starting acquisition - Sample: {}, Mode: {}, Angles: {}, WB enabled: {}, per-angle WB: {}",
+                                logger.info("Starting acquisition - Sample: {}, Mode: {}, Angles: {}, wbMode: {}",
                                         result.sampleName(), modeWithIndex, angleExposures.size(),
-                                        result.enableWhiteBalance(), result.perAngleWhiteBalance());
+                                        result.wbMode());
 
                                 String commandString = config.commandBuilder().buildSocketMessage();
                                 MinorFunctions.saveAcquisitionCommand(
