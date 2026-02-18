@@ -869,11 +869,68 @@ public class StageMapCanvas extends StackPane {
             }
         }
 
+        // ===== DIAGNOSTIC: log everything for debugging =====
+        double w = macroWidth;
+        double h = macroHeight;
+
+        // Log the transform matrix
+        logger.info("DIAG macro overlay: image={}x{} px, flipCorrection=({}, {})",
+                macroWidth, macroHeight, macroTransformFlipX, macroTransformFlipY);
+        logger.info("DIAG transform matrix: [{}, {}, {}; {}, {}, {}]",
+                String.format("%.6f", macroTransform.getScaleX()),
+                String.format("%.6f", macroTransform.getShearX()),
+                String.format("%.1f", macroTransform.getTranslateX()),
+                String.format("%.6f", macroTransform.getShearY()),
+                String.format("%.6f", macroTransform.getScaleY()),
+                String.format("%.1f", macroTransform.getTranslateY()));
+
+        // Log insert/slide reference dimensions
+        StageInsert.SlidePosition refSlide = slides.get(0);
+        logger.info("DIAG insert: origin=({}, {}), size={}x{} um, inverted=({}, {})",
+                String.format("%.1f", currentInsert.getOriginXUm()),
+                String.format("%.1f", currentInsert.getOriginYUm()),
+                String.format("%.0f", currentInsert.getWidthUm()),
+                String.format("%.0f", currentInsert.getHeightUm()),
+                currentInsert.isXAxisInverted(), currentInsert.isYAxisInverted());
+        logger.info("DIAG slide '{}': offset=({}, {}), size={}x{} um",
+                refSlide.getName(),
+                String.format("%.1f", refSlide.getXOffsetUm()),
+                String.format("%.1f", refSlide.getYOffsetUm()),
+                String.format("%.0f", refSlide.getWidthUm()),
+                String.format("%.0f", refSlide.getHeightUm()));
+        logger.info("DIAG canvas: scale={}, offset=({}, {})",
+                String.format("%.6f", scale),
+                String.format("%.1f", offsetX), String.format("%.1f", offsetY));
+
+        // Transform all 4 corners to stage to see the full picture
+        double[][] corners = {{0, 0}, {w, 0}, {0, h}, {w, h}};
+        String[] cornerNames = {"(0,0)", "(W,0)", "(0,H)", "(W,H)"};
+        for (int i = 0; i < 4; i++) {
+            double[] stageOut = new double[2];
+            macroTransform.transform(corners[i], 0, stageOut, 0, 1);
+            double[] screenOut = stageToScreen(stageOut[0], stageOut[1]);
+            logger.info("DIAG corner {} px={} -> stage=({}, {}) -> screen=({}, {})",
+                    cornerNames[i],
+                    String.format("(%.0f, %.0f)", corners[i][0], corners[i][1]),
+                    String.format("%.1f", stageOut[0]), String.format("%.1f", stageOut[1]),
+                    screenOut != null ? String.format("%.1f", screenOut[0]) : "null",
+                    screenOut != null ? String.format("%.1f", screenOut[1]) : "null");
+        }
+
+        // Log slide rectangle screen position for comparison
+        double slideScreenX = offsetX + refSlide.getXOffsetUm() * scale;
+        double slideScreenY = offsetY + refSlide.getYOffsetUm() * scale;
+        double slideScreenW = refSlide.getWidthUm() * scale;
+        double slideScreenH = refSlide.getHeightUm() * scale;
+        logger.info("DIAG slide rect on screen: ({}, {}) {}x{} px",
+                String.format("%.1f", slideScreenX), String.format("%.1f", slideScreenY),
+                String.format("%.1f", slideScreenW), String.format("%.1f", slideScreenH));
+
+        // ===== Compute macro position =====
+
         // The displayed image has been flipped by (macroTransformFlipX, macroTransformFlipY)
         // relative to the transform's input space. Map displayed TL and BR corners back
         // to transform input space, then to stage, then to screen.
-        double w = macroWidth;
-        double h = macroHeight;
 
         // Displayed top-left (0,0) in transform input space
         double tlTransX = macroTransformFlipX ? w : 0;
@@ -903,17 +960,22 @@ public class StageMapCanvas extends StackPane {
         double screenW = Math.abs(brScreen[0] - tlScreen[0]);
         double screenH = Math.abs(brScreen[1] - tlScreen[1]);
 
+        logger.info("DIAG macro screen rect: ({}, {}) {}x{} px  "
+                        + "[displayedTL->transform({}, {})->stage({}, {})->screen({}, {})  "
+                        + "displayedBR->transform({}, {})->stage({}, {})->screen({}, {})]",
+                String.format("%.1f", screenX), String.format("%.1f", screenY),
+                String.format("%.1f", screenW), String.format("%.1f", screenH),
+                String.format("%.0f", tlTransX), String.format("%.0f", tlTransY),
+                String.format("%.1f", tlStage[0]), String.format("%.1f", tlStage[1]),
+                String.format("%.1f", tlScreen[0]), String.format("%.1f", tlScreen[1]),
+                String.format("%.0f", brTransX), String.format("%.0f", brTransY),
+                String.format("%.1f", brStage[0]), String.format("%.1f", brStage[1]),
+                String.format("%.1f", brScreen[0]), String.format("%.1f", brScreen[1]));
+
         macroOverlayView.setX(screenX);
         macroOverlayView.setY(screenY);
         macroOverlayView.setFitWidth(screenW);
         macroOverlayView.setFitHeight(screenH);
-
-        logger.info("Macro overlay positioned: screen ({}, {}) {}x{} px, "
-                        + "stageTL=({}, {}), stageBR=({}, {})",
-                String.format("%.1f", screenX), String.format("%.1f", screenY),
-                String.format("%.1f", screenW), String.format("%.1f", screenH),
-                String.format("%.1f", tlStage[0]), String.format("%.1f", tlStage[1]),
-                String.format("%.1f", brStage[0]), String.format("%.1f", brStage[1]));
     }
 
     // ========== Size Handling ==========
