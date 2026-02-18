@@ -134,22 +134,26 @@ public class StageInsert {
             originYUm = slideTopStageY - (yInverted ? -slideYOffsetUm : slideYOffsetUm);
         }
 
-        // Read slide dimensions
+        // Read slide dimensions - use configured physical size, not measured aperture extent.
+        // The measured slide_top/bottom_y_um represent the visible edges through the aperture,
+        // which is smaller than the actual slide (holder covers the edges).
         double slideWidthMm = getDoubleValue(configMap, "slide_width_mm", 75.0);
         double slideHeightMm = getDoubleValue(configMap, "slide_height_mm", 25.0);
         double slideWidthUm = slideWidthMm * MM_TO_UM;
-        double slideHeightUm = Math.abs(slideBottomY - slideTopY);  // Use measured slide height
+        double slideHeightUm = slideHeightMm * MM_TO_UM;
 
         // Origin X is the top-left corner in VISUAL space
         // For inverted X: visual left = larger stage X, so origin = max X
         double originXUm = xInverted ? Math.max(apertureLeftX, apertureRightX)
                                      : Math.min(apertureLeftX, apertureRightX);
 
-        // Calculate slide's position within aperture
-        // Slide Y offset: distance from aperture top to slide top
-        double slideTopStageY = yInverted ? Math.max(slideTopY, slideBottomY)
-                                          : Math.min(slideTopY, slideBottomY);
-        double slideYOffsetUm = Math.abs(slideTopStageY - originYUm);
+        // Calculate slide's position within aperture.
+        // Center the full physical slide on the midpoint of the measured (visible) edges.
+        // The measured edges are where the slide is visible through the aperture opening;
+        // the full slide extends under the holder material on both sides.
+        double slideCenterStageY = (slideTopY + slideBottomY) / 2.0;
+        double slideCenterInsertY = Math.abs(slideCenterStageY - originYUm);
+        double slideYOffsetUm = slideCenterInsertY - slideHeightUm / 2.0;
 
         // Slide X offset: centered horizontally (can be negative if slide wider than aperture)
         double slideXOffsetUm = (apertureWidthUm - slideWidthUm) / 2.0;
