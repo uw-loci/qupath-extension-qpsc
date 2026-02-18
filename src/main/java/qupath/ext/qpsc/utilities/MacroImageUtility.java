@@ -29,17 +29,8 @@ import java.util.concurrent.ExecutionException;
 public class MacroImageUtility {
     private static final Logger logger = LoggerFactory.getLogger(MacroImageUtility.class);
 
-    // Default slide boundaries in macro image coordinates (in pixels)
-    // These define the physical slide area within the macro image
-
-    //TODO THIS IS NOW IN THE CONFIG FILE
-    private static final int DEFAULT_SLIDE_X_MIN = 0;
-    private static final int DEFAULT_SLIDE_X_MAX = 938;
-    private static final int DEFAULT_SLIDE_Y_MIN = 19;
-    private static final int DEFAULT_SLIDE_Y_MAX = 331;
-
     // Tolerance for slide boundary detection (in pixels)
-    private static final int BOUNDARY_TOLERANCE = 2; // ~80µm at 40µm/pixel
+    private static final int BOUNDARY_TOLERANCE = 2; // ~80um at 40um/pixel
 
     /**
      * Container for cropped macro image information.
@@ -121,14 +112,20 @@ public class MacroImageUtility {
 
     /**
      * Crops the macro image to just the slide area, removing surrounding holder/background.
-     * Uses default slide boundaries or attempts to detect them automatically.
+     * Uses the selected scanner's configuration to determine crop bounds.
      *
      * @param macroImage The original macro image
      * @return CroppedMacroResult containing the cropped image and offset information
+     * @throws IllegalStateException if no scanner is selected in preferences
      */
     public static CroppedMacroResult cropToSlideArea(BufferedImage macroImage) {
-        return cropToSlideArea(macroImage, DEFAULT_SLIDE_X_MIN, DEFAULT_SLIDE_X_MAX,
-                DEFAULT_SLIDE_Y_MIN, DEFAULT_SLIDE_Y_MAX);
+        String scannerName = PersistentPreferences.getSelectedScannerProperty();
+        if (scannerName == null || scannerName.isEmpty()) {
+            throw new IllegalStateException(
+                    "No scanner selected in preferences. Cannot determine crop bounds. "
+                    + "Please select a scanner in Edit > Preferences.");
+        }
+        return cropToSlideArea(macroImage, scannerName);
     }
 
     /**
@@ -209,10 +206,12 @@ public class MacroImageUtility {
         File scannerConfigFile = new File(configDir, "config_" + scannerName + ".yml");
 
         if (!scannerConfigFile.exists()) {
-            logger.warn("Scanner config file not found: {}. Using default crop settings.",
-                    scannerConfigFile.getAbsolutePath());
-            return cropToSlideArea(macroImage, DEFAULT_SLIDE_X_MIN, DEFAULT_SLIDE_X_MAX,
-                    DEFAULT_SLIDE_Y_MIN, DEFAULT_SLIDE_Y_MAX);
+            String error = String.format(
+                    "Scanner config file not found: %s. "
+                    + "Cannot determine crop bounds for scanner '%s'.",
+                    scannerConfigFile.getAbsolutePath(), scannerName);
+            logger.error(error);
+            throw new IllegalStateException(error);
         }
 
         // Load the scanner config
@@ -232,10 +231,12 @@ public class MacroImageUtility {
         Integer yMax = MinorFunctions.getYamlInteger(scannerConfig, "macro", "slide_bounds", "y_max_px");
 
         if (xMin == null || xMax == null || yMin == null || yMax == null) {
-            logger.error("Scanner '{}' requires cropping but slide bounds are not properly configured. Using defaults.",
-                    scannerName);
-            return cropToSlideArea(macroImage, DEFAULT_SLIDE_X_MIN, DEFAULT_SLIDE_X_MAX,
-                    DEFAULT_SLIDE_Y_MIN, DEFAULT_SLIDE_Y_MAX);
+            String error = String.format(
+                    "Scanner '%s' requires cropping but slide bounds are not properly configured. "
+                    + "Please add x_min_px, x_max_px, y_min_px, y_max_px under macro.slide_bounds in config_%s.yml",
+                    scannerName, scannerName);
+            logger.error(error);
+            throw new IllegalStateException(error);
         }
 
         logger.info("Cropping macro image for scanner '{}' using bounds: X[{}-{}], Y[{}-{}]",
