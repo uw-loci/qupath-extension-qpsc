@@ -884,28 +884,37 @@ public class StageMapCanvas extends StackPane {
             }
         }
 
-        // Position the macro to fill the slide rectangle.
-        // The macro is stretched to match both width and height - the aspect ratios
-        // differ slightly (macro captures some holder material beyond the glass edges)
-        // but the distortion is negligible for a navigation aid overlay.
+        // Position the macro to match the slide rectangle width, preserving aspect ratio.
+        // The config slide height (18.6mm) is the visible aperture opening, not the full
+        // 25mm slide. The macro covers the full physical slide, so it will extend slightly
+        // above and below the slide rectangle - this is correct (shows edges behind holder).
         double sx = offsetX + targetSlide.getXOffsetUm() * scale;
         double sy = offsetY + targetSlide.getYOffsetUm() * scale;
         double sw = targetSlide.getWidthUm() * scale;
         double sh = targetSlide.getHeightUm() * scale;
 
+        // Fit to slide width; height from macro aspect ratio
+        double macroAspect = (double) macroWidth / macroHeight;
+        double renderedHeight = sw / macroAspect;
+
+        // Center vertically on the slide rectangle
+        double verticalOffset = (sh - renderedHeight) / 2.0;
+
         macroOverlayView.setX(sx);
-        macroOverlayView.setY(sy);
+        macroOverlayView.setY(sy + verticalOffset);
         macroOverlayView.setFitWidth(sw);
-        macroOverlayView.setFitHeight(sh);
+        macroOverlayView.setFitHeight(renderedHeight);
 
         logger.info("Macro overlay positioned on '{}': screen ({}, {}) {}x{} px, "
-                        + "slide={}x{} um, macro={}x{} px",
+                        + "slide={}x{} um, macro={}x{} px (aspect {}, extends {} px beyond slide)",
                 targetSlide.getName(),
-                String.format("%.1f", sx), String.format("%.1f", sy),
-                String.format("%.1f", sw), String.format("%.1f", sh),
+                String.format("%.1f", sx), String.format("%.1f", sy + verticalOffset),
+                String.format("%.1f", sw), String.format("%.1f", renderedHeight),
                 String.format("%.0f", targetSlide.getWidthUm()),
                 String.format("%.0f", targetSlide.getHeightUm()),
-                macroWidth, macroHeight);
+                macroWidth, macroHeight,
+                String.format("%.2f", macroAspect),
+                String.format("%.1f", renderedHeight - sh));
     }
 
     // ========== Size Handling ==========
