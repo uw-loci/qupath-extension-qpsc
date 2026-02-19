@@ -65,11 +65,6 @@ public class PPMPreferences {
     private static final StringProperty overrideMinusAngle =
             PathPrefs.createPersistentPreference("PPMOverrideMinusAngle", "-7.0");
 
-    // Per-angle white balance for background collection (recommended for JAI cameras)
-    // Default to "true" since JAI cameras should use per-channel WB for accurate backgrounds
-    private static final StringProperty perAngleWBEnabled =
-            PathPrefs.createPersistentPreference("PPMPerAngleWBEnabled", "true");
-
     static {
         // PPM exposure defaults are initialized with fallback values.
         // Use loadExposuresForProfile() to load profile-specific defaults.
@@ -293,33 +288,5 @@ public class PPMPreferences {
         overrideMinusAngle.set(String.valueOf(angle));
     }
 
-    // =============== Per-Angle White Balance Preferences ===============
-
-    /**
-     * Gets whether per-angle white balance is enabled for background collection.
-     *
-     * <p>When enabled, background collection uses calibrated per-channel (R,G,B) exposures
-     * from the JAI white balance calibration. This ensures backgrounds match the exact
-     * exposure conditions used during actual acquisition.</p>
-     *
-     * <p>For JAI cameras, this should typically be enabled (default is true) to ensure
-     * proper flat-field correction. When disabled, backgrounds are captured with a
-     * unified adaptive exposure which may not match acquisition conditions.</p>
-     *
-     * @return true if per-angle white balance is enabled, false otherwise
-     */
-    public static boolean getPerAngleWBEnabled() {
-        return Boolean.parseBoolean(perAngleWBEnabled.get());
-    }
-
-    /**
-     * Sets whether per-angle white balance is enabled for background collection.
-     *
-     * @param enabled true to enable per-angle white balance (recommended for JAI cameras),
-     *                false to use unified adaptive exposure
-     */
-    public static void setPerAngleWBEnabled(boolean enabled) {
-        perAngleWBEnabled.set(String.valueOf(enabled));
-    }
 }
 

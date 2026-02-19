@@ -163,28 +163,6 @@ public class AcquisitionCommandBuilder {
     }
 
     /**
-     * Configure white balance
-     * @param enabled Whether white balance is enabled
-     */
-    public AcquisitionCommandBuilder whiteBalance(boolean enabled) {
-        return whiteBalance(enabled, false);
-    }
-
-    /**
-     * Configure white balance with per-angle option
-     * @param enabled Whether white balance is enabled
-     * @param perAngle Whether to use per-angle white balance (PPM mode)
-     */
-    public AcquisitionCommandBuilder whiteBalance(boolean enabled, boolean perAngle) {
-        this.whiteBalanceEnabled = enabled;
-        this.perAngleWhiteBalance = perAngle;
-        if (enabled && !processingSteps.contains("white_balance")) {
-            processingSteps.add("white_balance");
-        }
-        return this;
-    }
-
-    /**
      * Configure white balance using the new mode-based system.
      * Valid modes: "camera_awb", "simple", "per_angle", "off".
      * When set, this takes priority over the boolean whiteBalance flags.

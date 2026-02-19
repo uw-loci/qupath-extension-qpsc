@@ -112,12 +112,6 @@ public class QPPreferenceDialog {
     private static final BooleanProperty skipManualAutofocusProperty =
             PathPrefs.createPersistentPreference("skipManualAutofocus", false);
 
-    // White balance mode for JAI camera
-    // SIMPLE: Use same calibration for all angles (faster, less accurate)
-    // PPM: Use per-angle calibration (more accurate for polarized imaging)
-    private static final StringProperty jaiWhiteBalanceModeProperty =
-            PathPrefs.createPersistentPreference("jaiWhiteBalanceMode", "SIMPLE");
-
     // Last used calibration folder for sunburst/PPM reference calibration
     // Remembers the folder from the most recent calibration workflow
     private static final StringProperty lastCalibrationFolderProperty =
@@ -302,18 +296,6 @@ public class QPPreferenceDialog {
                              "Examples: 'OCR_PatientID', 'OCR_SlideLabel' would be propagated with prefix 'OCR'")
                 .build());
 
-        items.add(new PropertyItemBuilder<>(jaiWhiteBalanceModeProperty, String.class)
-                .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
-                .name("JAI White Balance Mode")
-                .choices(Arrays.asList("SIMPLE", "PPM"))
-                .category(CATEGORY)
-                .description("White balance mode for JAI 3-CCD prism camera acquisitions.\n\n" +
-                             "SIMPLE: Use same per-channel exposures for all polarization angles.\n" +
-                             "Faster calibration, good for most samples.\n\n" +
-                             "PPM: Use separate calibration for each polarization angle.\n" +
-                             "More accurate for samples with strong birefringence variation.\n\n" +
-                             "Requires running White Balance Calibration before acquisition.")
-                .build());
     }
 
 
@@ -486,34 +468,6 @@ public class QPPreferenceDialog {
      */
     public static void setMetadataPropagationPrefix(String prefix) {
         metadataPropagationPrefixProperty.set(prefix);
-    }
-
-    /**
-     * Gets the JAI white balance mode for acquisitions.
-     *
-     * @return "SIMPLE" for single calibration applied to all angles,
-     *         "PPM" for per-angle calibration
-     */
-    public static String getJaiWhiteBalanceMode() {
-        return jaiWhiteBalanceModeProperty.get();
-    }
-
-    /**
-     * Sets the JAI white balance mode for acquisitions.
-     *
-     * @param mode "SIMPLE" or "PPM"
-     */
-    public static void setJaiWhiteBalanceMode(String mode) {
-        jaiWhiteBalanceModeProperty.set(mode);
-    }
-
-    /**
-     * Checks if PPM per-angle white balance mode is enabled.
-     *
-     * @return true if using per-angle calibration, false for simple mode
-     */
-    public static boolean isJaiWhiteBalancePerAngle() {
-        return "PPM".equalsIgnoreCase(jaiWhiteBalanceModeProperty.get());
     }
 
     /**

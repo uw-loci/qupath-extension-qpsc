@@ -626,9 +626,7 @@ public class BackgroundCollectionController {
             String wbMode = convertWbModeToProtocol(wbModeComboBox.getValue());
             boolean usePerAngleWB = "per_angle".equals(wbMode);
 
-            // Save the preference for next time
-            PPMPreferences.setPerAngleWBEnabled(usePerAngleWB);
-            logger.info("Saved per-angle WB preference: {}, wbMode: {}", usePerAngleWB, wbMode);
+            logger.info("Background collection wbMode: {}", wbMode);
 
             return new BackgroundCollectionResult(modality, objective, finalExposures, outputPath, usePerAngleWB, wbMode);
 
