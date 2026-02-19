@@ -577,14 +577,13 @@ public class AcquisitionManager {
                         WSI_pixelSize_um
                     );
 
-                // Apply JAI camera white balance settings from workflow state
+                // Apply user's explicit white balance mode choice (required)
                 if (state.wbMode != null) {
                     config.commandBuilder().wbMode(state.wbMode);
                 } else {
-                    config.commandBuilder().whiteBalance(
-                            state.enableWhiteBalance,
-                            state.perAngleWhiteBalance
-                    );
+                    throw new IllegalStateException(
+                            "White balance mode must be explicitly selected. "
+                            + "The acquisition dialog should always provide a wbMode value.");
                 }
 
                 logger.info("Acquisition parameters for {}:", annotation.getName());

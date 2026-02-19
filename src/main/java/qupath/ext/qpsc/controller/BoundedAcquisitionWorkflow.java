@@ -300,14 +300,13 @@ public class BoundedAcquisitionWorkflow {
                                                 finalWSI_pixelSize_um
                                         );
 
-                                // Apply user's white balance settings from UI (overrides config defaults)
+                                // Apply user's explicit white balance mode choice (required)
                                 if (result.wbMode() != null) {
                                     config.commandBuilder().wbMode(result.wbMode());
                                 } else {
-                                    config.commandBuilder().whiteBalance(
-                                            result.enableWhiteBalance(),
-                                            result.perAngleWhiteBalance()
-                                    );
+                                    throw new IllegalStateException(
+                                            "White balance mode must be explicitly selected. "
+                                            + "The acquisition dialog should always provide a wbMode value.");
                                 }
 
                                 logger.info("Starting acquisition - Sample: {}, Mode: {}, Angles: {}, wbMode: {}",
