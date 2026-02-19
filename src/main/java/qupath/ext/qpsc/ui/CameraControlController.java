@@ -273,8 +273,11 @@ public class CameraControlController {
             wbModeCombo.setDisable(true);
             Thread thread = new Thread(() -> {
                 try {
-                    controller.withLiveModeHandling(() ->
-                            controller.setWhiteBalanceMode(mode));
+                    // Send WB mode directly without stopping live mode.
+                    // "Continuous" mode requires active frame acquisition to function --
+                    // withLiveModeHandling() would stop live mode first, causing the
+                    // camera to reject or ignore the "Continuous" setting.
+                    controller.setWhiteBalanceMode(mode);
                     logger.info("Applied WB mode: {}", selected);
                 } catch (IOException ex) {
                     Platform.runLater(() ->
