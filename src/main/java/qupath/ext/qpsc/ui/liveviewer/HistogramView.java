@@ -170,6 +170,7 @@ public class HistogramView extends VBox {
         byte[] raw = frame.rawPixels();
 
         long sumR = 0, sumG = 0, sumB = 0;
+        long satR = 0, satG = 0, satB = 0;
 
         if (channels == 1) {
             // Grayscale
@@ -182,6 +183,7 @@ public class HistogramView extends VBox {
                     val = ((raw[offset] & 0xFF) << 8) | (raw[offset + 1] & 0xFF);
                 }
                 sumR += val;
+                if (val >= currentMaxValue) satR++;
                 int bin = val * 255 / currentMaxValue;
                 bin = Math.min(bin, 255);
                 histogram[bin]++;
@@ -205,6 +207,9 @@ public class HistogramView extends VBox {
                 sumR += r;
                 sumG += g;
                 sumB += b;
+                if (r >= currentMaxValue) satR++;
+                if (g >= currentMaxValue) satG++;
+                if (b >= currentMaxValue) satB++;
                 int luminance = (int) (0.299 * r + 0.587 * g + 0.114 * b);
                 int bin = luminance * 255 / currentMaxValue;
                 bin = Math.min(bin, 255);
@@ -214,15 +219,25 @@ public class HistogramView extends VBox {
 
         currentHistogram = histogram;
 
-        // Update mean label with raw pixel means
+        // Update mean label with raw pixel means and saturation percentages
         if (pixelCount > 0) {
             if (channels == 1) {
-                meanLabel.setText(String.format("Mean: %.1f", (double) sumR / pixelCount));
+                double satPct = 100.0 * satR / pixelCount;
+                meanLabel.setText(String.format("Mean: %.1f  |  Sat: %.1f%%",
+                        (double) sumR / pixelCount, satPct));
+                meanLabel.setTextFill(satPct > 1.0 ? Color.RED : Color.BLACK);
             } else {
-                meanLabel.setText(String.format("Mean: R=%.1f  G=%.1f  B=%.1f",
+                double satPctR = 100.0 * satR / pixelCount;
+                double satPctG = 100.0 * satG / pixelCount;
+                double satPctB = 100.0 * satB / pixelCount;
+                boolean anySaturated = satPctR > 1.0 || satPctG > 1.0 || satPctB > 1.0;
+                meanLabel.setText(String.format(
+                        "Mean: R=%.1f  G=%.1f  B=%.1f  |  Sat: R=%.1f%%  G=%.1f%%  B=%.1f%%",
                         (double) sumR / pixelCount,
                         (double) sumG / pixelCount,
-                        (double) sumB / pixelCount));
+                        (double) sumB / pixelCount,
+                        satPctR, satPctG, satPctB));
+                meanLabel.setTextFill(anySaturated ? Color.RED : Color.BLACK);
             }
         }
 
