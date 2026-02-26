@@ -728,18 +728,29 @@ public class PPMAngleSelectionController {
     public static class BackgroundValidationResult {
         public final Set<Double> anglesWithoutBackground;
         public final Set<Double> angleswithExposureMismatches;
+        /** True if the WB mode used for background differs from the current acquisition WB mode. */
+        public final boolean wbModeMismatch;
+        /** WB mode stored in the background settings (null if not recorded). */
+        public final String backgroundWbMode;
+        /** Current acquisition WB mode being compared against. */
+        public final String currentWbMode;
         public final String userMessage;
 
         public BackgroundValidationResult(Set<Double> anglesWithoutBackground,
                                         Set<Double> anglesWithExposureMismatches,
+                                        boolean wbModeMismatch,
+                                        String backgroundWbMode, String currentWbMode,
                                         String userMessage) {
             this.anglesWithoutBackground = anglesWithoutBackground;
             this.angleswithExposureMismatches = anglesWithExposureMismatches;
+            this.wbModeMismatch = wbModeMismatch;
+            this.backgroundWbMode = backgroundWbMode;
+            this.currentWbMode = currentWbMode;
             this.userMessage = userMessage;
         }
 
         public boolean hasIssues() {
-            return !anglesWithoutBackground.isEmpty() || !angleswithExposureMismatches.isEmpty();
+            return !anglesWithoutBackground.isEmpty() || !angleswithExposureMismatches.isEmpty() || wbModeMismatch;
         }
     }
 
@@ -752,6 +763,21 @@ public class PPMAngleSelectionController {
      */
     public static BackgroundValidationResult validateBackgroundSettings(BackgroundSettingsReader.BackgroundSettings backgroundSettings,
                                                                         List<AngleExposure> selectedAngles) {
+        return validateBackgroundSettings(backgroundSettings, selectedAngles, null);
+    }
+
+    /**
+     * Validates background settings against user selections and returns structured results.
+     * Includes WB mode mismatch detection when currentWbMode is provided.
+     *
+     * @param backgroundSettings the existing background settings
+     * @param selectedAngles the user's selected angle-exposure pairs
+     * @param currentWbMode the WB mode selected for acquisition (null to skip WB check)
+     * @return validation results with angles to disable background correction for
+     */
+    public static BackgroundValidationResult validateBackgroundSettings(BackgroundSettingsReader.BackgroundSettings backgroundSettings,
+                                                                        List<AngleExposure> selectedAngles,
+                                                                        String currentWbMode) {
         // Convert user angles to the format used by background settings
         Map<Double, Double> userAngleMap = new HashMap<>();
         for (AngleExposure userAe : selectedAngles) {
@@ -786,11 +812,20 @@ public class PPMAngleSelectionController {
             }
         }
 
+        // Check WB mode mismatch
+        boolean wbModeMismatch = false;
+        String bgWbMode = backgroundSettings.wbMode;
+        if (currentWbMode != null && bgWbMode != null && !currentWbMode.equals(bgWbMode)) {
+            wbModeMismatch = true;
+        }
+
         // Generate user message
         String userMessage = generateBackgroundValidationMessage(anglesWithoutBackground, anglesWithExposureMismatches,
-                                                               userAngleMap, bgAngleMap, tolerance);
+                                                               userAngleMap, bgAngleMap, tolerance,
+                                                               wbModeMismatch, bgWbMode, currentWbMode);
 
-        return new BackgroundValidationResult(anglesWithoutBackground, anglesWithExposureMismatches, userMessage);
+        return new BackgroundValidationResult(anglesWithoutBackground, anglesWithExposureMismatches,
+                wbModeMismatch, bgWbMode, currentWbMode, userMessage);
     }
 
     /**
@@ -800,13 +835,22 @@ public class PPMAngleSelectionController {
                                                             Set<Double> anglesWithExposureMismatches,
                                                             Map<Double, Double> userAngleMap,
                                                             Map<Double, Double> bgAngleMap,
-                                                            double tolerance) {
+                                                            double tolerance,
+                                                            boolean wbModeMismatch,
+                                                            String bgWbMode, String currentWbMode) {
         StringBuilder info = new StringBuilder();
+
+        if (wbModeMismatch) {
+            info.append("  White balance mode mismatch:\n");
+            info.append(String.format("    Background collected with: %s\n", bgWbMode));
+            info.append(String.format("    Current acquisition mode:  %s\n", currentWbMode));
+            info.append("    -> Color cast may occur if WB modes differ between background and acquisition\n");
+        }
 
         if (!anglesWithoutBackground.isEmpty()) {
             info.append("  Selected angles without background images: ");
-            anglesWithoutBackground.forEach(angle -> info.append(String.format("%.1f° ", angle)));
-            info.append("\n  → Background correction will be DISABLED for these angles\n");
+            anglesWithoutBackground.forEach(angle -> info.append(String.format("%.1f ", angle)));
+            info.append("deg\n    -> Background correction will be DISABLED for these angles\n");
         }
 
         if (!anglesWithExposureMismatches.isEmpty()) {
@@ -815,13 +859,13 @@ public class PPMAngleSelectionController {
                 double userExposure = userAngleMap.get(angle);
                 double bgExposure = bgAngleMap.get(angle);
                 double diff = Math.abs(userExposure - bgExposure);
-                info.append(String.format("    %.1f°: selected %.1f ms vs background %.1f ms (diff: %.1f ms)\n",
+                info.append(String.format("    %.1f deg: selected %.1f ms vs background %.1f ms (diff: %.1f ms)\n",
                         angle, userExposure, bgExposure, diff));
             }
         }
 
         // If no specific issues found, provide general explanation
-        if (info.length() == 0) {
+        if (info.isEmpty()) {
             info.append("  Background images exist for different angles than selected");
         }
 

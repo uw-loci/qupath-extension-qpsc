@@ -574,7 +574,8 @@ public class AcquisitionManager {
                         angleExposures,
                         state.sample.projectsFolder().getAbsolutePath(),
                         actualSampleName,  // Use actual sample name from project folder
-                        WSI_pixelSize_um
+                        WSI_pixelSize_um,
+                        state.wbMode
                     );
 
                 // Apply user's explicit white balance mode choice (required)

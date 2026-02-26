@@ -90,7 +90,7 @@ public class BoundedAcquisitionWorkflow {
                             result.x1(), result.y1(), result.x2(), result.y2());
 
                     // Read persistent prefs
-                    String projectsFolder = QPPreferenceDialog.getProjectsFolderProperty();
+                    String prefProjectsFolder = QPPreferenceDialog.getProjectsFolderProperty();
                     double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
                     boolean invertX = QPPreferenceDialog.getInvertedXProperty();
                     boolean invertY = QPPreferenceDialog.getInvertedYProperty();
@@ -98,6 +98,10 @@ public class BoundedAcquisitionWorkflow {
                     // Create/open the QuPath project
                     QuPathGUI qupathGUI = QPEx.getQuPath();
                     Map<String, Object> pd;
+                    // If a project is already open, derive the output folder from its
+                    // actual location rather than the user preference (which is only
+                    // correct for creating brand-new projects).
+                    String projectsFolder;
                     try {
                         // Use enhanced scan type for consistent folder structure
                         String enhancedModality = ObjectiveUtils.createEnhancedFolderName(
@@ -109,12 +113,24 @@ public class BoundedAcquisitionWorkflow {
                         Project<BufferedImage> existingProject = qupathGUI.getProject();
                         if (existingProject != null) {
                             logger.info("Using existing project: {}", existingProject.getPath());
+                            // Derive projectsFolder from the project's actual location
+                            // Project structure: <projectsFolder>/<sampleName>/project.qpproj
+                            java.nio.file.Path projectPath = existingProject.getPath();
+                            if (projectPath != null && projectPath.getParent() != null
+                                    && projectPath.getParent().getParent() != null) {
+                                projectsFolder = projectPath.getParent().getParent().toString();
+                                logger.info("Overriding projectsFolder from project path: {} -> {}",
+                                        prefProjectsFolder, projectsFolder);
+                            } else {
+                                projectsFolder = prefProjectsFolder;
+                            }
                             pd = QPProjectFunctions.getCurrentProjectInformation(
                                     projectsFolder,
                                     result.sampleName(),
                                     enhancedModality
                             );
                         } else {
+                            projectsFolder = prefProjectsFolder;
                             logger.info("Creating new project with sample name: {}", result.sampleName());
                             pd = QPProjectFunctions.createAndOpenQuPathProject(
                                     qupathGUI,
@@ -297,7 +313,8 @@ public class BoundedAcquisitionWorkflow {
                                                 angleExposures,
                                                 projectsFolder,
                                                 result.sampleName(),  // For new projects, dialog name is correct
-                                                finalWSI_pixelSize_um
+                                                finalWSI_pixelSize_um,
+                                                result.wbMode()
                                         );
 
                                 // Apply user's explicit white balance mode choice (required)

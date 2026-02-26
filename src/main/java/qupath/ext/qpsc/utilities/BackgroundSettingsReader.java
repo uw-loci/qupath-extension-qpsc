@@ -37,58 +37,184 @@ public class BackgroundSettingsReader {
         public final String magnification;
         public final List<AngleExposure> angleExposures;
         public final String settingsFilePath;
-        
-        public BackgroundSettings(String modality, String objective, String detector, 
-                String magnification, List<AngleExposure> angleExposures, String settingsFilePath) {
+        /** White balance mode used during background collection (e.g., "per_angle", "simple", "camera_awb", "off"). May be null for older settings files. */
+        public final String wbMode;
+
+        public BackgroundSettings(String modality, String objective, String detector,
+                String magnification, List<AngleExposure> angleExposures, String settingsFilePath,
+                String wbMode) {
             this.modality = modality;
             this.objective = objective;
             this.detector = detector;
             this.magnification = magnification;
             this.angleExposures = angleExposures;
             this.settingsFilePath = settingsFilePath;
+            this.wbMode = wbMode;
         }
-        
+
         @Override
         public String toString() {
-            return String.format("BackgroundSettings[modality=%s, objective=%s, detector=%s, angles=%d]",
-                    modality, objective, detector, angleExposures.size());
+            return String.format("BackgroundSettings[modality=%s, objective=%s, detector=%s, angles=%d, wbMode=%s]",
+                    modality, objective, detector, angleExposures.size(), wbMode);
         }
     }
     
     /**
+     * Resolve the background folder path for a given hardware combination and WB mode.
+     * This is the central path resolution method that all callers should use.
+     *
+     * <p>Resolution logic:
+     * <ol>
+     *   <li>If wbMode provided: check {@code basePath/wbMode/background_settings.yml} first</li>
+     *   <li>Fall back to legacy {@code basePath/background_settings.yml}</li>
+     *   <li>If neither exists and wbMode provided: return {@code basePath/wbMode} (for new collections)</li>
+     * </ol>
+     *
+     * @param baseBackgroundFolder The base background correction folder from config
+     * @param modality The modality name (e.g., "ppm")
+     * @param objective The objective ID
+     * @param detector The detector ID
+     * @param wbMode White balance mode (e.g., "per_angle", "camera_awb"), or null for legacy behavior
+     * @return Resolved folder path (never null if inputs are valid)
+     */
+    public static String resolveBackgroundFolder(String baseBackgroundFolder,
+            String modality, String objective, String detector, String wbMode) {
+
+        if (baseBackgroundFolder == null || modality == null || objective == null || detector == null) {
+            logger.debug("Cannot resolve background folder - missing required parameters");
+            return null;
+        }
+
+        String magnification = extractMagnificationFromObjective(objective);
+        String basePath = new File(baseBackgroundFolder,
+                detector + File.separator + modality + File.separator + magnification).getPath();
+
+        if (wbMode != null && !wbMode.isEmpty()) {
+            // Check WB-mode subfolder first
+            File wbSettings = new File(basePath + File.separator + wbMode, "background_settings.yml");
+            if (wbSettings.exists()) {
+                String resolved = new File(basePath, wbMode).getPath();
+                logger.debug("Resolved background folder to WB subfolder: {}", resolved);
+                return resolved;
+            }
+        }
+
+        // Fall back to legacy (flat) path
+        File legacySettings = new File(basePath, "background_settings.yml");
+        if (legacySettings.exists()) {
+            logger.debug("Resolved background folder to legacy path: {}", basePath);
+            return basePath;
+        }
+
+        // Neither exists -- return WB subfolder for new collections, or basePath if no wbMode
+        if (wbMode != null && !wbMode.isEmpty()) {
+            String newPath = new File(basePath, wbMode).getPath();
+            logger.debug("No existing backgrounds found; returning WB subfolder for new collection: {}", newPath);
+            return newPath;
+        }
+
+        logger.debug("No existing backgrounds found; returning legacy path: {}", basePath);
+        return basePath;
+    }
+
+    /**
+     * Attempt to find and read background settings for a given hardware combination and WB mode.
+     *
+     * @param baseBackgroundFolder The base background correction folder from config
+     * @param modality The modality name (e.g., "ppm")
+     * @param objective The objective ID
+     * @param detector The detector ID
+     * @param wbMode White balance mode for targeted lookup (e.g., "per_angle"), or null
+     * @return BackgroundSettings if found and valid, null otherwise
+     */
+    public static BackgroundSettings findBackgroundSettings(String baseBackgroundFolder,
+            String modality, String objective, String detector, String wbMode) {
+
+        if (baseBackgroundFolder == null || modality == null || objective == null || detector == null) {
+            logger.debug("Cannot search for background settings - missing required parameters");
+            return null;
+        }
+
+        try {
+            String magnification = extractMagnificationFromObjective(objective);
+            String basePath = new File(baseBackgroundFolder,
+                    detector + File.separator + modality + File.separator + magnification).getPath();
+
+            // If wbMode given, check WB subfolder first
+            if (wbMode != null && !wbMode.isEmpty()) {
+                File wbSettings = new File(basePath + File.separator + wbMode, "background_settings.yml");
+                if (wbSettings.exists()) {
+                    logger.debug("Found WB-mode background settings at: {}", wbSettings.getAbsolutePath());
+                    return readBackgroundSettings(wbSettings);
+                }
+            }
+
+            // Fall back to legacy path
+            File legacySettings = new File(basePath, "background_settings.yml");
+            if (legacySettings.exists()) {
+                logger.debug("Found legacy background settings at: {}", legacySettings.getAbsolutePath());
+                return readBackgroundSettings(legacySettings);
+            }
+
+            logger.debug("No background settings found for {}/{}/{} (wbMode={})", modality, objective, detector, wbMode);
+            return null;
+
+        } catch (Exception e) {
+            logger.error("Error searching for background settings", e);
+            return null;
+        }
+    }
+
+    /**
      * Attempt to find and read background settings for a given modality/objective/detector combination.
-     * 
+     * When no wbMode is specified, scans WB-mode subdirectories to find any available backgrounds.
+     *
      * @param baseBackgroundFolder The base background correction folder from config
      * @param modality The modality name (e.g., "ppm")
      * @param objective The objective ID (e.g., "LOCI_OBJECTIVE_OLYMPUS_20X_POL_001")
      * @param detector The detector ID (e.g., "LOCI_DETECTOR_JAI_001")
      * @return BackgroundSettings if found and valid, null otherwise
      */
-    public static BackgroundSettings findBackgroundSettings(String baseBackgroundFolder, 
+    public static BackgroundSettings findBackgroundSettings(String baseBackgroundFolder,
             String modality, String objective, String detector) {
-        
+
         if (baseBackgroundFolder == null || modality == null || objective == null || detector == null) {
             logger.debug("Cannot search for background settings - missing required parameters");
             return null;
         }
-        
+
         try {
             // Extract magnification from objective
             String magnification = extractMagnificationFromObjective(objective);
-            
-            // Construct expected path: baseFolder/detector/modality/magnification/background_settings.yml
-            File settingsFile = new File(baseBackgroundFolder, 
-                    detector + File.separator + modality + File.separator + magnification + File.separator + "background_settings.yml");
-            
-            logger.debug("Looking for background settings at: {}", settingsFile.getAbsolutePath());
-            
-            if (!settingsFile.exists()) {
-                logger.debug("Background settings file not found: {}", settingsFile.getAbsolutePath());
-                return null;
+
+            String basePath = new File(baseBackgroundFolder,
+                    detector + File.separator + modality + File.separator + magnification).getPath();
+
+            // Check legacy (flat) path first for backward compatibility
+            File legacySettings = new File(basePath, "background_settings.yml");
+            if (legacySettings.exists()) {
+                logger.debug("Found legacy background settings at: {}", legacySettings.getAbsolutePath());
+                return readBackgroundSettings(legacySettings);
             }
-            
-            return readBackgroundSettings(settingsFile);
-            
+
+            // Scan WB-mode subdirectories
+            File baseDir = new File(basePath);
+            if (baseDir.isDirectory()) {
+                File[] subdirs = baseDir.listFiles(File::isDirectory);
+                if (subdirs != null) {
+                    for (File subdir : subdirs) {
+                        File wbSettings = new File(subdir, "background_settings.yml");
+                        if (wbSettings.exists()) {
+                            logger.debug("Found WB-mode background settings in subdirectory: {}", wbSettings.getAbsolutePath());
+                            return readBackgroundSettings(wbSettings);
+                        }
+                    }
+                }
+            }
+
+            logger.debug("No background settings found at legacy path or WB subdirectories under: {}", basePath);
+            return null;
+
         } catch (Exception e) {
             logger.error("Error searching for background settings", e);
             return null;
@@ -119,6 +245,10 @@ public class BackgroundSettingsReader {
             String objective = getString(hardware, "objective");
             String detector = getString(hardware, "detector");
             String magnification = getString(hardware, "magnification");
+
+            // Extract white balance mode (may be absent in older settings files)
+            Map<String, Object> acquisition = getMap(yamlData, "acquisition");
+            String wbMode = getString(acquisition, "wb_mode");
             
             // Extract angle-exposure pairs from the structured list
             List<AngleExposure> angleExposures = new ArrayList<>();
@@ -142,8 +272,8 @@ public class BackgroundSettingsReader {
                 return null;
             }
             
-            BackgroundSettings settings = new BackgroundSettings(modality, objective, detector, 
-                    magnification, angleExposures, settingsFile.getAbsolutePath());
+            BackgroundSettings settings = new BackgroundSettings(modality, objective, detector,
+                    magnification, angleExposures, settingsFile.getAbsolutePath(), wbMode);
             
             logger.info("Successfully read background settings: {}", settings);
             return settings;

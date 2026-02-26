@@ -41,3 +41,6 @@ hs_err*.log
 *thumbs.db
 bin/
 codemap/
+
+# Claude Code session scope
+CLAUDE.md

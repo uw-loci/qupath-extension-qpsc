@@ -409,7 +409,7 @@ public class WhiteBalanceWorkflow {
         ProgressIndicator progress = new ProgressIndicator();
         progress.setStyle("-fx-min-width: 50px; -fx-min-height: 50px;");
 
-        Label detailLabel = new Label("Rotating to uncrossed position, then running one-shot AWB");
+        Label detailLabel = new Label("Rotating to uncrossed position, resetting gains, then running AWB");
         detailLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
 
         root.getChildren().addAll(statusLabel, progress, detailLabel);
@@ -429,25 +429,37 @@ public class WhiteBalanceWorkflow {
                 logger.info("Camera AWB: Rotating to {} deg (uncrossed)",
                         params.rotationAngle());
                 Platform.runLater(() -> detailLabel.setText(
-                        "Step 1/3: Rotating to uncrossed position..."));
+                        "Step 1/4: Rotating to uncrossed position..."));
                 client.moveStageR(params.rotationAngle());
 
                 // Brief pause for rotation to settle
                 Thread.sleep(1000);
 
-                // Step 2: Run one-shot auto white balance (mode=2)
+                // Step 2a: Reset gains to neutral before AWB so camera
+                // starts from a known state (avoids gain contamination from
+                // previous WB modes)
+                logger.info("Camera AWB: Resetting gains to neutral before AWB");
+                Platform.runLater(() -> detailLabel.setText(
+                        "Step 2/4: Resetting gains to neutral..."));
+                try {
+                    client.setGains(new float[]{1.0f, 1.0f, 1.0f});
+                } catch (Exception e) {
+                    logger.warn("Could not reset gains before AWB: {}", e.getMessage());
+                }
+
+                // Step 2b: Run one-shot auto white balance (mode=2)
                 logger.info("Camera AWB: Running one-shot auto white balance");
                 Platform.runLater(() -> detailLabel.setText(
-                        "Step 2/3: Running camera auto white balance..."));
+                        "Step 3/4: Running camera auto white balance..."));
                 client.setWhiteBalanceMode(2);  // 2 = Once (one-shot auto)
 
                 // Wait for camera AWB to complete
                 Thread.sleep(2000);
 
-                // Step 3: Disable AWB so it doesn't change during acquisition
+                // Step 4: Disable AWB so it doesn't change during acquisition
                 logger.info("Camera AWB: Disabling auto white balance");
                 Platform.runLater(() -> detailLabel.setText(
-                        "Step 3/3: Disabling auto WB (camera remembers gains)..."));
+                        "Step 4/4: Disabling auto WB (camera remembers gains)..."));
                 client.setWhiteBalanceMode(0);  // 0 = Off
 
                 logger.info("Camera AWB calibration completed successfully");
@@ -462,8 +474,10 @@ public class WhiteBalanceWorkflow {
                             "Camera AWB has been applied successfully.\n\n" +
                             "The camera's internal R/B gains have been adjusted\n" +
                             "based on the current scene at uncrossed position.\n\n" +
-                            "These gains are stored in the camera and will persist\n" +
-                            "until the camera is power-cycled or AWB is run again.\n\n" +
+                            "WARNING: These gains persist in the camera until\n" +
+                            "power-cycled or AWB is run again. Switching to Simple\n" +
+                            "or Per-angle WB will NOT clear the internal AWB gains.\n" +
+                            "Run Camera AWB on a neutral target to reset them.\n\n" +
                             "Note: Camera AWB gains are NOT saved to YAML config.\n" +
                             "For reproducible results, use Simple or PPM WB instead."
                     );

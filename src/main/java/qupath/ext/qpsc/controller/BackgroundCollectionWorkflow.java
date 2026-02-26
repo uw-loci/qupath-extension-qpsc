@@ -143,7 +143,12 @@ public class BackgroundCollectionWorkflow {
             String finalOutputPath = outputPath;
             if (objective != null && detector != null) {
                 String magnification = extractMagnificationFromObjective(objective);
-                finalOutputPath = java.nio.file.Paths.get(outputPath, detector, modality, magnification).toString();
+                // Store backgrounds in WB-mode subfolder so different WB modes coexist
+                if (wbMode != null && !wbMode.isEmpty()) {
+                    finalOutputPath = java.nio.file.Paths.get(outputPath, detector, modality, magnification, wbMode).toString();
+                } else {
+                    finalOutputPath = java.nio.file.Paths.get(outputPath, detector, modality, magnification).toString();
+                }
             }
 
             // Create output directory
@@ -171,7 +176,7 @@ public class BackgroundCollectionWorkflow {
                     finalExposures.size());
 
             // Save background collection defaults using actual exposures from server
-            saveBackgroundDefaults(finalOutputPath, modality, objective, detector, angleExposures, finalExposures);
+            saveBackgroundDefaults(finalOutputPath, modality, objective, detector, angleExposures, finalExposures, wbMode);
 
             // Show success notification on UI thread
             Platform.runLater(() -> {
@@ -215,7 +220,7 @@ public class BackgroundCollectionWorkflow {
      */
     private static void saveBackgroundDefaults(String outputPath, String modality, String objective,
                                                String detector, List<AngleExposure> angleExposures,
-                                               Map<Double, Double> finalExposures) throws IOException {
+                                               Map<Double, Double> finalExposures, String wbMode) throws IOException {
 
         java.io.File settingsFile = new java.io.File(outputPath, "background_settings.yml");
 
@@ -306,6 +311,9 @@ public class BackgroundCollectionWorkflow {
         acquisition.put("total_angles", angles.size());
         acquisition.put("angles_degrees", angles);
         acquisition.put("exposures_ms", exposures);
+        if (wbMode != null) {
+            acquisition.put("wb_mode", wbMode);
+        }
         yamlData.put("acquisition", acquisition);
 
         // The main angle_exposures list - this is what readers look for

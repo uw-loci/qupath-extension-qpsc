@@ -39,16 +39,7 @@ public class AcquisitionConfigurationBuilder {
     
     /**
      * Builds a complete acquisition configuration from the provided parameters.
-     *
-     * @param sample Sample setup result containing hardware configuration
-     * @param configFileLocation Path to microscope configuration file
-     * @param modalityWithIndex Imaging mode with index (e.g., "ppm_20x_1")
-     * @param regionName Name of the annotation/region being acquired
-     * @param angleExposures List of rotation angles and exposures
-     * @param projectsFolder Base folder for projects (e.g., "D:/2025QPSC/data")
-     * @param sampleName The actual sample name to use for paths (from ProjectInfo, not sample dialog)
-     * @param explicitPixelSize Pixel size in micrometers
-     * @return Complete acquisition configuration
+     * Overload without wbMode for backward compatibility (skips WB mode mismatch validation).
      */
     public static AcquisitionConfiguration buildConfiguration(
             SampleSetupController.SampleSetupResult sample,
@@ -59,6 +50,34 @@ public class AcquisitionConfigurationBuilder {
             String projectsFolder,
             String sampleName,
             double explicitPixelSize) {
+        return buildConfiguration(sample, configFileLocation, modalityWithIndex, regionName,
+                angleExposures, projectsFolder, sampleName, explicitPixelSize, null);
+    }
+
+    /**
+     * Builds a complete acquisition configuration from the provided parameters.
+     *
+     * @param sample Sample setup result containing hardware configuration
+     * @param configFileLocation Path to microscope configuration file
+     * @param modalityWithIndex Imaging mode with index (e.g., "ppm_20x_1")
+     * @param regionName Name of the annotation/region being acquired
+     * @param angleExposures List of rotation angles and exposures
+     * @param projectsFolder Base folder for projects (e.g., "D:/2025QPSC/data")
+     * @param sampleName The actual sample name to use for paths (from ProjectInfo, not sample dialog)
+     * @param explicitPixelSize Pixel size in micrometers
+     * @param wbMode White balance mode (e.g., "camera_awb", "per_angle") for background validation, or null to skip
+     * @return Complete acquisition configuration
+     */
+    public static AcquisitionConfiguration buildConfiguration(
+            SampleSetupController.SampleSetupResult sample,
+            String configFileLocation,
+            String modalityWithIndex,
+            String regionName,
+            List<AngleExposure> angleExposures,
+            String projectsFolder,
+            String sampleName,
+            double explicitPixelSize,
+            String wbMode) {
 
         MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configFileLocation);
 
@@ -72,12 +91,12 @@ public class AcquisitionConfigurationBuilder {
         String bgMethod = configManager.getBackgroundCorrectionMethod(baseModality);
         String bgBaseFolder = configManager.getBackgroundCorrectionFolder(baseModality);
         
-        // Construct detector-specific background folder path
+        // Resolve detector-specific background folder path (WB-mode aware)
         String bgFolder = null;
         if (bgEnabled && bgBaseFolder != null) {
-            String magnification = extractMagnificationFromObjective(objective);
-            bgFolder = Paths.get(bgBaseFolder, detector, baseModality, magnification).toString();
-            logger.info("Constructed background folder path: {}", bgFolder);
+            bgFolder = BackgroundSettingsReader.resolveBackgroundFolder(
+                    bgBaseFolder, baseModality, objective, detector, wbMode);
+            logger.info("Resolved background folder path: {}", bgFolder);
         }
         
         // Get autofocus parameters
@@ -136,7 +155,7 @@ public class AcquisitionConfigurationBuilder {
             List<Double> disabledAngles = new ArrayList<>();
             try {
                 BackgroundSettingsReader.BackgroundSettings backgroundSettings =
-                    BackgroundSettingsReader.findBackgroundSettings(bgBaseFolder, baseModality, objective, detector);
+                    BackgroundSettingsReader.findBackgroundSettings(bgBaseFolder, baseModality, objective, detector, wbMode);
 
                 if (backgroundSettings != null) {
                     // Convert to PPMAngleSelectionController.AngleExposure format
@@ -146,11 +165,16 @@ public class AcquisitionConfigurationBuilder {
                     }
 
                     PPMAngleSelectionController.BackgroundValidationResult validation =
-                        PPMAngleSelectionController.validateBackgroundSettings(backgroundSettings, ppmAngleExposures);
+                        PPMAngleSelectionController.validateBackgroundSettings(backgroundSettings, ppmAngleExposures, wbMode);
 
                     // Combine angles without background and angles with exposure mismatches
                     disabledAngles.addAll(validation.anglesWithoutBackground);
                     disabledAngles.addAll(validation.angleswithExposureMismatches);
+
+                    if (validation.wbModeMismatch) {
+                        logger.warn("WB mode mismatch: background was collected with '{}' but acquisition uses '{}'",
+                                validation.backgroundWbMode, validation.currentWbMode);
+                    }
 
                     logger.info("Background validation: {} angles will have correction disabled", disabledAngles.size());
                     if (!disabledAngles.isEmpty()) {

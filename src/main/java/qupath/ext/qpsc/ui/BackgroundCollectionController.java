@@ -316,13 +316,17 @@ public class BackgroundCollectionController {
                 Set<String> detectors = configManager.getAvailableDetectorsForModalityObjective(modality, objective);
                 if (!detectors.isEmpty()) {
                     String detector = detectors.iterator().next();
+                    // Look up backgrounds for the currently selected WB mode
+                    String selectedWbMode = convertWbModeToProtocol(wbModeComboBox.getValue());
                     existingBackgroundSettings = BackgroundSettingsReader.findBackgroundSettings(
-                            baseBackgroundFolder, modality, objective, detector);
-                    
+                            baseBackgroundFolder, modality, objective, detector, selectedWbMode);
+
                     if (existingBackgroundSettings != null) {
-                        logger.info("Found existing background settings: {}", existingBackgroundSettings);
+                        logger.info("Found existing background settings for wbMode '{}': {}",
+                                selectedWbMode, existingBackgroundSettings);
                     } else {
-                        logger.debug("No existing background settings found for {}/{}/{}", modality, objective, detector);
+                        logger.debug("No existing background settings found for {}/{}/{} (wbMode={})",
+                                modality, objective, detector, selectedWbMode);
                     }
                 }
             }
