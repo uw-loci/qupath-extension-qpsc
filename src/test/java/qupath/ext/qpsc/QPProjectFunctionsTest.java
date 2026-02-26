@@ -8,14 +8,11 @@ import java.io.IOException;
 import java.nio.file.*;
 import java.util.Map;
 
-import org.controlsfx.control.PropertySheet;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
 
@@ -26,16 +23,6 @@ import qupath.lib.projects.Project;
 class QPProjectFunctionsTest {
 
     @TempDir Path tmp;
-
-    /**
-     * A minimal mock PropertySheet.Item that returns a fixed name and value.
-     */
-    private static PropertySheet.Item mockItem(String name, Object value) {
-        PropertySheet.Item item = mock(PropertySheet.Item.class);
-        when(item.getName()).thenReturn(name);
-        when(item.getValue()).thenReturn(value);
-        return item;
-    }
 
     @Test
     void testCreateProjectFolder_createsNewProject() throws IOException {
@@ -84,17 +71,12 @@ class QPProjectFunctionsTest {
         // mock QuPathGUI
         QuPathGUI gui = mock(QuPathGUI.class);
 
-        // prepare a single preference item for "First Scan Type"
-        ObservableList<PropertySheet.Item> prefs = FXCollections.observableArrayList(
-                mockItem("First Scan Type", "10x_bf")
-        );
-
-        // call under test
+        // call under test -- method now takes String enhancedModality instead of ObservableList
         Map<String,Object> result = QPProjectFunctions.createAndOpenQuPathProject(
                 gui,
                 tmpDir.toString(),
                 "SampleA",
-                prefs,
+                "10x_bf",
                 /*flipX*/ false,
                 /*flipY*/ true
         );
@@ -102,10 +84,9 @@ class QPProjectFunctionsTest {
         assertNotNull(result.get("currentQuPathProject"), "Project must be returned");
         String modeWithIndex = (String) result.get("imagingModeWithIndex");
         assertTrue(modeWithIndex.startsWith("10x_bf"),
-                "imagingModeWithIndex should start with the preference value");
+                "imagingModeWithIndex should start with the enhancedModality value");
         assertNull(result.get("matchingImage"),
                 "When no image is open, matchingImage should be null");
-        String tempTileDir = (String) result.get("tempTileDirectory");
         assertTrue(Files.isDirectory(tmpDir.resolve("SampleA").resolve(modeWithIndex)),
                 "tempTileDirectory must exist on disk");
     }

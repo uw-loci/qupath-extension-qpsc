@@ -64,7 +64,7 @@ class ExistingImageAcquisitionControllerTest {
                 0.85,
                 RefinementChoice.NONE,
                 null,
-                null
+                false, false, null
         );
 
         assertEquals("TestSample", config.sampleName());
@@ -87,7 +87,7 @@ class ExistingImageAcquisitionControllerTest {
                 0.0,
                 RefinementChoice.FULL_MANUAL,
                 null,
-                null
+                false, false, null
         );
 
         assertEquals("BF", config.modality());
@@ -110,7 +110,7 @@ class ExistingImageAcquisitionControllerTest {
                 0.92,
                 RefinementChoice.SINGLE_TILE,
                 null,
-                null
+                false, false, null
         );
 
         assertTrue(config.useExistingAlignment());
@@ -137,8 +137,8 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 0.85,
                 RefinementChoice.NONE,
-                null,
-                overrides
+                overrides,
+                false, false, null
         );
 
         assertNotNull(config.angleOverrides());
@@ -162,7 +162,7 @@ class ExistingImageAcquisitionControllerTest {
                 0.85,
                 RefinementChoice.NONE,
                 null,
-                null
+                false, false, null
         );
 
         assertTrue(config.isExistingProject());
@@ -183,7 +183,7 @@ class ExistingImageAcquisitionControllerTest {
                 0.0,
                 RefinementChoice.FULL_MANUAL,
                 null,
-                null
+                false, false, null
         );
 
         assertFalse(config.isExistingProject());
@@ -200,7 +200,8 @@ class ExistingImageAcquisitionControllerTest {
 
         ExistingImageAcquisitionConfig highConfig = new ExistingImageAcquisitionConfig(
                 "TestSample", new File("/test"), false, "ppm", "20x", "JAI",
-                true, null, 0.85, RefinementChoice.NONE, null, null
+                true, null, 0.85, RefinementChoice.NONE, null,
+                false, false, null
         );
 
         assertTrue(highConfig.alignmentConfidence() >= highThreshold,
@@ -215,7 +216,8 @@ class ExistingImageAcquisitionControllerTest {
 
         ExistingImageAcquisitionConfig medConfig = new ExistingImageAcquisitionConfig(
                 "TestSample", new File("/test"), false, "ppm", "20x", "JAI",
-                true, null, 0.65, RefinementChoice.SINGLE_TILE, null, null
+                true, null, 0.65, RefinementChoice.SINGLE_TILE, null,
+                false, false, null
         );
 
         double conf = medConfig.alignmentConfidence();
@@ -230,7 +232,8 @@ class ExistingImageAcquisitionControllerTest {
 
         ExistingImageAcquisitionConfig lowConfig = new ExistingImageAcquisitionConfig(
                 "TestSample", new File("/test"), false, "ppm", "20x", "JAI",
-                true, null, 0.35, RefinementChoice.FULL_MANUAL, null, null
+                true, null, 0.35, RefinementChoice.FULL_MANUAL, null,
+                false, false, null
         );
 
         assertTrue(lowConfig.alignmentConfidence() < lowThreshold,
@@ -248,11 +251,28 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 0.0,
                 RefinementChoice.FULL_MANUAL,
-                null, null
+                null,
+                false, false, null
         );
 
         assertFalse(manualConfig.useExistingAlignment());
         assertEquals(0.0, manualConfig.alignmentConfidence(), 0.001);
         assertNull(manualConfig.selectedTransform());
+    }
+
+    // ==================== White Balance Config Tests ====================
+
+    @Test
+    @DisplayName("ExistingImageAcquisitionConfig stores WB settings correctly")
+    void testConfigStoresWbSettings() {
+        ExistingImageAcquisitionConfig config = new ExistingImageAcquisitionConfig(
+                "TestSample", new File("/test"), false, "ppm", "20x", "JAI",
+                true, null, 0.85, RefinementChoice.NONE, null,
+                true, true, "per_angle"
+        );
+
+        assertTrue(config.enableWhiteBalance());
+        assertTrue(config.perAngleWhiteBalance());
+        assertEquals("per_angle", config.wbMode());
     }
 }

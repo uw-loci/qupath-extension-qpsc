@@ -1,6 +1,7 @@
 package qupath.ext.qpsc;
 
 import org.junit.jupiter.api.*;
+import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 
 import java.io.IOException;
@@ -171,14 +172,13 @@ class MicroscopeSocketClientTest {
 
         // Should not throw
         assertDoesNotThrow(() -> {
-            client.startAcquisition(
-                    "/path/to/config.yaml",
-                    "/projects",
-                    "sample001",
-                    "BF_10x",
-                    "region1",
-                    new double[]{0.0, 45.0, 90.0}
-            );
+            AcquisitionCommandBuilder builder = AcquisitionCommandBuilder.builder()
+                    .yamlPath("/path/to/config.yaml")
+                    .projectsFolder("/projects")
+                    .sampleLabel("sample001")
+                    .scanType("BF_10x")
+                    .regionName("region1");
+            client.startAcquisition(builder);
         });
     }
 
@@ -350,14 +350,13 @@ class MicroscopeSocketClientTest {
 
         // Should handle large message
         assertDoesNotThrow(() -> {
-            client.startAcquisition(
-                    "/very/long/path/to/configuration/file.yaml",
-                    "/very/long/path/to/projects/folder",
-                    "very_long_sample_label_with_lots_of_characters",
-                    "complex_scan_type_with_parameters",
-                    "detailed_region_name",
-                    angles
-            );
+            AcquisitionCommandBuilder builder = AcquisitionCommandBuilder.builder()
+                    .yamlPath("/very/long/path/to/configuration/file.yaml")
+                    .projectsFolder("/very/long/path/to/projects/folder")
+                    .sampleLabel("very_long_sample_label_with_lots_of_characters")
+                    .scanType("complex_scan_type_with_parameters")
+                    .regionName("detailed_region_name");
+            client.startAcquisition(builder);
         });
     }
 
