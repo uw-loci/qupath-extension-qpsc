@@ -10,10 +10,10 @@ plugins {
 // Configure your extension here
 qupathExtension {
     name = "qupath-extension-qpsc"
-    group = "io.github.uw-loci"
+    group = "io.github.michaelsnelson"
     version = "0.3.0"
     description = "A QuPath extension to allow interaction with a microscope through PycroManager and MicroManager."
-    automaticModule = "io.github.uw-loci.extension.qpsc"
+    automaticModule = "io.github.michaelsnelson.extension.qpsc"
 }
 
 
