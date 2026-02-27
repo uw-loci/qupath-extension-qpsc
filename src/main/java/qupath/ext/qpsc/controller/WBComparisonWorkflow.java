@@ -360,7 +360,16 @@ public class WBComparisonWorkflow {
         MicroscopeSocketClient.AcquisitionState finalState = socketClient.monitorAcquisition(
                 progress -> logger.debug("[{}] Acquisition progress: {}/{}", wbMode,
                         progress.current, progress.total),
-                null, // no manual focus callback
+                retriesRemaining -> {
+                    // Auto-skip manual focus for WB comparison (automated workflow)
+                    logger.warn("[{}] Autofocus failed, auto-skipping (retries remaining: {})",
+                            wbMode, retriesRemaining);
+                    try {
+                        socketClient.skipAutofocusRetry();
+                    } catch (IOException e) {
+                        logger.error("[{}] Failed to send SKIPAF response", wbMode, e);
+                    }
+                },
                 ACQUISITION_POLL_INTERVAL_MS,
                 ACQUISITION_TIMEOUT_MS
         );
