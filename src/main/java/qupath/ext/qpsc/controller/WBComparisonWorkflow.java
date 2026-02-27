@@ -488,6 +488,12 @@ public class WBComparisonWorkflow {
 
     /**
      * Stitches the acquired tiles for one WB mode.
+     *
+     * <p>Uses directory isolation to prevent cross-matching issues with the
+     * TileConfigurationTxtStrategy .contains() matching logic. For example,
+     * "0.0" would match "90.0" without isolation. Each angle directory is
+     * temporarily moved into an isolated parent so only that angle is visible
+     * to the stitcher. This matches the approach in StitchingHelper.</p>
      */
     private static void stitchMode(
             String wbMode,
@@ -504,29 +510,18 @@ public class WBComparisonWorkflow {
 
         // The tile folder structure (server creates scan_type level):
         // {outputFolder}/{sampleName}/{modeWithIndex}/{wbFolderName}/{modeWithIndex}/bounds/{angle}/
-        // TileProcessingUtilities constructs: {projectsBase}/{sampleLabel}/{imagingMode}/bounds/
+        // TileProcessingUtilities constructs: {projectsBase}/{sampleLabel}/{imagingMode}/{regionName}/
         String projectsBase = Paths.get(params.outputFolder(), params.sampleName(), modeWithIndex).toString();
+        Path tileBaseDir = Paths.get(projectsBase, wbFolderName, modeWithIndex, "bounds");
 
-        // Use TileProcessingUtilities for each angle
+        // Stitch each angle using directory isolation to prevent cross-matching
         for (AngleExposure ae : angleExposures) {
             String angleStr = String.valueOf(ae.ticks());
-            logger.info("[{}] Stitching angle: {}", wbMode, angleStr);
+            logger.info("[{}] Stitching angle: {} (with isolation)", wbMode, angleStr);
 
             try {
-                TileProcessingUtilities.stitchImagesAndUpdateProject(
-                        projectsBase,
-                        wbFolderName,
-                        modeWithIndex,
-                        "bounds",
-                        angleStr,
-                        gui,
-                        project,
-                        stitchConfig.compressionType(),
-                        pixelSize,
-                        1, // downsample
-                        handler,
-                        null // no extra stitch params
-                );
+                stitchAngleWithIsolation(tileBaseDir, angleStr, projectsBase, wbFolderName,
+                        modeWithIndex, pixelSize, stitchConfig.compressionType(), gui, project, handler);
             } catch (Exception e) {
                 logger.error("[{}] Failed to stitch angle {}: {}", wbMode, angleStr, e.getMessage());
                 // Continue with other angles
@@ -534,29 +529,77 @@ public class WBComparisonWorkflow {
         }
 
         // Also stitch birefringence if present
-        // Tiles are at: {projectsBase}/{wbFolderName}/{modeWithIndex}/bounds/{angle}.biref/
-        String birefDir = Paths.get(projectsBase, wbFolderName, modeWithIndex, "bounds",
-                angleExposures.get(0).ticks() + ".biref").toString();
-        if (new File(birefDir).isDirectory()) {
-            logger.info("[{}] Stitching birefringence", wbMode);
+        String birefAngle = angleExposures.get(0).ticks() + ".biref";
+        Path birefPath = tileBaseDir.resolve(birefAngle);
+        if (Files.isDirectory(birefPath)) {
+            logger.info("[{}] Stitching birefringence (with isolation)", wbMode);
             try {
-                String birefAngle = angleExposures.get(0).ticks() + ".biref";
-                TileProcessingUtilities.stitchImagesAndUpdateProject(
-                        projectsBase,
-                        wbFolderName,
-                        modeWithIndex,
-                        "bounds",
-                        birefAngle,
-                        gui,
-                        project,
-                        stitchConfig.compressionType(),
-                        pixelSize,
-                        1,
-                        handler,
-                        null
-                );
+                stitchAngleWithIsolation(tileBaseDir, birefAngle, projectsBase, wbFolderName,
+                        modeWithIndex, pixelSize, stitchConfig.compressionType(), gui, project, handler);
             } catch (Exception e) {
                 logger.error("[{}] Failed to stitch birefringence: {}", wbMode, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Stitches a single angle directory using temporary isolation.
+     *
+     * <p>Moves the target angle directory into a temp parent so it is the only
+     * subdirectory visible to the stitcher, preventing .contains() collisions
+     * (e.g., "0.0" matching "90.0"). Restores the directory after stitching.</p>
+     */
+    private static void stitchAngleWithIsolation(
+            Path tileBaseDir, String angleStr,
+            String projectsBase, String wbFolderName,
+            String modeWithIndex, double pixelSize,
+            String compression, QuPathGUI gui,
+            Project<BufferedImage> project, ModalityHandler handler
+    ) throws IOException {
+        Path angleDir = tileBaseDir.resolve(angleStr);
+        if (!Files.exists(angleDir)) {
+            logger.warn("Angle directory does not exist: {}", angleDir);
+            return;
+        }
+
+        // Create a temporary isolation directory alongside the angle dirs
+        String tempDirName = "_temp_" + angleStr.replace("-", "neg").replace(".", "_");
+        Path tempIsolationDir = tileBaseDir.resolve(tempDirName);
+        Path tempAngleDir = tempIsolationDir.resolve(angleStr);
+
+        try {
+            Files.createDirectories(tempIsolationDir);
+            Files.move(angleDir, tempAngleDir);
+            logger.info("Isolated {} into {}", angleStr, tempIsolationDir);
+
+            // Stitch with combined region path so only the isolated angle is visible
+            String combinedRegion = "bounds" + File.separator + tempDirName;
+            TileProcessingUtilities.stitchImagesAndUpdateProject(
+                    projectsBase,
+                    wbFolderName,
+                    modeWithIndex,
+                    combinedRegion,
+                    angleStr,
+                    gui,
+                    project,
+                    compression,
+                    pixelSize,
+                    1, // downsample
+                    handler,
+                    null
+            );
+        } finally {
+            // Always restore the directory structure
+            try {
+                if (Files.exists(tempAngleDir)) {
+                    Files.move(tempAngleDir, angleDir);
+                }
+                if (Files.exists(tempIsolationDir)) {
+                    Files.delete(tempIsolationDir);
+                }
+                logger.info("Restored {} from isolation", angleStr);
+            } catch (IOException e) {
+                logger.error("Failed to restore directory after isolation for {}: {}", angleStr, e.getMessage(), e);
             }
         }
     }
