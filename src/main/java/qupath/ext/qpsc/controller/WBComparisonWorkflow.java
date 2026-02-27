@@ -175,18 +175,17 @@ public class WBComparisonWorkflow {
             logger.info("Enhanced scan type: {}", modeWithIndex);
 
             // Generate tile grid once (reused for all modes)
-            // We need to generate the TileConfiguration.txt into a temp location,
-            // then copy it per-mode. We'll generate into the first mode's folder
-            // and copy from there.
-            String baseTileDir = Paths.get(params.outputFolder(), params.sampleName(),
-                    modeWithIndex, "bounds").toString();
-            File baseTileDirFile = new File(baseTileDir);
-            if (!baseTileDirFile.exists() && !baseTileDirFile.mkdirs()) {
-                throw new RuntimeException("Failed to create tile directory: " + baseTileDir);
+            // TilingUtilities.processBoundingBoxTilingRequest() auto-appends a "bounds/"
+            // subdirectory, so outputFolder should be one level above.
+            String tilingOutputDir = Paths.get(params.outputFolder(), params.sampleName(),
+                    modeWithIndex).toString();
+            File tilingOutputDirFile = new File(tilingOutputDir);
+            if (!tilingOutputDirFile.exists() && !tilingOutputDirFile.mkdirs()) {
+                throw new RuntimeException("Failed to create tile directory: " + tilingOutputDir);
             }
 
             TilingRequest tilingRequest = new TilingRequest.Builder()
-                    .outputFolder(baseTileDir)
+                    .outputFolder(tilingOutputDir)
                     .modalityName(modeWithIndex)
                     .frameSize(frameWidthUm, frameHeightUm)
                     .overlapPercent(params.overlapPercent())
@@ -199,10 +198,10 @@ public class WBComparisonWorkflow {
             } catch (IOException e) {
                 throw new RuntimeException("Failed to generate tile grid: " + e.getMessage(), e);
             }
-            logger.info("Tile grid generated at {}", baseTileDir);
+            logger.info("Tile grid generated at {}", tilingOutputDir);
 
-            // Read the generated TileConfiguration.txt
-            Path tileConfigPath = Paths.get(baseTileDir, "TileConfiguration.txt");
+            // TilingUtilities creates TileConfiguration.txt inside a "bounds/" subdirectory
+            Path tileConfigPath = Paths.get(tilingOutputDir, "bounds", "TileConfiguration.txt");
             if (!Files.exists(tileConfigPath)) {
                 throw new RuntimeException("TileConfiguration.txt not generated at " + tileConfigPath);
             }
@@ -630,7 +629,8 @@ public class WBComparisonWorkflow {
 
         List<AngleExposure> result = new ArrayList<>();
         for (Map<String, Object> angleConfig : rotationAngles) {
-            Object ticksObj = angleConfig.get("ticks");
+            // YAML uses "tick" (singular) for rotation angle values
+            Object ticksObj = angleConfig.get("tick");
             if (ticksObj instanceof Number) {
                 double ticks = ((Number) ticksObj).doubleValue();
                 double exposure = 10.0; // default
