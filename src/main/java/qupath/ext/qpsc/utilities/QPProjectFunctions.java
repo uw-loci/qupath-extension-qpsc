@@ -753,13 +753,23 @@ public class QPProjectFunctions {
             return ImageData.ImageType.OTHER;
         }
 
+        // Safety check: non-RGB images cannot be BRIGHTFIELD_H_E.
+        // This can happen when birefringence (greyscale) images have PPM-related filenames.
+        boolean isRgb = server.nChannels() >= 3;
+
         // First check if modality handler specifies a preferred image type
         if (modalityHandler != null) {
             java.util.Optional<ImageData.ImageType> modalityType = modalityHandler.getImageType();
             if (modalityType.isPresent()) {
+                ImageData.ImageType requested = modalityType.get();
+                if (requested == ImageData.ImageType.BRIGHTFIELD_H_E && !isRgb) {
+                    logger.info("Modality requested BRIGHTFIELD_H_E but image is non-RGB ({} channels), using OTHER: {}",
+                            server.nChannels(), fileName);
+                    return ImageData.ImageType.OTHER;
+                }
                 logger.info("Using modality-specified image type {} for: {} (modality={})",
-                        modalityType.get(), fileName, modalityHandler.getClass().getSimpleName());
-                return modalityType.get();
+                        requested, fileName, modalityHandler.getClass().getSimpleName());
+                return requested;
             }
         }
 
@@ -772,6 +782,11 @@ public class QPProjectFunctions {
                 fileName.contains("_bf") ||
                 fileName.contains("brightfield")) {
 
+            if (!isRgb) {
+                logger.info("Filename matches PPM/BF pattern but image is non-RGB ({} channels), using OTHER: {}",
+                        server.nChannels(), fileName);
+                return ImageData.ImageType.OTHER;
+            }
             // Force brightfield H&E for PPM and BF modalities
             logger.info("Setting image type to BRIGHTFIELD_H_E based on filename pattern: {}", fileName);
             return ImageData.ImageType.BRIGHTFIELD_H_E;
