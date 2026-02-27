@@ -70,9 +70,10 @@ public class WBComparisonWorkflow {
                         return;
                     }
 
-                    logger.info("WB Comparison parameters: modes={}, grid={}x{}, blank=({},{}), tissue=({},{})",
+                    logger.info("WB Comparison parameters: modes={}, grid={}x{}, blank=({},{},{}), tissue=({},{},{})",
                             params.selectedModes(), params.gridCols(), params.gridRows(),
-                            params.blankX(), params.blankY(), params.tissueX(), params.tissueY());
+                            params.blankX(), params.blankY(), params.blankZ(),
+                            params.tissueX(), params.tissueY(), params.tissueZ());
 
                     CompletableFuture.runAsync(() -> executeWorkflow(params))
                             .exceptionally(ex -> {
@@ -275,8 +276,10 @@ public class WBComparisonWorkflow {
         Files.createDirectories(Paths.get(boundsDir));
 
         // --- 3a. CALIBRATE at blank position ---
-        logger.info("[{}] Moving to blank position ({}, {})", wbMode, params.blankX(), params.blankY());
+        logger.info("[{}] Moving to blank position ({}, {}, z={})", wbMode,
+                params.blankX(), params.blankY(), params.blankZ());
         socketClient.moveStageXY(params.blankX(), params.blankY());
+        socketClient.moveStageZ(params.blankZ());
         Thread.sleep(1000); // settle
 
         calibrateWhiteBalance(wbMode, socketClient, configPath, bgDir,
@@ -311,7 +314,11 @@ public class WBComparisonWorkflow {
         }
 
         // --- 3c. ACQUIRE at tissue position ---
-        logger.info("[{}] Moving to tissue position ({}, {})", wbMode, params.tissueX(), params.tissueY());
+        logger.info("[{}] Moving to tissue position ({}, {}, z={})", wbMode,
+                params.tissueX(), params.tissueY(), params.tissueZ());
+        socketClient.moveStageXY(params.tissueX(), params.tissueY());
+        socketClient.moveStageZ(params.tissueZ());
+        Thread.sleep(1000); // settle after move
 
         // Copy TileConfiguration.txt to mode-specific bounds directory
         Path modeConfigPath = Paths.get(boundsDir, "TileConfiguration.txt");
@@ -333,8 +340,18 @@ public class WBComparisonWorkflow {
                 .backgroundCorrection(true, "divide", bgDir)
                 .autofocus(params.afTiles(), params.afSteps(), params.afRange());
 
+        // Establish fresh connection before acquisition to avoid stale connection state
+        // from calibration/background operations (which may leave the socket in an
+        // unstable state that causes EOFException during status polling)
+        socketClient.disconnect();
+        socketClient.connect();
+
         socketClient.startAcquisition(builder);
         logger.info("[{}] Acquisition started, polling for completion", wbMode);
+
+        // Allow server time to fully initialize the acquisition before polling
+        // (matches BoundedAcquisitionWorkflow pattern)
+        Thread.sleep(1000);
 
         // Poll for completion using monitorAcquisition() which has retry logic
         // for initial connection failures (server closes connection after STARTED ack)

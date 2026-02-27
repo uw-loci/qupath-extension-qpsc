@@ -49,10 +49,14 @@ public class WBComparisonDialog {
             PathPrefs.createPersistentPreference("wbComparison.blankX", Double.NaN);
     private static final javafx.beans.property.DoubleProperty blankYProp =
             PathPrefs.createPersistentPreference("wbComparison.blankY", Double.NaN);
+    private static final javafx.beans.property.DoubleProperty blankZProp =
+            PathPrefs.createPersistentPreference("wbComparison.blankZ", Double.NaN);
     private static final javafx.beans.property.DoubleProperty tissueXProp =
             PathPrefs.createPersistentPreference("wbComparison.tissueX", Double.NaN);
     private static final javafx.beans.property.DoubleProperty tissueYProp =
             PathPrefs.createPersistentPreference("wbComparison.tissueY", Double.NaN);
+    private static final javafx.beans.property.DoubleProperty tissueZProp =
+            PathPrefs.createPersistentPreference("wbComparison.tissueZ", Double.NaN);
     private static final javafx.beans.property.IntegerProperty gridColsProp =
             PathPrefs.createPersistentPreference("wbComparison.gridCols", 3);
     private static final javafx.beans.property.IntegerProperty gridRowsProp =
@@ -72,8 +76,8 @@ public class WBComparisonDialog {
      * Result record containing all dialog parameters.
      */
     public record WBComparisonParams(
-            double blankX, double blankY,
-            double tissueX, double tissueY,
+            double blankX, double blankY, double blankZ,
+            double tissueX, double tissueY, double tissueZ,
             int gridCols, int gridRows,
             boolean doCameraAWB, boolean doSimple, boolean doPerAngle,
             String sampleName, String outputFolder,
@@ -128,25 +132,31 @@ public class WBComparisonDialog {
         // === Position fields ===
         TextField blankXField = new TextField();
         TextField blankYField = new TextField();
+        TextField blankZField = new TextField();
         TextField tissueXField = new TextField();
         TextField tissueYField = new TextField();
+        TextField tissueZField = new TextField();
 
         blankXField.setPrefColumnCount(10);
         blankYField.setPrefColumnCount(10);
+        blankZField.setPrefColumnCount(10);
         tissueXField.setPrefColumnCount(10);
         tissueYField.setPrefColumnCount(10);
+        tissueZField.setPrefColumnCount(10);
 
         // Populate from preferences if valid
         if (!Double.isNaN(blankXProp.get())) blankXField.setText(String.format("%.2f", blankXProp.get()));
         if (!Double.isNaN(blankYProp.get())) blankYField.setText(String.format("%.2f", blankYProp.get()));
+        if (!Double.isNaN(blankZProp.get())) blankZField.setText(String.format("%.2f", blankZProp.get()));
         if (!Double.isNaN(tissueXProp.get())) tissueXField.setText(String.format("%.2f", tissueXProp.get()));
         if (!Double.isNaN(tissueYProp.get())) tissueYField.setText(String.format("%.2f", tissueYProp.get()));
+        if (!Double.isNaN(tissueZProp.get())) tissueZField.setText(String.format("%.2f", tissueZProp.get()));
 
         Button useCurrentBlank = new Button("Use Current Position");
-        useCurrentBlank.setOnAction(e -> fillCurrentPosition(blankXField, blankYField));
+        useCurrentBlank.setOnAction(e -> fillCurrentPosition(blankXField, blankYField, blankZField));
 
         Button useCurrentTissue = new Button("Use Current Position");
-        useCurrentTissue.setOnAction(e -> fillCurrentPosition(tissueXField, tissueYField));
+        useCurrentTissue.setOnAction(e -> fillCurrentPosition(tissueXField, tissueYField, tissueZField));
 
         GridPane posGrid = new GridPane();
         posGrid.setHgap(8);
@@ -157,16 +167,20 @@ public class WBComparisonDialog {
         posGrid.add(blankXField, 1, 1);
         posGrid.add(new Label("Y:"), 0, 2);
         posGrid.add(blankYField, 1, 2);
-        posGrid.add(useCurrentBlank, 2, 1, 1, 2);
+        posGrid.add(new Label("Z:"), 0, 3);
+        posGrid.add(blankZField, 1, 3);
+        posGrid.add(useCurrentBlank, 2, 1, 1, 3);
 
-        posGrid.add(new Separator(), 0, 3, 3, 1);
+        posGrid.add(new Separator(), 0, 4, 3, 1);
 
-        posGrid.add(new Label("Tissue Center:"), 0, 4, 3, 1);
-        posGrid.add(new Label("X:"), 0, 5);
-        posGrid.add(tissueXField, 1, 5);
-        posGrid.add(new Label("Y:"), 0, 6);
-        posGrid.add(tissueYField, 1, 6);
-        posGrid.add(useCurrentTissue, 2, 5, 1, 2);
+        posGrid.add(new Label("Tissue Center:"), 0, 5, 3, 1);
+        posGrid.add(new Label("X:"), 0, 6);
+        posGrid.add(tissueXField, 1, 6);
+        posGrid.add(new Label("Y:"), 0, 7);
+        posGrid.add(tissueYField, 1, 7);
+        posGrid.add(new Label("Z:"), 0, 8);
+        posGrid.add(tissueZField, 1, 8);
+        posGrid.add(useCurrentTissue, 2, 6, 1, 3);
 
         // Grid size
         Spinner<Integer> colsSpinner = new Spinner<>(1, 20, gridColsProp.get());
@@ -297,8 +311,10 @@ public class WBComparisonDialog {
             try {
                 double blankX = parseDouble(blankXField.getText(), "Blank X");
                 double blankY = parseDouble(blankYField.getText(), "Blank Y");
+                double blankZ = parseDouble(blankZField.getText(), "Blank Z");
                 double tissueX = parseDouble(tissueXField.getText(), "Tissue X");
                 double tissueY = parseDouble(tissueYField.getText(), "Tissue Y");
+                double tissueZ = parseDouble(tissueZField.getText(), "Tissue Z");
                 int cols = colsSpinner.getValue();
                 int rows = rowsSpinner.getValue();
                 double overlap = parseDouble(overlapField.getText(), "Overlap");
@@ -329,8 +345,10 @@ public class WBComparisonDialog {
                 // Persist values
                 blankXProp.set(blankX);
                 blankYProp.set(blankY);
+                blankZProp.set(blankZ);
                 tissueXProp.set(tissueX);
                 tissueYProp.set(tissueY);
+                tissueZProp.set(tissueZ);
                 gridColsProp.set(cols);
                 gridRowsProp.set(rows);
                 outputFolderProp.set(outputFolder);
@@ -340,7 +358,7 @@ public class WBComparisonDialog {
                 afRangeProp.set(afRange);
 
                 return new WBComparisonParams(
-                        blankX, blankY, tissueX, tissueY,
+                        blankX, blankY, blankZ, tissueX, tissueY, tissueZ,
                         cols, rows,
                         cbCameraAWB.isSelected(), cbSimple.isSelected(), cbPerAngle.isSelected(),
                         sampleName, outputFolder,
@@ -359,18 +377,20 @@ public class WBComparisonDialog {
     }
 
     /**
-     * Fills X/Y text fields with the current stage position.
+     * Fills X/Y/Z text fields with the current stage position.
      */
-    private static void fillCurrentPosition(TextField xField, TextField yField) {
+    private static void fillCurrentPosition(TextField xField, TextField yField, TextField zField) {
         try {
             MicroscopeController mc = MicroscopeController.getInstance();
             if (!mc.isConnected()) {
                 mc.connect();
             }
             double[] pos = mc.getStagePositionXY();
+            double z = mc.getStagePositionZ();
             xField.setText(String.format("%.2f", pos[0]));
             yField.setText(String.format("%.2f", pos[1]));
-            logger.info("Filled current stage position: ({}, {})", pos[0], pos[1]);
+            zField.setText(String.format("%.2f", z));
+            logger.info("Filled current stage position: ({}, {}, {})", pos[0], pos[1], z);
         } catch (Exception e) {
             logger.error("Failed to get current stage position", e);
             qupath.fx.dialogs.Dialogs.showErrorMessage("Stage Position",
