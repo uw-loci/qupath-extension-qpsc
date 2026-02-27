@@ -54,13 +54,13 @@ dependencies {
     shadow("io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.1.0")
     // CompileOnly - QuPath provides bioformats at runtime, we just compile against it
     // This avoids trying to resolve OME transitive dependencies during build
-    compileOnly("io.github.qupath:qupath-extension-bioformats:0.6.0-rc4")
+    compileOnly("io.github.qupath:qupath-extension-bioformats:0.7.0-rc1")
     // If you aren't using Groovy, this can be removed
     shadow(libs.bundles.groovy)
 
     // For testing
     testImplementation(libs.bundles.qupath)
-    testImplementation("io.github.qupath:qupath-app:0.6.0-rc4")
+    testImplementation("io.github.qupath:qupath-app:0.7.0-rc1")
     //testImplementation(libs.junit)
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.1")
     testImplementation("org.assertj:assertj-core:3.24.2")
