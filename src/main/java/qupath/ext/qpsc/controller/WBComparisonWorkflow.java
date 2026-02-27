@@ -336,8 +336,26 @@ public class WBComparisonWorkflow {
         socketClient.startAcquisition(builder);
         logger.info("[{}] Acquisition started, polling for completion", wbMode);
 
-        // Poll for completion
-        waitForAcquisition(socketClient, wbMode);
+        // Poll for completion using monitorAcquisition() which has retry logic
+        // for initial connection failures (server closes connection after STARTED ack)
+        MicroscopeSocketClient.AcquisitionState finalState = socketClient.monitorAcquisition(
+                progress -> logger.debug("[{}] Acquisition progress: {}/{}", wbMode,
+                        progress.current, progress.total),
+                null, // no manual focus callback
+                ACQUISITION_POLL_INTERVAL_MS,
+                ACQUISITION_TIMEOUT_MS
+        );
+
+        if (finalState == MicroscopeSocketClient.AcquisitionState.FAILED) {
+            String failMsg = socketClient.getLastFailureMessage();
+            throw new RuntimeException("Acquisition failed for WB mode '" + wbMode + "': " +
+                    (failMsg != null ? failMsg : "unknown error"));
+        } else if (finalState == MicroscopeSocketClient.AcquisitionState.CANCELLED) {
+            throw new RuntimeException("Acquisition cancelled for WB mode '" + wbMode + "'");
+        } else if (finalState != MicroscopeSocketClient.AcquisitionState.COMPLETED) {
+            throw new RuntimeException("Acquisition ended in unexpected state '" + finalState +
+                    "' for WB mode '" + wbMode + "'");
+        }
         logger.info("[{}] Acquisition completed", wbMode);
 
         // --- 3d. STITCH ---
@@ -439,50 +457,6 @@ public class WBComparisonWorkflow {
         }
     }
 
-    /**
-     * Polls acquisition status until COMPLETED, FAILED, or timeout.
-     */
-    private static void waitForAcquisition(MicroscopeSocketClient socketClient, String wbMode)
-            throws Exception {
-        long startTime = System.currentTimeMillis();
-
-        while (true) {
-            Thread.sleep(ACQUISITION_POLL_INTERVAL_MS);
-
-            MicroscopeSocketClient.AcquisitionState state = socketClient.getAcquisitionStatus();
-            long elapsed = System.currentTimeMillis() - startTime;
-
-            switch (state) {
-                case COMPLETED -> {
-                    return;
-                }
-                case FAILED -> throw new RuntimeException(
-                        "Acquisition failed for WB mode '" + wbMode + "'");
-                case CANCELLED -> throw new RuntimeException(
-                        "Acquisition cancelled for WB mode '" + wbMode + "'");
-                case RUNNING -> {
-                    if (elapsed > ACQUISITION_TIMEOUT_MS) {
-                        throw new RuntimeException(
-                                "Acquisition timed out after " + (elapsed / 1000) + "s for WB mode '" + wbMode + "'");
-                    }
-                    try {
-                        MicroscopeSocketClient.AcquisitionProgress progress =
-                                socketClient.getAcquisitionProgress();
-                        logger.debug("[{}] Acquisition progress: {}/{}", wbMode,
-                                progress.current, progress.total);
-                    } catch (Exception e) {
-                        logger.trace("[{}] Could not get progress: {}", wbMode, e.getMessage());
-                    }
-                }
-                case IDLE -> {
-                    // Server transitioned to IDLE -- acquisition finished between poll cycles
-                    logger.info("[{}] Server is IDLE, treating as completed", wbMode);
-                    return;
-                }
-                default -> logger.debug("[{}] Acquisition state: {}", wbMode, state);
-            }
-        }
-    }
 
     /**
      * Stitches the acquired tiles for one WB mode.
