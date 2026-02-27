@@ -195,7 +195,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         /** Start continuous sequence acquisition (core-level) */
         STRTSEQ("strtseq_"),
         /** Stop continuous sequence acquisition (core-level) */
-        STOPSEQ("stopseq_");
+        STOPSEQ("stopseq_"),
+        /** Get MicroManager pixel size (um/pixel) */
+        GETPXSZ("getpxsz_");
 
         private final byte[] value;
 
@@ -646,7 +648,24 @@ public class MicroscopeSocketClient implements AutoCloseable {
         return new double[] { fovX, fovY };
     }
 
+    /**
+     * Gets the current pixel size from MicroManager's pixel size calibration.
+     * This reflects the active objective group in MicroManager, not the QPSC config.
+     *
+     * @return pixel size in microns per pixel, or 0.0 if unavailable
+     * @throws IOException if communication fails
+     */
+    public double getMicroscopePixelSize() throws IOException {
+        byte[] response = executeCommandOnAux(Command.GETPXSZ, null, 4);
 
+        ByteBuffer buffer = ByteBuffer.wrap(response);
+        buffer.order(ByteOrder.BIG_ENDIAN);
+
+        float pixelSize = buffer.getFloat();
+
+        logger.info("MicroManager pixel size: {} um/pixel", pixelSize);
+        return pixelSize;
+    }
 
     /**
      * Gets the current XY position of the microscope stage.

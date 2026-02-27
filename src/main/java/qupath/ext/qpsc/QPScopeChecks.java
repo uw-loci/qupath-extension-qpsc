@@ -1,6 +1,8 @@
 package qupath.ext.qpsc;
 
+import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.ObjectiveUtils;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -108,6 +110,58 @@ public class QPScopeChecks {
     public static boolean validateStageLimitsConfig() {
         // Delegate to comprehensive validation
         return validateMicroscopeConfig();
+    }
+
+    /**
+     * Validates that the QPSC config pixel size matches MicroManager's active pixel size calibration.
+     * If they differ by more than 25%, shows a confirmation dialog warning the user.
+     *
+     * @param objective  the QPSC objective identifier (e.g., "LOCI_OBJECTIVE_OLYMPUS_20X_POL_001")
+     * @param detector   the detector identifier
+     * @param modality   the modality name
+     * @param configPixelSize the pixel size from QPSC config (um/pixel)
+     * @return true if validation passes or user chooses to continue; false if user cancels
+     */
+    public static boolean validateObjectivePixelSize(
+            String objective, String detector, String modality, double configPixelSize) {
+
+        double mmPixelSize;
+        try {
+            MicroscopeController controller = MicroscopeController.getInstance();
+            if (controller == null || !controller.isConnected()) {
+                logger.debug("Microscope not connected, skipping pixel size validation");
+                return true;
+            }
+            mmPixelSize = controller.getSocketClient().getMicroscopePixelSize();
+        } catch (Exception e) {
+            logger.warn("Could not query MicroManager pixel size, skipping validation: {}", e.getMessage());
+            return true;
+        }
+
+        if (mmPixelSize <= 0.0) {
+            logger.info("MicroManager returned no pixel size calibration (0.0), skipping validation");
+            return true;
+        }
+
+        double ratio = Math.abs(configPixelSize - mmPixelSize) / configPixelSize;
+        String magnification = ObjectiveUtils.extractMagnification(objective);
+        String displayMag = (magnification != null) ? magnification : objective;
+
+        logger.info("Pixel size check: config={} um ({}), MicroManager={} um, diff={} percent",
+                configPixelSize, displayMag, mmPixelSize, String.format("%.1f", ratio * 100));
+
+        if (ratio > 0.25) {
+            String message = String.format(
+                    "Selected objective (%s) expects pixel size %.4f um, "
+                    + "but MicroManager reports %.4f um.\n\n"
+                    + "This may indicate a different objective is active in MicroManager.\n\n"
+                    + "Continue anyway?",
+                    displayMag, configPixelSize, mmPixelSize);
+
+            return Dialogs.showConfirmDialog("Objective Mismatch Warning", message);
+        }
+
+        return true;
     }
 
     /**

@@ -3,6 +3,7 @@ package qupath.ext.qpsc.controller;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.controller.workflow.*;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -654,6 +655,21 @@ public class ExistingImageWorkflowV2 {
          */
         private CompletableFuture<WorkflowState> performAcquisition(WorkflowState state) {
             if (state == null) return CompletableFuture.completedFuture(null);
+
+            // Validate pixel size against MicroManager before acquisition
+            try {
+                String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
+                double configPixelSize = configManager.getModalityPixelSize(
+                        state.modality, state.objective, state.detector);
+                if (!QPScopeChecks.validateObjectivePixelSize(
+                        state.objective, state.detector, state.modality, configPixelSize)) {
+                    return CompletableFuture.completedFuture(null); // user cancelled
+                }
+            } catch (Exception e) {
+                logger.warn("Could not validate pixel size before acquisition: {}", e.getMessage());
+                // Non-fatal -- proceed with acquisition
+            }
 
             logger.info("Starting acquisition phase");
 

@@ -1,6 +1,7 @@
 package qupath.ext.qpsc.controller;
 
 import javafx.application.Platform;
+import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -191,6 +192,12 @@ public class BoundedAcquisitionWorkflow {
                                 "Configuration Error"
                         );
                         return;
+                    }
+
+                    // Validate pixel size against MicroManager's active calibration
+                    if (!QPScopeChecks.validateObjectivePixelSize(
+                            result.objective(), result.detector(), result.modality(), WSI_pixelSize_um)) {
+                        return; // user cancelled
                     }
 
                     // Create tile configuration
