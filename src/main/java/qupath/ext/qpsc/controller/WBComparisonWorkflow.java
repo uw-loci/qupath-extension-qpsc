@@ -266,10 +266,12 @@ public class WBComparisonWorkflow {
         String wbFolderName = "wb_" + wbMode;
 
         // Build output paths for this mode
+        // Server constructs tile path as: {projects}/{sample}/{scan_type}/{region}/
+        // So tiles end up at: {modeDir}/{modeWithIndex}/bounds/{angle}/
         String modeDir = Paths.get(params.outputFolder(), params.sampleName(),
                 modeWithIndex, wbFolderName).toString();
         String bgDir = Paths.get(modeDir, "backgrounds").toString();
-        String boundsDir = Paths.get(modeDir, "bounds").toString();
+        String boundsDir = Paths.get(modeDir, modeWithIndex, "bounds").toString();
 
         // Create directories
         Files.createDirectories(Paths.get(bgDir));
@@ -326,8 +328,8 @@ public class WBComparisonWorkflow {
         logger.info("[{}] TileConfiguration.txt copied to {}", wbMode, boundsDir);
 
         // Build acquisition command
-        // Use a unique scan type per mode to keep tiles separate
-        // The output structure will be: {project}/{sample}/{modeWithIndex}/{wbFolderName}/bounds/
+        // Server path: {projects}/{sample}/{scan_type}/{region}/ =
+        //   {output}/{sample}/{modeWithIndex}/{wbFolderName}/{modeWithIndex}/bounds/
         AcquisitionCommandBuilder builder = AcquisitionCommandBuilder.builder()
                 .yamlPath(configPath)
                 .projectsFolder(Paths.get(params.outputFolder(), params.sampleName(), modeWithIndex).toString())
@@ -491,9 +493,9 @@ public class WBComparisonWorkflow {
         QuPathGUI gui = QuPathGUI.getInstance();
         var stitchConfig = StitchingConfiguration.getStandardConfiguration();
 
-        // The tile folder structure is:
-        // {outputFolder}/{sampleName}/{modeWithIndex}/{wbFolderName}/bounds/{angle}/
-        // We need to stitch each angle subdirectory
+        // The tile folder structure (server creates scan_type level):
+        // {outputFolder}/{sampleName}/{modeWithIndex}/{wbFolderName}/{modeWithIndex}/bounds/{angle}/
+        // TileProcessingUtilities constructs: {projectsBase}/{sampleLabel}/{imagingMode}/bounds/
         String projectsBase = Paths.get(params.outputFolder(), params.sampleName(), modeWithIndex).toString();
 
         // Use TileProcessingUtilities for each angle
@@ -523,7 +525,8 @@ public class WBComparisonWorkflow {
         }
 
         // Also stitch birefringence if present
-        String birefDir = Paths.get(projectsBase, wbFolderName, "bounds",
+        // Tiles are at: {projectsBase}/{wbFolderName}/{modeWithIndex}/bounds/{angle}.biref/
+        String birefDir = Paths.get(projectsBase, wbFolderName, modeWithIndex, "bounds",
                 angleExposures.get(0).ticks() + ".biref").toString();
         if (new File(birefDir).isDirectory()) {
             logger.info("[{}] Stitching birefringence", wbMode);
