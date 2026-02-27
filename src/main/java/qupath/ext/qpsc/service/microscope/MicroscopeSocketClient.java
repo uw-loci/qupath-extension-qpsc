@@ -858,11 +858,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param exposures Exposure values in parentheses format (e.g., "(120.0,250.0,60.0,1.2)")
      *                  NOTE: These are ignored by server with adaptive exposure enabled
      * @param wbMode White balance mode: "camera_awb", "simple", "per_angle", or "off"
+     * @param objective Objective ID for calibration lookup (e.g., "LOCI_OBJECTIVE_OLYMPUS_20X_POL_001")
+     * @param detector Detector ID for calibration lookup (e.g., "LOCI_DETECTOR_JAI_001")
      * @return Map of angle (degrees) to final exposure time (ms) used by Python server
      * @throws IOException if communication fails
      */
     public Map<Double, Double> startBackgroundAcquisition(String yamlPath, String outputPath, String modality,
-                                           String angles, String exposures, String wbMode) throws IOException {
+                                           String angles, String exposures, String wbMode,
+                                           String objective, String detector) throws IOException {
 
         // Build BGACQUIRE-specific command message
         // Include new --wb-mode flag and legacy --use_per_angle_wb for backward compat
@@ -874,8 +877,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if ("per_angle".equals(wbMode)) {
             wbFlags += " --use_per_angle_wb";
         }
-        String message = String.format("--yaml %s --output %s --modality %s --angles %s --exposures %s%s %s",
-                yamlPath, outputPath, modality, angles, exposures, wbFlags, END_MARKER);
+        // Objective and detector are required for WB calibration lookup in imageprocessing YAML
+        String hwFlags = "";
+        if (objective != null && !objective.isEmpty()) {
+            hwFlags += " --objective " + objective;
+        }
+        if (detector != null && !detector.isEmpty()) {
+            hwFlags += " --detector " + detector;
+        }
+        String message = String.format("--yaml %s --output %s --modality %s --angles %s --exposures %s%s%s %s",
+                yamlPath, outputPath, modality, angles, exposures, wbFlags, hwFlags, END_MARKER);
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
 
         logger.info("Sending background acquisition command:");

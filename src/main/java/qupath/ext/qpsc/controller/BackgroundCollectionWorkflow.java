@@ -170,7 +170,8 @@ public class BackgroundCollectionWorkflow {
             // Call the synchronous background acquisition method
             // Returns map of final exposures actually used by Python (with adaptive exposure)
             Map<Double, Double> finalExposures = socketClient.startBackgroundAcquisition(
-                    configFileLocation, finalOutputPath, modality, angles, exposures, wbMode);
+                    configFileLocation, finalOutputPath, modality, angles, exposures, wbMode,
+                    objective, detector);
 
             logger.info("Background acquisition completed successfully with {} final exposures",
                     finalExposures.size());

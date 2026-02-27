@@ -298,7 +298,7 @@ public class WBComparisonWorkflow {
                 .collect(Collectors.joining(",", "(", ")"));
 
         Map<Double, Double> finalExposures = socketClient.startBackgroundAcquisition(
-                configPath, bgDir, modality, angles, exposures, wbMode);
+                configPath, bgDir, modality, angles, exposures, wbMode, objective, detector);
         logger.info("[{}] Background acquisition complete, {} exposures returned",
                 wbMode, finalExposures.size());
 
