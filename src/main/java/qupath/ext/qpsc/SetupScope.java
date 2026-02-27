@@ -313,6 +313,21 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 			}
 		});
 
+		// WB Comparison Test
+		MenuItem wbComparisonOption = new MenuItem(res.getString("menu.wbComparison"));
+		wbComparisonOption.setDisable(!configValid);
+		setMenuItemTooltip(wbComparisonOption,
+				"Compare camera_awb, simple, and per_angle white balance modes side-by-side. " +
+				"Calibrates and acquires the same tissue region with each WB mode, producing " +
+				"stitched images in a single QuPath project for visual comparison.");
+		wbComparisonOption.setOnAction(e -> {
+			try {
+				QPScopeController.getInstance().startWorkflow("wbComparison");
+			} catch (IOException ex) {
+				throw new RuntimeException(ex);
+			}
+		});
+
 		// Server Connection Settings
 		MenuItem serverConnectionOption = new MenuItem(res.getString("menu.serverConnection"));
 		setMenuItemTooltip(serverConnectionOption,
@@ -365,6 +380,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 				new SeparatorMenuItem(),
 				// Camera calibration
 				backgroundCollectionOption,
+				wbComparisonOption,
 				new SeparatorMenuItem(),
 				// Autofocus tools
 				autofocusEditorOption,

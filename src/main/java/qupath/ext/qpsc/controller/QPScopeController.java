@@ -191,6 +191,10 @@ public class QPScopeController {
                 logger.debug("Launching camera control dialog");
                 CameraControlController.showCameraControlDialog();
             }
+            case "wbComparison" -> {
+                logger.debug("Launching WB comparison test workflow");
+                WBComparisonWorkflow.run();
+            }
             case "liveViewer" -> {
                 logger.debug("Launching live viewer window");
                 qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.show();
