@@ -580,28 +580,14 @@ public class ExistingImageAcquisitionController {
             confidenceLabel.setStyle("-fx-font-size: 11px;");
             updateConfidenceLabel();
 
-            transformCombo.valueProperty().addListener((obs, old, preset) -> {
-                updateConfidenceLabel();
-                updateRefinementRecommendation();
-                if (preset != null) {
-                    PersistentPreferences.setLastSelectedTransform(preset.getName());
-                }
-            });
+            // Note: transformCombo and useExistingRadio listeners are registered in
+            // setupPreviewUpdateListeners() to avoid init-order NPEs -- they reference
+            // fields created in createRefinementSection() (refinementBox, noRefineRadio, etc.)
 
             Label transformLabel = new Label("Select saved transform:");
             transformSelectionBox.getChildren().addAll(transformLabel, transformCombo, confidenceLabel);
             transformSelectionBox.setVisible(useExistingRadio.isSelected());
             transformSelectionBox.setManaged(useExistingRadio.isSelected());
-
-            // Toggle visibility
-            useExistingRadio.selectedProperty().addListener((obs, old, selected) -> {
-                transformSelectionBox.setVisible(selected);
-                transformSelectionBox.setManaged(selected);
-                refinementBox.setVisible(selected);
-                refinementBox.setManaged(selected);
-                PersistentPreferences.setUseExistingAlignment(selected);
-                triggerPreviewUpdate();
-            });
 
             // Recommendation
             Label recommendationLabel = new Label();
@@ -966,6 +952,25 @@ public class ExistingImageAcquisitionController {
 
         private void setupPreviewUpdateListeners() {
             previewDebounce.setOnFinished(event -> updatePreviewPanel());
+
+            // These listeners are registered here (not in createAlignmentSection) because
+            // they reference fields from createRefinementSection (refinementBox, radio buttons, etc.)
+            transformCombo.valueProperty().addListener((obs, old, preset) -> {
+                updateConfidenceLabel();
+                updateRefinementRecommendation();
+                if (preset != null) {
+                    PersistentPreferences.setLastSelectedTransform(preset.getName());
+                }
+            });
+
+            useExistingRadio.selectedProperty().addListener((obs, old, selected) -> {
+                transformSelectionBox.setVisible(selected);
+                transformSelectionBox.setManaged(selected);
+                refinementBox.setVisible(selected);
+                refinementBox.setManaged(selected);
+                PersistentPreferences.setUseExistingAlignment(selected);
+                triggerPreviewUpdate();
+            });
         }
 
         private void triggerPreviewUpdate() {
