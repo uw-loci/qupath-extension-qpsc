@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
@@ -652,8 +653,16 @@ public class WBComparisonWorkflow {
 
     private static String resolveObjective(MicroscopeConfigManager configManager, String modality) {
         Set<String> objectives = configManager.getAvailableObjectivesForModality(modality);
-        if (!objectives.isEmpty()) return objectives.iterator().next();
-        throw new RuntimeException("No objectives available for modality: " + modality);
+        if (objectives.isEmpty()) {
+            throw new RuntimeException("No objectives available for modality: " + modality);
+        }
+        // Prefer the user's last-used objective (same pattern as SampleSetupController)
+        String lastObjective = PersistentPreferences.getLastObjective();
+        if (!lastObjective.isEmpty() && objectives.contains(lastObjective)) {
+            return lastObjective;
+        }
+        // Fall back to sorted order for deterministic selection
+        return objectives.stream().sorted().findFirst().orElseThrow();
     }
 
     private static String resolveDetector(MicroscopeConfigManager configManager, String modality, String objective) {
