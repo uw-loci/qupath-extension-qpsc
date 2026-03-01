@@ -3889,8 +3889,35 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throw new IllegalArgumentException("WB mode must be 0 (Off), 1 (Continuous), or 2 (Once)");
         }
 
-        byte[] payload = new byte[]{(byte) mode};
-        byte[] response = executeCommand(Command.SETWBMD, payload, 8);
+        // Mode 2 (AWB calibration) runs streaming + equilibration on the server
+        // which takes ~5 seconds. Temporarily increase the read timeout so we
+        // don't time out and leave the server streaming in the background.
+        byte[] response;
+        if (mode == 2) {
+            synchronized (socketLock) {
+                ensureConnected();
+                int originalTimeout = socket.getSoTimeout();
+                try {
+                    socket.setSoTimeout(15000); // 15 seconds for AWB calibration
+                    output.write(Command.SETWBMD.getValue());
+                    output.write(new byte[]{(byte) mode});
+                    output.flush();
+                    lastActivityTime.set(System.currentTimeMillis());
+                    response = new byte[8];
+                    input.readFully(response);
+                    lastActivityTime.set(System.currentTimeMillis());
+                } catch (IOException e) {
+                    handleIOException(e);
+                    throw e;
+                } finally {
+                    try { socket.setSoTimeout(originalTimeout); } catch (Exception ignored) {}
+                }
+            }
+        } else {
+            byte[] payload = new byte[]{(byte) mode};
+            response = executeCommand(Command.SETWBMD, payload, 8);
+        }
+
         String responseStr = new String(response, StandardCharsets.UTF_8).trim();
 
         if (!responseStr.startsWith("ACK")) {
