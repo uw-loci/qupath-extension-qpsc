@@ -525,17 +525,23 @@ public class WBComparisonWorkflow {
             }
         }
 
-        // Also stitch birefringence if present
-        String birefAngle = angleExposures.get(0).ticks() + ".biref";
-        Path birefPath = tileBaseDir.resolve(birefAngle);
-        if (Files.isDirectory(birefPath)) {
-            logger.info("[{}] Stitching birefringence (with isolation)", wbMode);
-            try {
-                stitchAngleWithIsolation(tileBaseDir, birefAngle, projectsBase, wbFolderName,
-                        modeWithIndex, pixelSize, stitchConfig.compressionType(), gui, project, handler);
-            } catch (Exception e) {
-                logger.error("[{}] Failed to stitch birefringence: {}", wbMode, e.getMessage());
-            }
+        // Also stitch birefringence if present -- scan for any .biref directory
+        // (the Python server names it after the minimum positive angle, e.g. "7.0.biref")
+        try (var stream = Files.list(tileBaseDir)) {
+            stream.filter(Files::isDirectory)
+                    .filter(p -> p.getFileName().toString().endsWith(".biref"))
+                    .forEach(birefPath -> {
+                        String birefDirName = birefPath.getFileName().toString();
+                        logger.info("[{}] Stitching birefringence: {} (with isolation)", wbMode, birefDirName);
+                        try {
+                            stitchAngleWithIsolation(tileBaseDir, birefDirName, projectsBase, wbFolderName,
+                                    modeWithIndex, pixelSize, stitchConfig.compressionType(), gui, project, handler);
+                        } catch (Exception e) {
+                            logger.error("[{}] Failed to stitch birefringence: {}", wbMode, e.getMessage());
+                        }
+                    });
+        } catch (IOException e) {
+            logger.warn("[{}] Could not scan for biref directories: {}", wbMode, e.getMessage());
         }
     }
 

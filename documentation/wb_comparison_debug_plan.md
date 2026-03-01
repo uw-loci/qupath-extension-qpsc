@@ -42,20 +42,41 @@ With the manual focus fix, all three modes should now complete.
 
 **Fix**: Added handling for 2-part scan types in `ppm_library/imaging/background.py`.
 
+## Resolved Issues (2026-03-01 AWB Fixes)
+
+### Issue 5: Camera AWB not applying color corrections (FIXED)
+AWB was running at the client's default exposure (10ms) which fully saturated the sensor at
+uncrossed/90-deg. The camera couldn't determine color ratios from clipped pixels. Also, only
+3 frames were delivered during AWB equilibration (insufficient for convergence).
+
+**Fix:** `run_auto_white_balance()` now uses a safe calibration exposure (0.5ms default) with
+38 Hz frame rate and 3-second equilibration with active buffer draining (~100+ frames).
+AWB adjusts the camera's internal Temperature property, not the analog gain registers.
+
+### Issue 6: AWB drain loop overshoot causing error 11018 (FIXED)
+The drain loop ran for 11+ seconds due to no time check in the inner loop. During this time,
+subsequent WB calibration commands arrived and collided with the still-active streaming.
+
+**Fix:** Added `time.time() < end_time` check in the inner drain loop.
+
+### Issue 7: Java socket timeout too short for AWB (FIXED)
+Default 5-second read timeout caused Java to time out during AWB (5-6 seconds), sending
+subsequent commands while streaming was still active.
+
+**Fix:** `setWhiteBalanceMode(2)` now uses 15-second timeout.
+
+### Issue 8: Background exposures starting too high (FIXED)
+Client default 10ms needed ~20 proportional-reduction iterations to reach 0.5ms for 90-deg.
+Fully saturated images (median=255) gave 13.5% reduction per step.
+
+**Fix:** Two-part: (1) Load saved exposures from prior run as starting points, (2) Halve
+exposure when fully clipped (median >= 254) instead of proportional reduction.
+
 ## Remaining Questions (for next test run)
 
-1. **Are backgrounds expected to have WB applied?**
-   With camera_awb, AWB "Once" is triggered then mode set to "Off" before background capture.
-   If the camera doesn't persist AWB gains when mode is Off, backgrounds will always be unbalanced.
-   The new fallback (computing WB from backgrounds) handles this for the acquisition tiles,
-   but the background images themselves will still show the raw camera color cast.
+1. **Stitching**: Not yet tested. The scan type warning fix may have been blocking it.
 
-2. **Autofocus at tissue position**: Why did AF fail? Possibly the 90 deg / 0.68ms exposure
-   is too dim for focus scoring. May need to verify tissue position or adjust AF angle/exposure.
-
-3. **Stitching**: Not yet tested. The scan type warning fix may have been blocking it.
-
-4. **Gain_AnalogGreen warning**: Non-fatal. Server logs
+2. **Gain_AnalogGreen warning**: Non-fatal. Server logs
    `"Could not configure camera AWB mode: Failed to set property 'Gain_AnalogGreen' to '1.0'"`
    but `disable_individual_gain()` succeeded. Likely a camera firmware side-effect of
    transitioning from individual to unified gain mode. No code path explicitly sets
@@ -96,3 +117,11 @@ With the manual focus fix, all three modes should now complete.
 - `28abdd9` - Add Z position support, fix missing stage move, fresh connection before acquire
 - `c716892` - Fix tile path missing scan_type subdirectory
 - (pending) - Auto-skip manual focus, use background WB coefficients, handle 2-part scan types
+
+### AWB Fix Commits (2026-03-01)
+- `f8df128` (microscope_control) - AWB calibration exposure + consistent Off write
+- `53af6aa` (microscope_control) - Fix drain loop overshooting with time check
+- `e3c9777` (microscope_control) - AWB Temperature readback diagnostics
+- `7c3cb72` (microscope_command_server) - Aggressive exposure halving for saturated backgrounds
+- `4788117` (microscope_command_server) - Load saved exposures as starting points
+- `3e412c1` (qupath-extension-qpsc) - 15-second socket timeout for AWB mode 2
