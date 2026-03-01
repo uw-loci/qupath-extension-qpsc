@@ -407,7 +407,7 @@ public class WBComparisonWorkflow {
 
         switch (wbMode) {
             case "camera_awb" -> {
-                // Rotate to uncrossed (90 deg), run one-shot AWB, then disable
+                // Rotate to uncrossed (90 deg) for maximum light, then run AWB
                 double uncrossedAngle = 90.0;
                 for (AngleExposure ae : angleExposures) {
                     if (ae.ticks() == 90.0) {
@@ -419,17 +419,17 @@ public class WBComparisonWorkflow {
                 socketClient.moveStageR(uncrossedAngle);
                 Thread.sleep(1000);
 
-                // Reset gains to neutral
+                // Reset gains to neutral before AWB
                 try {
                     socketClient.setGains(new float[]{1.0f, 1.0f, 1.0f});
                 } catch (Exception e) {
                     logger.warn("[camera_awb] Could not reset gains: {}", e.getMessage());
                 }
 
-                // Run one-shot auto WB
-                socketClient.setWhiteBalanceMode(2); // Once
-                Thread.sleep(2000);
-                socketClient.setWhiteBalanceMode(0); // Off
+                // Run AWB -- server starts streaming, enables Continuous WB,
+                // monitors analog gains until stable, then sets WB to Off.
+                // This blocks until convergence (up to ~5s).
+                socketClient.setWhiteBalanceMode(2);
                 logger.info("[camera_awb] Camera AWB calibration complete");
             }
             case "simple" -> {
