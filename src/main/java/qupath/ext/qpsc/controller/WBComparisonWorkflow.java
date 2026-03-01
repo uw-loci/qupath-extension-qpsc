@@ -419,16 +419,12 @@ public class WBComparisonWorkflow {
                 socketClient.moveStageR(uncrossedAngle);
                 Thread.sleep(1000);
 
-                // Reset gains to neutral before AWB
-                try {
-                    socketClient.setGains(new float[]{1.0f, 1.0f, 1.0f});
-                } catch (Exception e) {
-                    logger.warn("[camera_awb] Could not reset gains: {}", e.getMessage());
-                }
-
                 // Run AWB -- server starts streaming, enables Continuous WB,
-                // monitors analog gains until stable, then sets WB to Off.
-                // This blocks until convergence (up to ~5s).
+                // waits for equilibration (~1.5s), stops streaming, then sets
+                // WB to Off. Internal AWB corrections persist after Off.
+                // NOTE: Do NOT reset analog gains before this -- the camera's
+                // AWB works through an internal processing pipeline, not through
+                // the analog gain registers.
                 socketClient.setWhiteBalanceMode(2);
                 logger.info("[camera_awb] Camera AWB calibration complete");
             }
