@@ -264,6 +264,18 @@ public class WBComparisonWorkflow {
             double bbX1, double bbY1, double bbX2, double bbY2
     ) throws Exception {
 
+        // Ensure camera AWB is off before starting any mode.
+        // camera_awb runs last (see WBComparisonDialog.selectedModes()), but this
+        // provides defense-in-depth in case Continuous wasn't properly deactivated.
+        if (!"camera_awb".equals(wbMode)) {
+            try {
+                socketClient.setWhiteBalanceMode(0); // Off
+                logger.info("[{}] Confirmed camera AWB is Off before starting mode", wbMode);
+            } catch (Exception e) {
+                logger.warn("[{}] Could not confirm AWB Off (non-fatal): {}", wbMode, e.getMessage());
+            }
+        }
+
         String wbFolderName = "wb_" + wbMode;
 
         // Build output paths for this mode

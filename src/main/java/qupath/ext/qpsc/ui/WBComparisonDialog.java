@@ -84,12 +84,17 @@ public class WBComparisonDialog {
             double overlapPercent, double targetIntensity,
             int afTiles, int afSteps, double afRange
     ) {
-        /** Returns the list of selected WB mode names. */
+        /**
+         * Returns the list of selected WB mode names.
+         * camera_awb runs LAST because it activates AWB Continuous on the camera,
+         * which can be difficult to deactivate reliably. Running it last prevents
+         * residual Continuous mode from corrupting other WB methods.
+         */
         public List<String> selectedModes() {
             List<String> modes = new ArrayList<>();
-            if (doCameraAWB) modes.add("camera_awb");
             if (doSimple) modes.add("simple");
             if (doPerAngle) modes.add("per_angle");
+            if (doCameraAWB) modes.add("camera_awb");
             return modes;
         }
     }
