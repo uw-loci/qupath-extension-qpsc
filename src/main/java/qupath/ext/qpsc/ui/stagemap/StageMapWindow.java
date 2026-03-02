@@ -854,6 +854,8 @@ public class StageMapWindow {
         // Try to get the macro image from any available source
         BufferedImage macroImage = MacroImageUtility.retrieveMacroImage(gui);
         String source;
+        boolean isSavedImage = false;
+        boolean isSavedRawFormat = false;
 
         if (macroImage != null) {
             source = "QuPath associated images";
@@ -861,19 +863,23 @@ public class StageMapWindow {
                     macroImage.getWidth(), macroImage.getHeight(), source);
         } else {
             // Flipped duplicate images don't expose the original's associated images.
-            // Fall back to saved _alignment.png (which is the raw macro saved as PNG).
+            // Fall back to saved _alignment.png.
             macroImage = AffineTransformManager.loadSavedMacroImage(project, sampleName);
             if (macroImage != null) {
                 source = "saved alignment image";
-                logger.info("Macro overlay: loaded saved alignment image ({}x{}) for '{}'",
-                        macroImage.getWidth(), macroImage.getHeight(), sampleName);
+                isSavedImage = true;
+                isSavedRawFormat = AffineTransformManager.isSavedMacroRawFormat(project, sampleName);
+                logger.info("Macro overlay: loaded saved alignment image ({}x{}) for '{}' (rawFormat={})",
+                        macroImage.getWidth(), macroImage.getHeight(), sampleName, isSavedRawFormat);
             } else {
                 logger.info("Macro overlay: no macro image available (no raw macro, no saved alignment)");
                 return null;
             }
         }
 
-        // Apply scanner-specific cropping if scanner name is known
+        // Apply scanner-specific cropping if scanner name is known.
+        // Saved images are already cropped; the double-crop guard in cropToSlideArea
+        // will detect matching dimensions and skip the crop.
         if (scannerName != null) {
             try {
                 MacroImageUtility.CroppedMacroResult cropped =
@@ -896,20 +902,33 @@ public class StageMapWindow {
         //
         // XOR the preference with axis inversion for each axis. On the PPM/single_h
         // insert both axes are inverted, and both flips are needed for correct visual
-        // orientation (equivalent to 180-degree rotation). If click-to-navigate maps
-        // to wrong positions, that is a separate screenToStage mapping issue.
+        // orientation (equivalent to 180-degree rotation).
         boolean prefFlipX = QPPreferenceDialog.getFlipMacroXProperty();
         boolean prefFlipY = QPPreferenceDialog.getFlipMacroYProperty();
         StageInsert insert = insertComboBox.getValue();
         boolean axisInvertedX = insert != null && insert.isXAxisInverted();
         boolean axisInvertedY = insert != null && insert.isYAxisInverted();
-        boolean flipX = prefFlipX ^ axisInvertedX;
-        boolean flipY = prefFlipY ^ axisInvertedY;
+
+        boolean flipX, flipY;
+        if (isSavedImage && !isSavedRawFormat) {
+            // Old-format saved alignment: preference flips are already baked into the PNG.
+            // Only apply axis inversion correction (which was NOT baked in).
+            flipX = axisInvertedX;
+            flipY = axisInvertedY;
+            logger.info("Macro overlay: old-format saved image, applying axis inversion only: ({}, {})",
+                    flipX, flipY);
+        } else {
+            // Raw macro (from associated images or new-format saved alignment):
+            // apply the full display flip.
+            flipX = prefFlipX ^ axisInvertedX;
+            flipY = prefFlipY ^ axisInvertedY;
+            logger.info("Macro overlay: prefFlip=({}, {}), axisInverted=({}, {}), effective flip=({}, {})",
+                    prefFlipX, prefFlipY, axisInvertedX, axisInvertedY, flipX, flipY);
+        }
+
         if (flipX || flipY) {
             macroImage = MacroImageUtility.flipMacroImage(macroImage, flipX, flipY);
         }
-        logger.info("Macro overlay: prefFlip=({}, {}), axisInverted=({}, {}), effective flip=({}, {})",
-                prefFlipX, prefFlipY, axisInvertedX, axisInvertedY, flipX, flipY);
 
         return macroImage;
     }

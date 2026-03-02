@@ -152,8 +152,6 @@ public class ExistingAlignmentPath {
             boolean isSavedImage = !MacroImageUtility.isMacroImageAvailable(gui);
 
             if (isSavedImage) {
-                logger.info("Using saved macro image - already cropped and flipped");
-                // Image is already processed, create dummy cropped result
                 MacroImageUtility.CroppedMacroResult croppedResult =
                         new MacroImageUtility.CroppedMacroResult(
                                 macroImage,
@@ -161,14 +159,39 @@ public class ExistingAlignmentPath {
                                 macroImage.getHeight(),
                                 0, 0
                         );
-                // The saved image is already flipped, so use it directly
-                return new MacroImageContext(croppedResult, macroImage, macroImage);
+
+                // Check if the saved image is in new raw format (no flips) or
+                // old format (preference flips baked in).
+                @SuppressWarnings("unchecked")
+                Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+                String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+                if (imageName != null) {
+                    imageName = qupath.lib.common.GeneralTools.stripExtension(imageName);
+                }
+                boolean isRawFormat = imageName != null
+                        && AffineTransformManager.isSavedMacroRawFormat(project, imageName);
+
+                if (isRawFormat) {
+                    // New format: image is raw cropped, no flips baked in.
+                    // Apply display flips for the alignment UI, save raw for downstream.
+                    logger.info("Using saved macro image (raw format) - applying display flips");
+                    BufferedImage displayImage = applyFlips(macroImage);
+                    return new MacroImageContext(croppedResult, displayImage, macroImage);
+                } else {
+                    // Old format: image has preference flips baked in.
+                    // Use directly for display (already flipped). Don't re-save the macro
+                    // (pass null) to preserve the existing PNG and avoid format confusion.
+                    logger.info("Using saved macro image (old format) - already flipped for display");
+                    return new MacroImageContext(croppedResult, macroImage, null);
+                }
             } else {
                 // Normal processing for fresh macro image
                 logger.info("Processing macro image from slide");
                 MacroImageUtility.CroppedMacroResult croppedResult = cropMacroImage(macroImage);
                 BufferedImage displayImage = applyFlips(croppedResult.getCroppedImage());
-                return new MacroImageContext(croppedResult, displayImage, displayImage);
+                // Save the raw cropped macro (no flips) so downstream consumers
+                // (Stage Map overlay) can apply their own display flips consistently.
+                return new MacroImageContext(croppedResult, displayImage, croppedResult.getCroppedImage());
             }
         });
     }
@@ -999,18 +1022,23 @@ public class ExistingAlignmentPath {
 
     /**
      * Context for macro image processing results.
+     *
+     * <p>{@code displayImage} has display flips applied (for alignment UI).
+     * {@code processedMacroImage} is the raw cropped macro without display flips,
+     * used for saving to {@code _alignment.png} so downstream consumers (Stage Map)
+     * can apply their own display flips consistently.
      */
     private static class MacroImageContext {
         final MacroImageUtility.CroppedMacroResult croppedResult;
         final BufferedImage displayImage;
-        final BufferedImage processedMacroImage;  // Add this
+        final BufferedImage processedMacroImage;
 
         MacroImageContext(MacroImageUtility.CroppedMacroResult croppedResult,
                           BufferedImage displayImage,
-                          BufferedImage processedMacroImage) {  // Add parameter
+                          BufferedImage processedMacroImage) {
             this.croppedResult = croppedResult;
             this.displayImage = displayImage;
-            this.processedMacroImage = processedMacroImage;  // Store it
+            this.processedMacroImage = processedMacroImage;
         }
     }
 

@@ -413,10 +413,11 @@ public class AffineTransformManager {
      *                 in the JSON file. May be null.
      * @param transform The affine transform mapping macro coordinates to stage coordinates. Must not be null.
      *                  The transform components are extracted and saved as a 6-element array.
-     * @param processedMacroImage The flipped and cropped macro image used for alignment. If not null,
+     * @param processedMacroImage The cropped macro image for alignment. If not null,
      *                            this image is saved as a PNG file alongside the alignment data.
-     *                            The image should already be processed (flipped/cropped) according to
-     *                            the scanner configuration.
+     *                            The image should be cropped according to the scanner configuration
+     *                            but NOT display-flipped, so downstream consumers (Stage Map overlay)
+     *                            can apply their own display flips consistently.
      *
      * @throws NullPointerException if project, sampleName, or transform is null
      * @throws IllegalStateException if the project path cannot be determined
@@ -463,6 +464,12 @@ public class AffineTransformManager {
                     transform.getTranslateX(),
                     transform.getTranslateY()
             });
+
+            // Mark that the saved macro image is in raw format (no display flips baked in).
+            // Old alignment files without this flag have preference flips baked into the PNG.
+            if (processedMacroImage != null) {
+                alignmentData.put("macroImageRaw", true);
+            }
 
             // Convert to JSON and save
             Gson gson = new GsonBuilder().setPrettyPrinting().create();
@@ -637,6 +644,42 @@ public class AffineTransformManager {
         }
 
         return null;
+    }
+
+    /**
+     * Checks whether the saved macro image for a slide alignment is in raw format
+     * (no display flips baked in). Files saved before this format change will not
+     * have the {@code macroImageRaw} flag and return {@code false}, meaning the
+     * saved PNG has preference flips baked in.
+     *
+     * @param project The QuPath project
+     * @param sampleName The sample name
+     * @return true if the saved macro is raw (no flips), false if old format or not found
+     */
+    public static boolean isSavedMacroRawFormat(Project<BufferedImage> project, String sampleName) {
+        try {
+            File projectDir = project.getPath().toFile().getParentFile();
+            File alignmentDir = new File(projectDir, "alignmentFiles");
+            if (!alignmentDir.exists()) {
+                return false;
+            }
+
+            File alignmentFile = new File(alignmentDir, sampleName + "_alignment.json");
+            if (!alignmentFile.exists()) {
+                return false;
+            }
+
+            String json = new String(Files.readAllBytes(alignmentFile.toPath()), StandardCharsets.UTF_8);
+            Gson gson = new Gson();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = gson.fromJson(json, Map.class);
+            Object rawFlag = data.get("macroImageRaw");
+            return rawFlag instanceof Boolean && (Boolean) rawFlag;
+
+        } catch (Exception e) {
+            logger.debug("Could not check macro format for '{}': {}", sampleName, e.getMessage());
+            return false;
+        }
     }
 
     /**
