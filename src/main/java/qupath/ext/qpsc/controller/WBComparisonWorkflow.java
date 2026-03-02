@@ -219,16 +219,21 @@ public class WBComparisonWorkflow {
             Map<String, String> results = new LinkedHashMap<>(); // mode -> "success" or error message
             int modeIndex = 1;
 
+            // Track the best focus Z found by any mode's autofocus.
+            // The first mode starts from tissueZ and may need to search far.
+            // Subsequent modes reuse the focus Z so AF starts near optimal.
+            double focusZ = params.tissueZ();
+
             for (String wbMode : modes) {
                 logger.info("=== Processing WB mode: {} ({}/{}) ===", wbMode, modeIndex, modes.size());
 
                 try {
-                    processMode(wbMode, modeIndex, params, socketClient, configPath, configManager,
+                    focusZ = processMode(wbMode, modeIndex, params, socketClient, configPath, configManager,
                             modality, objective, detector, pixelSize, modeWithIndex,
                             angleExposures, handler, project, tileConfigContent,
-                            bbX1, bbY1, bbX2, bbY2);
+                            bbX1, bbY1, bbX2, bbY2, focusZ);
                     results.put(wbMode, "success");
-                    logger.info("WB mode '{}' completed successfully", wbMode);
+                    logger.info("WB mode '{}' completed successfully (focusZ={})", wbMode, focusZ);
                 } catch (Exception e) {
                     logger.error("WB mode '{}' failed", wbMode, e);
                     results.put(wbMode, e.getMessage());
@@ -248,8 +253,16 @@ public class WBComparisonWorkflow {
 
     /**
      * Processes a single WB mode: calibrate -> background -> acquire -> stitch.
+     *
+     * @param focusZ Starting Z for acquisition (tissueZ for first mode, or
+     *               focus Z from previous mode's autofocus). Using the previous
+     *               mode's focus Z avoids the "peak at edge" AF failure that
+     *               occurs when tissueZ is far from optimal focus.
+     * @return The focus Z used/found during this mode's acquisition, for use
+     *         by the next mode. Returns focusZ unchanged if acquisition fails
+     *         before autofocus can run.
      */
-    private static void processMode(
+    private static double processMode(
             String wbMode, int modeIndex,
             WBComparisonDialog.WBComparisonParams params,
             MicroscopeSocketClient socketClient,
@@ -261,7 +274,8 @@ public class WBComparisonWorkflow {
             ModalityHandler handler,
             Project<BufferedImage> project,
             byte[] tileConfigContent,
-            double bbX1, double bbY1, double bbX2, double bbY2
+            double bbX1, double bbY1, double bbX2, double bbY2,
+            double focusZ
     ) throws Exception {
 
         // Ensure camera AWB is off before starting any mode.
@@ -329,10 +343,14 @@ public class WBComparisonWorkflow {
         }
 
         // --- 3c. ACQUIRE at tissue position ---
-        logger.info("[{}] Moving to tissue position ({}, {}, z={})", wbMode,
-                params.tissueX(), params.tissueY(), params.tissueZ());
+        // Use focusZ instead of tissueZ for subsequent modes. The first mode
+        // starts from tissueZ, and its autofocus finds the actual focus position.
+        // Subsequent modes reuse that focus Z so their AF sweeps are centered
+        // near optimal focus, avoiding "peak at edge" quality failures.
+        logger.info("[{}] Moving to tissue position ({}, {}, z={} [focusZ])", wbMode,
+                params.tissueX(), params.tissueY(), focusZ);
         socketClient.moveStageXY(params.tissueX(), params.tissueY());
-        socketClient.moveStageZ(params.tissueZ());
+        socketClient.moveStageZ(focusZ);
         Thread.sleep(1000); // settle after move
 
         // Copy TileConfiguration.txt to mode-specific bounds directory
@@ -399,11 +417,25 @@ public class WBComparisonWorkflow {
         }
         logger.info("[{}] Acquisition completed", wbMode);
 
+        // Capture the focus Z found by this mode's autofocus.
+        // The server leaves the stage at the last tile's Z position, which
+        // includes autofocus corrections. Pass this to the next mode so its
+        // AF starts near optimal focus instead of searching from tissueZ.
+        double newFocusZ = focusZ;
+        try {
+            newFocusZ = socketClient.getStageZ();
+            logger.info("[{}] Post-acquisition focus Z: {}", wbMode, newFocusZ);
+        } catch (Exception e) {
+            logger.warn("[{}] Could not read post-acquisition Z, keeping focusZ={}", wbMode, focusZ);
+        }
+
         // --- 3d. STITCH ---
         logger.info("[{}] Starting stitching", wbMode);
         stitchMode(wbMode, params, modeWithIndex, wbFolderName,
                 modeAngleExposures, pixelSize, handler, project);
         logger.info("[{}] Stitching completed", wbMode);
+
+        return newFocusZ;
     }
 
     /**
