@@ -72,6 +72,23 @@ Fully saturated images (median=255) gave 13.5% reduction per step.
 **Fix:** Two-part: (1) Load saved exposures from prior run as starting points, (2) Halve
 exposure when fully clipped (median >= 254) instead of proportional reduction.
 
+## Resolved Issues (2026-03-02 Autofocus Fix)
+
+### Issue 9: Per_angle autofocus consistently fails (FIXED)
+Per_angle AF failed with quality 0.44 (below 0.50 threshold) while simple (0.58) and camera_awb (0.51)
+passed. All three modes started from the same Z position, so the focusZ persistence fix (eba5037) was
+irrelevant.
+
+**Root cause**: Both AF blocks in workflow.py reset R/B analog gains to 1.0/1.0. The uncrossed (90-deg)
+calibration requires B analog gain ~2.86. Without this:
+- Simple mode compensated with higher exposure (0.69ms vs 0.49ms)
+- Camera_awb mode preserved AWB analog gains because `jai_calibration=None`
+- Per_angle mode had lowest exposure AND no B gain -> insufficient signal for focus metric
+
+**Fix**: Both AF blocks now extract uncrossed calibration analog gains from
+`jai_calibration["angles"]["uncrossed"]["gains"]` and apply those instead of 1.0.
+Also compensates AF exposure for unified_gain. Commit `27f9ba4` (microscope_command_server).
+
 ## Remaining Questions (for next test run)
 
 1. **Stitching**: Not yet tested. The scan type warning fix may have been blocking it.
@@ -117,6 +134,9 @@ exposure when fully clipped (median >= 254) instead of proportional reduction.
 - `28abdd9` - Add Z position support, fix missing stage move, fresh connection before acquire
 - `c716892` - Fix tile path missing scan_type subdirectory
 - (pending) - Auto-skip manual focus, use background WB coefficients, handle 2-part scan types
+
+### Autofocus Fix Commits (2026-03-02)
+- `27f9ba4` (microscope_command_server) - Apply uncrossed calibration analog gains during AF instead of 1.0
 
 ### AWB Fix Commits (2026-03-01)
 - `f8df128` (microscope_control) - AWB calibration exposure + consistent Off write

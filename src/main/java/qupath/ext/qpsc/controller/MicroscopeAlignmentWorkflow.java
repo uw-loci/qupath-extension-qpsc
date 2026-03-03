@@ -36,7 +36,7 @@ import java.util.concurrent.CompletableFuture;
  * <h3>Key Improvements:</h3>
  * <ul>
  *   <li>Early bounds detection before alignment</li>
- *   <li>Complete transform validation (macro→stage)</li>
+ *   <li>Complete transform validation (macro -&gt; stage)</li>
  *   <li>Ground truth validation support</li>
  *   <li>Proper scaling based on pixel size only</li>
  * </ul>

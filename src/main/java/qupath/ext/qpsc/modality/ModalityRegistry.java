@@ -4,6 +4,7 @@ import qupath.ext.qpsc.modality.ppm.PPMModalityHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -188,7 +189,7 @@ public final class ModalityRegistry {
      * 
      * <p><strong>Performance Considerations:</strong> The lookup operation has O(n) complexity where n
      * is the number of registered handlers, since it must iterate through all registered prefixes.
-     * For typical usage with a small number of modalities (< 10), this provides adequate performance.
+     * For typical usage with a small number of modalities (&lt; 10), this provides adequate performance.
      * Applications requiring high-performance lookups should consider caching results.</p>
      * 
      * @param modalityName the full modality identifier to look up (e.g., "ppm_20x", "fl_405_40x").
@@ -224,5 +225,17 @@ public final class ModalityRegistry {
         logger.warn("No registered handler found for modality '{}' - returning no-op handler. " +
                    "Registered prefixes: {}", modalityName, HANDLERS.keySet());
         return NO_OP;
+    }
+
+    /**
+     * Returns an unmodifiable view of all registered handlers.
+     *
+     * <p>Used for dynamic menu construction and other operations that need to
+     * iterate over all registered modalities.</p>
+     *
+     * @return unmodifiable map of prefix to handler
+     */
+    public static Map<String, ModalityHandler> getAllHandlers() {
+        return Collections.unmodifiableMap(HANDLERS);
     }
 }

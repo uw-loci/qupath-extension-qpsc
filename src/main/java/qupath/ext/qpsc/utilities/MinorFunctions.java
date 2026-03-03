@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
  * MinorFunctions
  *
  * <p>Miscellaneous small utilities:
- *   - Converting List<?> → List<Double> or double[] arrays.
+ *   - Converting {@code List<?>} to {@code List<Double>} or double[] arrays.
  *   - Regex helpers, string parsing, filename manipulation.
  *   - Anything too small to justify its own class.
  */

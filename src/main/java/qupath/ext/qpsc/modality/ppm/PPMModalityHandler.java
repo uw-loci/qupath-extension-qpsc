@@ -1,39 +1,42 @@
 package qupath.ext.qpsc.modality.ppm;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.modality.BackgroundValidationResult;
 import qupath.ext.qpsc.modality.ModalityHandler;
+import qupath.ext.qpsc.modality.ModalityMenuItem;
+import qupath.ext.qpsc.modality.ppm.ui.PPMAngleSelectionController;
 import qupath.ext.qpsc.modality.ppm.ui.PPMBoundingBoxUI;
+import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
+import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.lib.images.ImageData;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 /**
  * Modality handler for Polarized light Microscopy (PPM) multi-angle acquisition sequences.
- * 
+ *
  * <p>This handler manages PPM imaging workflows that require multiple polarizer rotation
  * angles with specific exposure times for each angle. PPM is commonly used for analyzing
  * birefringent materials, collagen organization, and other optically anisotropic structures.</p>
- * 
+ *
  * <p>The handler supports decimal exposure times for precise control of illumination duration
- * at each polarizer angle. Typical PPM sequences include crossed polarizers (0°), positive
- * and negative angles (±5°), and uncrossed polarizers (45°) with different exposure requirements.</p>
- * 
+ * at each polarizer angle. Typical PPM sequences include crossed polarizers (0 deg), positive
+ * and negative angles (+/-5 deg), and uncrossed polarizers (45 deg) with different exposure requirements.</p>
+ *
  * <p><strong>Key Features:</strong></p>
  * <ul>
  *   <li>Automatic angle sequence loading from microscope configuration</li>
  *   <li>Decimal precision exposure times (e.g., 1.2ms, 500.0ms, 0.8ms)</li>
  *   <li>User-customizable angle overrides via {@link PPMBoundingBoxUI}</li>
  *   <li>Integration with {@link RotationManager} for hardware-specific angle conversion</li>
+ *   <li>Post-processing directory discovery for birefringence and sum images</li>
+ *   <li>Background validation with angle-specific exposure mismatch detection</li>
+ *   <li>Dynamic menu contributions for PPM-specific calibration workflows</li>
  * </ul>
- * 
- * <p><strong>Angle Override Support:</strong><br>
- * Users can override the default plus and minus angles while preserving the original
- * exposure times. This is useful for optimizing imaging conditions for different samples.</p>
- * 
+ *
  * @author Mike Nelson
  * @since 1.0
  * @see qupath.ext.qpsc.modality.ModalityHandler
@@ -41,13 +44,16 @@ import java.util.concurrent.CompletableFuture;
  * @see RotationManager
  */
 public class PPMModalityHandler implements ModalityHandler {
+
+    private static final Logger logger = LoggerFactory.getLogger(PPMModalityHandler.class);
+
     /**
      * Retrieves PPM rotation angles and their associated decimal exposure times.
-     * 
+     *
      * <p>This method loads the PPM angle sequence from the microscope configuration
      * via {@link RotationManager}. The returned angles include both the hardware tick
      * values and precise decimal exposure times for each polarizer position.</p>
-     * 
+     *
      * @param modalityName the PPM modality identifier (e.g., "ppm_20x", "ppm_40x")
      * @param objective the objective ID for hardware-specific parameter lookup
      * @param detector the detector ID for hardware-specific parameter lookup
@@ -61,13 +67,6 @@ public class PPMModalityHandler implements ModalityHandler {
 
     /**
      * Returns BRIGHTFIELD_H_E as the preferred image type for PPM acquisitions.
-     *
-     * <p>PPM images are brightfield images captured at different polarization angles.
-     * While QuPath's auto-detection might incorrectly classify them as fluorescence
-     * (especially for images with dark backgrounds), PPM images should always be
-     * treated as brightfield H&E for proper color handling and analysis.</p>
-     *
-     * @return BRIGHTFIELD_H_E image type for all PPM acquisitions
      */
     @Override
     public Optional<ImageData.ImageType> getImageType() {
@@ -76,28 +75,18 @@ public class PPMModalityHandler implements ModalityHandler {
 
     /**
      * Creates the PPM-specific UI component for angle parameter customization.
-     *
-     * <p>Returns a {@link PPMBoundingBoxUI} that allows users to override the default
-     * plus and minus angles while preserving the original exposure times. This enables
-     * fine-tuning of polarization angles for different sample types.</p>
-     *
-     * @return a PPM bounding box UI component for angle override controls
      */
     @Override
-    public java.util.Optional<BoundingBoxUI> createBoundingBoxUI() {
-        return java.util.Optional.of(new PPMBoundingBoxUI());
+    public Optional<BoundingBoxUI> createBoundingBoxUI() {
+        return Optional.of(new PPMBoundingBoxUI());
     }
 
     /**
      * Applies user-specified angle overrides while preserving original decimal exposure times.
-     * 
-     * <p>This method enables users to customize the plus and minus polarizer angles while
-     * keeping the configured exposure times unchanged. The override map uses "plus" and "minus"
-     * keys to identify which angles to replace.</p>
-     * 
+     *
      * <p>Only positive and negative tick angles are subject to override; zero-degree (crossed)
      * and uncrossed angles retain their original values.</p>
-     * 
+     *
      * @param angles the original PPM angle-exposure sequence with decimal exposure times
      * @param overrides map containing "plus" and/or "minus" angle replacements
      * @return new angle sequence with overrides applied, preserving original exposures
@@ -120,5 +109,256 @@ public class PPMModalityHandler implements ModalityHandler {
             }
         }
         return adjusted;
+    }
+
+    // ========================================================================
+    // New ModalityHandler methods (Phase 2 - PPM extraction)
+    // ========================================================================
+
+    /**
+     * Loads PPM profile-specific exposure defaults for the given hardware configuration.
+     */
+    @Override
+    public void prepareForAcquisition(String modality, String objective, String detector) {
+        try {
+            PPMPreferences.loadExposuresForProfile(objective, detector);
+        } catch (Exception e) {
+            logger.warn("Failed to load PPM exposure defaults for {}/{}: {}",
+                    objective, detector, e.getMessage());
+        }
+    }
+
+    /**
+     * Returns rotation angles with overrides, showing the PPM angle selection dialog
+     * so the user can confirm or adjust the overridden values.
+     *
+     * <p>This override gets defaults (without dialog), applies overrides,
+     * then shows the PPMAngleSelectionController dialog with the overridden
+     * values pre-filled for user confirmation.</p>
+     */
+    @Override
+    public CompletableFuture<List<AngleExposure>> getRotationAnglesWithOverrides(
+            String modality, String objective, String detector,
+            Map<String, Double> overrides) {
+
+        if (overrides == null || overrides.isEmpty()) {
+            // No overrides -- use normal flow (which shows the dialog)
+            return getRotationAngles(modality, objective, detector);
+        }
+
+        // Get defaults without dialog, apply overrides, then show dialog with overridden values
+        RotationManager rotationManager = new RotationManager(modality, objective, detector);
+        return rotationManager.getDefaultAnglesWithExposure(modality)
+                .thenCompose(defaultAngles -> {
+                    List<AngleExposure> overriddenAngles = applyAngleOverrides(defaultAngles, overrides);
+
+                    // Extract overridden plus/minus/uncrossed angles for dialog initialization
+                    double plusAngle = 7.0, minusAngle = -7.0, uncrossedAngle = 90.0;
+                    for (AngleExposure ae : overriddenAngles) {
+                        if (ae.ticks() > 0 && ae.ticks() < 45) plusAngle = ae.ticks();
+                        else if (ae.ticks() < 0) minusAngle = ae.ticks();
+                        else if (ae.ticks() >= 45) uncrossedAngle = ae.ticks();
+                    }
+
+                    return PPMAngleSelectionController.showDialog(
+                            plusAngle, minusAngle, uncrossedAngle,
+                            modality, objective, detector)
+                            .thenApply(dialogResult -> {
+                                if (dialogResult == null) {
+                                    throw new RuntimeException("ANGLE_SELECTION_CANCELLED");
+                                }
+                                List<AngleExposure> finalAngles = new ArrayList<>();
+                                for (PPMAngleSelectionController.AngleExposure ae : dialogResult.angleExposures) {
+                                    finalAngles.add(new AngleExposure(ae.angle, ae.exposureMs));
+                                }
+                                return finalAngles;
+                            });
+                });
+    }
+
+    /**
+     * Returns post-processing directory suffixes for birefringence and sum images.
+     *
+     * <p>The Python acquisition side creates subdirectories ending with ".biref"
+     * and ".sum" containing computed birefringence and sum images. The stitching
+     * system scans for these directories and processes them as additional outputs.</p>
+     */
+    @Override
+    public List<String> getPostProcessingDirectorySuffixes() {
+        return List.of(".biref", ".sum");
+    }
+
+    /**
+     * Returns 4 as the default angle count for PPM (minus, zero, plus, uncrossed).
+     */
+    @Override
+    public int getDefaultAngleCount() {
+        return 4;
+    }
+
+    /**
+     * Validates background settings against the selected acquisition angles.
+     *
+     * <p>Compares background images' angle-exposure pairs against the user's
+     * acquisition angles. Reports missing backgrounds, exposure mismatches,
+     * and WB mode mismatches.</p>
+     */
+    @Override
+    public BackgroundValidationResult validateBackgroundSettings(
+            BackgroundSettingsReader.BackgroundSettings backgroundSettings,
+            List<AngleExposure> angles,
+            String wbMode) {
+
+        // Build maps from both sides
+        Map<Double, Double> userAngleMap = new LinkedHashMap<>();
+        for (AngleExposure ae : angles) {
+            userAngleMap.put(ae.ticks(), ae.exposureMs());
+        }
+
+        Map<Double, Double> bgAngleMap = new LinkedHashMap<>();
+        for (AngleExposure bgAe : backgroundSettings.angleExposures) {
+            bgAngleMap.put(bgAe.ticks(), bgAe.exposureMs());
+        }
+
+        // Find selected angles without background
+        Set<Double> anglesWithoutBackground = new HashSet<>();
+        for (Double userAngle : userAngleMap.keySet()) {
+            if (!bgAngleMap.containsKey(userAngle)) {
+                anglesWithoutBackground.add(userAngle);
+            }
+        }
+
+        // Find angles with exposure mismatches
+        Set<Double> anglesWithExposureMismatches = new HashSet<>();
+        double tolerance = 0.1;
+        for (Double angle : userAngleMap.keySet()) {
+            if (bgAngleMap.containsKey(angle)) {
+                double userExposure = userAngleMap.get(angle);
+                double bgExposure = bgAngleMap.get(angle);
+                if (Math.abs(userExposure - bgExposure) > tolerance) {
+                    anglesWithExposureMismatches.add(angle);
+                }
+            }
+        }
+
+        // Check WB mode mismatch
+        boolean wbModeMismatch = false;
+        String bgWbMode = backgroundSettings.wbMode;
+        if (wbMode != null && bgWbMode != null && !wbMode.equals(bgWbMode)) {
+            wbModeMismatch = true;
+        }
+
+        // Generate user-facing message
+        String userMessage = generateValidationMessage(
+                anglesWithoutBackground, anglesWithExposureMismatches,
+                userAngleMap, bgAngleMap, tolerance,
+                wbModeMismatch, bgWbMode, wbMode);
+
+        return new BackgroundValidationResult(
+                anglesWithoutBackground, anglesWithExposureMismatches,
+                wbModeMismatch, bgWbMode, wbMode, userMessage);
+    }
+
+    /**
+     * Returns the default exposure time for a PPM rotation angle from
+     * persistent user preferences.
+     *
+     * <p>Maps angle ranges to the four PPM preference slots: zero (crossed),
+     * positive, negative, and uncrossed.</p>
+     */
+    @Override
+    public double getDefaultExposureForAngle(double angle) {
+        if (Math.abs(angle - 0.0) < 0.001) {
+            return PPMPreferences.getZeroExposureMs();
+        } else if (angle > 0 && angle < 20) {
+            return PPMPreferences.getPlusExposureMs();
+        } else if (angle < 0 && angle > -20) {
+            return PPMPreferences.getMinusExposureMs();
+        } else if (angle >= 40 && angle <= 100) {
+            return PPMPreferences.getUncrossedExposureMs();
+        }
+        return -1;
+    }
+
+    /**
+     * Returns PPM-specific menu items for calibration and optimization workflows.
+     */
+    @Override
+    public List<ModalityMenuItem> getMenuContributions() {
+        return List.of(
+                new ModalityMenuItem("polarizerCalibration",
+                        "Polarizer Calibration (PPM)...",
+                        "Calibrate the polarizer rotation stage for polarized light microscopy (PPM). " +
+                        "Determines the correct rotation angles for optimal birefringence imaging.",
+                        () -> qupath.ext.qpsc.modality.ppm.workflow.PolarizerCalibrationWorkflow.run()),
+                new ModalityMenuItem("ppmSensitivityTest",
+                        "PPM Rotation Sensitivity Test...",
+                        "Test PPM rotation stage sensitivity by acquiring images at precise angles. " +
+                        "Analyzes the impact of angular deviations on image quality and birefringence calculations. " +
+                        "Provides comprehensive analysis reports for validation and optimization.",
+                        () -> qupath.ext.qpsc.modality.ppm.workflow.PPMSensitivityTestWorkflow.run()),
+                new ModalityMenuItem("birefringenceOptimization",
+                        "PPM Birefringence Optimization...",
+                        "Find the optimal polarizer angle for maximum birefringence signal contrast. " +
+                        "Systematically tests angles by acquiring paired images (+theta, -theta) and " +
+                        "computing their difference. Results include optimal angles, signal metrics, and " +
+                        "visualization plots. Supports multiple exposure modes (interpolate, calibrate, fixed).",
+                        () -> qupath.ext.qpsc.modality.ppm.workflow.BirefringenceOptimizationWorkflow.run()),
+                new ModalityMenuItem("sunburstCalibration",
+                        "PPM Reference Slide...",
+                        "Create a hue-to-angle calibration from a PPM reference slide with sunburst pattern. " +
+                        "Acquires an image of radial spokes and creates a linear regression mapping " +
+                        "hue values to orientation angles for use in PPM analysis.",
+                        () -> qupath.ext.qpsc.modality.ppm.workflow.SunburstCalibrationWorkflow.run())
+        );
+    }
+
+    // ========================================================================
+    // Private helpers
+    // ========================================================================
+
+    /**
+     * Generates a human-readable validation message for background issues.
+     */
+    private static String generateValidationMessage(
+            Set<Double> anglesWithoutBackground,
+            Set<Double> anglesWithExposureMismatches,
+            Map<Double, Double> userAngleMap,
+            Map<Double, Double> bgAngleMap,
+            double tolerance,
+            boolean wbModeMismatch,
+            String bgWbMode, String currentWbMode) {
+
+        StringBuilder info = new StringBuilder();
+
+        if (wbModeMismatch) {
+            info.append("  White balance mode mismatch:\n");
+            info.append(String.format("    Background collected with: %s\n", bgWbMode));
+            info.append(String.format("    Current acquisition mode:  %s\n", currentWbMode));
+            info.append("    -> Color cast may occur if WB modes differ between background and acquisition\n");
+        }
+
+        if (!anglesWithoutBackground.isEmpty()) {
+            info.append("  Selected angles without background images: ");
+            anglesWithoutBackground.forEach(angle -> info.append(String.format("%.1f ", angle)));
+            info.append("deg\n    -> Background correction will be DISABLED for these angles\n");
+        }
+
+        if (!anglesWithExposureMismatches.isEmpty()) {
+            info.append("  Exposure time mismatches (background correction will be DISABLED):\n");
+            for (Double angle : anglesWithExposureMismatches) {
+                double userExposure = userAngleMap.get(angle);
+                double bgExposure = bgAngleMap.get(angle);
+                double diff = Math.abs(userExposure - bgExposure);
+                info.append(String.format("    %.1f deg: selected %.1f ms vs background %.1f ms (diff: %.1f ms)\n",
+                        angle, userExposure, bgExposure, diff));
+            }
+        }
+
+        if (info.isEmpty()) {
+            info.append("  Background images exist for different angles than selected");
+        }
+
+        return info.toString();
     }
 }

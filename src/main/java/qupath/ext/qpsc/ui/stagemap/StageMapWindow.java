@@ -851,35 +851,32 @@ public class StageMapWindow {
             String sampleName,
             String scannerName) {
 
-        // Try to get the macro image from any available source
+        // Try to get the macro image from any available source.
+        // For flipped entries (TransformedServer), associated images are not exposed,
+        // so we trace back to the original entry and read its macro directly.
+        // This ensures both base and flipped images use the exact same raw macro.
         BufferedImage macroImage = MacroImageUtility.retrieveMacroImage(gui);
         String source;
-        boolean isSavedImage = false;
-        boolean isSavedRawFormat = false;
 
         if (macroImage != null) {
             source = "QuPath associated images";
             logger.info("Macro overlay: loaded raw macro ({}x{}) from {}",
                     macroImage.getWidth(), macroImage.getHeight(), source);
         } else {
-            // Flipped duplicate images don't expose the original's associated images.
-            // Fall back to saved _alignment.png.
-            macroImage = AffineTransformManager.loadSavedMacroImage(project, sampleName);
+            // Current image has no associated images (typical for flipped duplicates).
+            // Look up the original entry via metadata and load its macro.
+            macroImage = loadMacroFromOriginalEntry(gui, project);
             if (macroImage != null) {
-                source = "saved alignment image";
-                isSavedImage = true;
-                isSavedRawFormat = AffineTransformManager.isSavedMacroRawFormat(project, sampleName);
-                logger.info("Macro overlay: loaded saved alignment image ({}x{}) for '{}' (rawFormat={})",
-                        macroImage.getWidth(), macroImage.getHeight(), sampleName, isSavedRawFormat);
+                source = "original entry associated images";
+                logger.info("Macro overlay: loaded raw macro ({}x{}) from {}",
+                        macroImage.getWidth(), macroImage.getHeight(), source);
             } else {
-                logger.info("Macro overlay: no macro image available (no raw macro, no saved alignment)");
+                logger.info("Macro overlay: no macro image available");
                 return null;
             }
         }
 
         // Apply scanner-specific cropping if scanner name is known.
-        // Saved images are already cropped; the double-crop guard in cropToSlideArea
-        // will detect matching dimensions and skip the crop.
         if (scannerName != null) {
             try {
                 MacroImageUtility.CroppedMacroResult cropped =
@@ -894,12 +891,7 @@ public class StageMapWindow {
         }
 
         // Apply flip for Stage Map display.
-        // The macro overlay is placed at the slide rectangle in insert-relative screen
-        // space. The slide rectangle position uses fixed insert-relative offsets that do
-        // not change with axis inversion. However, when an axis is inverted the physical
-        // slide edge that corresponds to a given screen edge is reversed, so the macro
-        // image needs to be mirrored to match the screen layout.
-        //
+        // The macro is always raw (from associated images, either current or original entry).
         // XOR the preference with axis inversion for each axis. On the PPM/single_h
         // insert both axes are inverted, and both flips are needed for correct visual
         // orientation (equivalent to 180-degree rotation).
@@ -909,28 +901,124 @@ public class StageMapWindow {
         boolean axisInvertedX = insert != null && insert.isXAxisInverted();
         boolean axisInvertedY = insert != null && insert.isYAxisInverted();
 
-        boolean flipX, flipY;
-        if (isSavedImage && !isSavedRawFormat) {
-            // Old-format saved alignment: preference flips are already baked into the PNG.
-            // Only apply axis inversion correction (which was NOT baked in).
-            flipX = axisInvertedX;
-            flipY = axisInvertedY;
-            logger.info("Macro overlay: old-format saved image, applying axis inversion only: ({}, {})",
-                    flipX, flipY);
-        } else {
-            // Raw macro (from associated images or new-format saved alignment):
-            // apply the full display flip.
-            flipX = prefFlipX ^ axisInvertedX;
-            flipY = prefFlipY ^ axisInvertedY;
-            logger.info("Macro overlay: prefFlip=({}, {}), axisInverted=({}, {}), effective flip=({}, {})",
-                    prefFlipX, prefFlipY, axisInvertedX, axisInvertedY, flipX, flipY);
-        }
+        boolean flipX = prefFlipX ^ axisInvertedX;
+        boolean flipY = prefFlipY ^ axisInvertedY;
+        logger.info("Macro overlay: prefFlip=({}, {}), axisInverted=({}, {}), effective flip=({}, {})",
+                prefFlipX, prefFlipY, axisInvertedX, axisInvertedY, flipX, flipY);
 
         if (flipX || flipY) {
             macroImage = MacroImageUtility.flipMacroImage(macroImage, flipX, flipY);
         }
 
         return macroImage;
+    }
+
+    /**
+     * Loads the raw macro image by tracing the current entry's metadata chain
+     * back to the base (source) image that has associated images.
+     *
+     * <p>This handles flipped duplicates, sub-acquisitions, and any other derived
+     * image entries that trace back to an original slide scan. The lookup uses:
+     * <ol>
+     *   <li>{@code base_image} metadata - the root source image name (covers all derived images)</li>
+     *   <li>{@code original_image_id} metadata - direct parent for flipped entries</li>
+     * </ol>
+     *
+     * @param gui     The QuPath GUI instance
+     * @param project The current project
+     * @return The raw macro image from the source entry, or null if not found
+     */
+    private BufferedImage loadMacroFromOriginalEntry(QuPathGUI gui, Project<BufferedImage> project) {
+        ImageData<BufferedImage> imageData = gui.getImageData();
+        if (imageData == null || project == null) {
+            return null;
+        }
+
+        ProjectImageEntry<BufferedImage> currentEntry = project.getEntry(imageData);
+        if (currentEntry == null) {
+            return null;
+        }
+
+        // Strategy 1: Use base_image metadata (covers flipped entries AND sub-acquisitions)
+        String baseImageName = ImageMetadataManager.getBaseImage(currentEntry);
+        if (baseImageName != null && !baseImageName.isEmpty()) {
+            logger.info("Macro overlay: tracing base_image='{}' for current entry", baseImageName);
+            BufferedImage macro = findMacroByImageName(project, baseImageName);
+            if (macro != null) {
+                return macro;
+            }
+        }
+
+        // Strategy 2: Use original_image_id (direct parent for flipped entries)
+        String originalId = ImageMetadataManager.getOriginalImageId(currentEntry);
+        if (originalId != null) {
+            logger.info("Macro overlay: tracing original_image_id='{}' for current entry", originalId);
+            for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
+                if (originalId.equals(entry.getID())) {
+                    BufferedImage macro = readMacroFromEntry(entry);
+                    if (macro != null) {
+                        return macro;
+                    }
+                    // The original might itself be derived; check its base_image
+                    String origBase = ImageMetadataManager.getBaseImage(entry);
+                    if (origBase != null && !origBase.isEmpty()) {
+                        macro = findMacroByImageName(project, origBase);
+                        if (macro != null) {
+                            return macro;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        logger.debug("Macro overlay: no source entry with macro found for current image");
+        return null;
+    }
+
+    /**
+     * Finds an entry by image name (with or without extension) and reads its macro.
+     */
+    private BufferedImage findMacroByImageName(Project<BufferedImage> project, String targetName) {
+        for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
+            String entryName = entry.getImageName();
+            String strippedName = qupath.lib.common.GeneralTools.stripExtension(entryName);
+            if (targetName.equals(entryName) || targetName.equals(strippedName)) {
+                BufferedImage macro = readMacroFromEntry(entry);
+                if (macro != null) {
+                    logger.info("Macro overlay: loaded raw macro ({}x{}) from entry '{}'",
+                            macro.getWidth(), macro.getHeight(), entryName);
+                    return macro;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Reads the macro associated image from a project entry.
+     */
+    private BufferedImage readMacroFromEntry(ProjectImageEntry<BufferedImage> entry) {
+        try {
+            ImageData<BufferedImage> data = entry.readImageData();
+            var server = data.getServer();
+            var associatedList = server.getAssociatedImageList();
+            if (associatedList == null) {
+                return null;
+            }
+            for (String name : associatedList) {
+                if (name.toLowerCase().contains("macro")) {
+                    Object image = server.getAssociatedImage(name);
+                    if (image instanceof BufferedImage macro) {
+                        return macro;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Macro overlay: failed to read macro from entry '{}': {}",
+                    entry.getImageName(), e.getMessage());
+        }
+        return null;
     }
 
     /**

@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
  * MicroscopeConfigManager
  *
  * <p>Singleton for loading and querying your microscope YAML configuration:
- *   - Parses nested YAML into a Map<String,Object>.
+ *   - Parses nested YAML into a {@code Map<String,Object>}.
  *   - Offers type safe getters (getDouble, getSection, getList, etc.).
  *   - Validates required keys and reports missing paths.
  *   - Supports new acquisition profile format with defaults and specific profiles
@@ -472,7 +472,7 @@ public class MicroscopeConfigManager {
      * Retrieves a nested Map section from the config or resources.
      *
      * @param keys Sequence of keys.
-     * @return Map<String,Object> or null.
+     * @return {@code Map<String,Object>} or null.
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> getSection(String... keys) {
@@ -904,17 +904,6 @@ public class MicroscopeConfigManager {
 
         logger.debug("No rotation angles found for {}", modality);
         return new ArrayList<>();
-    }
-
-    /**
-     * Check if a modality uses PPM (polarized light) rotation.
-     */
-    public boolean isPPMModality(String modality) {
-        if (modality != null && modality.toLowerCase().startsWith("ppm")) {
-            return true;
-        }
-        List<Map<String, Object>> angles = getRotationAngles(modality);
-        return !angles.isEmpty();
     }
 
     // ========== EXISTING METHODS THAT REMAIN UNCHANGED ==========

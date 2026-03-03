@@ -50,7 +50,7 @@ public class TileProcessingUtilities {
 
     /**
      * Stitches all tiles under the given imaging mode folder into one or more OME TIFF files,
-     * renames them to include sample, mode and annotation/angle information, then imports & opens
+     * renames them to include sample, mode and annotation/angle information, then imports and opens
      * them in the given QuPath project (respecting X/Y inversion preferences).
      *
      * <p><b>Directory Structure:</b> The method expects tiles to be organized as:

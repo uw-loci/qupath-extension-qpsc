@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.controller;
+package qupath.ext.qpsc.modality.ppm.workflow;
 
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.ui.BirefringenceOptimizationDialog;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;

@@ -22,6 +22,8 @@ import qupath.lib.gui.extensions.QuPathExtension;
 import java.io.IOException;
 import java.util.Set;
 import java.util.ResourceBundle;
+import qupath.ext.qpsc.modality.ModalityMenuItem;
+import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 
@@ -254,66 +256,6 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 			}
 		});
 
-		// Polarizer calibration (PPM only)
-		MenuItem polarizerCalibrationOption = new MenuItem(res.getString("menu.polarizerCalibration"));
-		polarizerCalibrationOption.setDisable(!configValid);
-		setMenuItemTooltip(polarizerCalibrationOption,
-				"Calibrate the polarizer rotation stage for polarized light microscopy (PPM). " +
-				"Determines the correct rotation angles for optimal birefringence imaging.");
-		polarizerCalibrationOption.setOnAction(e -> {
-			try {
-				QPScopeController.getInstance().startWorkflow("polarizerCalibration");
-			} catch (IOException ex) {
-				throw new RuntimeException(ex);
-			}
-		});
-
-		// PPM Rotation Sensitivity Test
-		MenuItem ppmSensitivityTestOption = new MenuItem(res.getString("menu.ppmSensitivityTest"));
-		ppmSensitivityTestOption.setDisable(!configValid);
-		setMenuItemTooltip(ppmSensitivityTestOption,
-				"Test PPM rotation stage sensitivity by acquiring images at precise angles. " +
-				"Analyzes the impact of angular deviations on image quality and birefringence calculations. " +
-				"Provides comprehensive analysis reports for validation and optimization.");
-		ppmSensitivityTestOption.setOnAction(e -> {
-			try {
-				QPScopeController.getInstance().startWorkflow("ppmSensitivityTest");
-			} catch (IOException ex) {
-				throw new RuntimeException(ex);
-			}
-		});
-
-		// PPM Birefringence Optimization
-		MenuItem birefringenceOptimizationOption = new MenuItem(res.getString("menu.birefringenceOptimization"));
-		birefringenceOptimizationOption.setDisable(!configValid);
-		setMenuItemTooltip(birefringenceOptimizationOption,
-				"Find the optimal polarizer angle for maximum birefringence signal contrast. " +
-				"Systematically tests angles by acquiring paired images (+theta, -theta) and " +
-				"computing their difference. Results include optimal angles, signal metrics, and " +
-				"visualization plots. Supports multiple exposure modes (interpolate, calibrate, fixed).");
-		birefringenceOptimizationOption.setOnAction(e -> {
-			try {
-				QPScopeController.getInstance().startWorkflow("birefringenceOptimization");
-			} catch (IOException ex) {
-				throw new RuntimeException(ex);
-			}
-		});
-
-		// PPM Reference Slide (Hue-to-Angle calibration using sunburst pattern)
-		MenuItem ppmReferenceSlideOption = new MenuItem(res.getString("menu.ppmReferenceSlide"));
-		ppmReferenceSlideOption.setDisable(!configValid);
-		setMenuItemTooltip(ppmReferenceSlideOption,
-				"Create a hue-to-angle calibration from a PPM reference slide with sunburst pattern. " +
-				"Acquires an image of radial spokes and creates a linear regression mapping " +
-				"hue values to orientation angles for use in PPM analysis.");
-		ppmReferenceSlideOption.setOnAction(e -> {
-			try {
-				QPScopeController.getInstance().startWorkflow("sunburstCalibration");
-			} catch (IOException ex) {
-				throw new RuntimeException(ex);
-			}
-		});
-
 		// Autofocus settings editor
 		MenuItem autofocusEditorOption = new MenuItem(res.getString("menu.autofocusEditor"));
 		autofocusEditorOption.setDisable(!configValid);
@@ -399,15 +341,29 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 				new SeparatorMenuItem(),
 				// Autofocus tools
 				autofocusEditorOption,
-				autofocusBenchmarkOption,
+				autofocusBenchmarkOption
+		);
+
+		// Add modality-specific menu items dynamically from registered handlers
+		for (var entry : ModalityRegistry.getAllHandlers().entrySet()) {
+			var contributions = entry.getValue().getMenuContributions();
+			if (!contributions.isEmpty()) {
+				utilitiesMenu.getItems().add(new SeparatorMenuItem());
+				for (var item : contributions) {
+					MenuItem menuItem = new MenuItem(item.label());
+					menuItem.setDisable(!configValid);
+					if (item.tooltip() != null) {
+						setMenuItemTooltip(menuItem, item.tooltip());
+					}
+					menuItem.setOnAction(e -> item.action().run());
+					utilitiesMenu.getItems().add(menuItem);
+				}
+			}
+		}
+
+		// Server settings (always last)
+		utilitiesMenu.getItems().addAll(
 				new SeparatorMenuItem(),
-				// PPM-specific tools
-				polarizerCalibrationOption,
-				ppmSensitivityTestOption,
-				birefringenceOptimizationOption,
-				ppmReferenceSlideOption,
-				new SeparatorMenuItem(),
-				// Server settings
 				serverConnectionOption
 		);
 

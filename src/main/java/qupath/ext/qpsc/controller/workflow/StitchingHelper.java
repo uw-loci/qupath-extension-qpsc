@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
+import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.ext.qpsc.ui.DualProgressDialog;
@@ -334,158 +335,11 @@ public class StitchingHelper {
                     
                     logger.info("Completed processing {} angles. Successfully stitched {} images.", angleExposures.size(), stitchedImages.size());
                     
-                    // Process birefringence image if it exists
-                    if (blockingDialog != null) {
-                        blockingDialog.updateStatus(operationId, "Checking for birefringence results for " + annotationName + "...");
-                    }
-
-                    // Scan for any birefringence directory (ends with .biref)
-                    String birefAngleStr = null;
-                    Path birefPath = null;
-
-                    try {
-                        if (Files.exists(tileBaseDir)) {
-                            birefPath = Files.list(tileBaseDir)
-                                    .filter(Files::isDirectory)
-                                    .filter(path -> path.getFileName().toString().endsWith(".biref"))
-                                    .findFirst()
-                                    .orElse(null);
-
-                            if (birefPath != null) {
-                                birefAngleStr = birefPath.getFileName().toString();
-                                logger.info("Found birefringence directory: {}", birefAngleStr);
-                            }
-                        }
-                    } catch (IOException e) {
-                        logger.warn("Could not scan for birefringence directories: {}", e.getMessage());
-                    }
-
-                    logger.info("Checking for birefringence directory at: {}", birefPath);
-                    logger.info("Birefringence directory exists: {}", birefPath != null && Files.exists(birefPath));
-
-                    if (birefPath != null && Files.exists(birefPath)) {
-                        logger.info("Found birefringence directory: {}", birefPath);
-                        
-                        // Log directory contents to understand what's inside
-                        try {
-                            long fileCount = Files.list(birefPath).count();
-                            logger.info("Birefringence directory contains {} files", fileCount);
-                            logger.debug("Birefringence directory contents:");
-                            Files.list(birefPath).forEach(path -> logger.debug("  - {}", path));
-                        } catch (IOException e) {
-                            logger.warn("Could not list birefringence directory contents: {}", e.getMessage());
-                        }
-
-                        if (blockingDialog != null) {
-                            blockingDialog.updateStatus(operationId, "Processing birefringence image for " + annotationName + "...");
-                        }
-                        
-                        try {
-                            logger.info("Starting birefringence isolation processing for angle string: {}", birefAngleStr);
-                            String birefOutPath = processAngleWithIsolation(
-                                    tileBaseDir, birefAngleStr,
-                                    projectsFolder, sampleName,
-                                    modeWithIndex, annotationName,
-                                    compression, pixelSize, stitchingConfig.downsampleFactor(),
-                                    gui, project, handler, stitchParams
-                            );
-                            
-                            if (birefOutPath != null) {
-                                stitchedImages.add(birefOutPath);
-                                logger.info("Successfully processed birefringence image - output: {}", birefOutPath);
-                            } else {
-                                logger.error("Birefringence processing returned null output path");
-                            }
-                        } catch (Exception e) {
-                            logger.error("Failed to stitch birefringence image for angle {}: {}", birefAngleStr, e.getMessage(), e);
-                        }
-                    } else {
-                        logger.info("No birefringence directory found at: {}", birefPath);
-                        
-                        // Log what directories DO exist to help debug
-                        try {
-                            if (Files.exists(tileBaseDir)) {
-                                long dirCount = Files.list(tileBaseDir).filter(Files::isDirectory).count();
-                                logger.debug("Available directories in tile base ({}): {}", tileBaseDir, dirCount);
-                                Files.list(tileBaseDir)
-                                     .filter(Files::isDirectory)
-                                     .forEach(path -> logger.debug("  - {}", path.getFileName()));
-                            } else {
-                                logger.warn("Tile base directory does not exist: {}", tileBaseDir);
-                            }
-                        } catch (IOException e) {
-                            logger.warn("Could not list tile base directory: {}", e.getMessage());
-                        }
-                    }
-
-                    // Process sum image if it exists
-                    if (blockingDialog != null) {
-                        blockingDialog.updateStatus(operationId, "Checking for sum results for " + annotationName + "...");
-                    }
-
-                    // Scan for any sum directory (ends with .sum)
-                    String sumAngleStr = null;
-                    Path sumPath = null;
-
-                    try {
-                        if (Files.exists(tileBaseDir)) {
-                            sumPath = Files.list(tileBaseDir)
-                                    .filter(Files::isDirectory)
-                                    .filter(path -> path.getFileName().toString().endsWith(".sum"))
-                                    .findFirst()
-                                    .orElse(null);
-
-                            if (sumPath != null) {
-                                sumAngleStr = sumPath.getFileName().toString();
-                                logger.info("Found sum directory: {}", sumAngleStr);
-                            }
-                        }
-                    } catch (IOException e) {
-                        logger.warn("Could not scan for sum directories: {}", e.getMessage());
-                    }
-
-                    logger.info("Checking for sum directory at: {}", sumPath);
-                    logger.info("Sum directory exists: {}", sumPath != null && Files.exists(sumPath));
-
-                    if (sumPath != null && Files.exists(sumPath)) {
-                        logger.info("Found sum directory: {}", sumPath);
-
-                        // Log directory contents to understand what's inside
-                        try {
-                            long fileCount = Files.list(sumPath).count();
-                            logger.info("Sum directory contains {} files", fileCount);
-                            logger.debug("Sum directory contents:");
-                            Files.list(sumPath).forEach(path -> logger.debug("  - {}", path));
-                        } catch (IOException e) {
-                            logger.warn("Could not list sum directory contents: {}", e.getMessage());
-                        }
-
-                        if (blockingDialog != null) {
-                            blockingDialog.updateStatus(operationId, "Processing sum image for " + annotationName + "...");
-                        }
-
-                        try {
-                            logger.info("Starting sum isolation processing for angle string: {}", sumAngleStr);
-                            String sumOutPath = processAngleWithIsolation(
-                                    tileBaseDir, sumAngleStr,
-                                    projectsFolder, sampleName,
-                                    modeWithIndex, annotationName,
-                                    compression, pixelSize, stitchingConfig.downsampleFactor(),
-                                    gui, project, handler, stitchParams
-                            );
-
-                            if (sumOutPath != null) {
-                                stitchedImages.add(sumOutPath);
-                                logger.info("Successfully processed sum image - output: {}", sumOutPath);
-                            } else {
-                                logger.error("Sum processing returned null output path");
-                            }
-                        } catch (Exception e) {
-                            logger.error("Failed to stitch sum image for angle {}: {}", sumAngleStr, e.getMessage(), e);
-                        }
-                    } else {
-                        logger.info("No sum directory found at: {}", sumPath);
-                    }
+                    // Process modality-specific post-processing directories (e.g., biref, sum)
+                    processPostProcessingDirectories(handler, tileBaseDir, annotationName,
+                            projectsFolder, sampleName, modeWithIndex,
+                            compression, pixelSize, stitchingConfig.downsampleFactor(),
+                            gui, project, stitchParams, blockingDialog, operationId, stitchedImages);
 
                     // Return path of last successfully processed image
                     String outPath = stitchedImages.isEmpty() ? null : stitchedImages.get(stitchedImages.size() - 1);
@@ -493,7 +347,7 @@ public class StitchingHelper {
                     logger.info("Batch stitching completed for {}, output: {}",
                             annotationName, outPath);
 
-                    // Complete the blocking dialog now that ALL angles/biref/sum are processed
+                    // Complete the blocking dialog now that ALL angles/post-processing are done
                     if (blockingDialog != null) {
                         logger.info("Completing stitching dialog operation after all images processed");
                         blockingDialog.completeOperation(operationId);
@@ -769,158 +623,11 @@ public class StitchingHelper {
                     
                     logger.info("Completed processing {} angles. Successfully stitched {} images.", angleExposures.size(), stitchedImages.size());
 
-                    // Process birefringence image if it exists
-                    if (blockingDialog != null) {
-                        blockingDialog.updateStatus(operationId, "Checking for birefringence results for " + regionName + "...");
-                    }
-
-                    // Scan for any birefringence directory (ends with .biref)
-                    String birefAngleStr = null;
-                    Path birefPath = null;
-
-                    try {
-                        if (Files.exists(tileBaseDir)) {
-                            birefPath = Files.list(tileBaseDir)
-                                    .filter(Files::isDirectory)
-                                    .filter(path -> path.getFileName().toString().endsWith(".biref"))
-                                    .findFirst()
-                                    .orElse(null);
-
-                            if (birefPath != null) {
-                                birefAngleStr = birefPath.getFileName().toString();
-                                logger.info("Found birefringence directory: {}", birefAngleStr);
-                            }
-                        }
-                    } catch (IOException e) {
-                        logger.warn("Could not scan for birefringence directories: {}", e.getMessage());
-                    }
-
-                    logger.info("Checking for birefringence directory at: {}", birefPath);
-                    logger.info("Birefringence directory exists: {}", birefPath != null && Files.exists(birefPath));
-
-                    if (birefPath != null && Files.exists(birefPath)) {
-                        logger.info("Found birefringence directory: {}", birefPath);
-                        
-                        // Log directory contents to understand what's inside
-                        try {
-                            long fileCount = Files.list(birefPath).count();
-                            logger.info("Birefringence directory contains {} files", fileCount);
-                            logger.debug("Birefringence directory contents:");
-                            Files.list(birefPath).forEach(path -> logger.debug("  - {}", path));
-                        } catch (IOException e) {
-                            logger.warn("Could not list birefringence directory contents: {}", e.getMessage());
-                        }
-
-                        if (blockingDialog != null) {
-                            blockingDialog.updateStatus(operationId, "Processing birefringence image for " + regionName + "...");
-                        }
-                        
-                        try {
-                            logger.info("Starting birefringence isolation processing for angle string: {}", birefAngleStr);
-                            String birefOutPath = processAngleWithIsolation(
-                                    tileBaseDir, birefAngleStr,
-                                    projectsFolder, sampleName,
-                                    modeWithIndex, regionName,
-                                    compression, pixelSize, stitchingConfig.downsampleFactor(),
-                                    gui, project, handler, stitchParams
-                            );
-
-                            if (birefOutPath != null) {
-                                stitchedImages.add(birefOutPath);
-                                logger.info("Successfully processed birefringence image - output: {}", birefOutPath);
-                            } else {
-                                logger.error("Birefringence processing returned null output path");
-                            }
-                        } catch (Exception e) {
-                            logger.error("Failed to stitch birefringence image for angle {}: {}", birefAngleStr, e.getMessage(), e);
-                        }
-                    } else {
-                        logger.info("No birefringence directory found at: {}", birefPath);
-                        
-                        // Log what directories DO exist to help debug
-                        try {
-                            if (Files.exists(tileBaseDir)) {
-                                long dirCount = Files.list(tileBaseDir).filter(Files::isDirectory).count();
-                                logger.debug("Available directories in tile base ({}): {}", tileBaseDir, dirCount);
-                                Files.list(tileBaseDir)
-                                     .filter(Files::isDirectory)
-                                     .forEach(path -> logger.debug("  - {}", path.getFileName()));
-                            } else {
-                                logger.warn("Tile base directory does not exist: {}", tileBaseDir);
-                            }
-                        } catch (IOException e) {
-                            logger.warn("Could not list tile base directory: {}", e.getMessage());
-                        }
-                    }
-
-                    // Process sum image if it exists
-                    if (blockingDialog != null) {
-                        blockingDialog.updateStatus(operationId, "Checking for sum results for " + regionName + "...");
-                    }
-
-                    // Scan for any sum directory (ends with .sum)
-                    String sumAngleStr = null;
-                    Path sumPath = null;
-
-                    try {
-                        if (Files.exists(tileBaseDir)) {
-                            sumPath = Files.list(tileBaseDir)
-                                    .filter(Files::isDirectory)
-                                    .filter(path -> path.getFileName().toString().endsWith(".sum"))
-                                    .findFirst()
-                                    .orElse(null);
-
-                            if (sumPath != null) {
-                                sumAngleStr = sumPath.getFileName().toString();
-                                logger.info("Found sum directory: {}", sumAngleStr);
-                            }
-                        }
-                    } catch (IOException e) {
-                        logger.warn("Could not scan for sum directories: {}", e.getMessage());
-                    }
-
-                    logger.info("Checking for sum directory at: {}", sumPath);
-                    logger.info("Sum directory exists: {}", sumPath != null && Files.exists(sumPath));
-
-                    if (sumPath != null && Files.exists(sumPath)) {
-                        logger.info("Found sum directory: {}", sumPath);
-
-                        // Log directory contents to understand what's inside
-                        try {
-                            long fileCount = Files.list(sumPath).count();
-                            logger.info("Sum directory contains {} files", fileCount);
-                            logger.debug("Sum directory contents:");
-                            Files.list(sumPath).forEach(path -> logger.debug("  - {}", path));
-                        } catch (IOException e) {
-                            logger.warn("Could not list sum directory contents: {}", e.getMessage());
-                        }
-
-                        if (blockingDialog != null) {
-                            blockingDialog.updateStatus(operationId, "Processing sum image for " + regionName + "...");
-                        }
-
-                        try {
-                            logger.info("Starting sum isolation processing for angle string: {}", sumAngleStr);
-                            String sumOutPath = processAngleWithIsolation(
-                                    tileBaseDir, sumAngleStr,
-                                    projectsFolder, sampleName,
-                                    modeWithIndex, regionName,
-                                    compression, pixelSize, stitchingConfig.downsampleFactor(),
-                                    gui, project, handler, stitchParams
-                            );
-
-                            if (sumOutPath != null) {
-                                stitchedImages.add(sumOutPath);
-                                logger.info("Successfully processed sum image - output: {}", sumOutPath);
-                            } else {
-                                logger.error("Sum processing returned null output path");
-                            }
-                        } catch (Exception e) {
-                            logger.error("Failed to stitch sum image for angle {}: {}", sumAngleStr, e.getMessage(), e);
-                        }
-                    } else {
-                        logger.info("No sum directory found at: {}", sumPath);
-                    }
+                    // Process modality-specific post-processing directories (e.g., biref, sum)
+                    processPostProcessingDirectories(handler, tileBaseDir, regionName,
+                            projectsFolder, sampleName, modeWithIndex,
+                            compression, pixelSize, stitchingConfig.downsampleFactor(),
+                            gui, project, stitchParams, blockingDialog, operationId, stitchedImages);
 
                     // Return path of last successfully processed image
                     String outPath = stitchedImages.isEmpty() ? null : stitchedImages.get(stitchedImages.size() - 1);
@@ -928,7 +635,7 @@ public class StitchingHelper {
                     logger.info("Batch stitching completed for {}, output: {}",
                             regionName, outPath);
 
-                    // Complete the blocking dialog now that ALL angles/biref/sum are processed
+                    // Complete the blocking dialog now that ALL angles/post-processing are done
                     if (blockingDialog != null) {
                         logger.info("Completing stitching dialog operation after all images processed");
                         blockingDialog.completeOperation(operationId);
@@ -1186,6 +893,125 @@ public class StitchingHelper {
                 // Log the current state for debugging
                 logger.error("Current state - tempAngleDir exists: {}, tempIsolationDir exists: {}, originalAngleDir exists: {}", 
                     Files.exists(tempAngleDir), Files.exists(tempIsolationDir), Files.exists(angleDir));
+            }
+        }
+    }
+
+    /**
+     * Scans for and processes modality-specific post-processing directories.
+     *
+     * <p>After all angle directories are stitched, this method checks for additional
+     * output directories created by the Python acquisition side (e.g., birefringence
+     * and sum images for PPM). The suffixes to scan for are provided by the modality
+     * handler via {@link ModalityHandler#getPostProcessingDirectorySuffixes()}.</p>
+     *
+     * @param handler          the modality handler providing directory suffixes
+     * @param tileBaseDir      base directory containing angle subdirectories
+     * @param regionName       name of the region/annotation being processed
+     * @param projectsFolder   projects folder path
+     * @param sampleName       sample name
+     * @param modeWithIndex    imaging mode with index
+     * @param compression      compression type for output
+     * @param pixelSize        pixel size in microns
+     * @param downsampleFactor downsample factor
+     * @param gui              QuPath GUI
+     * @param project          QuPath project
+     * @param stitchParams     stitching parameters
+     * @param blockingDialog   optional blocking dialog for status updates
+     * @param operationId      operation ID for dialog progress tracking
+     * @param stitchedImages   list to append successfully stitched image paths to
+     */
+    private static void processPostProcessingDirectories(
+            ModalityHandler handler,
+            Path tileBaseDir,
+            String regionName,
+            String projectsFolder,
+            String sampleName,
+            String modeWithIndex,
+            String compression,
+            double pixelSize,
+            int downsampleFactor,
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            Map<String, Object> stitchParams,
+            StitchingBlockingDialog blockingDialog,
+            String operationId,
+            List<String> stitchedImages) {
+
+        List<String> suffixes = handler.getPostProcessingDirectorySuffixes();
+        if (suffixes.isEmpty()) {
+            return;
+        }
+
+        for (String suffix : suffixes) {
+            String suffixLabel = suffix.startsWith(".") ? suffix.substring(1) : suffix;
+
+            if (blockingDialog != null) {
+                blockingDialog.updateStatus(operationId,
+                        "Checking for " + suffixLabel + " results for " + regionName + "...");
+            }
+
+            // Scan for directory ending with this suffix
+            String extraAngleStr = null;
+            Path extraPath = null;
+
+            try {
+                if (Files.exists(tileBaseDir)) {
+                    extraPath = Files.list(tileBaseDir)
+                            .filter(Files::isDirectory)
+                            .filter(path -> path.getFileName().toString().endsWith(suffix))
+                            .findFirst()
+                            .orElse(null);
+
+                    if (extraPath != null) {
+                        extraAngleStr = extraPath.getFileName().toString();
+                        logger.info("Found {} directory: {}", suffixLabel, extraAngleStr);
+                    }
+                }
+            } catch (IOException e) {
+                logger.warn("Could not scan for {} directories: {}", suffixLabel, e.getMessage());
+            }
+
+            if (extraPath != null && Files.exists(extraPath)) {
+                logger.info("Found {} directory: {}", suffixLabel, extraPath);
+
+                // Log directory contents
+                try {
+                    long fileCount = Files.list(extraPath).count();
+                    logger.info("{} directory contains {} files", suffixLabel, fileCount);
+                    logger.debug("{} directory contents:", suffixLabel);
+                    Files.list(extraPath).forEach(path -> logger.debug("  - {}", path));
+                } catch (IOException e) {
+                    logger.warn("Could not list {} directory contents: {}", suffixLabel, e.getMessage());
+                }
+
+                if (blockingDialog != null) {
+                    blockingDialog.updateStatus(operationId,
+                            "Processing " + suffixLabel + " image for " + regionName + "...");
+                }
+
+                try {
+                    logger.info("Starting {} isolation processing for angle string: {}", suffixLabel, extraAngleStr);
+                    String outPath = processAngleWithIsolation(
+                            tileBaseDir, extraAngleStr,
+                            projectsFolder, sampleName,
+                            modeWithIndex, regionName,
+                            compression, pixelSize, downsampleFactor,
+                            gui, project, handler, stitchParams
+                    );
+
+                    if (outPath != null) {
+                        stitchedImages.add(outPath);
+                        logger.info("Successfully processed {} image - output: {}", suffixLabel, outPath);
+                    } else {
+                        logger.error("{} processing returned null output path", suffixLabel);
+                    }
+                } catch (Exception e) {
+                    logger.error("Failed to stitch {} image for angle {}: {}",
+                            suffixLabel, extraAngleStr, e.getMessage(), e);
+                }
+            } else {
+                logger.info("No {} directory found in {}", suffixLabel, tileBaseDir);
             }
         }
     }

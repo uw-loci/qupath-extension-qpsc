@@ -5,6 +5,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import javafx.scene.Node;
+import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
+import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 
 /**
  * Core extensibility interface for the QPSC modality plugin system.
@@ -202,7 +204,7 @@ public interface ModalityHandler {
      * but modalities may override this to provide more intuitive naming conventions.
      * Common patterns include:</p>
      * <ul>
-     *   <li><strong>Sign prefixes:</strong> "p45" for +45°, "m45" for -45°</li>
+     *   <li><strong>Sign prefixes:</strong> "p45" for +45 deg, "m45" for -45 deg</li>
      *   <li><strong>Degree symbols:</strong> "45deg", "90deg"</li>
      *   <li><strong>Ordinal naming:</strong> "angle1", "angle2" for sequence position</li>
      *   <li><strong>Descriptive names:</strong> "parallel", "perpendicular" for specific angles</li>
@@ -223,6 +225,135 @@ public interface ModalityHandler {
      */
     default String getAngleSuffix(double angle) {
         return String.valueOf(angle);
+    }
+
+    // ========================================================================
+    // New extensibility methods (Phase 1 - PPM extraction)
+    // All have default implementations so existing handlers are unaffected.
+    // ========================================================================
+
+    /**
+     * Pre-acquisition hook for loading modality-specific profile defaults.
+     *
+     * <p>Called before angle resolution to let the modality load exposure defaults
+     * or other profile-specific settings for the given hardware configuration.
+     * The default implementation is a no-op.</p>
+     *
+     * @param modality  the modality identifier (e.g., "ppm_20x")
+     * @param objective the objective ID for hardware-specific lookup
+     * @param detector  the detector ID for hardware-specific lookup
+     */
+    default void prepareForAcquisition(String modality, String objective, String detector) {
+        // Default: no-op
+    }
+
+    /**
+     * Returns rotation angles with user-provided overrides applied, optionally
+     * showing a modality-specific confirmation dialog.
+     *
+     * <p>The default implementation gets angles via {@link #getRotationAngles},
+     * then applies overrides via {@link #applyAngleOverrides}. Modalities that
+     * need an interactive confirmation step (e.g., showing a dialog with the
+     * overridden values pre-filled) should override this method.</p>
+     *
+     * @param modality  the modality identifier
+     * @param objective the objective ID
+     * @param detector  the detector ID
+     * @param overrides user-provided angle overrides (may be null or empty)
+     * @return future containing the final angle-exposure list
+     */
+    default CompletableFuture<List<AngleExposure>> getRotationAnglesWithOverrides(
+            String modality, String objective, String detector,
+            Map<String, Double> overrides) {
+        return getRotationAngles(modality, objective, detector)
+                .thenApply(angles -> overrides != null && !overrides.isEmpty()
+                        ? applyAngleOverrides(angles, overrides) : angles);
+    }
+
+    /**
+     * Returns directory suffixes for post-processing outputs created by the
+     * Python acquisition side.
+     *
+     * <p>During stitching, the system scans the tile base directory for
+     * subdirectories ending with these suffixes and stitches them as additional
+     * output images. For example, PPM returns {@code [".biref", ".sum"]}.</p>
+     *
+     * @return list of directory suffixes (e.g., ".biref", ".sum"). Empty list if none.
+     */
+    default List<String> getPostProcessingDirectorySuffixes() {
+        return List.of();
+    }
+
+    /**
+     * Returns the default number of angles for time/storage estimates in the UI.
+     *
+     * <p>Used by the acquisition preview to estimate total images, time, and storage
+     * before the actual angle selection dialog is shown.</p>
+     *
+     * @return default angle count (1 for single-angle modalities, 4 for PPM, etc.)
+     */
+    default int getDefaultAngleCount() {
+        return 1;
+    }
+
+    /**
+     * Allows the modality to configure its own processing pipeline flags on
+     * the command builder.
+     *
+     * <p>Called during command construction to let the modality set
+     * modality-specific flags (debayer, processing pipeline, etc.).
+     * The default implementation is a no-op.</p>
+     *
+     * @param builder the command builder to configure
+     */
+    default void configureCommandBuilder(AcquisitionCommandBuilder builder) {
+        // Default: no modality-specific configuration
+    }
+
+    /**
+     * Validates background correction settings against the selected acquisition angles.
+     *
+     * <p>Returns a result indicating which angles lack background images and which
+     * have exposure mismatches. The default implementation returns an empty result
+     * (no issues).</p>
+     *
+     * @param backgroundSettings the existing background settings to validate against
+     * @param angles             the user's selected angle-exposure pairs
+     * @param wbMode             the current white balance mode (null to skip WB check)
+     * @return validation result with any issues found
+     */
+    default BackgroundValidationResult validateBackgroundSettings(
+            BackgroundSettingsReader.BackgroundSettings backgroundSettings,
+            List<AngleExposure> angles,
+            String wbMode) {
+        return BackgroundValidationResult.EMPTY;
+    }
+
+    /**
+     * Returns modality-specific menu items for the QPSC menu.
+     *
+     * <p>These items are added dynamically to the Utilities submenu during
+     * extension setup. Each item specifies an id, label, tooltip, and action.</p>
+     *
+     * @return list of menu item descriptors. Empty list if no menu contributions.
+     */
+    default List<ModalityMenuItem> getMenuContributions() {
+        return List.of();
+    }
+
+    /**
+     * Returns the default exposure time for a given rotation angle from
+     * modality-specific persistent preferences.
+     *
+     * <p>Used by the background collection controller as a fallback when
+     * no exposure is found in the configuration file. Multi-angle modalities
+     * typically store per-angle exposure defaults in user preferences.</p>
+     *
+     * @param angle the rotation angle in ticks/degrees
+     * @return the default exposure in milliseconds, or -1 if no default is available
+     */
+    default double getDefaultExposureForAngle(double angle) {
+        return -1;
     }
 
     /**

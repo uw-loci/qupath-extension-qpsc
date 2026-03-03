@@ -19,7 +19,7 @@ import qupath.ext.qpsc.ui.ServerConnectionController;
  * <ul>
  *   <li>Routes menu selections to appropriate workflow implementations</li>
  *   <li>Presents dialogs and gathers user input (bounding box, sample name, modality)</li>
- *   <li>Drives the complete imaging pipeline sequence (tiling → acquisition → stitching)</li>
+ *   <li>Drives the complete imaging pipeline sequence (tiling -&gt; acquisition -&gt; stitching)</li>
  *   <li>Delegates low-level calls to MicroscopeController and utility functions</li>
  *   <li>Maintains UI responsiveness with progress tracking and cancellation handling</li>
  * </ul>
@@ -155,18 +155,9 @@ public class QPScopeController {
                 logger.debug("Launching background collection workflow");
                 BackgroundCollectionWorkflow.run();
             }
-            case "polarizerCalibration" -> {
-                logger.debug("Launching polarizer calibration workflow");
-                PolarizerCalibrationWorkflow.run();
-            }
-            case "birefringenceOptimization" -> {
-                logger.debug("Launching birefringence optimization workflow");
-                BirefringenceOptimizationWorkflow.run();
-            }
-            case "sunburstCalibration" -> {
-                logger.debug("Launching sunburst calibration workflow");
-                SunburstCalibrationWorkflow.run();
-            }
+            // PPM workflows (polarizerCalibration, birefringenceOptimization,
+            // sunburstCalibration, ppmSensitivityTest) are now registered dynamically
+            // via PPMModalityHandler.getMenuContributions() -- no case statements needed
             case "autofocusEditor" -> {
                 logger.debug("Launching autofocus settings editor");
                 AutofocusEditorWorkflow.run();
@@ -175,10 +166,7 @@ public class QPScopeController {
                 logger.debug("Launching autofocus parameter benchmark");
                 AutofocusBenchmarkWorkflow.run();
             }
-            case "ppmSensitivityTest" -> {
-                logger.debug("Launching PPM rotation sensitivity test");
-                PPMSensitivityTestWorkflow.run();
-            }
+            // ppmSensitivityTest -- handled via dynamic menu registration
             case "whiteBalance" -> {
                 logger.debug("Launching white balance calibration workflow");
                 WhiteBalanceWorkflow.run();

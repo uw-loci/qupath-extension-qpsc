@@ -959,12 +959,9 @@ public class UnifiedAcquisitionController {
                 int tilesY = (int) Math.ceil(paddedHeight / stepY);
                 int totalTiles = tilesX * tilesY;
 
-                // Get angle count from modality - use sensible defaults for preview
-                // PPM typically has 4 angles, other modalities have 1
-                int angleCount = 1;
-                if ("ppm".equalsIgnoreCase(modality)) {
-                    angleCount = 4;  // PPM default: minus, zero, plus, uncrossed
-                }
+                // Get angle count from modality handler for preview estimation
+                int angleCount = qupath.ext.qpsc.modality.ModalityRegistry.getHandler(modality)
+                        .getDefaultAngleCount();
 
                 int totalImages = totalTiles * angleCount;
 

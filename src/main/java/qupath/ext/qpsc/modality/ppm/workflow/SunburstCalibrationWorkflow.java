@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.controller;
+package qupath.ext.qpsc.modality.ppm.workflow;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.ui.CalibrationResultDialog;
 import qupath.ext.qpsc.ui.CalibrationResultDialog.CalibrationResultData;
 import qupath.ext.qpsc.ui.SunburstCalibrationDialog;

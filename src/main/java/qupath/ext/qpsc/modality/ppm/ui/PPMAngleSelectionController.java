@@ -127,7 +127,7 @@ public class PPMAngleSelectionController {
      * 
      * <p>The exposure time input fields support decimal values (e.g., 1.2, 0.5, 15.8) and
      * are validated to ensure positive values. Default exposure times are determined using
-     * priority order: background image settings → config file → persistent preferences.</p>
+     * priority order: background image settings -&gt; config file -&gt; persistent preferences.</p>
      * 
      * <p>The dialog includes convenience buttons for \"Select All\" and \"Select None\" to
      * quickly configure common acquisition patterns.</p>

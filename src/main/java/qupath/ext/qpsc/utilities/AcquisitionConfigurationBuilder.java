@@ -3,9 +3,11 @@ package qupath.ext.qpsc.utilities;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.modality.BackgroundValidationResult;
+import qupath.ext.qpsc.modality.ModalityHandler;
+import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.ui.SampleSetupController;
-import qupath.ext.qpsc.modality.ppm.ui.PPMAngleSelectionController;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -158,14 +160,9 @@ public class AcquisitionConfigurationBuilder {
                     BackgroundSettingsReader.findBackgroundSettings(bgBaseFolder, baseModality, objective, detector, wbMode);
 
                 if (backgroundSettings != null) {
-                    // Convert to PPMAngleSelectionController.AngleExposure format
-                    List<PPMAngleSelectionController.AngleExposure> ppmAngleExposures = new ArrayList<>();
-                    for (AngleExposure ae : angleExposures) {
-                        ppmAngleExposures.add(new PPMAngleSelectionController.AngleExposure(ae.ticks(), ae.exposureMs()));
-                    }
-
-                    PPMAngleSelectionController.BackgroundValidationResult validation =
-                        PPMAngleSelectionController.validateBackgroundSettings(backgroundSettings, ppmAngleExposures, wbMode);
+                    ModalityHandler handler = ModalityRegistry.getHandler(baseModality);
+                    BackgroundValidationResult validation =
+                            handler.validateBackgroundSettings(backgroundSettings, angleExposures, wbMode);
 
                     // Combine angles without background and angles with exposure mismatches
                     disabledAngles.addAll(validation.anglesWithoutBackground);

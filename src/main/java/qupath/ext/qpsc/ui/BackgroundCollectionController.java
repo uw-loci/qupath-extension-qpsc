@@ -15,7 +15,6 @@ import qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.BackgroundCollect
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
-import qupath.ext.qpsc.modality.ppm.PPMPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
@@ -392,14 +391,15 @@ public class BackgroundCollectionController {
                 currentAngleExposures.clear();
                 currentAngleExposures.addAll(exposuresToUse);
                 
-                // Create exposure controls with angle editing for PPM
+                // Create exposure controls with angle editing for multi-angle modalities
+                boolean isMultiAngle = exposuresToUse.size() > 1;
                 GridPane exposureGrid = new GridPane();
                 exposureGrid.setHgap(10);
                 exposureGrid.setVgap(5);
 
-                // Add headers for PPM modality
-                if ("ppm".equals(modality)) {
-                    Label angleHeader = new Label("Angle (°):");
+                // Add headers for multi-angle modalities
+                if (isMultiAngle) {
+                    Label angleHeader = new Label("Angle (deg):");
                     angleHeader.setStyle("-fx-font-weight: bold;");
                     Label exposureHeader = new Label("Exposure:");
                     exposureHeader.setStyle("-fx-font-weight: bold;");
@@ -413,15 +413,15 @@ public class BackgroundCollectionController {
                 for (int i = 0; i < exposuresToUse.size(); i++) {
                     AngleExposure ae = exposuresToUse.get(i);
                     final int index = i;
-                    int gridRow = "ppm".equals(modality) ? i + 1 : i; // Offset for header row in PPM
+                    int gridRow = isMultiAngle ? i + 1 : i; // Offset for header row
 
-                    if ("ppm".equals(modality)) {
-                        // For PPM: Editable angle field + exposure field + angle type label
+                    if (isMultiAngle) {
+                        // Multi-angle: Editable angle field + exposure field + angle type label
                         TextField angleField = new TextField(String.format("%.1f", ae.ticks()));
                         angleField.setPrefWidth(80);
                         TextField exposureField = new TextField(String.valueOf(ae.exposureMs()));
                         exposureField.setPrefWidth(100);
-                        Label angleTypeLabel = new Label(getPPMAngleTypeName(ae.ticks()));
+                        Label angleTypeLabel = new Label(getAngleTypeName(ae.ticks()));
                         angleTypeLabel.setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
 
                         // Update current values when user changes angle
@@ -433,7 +433,7 @@ public class BackgroundCollectionController {
                                     currentAngleExposures.set(index, new AngleExposure(newAngle, oldAe.exposureMs()));
 
                                     // Update angle type label
-                                    Platform.runLater(() -> angleTypeLabel.setText(getPPMAngleTypeName(newAngle)));
+                                    Platform.runLater(() -> angleTypeLabel.setText(getAngleTypeName(newAngle)));
                                 }
                             } catch (IllegalArgumentException e) {
                                 // Invalid input (unparseable or out of range), ignore during typing
@@ -465,8 +465,8 @@ public class BackgroundCollectionController {
                         angleFields.add(angleField);
 
                     } else {
-                        // For other modalities: Fixed angle label + exposure field (original behavior)
-                        Label angleLabel = new Label(String.format("%.1f°:", ae.ticks()));
+                        // Single-angle: Fixed angle label + exposure field
+                        Label angleLabel = new Label(String.format("%.1f deg:", ae.ticks()));
                         TextField exposureField = new TextField(String.valueOf(ae.exposureMs()));
                         exposureField.setPrefWidth(100);
 
@@ -611,8 +611,8 @@ public class BackgroundCollectionController {
                     double exposure = Double.parseDouble(exposureFields.get(i).getText());
                     double angle;
 
-                    // For PPM, read angle from angle field; for others, use current stored angle
-                    if ("ppm".equals(modality) && i < angleFields.size()) {
+                    // For multi-angle modalities, read angle from editable field; for others, use stored angle
+                    if (!angleFields.isEmpty() && i < angleFields.size()) {
                         angle = Double.parseDouble(angleFields.get(i).getText());
                     } else {
                         angle = currentAngleExposures.get(i).ticks();
@@ -655,32 +655,37 @@ public class BackgroundCollectionController {
         CompletableFuture<List<AngleExposure>> future = new CompletableFuture<>();
 
         try {
-            if ("ppm".equals(modality)) {
-                // For PPM, get default angles and pair with preference-prioritized exposures
-                List<AngleExposure> defaults = new ArrayList<>();
+            ModalityHandler handler = ModalityRegistry.getHandler(modality);
 
-                // Standard PPM angles - these should be configurable in the dialog
-                double[] angles = {-7.0, 0.0, 7.0, 90.0}; // minus, zero, plus, uncrossed
+            // For multi-angle modalities, load profile-specific defaults first
+            handler.prepareForAcquisition(modality, objective, detector);
 
-                for (double angle : angles) {
-                    double exposure = getBackgroundExposureDefault(angle, modality, objective, detector);
-                    defaults.add(new AngleExposure(angle, exposure));
-                }
-
-                future.complete(defaults);
+            if (handler.getDefaultAngleCount() > 1) {
+                // Multi-angle modality: get default angles and pair with config-prioritized exposures
+                // Use getDefaultAnglesWithExposure via the handler's normal flow but without dialog
+                handler.getRotationAngles(modality, objective, detector)
+                    .thenApply(angles -> {
+                        // Override exposures with background collection defaults from config
+                        List<AngleExposure> defaults = new ArrayList<>();
+                        for (AngleExposure ae : angles) {
+                            double exposure = getBackgroundExposureDefault(ae.ticks(), modality, objective, detector);
+                            defaults.add(new AngleExposure(ae.ticks(), exposure));
+                        }
+                        return defaults;
+                    })
+                    .thenAccept(future::complete)
+                    .exceptionally(ex -> {
+                        future.completeExceptionally(ex);
+                        return null;
+                    });
             } else {
-                // For other modalities, fall back to normal handler method
-                ModalityHandler handler = ModalityRegistry.getHandler(modality);
-                if (handler != null) {
-                    handler.getRotationAngles(modality, objective, detector)
-                        .thenAccept(future::complete)
-                        .exceptionally(ex -> {
-                            future.completeExceptionally(ex);
-                            return null;
-                        });
-                } else {
-                    future.completeExceptionally(new RuntimeException("No handler found for modality: " + modality));
-                }
+                // Single-angle modality: use handler's normal angle retrieval
+                handler.getRotationAngles(modality, objective, detector)
+                    .thenAccept(future::complete)
+                    .exceptionally(ex -> {
+                        future.completeExceptionally(ex);
+                        return null;
+                    });
             }
         } catch (Exception e) {
             future.completeExceptionally(e);
@@ -749,9 +754,10 @@ public class BackgroundCollectionController {
 
         // Priority 2: Check persistent preferences as fallback (only if per-angle WB is NOT enabled)
         // When per-angle WB is enabled, we want to use calibrated values, not generic preferences
-        if ("ppm".equals(modality) && !perAngleWbEnabled) {
+        ModalityHandler bgHandler = ModalityRegistry.getHandler(modality);
+        if (bgHandler.getDefaultAngleCount() > 1 && !perAngleWbEnabled) {
             try {
-                double preferencesValue = getPersistentPreferenceExposure(angle);
+                double preferencesValue = bgHandler.getDefaultExposureForAngle(angle);
                 if (preferencesValue > 0) {
                     logger.info("Using persistent preferences exposure time for background collection angle {}: {}ms", angle, preferencesValue);
                     return preferencesValue;
@@ -784,28 +790,11 @@ public class BackgroundCollectionController {
         return new String[]{String.valueOf(angle)};
     }
 
-    /**
-     * Get exposure time from persistent preferences for a given angle.
-     */
-    private double getPersistentPreferenceExposure(double angle) {
-        if (Math.abs(angle - 0.0) < 0.001) {
-            return PPMPreferences.getZeroExposureMs();
-        } else if (angle > 0 && angle < 20) {
-            return PPMPreferences.getPlusExposureMs();
-        } else if (angle < 0 && angle > -20) {
-            return PPMPreferences.getMinusExposureMs();
-        } else if (angle >= 40 && angle <= 100) {
-            return PPMPreferences.getUncrossedExposureMs();
-        }
-
-        // Default fallback
-        return 1.0;
-    }
 
     /**
      * Get a descriptive name for a PPM angle type.
      */
-    private String getPPMAngleTypeName(double angle) {
+    private String getAngleTypeName(double angle) {
         if (Math.abs(angle - 0.0) < 0.001) {
             return "crossed";
         } else if (angle > 0 && angle < 45) {

@@ -11,7 +11,7 @@ plugins {
 qupathExtension {
     name = "qupath-extension-qpsc"
     group = "io.github.uw-loci"
-    version = "0.3.0"
+    version = "0.3.1"
     description = "A QuPath extension to allow interaction with a microscope through PycroManager and MicroManager."
     automaticModule = "io.github.uw-loci.extension.qpsc"
 }
@@ -69,8 +69,8 @@ dependencies {
     testImplementation("org.openjfx:javafx-base:$javafxVersion")
     testImplementation("org.openjfx:javafx-graphics:$javafxVersion")
     testImplementation("org.openjfx:javafx-controls:$javafxVersion")
-    testImplementation("org.mockito:mockito-core:5.2.0")
-    testImplementation("org.mockito:mockito-junit-jupiter:5.2.0")
+    testImplementation("org.mockito:mockito-core:5.14.2")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.14.2")
 }
 
 //TODO remove before release
@@ -81,8 +81,19 @@ tasks.withType<JavaCompile> {
 }
 tasks.test {
     useJUnitPlatform()
-    jvmArgs = listOf(
-        "--add-modules", "javafx.base,javafx.graphics,javafx.controls",
-        "--add-opens", "javafx.graphics/javafx.stage=ALL-UNNAMED"
-    )
+    // Move JavaFX JARs from classpath to module path so --add-modules can find them.
+    // Temurin JDK (used in CI) does not bundle JavaFX, so the modules are only available
+    // as dependency JARs which Gradle places on the classpath by default.
+    doFirst {
+        val cp = classpath.files
+        val fxJars = cp.filter { it.name.startsWith("javafx-") }
+        if (fxJars.isNotEmpty()) {
+            classpath = files(cp - fxJars)
+            jvmArgs(
+                "--module-path", fxJars.joinToString(File.pathSeparator),
+                "--add-modules", "javafx.base,javafx.graphics,javafx.controls",
+                "--add-opens", "javafx.graphics/javafx.stage=ALL-UNNAMED"
+            )
+        }
+    }
 }

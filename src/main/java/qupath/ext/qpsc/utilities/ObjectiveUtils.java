@@ -23,9 +23,9 @@ public class ObjectiveUtils {
      * 
      * <p>This method handles various objective naming formats including:
      * <ul>
-     *   <li>LOCI_OBJECTIVE_OLYMPUS_20X_POL_001 → "20x"</li>
-     *   <li>LOCI_OBJECTIVE_OLYMPUS_10X_001 → "10x"</li>
-     *   <li>LOCI_OBJECTIVE_NIKON_4X_002 → "4x"</li>
+     *   <li>LOCI_OBJECTIVE_OLYMPUS_20X_POL_001 -&gt; "20x"</li>
+     *   <li>LOCI_OBJECTIVE_OLYMPUS_10X_001 -&gt; "10x"</li>
+     *   <li>LOCI_OBJECTIVE_NIKON_4X_002 -&gt; "4x"</li>
      * </ul>
      * 
      * @param objectiveIdentifier The objective identifier string

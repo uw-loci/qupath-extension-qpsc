@@ -5,6 +5,8 @@ import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.AngleResolutionService;
+import qupath.ext.qpsc.service.ManualFocusHandler;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UnifiedAcquisitionController;
@@ -221,69 +223,15 @@ public class BoundedAcquisitionWorkflow {
                         return;
                     }
 
-                    // Get rotation angles for the modality
                     ModalityHandler modalityHandler = ModalityRegistry.getHandler(result.modality());
-
-                    // Load profile-specific exposure defaults for PPM
-                    if ("ppm".equals(result.modality())) {
-                        try {
-                            qupath.ext.qpsc.modality.ppm.PPMPreferences.loadExposuresForProfile(
-                                    result.objective(), result.detector());
-                        } catch (Exception e) {
-                            logger.warn("Failed to load PPM exposure defaults: {}", e.getMessage());
-                        }
-                    }
 
                     double finalWSI_pixelSize_um = WSI_pixelSize_um;
 
-                    // Handle angle overrides
-                    CompletableFuture<List<qupath.ext.qpsc.modality.AngleExposure>> anglesFuture;
-                    if (result.angleOverrides() != null && !result.angleOverrides().isEmpty()
-                            && "ppm".equals(result.modality())) {
-                        // PPM with overrides
-                        qupath.ext.qpsc.modality.ppm.RotationManager rotationManager =
-                                new qupath.ext.qpsc.modality.ppm.RotationManager(
-                                        result.modality(), result.objective(), result.detector());
-
-                        anglesFuture = rotationManager.getDefaultAnglesWithExposure(result.modality())
-                                .thenCompose(defaultAngles -> {
-                                    List<qupath.ext.qpsc.modality.AngleExposure> overriddenAngles =
-                                            modalityHandler.applyAngleOverrides(defaultAngles, result.angleOverrides());
-
-                                    double plusAngle = 7.0, minusAngle = -7.0, uncrossedAngle = 90.0;
-                                    for (qupath.ext.qpsc.modality.AngleExposure ae : overriddenAngles) {
-                                        if (ae.ticks() > 0 && ae.ticks() < 45) plusAngle = ae.ticks();
-                                        else if (ae.ticks() < 0) minusAngle = ae.ticks();
-                                        else if (ae.ticks() >= 45) uncrossedAngle = ae.ticks();
-                                    }
-
-                                    return qupath.ext.qpsc.modality.ppm.ui.PPMAngleSelectionController.showDialog(
-                                            plusAngle, minusAngle, uncrossedAngle,
-                                            result.modality(), result.objective(), result.detector())
-                                            .thenApply(dialogResult -> {
-                                                if (dialogResult == null) {
-                                                    throw new RuntimeException("ANGLE_SELECTION_CANCELLED");
-                                                }
-                                                List<qupath.ext.qpsc.modality.AngleExposure> finalAngles = new ArrayList<>();
-                                                for (var ae : dialogResult.angleExposures) {
-                                                    finalAngles.add(new qupath.ext.qpsc.modality.AngleExposure(
-                                                            ae.angle, ae.exposureMs));
-                                                }
-                                                return finalAngles;
-                                            });
-                                });
-                    } else {
-                        // Normal flow
-                        anglesFuture = modalityHandler.getRotationAngles(
-                                result.modality(), result.objective(), result.detector())
-                                .thenApply(angleExposures -> {
-                                    if (result.angleOverrides() != null && !result.angleOverrides().isEmpty()) {
-                                        return modalityHandler.applyAngleOverrides(
-                                                angleExposures, result.angleOverrides());
-                                    }
-                                    return angleExposures;
-                                });
-                    }
+                    // Resolve angles via shared service (prepares handler + applies overrides)
+                    CompletableFuture<List<qupath.ext.qpsc.modality.AngleExposure>> anglesFuture =
+                            AngleResolutionService.resolve(
+                                    result.modality(), result.objective(), result.detector(),
+                                    result.angleOverrides());
 
                     anglesFuture.thenAccept(angleExposures -> {
                         List<Double> rotationAngles = angleExposures.stream()
@@ -380,58 +328,8 @@ public class BoundedAcquisitionWorkflow {
                                 MicroscopeSocketClient.AcquisitionState finalState =
                                         socketClient.monitorAcquisition(
                                                 progress -> progressCounter.set(progress.current),
-                                                retriesRemaining -> {
-                                                    if (QPPreferenceDialog.getSkipManualAutofocus()) {
-                                                        logger.warn("Manual focus requested but 'No Manual Autofocus' enabled - " +
-                                                                   "skipping autofocus (retries remaining: {})", retriesRemaining);
-                                                        try {
-                                                            socketClient.skipAutofocusRetry();
-                                                            logger.info("Autofocus skipped - using current focus position");
-                                                        } catch (IOException e) {
-                                                            logger.error("Failed to send skip autofocus", e);
-                                                        }
-                                                    } else {
-                                                        logger.info("Manual focus requested - showing dialog (retries remaining: {})", retriesRemaining);
-                                                        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-                                                        Platform.runLater(() -> {
-                                                            try {
-                                                                UIFunctions.ManualFocusResult mfResult = UIFunctions.showManualFocusDialog(retriesRemaining);
-                                                                switch (mfResult) {
-                                                                    case RETRY_AUTOFOCUS:
-                                                                        socketClient.acknowledgeManualFocus();
-                                                                        logger.info("User chose to retry autofocus");
-                                                                        break;
-                                                                    case USE_CURRENT_FOCUS:
-                                                                        socketClient.skipAutofocusRetry();
-                                                                        logger.info("User chose to use current focus");
-                                                                        break;
-                                                                    case CANCEL_ACQUISITION:
-                                                                        // Send SKIPAF first to unblock server's manual_focus wait
-                                                                        socketClient.skipAutofocusRetry();
-                                                                        socketClient.cancelAcquisition();
-                                                                        logger.info("User chose to cancel acquisition");
-                                                                        break;
-                                                                }
-                                                            } catch (IOException e) {
-                                                                logger.error("Failed to send manual focus response", e);
-                                                            } finally {
-                                                                latch.countDown();
-                                                            }
-                                                        });
-                                                        try {
-                                                            while (!latch.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
-                                                                try {
-                                                                    socketClient.getAcquisitionProgress();
-                                                                } catch (IOException e) {
-                                                                    logger.warn("Failed keepalive ping during manual focus", e);
-                                                                }
-                                                            }
-                                                        } catch (InterruptedException e) {
-                                                            logger.error("Interrupted waiting for manual focus dialog", e);
-                                                            Thread.currentThread().interrupt();
-                                                        }
-                                                    }
-                                                },
+                                                retriesRemaining -> ManualFocusHandler.handle(
+                                                        socketClient, retriesRemaining, null, null),
                                                 500, 300000
                                         );
 

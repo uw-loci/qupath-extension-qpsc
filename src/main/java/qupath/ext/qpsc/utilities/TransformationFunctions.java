@@ -821,7 +821,7 @@ public class TransformationFunctions {
     }
 
     /**
-     * Reads min & max X,Y from a TileConfiguration file.
+     * Reads min and max X,Y from a TileConfiguration file.
      */
     public static List<List<Double>> findImageBoundaries(File tileConfigFile) throws IOException {
         double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY;

@@ -453,29 +453,4 @@ public class AcquisitionCommandBuilder {
         return message;
     }
 
-    /**
-     * Creates a builder pre-configured for PPM (polarized) acquisition
-     */
-    public static AcquisitionCommandBuilder ppmBuilder() {
-        return builder()
-                .enableDebayer(true) // PPM typically needs debayering
-                .processingPipeline(Arrays.asList("debayer", "background_correction"));
-    }
-
-    /**
-     * Creates a builder pre-configured for brightfield acquisition
-     */
-    public static AcquisitionCommandBuilder brightfieldBuilder() {
-        return builder()
-                .enableDebayer(true)
-                .processingPipeline(Arrays.asList("debayer", "background_correction"));
-    }
-
-    /**
-     * Creates a builder pre-configured for laser scanning acquisition
-     */
-    public static AcquisitionCommandBuilder laserScanningBuilder() {
-        return builder()
-                .enableDebayer(false); // Laser scanning typically doesn't need debayering
-    }
 }

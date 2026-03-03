@@ -59,9 +59,9 @@ public class ConfigurationAccessorTest {
 
         List<String> missing = mgr.validateConfiguration();
         if (missing.isEmpty()) {
-            logger.info("✓ Configuration is valid");
+            logger.info("[OK] Configuration is valid");
         } else {
-            logger.error("✗ Configuration has missing sections: {}", missing);
+            logger.error("[FAIL] Configuration has missing sections: {}", missing);
         }
     }
 
@@ -73,7 +73,7 @@ public class ConfigurationAccessorTest {
 
         for (String modality : modalities) {
             boolean valid = mgr.isValidModality(modality);
-            boolean isPPM = mgr.isPPMModality(modality);
+            boolean isPPM = modality != null && modality.startsWith("ppm");
 
             logger.info("  {} - Valid: {}, PPM: {}", modality, valid, isPPM);
 
@@ -194,7 +194,7 @@ public class ConfigurationAccessorTest {
         // Find PPM modalities
         Set<String> modalities = mgr.getAvailableModalities();
         for (String modality : modalities) {
-            if (mgr.isPPMModality(modality)) {
+            if (modality != null && modality.startsWith("ppm")) {
                 logger.info("Testing PPM modality: {}", modality);
 
                 List<Map<String, Object>> angles = mgr.getRotationAngles(modality);

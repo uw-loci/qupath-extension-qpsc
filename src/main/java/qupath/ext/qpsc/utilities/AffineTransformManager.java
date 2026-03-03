@@ -469,6 +469,24 @@ public class AffineTransformManager {
             // Old alignment files without this flag have preference flips baked into the PNG.
             if (processedMacroImage != null) {
                 alignmentData.put("macroImageRaw", true);
+            } else if (alignmentFile.exists()) {
+                // When re-saving without a new macro image, preserve the existing
+                // macroImageRaw flag from the previous JSON so that the on-disk PNG's
+                // format continues to be correctly detected by downstream consumers.
+                try {
+                    String existingJson = new String(
+                            Files.readAllBytes(alignmentFile.toPath()), StandardCharsets.UTF_8);
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> existingData = new Gson().fromJson(existingJson, Map.class);
+                    Object rawFlag = existingData.get("macroImageRaw");
+                    if (rawFlag instanceof Boolean && (Boolean) rawFlag) {
+                        alignmentData.put("macroImageRaw", true);
+                        logger.debug("Preserved macroImageRaw=true from existing alignment JSON");
+                    }
+                } catch (Exception e) {
+                    logger.debug("Could not read existing alignment JSON to preserve macroImageRaw: {}",
+                            e.getMessage());
+                }
             }
 
             // Convert to JSON and save
