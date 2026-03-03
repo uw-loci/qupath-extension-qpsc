@@ -463,13 +463,13 @@ public class WBComparisonWorkflow {
                 socketClient.moveStageR(uncrossedAngle);
                 Thread.sleep(1000);
 
-                // Run AWB -- server starts streaming, enables Continuous WB,
-                // waits for equilibration (~1.5s), stops streaming, then sets
-                // WB to Off. Internal AWB corrections persist after Off.
+                // Run full AWB calibration (mode 3) -- server starts streaming,
+                // enables Continuous WB, waits for equilibration (~3s), stops
+                // streaming, then sets WB to Off.
                 // NOTE: Do NOT reset analog gains before this -- the camera's
                 // AWB works through an internal processing pipeline, not through
                 // the analog gain registers.
-                socketClient.setWhiteBalanceMode(2);
+                socketClient.setWhiteBalanceMode(3);
                 logger.info("[camera_awb] Camera AWB calibration complete");
             }
             case "simple" -> {

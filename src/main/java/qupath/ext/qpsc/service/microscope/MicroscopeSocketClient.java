@@ -3883,19 +3883,23 @@ public class MicroscopeSocketClient implements AutoCloseable {
     /**
      * Sets the camera's white balance mode.
      *
-     * @param mode 0=Off, 1=Continuous, 2=Once (one-shot auto)
+     * <p>Modes 0-2 are simple property sets (fast). Mode 3 runs a full
+     * calibration routine on the server (slow, ~5 seconds).
+     *
+     * @param mode 0=Off, 1=Continuous, 2=Once (native one-shot), 3=Full AWB calibration
      * @throws IOException if communication fails
      */
     public void setWhiteBalanceMode(int mode) throws IOException {
-        if (mode < 0 || mode > 2) {
-            throw new IllegalArgumentException("WB mode must be 0 (Off), 1 (Continuous), or 2 (Once)");
+        if (mode < 0 || mode > 3) {
+            throw new IllegalArgumentException(
+                    "WB mode must be 0 (Off), 1 (Continuous), 2 (Once), or 3 (Full AWB calibration)");
         }
 
-        // Mode 2 (AWB calibration) runs streaming + equilibration on the server
+        // Mode 3 (full AWB calibration) runs streaming + equilibration on the server
         // which takes ~5 seconds. Temporarily increase the read timeout so we
         // don't time out and leave the server streaming in the background.
         byte[] response;
-        if (mode == 2) {
+        if (mode == 3) {
             synchronized (socketLock) {
                 ensureConnected();
                 int originalTimeout = socket.getSoTimeout();
@@ -3929,7 +3933,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throw new IOException("Failed to set WB mode: " + responseStr);
         }
 
-        String[] modeNames = {"Off", "Continuous", "Once"};
+        String[] modeNames = {"Off", "Continuous", "Once", "Full AWB Calibration"};
         logger.info("White balance mode set to: {}", modeNames[mode]);
     }
 

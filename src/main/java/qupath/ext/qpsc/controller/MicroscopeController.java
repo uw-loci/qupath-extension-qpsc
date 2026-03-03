@@ -676,13 +676,14 @@ public class MicroscopeController {
     /**
      * Sets the camera's white balance mode.
      *
-     * @param mode 0=Off, 1=Continuous, 2=Once (one-shot auto)
+     * @param mode 0=Off, 1=Continuous, 2=Once (native one-shot),
+     *             3=Full AWB calibration (streaming + equilibration, ~5s)
      * @throws IOException if communication fails
      */
     public void setWhiteBalanceMode(int mode) throws IOException {
         try {
             socketClient.setWhiteBalanceMode(mode);
-            String[] modeNames = {"Off", "Continuous", "Once"};
+            String[] modeNames = {"Off", "Continuous", "Once", "Full AWB Calibration"};
             logger.info("Set white balance mode to: {}", modeNames[mode]);
         } catch (IOException e) {
             logger.error("Failed to set white balance mode: {}", e.getMessage());
