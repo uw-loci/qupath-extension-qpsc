@@ -451,26 +451,11 @@ public class WBComparisonWorkflow {
 
         switch (wbMode) {
             case "camera_awb" -> {
-                // Rotate to uncrossed (90 deg) for maximum light, then run AWB
-                double uncrossedAngle = 90.0;
-                for (AngleExposure ae : angleExposures) {
-                    if (ae.ticks() == 90.0) {
-                        uncrossedAngle = ae.ticks();
-                        break;
-                    }
-                }
-                logger.info("[camera_awb] Rotating to {} deg for AWB", uncrossedAngle);
-                socketClient.moveStageR(uncrossedAngle);
-                Thread.sleep(1000);
-
-                // Run full AWB calibration (mode 3) -- server starts streaming,
-                // enables Continuous WB, waits for equilibration (~3s), stops
-                // streaming, then sets WB to Off.
-                // NOTE: Do NOT reset analog gains before this -- the camera's
-                // AWB works through an internal processing pipeline, not through
-                // the analog gain registers.
-                socketClient.setWhiteBalanceMode(3);
-                logger.info("[camera_awb] Camera AWB calibration complete");
+                // No automated calibration -- the user must trigger AWB manually
+                // through MicroManager's Device Property Browser before running
+                // this mode. Pycromanager cannot reliably control AWB (see
+                // claude-reports/2026-03-03_awb-white-balance-pycromanager-vs-mm-gui.md).
+                logger.info("[camera_awb] Skipping calibration (user runs AWB manually via MicroManager)");
             }
             case "simple" -> {
                 // Use a reasonable base exposure for simple WB
