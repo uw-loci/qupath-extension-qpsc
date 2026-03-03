@@ -612,6 +612,13 @@ public class StageMapWindow {
     }
 
     private void handleCanvasClick(double stageX, double stageY) {
+        // Block navigation during active acquisition
+        if (MicroscopeController.getInstance().isAcquisitionActive()) {
+            statusLabel.setText("Locked during acquisition");
+            statusLabel.setStyle("-fx-text-fill: #fa7;");
+            return;
+        }
+
         StageInsert insert = insertComboBox.getValue();
         if (insert == null) {
             logger.warn("No insert selected for stage movement");

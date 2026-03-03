@@ -241,7 +241,8 @@ public class BoundedAcquisitionWorkflow {
 
                         String boundsMode = "bounds";
 
-                        // Stop live viewing before acquisition starts
+                        // Lock stage movements and stop live viewing before acquisition starts
+                        MicroscopeController.getInstance().setAcquisitionActive(true);
                         MicroscopeController.LiveViewState liveState =
                                 MicroscopeController.getInstance().stopAllLiveViewing();
 
@@ -363,9 +364,12 @@ public class BoundedAcquisitionWorkflow {
                             }
                         });
 
-                        // Restore live viewing when acquisition completes (stitching does not need camera)
-                        acquisitionFuture.whenComplete((ignored0, ex0) ->
-                                MicroscopeController.getInstance().restoreLiveViewState(liveState));
+                        // Restore live viewing and release acquisition lock when acquisition completes
+                        // (stitching continues in background but does not use the stage)
+                        acquisitionFuture.whenComplete((ignored0, ex0) -> {
+                                MicroscopeController.getInstance().restoreLiveViewState(liveState);
+                                MicroscopeController.getInstance().setAcquisitionActive(false);
+                        });
 
                         // Handle stitching after acquisition
                         acquisitionFuture.thenCompose(ignored -> {

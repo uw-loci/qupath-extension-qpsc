@@ -49,6 +49,15 @@ public class MicroscopeController {
     /** Current affine transform for coordinate conversion */
     private final AtomicReference<AffineTransform> currentTransform = new AtomicReference<>();
 
+    /** Flag to block user-initiated stage movements during acquisition */
+    private volatile boolean acquisitionActive = false;
+
+    /** Timestamp of last blocked-movement notification (for cooldown) */
+    private volatile long lastBlockedNotificationTime = 0;
+
+    /** Minimum interval between "movement blocked" notifications to avoid spam */
+    private static final long BLOCKED_NOTIFICATION_COOLDOWN_MS = 5000;
+
     /**
      * Private constructor for singleton pattern.
      * Initializes the socket connection to the microscope server.
@@ -132,6 +141,58 @@ public class MicroscopeController {
         return instance;
     }
 
+    // ==================== Acquisition Lock ====================
+
+    /**
+     * Sets whether an acquisition is currently active.
+     * When active, user-initiated stage movements (Stage Map, Stage Control Panel,
+     * keyboard controls) are blocked to prevent interference with tile acquisition.
+     *
+     * <p>Workflow-internal movements (WB workflows via socketClient directly,
+     * server-side tile movements) are NOT affected because they bypass
+     * MicroscopeController's move methods.
+     *
+     * @param active true to lock stage movements, false to unlock
+     */
+    public void setAcquisitionActive(boolean active) {
+        this.acquisitionActive = active;
+        logger.info("Acquisition lock {}", active ? "ENGAGED - user stage movements blocked"
+                : "RELEASED - user stage movements allowed");
+    }
+
+    /**
+     * Checks whether an acquisition is currently active.
+     *
+     * @return true if acquisition is active and stage movements are blocked
+     */
+    public boolean isAcquisitionActive() {
+        return acquisitionActive;
+    }
+
+    /**
+     * Checks whether user-initiated stage movement should be blocked.
+     * If blocked, logs a warning and shows a throttled user notification.
+     *
+     * @param caller description of the movement source (for logging)
+     * @return true if the movement is blocked, false if it may proceed
+     */
+    private boolean isMovementBlocked(String caller) {
+        if (!acquisitionActive) {
+            return false;
+        }
+        logger.debug("Stage movement blocked during acquisition (source: {})", caller);
+
+        long now = System.currentTimeMillis();
+        if (now - lastBlockedNotificationTime > BLOCKED_NOTIFICATION_COOLDOWN_MS) {
+            lastBlockedNotificationTime = now;
+            UIFunctions.notifyUserOfError(
+                    "Stage movement is locked during acquisition.",
+                    "Movement Locked"
+            );
+        }
+        return true;
+    }
+
     /**
      * Queries the microscope for its current X,Y stage position.
      *
@@ -193,6 +254,10 @@ public class MicroscopeController {
      * @param y Target Y coordinate in microns
      */
     public void moveStageXY(double x, double y) {
+        if (isMovementBlocked("moveStageXY")) {
+            return;
+        }
+
         // Validate bounds using ConfigManager directly
         String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
@@ -223,6 +288,10 @@ public class MicroscopeController {
      * @param z Target Z coordinate in microns
      */
     public void moveStageZ(double z) {
+        if (isMovementBlocked("moveStageZ")) {
+            return;
+        }
+
         // Validate bounds using ConfigManager directly
         String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
@@ -253,6 +322,10 @@ public class MicroscopeController {
      * @param angle The target rotation angle in ticks
      */
     public void moveStageR(double angle) {
+        if (isMovementBlocked("moveStageR")) {
+            return;
+        }
+
         try {
             socketClient.moveStageR(angle);
             logger.info("Successfully rotated stage to {} ticks", angle);

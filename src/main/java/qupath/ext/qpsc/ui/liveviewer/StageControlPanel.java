@@ -922,7 +922,22 @@ public class StageControlPanel extends TitledPane {
         }
     }
 
+    /**
+     * Checks if stage movement is blocked by an active acquisition.
+     * Updates the XY status label if blocked.
+     *
+     * @return true if movement is blocked
+     */
+    private boolean isAcquisitionBlocked() {
+        if (MicroscopeController.getInstance().isAcquisitionActive()) {
+            xyStatus.setText("Locked during acquisition");
+            return true;
+        }
+        return false;
+    }
+
     private void handleMoveXY() {
+        if (isAcquisitionBlocked()) return;
         try {
             double x = Double.parseDouble(xField.getText().replace(",", ""));
             double y = Double.parseDouble(yField.getText().replace(",", ""));
@@ -961,6 +976,7 @@ public class StageControlPanel extends TitledPane {
     }
 
     private void handleMoveZ() {
+        if (isAcquisitionBlocked()) return;
         try {
             double z = Double.parseDouble(zField.getText().replace(",", ""));
 
@@ -997,6 +1013,7 @@ public class StageControlPanel extends TitledPane {
     }
 
     private void handleMoveR() {
+        if (isAcquisitionBlocked()) return;
         try {
             double r = Double.parseDouble(rField.getText().replace(",", ""));
 
@@ -1025,6 +1042,7 @@ public class StageControlPanel extends TitledPane {
     }
 
     private void handleZScroll(ScrollEvent event, TextField zStepField) {
+        if (isAcquisitionBlocked()) { event.consume(); return; }
         try {
             double step = Double.parseDouble(zStepField.getText().replace(",", ""));
             double currentZ = Double.parseDouble(zField.getText().replace(",", ""));
@@ -1061,6 +1079,7 @@ public class StageControlPanel extends TitledPane {
     }
 
     private void handleArrowMove(int xDir, int yDir) {
+        if (isAcquisitionBlocked()) return;
         try {
             double step = Double.parseDouble(xyStepField.getText().replace(",", ""));
             double currentX = Double.parseDouble(xField.getText().replace(",", ""));
@@ -1094,7 +1113,10 @@ public class StageControlPanel extends TitledPane {
             // (which could cause "Not Responding" if socket is held by another operation)
             Thread moveThread = new Thread(() -> {
                 try {
+                    long t0 = System.nanoTime();
                     MicroscopeController.getInstance().moveStageXY(newX, newY);
+                    long ms = (System.nanoTime() - t0) / 1_000_000;
+                    logger.debug("Arrow move to ({}, {}) took {}ms", newX, newY, ms);
                     Platform.runLater(() -> xyStatus.setText(String.format("Moved to (%.0f, %.0f)", newX, newY)));
                 } catch (Exception ex) {
                     logger.warn("Arrow movement failed: {}", ex.getMessage());
@@ -1110,6 +1132,7 @@ public class StageControlPanel extends TitledPane {
     }
 
     private void handleJoystickMove(double deltaX, double deltaY) {
+        if (isAcquisitionBlocked()) return;
         try {
             double[] current = joystickPosition.get();
             double currentX = current[0];
@@ -1201,6 +1224,7 @@ public class StageControlPanel extends TitledPane {
     }
 
     private void handleGoToCentroid() {
+        if (isAcquisitionBlocked()) return;
         QuPathGUI gui = QuPathGUI.getInstance();
         AffineTransform transform = MicroscopeController.getInstance().getCurrentTransform();
 
@@ -1331,6 +1355,7 @@ public class StageControlPanel extends TitledPane {
     }
 
     private void handleGoToSavedPoint(boolean includeZ) {
+        if (isAcquisitionBlocked()) return;
         SavedPoint selected = savedPointsListView.getSelectionModel().getSelectedItem();
         if (selected == null) {
             savedPointsStatus.setText("No point selected");
@@ -1516,6 +1541,9 @@ public class StageControlPanel extends TitledPane {
     public boolean handleKeyEvent(KeyEvent event) {
         if (!isExpanded()) {
             return false;
+        }
+        if (isAcquisitionBlocked()) {
+            return true; // consume the event so it doesn't propagate
         }
 
         KeyCode code = event.getCode();

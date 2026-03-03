@@ -340,6 +340,9 @@ public class AcquisitionManager {
             return CompletableFuture.completedFuture(false);
         }
 
+        // Lock stage movements before stopping live viewing to prevent user interference
+        MicroscopeController.getInstance().setAcquisitionActive(true);
+
         // Stop live viewing before acquisition starts to prevent hardware conflicts
         MicroscopeController.LiveViewState liveState =
                 MicroscopeController.getInstance().stopAllLiveViewing();
@@ -446,8 +449,10 @@ public class AcquisitionManager {
         }
 
         return acquisitionChain.whenComplete((result, error) -> {
-            // Restore live viewing state now that all acquisitions are done
+            // Release acquisition lock and restore live viewing now that all acquisitions are done
+            // (stitching continues in background but does not use the stage)
             MicroscopeController.getInstance().restoreLiveViewState(liveState);
+            MicroscopeController.getInstance().setAcquisitionActive(false);
 
             // Close dual progress dialog when workflow completes or fails
             if (progressDialog != null) {
