@@ -67,6 +67,7 @@ public class StageMapWindow {
     private Label positionLabel;
     private Label targetLabel;
     private Label statusLabel;
+    private Label movementWarningLabel;
 
     // ========== State ==========
     private ScheduledExecutorService positionPoller;
@@ -263,7 +264,18 @@ public class StageMapWindow {
                 canvas.setInsert(selected);
                 logger.debug("Switched to insert configuration: {}", selected.getId());
             }
+            updateMovementWarning();
         });
+
+        // Movement direction warning label - shows when Live View controls move opposite to expected
+        movementWarningLabel = new Label();
+        movementWarningLabel.setStyle("-fx-text-fill: orange; -fx-font-size: 10px; -fx-font-weight: bold;");
+        movementWarningLabel.setVisible(false);
+        movementWarningLabel.setManaged(false);
+
+        // Update warning when Sample Movement checkbox is toggled in Live Viewer
+        PersistentPreferences.stageControlSampleMovementProperty().addListener(
+                (obs, oldVal, newVal) -> Platform.runLater(this::updateMovementWarning));
 
         // Button to open config folder for calibration
         Button configButton = new Button("Config");
@@ -322,8 +334,50 @@ public class StageMapWindow {
             }
         });
 
-        topBar.getChildren().addAll(insertLabel, insertComboBox, spacer, macroOverlayCheckbox, configButton, helpButton);
+        topBar.getChildren().addAll(insertLabel, insertComboBox, movementWarningLabel, spacer, macroOverlayCheckbox, configButton, helpButton);
         return topBar;
+    }
+
+    /**
+     * Updates the movement direction warning label based on the current insert's
+     * axis inversion settings and the Sample Movement checkbox state.
+     *
+     * Movement is "opposite" when Live View stage controls move the image in the
+     * reverse direction from what the user expects:
+     * - X is opposite when the X axis is inverted AND Sample Movement is enabled
+     * - Y is opposite when the Y axis is inverted (regardless of Sample Movement)
+     */
+    private void updateMovementWarning() {
+        StageInsert insert = insertComboBox.getValue();
+        if (insert == null) {
+            movementWarningLabel.setVisible(false);
+            movementWarningLabel.setManaged(false);
+            return;
+        }
+
+        boolean sampleMovement = PersistentPreferences.getStageControlSampleMovement();
+        boolean xOpposite = insert.isXAxisInverted() && sampleMovement;
+        boolean yOpposite = insert.isYAxisInverted();
+
+        if (!xOpposite && !yOpposite) {
+            movementWarningLabel.setVisible(false);
+            movementWarningLabel.setManaged(false);
+            return;
+        }
+
+        String axes;
+        if (xOpposite && yOpposite) {
+            axes = "X and Y";
+        } else if (xOpposite) {
+            axes = "X";
+        } else {
+            axes = "Y";
+        }
+
+        movementWarningLabel.setText(
+                "Movement in Live View in [" + axes + "] Opposite Live View Controls");
+        movementWarningLabel.setVisible(true);
+        movementWarningLabel.setManaged(true);
     }
 
     /**
@@ -409,6 +463,9 @@ public class StageMapWindow {
             }
 
             logger.info("Loaded {} insert configurations", inserts.size());
+
+            // Set initial movement warning state based on default insert
+            updateMovementWarning();
 
         } catch (Exception e) {
             logger.error("Error loading insert configurations: {}", e.getMessage(), e);

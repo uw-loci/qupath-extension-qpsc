@@ -92,7 +92,7 @@ public class StageMapCanvas extends StackPane {
     private AffineTransform macroTransform;
     private int macroWidth, macroHeight;
     private boolean macroOverlayVisible = false;
-    private static final double MACRO_OVERLAY_OPACITY = 0.3;  // 70% transparency
+    private static final double MACRO_OVERLAY_OPACITY = 0.6;  // 40% transparency
     private boolean macroTransformFlipX = false;
     private boolean macroTransformFlipY = false;
     private double macroPixelSizeUm = 0;      // physical size per macro pixel (from scanner config)

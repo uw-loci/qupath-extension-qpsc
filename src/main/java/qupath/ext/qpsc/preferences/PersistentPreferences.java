@@ -807,6 +807,15 @@ public class PersistentPreferences {
     }
 
     /**
+     * Returns the property for observing sample movement checkbox changes.
+     * Used by StageMapWindow to update the movement direction warning label.
+     * @return the StringProperty backing the sample movement setting
+     */
+    public static StringProperty stageControlSampleMovementProperty() {
+        return stageControlSampleMovementSaved;
+    }
+
+    /**
      * Gets the saved step size value.
      * @return step size in um as string
      */
