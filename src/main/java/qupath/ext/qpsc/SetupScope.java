@@ -81,6 +81,21 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
 		// 1) Register all our persistent preferences
 		QPPreferenceDialog.installPreferences(qupath);
+
+		// Check if tiles-to-pyramid extension is installed (required for stitching)
+		if (!QPPreferenceDialog.isStitchingAvailable()) {
+			Platform.runLater(() ->
+					Dialogs.showErrorNotification(
+							EXTENSION_NAME + " - Missing Dependency",
+							"qupath-extension-tiles-to-pyramid is not installed!\n\n" +
+									"Image stitching will NOT work. Please install the\n" +
+									"tiles-to-pyramid extension JAR in your QuPath\n" +
+									"extensions folder and restart QuPath.\n\n" +
+									"Download: https://github.com/uw-loci/qupath-extension-tiles-to-pyramid"
+					)
+			);
+		}
+
 		MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
 		// 2) Validate microscope YAML up-front via QPScopeChecks

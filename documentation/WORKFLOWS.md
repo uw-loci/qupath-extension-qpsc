@@ -88,12 +88,13 @@ The unified dialog presents all configuration in a single screen with collapsibl
 
 #### ADVANCED OPTIONS Section (Collapsed by Default)
 
-**JAI Camera White Balance** (visible only for JAI cameras):
+**White Balance Mode** (visible only for JAI cameras):
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| Enable white balance correction | ON | Apply white balance calibration during acquisition |
-| Use per-angle white balance (PPM) | OFF | Use different WB settings per polarizer angle |
+| Option | Description |
+|--------|-------------|
+| WB Mode | ComboBox with four options: **Off** (no WB), **Camera AWB** (one-shot auto WB), **Simple** (uniform exposure adjustment), **Per-angle** (per-angle calibrated exposures) |
+
+WB mode applies immediately on selection. The selected mode flows through to both acquisition and background collection.
 
 **Modality-Specific Options:**
 - PPM modality shows angle override controls

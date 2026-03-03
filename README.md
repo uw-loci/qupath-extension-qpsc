@@ -53,17 +53,29 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 | **Automated Stage Control** | Move XY, Z, and rotation stages with safety bounds checking |
 | **Multi-angle Imaging (PPM)** | Polarized light microscopy with automatic rotation sequences |
 
-### Calibration Tools
+### Live Imaging & Stage Control
 
+| Feature | Description |
+|---------|-------------|
+| **Live Camera Viewer** | Real-time camera feed with histogram, per-channel saturation %, RGB readouts, and display scale controls |
+| **Integrated Stage Control** | Virtual joystick, FOV-based step sizes, saved stage positions, and double-step arrows -- all built into the Live Viewer |
+| **Stage Map** | Visual map of the stage insert with configurable macro image overlay and real-time position tracking |
+
+### Calibration & Camera Tools
+
+- **White Balance Calibration**: Per-channel R/G/B exposure calibration for JAI 3-CCD prism cameras with 4 WB modes (Off, Camera AWB, Simple, Per-angle)
+- **Camera Control**: Card-based dialog for viewing and testing camera exposure/gain settings per angle
 - **Background Collection**: Acquire flat-field correction images (removes uneven illumination)
 - **Polarizer Calibration**: Find optimal rotation angles for crossed polarizers
+- **Sunburst Calibration (PPM Reference Slide)**: Hue-to-angle mapping from a reference slide with radial spoke detection
+- **JAI Noise Characterization**: Measure camera noise statistics with Quick/Full/Custom presets
 - **Autofocus Editor**: Configure focus parameters per objective
 
 ### Technical Features
 
 - **Automatic Stitching**: Tiles are automatically stitched into pyramidal OME-TIFF/OME-ZARR images
 - **Project Integration**: Acquired images automatically added to your QuPath project
-- **Real-time Progress**: Live feedback during acquisition via socket communication
+- **Real-time Progress**: Live feedback during acquisition via socket communication with CONFIG handshake validation
 - **Modality System**: Pluggable imaging modes (PPM, brightfield, future: SHG)
 
 > **Note:** Polarized (PPM) acquisitions use the `ppm_` prefix (e.g., `ppm_20x`). Modalities without this prefix perform single-pass acquisitions.
@@ -107,10 +119,10 @@ Before your first acquisition, verify each component:
 - [ ] **QuPath**: "QP Scope" menu visible in menu bar
 - [ ] **Micro-Manager**: Can control stage manually (test XY movement)
 - [ ] **Python Server**: Server script starts without errors
-- [ ] **Connection**: Use "Stage Control" to test QuPath can move the stage
+- [ ] **Connection**: Use the "Live Viewer" to test QuPath can move the stage
 - [ ] **Configuration**: YAML files point to correct hardware IDs
 
-**Recommended first test:** Use "Stage Control" from the QP Scope menu to verify communication before attempting a full acquisition.
+**Recommended first test:** Use the "Live Viewer" from the QP Scope menu to verify camera feed and stage movement before attempting a full acquisition.
 
 ### Usage
 
@@ -133,8 +145,10 @@ Open the **QP Scope** menu in QuPath to access all features:
 **Utilities:**
 | Menu Item | Purpose |
 |-----------|---------|
-| Stage Control | Test stage movement, verify connection |
-| Server Settings | Configure Python server connection |
+| Live Viewer | Real-time camera feed with integrated stage control |
+| Camera Control | View/test camera exposure and gain settings |
+| Stage Map | Visual stage insert map with macro image overlay |
+| Server Connection Settings | Configure Python server connection |
 
 ---
 
@@ -355,14 +369,23 @@ Once WB calibration is complete:
 2. **Run acquisitions** - the same calibrated exposures will be applied
 3. Flat-field correction will work correctly because all three steps use matching exposures
 
+#### White Balance Mode Selection
+
+During acquisition, select a WB mode from the dropdown in the acquisition dialog:
+
+| WB Mode | Description | Use Case |
+|---------|-------------|----------|
+| **Off** | No white balance applied | Non-JAI cameras, raw imaging |
+| **Camera AWB** | Camera auto white balance (one-shot at 90 degrees) | Quick setup, less critical color accuracy |
+| **Simple** | Uniform exposure adjustment across all angles | Fast calibration, acceptable for most samples |
+| **Per-angle** | Per-angle calibrated exposures from WB calibration | Best color accuracy for PPM, strong birefringence |
+
 #### Automatic JAI Detection
 
 The system automatically detects JAI cameras and:
-- **Loads calibration automatically** during background collection (regardless of checkbox setting)
+- **Loads calibration automatically** during background collection
 - **Warns you** if no calibration exists for the current objective/detector
-- **Forces per-channel mode** when calibration is available
-
-This means even if you forget to check the "Use per-channel white balance" checkbox, JAI cameras will still use the correct per-channel exposures if calibration exists.
+- **Enforces explicit WB mode selection** -- no silent defaults
 
 #### Troubleshooting
 

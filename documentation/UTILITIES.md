@@ -8,12 +8,13 @@ This document provides comprehensive documentation for all utilities available i
 
 | Utility | Purpose | Menu Location |
 |---------|---------|---------------|
-| [Stage Control](#stage-control) | Manual microscope stage XYZ movement | Extensions > QP Scope > Stage Control |
+| [Live Camera Viewer](#live-camera-viewer) | Real-time camera feed with integrated stage control | Extensions > QP Scope > Live Viewer |
 | [Camera Control](#camera-control) | View/test camera exposure and gain settings | Extensions > QP Scope > Camera Control... |
 | [Stage Map](#stage-map) | Visual map showing stage insert with slide positions | Extensions > QP Scope > Stage Map |
 | [Server Connection Settings](#server-connection-settings) | Configure microscope server connection | Extensions > QP Scope > Server Connection Settings... |
 | [Background Collection](#background-collection) | Capture flat-field correction images | Extensions > QP Scope > Collect Background Images |
 | [White Balance Calibration](#white-balance-calibration) | Calibrate JAI 3-CCD camera white balance | Extensions > QP Scope > White Balance Calibration... |
+| [JAI Noise Characterization](#jai-noise-characterization) | Measure camera noise statistics | Extensions > QP Scope > JAI Camera > Noise Characterization... |
 | [Polarizer Calibration](#polarizer-calibration-ppm) | Calibrate polarizer rotation stage for PPM | Extensions > QP Scope > Polarizer Calibration (PPM)... |
 | [PPM Reference Slide](#ppm-reference-slide-sunburst-calibration) | Hue-to-angle calibration from sunburst slide | Extensions > QP Scope > Utilities > PPM Reference Slide... |
 | [Autofocus Editor](#autofocus-settings-editor) | Configure per-objective autofocus parameters | Extensions > QP Scope > Autofocus Settings Editor... |
@@ -23,39 +24,83 @@ This document provides comprehensive documentation for all utilities available i
 
 ---
 
-## Stage Control
+## Live Camera Viewer
 
 ### Purpose
-Manual control of the microscope stage for positioning and testing. Use this utility to verify communication with the microscope server and manually move to specific positions.
+Real-time camera feed with integrated stage control, histogram, and noise statistics. This is the primary tool for verifying microscope communication, positioning the stage, and checking camera settings before acquisition.
 
 ### Location
-**Extensions > QP Scope > Stage Control**
+**Extensions > QP Scope > Live Viewer**
 
-### Dialog Fields
+### Camera Feed
 
-| Field | Type | Description |
-|-------|------|-------------|
-| Stage X (um) | Text Field | X coordinate in micrometers |
-| Stage Y (um) | Text Field | Y coordinate in micrometers |
-| Stage Z (um) | Text Field | Z coordinate (focus) in micrometers |
-| Polarizer (deg) | Text Field | Polarizer rotation angle in degrees (PPM only) |
+The main area displays a real-time camera feed streamed from MicroManager's circular buffer.
 
-### Buttons
+| Feature | Description |
+|---------|-------------|
+| **Camera Image** | Live feed with auto-resize to fit window |
+| **Fit Mode** | Toggle to scale image to fit the dialog |
+| **Display Scale** | Dropdown to select display magnification |
+| **Double-click** | Click on the image to center the stage at that position |
 
-| Button | Action |
-|--------|--------|
-| **Move XY** | Move stage to the specified X and Y coordinates |
-| **Move Z** | Move focus to the specified Z coordinate |
-| **Move Polarizer** | Rotate polarizer to the specified angle |
+### Histogram Panel
+
+A 256-bin luminance histogram displayed below the camera feed:
+
+| Feature | Description |
+|---------|-------------|
+| **Histogram** | Real-time luminance distribution |
+| **Min/Max Sliders** | Contrast adjustment sliders |
+| **Auto Scale** | Button to auto-set contrast range |
+| **Per-Channel Saturation %** | Shows R/G/B saturation percentage; turns red when any channel exceeds 1% |
+
+### RGB Readouts
+
+Displays current R, G, B mean intensity values from the live feed. Useful for calibration diagnostics and verifying white balance.
+
+### Stage Control Panel (Left Side)
+
+Integrated stage control with two tabs:
+
+#### Movement Tab
+
+| Feature | Description |
+|---------|-------------|
+| **Virtual Joystick** | Click-and-drag joystick with quadratic response curve for fine/coarse movement |
+| **FOV Step Size** | Dropdown to select step size as fraction of field of view (1/4 FOV, 1/2 FOV, 1 FOV, etc.) |
+| **Arrow Buttons** | Up/Down/Left/Right buttons around the joystick for precise single-step movement |
+| **Double-Step Arrows** | Outer arrow buttons for 2x step size movement |
+| **Sample Movement** | Checkbox to enable "sample perspective" movement (direction inversion for intuitive control) |
+| **Z Controls** | Z position display with up/down buttons |
+| **Polarizer Controls** | Rotation angle control (PPM only) |
+
+#### Saved Points Tab
+
+| Feature | Description |
+|---------|-------------|
+| **Save Current Position** | Button to save current XYZ position with a custom name |
+| **Saved Points List** | Table of named positions with Go To / Delete actions |
+| **Persistence** | Saved points are stored in JSON preferences and persist across sessions |
+
+### Noise Stats Panel
+
+| Feature | Description |
+|---------|-------------|
+| **Measure Button** | Captures multiple frames for temporal noise analysis |
+| **R/G/B Grid** | Displays Mean, StdDev, and SNR per channel |
+
+### Live Mode Handling
+- Live streaming pauses automatically during acquisition
+- Live mode is preserved (not destroyed) when acquisition starts
+- Camera mode changes are handled cleanly during streaming
 
 ### Usage Notes
-- Current positions are displayed when the dialog opens
-- Coordinates are validated against stage limits before movement
-- Warning displayed if multiple viewers are open (may cause issues)
 - Use this as a first test after setting up microscope connection
+- The dialog is singleton -- opening it again brings it to front
+- Stage control settings (step size, sample movement) are persisted between sessions
 
 ### Screenshot
-`[Screenshot: documentation/images/stage-control.png]`
+`[Screenshot: documentation/images/live-viewer.png]`
 
 ---
 
@@ -85,30 +130,32 @@ Displays the current camera name detected from the hardware.
 
 Changing the objective or detector automatically loads the corresponding calibration values.
 
-#### Mode Toggles (JAI cameras only)
+#### Exposure Mode Toggle (JAI cameras only)
 
-These options are only visible when a JAI 3-CCD camera is detected:
+Visible when a JAI 3-CCD camera is detected:
 
 | Toggle | Options | Description |
 |--------|---------|-------------|
 | Exposure Mode | Individual / Unified | Individual: per-channel R/G/B exposures; Unified: single exposure for all channels |
-| Gain Mode | Individual / Unified | Individual: per-channel R/G/B gains; Unified: single gain for all channels |
 
-#### Per-Angle Settings
+**Note:** Gain is always unified. The gain row shows Unified gain plus analog Red and Blue gain values.
 
-For PPM modality, displays calibration values for each polarizer angle:
+#### Per-Angle Cards
+
+For PPM modality, each polarizer angle is displayed as a color-coded card:
 - **Uncrossed (90 deg)**: Brightest angle
 - **Crossed (0 deg)**: Darkest angle (extinction)
 - **Positive (7 deg)**: Intermediate birefringence angle
 - **Negative (-7 deg)**: Opposite intermediate angle
 
-Each angle row shows:
+Each card shows:
 
 | Field | Description |
 |-------|-------------|
 | Exposure All (ms) | Unified exposure time |
-| Exposure R/G/B (ms) | Per-channel exposure times |
-| Gain R/G/B | Per-channel analog gain values |
+| Exposure R/G/B (ms) | Per-channel exposure times (when in Individual mode) |
+| Gain Unified | Unified gain value |
+| Gain R / B | Analog red and blue gain values |
 | Apply | Set camera settings AND move rotation stage to this angle |
 
 ### Live Mode Handling
@@ -523,6 +570,39 @@ Find the optimal polarizer angle that maximizes birefringence contrast for your 
 
 ### Screenshot
 `[Screenshot: documentation/images/ppm-birefringence.png]`
+
+---
+
+## JAI Noise Characterization
+
+### Purpose
+Measure camera noise statistics (mean, standard deviation, SNR) with configurable presets. Useful for characterizing camera performance and detecting hardware issues.
+
+### Location
+**Extensions > QP Scope > JAI Camera > Noise Characterization...**
+
+This menu item only appears when a JAI camera is detected in the configuration.
+
+### Presets
+
+| Preset | Frames | Description |
+|--------|--------|-------------|
+| **Quick** | 10 | Fast measurement for spot checks |
+| **Full** | 100 | Comprehensive measurement for characterization |
+| **Custom** | User-defined | Specify exact frame count |
+
+### Output
+- Per-channel (R, G, B) statistics: Mean, StdDev, SNR
+- Results displayed in a non-modal dialog
+- NoiseStatsPanel in Live Viewer also shows real-time noise stats via the "Measure" button
+
+### Usage Notes
+- Position microscope at uniform area (blank slide or cap) for clean noise measurement
+- Preferences for frame count are persisted between sessions
+- Dialog is non-modal, allowing continued microscope interaction
+
+### Screenshot
+`[Screenshot: documentation/images/noise-characterization.png]`
 
 ---
 

@@ -34,6 +34,9 @@ public class QPPreferenceDialog {
     private static final Logger logger = LoggerFactory.getLogger(QPPreferenceDialog.class);
     private static final String CATEGORY = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings").getString("name");
 
+    /** False if qupath-extension-tiles-to-pyramid is not installed. */
+    private static boolean stitchingAvailable = true;
+
     // --- Preference definitions ---
 
     private static final BooleanProperty flipMacroXProperty =
@@ -81,11 +84,21 @@ public class QPPreferenceDialog {
                     OMEPyramidWriter.CompressionType.DEFAULT,
                     OMEPyramidWriter.CompressionType.class);
 
-    private static final ObjectProperty<StitchingConfig.OutputFormat> outputFormatProperty =
-            PathPrefs.createPersistentPreference(
+    // Lazy-init to avoid NoClassDefFoundError if tiles-to-pyramid extension is missing.
+    // The StitchingConfig.OutputFormat class comes from qupath-extension-tiles-to-pyramid,
+    // and referencing it in a static initializer would prevent the entire preference class
+    // from loading if that extension JAR is absent.
+    private static ObjectProperty<StitchingConfig.OutputFormat> outputFormatProperty;
+
+    private static ObjectProperty<StitchingConfig.OutputFormat> getOutputFormatPropertyInternal() {
+        if (outputFormatProperty == null) {
+            outputFormatProperty = PathPrefs.createPersistentPreference(
                     "stitchingOutputFormat",
                     StitchingConfig.OutputFormat.OME_TIFF,
                     StitchingConfig.OutputFormat.class);
+        }
+        return outputFormatProperty;
+    }
 
     // Filename configuration preferences
     // Note: These control what information appears in the filename
@@ -211,16 +224,23 @@ public class QPPreferenceDialog {
                 .category(CATEGORY)
                 .description("Compression for OME Pyramid output.")
                 .build());
-        items.add(new PropertyItemBuilder<>(outputFormatProperty, StitchingConfig.OutputFormat.class)
-                .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
-                .choices(Arrays.asList(StitchingConfig.OutputFormat.values()))
-                .name("Stitching output format")
-                .category(CATEGORY)
-                .description("Output format for stitched images.\n" +
-                             "OME-TIFF: Traditional single-file format, widely compatible (standard as of 2025).\n" +
-                             "OME-ZARR: Cloud-native directory format with better compression and parallel writing,\n" +
-                             "but less commonly used. ZARR provides 2-3x faster writing and 20-30% smaller files.")
-                .build());
+        try {
+            items.add(new PropertyItemBuilder<>(getOutputFormatPropertyInternal(), StitchingConfig.OutputFormat.class)
+                    .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
+                    .choices(Arrays.asList(StitchingConfig.OutputFormat.values()))
+                    .name("Stitching output format")
+                    .category(CATEGORY)
+                    .description("Output format for stitched images.\n" +
+                                 "OME-TIFF: Traditional single-file format, widely compatible (standard as of 2025).\n" +
+                                 "OME-ZARR: Cloud-native directory format with better compression and parallel writing,\n" +
+                                 "but less commonly used. ZARR provides 2-3x faster writing and 20-30% smaller files.")
+                    .build());
+        } catch (NoClassDefFoundError e) {
+            logger.error("qupath-extension-tiles-to-pyramid is missing! "
+                    + "Install it in your QuPath extensions folder. "
+                    + "Stitching output format preference will be unavailable.");
+            stitchingAvailable = false;
+        }
 
         items.add(new PropertyItemBuilder<>(microscopeServerHostProperty, String.class)
                 .name("Microscope Server Host")
@@ -371,7 +391,19 @@ public class QPPreferenceDialog {
         return compressionTypeProperty.get();
     }
     public static StitchingConfig.OutputFormat getOutputFormatProperty() {
-        return outputFormatProperty.get();
+        try {
+            return getOutputFormatPropertyInternal().get();
+        } catch (NoClassDefFoundError e) {
+            logger.warn("tiles-to-pyramid not available, defaulting to OME_TIFF");
+            return null;
+        }
+    }
+
+    /**
+     * Returns true if qupath-extension-tiles-to-pyramid is installed and stitching is available.
+     */
+    public static boolean isStitchingAvailable() {
+        return stitchingAvailable;
     }
     //TODO should this be here?
 

@@ -31,7 +31,6 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Image name includes: Annotation](#image-name-includes-annotation) | Boolean | OFF | Add annotation name to filename |
 | [Image name includes: Angle](#image-name-includes-angle) | Boolean | ON | Add angle to filename |
 | [Metadata Propagation Prefix](#metadata-propagation-prefix) | String | OCR | Prefix for inherited metadata |
-| [JAI White Balance Mode](#jai-white-balance-mode) | Choice | SIMPLE | White balance calibration mode |
 
 ---
 
@@ -467,29 +466,20 @@ When enabled, the manual autofocus dialog never appears. If autofocus fails, the
 
 ---
 
-## Camera-Specific Settings
+## White Balance Mode
 
-### JAI White Balance Mode
+White balance mode is no longer a global preference. Instead, WB mode is selected per-acquisition from a dropdown in the acquisition dialog:
 
-| Property | Value |
-|----------|-------|
-| Type | Choice |
-| Default | SIMPLE |
-| Options | SIMPLE, PPM |
-| Requires Restart | No |
+| WB Mode | Description |
+|---------|-------------|
+| **Off** | No white balance applied |
+| **Camera AWB** | Camera auto white balance (one-shot at 90 degrees) |
+| **Simple** | Uniform exposure adjustment across all angles |
+| **Per-angle** | Per-angle calibrated exposures from WB calibration |
 
-**Description:**
-White balance calibration mode for JAI 3-CCD prism cameras.
+This dropdown appears in the Bounding Box acquisition dialog, Existing Image acquisition dialog, and Background Collection dialog. The selected mode flows through to the `--wb-mode` command parameter.
 
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| **SIMPLE** | Same per-channel exposures for all polarization angles | Faster calibration, good for most samples |
-| **PPM** | Separate calibration for each polarization angle | More accurate for samples with strong birefringence variation |
-
-**Requirements:**
-- Requires running White Balance Calibration before acquisition
-- Only affects JAI and similar prism-based cameras
-- Standard Bayer cameras ignore this setting
+**Note:** The previous `JAI White Balance Mode` preference (SIMPLE/PPM) has been removed in v0.3.0.
 
 ---
 
@@ -518,7 +508,7 @@ For first-time setup, configure these preferences in order:
 
 Then verify settings using:
 - Extensions > QP Scope > Server Connection Settings > Test Connection
-- Extensions > QP Scope > Stage Control (test movement)
+- Extensions > QP Scope > Live Viewer (test camera feed and stage movement)
 - Extensions > QP Scope > Microscope Alignment (verify coordinates)
 
 ---

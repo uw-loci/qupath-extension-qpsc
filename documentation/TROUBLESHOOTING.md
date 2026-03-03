@@ -1,6 +1,6 @@
 # QPSC Troubleshooting Guide & FAQ
 
-**Last Updated:** December 16, 2025
+**Last Updated:** March 2, 2026
 **Target Audience:** Pathologists, researchers, and microscopy users
 **Skill Level:** All levels (clear explanations provided)
 
@@ -63,7 +63,7 @@
 
 #### Q: Where do I install the QPSC extension?
 
-**A:** Copy `qupath-extension-qpsc-0.2.0-all.jar` to your QuPath extensions folder:
+**A:** Copy `qupath-extension-qpsc-0.3.0-all.jar` to your QuPath extensions folder:
 - **Windows:** `C:\Users\<YourName>\QuPath\extensions\`
 - **Mac:** `~/Library/Application Support/QuPath/extensions/`
 - **Linux:** `~/.qupath/extensions/`
@@ -81,7 +81,7 @@ Then restart QuPath.
 
 **A:** You need both extensions:
 1. `qupath-extension-tiles-to-pyramid-0.1.0-all.jar` (install this FIRST)
-2. `qupath-extension-qpsc-0.2.0-all.jar` (install after)
+2. `qupath-extension-qpsc-0.3.0-all.jar` (install after)
 
 Both must be in the extensions folder. The tiles-to-pyramid extension handles image stitching.
 
@@ -122,8 +122,8 @@ Some settings (like exposure times for backgrounds) are saved separately and nee
 
 **A:** Open a command window and run:
 ```bash
-cd /path/to/smart-wsi-scanner
-python -m smart_wsi_scanner.qp_server
+cd /path/to/microscope_command_server
+python -m microscope_command_server.server
 ```
 
 You should see:
@@ -148,8 +148,8 @@ taskkill /PID <process_id> /F
 ```
 
 **Option 2:** Use a different port
-- Edit `qp_server.py` and change the port number
-- Update your microscope config file to match
+- Start the server with a different port: `python -m microscope_command_server.server --port 5001`
+- Update QuPath preferences to match the new port
 
 #### Q: Server starts but QuPath can't connect
 
@@ -163,7 +163,7 @@ taskkill /PID <process_id> /F
 
 **A:** This is a Windows encoding issue. The fix is already in the code, but if you see it:
 - Your Python code has non-ASCII characters (like arrows, degrees symbols)
-- Update to the latest version of smart-wsi-scanner
+- Update to the latest version of microscope-command-server
 - If editing code yourself, use only ASCII characters in logging statements
 
 ### Micro-Manager Connection
@@ -661,6 +661,22 @@ If `base_gain` is set higher than 4.0, the R/B channels are clamped to 4.0x whil
 3. Verify stage shows in device list
 4. Test stage movement manually
 
+#### "CONFIG handshake failed" / "CFG_FAIL"
+
+**Meaning:** The microscope server rejected the configuration file sent during connection
+
+**Likely causes:**
+- Microscope config preference not set in QuPath
+- Config file path is invalid or file does not exist
+- Server version too old (requires microscope-command-server v1.1.0+)
+- Server cannot read the configuration file
+
+**Solution:**
+1. Verify microscope config is set: Edit > Preferences > QPSC > Microscope Config File
+2. Ensure the config file exists at the specified path
+3. Update microscope-command-server to v1.1.0 or later (CONFIG handshake required since v0.3.0)
+4. Check Python server console for the specific rejection reason
+
 ### Configuration Errors
 
 #### "Pixel size must be set for annotation-based workflows"
@@ -808,13 +824,13 @@ If `base_gain` is set higher than 4.0, the R/B channels are clamped to 4.0x whil
 - Start Python server
 - Create or open project as needed
 
-### Python Server (smart-wsi-scanner)
+### Python Server (microscope-command-server)
 
 **Problem:** Server won't start
 
 **Check:**
 1. Python version (3.8 or newer required)
-2. Dependencies installed (`pip install -r requirements.txt`)
+2. Dependencies installed (`pip install -e .` from microscope_command_server directory)
 3. Port 5000 not in use
 4. Micro-Manager running
 
@@ -824,11 +840,11 @@ If `base_gain` is set higher than 4.0, the R/B channels are clamped to 4.0x whil
 python --version
 
 # Install dependencies
-cd smart-wsi-scanner
-pip install -r requirements.txt
+cd microscope_command_server
+pip install -e .
 
 # Start server with explicit port
-python -m smart_wsi_scanner.qp_server --port 5000
+python -m microscope_command_server.server --port 5000
 ```
 
 **Problem:** Server crashes during acquisition
@@ -1001,7 +1017,7 @@ Run through this before first use:
 **QuPath Logs:**
 - Primary: `<QuPath-Directory>/logs/qpsc/qpsc-acquisition.log`
 - Older logs: Same folder, dated files kept for 7 days
-- Project-specific: `<Project-Folder>/acquisition.log` (when workflows enable it)
+- Project-specific: `<Project-Folder>/logs/acquisition.log` (when workflows enable it)
 
 **Python Server Logs:**
 - Console output (not saved by default)
@@ -1155,8 +1171,8 @@ If this guide doesn't solve your problem:
 
 **Start Python Server:**
 ```bash
-cd /path/to/smart-wsi-scanner
-python -m smart_wsi_scanner.qp_server
+cd /path/to/microscope_command_server
+python -m microscope_command_server.server
 ```
 
 **Test Microscope Connection:**
@@ -1202,6 +1218,6 @@ Do you have an overview image of your sample?
 
 ---
 
-**Document Version:** 1.1
-**Last Updated:** December 16, 2025
+**Document Version:** 1.2
+**Last Updated:** March 2, 2026
 **GitHub:** https://github.com/uw-loci/qupath-extension-qpsc
