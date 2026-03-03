@@ -105,6 +105,10 @@ public class StageInsert {
         double slideTopY = getDoubleValue(configMap, "slide_top_y_um", 0.0);
         double slideBottomY = getDoubleValue(configMap, "slide_bottom_y_um", 25000.0);
 
+        // Read optional slide X edge positions (measured, like Y edges)
+        Double slideLeftX = getDoubleValueOrNull(configMap, "slide_left_x_um");
+        Double slideRightX = getDoubleValueOrNull(configMap, "slide_right_x_um");
+
         // Detect axis orientation (optics may invert the coordinate system)
         // "Left" visually may correspond to larger X values if optics flip the image
         boolean xInverted = apertureLeftX > apertureRightX;
@@ -155,8 +159,20 @@ public class StageInsert {
         double slideCenterInsertY = Math.abs(slideCenterStageY - originYUm);
         double slideYOffsetUm = slideCenterInsertY - slideHeightUm / 2.0;
 
-        // Slide X offset: centered horizontally (can be negative if slide wider than aperture)
-        double slideXOffsetUm = (apertureWidthUm - slideWidthUm) / 2.0;
+        // Slide X offset: use measured edges if available, otherwise center in aperture.
+        double slideXOffsetUm;
+        if (slideLeftX != null && slideRightX != null) {
+            // Measured slide X edges - center the physical slide on their midpoint
+            double slideCenterStageX = (slideLeftX + slideRightX) / 2.0;
+            double slideCenterInsertX = Math.abs(slideCenterStageX - originXUm);
+            slideXOffsetUm = slideCenterInsertX - slideWidthUm / 2.0;
+            logger.info("Slide X from measured edges: left={}, right={}, center={}, offset={} um",
+                    String.format("%.0f", slideLeftX), String.format("%.0f", slideRightX),
+                    String.format("%.0f", slideCenterStageX), String.format("%.0f", slideXOffsetUm));
+        } else {
+            // No measured edges - assume slide is centered in aperture
+            slideXOffsetUm = (apertureWidthUm - slideWidthUm) / 2.0;
+        }
 
         // Build slide positions
         List<SlidePosition> slides = new ArrayList<>();
