@@ -10,6 +10,7 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -161,14 +162,53 @@ public class CameraControlController {
 
         ComboBox<String> objectiveCombo = new ComboBox<>();
         objectiveCombo.getItems().addAll(objectives);
-        if (!objectives.isEmpty()) {
-            objectiveCombo.setValue(objectives.iterator().next());
-        }
-
         ComboBox<String> detectorCombo = new ComboBox<>();
         detectorCombo.getItems().addAll(detectors);
-        if (!detectors.isEmpty()) {
-            detectorCombo.setValue(detectors.iterator().next());
+
+        // Try to auto-detect objective by matching MicroManager pixel size against config
+        boolean autoDetected = false;
+        try {
+            double mmPixelSize = controller.getSocketClient().getMicroscopePixelSize();
+            if (mmPixelSize > 0) {
+                for (String obj : objectives) {
+                    for (String det : detectors) {
+                        Double configPixelSize = mgr.getHardwarePixelSize(obj, det);
+                        if (configPixelSize != null && Math.abs(configPixelSize - mmPixelSize) < 0.001) {
+                            objectiveCombo.setValue(obj);
+                            detectorCombo.setValue(det);
+                            autoDetected = true;
+                            logger.info("Auto-detected objective/detector from MM pixel size {}: {} / {}",
+                                    mmPixelSize, obj, det);
+                            break;
+                        }
+                    }
+                    if (autoDetected) break;
+                }
+                if (!autoDetected) {
+                    logger.info("MM pixel size {} did not match any configured objective/detector pair", mmPixelSize);
+                }
+            }
+        } catch (IOException e) {
+            logger.debug("Could not read MM pixel size for auto-detection: {}", e.getMessage());
+        }
+
+        // Fall back to last-used preferences if auto-detection didn't work
+        if (!autoDetected) {
+            String lastObjective = PersistentPreferences.getLastObjective();
+            if (!lastObjective.isEmpty() && objectives.contains(lastObjective)) {
+                objectiveCombo.setValue(lastObjective);
+                logger.debug("Pre-selected last-used objective: {}", lastObjective);
+            } else if (!objectives.isEmpty()) {
+                objectiveCombo.setValue(objectives.iterator().next());
+            }
+
+            String lastDetector = PersistentPreferences.getLastDetector();
+            if (!lastDetector.isEmpty() && detectors.contains(lastDetector)) {
+                detectorCombo.setValue(lastDetector);
+                logger.debug("Pre-selected last-used detector: {}", lastDetector);
+            } else if (!detectors.isEmpty()) {
+                detectorCombo.setValue(detectors.iterator().next());
+            }
         }
 
         selectionGrid.add(new Label(res.getString("camera.label.objective")), 0, 0);
