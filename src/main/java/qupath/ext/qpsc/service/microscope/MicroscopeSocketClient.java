@@ -764,8 +764,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         buffer.putFloat((float) x);
         buffer.putFloat((float) y);
 
+        long t0 = System.nanoTime();
         executeCommandOnAux(Command.MOVE, buffer.array(), 0);
-        logger.info("Moved stage to XY position: ({}, {})", x, y);
+        long elapsedMs = (System.nanoTime() - t0) / 1_000_000;
+        logger.info("moveStageXY({}, {}) aux round-trip: {}ms", x, y, elapsedMs);
     }
 
     /**

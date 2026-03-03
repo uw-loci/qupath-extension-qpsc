@@ -216,13 +216,22 @@ public class VirtualJoystick extends Pane {
                     // After sleeping, check if a newer target arrived
                     double[] newerTarget = pendingTarget.getAndSet(null);
                     if (newerTarget != null) {
+                        logger.debug("Joystick coalesced: skipped ({}, {}) -> ({}, {})",
+                                String.format("%.1f", target[0]), String.format("%.1f", target[1]),
+                                String.format("%.1f", newerTarget[0]), String.format("%.1f", newerTarget[1]));
                         target = newerTarget; // Use the newer position
                     }
                 }
 
                 // Execute the move (note: this returns immediately, server handles async)
                 try {
+                    long dispatchTime = System.currentTimeMillis();
+                    long interval = dispatchTime - lastMoveTime;
                     movementCallback.accept(target[0], target[1]);
+                    long callbackMs = System.currentTimeMillis() - dispatchTime;
+                    logger.debug("Joystick dispatch: interval={}ms, callback={}ms, delta=({}, {})",
+                            interval, callbackMs,
+                            String.format("%.1f", target[0]), String.format("%.1f", target[1]));
                     lastMoveTime = System.currentTimeMillis();
                 } catch (Exception e) {
                     logger.warn("Joystick movement callback failed: {}", e.getMessage());
