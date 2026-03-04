@@ -1,5 +1,12 @@
 package qupath.ext.qpsc.ui;
 
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -25,14 +32,6 @@ import qupath.ext.qpsc.utilities.SampleNameValidator;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.Project;
-
-import java.awt.geom.AffineTransform;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.text.SimpleDateFormat;
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
  * Consolidated acquisition controller for the Existing Image workflow.
@@ -65,6 +64,7 @@ public class ExistingImageAcquisitionController {
 
     /** Confidence thresholds */
     private static final double HIGH_CONFIDENCE = 0.8;
+
     private static final double MEDIUM_CONFIDENCE = 0.5;
 
     /**
@@ -114,8 +114,7 @@ public class ExistingImageAcquisitionController {
             // White balance settings (JAI camera only)
             boolean enableWhiteBalance,
             boolean perAngleWhiteBalance,
-            String wbMode
-    ) {}
+            String wbMode) {}
 
     /**
      * Shows the consolidated acquisition dialog.
@@ -131,8 +130,7 @@ public class ExistingImageAcquisitionController {
 
         Platform.runLater(() -> {
             try {
-                ConsolidatedDialogBuilder builder = new ConsolidatedDialogBuilder(
-                        defaultSampleName, annotations);
+                ConsolidatedDialogBuilder builder = new ConsolidatedDialogBuilder(defaultSampleName, annotations);
                 Optional<ExistingImageAcquisitionConfig> result = builder.buildAndShow();
 
                 if (result.isPresent()) {
@@ -237,8 +235,8 @@ public class ExistingImageAcquisitionController {
             this.defaultSampleName = defaultSampleName;
             this.annotations = annotations != null ? annotations : new ArrayList<>();
             this.annotationCount = this.annotations.size();
-            this.configManager = MicroscopeConfigManager.getInstance(
-                    QPPreferenceDialog.getMicroscopeConfigFileProperty());
+            this.configManager =
+                    MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
             // Initialize transform manager
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
@@ -252,8 +250,7 @@ public class ExistingImageAcquisitionController {
                 File projectFile = gui.getProject().getPath().toFile();
                 this.existingProjectFolder = projectFile.getParentFile();
                 this.existingProjectName = existingProjectFolder.getName();
-                logger.info("Found open project: {} in {}", existingProjectName,
-                        existingProjectFolder.getParent());
+                logger.info("Found open project: {} in {}", existingProjectName, existingProjectFolder.getParent());
             } else {
                 this.existingProjectFolder = null;
                 this.existingProjectName = null;
@@ -262,8 +259,7 @@ public class ExistingImageAcquisitionController {
             // Load available transforms
             String microscopeName = configManager.getMicroscopeName();
             this.availableTransforms = transformManager.getTransformsForMicroscope(microscopeName);
-            logger.info("Found {} transforms for microscope '{}'",
-                    availableTransforms.size(), microscopeName);
+            logger.info("Found {} transforms for microscope '{}'", availableTransforms.size(), microscopeName);
         }
 
         Optional<ExistingImageAcquisitionConfig> buildAndShow() {
@@ -295,7 +291,8 @@ public class ExistingImageAcquisitionController {
             setupPreviewUpdateListeners();
 
             // Assemble main content
-            VBox mainContent = new VBox(10,
+            VBox mainContent = new VBox(
+                    10,
                     variantBanner,
                     errorSummaryPanel,
                     projectPane,
@@ -303,8 +300,7 @@ public class ExistingImageAcquisitionController {
                     alignmentPane,
                     refinementPane,
                     advancedPane,
-                    createPreviewSection()
-            );
+                    createPreviewSection());
             mainContent.setPadding(new Insets(0));
 
             // Wrap in scroll pane
@@ -344,15 +340,15 @@ public class ExistingImageAcquisitionController {
             textLabel.setWrapText(true);
 
             if (hasOpenProject) {
-                variantBanner.setStyle("-fx-background-color: #E8F5E9; -fx-border-color: #A5D6A7; " +
-                        "-fx-border-width: 0 0 1 0;");
+                variantBanner.setStyle(
+                        "-fx-background-color: #E8F5E9; -fx-border-color: #A5D6A7; " + "-fx-border-width: 0 0 1 0;");
                 iconLabel.setText("[+]");
                 iconLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #2E7D32;");
                 textLabel.setText("Adding to existing project: " + existingProjectName);
                 textLabel.setStyle("-fx-text-fill: #2E7D32;");
             } else {
-                variantBanner.setStyle("-fx-background-color: #E3F2FD; -fx-border-color: #90CAF9; " +
-                        "-fx-border-width: 0 0 1 0;");
+                variantBanner.setStyle(
+                        "-fx-background-color: #E3F2FD; -fx-border-color: #90CAF9; " + "-fx-border-width: 0 0 1 0;");
                 iconLabel.setText("[*]");
                 iconLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #1565C0;");
                 textLabel.setText("Creating new project");
@@ -475,7 +471,7 @@ public class ExistingImageAcquisitionController {
             objectiveBox.valueProperty().addListener((obs, old, newVal) -> triggerPreviewUpdate());
             detectorBox.valueProperty().addListener((obs, old, newVal) -> {
                 triggerPreviewUpdate();
-                updateWhiteBalanceVisibility();  // Update WB section visibility when detector changes
+                updateWhiteBalanceVisibility(); // Update WB section visibility when detector changes
             });
 
             int row = 0;
@@ -593,12 +589,14 @@ public class ExistingImageAcquisitionController {
             Label recommendationLabel = new Label();
             recommendationLabel.setWrapText(true);
             recommendationLabel.setPadding(new Insets(8));
-            recommendationLabel.setStyle("-fx-background-color: #FFF8E1; -fx-background-radius: 4; -fx-font-size: 11px;");
+            recommendationLabel.setStyle(
+                    "-fx-background-color: #FFF8E1; -fx-background-radius: 4; -fx-font-size: 11px;");
 
             if (hasTransforms) {
-                recommendationLabel.setText("[i] Recommendation: Use Existing Alignment (found " +
-                        availableTransforms.size() + " saved transform" +
-                        (availableTransforms.size() > 1 ? "s" : "") + ")");
+                recommendationLabel.setText(
+                        "[i] Recommendation: Use Existing Alignment (found " + availableTransforms.size()
+                                + " saved transform" + (availableTransforms.size() > 1 ? "s" : "")
+                                + ")");
             } else {
                 recommendationLabel.setText("[i] Manual alignment required (no saved transforms found)");
             }
@@ -641,9 +639,9 @@ public class ExistingImageAcquisitionController {
 
             // Add descriptions
             Label noRefineDesc = new Label(
-                isUsingRefinedAlignment() ?
-                    "    Fastest - use alignment as-is. Accuracy: +/- 5 um (previously refined)" :
-                    "    Fastest - use alignment as-is. Accuracy: +/- 20 um");
+                    isUsingRefinedAlignment()
+                            ? "    Fastest - use alignment as-is. Accuracy: +/- 5 um (previously refined)"
+                            : "    Fastest - use alignment as-is. Accuracy: +/- 20 um");
             noRefineDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
 
             Label singleTileDesc = new Label("    Verify position with one tile. Accuracy: +/- 5 um");
@@ -656,17 +654,22 @@ public class ExistingImageAcquisitionController {
             refinementRecommendationLabel = new Label();
             refinementRecommendationLabel.setWrapText(true);
             refinementRecommendationLabel.setPadding(new Insets(8));
-            refinementRecommendationLabel.setStyle("-fx-background-color: #FFF8E1; -fx-background-radius: 4; -fx-font-size: 11px;");
+            refinementRecommendationLabel.setStyle(
+                    "-fx-background-color: #FFF8E1; -fx-background-radius: 4; -fx-font-size: 11px;");
 
             // Set default based on confidence
             updateRefinementRecommendation();
 
-            refinementBox.getChildren().addAll(
-                    noRefineRadio, noRefineDesc,
-                    singleTileRadio, singleTileDesc,
-                    fullManualRadio, fullManualDesc,
-                    refinementRecommendationLabel
-            );
+            refinementBox
+                    .getChildren()
+                    .addAll(
+                            noRefineRadio,
+                            noRefineDesc,
+                            singleTileRadio,
+                            singleTileDesc,
+                            fullManualRadio,
+                            fullManualDesc,
+                            refinementRecommendationLabel);
 
             refinementPane = new TitledPane("REFINEMENT OPTIONS", refinementBox);
             refinementPane.setExpanded(true);
@@ -695,13 +698,16 @@ public class ExistingImageAcquisitionController {
             // WB mode dropdown
             wbModeComboBox = new ComboBox<>();
             wbModeComboBox.getItems().addAll("Off", "Camera AWB", "Simple (90deg)", "Per-angle (PPM)");
-            wbModeComboBox.setValue("Per-angle (PPM)");
-            wbModeComboBox.setTooltip(new Tooltip(
-                    "White balance mode:\n" +
-                    "  Off - No white balance correction\n" +
-                    "  Camera AWB - Camera auto white balance at 90deg, then off\n" +
-                    "  Simple (90deg) - Use 90deg R:G:B ratios, uniformly scaled per angle\n" +
-                    "  Per-angle (PPM) - Independent calibration per angle (default)"));
+            String savedWBMode = PersistentPreferences.getLastWhiteBalanceMode();
+            if (wbModeComboBox.getItems().contains(savedWBMode)) {
+                wbModeComboBox.setValue(savedWBMode);
+            } else {
+                wbModeComboBox.setValue("Per-angle (PPM)");
+            }
+            wbModeComboBox.setTooltip(new Tooltip("White balance mode:\n" + "  Off - No white balance correction\n"
+                    + "  Camera AWB - Camera auto white balance at 90deg, then off\n"
+                    + "  Simple (90deg) - Use 90deg R:G:B ratios, uniformly scaled per angle\n"
+                    + "  Per-angle (PPM) - Independent calibration per angle (default)"));
 
             // Hidden legacy checkboxes for backward compat
             enableWhiteBalanceCheckBox = new CheckBox();
@@ -717,6 +723,7 @@ public class ExistingImageAcquisitionController {
                 if (newVal != null) {
                     enableWhiteBalanceCheckBox.setSelected(!"Off".equals(newVal));
                     perAngleWhiteBalanceCheckBox.setSelected("Per-angle (PPM)".equals(newVal));
+                    PersistentPreferences.setLastWhiteBalanceMode(newVal);
                 }
             });
 
@@ -726,7 +733,7 @@ public class ExistingImageAcquisitionController {
             wbModeRow.getChildren().addAll(wbModeLabel, wbModeComboBox);
 
             whiteBalanceSection.getChildren().addAll(wbHeader, wbModeRow);
-            whiteBalanceSection.setVisible(false);  // Hidden by default
+            whiteBalanceSection.setVisible(false); // Hidden by default
             whiteBalanceSection.setManaged(false);
 
             // Modality-specific options (will be populated by updateModalityUI)
@@ -757,12 +764,8 @@ public class ExistingImageAcquisitionController {
         }
 
         private TitledPane createPreviewSection() {
-            VBox previewContent = new VBox(5,
-                    previewAnnotationsLabel,
-                    previewTilesLabel,
-                    previewTimeLabel,
-                    previewStorageLabel
-            );
+            VBox previewContent =
+                    new VBox(5, previewAnnotationsLabel, previewTilesLabel, previewTimeLabel, previewStorageLabel);
             previewContent.setPadding(new Insets(10));
             previewContent.setStyle("-fx-background-color: #f8f9fa; -fx-border-color: #dee2e6; -fx-border-width: 1px;");
 
@@ -776,8 +779,8 @@ public class ExistingImageAcquisitionController {
 
         private void createErrorSummaryPanel() {
             errorSummaryPanel = new VBox(5);
-            errorSummaryPanel.setStyle("-fx-background-color: #fff3cd; -fx-border-color: #ffc107; " +
-                    "-fx-border-width: 1px; -fx-padding: 10px;");
+            errorSummaryPanel.setStyle("-fx-background-color: #fff3cd; -fx-border-color: #ffc107; "
+                    + "-fx-border-width: 1px; -fx-padding: 10px;");
             errorSummaryPanel.setVisible(false);
             errorSummaryPanel.setManaged(false);
 
@@ -869,7 +872,7 @@ public class ExistingImageAcquisitionController {
                 modalityUI = uiOpt.get();
                 // Add the modality-specific UI to the content pane
                 modalityContent.getChildren().add(modalityUI.getNode());
-                modalityPane.setExpanded(true);  // Auto-expand when there's content
+                modalityPane.setExpanded(true); // Auto-expand when there's content
                 logger.debug("Added modality UI for: {}", modality);
             } else {
                 modalityUI = null;
@@ -891,7 +894,7 @@ public class ExistingImageAcquisitionController {
          */
         private void updateWhiteBalanceVisibility() {
             if (whiteBalanceSection == null) {
-                return;  // Not yet initialized
+                return; // Not yet initialized
             }
 
             String detectorDisplay = detectorBox.getValue();
@@ -906,24 +909,28 @@ public class ExistingImageAcquisitionController {
             String modality = modalityBox.getValue();
             boolean isPPM = modality != null && modality.toLowerCase().startsWith("ppm");
             if (!isPPM && wbModeComboBox != null) {
-                if ("Per-angle (PPM)".equals(wbModeComboBox.getValue()) ||
-                    "Simple (90deg)".equals(wbModeComboBox.getValue())) {
+                if ("Per-angle (PPM)".equals(wbModeComboBox.getValue())
+                        || "Simple (90deg)".equals(wbModeComboBox.getValue())) {
                     wbModeComboBox.setValue("Off");
                 }
             }
 
-            logger.debug("White balance visibility updated: JAI={}, PPM={}, section visible={}",
-                    isJAI, isPPM, whiteBalanceSection.isVisible());
+            logger.debug(
+                    "White balance visibility updated: JAI={}, PPM={}, section visible={}",
+                    isJAI,
+                    isPPM,
+                    whiteBalanceSection.isVisible());
         }
 
         private void updateConfidenceLabel() {
             AffineTransformManager.TransformPreset preset = transformCombo.getValue();
             if (preset != null) {
                 double confidence = AlignmentHelper.calculateConfidence(preset);
-                String level = confidence >= HIGH_CONFIDENCE ? "HIGH" :
-                        (confidence >= MEDIUM_CONFIDENCE ? "MEDIUM" : "LOW");
-                String color = confidence >= HIGH_CONFIDENCE ? "#2E7D32" :
-                        (confidence >= MEDIUM_CONFIDENCE ? "#F57F17" : "#C62828");
+                String level =
+                        confidence >= HIGH_CONFIDENCE ? "HIGH" : (confidence >= MEDIUM_CONFIDENCE ? "MEDIUM" : "LOW");
+                String color = confidence >= HIGH_CONFIDENCE
+                        ? "#2E7D32"
+                        : (confidence >= MEDIUM_CONFIDENCE ? "#F57F17" : "#C62828");
                 confidenceLabel.setText(String.format("Confidence: %s (%.0f%%)", level, confidence * 100));
                 confidenceLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
             } else {
@@ -1005,8 +1012,7 @@ public class ExistingImageAcquisitionController {
                 return false;
             }
 
-            AffineTransform slideTransform =
-                AffineTransformManager.loadSlideAlignment(project, imageName);
+            AffineTransform slideTransform = AffineTransformManager.loadSlideAlignment(project, imageName);
 
             return slideTransform != null;
         }
@@ -1099,29 +1105,30 @@ public class ExistingImageAcquisitionController {
             // Style based on age
             if (isOutdated) {
                 // Amber warning style for old alignments
-                banner.setStyle("-fx-background-color: #FFF8E1; -fx-border-color: #FFD54F; " +
-                               "-fx-border-width: 0 0 1 0;");
+                banner.setStyle(
+                        "-fx-background-color: #FFF8E1; -fx-border-color: #FFD54F; " + "-fx-border-width: 0 0 1 0;");
             } else {
                 // Blue info style for recent alignments
-                banner.setStyle("-fx-background-color: #E3F2FD; -fx-border-color: #90CAF9; " +
-                               "-fx-border-width: 0 0 1 0;");
+                banner.setStyle(
+                        "-fx-background-color: #E3F2FD; -fx-border-color: #90CAF9; " + "-fx-border-width: 0 0 1 0;");
             }
 
             // Icon
             Label iconLabel = new Label(isOutdated ? "[!]" : "[*]");
-            iconLabel.setStyle(String.format("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: %s;",
-                isOutdated ? "#F57F17" : "#1565C0"));
+            iconLabel.setStyle(String.format(
+                    "-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: %s;",
+                    isOutdated ? "#F57F17" : "#1565C0"));
 
             // Message
             VBox messageBox = new VBox(2);
 
             // Title
-            String titleText = isOutdated ?
-                "Previously Refined Alignment May Be Outdated" :
-                "Using Previously Refined Alignment";
+            String titleText =
+                    isOutdated ? "Previously Refined Alignment May Be Outdated" : "Using Previously Refined Alignment";
             Label titleLabel = new Label(titleText);
-            titleLabel.setStyle(String.format("-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: %s;",
-                isOutdated ? "#F57F17" : "#1565C0"));
+            titleLabel.setStyle(String.format(
+                    "-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: %s;",
+                    isOutdated ? "#F57F17" : "#1565C0"));
 
             // Date with age indicator
             String ageText;
@@ -1135,19 +1142,20 @@ public class ExistingImageAcquisitionController {
                 ageText = ""; // Unknown age
             }
 
-            String detailText = date != null ?
-                String.format("Last refined: %s%s", date, ageText.isEmpty() ? "" : " (" + ageText + ")") :
-                "Last refined: Unknown";
+            String detailText = date != null
+                    ? String.format("Last refined: %s%s", date, ageText.isEmpty() ? "" : " (" + ageText + ")")
+                    : "Last refined: Unknown";
             Label detailLabel = new Label(detailText);
             detailLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #424242;");
 
             // Recommendation
-            String recommendationText = isOutdated ?
-                "The system may have shifted - consider re-aligning" :
-                "Recommendation: Proceed without refinement";
+            String recommendationText = isOutdated
+                    ? "The system may have shifted - consider re-aligning"
+                    : "Recommendation: Proceed without refinement";
             Label recommendationLabel = new Label(recommendationText);
-            recommendationLabel.setStyle(String.format("-fx-font-size: 11px; -fx-font-style: italic; -fx-text-fill: %s;",
-                isOutdated ? "#F57F17" : "#1565C0"));
+            recommendationLabel.setStyle(String.format(
+                    "-fx-font-size: 11px; -fx-font-style: italic; -fx-text-fill: %s;",
+                    isOutdated ? "#F57F17" : "#1565C0"));
 
             messageBox.getChildren().addAll(titleLabel, detailLabel, recommendationLabel);
 
@@ -1181,14 +1189,13 @@ public class ExistingImageAcquisitionController {
                 double imagePixelSize = 1.0; // Default if no image
                 QuPathGUI gui = QuPathGUI.getInstance();
                 if (gui != null && gui.getImageData() != null) {
-                    imagePixelSize = gui.getImageData().getServer()
-                            .getPixelCalibration().getAveragedPixelSizeMicrons();
+                    imagePixelSize =
+                            gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
                 }
 
                 // Calculate actual tile count from annotation bounds
                 double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
-                int totalTiles = calculateTileCount(fovWidthMicrons, fovHeightMicrons,
-                        overlapPercent, imagePixelSize);
+                int totalTiles = calculateTileCount(fovWidthMicrons, fovHeightMicrons, overlapPercent, imagePixelSize);
 
                 // Get angle count from modality handler
                 int angleCount = getAngleCountForModality(modality);
@@ -1196,8 +1203,8 @@ public class ExistingImageAcquisitionController {
 
                 // Update labels with actual counts
                 if (angleCount > 1) {
-                    previewTilesLabel.setText(String.format("Images: %,d tiles x %d angles = %,d images",
-                            totalTiles, angleCount, totalImages));
+                    previewTilesLabel.setText(String.format(
+                            "Images: %,d tiles x %d angles = %,d images", totalTiles, angleCount, totalImages));
                 } else {
                     previewTilesLabel.setText(String.format("Tiles: %,d", totalTiles));
                 }
@@ -1251,8 +1258,8 @@ public class ExistingImageAcquisitionController {
          * @param imagePixelSize Image pixel size in microns
          * @return Total number of tiles
          */
-        private int calculateTileCount(double fovWidthMicrons, double fovHeightMicrons,
-                                        double overlapPercent, double imagePixelSize) {
+        private int calculateTileCount(
+                double fovWidthMicrons, double fovHeightMicrons, double overlapPercent, double imagePixelSize) {
             if (annotations.isEmpty()) {
                 return 0;
             }
@@ -1413,12 +1420,13 @@ public class ExistingImageAcquisitionController {
 
                 // Get white balance settings from ComboBox
                 String wbModeDisplay = wbModeComboBox != null ? wbModeComboBox.getValue() : "Per-angle (PPM)";
-                String wbMode = switch (wbModeDisplay) {
-                    case "Off" -> "off";
-                    case "Camera AWB" -> "camera_awb";
-                    case "Simple (90deg)" -> "simple";
-                    default -> "per_angle";
-                };
+                String wbMode =
+                        switch (wbModeDisplay) {
+                            case "Off" -> "off";
+                            case "Camera AWB" -> "camera_awb";
+                            case "Simple (90deg)" -> "simple";
+                            default -> "per_angle";
+                        };
                 boolean enableWhiteBalance = !"off".equals(wbMode);
                 boolean perAngleWhiteBalance = "per_angle".equals(wbMode);
 
@@ -1428,19 +1436,32 @@ public class ExistingImageAcquisitionController {
                 PersistentPreferences.setLastObjective(objective);
                 PersistentPreferences.setLastDetector(detector);
 
-                logger.info("Created acquisition config: sample={}, modality={}, useExisting={}, refinement={}, " +
-                           "wbMode={}, enableWB={}, perAngleWB={}",
-                        sampleName, modality, useExisting, refinement, wbMode, enableWhiteBalance, perAngleWhiteBalance);
+                logger.info(
+                        "Created acquisition config: sample={}, modality={}, useExisting={}, refinement={}, "
+                                + "wbMode={}, enableWB={}, perAngleWB={}",
+                        sampleName,
+                        modality,
+                        useExisting,
+                        refinement,
+                        wbMode,
+                        enableWhiteBalance,
+                        perAngleWhiteBalance);
 
                 return new ExistingImageAcquisitionConfig(
-                        sampleName, projectsFolder, hasOpenProject,
-                        modality, objective, detector,
-                        useExisting, transform, confidence,
+                        sampleName,
+                        projectsFolder,
+                        hasOpenProject,
+                        modality,
+                        objective,
+                        detector,
+                        useExisting,
+                        transform,
+                        confidence,
                         refinement,
                         angleOverrides,
-                        enableWhiteBalance, perAngleWhiteBalance,
-                        wbMode
-                );
+                        enableWhiteBalance,
+                        perAngleWhiteBalance,
+                        wbMode);
 
             } catch (Exception e) {
                 logger.error("Error creating result", e);

@@ -1,11 +1,14 @@
 package qupath.ext.qpsc.ui;
 
+import java.io.File;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.DirectoryChooser;
@@ -22,11 +25,6 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.SampleNameValidator;
 import qupath.lib.gui.QuPathGUI;
-
-import java.io.File;
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
  * Unified acquisition controller that consolidates sample setup, hardware selection,
@@ -63,13 +61,14 @@ public class UnifiedAcquisitionController {
             String modality,
             String objective,
             String detector,
-            double x1, double y1,
-            double x2, double y2,
+            double x1,
+            double y1,
+            double x2,
+            double y2,
             Map<String, Double> angleOverrides,
             boolean enableWhiteBalance,
             boolean perAngleWhiteBalance,
-            String wbMode
-    ) {}
+            String wbMode) {}
 
     /**
      * Shows the unified acquisition dialog.
@@ -174,8 +173,8 @@ public class UnifiedAcquisitionController {
 
         UnifiedDialogBuilder() {
             this.res = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings");
-            this.configManager = MicroscopeConfigManager.getInstance(
-                    QPPreferenceDialog.getMicroscopeConfigFileProperty());
+            this.configManager =
+                    MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
             // Check if a project is already open
             QuPathGUI gui = QuPathGUI.getInstance();
@@ -185,8 +184,7 @@ public class UnifiedAcquisitionController {
                 File projectFile = gui.getProject().getPath().toFile();
                 this.existingProjectFolder = projectFile.getParentFile();
                 this.existingProjectName = existingProjectFolder.getName();
-                logger.info("Found open project: {} in {}", existingProjectName,
-                        existingProjectFolder.getParent());
+                logger.info("Found open project: {} in {}", existingProjectName, existingProjectFolder.getParent());
             } else {
                 this.existingProjectFolder = null;
                 this.existingProjectName = null;
@@ -197,8 +195,8 @@ public class UnifiedAcquisitionController {
             dialog = new Dialog<>();
             dialog.initModality(Modality.APPLICATION_MODAL);
             dialog.setTitle("Bounded Acquisition");
-            dialog.setHeaderText("Configure and start a new bounded acquisition.\n" +
-                    "All settings are visible below - expand sections as needed.");
+            dialog.setHeaderText("Configure and start a new bounded acquisition.\n"
+                    + "All settings are visible below - expand sections as needed.");
             dialog.setResizable(true);
 
             // Add buttons
@@ -223,14 +221,8 @@ public class UnifiedAcquisitionController {
             setupPreviewUpdateListeners();
 
             // Assemble the main content
-            VBox mainContent = new VBox(10,
-                    errorSummaryPanel,
-                    projectPane,
-                    hardwarePane,
-                    regionPane,
-                    advancedPane,
-                    createPreviewSection()
-            );
+            VBox mainContent = new VBox(
+                    10, errorSummaryPanel, projectPane, hardwarePane, regionPane, advancedPane, createPreviewSection());
             mainContent.setPadding(new Insets(15));
 
             // Wrap in scroll pane for smaller screens
@@ -397,7 +389,7 @@ public class UnifiedAcquisitionController {
             objectiveBox.valueProperty().addListener((obs, old, newVal) -> triggerPreviewUpdate());
             detectorBox.valueProperty().addListener((obs, old, newVal) -> {
                 triggerPreviewUpdate();
-                updateWhiteBalanceVisibility();  // Update WB section visibility when detector changes
+                updateWhiteBalanceVisibility(); // Update WB section visibility when detector changes
             });
 
             int row = 0;
@@ -635,7 +627,8 @@ public class UnifiedAcquisitionController {
         }
 
         private TitledPane createPreviewSection() {
-            VBox previewContent = new VBox(5,
+            VBox previewContent = new VBox(
+                    5,
                     previewRegionLabel,
                     previewFOVLabel,
                     previewTileGridLabel,
@@ -644,8 +637,7 @@ public class UnifiedAcquisitionController {
                     new Separator(),
                     previewTimeLabel,
                     previewStorageLabel,
-                    previewErrorLabel
-            );
+                    previewErrorLabel);
             previewContent.setPadding(new Insets(10));
             previewContent.setStyle("-fx-background-color: #f8f9fa; -fx-border-color: #dee2e6; -fx-border-width: 1px;");
 
@@ -672,13 +664,16 @@ public class UnifiedAcquisitionController {
             // WB mode dropdown - replaces two checkboxes with a single ComboBox
             wbModeComboBox = new ComboBox<>();
             wbModeComboBox.getItems().addAll("Off", "Camera AWB", "Simple (90deg)", "Per-angle (PPM)");
-            wbModeComboBox.setValue("Per-angle (PPM)");  // Default for PPM
-            wbModeComboBox.setTooltip(new Tooltip(
-                    "White balance mode:\n" +
-                    "  Off - No white balance correction\n" +
-                    "  Camera AWB - Camera auto white balance at 90deg, then off\n" +
-                    "  Simple (90deg) - Use 90deg R:G:B ratios, uniformly scaled per angle\n" +
-                    "  Per-angle (PPM) - Independent calibration per angle (default)"));
+            String savedWBMode = PersistentPreferences.getLastWhiteBalanceMode();
+            if (wbModeComboBox.getItems().contains(savedWBMode)) {
+                wbModeComboBox.setValue(savedWBMode);
+            } else {
+                wbModeComboBox.setValue("Per-angle (PPM)");
+            }
+            wbModeComboBox.setTooltip(new Tooltip("White balance mode:\n" + "  Off - No white balance correction\n"
+                    + "  Camera AWB - Camera auto white balance at 90deg, then off\n"
+                    + "  Simple (90deg) - Use 90deg R:G:B ratios, uniformly scaled per angle\n"
+                    + "  Per-angle (PPM) - Independent calibration per angle (default)"));
 
             // Keep legacy checkboxes in sync (hidden, for backward compat with callers)
             enableWhiteBalanceCheckBox = new CheckBox();
@@ -690,11 +685,12 @@ public class UnifiedAcquisitionController {
             perAngleWhiteBalanceCheckBox.setVisible(false);
             perAngleWhiteBalanceCheckBox.setManaged(false);
 
-            // Sync legacy checkboxes when ComboBox changes
+            // Sync legacy checkboxes when ComboBox changes and persist selection
             wbModeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
                 if (newVal != null) {
                     enableWhiteBalanceCheckBox.setSelected(!"Off".equals(newVal));
                     perAngleWhiteBalanceCheckBox.setSelected("Per-angle (PPM)".equals(newVal));
+                    PersistentPreferences.setLastWhiteBalanceMode(newVal);
                 }
             });
 
@@ -704,7 +700,7 @@ public class UnifiedAcquisitionController {
             wbModeRow.getChildren().addAll(wbModeLabel, wbModeComboBox);
 
             whiteBalanceSection.getChildren().addAll(wbHeader, wbModeRow);
-            whiteBalanceSection.setVisible(false);  // Hidden by default
+            whiteBalanceSection.setVisible(false); // Hidden by default
             whiteBalanceSection.setManaged(false);
 
             // === MODALITY-SPECIFIC SECTION ===
@@ -722,12 +718,9 @@ public class UnifiedAcquisitionController {
 
         private void createErrorSummaryPanel() {
             errorSummaryPanel = new VBox(5);
-            errorSummaryPanel.setStyle(
-                    "-fx-background-color: #fff3cd; " +
-                    "-fx-border-color: #ffc107; " +
-                    "-fx-border-width: 1px; " +
-                    "-fx-padding: 10px;"
-            );
+            errorSummaryPanel.setStyle("-fx-background-color: #fff3cd; " + "-fx-border-color: #ffc107; "
+                    + "-fx-border-width: 1px; "
+                    + "-fx-padding: 10px;");
             errorSummaryPanel.setVisible(false);
             errorSummaryPanel.setManaged(false);
 
@@ -839,7 +832,7 @@ public class UnifiedAcquisitionController {
          */
         private void updateWhiteBalanceVisibility() {
             if (whiteBalanceSection == null) {
-                return;  // Not yet initialized
+                return; // Not yet initialized
             }
 
             String detectorDisplay = detectorBox.getValue();
@@ -855,14 +848,17 @@ public class UnifiedAcquisitionController {
             boolean isPPM = modality != null && modality.toLowerCase().startsWith("ppm");
             // All modes are available for PPM; for non-PPM, hide PPM-specific options
             if (!isPPM && wbModeComboBox != null) {
-                if ("Per-angle (PPM)".equals(wbModeComboBox.getValue()) ||
-                    "Simple (90deg)".equals(wbModeComboBox.getValue())) {
+                if ("Per-angle (PPM)".equals(wbModeComboBox.getValue())
+                        || "Simple (90deg)".equals(wbModeComboBox.getValue())) {
                     wbModeComboBox.setValue("Off");
                 }
             }
 
-            logger.debug("White balance visibility updated: JAI={}, PPM={}, section visible={}",
-                    isJAI, isPPM, whiteBalanceSection.isVisible());
+            logger.debug(
+                    "White balance visibility updated: JAI={}, PPM={}, section visible={}",
+                    isJAI,
+                    isPPM,
+                    whiteBalanceSection.isVisible());
         }
 
         private void setupPreviewUpdateListeners() {
@@ -989,19 +985,17 @@ public class UnifiedAcquisitionController {
                     x2 = Math.max(startX, endX);
                     y2 = Math.max(startY, endY);
                 }
-                calculatedBoundsLabel.setText(String.format(
-                        "Calculated bounds: (%.1f, %.1f) to (%.1f, %.1f)", x1, y1, x2, y2));
+                calculatedBoundsLabel.setText(
+                        String.format("Calculated bounds: (%.1f, %.1f) to (%.1f, %.1f)", x1, y1, x2, y2));
                 calculatedBoundsLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #28a745;");
 
                 // Update preview labels
-                previewRegionLabel.setText(String.format("Region: %.2f x %.2f mm",
-                        width / 1000.0, height / 1000.0));
-                previewFOVLabel.setText(String.format("Field of View: %.0f x %.0f um (%s)",
-                        frameWidth, frameHeight, objective));
-                previewTileGridLabel.setText(String.format("Tile Grid: %d x %d = %d tiles (%.0f%% overlap)",
-                        tilesX, tilesY, totalTiles, overlapPercent));
-                previewAnglesLabel.setText(String.format("Angles: %d (%s modality)",
-                        angleCount, modality));
+                previewRegionLabel.setText(String.format("Region: %.2f x %.2f mm", width / 1000.0, height / 1000.0));
+                previewFOVLabel.setText(
+                        String.format("Field of View: %.0f x %.0f um (%s)", frameWidth, frameHeight, objective));
+                previewTileGridLabel.setText(String.format(
+                        "Tile Grid: %d x %d = %d tiles (%.0f%% overlap)", tilesX, tilesY, totalTiles, overlapPercent));
+                previewAnglesLabel.setText(String.format("Angles: %d (%s modality)", angleCount, modality));
                 previewTotalImagesLabel.setText(String.format("Total Images: %,d", totalImages));
                 previewTimeLabel.setText("Est. Time: " + timeEstimate);
                 previewStorageLabel.setText("Est. Storage: " + storageEstimate);
@@ -1195,8 +1189,7 @@ public class UnifiedAcquisitionController {
                 PersistentPreferences.setLastModality(modality);
                 PersistentPreferences.setLastObjective(objective);
                 PersistentPreferences.setLastDetector(detector);
-                PersistentPreferences.setBoundingBoxString(
-                        String.format("%.2f,%.2f,%.2f,%.2f", x1, y1, x2, y2));
+                PersistentPreferences.setBoundingBoxString(String.format("%.2f,%.2f,%.2f,%.2f", x1, y1, x2, y2));
 
                 // Get angle overrides if available
                 Map<String, Double> angleOverrides = null;
@@ -1209,26 +1202,46 @@ public class UnifiedAcquisitionController {
 
                 // Get white balance settings from ComboBox
                 String wbModeDisplay = wbModeComboBox != null ? wbModeComboBox.getValue() : "Per-angle (PPM)";
-                String wbMode = switch (wbModeDisplay) {
-                    case "Off" -> "off";
-                    case "Camera AWB" -> "camera_awb";
-                    case "Simple (90deg)" -> "simple";
-                    default -> "per_angle";
-                };
+                String wbMode =
+                        switch (wbModeDisplay) {
+                            case "Off" -> "off";
+                            case "Camera AWB" -> "camera_awb";
+                            case "Simple (90deg)" -> "simple";
+                            default -> "per_angle";
+                        };
                 boolean enableWhiteBalance = !"off".equals(wbMode);
                 boolean perAngleWhiteBalance = "per_angle".equals(wbMode);
 
-                logger.info("Created unified acquisition result: sample={}, modality={}, " +
-                           "objective={}, detector={}, bounds=({},{}) to ({},{}), " +
-                           "wbMode={}, enableWB={}, perAngleWB={}",
-                        sampleName, modality, objective, detector, x1, y1, x2, y2,
-                        wbMode, enableWhiteBalance, perAngleWhiteBalance);
+                logger.info(
+                        "Created unified acquisition result: sample={}, modality={}, "
+                                + "objective={}, detector={}, bounds=({},{}) to ({},{}), "
+                                + "wbMode={}, enableWB={}, perAngleWB={}",
+                        sampleName,
+                        modality,
+                        objective,
+                        detector,
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                        wbMode,
+                        enableWhiteBalance,
+                        perAngleWhiteBalance);
 
                 return new UnifiedAcquisitionResult(
-                        sampleName, projectsFolder, modality, objective, detector,
-                        x1, y1, x2, y2, angleOverrides, enableWhiteBalance, perAngleWhiteBalance,
-                        wbMode
-                );
+                        sampleName,
+                        projectsFolder,
+                        modality,
+                        objective,
+                        detector,
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                        angleOverrides,
+                        enableWhiteBalance,
+                        perAngleWhiteBalance,
+                        wbMode);
 
             } catch (Exception e) {
                 logger.error("Error creating result", e);

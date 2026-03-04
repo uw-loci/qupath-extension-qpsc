@@ -1,11 +1,10 @@
 package qupath.ext.qpsc.preferences;
 
-import javafx.beans.property.StringProperty;
-import qupath.lib.gui.prefs.PathPrefs;
-
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import javafx.beans.property.StringProperty;
+import qupath.lib.gui.prefs.PathPrefs;
 
 /**
  * PersistentPreferences
@@ -30,14 +29,17 @@ public class PersistentPreferences {
 
     private static final StringProperty selectedScannerProperty =
             PathPrefs.createPersistentPreference("selectedScanner", "Generic");
-    private static final StringProperty savedTransformNameProperty  =
+    private static final StringProperty savedTransformNameProperty =
             PathPrefs.createPersistentPreference("savedMicroscopeTransform", "");
+
     public static String getSavedTransformName() {
         return savedTransformNameProperty.get();
     }
+
     public static String getSelectedScannerProperty() {
         return selectedScannerProperty.get();
     }
+
     public static void setSelectedScannerProperty(String scanner) {
         selectedScannerProperty.set(scanner);
     }
@@ -45,6 +47,7 @@ public class PersistentPreferences {
     public static StringProperty selectedScannerProperty() {
         return selectedScannerProperty;
     }
+
     public static void setSavedTransformName(String name) {
         savedTransformNameProperty.set(name);
     }
@@ -57,7 +60,7 @@ public class PersistentPreferences {
     public static void setSelectedScanner(String scanner) {
         selectedScannerProperty.set(scanner);
     }
-// ================== BOUNDING BOX WORKFLOW ==================
+    // ================== BOUNDING BOX WORKFLOW ==================
     private static final StringProperty boundingBoxString =
             PathPrefs.createPersistentPreference("BoundingBox", "27000,7000,20000,10000");
 
@@ -366,14 +369,11 @@ public class PersistentPreferences {
     private static final StringProperty lastSampleNameSaved =
             PathPrefs.createPersistentPreference("LastSampleName", "");
 
-    private static final StringProperty lastModalitySaved =
-            PathPrefs.createPersistentPreference("LastModality", "");
+    private static final StringProperty lastModalitySaved = PathPrefs.createPersistentPreference("LastModality", "");
 
-    private static final StringProperty lastObjectiveSaved =
-            PathPrefs.createPersistentPreference("LastObjective", "");
+    private static final StringProperty lastObjectiveSaved = PathPrefs.createPersistentPreference("LastObjective", "");
 
-    private static final StringProperty lastDetectorSaved =
-            PathPrefs.createPersistentPreference("LastDetector", "");
+    private static final StringProperty lastDetectorSaved = PathPrefs.createPersistentPreference("LastDetector", "");
 
     public static String getLastSampleName() {
         return lastSampleNameSaved.getValue();
@@ -407,7 +407,6 @@ public class PersistentPreferences {
         lastDetectorSaved.setValue(detector);
     }
 
-
     // ================== TRANSFORM SETTINGS ==================
     private static final StringProperty saveTransformDefaultSaved =
             PathPrefs.createPersistentPreference("SaveTransformDefault", "true");
@@ -430,7 +429,6 @@ public class PersistentPreferences {
     public static void setLastTransformName(final String name) {
         lastTransformNameSaved.setValue(name);
     }
-
 
     // ================== ALIGNMENT SELECTION ==================
     private static final StringProperty useExistingAlignmentSaved =
@@ -569,7 +567,6 @@ public class PersistentPreferences {
 
     // ================== EXISTING IMAGE WORKFLOW ==================
 
-
     // Add these new preferences for annotation class selection
     private static final StringProperty selectedAnnotationClassesSaved =
             PathPrefs.createPersistentPreference("SelectedAnnotationClasses", "Tissue,Scanned Area,Bounding Box");
@@ -699,8 +696,8 @@ public class PersistentPreferences {
      * @param modality Current modality
      * @param objective Current objective
      */
-    public static void updateTimingData(long baseTileTimeMs, long adaptiveAfTimeMs,
-                                        long fullAfTimeMs, String modality, String objective) {
+    public static void updateTimingData(
+            long baseTileTimeMs, long adaptiveAfTimeMs, long fullAfTimeMs, String modality, String objective) {
         String currentConfig = modality + ":" + objective;
         String lastConfig = getLastTimingConfig();
 
@@ -777,6 +774,18 @@ public class PersistentPreferences {
         fullAfTimeMsSaved.setValue("25000");
         timingSampleCountSaved.setValue("0");
         lastTimingConfigSaved.setValue("");
+    }
+
+    // ================== WHITE BALANCE MODE ==================
+    private static final StringProperty lastWBModeSaved =
+            PathPrefs.createPersistentPreference("LastWhiteBalanceMode", "Per-angle (PPM)");
+
+    public static String getLastWhiteBalanceMode() {
+        return lastWBModeSaved.getValue();
+    }
+
+    public static void setLastWhiteBalanceMode(final String mode) {
+        lastWBModeSaved.setValue(mode);
     }
 
     // ================== STAGE CONTROL SETTINGS ==================

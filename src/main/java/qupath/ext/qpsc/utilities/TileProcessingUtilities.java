@@ -1,5 +1,12 @@
 package qupath.ext.qpsc.utilities;
 
+import java.awt.image.BufferedImage;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.util.*;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,14 +19,6 @@ import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
-
-import java.awt.image.BufferedImage;
-import java.io.*;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
-import java.util.*;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 /**
  * UtilityFunctions - High-level file and scripting utilities for QuPath Scope Control.
@@ -111,19 +110,26 @@ public class TileProcessingUtilities {
             double pixelSizeMicrons,
             int downsample,
             ModalityHandler modalityHandler,
-            Map<String, Object> stitchParams) throws IOException {
+            Map<String, Object> stitchParams)
+            throws IOException {
 
         logger.info("=== Starting stitching workflow ===");
-        logger.info("Sample: {}, Mode: {}, Annotation: {}, Matching: '{}'",
-                sampleLabel, imagingModeWithIndex, annotationName, matchingString);
+        logger.info(
+                "Sample: {}, Mode: {}, Annotation: {}, Matching: '{}'",
+                sampleLabel,
+                imagingModeWithIndex,
+                annotationName,
+                matchingString);
 
         // Construct folder paths
-        String tileFolder = projectsFolderPath + File.separator
-                + sampleLabel + File.separator
-                + imagingModeWithIndex + File.separator + annotationName;
-        String stitchedFolder = projectsFolderPath + File.separator
-                + sampleLabel + File.separator
-                + "SlideImages";
+        String tileFolder = projectsFolderPath
+                + File.separator
+                + sampleLabel
+                + File.separator
+                + imagingModeWithIndex
+                + File.separator
+                + annotationName;
+        String stitchedFolder = projectsFolderPath + File.separator + sampleLabel + File.separator + "SlideImages";
 
         logger.info("Tile folder: {}", tileFolder);
         logger.info("Output folder: {}", stitchedFolder);
@@ -154,8 +160,12 @@ public class TileProcessingUtilities {
         // Get output format from preferences
         StitchingConfig.OutputFormat outputFormat = QPPreferenceDialog.getOutputFormatProperty();
 
-        logger.info("Configuring stitching with compression: {}, pixel size: {} µm, downsample: {}, format: {}",
-                compression, pixelSizeMicrons, downsample, outputFormat);
+        logger.info(
+                "Configuring stitching with compression: {}, pixel size: {} um, downsample: {}, format: {}",
+                compression,
+                pixelSizeMicrons,
+                downsample,
+                outputFormat);
 
         StitchingConfig config = new StitchingConfig(
                 "Coordinates in TileConfiguration.txt file",
@@ -165,9 +175,21 @@ public class TileProcessingUtilities {
                 pixelSizeMicrons,
                 downsample,
                 matchingString,
-                1.0,  // zSpacingMicrons parameter
-                outputFormat  // Output format from preferences
-        );
+                1.0, // zSpacingMicrons parameter
+                outputFormat // Output format from preferences
+                );
+
+        // Set outputFilename so stitched files include the sample name instead of just the angle
+        StitchingHelper.StitchingMetadata earlyMetadata = null;
+        if (stitchParams != null && stitchParams.containsKey("metadata")) {
+            earlyMetadata = (StitchingHelper.StitchingMetadata) stitchParams.get("metadata");
+        }
+        String outputName =
+                (earlyMetadata != null && earlyMetadata.sampleName != null && !earlyMetadata.sampleName.isEmpty())
+                        ? earlyMetadata.sampleName
+                        : sampleLabel;
+        config.outputFilename = outputName;
+        logger.info("Set outputFilename on StitchingConfig: {}", outputName);
 
         logger.info("Starting BasicStitching workflow with {} format...", outputFormat);
         String outPath = StitchingWorkflow.run(config);
@@ -195,11 +217,15 @@ public class TileProcessingUtilities {
 
             // Use metadata.sampleName for file naming if available (source image name)
             // Fall back to sampleLabel (project folder name) if not available
-            String batchDisplayName = (batchMetadata != null && batchMetadata.sampleName != null && !batchMetadata.sampleName.isEmpty())
-                    ? batchMetadata.sampleName
-                    : sampleLabel;
-            logger.debug("Using display name for batch file naming: {} (metadata.sampleName={}, sampleLabel={})",
-                    batchDisplayName, batchMetadata != null ? batchMetadata.sampleName : "null", sampleLabel);
+            String batchDisplayName =
+                    (batchMetadata != null && batchMetadata.sampleName != null && !batchMetadata.sampleName.isEmpty())
+                            ? batchMetadata.sampleName
+                            : sampleLabel;
+            logger.debug(
+                    "Using display name for batch file naming: {} (metadata.sampleName={}, sampleLabel={})",
+                    batchDisplayName,
+                    batchMetadata != null ? batchMetadata.sampleName : "null",
+                    sampleLabel);
 
             // Look for both OME-TIFF files and OME-ZARR directories
             File[] allOmeFiles = outputDir.listFiles((dir, name) ->
@@ -227,7 +253,8 @@ public class TileProcessingUtilities {
                     extension = ".ome.tif";
                     angleOrSubdir = originalName.replace(".ome.tif", "");
                 }
-                logger.debug("Processing file: {} (angle/subdir: {}, format: {})", originalName, angleOrSubdir, extension);
+                logger.debug(
+                        "Processing file: {} (angle/subdir: {}, format: {})", originalName, angleOrSubdir, extension);
 
                 String angleSuffix = angleOrSubdir;
                 if (modalityHandler != null) {
@@ -241,14 +268,15 @@ public class TileProcessingUtilities {
                 // Create the full name with sample, mode, annotation, and angle
                 // Use batchDisplayName (source image name from metadata) instead of sampleLabel (project folder name)
                 // Sanitize annotation name to replace path separators with underscores for valid filenames
-                String sanitizedAnnotationName = annotationName.replace(File.separator, "_")
-                                                               .replace("/", "_")
-                                                               .replace("\\", "_");
-                String baseName = batchDisplayName + "_" + imagingModeWithIndex + "_" +
-                        sanitizedAnnotationName + "_" + angleSuffix + extension;
+                String sanitizedAnnotationName = annotationName
+                        .replace(File.separator, "_")
+                        .replace("/", "_")
+                        .replace("\\", "_");
+                String baseName = batchDisplayName + "_" + imagingModeWithIndex + "_" + sanitizedAnnotationName + "_"
+                        + angleSuffix + extension;
                 File renamed = new File(stitchedFile.getParent(), baseName);
 
-                logger.info("Renaming {} → {}", originalName, baseName);
+                logger.info("Renaming {} -> {}", originalName, baseName);
                 if (stitchedFile.renameTo(renamed)) {
                     lastPath = renamed.getAbsolutePath();
                     logger.info("Successfully renamed to: {}", baseName);
@@ -265,24 +293,21 @@ public class TileProcessingUtilities {
 
                             // Add to project with metadata if available
                             if (finalMetadata != null) {
-                                // Stitched images from microscope don't need flipping - they come with correct orientation
+                                // Stitched images from microscope don't need flipping - they come with correct
+                                // orientation
                                 QPProjectFunctions.addImageToProjectWithMetadata(
                                         project,
                                         new File(pathToImport),
                                         finalMetadata.parentEntry,
                                         finalMetadata.xOffset,
                                         finalMetadata.yOffset,
-                                        false,  // isFlippedX - stitched images don't need flipping
-                                        false,  // isFlippedY - stitched images don't need flipping
+                                        false, // isFlippedX - stitched images don't need flipping
+                                        false, // isFlippedY - stitched images don't need flipping
                                         finalMetadata.sampleName,
                                         modalityHandler);
                             } else {
                                 QPProjectFunctions.addImageToProject(
-                                        new File(pathToImport),
-                                        project,
-                                        false,
-                                        false,
-                                        modalityHandler);
+                                        new File(pathToImport), project, false, false, modalityHandler);
                             }
 
                             logger.info("Successfully imported {} to project", new File(pathToImport).getName());
@@ -300,13 +325,15 @@ public class TileProcessingUtilities {
                                         logger.info("Saved current image data before opening stitched image");
                                     }
                                 } catch (Exception saveEx) {
-                                    logger.warn("Could not save current image data before opening stitched image: {}",
-                                        saveEx.getMessage());
+                                    logger.warn(
+                                            "Could not save current image data before opening stitched image: {}",
+                                            saveEx.getMessage());
                                 }
 
                                 List<ProjectImageEntry<BufferedImage>> images = project.getImageList();
                                 images.stream()
-                                        .filter(e -> new File(e.getImageName()).getName()
+                                        .filter(e -> new File(e.getImageName())
+                                                .getName()
                                                 .equals(new File(pathToImport).getName()))
                                         .findFirst()
                                         .ifPresent(entry -> {
@@ -359,8 +386,11 @@ public class TileProcessingUtilities {
             String displayName = (metadata != null && metadata.sampleName != null && !metadata.sampleName.isEmpty())
                     ? metadata.sampleName
                     : sampleLabel;
-            logger.debug("Using display name for file naming: {} (metadata.sampleName={}, sampleLabel={})",
-                    displayName, metadata != null ? metadata.sampleName : "null", sampleLabel);
+            logger.debug(
+                    "Using display name for file naming: {} (metadata.sampleName={}, sampleLabel={})",
+                    displayName,
+                    metadata != null ? metadata.sampleName : "null",
+                    sampleLabel);
 
             // Determine appropriate filename based on context
             File orig = new File(outPath);
@@ -371,7 +401,7 @@ public class TileProcessingUtilities {
             if (orig.getName().endsWith(".ome.zarr")) {
                 extension = ".ome.zarr";
             } else {
-                extension = ".ome.tif";  // Default to TIFF
+                extension = ".ome.tif"; // Default to TIFF
             }
 
             // Extract modality, objective, and index from imagingModeWithIndex
@@ -430,20 +460,20 @@ public class TileProcessingUtilities {
             // Generate filename using preferences-based system
             // Use displayName (source image name from metadata) instead of sampleLabel (project folder name)
             baseName = ImageNameGenerator.generateImageName(
+                    displayName, imageIndex, modality, objective, sanitizedAnnotationName, angleSuffix, extension);
+
+            logger.info(
+                    "Generated filename: {} (displayName={}, modality={}, objective={}, annotation={}, angle={}, index={})",
+                    baseName,
                     displayName,
-                    imageIndex,
                     modality,
                     objective,
                     sanitizedAnnotationName,
                     angleSuffix,
-                    extension
-            );
-
-            logger.info("Generated filename: {} (displayName={}, modality={}, objective={}, annotation={}, angle={}, index={})",
-                    baseName, displayName, modality, objective, sanitizedAnnotationName, angleSuffix, imageIndex);
+                    imageIndex);
 
             File renamed = new File(orig.getParent(), baseName);
-            logger.info("Renaming {} → {}", orig.getName(), baseName);
+            logger.info("Renaming {} -> {}", orig.getName(), baseName);
 
             if (orig.renameTo(renamed)) {
                 outPath = renamed.getAbsolutePath();
@@ -456,10 +486,14 @@ public class TileProcessingUtilities {
             // Note: metadata was already extracted earlier for filename generation
             // If metadata doesn't have the identification fields, use the extracted values
             final String finalModality = (metadata != null && metadata.modality != null) ? metadata.modality : modality;
-            final String finalObjective = (metadata != null && metadata.objective != null) ? metadata.objective : objective;
+            final String finalObjective =
+                    (metadata != null && metadata.objective != null) ? metadata.objective : objective;
             final String finalAngleSuffix = (metadata != null && metadata.angle != null) ? metadata.angle : angleSuffix;
-            final String finalAnnotation = (metadata != null && metadata.annotationName != null) ? metadata.annotationName : sanitizedAnnotationName;
-            final Integer finalIndex = (metadata != null && metadata.imageIndex != null) ? metadata.imageIndex : imageIndex;
+            final String finalAnnotation = (metadata != null && metadata.annotationName != null)
+                    ? metadata.annotationName
+                    : sanitizedAnnotationName;
+            final Integer finalIndex =
+                    (metadata != null && metadata.imageIndex != null) ? metadata.imageIndex : imageIndex;
 
             lastProcessedPath = outPath;
             final StitchingHelper.StitchingMetadata finalMetadata = metadata;
@@ -479,8 +513,8 @@ public class TileProcessingUtilities {
                                 finalMetadata.parentEntry,
                                 finalMetadata.xOffset,
                                 finalMetadata.yOffset,
-                                false,  // isFlippedX - stitched images don't need flipping
-                                false,  // isFlippedY - stitched images don't need flipping
+                                false, // isFlippedX - stitched images don't need flipping
+                                false, // isFlippedY - stitched images don't need flipping
                                 finalMetadata.sampleName,
                                 finalModality,
                                 finalObjective,
@@ -490,11 +524,7 @@ public class TileProcessingUtilities {
                                 modalityHandler);
                     } else {
                         QPProjectFunctions.addImageToProject(
-                                new File(lastProcessedPath),
-                                project,
-                                false,
-                                false,
-                                modalityHandler);
+                                new File(lastProcessedPath), project, false, false, modalityHandler);
                     }
 
                     logger.info("Successfully added image to project");
@@ -508,15 +538,16 @@ public class TileProcessingUtilities {
                             logger.info("Saved current image data before opening stitched image");
                         }
                     } catch (Exception saveEx) {
-                        logger.warn("Could not save current image data before opening stitched image: {}",
-                            saveEx.getMessage());
+                        logger.warn(
+                                "Could not save current image data before opening stitched image: {}",
+                                saveEx.getMessage());
                     }
 
                     // Find and open the newly added entry
                     List<ProjectImageEntry<BufferedImage>> images = project.getImageList();
                     images.stream()
-                            .filter(e -> new File(e.getImageName()).getName()
-                                    .equals(new File(lastProcessedPath).getName()))
+                            .filter(e ->
+                                    new File(e.getImageName()).getName().equals(new File(lastProcessedPath).getName()))
                             .findFirst()
                             .ifPresent(entry -> {
                                 logger.info("Opening image entry: {}", entry.getImageName());
@@ -531,7 +562,7 @@ public class TileProcessingUtilities {
                     // Close blocking dialog if provided
                     if (stitchParams != null && stitchParams.containsKey("blockingDialog")) {
                         qupath.ext.qpsc.ui.StitchingBlockingDialog dialog =
-                            (qupath.ext.qpsc.ui.StitchingBlockingDialog) stitchParams.get("blockingDialog");
+                                (qupath.ext.qpsc.ui.StitchingBlockingDialog) stitchParams.get("blockingDialog");
                         String operationId = (String) stitchParams.get("operationId");
                         if (dialog != null && operationId != null) {
                             logger.info("Completing stitching dialog operation after project import");
@@ -541,8 +572,7 @@ public class TileProcessingUtilities {
 
                     // Notify success
                     qupath.fx.dialogs.Dialogs.showInfoNotification(
-                            res.getString("stitching.success.title"),
-                            res.getString("stitching.success.message"));
+                            res.getString("stitching.success.title"), res.getString("stitching.success.message"));
 
                 } catch (IOException e) {
                     logger.error("Failed to import stitched image", e);
@@ -612,7 +642,8 @@ public class TileProcessingUtilities {
             String compression,
             double pixelSizeMicrons,
             int downsample,
-            ModalityHandler modalityHandler) throws IOException {
+            ModalityHandler modalityHandler)
+            throws IOException {
 
         logger.debug("Using convenience method - annotation name as matching string");
 
@@ -622,15 +653,15 @@ public class TileProcessingUtilities {
                 sampleLabel,
                 imagingModeWithIndex,
                 annotationName,
-                annotationName,  // Use annotation name as matching string
+                annotationName, // Use annotation name as matching string
                 qupathGUI,
                 project,
                 compression,
                 pixelSizeMicrons,
                 downsample,
                 modalityHandler,
-                null  // No metadata
-        );
+                null // No metadata
+                );
     }
 
     /**
@@ -652,7 +683,7 @@ public class TileProcessingUtilities {
         cmd.addAll(List.of(args));
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.inheritIO();  // Inherit I/O streams for real-time output
+        pb.inheritIO(); // Inherit I/O streams for real-time output
 
         logger.debug("Starting process...");
         Process process = pb.start();
@@ -694,16 +725,14 @@ public class TileProcessingUtilities {
 
             // Walk in reverse order (deepest first) to delete files and then empty directories
             // Using Comparator.reverseOrder() ensures children are processed before parents
-            Files.walk(dir)
-                    .sorted(java.util.Comparator.reverseOrder())
-                    .forEach(p -> {
-                        try {
-                            Files.delete(p);
-                            logger.trace("Deleted: {}", p);
-                        } catch (IOException ex) {
-                            logger.error("Failed to delete: {}", p, ex);
-                        }
-                    });
+            Files.walk(dir).sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.delete(p);
+                    logger.trace("Deleted: {}", p);
+                } catch (IOException ex) {
+                    logger.error("Failed to delete: {}", p, ex);
+                }
+            });
 
             logger.info("Successfully deleted folder and all contents: {}", folderPath);
 
@@ -757,28 +786,29 @@ public class TileProcessingUtilities {
 
             final long[] zippedCount = {0};
             try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zipPath.toFile()))) {
-                Files.walk(dir)
-                        .filter(Files::isRegularFile)
-                        .forEach(p -> {
-                            // Use relative path to preserve subdirectory structure
-                            String relativePath = dir.relativize(p).toString();
-                            ZipEntry e = new ZipEntry(relativePath);
-                            try {
-                                zos.putNextEntry(e);
-                                Files.copy(p, zos);
-                                zos.closeEntry();
-                                zippedCount[0]++;
-                                logger.trace("Added to ZIP: {}", relativePath);
-                            } catch (IOException ex) {
-                                logger.error("Failed to zip file: {}", p, ex);
-                            }
-                        });
+                Files.walk(dir).filter(Files::isRegularFile).forEach(p -> {
+                    // Use relative path to preserve subdirectory structure
+                    String relativePath = dir.relativize(p).toString();
+                    ZipEntry e = new ZipEntry(relativePath);
+                    try {
+                        zos.putNextEntry(e);
+                        Files.copy(p, zos);
+                        zos.closeEntry();
+                        zippedCount[0]++;
+                        logger.trace("Added to ZIP: {}", relativePath);
+                    } catch (IOException ex) {
+                        logger.error("Failed to zip file: {}", p, ex);
+                    }
+                });
             }
 
             // Verify zip was created and has content
             if (Files.exists(zipPath) && Files.size(zipPath) > 0) {
-                logger.info("Successfully compressed {} files to ZIP archive: {} ({} bytes)",
-                        zippedCount[0], zipPath, Files.size(zipPath));
+                logger.info(
+                        "Successfully compressed {} files to ZIP archive: {} ({} bytes)",
+                        zippedCount[0],
+                        zipPath,
+                        Files.size(zipPath));
                 return true;
             } else {
                 logger.error("ZIP file creation failed or file is empty");
@@ -807,13 +837,11 @@ public class TileProcessingUtilities {
      * @return The modified script content as a string
      * @throws IOException If the script file cannot be read or written
      */
-    public static String modifyTissueDetectScript(
-            String groovyScriptPath,
-            String pixelSize,
-            String jsonFilePathString) throws IOException {
+    public static String modifyTissueDetectScript(String groovyScriptPath, String pixelSize, String jsonFilePathString)
+            throws IOException {
 
         logger.info("Modifying tissue detection script: {}", groovyScriptPath);
-        logger.debug("Setting pixel size: {} µm, classifier: {}", pixelSize, jsonFilePathString);
+        logger.debug("Setting pixel size: {} um, classifier: {}", pixelSize, jsonFilePathString);
 
         List<String> lines = Files.readAllLines(Paths.get(groovyScriptPath), StandardCharsets.UTF_8);
         List<String> out = new ArrayList<>(lines.size());

@@ -1,5 +1,11 @@
 package qupath.ext.qpsc.ui;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -16,24 +22,15 @@ import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.ppm.RotationManager;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
-import qupath.lib.gui.QuPathGUI;
-
-import java.io.File;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * BackgroundCollectionController - UI for background image acquisition
- * 
+ *
  * <p>Provides a dialog for:
  * <ul>
  *   <li>Selecting modality</li>
@@ -43,9 +40,9 @@ import java.util.concurrent.CompletableFuture;
  * </ul>
  */
 public class BackgroundCollectionController {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(BackgroundCollectionController.class);
-    
+
     private ComboBox<String> modalityComboBox;
     private ComboBox<String> objectiveComboBox;
     private TextField outputPathField;
@@ -56,27 +53,27 @@ public class BackgroundCollectionController {
     private List<TextField> angleFields = new ArrayList<>(); // Track angle fields for PPM
     private BackgroundSettingsReader.BackgroundSettings existingBackgroundSettings;
     private Label backgroundValidationLabel;
-    
+
     /**
      * Shows the background collection dialog and returns the result.
-     * 
+     *
      * @return CompletableFuture with BackgroundCollectionResult, or null if cancelled
      */
     public static CompletableFuture<BackgroundCollectionResult> showDialog() {
         var controller = new BackgroundCollectionController();
         return controller.showDialogInternal();
     }
-    
+
     private CompletableFuture<BackgroundCollectionResult> showDialogInternal() {
         CompletableFuture<BackgroundCollectionResult> future = new CompletableFuture<>();
-        
+
         Platform.runLater(() -> {
             try {
                 // Create dialog
                 Dialog<BackgroundCollectionResult> dialog = new Dialog<>();
                 dialog.setTitle("Background Collection");
                 dialog.setHeaderText("Configure background image acquisition for flat field correction");
-                
+
                 // Create UI - wrap content in ScrollPane to handle variable height
                 VBox content = createDialogContent();
                 ScrollPane scrollPane = new ScrollPane(content);
@@ -89,18 +86,20 @@ public class BackgroundCollectionController {
                 dialog.getDialogPane().setPrefHeight(580);
                 dialog.getDialogPane().setMinHeight(400);
                 dialog.setResizable(true);
-                
+
                 // Add buttons
                 ButtonType okButtonType = new ButtonType("Acquire Backgrounds", ButtonBar.ButtonData.OK_DONE);
                 dialog.getDialogPane().getButtonTypes().addAll(okButtonType, ButtonType.CANCEL);
-                
+
                 // Disable OK button initially
                 Button okButton = (Button) dialog.getDialogPane().lookupButton(okButtonType);
                 okButton.setDisable(true);
-                
+
                 // Enable OK when valid modality and objective are selected
                 modalityComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
-                    boolean isValid = newVal != null && objectiveComboBox.getValue() != null && !outputPathField.getText().trim().isEmpty();
+                    boolean isValid = newVal != null
+                            && objectiveComboBox.getValue() != null
+                            && !outputPathField.getText().trim().isEmpty();
                     okButton.setDisable(!isValid);
                     if (newVal != null) {
                         updateObjectiveSelection(newVal);
@@ -115,10 +114,12 @@ public class BackgroundCollectionController {
                         clearExposureControls();
                     }
                 });
-                
+
                 // Add objective change listener
                 objectiveComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
-                    boolean isValid = modalityComboBox.getValue() != null && newVal != null && !outputPathField.getText().trim().isEmpty();
+                    boolean isValid = modalityComboBox.getValue() != null
+                            && newVal != null
+                            && !outputPathField.getText().trim().isEmpty();
                     okButton.setDisable(!isValid);
                     // Update exposure controls when objective changes (if modality is also selected)
                     if (newVal != null && modalityComboBox.getValue() != null) {
@@ -127,12 +128,14 @@ public class BackgroundCollectionController {
                         clearExposureControls();
                     }
                 });
-                
+
                 outputPathField.textProperty().addListener((obs, oldVal, newVal) -> {
-                    boolean isValid = modalityComboBox.getValue() != null && objectiveComboBox.getValue() != null && !newVal.trim().isEmpty();
+                    boolean isValid = modalityComboBox.getValue() != null
+                            && objectiveComboBox.getValue() != null
+                            && !newVal.trim().isEmpty();
                     okButton.setDisable(!isValid);
                 });
-                
+
                 // Set result converter
                 dialog.setResultConverter(dialogButton -> {
                     if (dialogButton == okButtonType) {
@@ -140,45 +143,44 @@ public class BackgroundCollectionController {
                     }
                     return null;
                 });
-                
+
                 // Show dialog
-                dialog.showAndWait().ifPresentOrElse(
-                    result -> {
-                        if (result != null) {
-                            // Save exposure changes to YAML config
-                            saveExposureChangesToConfig(result.modality(), result.angleExposures());
-                        }
-                        future.complete(result);
-                    },
-                    () -> future.complete(null)
-                );
-                
+                dialog.showAndWait()
+                        .ifPresentOrElse(
+                                result -> {
+                                    if (result != null) {
+                                        // Save exposure changes to YAML config
+                                        saveExposureChangesToConfig(result.modality(), result.angleExposures());
+                                    }
+                                    future.complete(result);
+                                },
+                                () -> future.complete(null));
+
             } catch (Exception e) {
                 logger.error("Error creating background collection dialog", e);
                 future.completeExceptionally(e);
             }
         });
-        
+
         return future;
     }
-    
+
     private VBox createDialogContent() {
         VBox content = new VBox(15);
         content.setPadding(new Insets(20));
-        
+
         // Instructions
-        Label instructionLabel = new Label(
-                "Position the microscope at a clean, blank area before starting acquisition.\n" +
-                "Background images will be saved with no processing applied."
-        );
+        Label instructionLabel =
+                new Label("Position the microscope at a clean, blank area before starting acquisition.\n"
+                        + "Background images will be saved with no processing applied.");
         instructionLabel.setWrapText(true);
         instructionLabel.setStyle("-fx-font-style: italic;");
-        
+
         // Modality selection
         GridPane modalityPane = new GridPane();
         modalityPane.setHgap(10);
         modalityPane.setVgap(10);
-        
+
         Label modalityLabel = new Label("Modality:");
         modalityComboBox = new ComboBox<>();
         // Get available modalities from configuration
@@ -193,34 +195,34 @@ public class BackgroundCollectionController {
             modalityComboBox.getItems().addAll("ppm", "brightfield", "fluorescence");
         }
         modalityComboBox.setPromptText("Select modality...");
-        
+
         modalityPane.add(modalityLabel, 0, 0);
         modalityPane.add(modalityComboBox, 1, 0);
-        
+
         // Objective selection
         Label objectiveLabel = new Label("Objective:");
         objectiveComboBox = new ComboBox<>();
         objectiveComboBox.setPromptText("Select objective...");
         objectiveComboBox.setDisable(true); // Disabled until modality is selected
-        
+
         modalityPane.add(objectiveLabel, 0, 1);
         modalityPane.add(objectiveComboBox, 1, 1);
-        
+
         // Output path selection
         Label outputLabel = new Label("Output folder:");
         outputPathField = new TextField();
         outputPathField.setPromptText("Select folder for background images...");
         outputPathField.setPrefWidth(300);
-        
+
         Button browseButton = new Button("Browse...");
         browseButton.setOnAction(e -> browseForOutputFolder());
-        
+
         HBox outputPane = new HBox(10, outputPathField, browseButton);
         outputPane.setAlignment(Pos.CENTER_LEFT);
-        
+
         modalityPane.add(outputLabel, 0, 2);
         modalityPane.add(outputPane, 1, 2);
-        
+
         // Set default output path
         setDefaultOutputPath();
 
@@ -228,21 +230,27 @@ public class BackgroundCollectionController {
         Label wbModeLabel = new Label("White Balance Mode:");
         wbModeComboBox = new ComboBox<>();
         wbModeComboBox.getItems().addAll("Off", "Camera AWB", "Simple (90deg)", "Per-angle (PPM)");
-        wbModeComboBox.setValue("Per-angle (PPM)");  // Default for PPM
-        wbModeComboBox.setTooltip(new Tooltip(
-                "White balance mode for background acquisition:\n" +
-                "  Off - No white balance correction\n" +
-                "  Camera AWB - Camera auto white balance at 90deg, then off\n" +
-                "  Simple (90deg) - Use 90deg R:G:B ratios, uniformly scaled per angle\n" +
-                "  Per-angle (PPM) - Independent calibration per angle (default)\n\n" +
-                "Backgrounds must be collected with the SAME mode used for acquisition."
-        ));
+        String savedWBMode = PersistentPreferences.getLastWhiteBalanceMode();
+        if (wbModeComboBox.getItems().contains(savedWBMode)) {
+            wbModeComboBox.setValue(savedWBMode);
+        } else {
+            wbModeComboBox.setValue("Per-angle (PPM)");
+        }
+        wbModeComboBox.setTooltip(
+                new Tooltip("White balance mode for background acquisition:\n" + "  Off - No white balance correction\n"
+                        + "  Camera AWB - Camera auto white balance at 90deg, then off\n"
+                        + "  Simple (90deg) - Use 90deg R:G:B ratios, uniformly scaled per angle\n"
+                        + "  Per-angle (PPM) - Independent calibration per angle (default)\n\n"
+                        + "Backgrounds must be collected with the SAME mode used for acquisition."));
 
         HBox wbModeRow = new HBox(10, wbModeLabel, wbModeComboBox);
         wbModeRow.setAlignment(Pos.CENTER_LEFT);
 
-        // Listener to reload exposure values when WB mode changes
+        // Listener to reload exposure values when WB mode changes and persist selection
         wbModeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                PersistentPreferences.setLastWhiteBalanceMode(newVal);
+            }
             String modality = modalityComboBox.getValue();
             String objective = objectiveComboBox.getValue();
             if (modality != null && objective != null) {
@@ -254,26 +262,26 @@ public class BackgroundCollectionController {
         // Exposure controls (will be populated when modality AND objective are selected)
         Label exposureLabel = new Label("Exposure Times (ms):");
         exposureControlsPane = new VBox(10);
-        
+
         // Background validation label
         backgroundValidationLabel = new Label();
         backgroundValidationLabel.setWrapText(true);
         backgroundValidationLabel.setVisible(false); // Hidden until needed
-        
-        content.getChildren().addAll(
-                instructionLabel,
-                new Separator(),
-                modalityPane,
-                wbModeRow,
-                new Separator(),
-                exposureLabel,
-                backgroundValidationLabel,
-                exposureControlsPane
-        );
-        
+
+        content.getChildren()
+                .addAll(
+                        instructionLabel,
+                        new Separator(),
+                        modalityPane,
+                        wbModeRow,
+                        new Separator(),
+                        exposureLabel,
+                        backgroundValidationLabel,
+                        exposureControlsPane);
+
         return content;
     }
-    
+
     /**
      * Clear exposure controls when no valid modality/objective combination is selected
      */
@@ -286,22 +294,25 @@ public class BackgroundCollectionController {
         existingBackgroundSettings = null;
         backgroundValidationLabel.setVisible(false);
     }
-    
+
     /**
      * Update exposure controls with background validation for the given modality and objective
      */
     private void updateExposureControlsWithBackground(String modality, String objective) {
-        logger.info("Updating exposure controls with background validation for modality: {}, objective: {}", modality, objective);
-        
+        logger.info(
+                "Updating exposure controls with background validation for modality: {}, objective: {}",
+                modality,
+                objective);
+
         clearExposureControls();
-        
+
         // Get modality handler
         ModalityHandler handler = ModalityRegistry.getHandler(modality);
         if (handler == null) {
             logger.warn("No handler found for modality: {}", modality);
             return;
         }
-        
+
         // Try to find existing background settings
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
@@ -310,7 +321,7 @@ public class BackgroundCollectionController {
             configManager.reload(configPath);
             logger.debug("Reloaded config manager to pick up latest calibration values");
             String baseBackgroundFolder = configManager.getBackgroundCorrectionFolder(modality);
-            
+
             if (baseBackgroundFolder != null) {
                 // Get detector for this modality/objective combination
                 Set<String> detectors = configManager.getAvailableDetectorsForModalityObjective(modality, objective);
@@ -322,21 +333,27 @@ public class BackgroundCollectionController {
                             baseBackgroundFolder, modality, objective, detector, selectedWbMode);
 
                     if (existingBackgroundSettings != null) {
-                        logger.info("Found existing background settings for wbMode '{}': {}",
-                                selectedWbMode, existingBackgroundSettings);
+                        logger.info(
+                                "Found existing background settings for wbMode '{}': {}",
+                                selectedWbMode,
+                                existingBackgroundSettings);
                     } else {
-                        logger.debug("No existing background settings found for {}/{}/{} (wbMode={})",
-                                modality, objective, detector, selectedWbMode);
+                        logger.debug(
+                                "No existing background settings found for {}/{}/{} (wbMode={})",
+                                modality,
+                                objective,
+                                detector,
+                                selectedWbMode);
                     }
                 }
             }
         } catch (Exception e) {
             logger.warn("Error searching for background settings", e);
         }
-        
+
         // Get default angles and exposures
         logger.debug("Requesting rotation angles for modality: {}", modality);
-        
+
         // Get detector for hardware-specific lookup
         String detector = null;
         try {
@@ -349,171 +366,182 @@ public class BackgroundCollectionController {
         } catch (Exception e) {
             logger.debug("Could not determine detector for hardware-specific lookup", e);
         }
-        
+
         final String finalDetector = detector;
         // Capture existingBackgroundSettings in final variable for use in callback
         final BackgroundSettingsReader.BackgroundSettings capturedSettings = existingBackgroundSettings;
-        logger.info("DEBUG: Before async call - existingBackgroundSettings = {}",
+        logger.info(
+                "DEBUG: Before async call - existingBackgroundSettings = {}",
                 capturedSettings != null ? "FOUND" : "NULL");
 
-        getBackgroundCollectionDefaults(modality, objective, finalDetector).thenAccept(defaultExposures -> {
-            Platform.runLater(() -> {
-                boolean perAngleWbEnabled = isPerAngleWbMode();
-                logger.info("DEBUG: Inside callback - capturedSettings = {}, perAngleWB = {}",
-                        capturedSettings != null ? "FOUND" : "NULL", perAngleWbEnabled);
-                logger.debug("Creating exposure controls for {} angles", defaultExposures.size());
+        getBackgroundCollectionDefaults(modality, objective, finalDetector)
+                .thenAccept(defaultExposures -> {
+                    Platform.runLater(() -> {
+                        boolean perAngleWbEnabled = isPerAngleWbMode();
+                        logger.info(
+                                "DEBUG: Inside callback - capturedSettings = {}, perAngleWB = {}",
+                                capturedSettings != null ? "FOUND" : "NULL",
+                                perAngleWbEnabled);
+                        logger.debug("Creating exposure controls for {} angles", defaultExposures.size());
 
-                // When per-angle white balance is enabled, always use calibrated values from config
-                // (the defaultExposures now contain per-channel calibrated values from imageprocessing YAML)
-                // When per-angle WB is disabled, prefer previous background collection values if available
-                List<AngleExposure> exposuresToUse;
-                if (perAngleWbEnabled) {
-                    // Per-angle WB mode: use calibrated per-channel exposures from imageprocessing YAML
-                    exposuresToUse = defaultExposures;
-                    logger.info("Per-angle WB enabled - using calibrated exposures from imageprocessing config");
-                    showBackgroundValidationMessage("Per-angle white balance: Using calibrated exposure values from config.",
-                            "-fx-text-fill: blue; -fx-font-weight: bold;");
-                } else if (capturedSettings != null) {
-                    // Standard mode with existing backgrounds: use previous collection values
-                    exposuresToUse = capturedSettings.angleExposures;
-                    logger.info("Loading exposure values from previous background collection: {}",
-                            capturedSettings.settingsFilePath);
-                    showBackgroundValidationMessage("Existing background images found. Values loaded from previous collection.",
-                            "-fx-text-fill: orange; -fx-font-weight: bold;");
-                } else {
-                    // Standard mode, no previous backgrounds: use defaults from config/preferences
-                    exposuresToUse = defaultExposures;
-                    logger.info("No existing background settings - using defaults from config/preferences");
-                    showBackgroundValidationMessage("No existing background images. Ready for new collection.",
-                            "-fx-text-fill: green; -fx-font-weight: bold;");
-                }
-                
-                // Clear and update current values
-                currentAngleExposures.clear();
-                currentAngleExposures.addAll(exposuresToUse);
-                
-                // Create exposure controls with angle editing for multi-angle modalities
-                boolean isMultiAngle = exposuresToUse.size() > 1;
-                GridPane exposureGrid = new GridPane();
-                exposureGrid.setHgap(10);
-                exposureGrid.setVgap(5);
+                        // When per-angle white balance is enabled, always use calibrated values from config
+                        // (the defaultExposures now contain per-channel calibrated values from imageprocessing YAML)
+                        // When per-angle WB is disabled, prefer previous background collection values if available
+                        List<AngleExposure> exposuresToUse;
+                        if (perAngleWbEnabled) {
+                            // Per-angle WB mode: use calibrated per-channel exposures from imageprocessing YAML
+                            exposuresToUse = defaultExposures;
+                            logger.info(
+                                    "Per-angle WB enabled - using calibrated exposures from imageprocessing config");
+                            showBackgroundValidationMessage(
+                                    "Per-angle white balance: Using calibrated exposure values from config.",
+                                    "-fx-text-fill: blue; -fx-font-weight: bold;");
+                        } else if (capturedSettings != null) {
+                            // Standard mode with existing backgrounds: use previous collection values
+                            exposuresToUse = capturedSettings.angleExposures;
+                            logger.info(
+                                    "Loading exposure values from previous background collection: {}",
+                                    capturedSettings.settingsFilePath);
+                            showBackgroundValidationMessage(
+                                    "Existing background images found. Values loaded from previous collection.",
+                                    "-fx-text-fill: orange; -fx-font-weight: bold;");
+                        } else {
+                            // Standard mode, no previous backgrounds: use defaults from config/preferences
+                            exposuresToUse = defaultExposures;
+                            logger.info("No existing background settings - using defaults from config/preferences");
+                            showBackgroundValidationMessage(
+                                    "No existing background images. Ready for new collection.",
+                                    "-fx-text-fill: green; -fx-font-weight: bold;");
+                        }
 
-                // Add headers for multi-angle modalities
-                if (isMultiAngle) {
-                    Label angleHeader = new Label("Angle (deg):");
-                    angleHeader.setStyle("-fx-font-weight: bold;");
-                    Label exposureHeader = new Label("Exposure:");
-                    exposureHeader.setStyle("-fx-font-weight: bold;");
+                        // Clear and update current values
+                        currentAngleExposures.clear();
+                        currentAngleExposures.addAll(exposuresToUse);
 
-                    exposureGrid.add(angleHeader, 0, 0);
-                    exposureGrid.add(exposureHeader, 1, 0);
-                    exposureGrid.add(new Label(""), 2, 0); // placeholder for "ms" column
-                    exposureGrid.add(new Label("Type:"), 3, 0);
-                }
+                        // Create exposure controls with angle editing for multi-angle modalities
+                        boolean isMultiAngle = exposuresToUse.size() > 1;
+                        GridPane exposureGrid = new GridPane();
+                        exposureGrid.setHgap(10);
+                        exposureGrid.setVgap(5);
 
-                for (int i = 0; i < exposuresToUse.size(); i++) {
-                    AngleExposure ae = exposuresToUse.get(i);
-                    final int index = i;
-                    int gridRow = isMultiAngle ? i + 1 : i; // Offset for header row
+                        // Add headers for multi-angle modalities
+                        if (isMultiAngle) {
+                            Label angleHeader = new Label("Angle (deg):");
+                            angleHeader.setStyle("-fx-font-weight: bold;");
+                            Label exposureHeader = new Label("Exposure:");
+                            exposureHeader.setStyle("-fx-font-weight: bold;");
 
-                    if (isMultiAngle) {
-                        // Multi-angle: Editable angle field + exposure field + angle type label
-                        TextField angleField = new TextField(String.format("%.1f", ae.ticks()));
-                        angleField.setPrefWidth(80);
-                        TextField exposureField = new TextField(String.valueOf(ae.exposureMs()));
-                        exposureField.setPrefWidth(100);
-                        Label angleTypeLabel = new Label(getAngleTypeName(ae.ticks()));
-                        angleTypeLabel.setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
+                            exposureGrid.add(angleHeader, 0, 0);
+                            exposureGrid.add(exposureHeader, 1, 0);
+                            exposureGrid.add(new Label(""), 2, 0); // placeholder for "ms" column
+                            exposureGrid.add(new Label("Type:"), 3, 0);
+                        }
 
-                        // Update current values when user changes angle
-                        angleField.textProperty().addListener((obs, oldVal, newVal) -> {
-                            try {
-                                double newAngle = Double.parseDouble(newVal);
-                                if (index < currentAngleExposures.size()) {
-                                    AngleExposure oldAe = currentAngleExposures.get(index);
-                                    currentAngleExposures.set(index, new AngleExposure(newAngle, oldAe.exposureMs()));
+                        for (int i = 0; i < exposuresToUse.size(); i++) {
+                            AngleExposure ae = exposuresToUse.get(i);
+                            final int index = i;
+                            int gridRow = isMultiAngle ? i + 1 : i; // Offset for header row
 
-                                    // Update angle type label
-                                    Platform.runLater(() -> angleTypeLabel.setText(getAngleTypeName(newAngle)));
-                                }
-                            } catch (IllegalArgumentException e) {
-                                // Invalid input (unparseable or out of range), ignore during typing
-                                // NumberFormatException is a subclass of IllegalArgumentException
+                            if (isMultiAngle) {
+                                // Multi-angle: Editable angle field + exposure field + angle type label
+                                TextField angleField = new TextField(String.format("%.1f", ae.ticks()));
+                                angleField.setPrefWidth(80);
+                                TextField exposureField = new TextField(String.valueOf(ae.exposureMs()));
+                                exposureField.setPrefWidth(100);
+                                Label angleTypeLabel = new Label(getAngleTypeName(ae.ticks()));
+                                angleTypeLabel.setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
+
+                                // Update current values when user changes angle
+                                angleField.textProperty().addListener((obs, oldVal, newVal) -> {
+                                    try {
+                                        double newAngle = Double.parseDouble(newVal);
+                                        if (index < currentAngleExposures.size()) {
+                                            AngleExposure oldAe = currentAngleExposures.get(index);
+                                            currentAngleExposures.set(
+                                                    index, new AngleExposure(newAngle, oldAe.exposureMs()));
+
+                                            // Update angle type label
+                                            Platform.runLater(() -> angleTypeLabel.setText(getAngleTypeName(newAngle)));
+                                        }
+                                    } catch (IllegalArgumentException e) {
+                                        // Invalid input (unparseable or out of range), ignore during typing
+                                        // NumberFormatException is a subclass of IllegalArgumentException
+                                    }
+                                });
+
+                                // Update current values when user changes exposure
+                                exposureField.textProperty().addListener((obs, oldVal, newVal) -> {
+                                    try {
+                                        double newExposure = Double.parseDouble(newVal);
+                                        if (index < currentAngleExposures.size()) {
+                                            AngleExposure oldAe = currentAngleExposures.get(index);
+                                            currentAngleExposures.set(
+                                                    index, new AngleExposure(oldAe.ticks(), newExposure));
+                                        }
+                                    } catch (IllegalArgumentException e) {
+                                        // Invalid input (unparseable or out of range), ignore during typing
+                                        // NumberFormatException is a subclass of IllegalArgumentException
+                                    }
+                                });
+
+                                exposureGrid.add(angleField, 0, gridRow);
+                                exposureGrid.add(exposureField, 1, gridRow);
+                                exposureGrid.add(new Label("ms"), 2, gridRow);
+                                exposureGrid.add(angleTypeLabel, 3, gridRow);
+
+                                exposureFields.add(exposureField);
+                                angleFields.add(angleField);
+
+                            } else {
+                                // Single-angle: Fixed angle label + exposure field
+                                Label angleLabel = new Label(String.format("%.1f deg:", ae.ticks()));
+                                TextField exposureField = new TextField(String.valueOf(ae.exposureMs()));
+                                exposureField.setPrefWidth(100);
+
+                                // Update current values when user changes exposure
+                                exposureField.textProperty().addListener((obs, oldVal, newVal) -> {
+                                    try {
+                                        double newExposure = Double.parseDouble(newVal);
+                                        if (index < currentAngleExposures.size()) {
+                                            AngleExposure oldAe = currentAngleExposures.get(index);
+                                            currentAngleExposures.set(
+                                                    index, new AngleExposure(oldAe.ticks(), newExposure));
+                                        }
+                                    } catch (IllegalArgumentException e) {
+                                        // Invalid input (unparseable or out of range), ignore during typing
+                                        // NumberFormatException is a subclass of IllegalArgumentException
+                                    }
+                                });
+
+                                exposureGrid.add(angleLabel, 0, gridRow);
+                                exposureGrid.add(exposureField, 1, gridRow);
+                                exposureGrid.add(new Label("ms"), 2, gridRow);
+
+                                exposureFields.add(exposureField);
                             }
-                        });
+                        }
 
-                        // Update current values when user changes exposure
-                        exposureField.textProperty().addListener((obs, oldVal, newVal) -> {
-                            try {
-                                double newExposure = Double.parseDouble(newVal);
-                                if (index < currentAngleExposures.size()) {
-                                    AngleExposure oldAe = currentAngleExposures.get(index);
-                                    currentAngleExposures.set(index, new AngleExposure(oldAe.ticks(), newExposure));
-
-                                }
-                            } catch (IllegalArgumentException e) {
-                                // Invalid input (unparseable or out of range), ignore during typing
-                                // NumberFormatException is a subclass of IllegalArgumentException
-                            }
-                        });
-
-                        exposureGrid.add(angleField, 0, gridRow);
-                        exposureGrid.add(exposureField, 1, gridRow);
-                        exposureGrid.add(new Label("ms"), 2, gridRow);
-                        exposureGrid.add(angleTypeLabel, 3, gridRow);
-
-                        exposureFields.add(exposureField);
-                        angleFields.add(angleField);
-
-                    } else {
-                        // Single-angle: Fixed angle label + exposure field
-                        Label angleLabel = new Label(String.format("%.1f deg:", ae.ticks()));
-                        TextField exposureField = new TextField(String.valueOf(ae.exposureMs()));
-                        exposureField.setPrefWidth(100);
-
-                        // Update current values when user changes exposure
-                        exposureField.textProperty().addListener((obs, oldVal, newVal) -> {
-                            try {
-                                double newExposure = Double.parseDouble(newVal);
-                                if (index < currentAngleExposures.size()) {
-                                    AngleExposure oldAe = currentAngleExposures.get(index);
-                                    currentAngleExposures.set(index, new AngleExposure(oldAe.ticks(), newExposure));
-
-                                }
-                            } catch (IllegalArgumentException e) {
-                                // Invalid input (unparseable or out of range), ignore during typing
-                                // NumberFormatException is a subclass of IllegalArgumentException
-                            }
-                        });
-
-                        exposureGrid.add(angleLabel, 0, gridRow);
-                        exposureGrid.add(exposureField, 1, gridRow);
-                        exposureGrid.add(new Label("ms"), 2, gridRow);
-
-                        exposureFields.add(exposureField);
-                    }
-                }
-                
-                // Add the grid to the exposure controls pane
-                exposureControlsPane.getChildren().add(exposureGrid);
-                logger.debug("Exposure controls added to dialog");
-            });
-        }).exceptionally(ex -> {
-            logger.error("Failed to get rotation angles for modality: {}", modality, ex);
-            Platform.runLater(() -> {
-                Label errorLabel = new Label("Failed to load exposure settings for " + modality);
-                errorLabel.setStyle("-fx-text-fill: red;");
-                exposureControlsPane.getChildren().add(errorLabel);
-            });
-            return null;
-        });
+                        // Add the grid to the exposure controls pane
+                        exposureControlsPane.getChildren().add(exposureGrid);
+                        logger.debug("Exposure controls added to dialog");
+                    });
+                })
+                .exceptionally(ex -> {
+                    logger.error("Failed to get rotation angles for modality: {}", modality, ex);
+                    Platform.runLater(() -> {
+                        Label errorLabel = new Label("Failed to load exposure settings for " + modality);
+                        errorLabel.setStyle("-fx-text-fill: red;");
+                        exposureControlsPane.getChildren().add(errorLabel);
+                    });
+                    return null;
+                });
     }
-    
+
     /**
      * Note: validateCurrentSettings() method removed as background collection shouldn't
      * validate against existing backgrounds since the purpose is to create new ones.
      */
-    
+
     /**
      * Show or hide background validation message
      */
@@ -522,17 +550,17 @@ public class BackgroundCollectionController {
         backgroundValidationLabel.setStyle(style);
         backgroundValidationLabel.setVisible(true);
     }
-    
+
     private void updateObjectiveSelection(String modality) {
         logger.info("Updating objective selection for modality: {}", modality);
-        
+
         objectiveComboBox.getItems().clear();
-        
+
         try {
             String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
             Set<String> availableObjectives = configManager.getAvailableObjectivesForModality(modality);
-            
+
             if (!availableObjectives.isEmpty()) {
                 objectiveComboBox.getItems().addAll(availableObjectives);
                 objectiveComboBox.setDisable(false);
@@ -546,11 +574,11 @@ public class BackgroundCollectionController {
             objectiveComboBox.setDisable(true);
         }
     }
-    
+
     private void browseForOutputFolder() {
         DirectoryChooser chooser = new DirectoryChooser();
         chooser.setTitle("Select Background Images Output Folder");
-        
+
         // Set initial directory to current value if valid
         String currentPath = outputPathField.getText().trim();
         if (!currentPath.isEmpty()) {
@@ -559,26 +587,26 @@ public class BackgroundCollectionController {
                 chooser.setInitialDirectory(currentDir);
             }
         }
-        
+
         Stage stage = (Stage) outputPathField.getScene().getWindow();
         File selectedDir = chooser.showDialog(stage);
-        
+
         if (selectedDir != null) {
             outputPathField.setText(selectedDir.getAbsolutePath());
         }
     }
-    
+
     private void setDefaultOutputPath() {
         // Try to get default background folder from config or preferences
         try {
             String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
             var configManager = MicroscopeConfigManager.getInstance(configPath);
-            
+
             // Look for default background folder in modality configuration
             // Use the first available modality to get a default base folder
             Set<String> modalities = configManager.getAvailableModalities();
             String defaultPath = "C:/qpsc_data/background_tiles"; // fallback
-            
+
             if (!modalities.isEmpty()) {
                 String firstModality = modalities.iterator().next();
                 String bgFolder = configManager.getBackgroundCorrectionFolder(firstModality);
@@ -586,9 +614,9 @@ public class BackgroundCollectionController {
                     defaultPath = bgFolder;
                 }
             }
-            
+
             outputPathField.setText(defaultPath);
-            
+
         } catch (Exception e) {
             logger.warn("Could not determine default background path", e);
             outputPathField.setText("C:/qpsc_data/background_tiles");
@@ -621,8 +649,8 @@ public class BackgroundCollectionController {
 
                     finalExposures.add(new AngleExposure(angle, exposure));
                 } catch (NumberFormatException e) {
-                    Dialogs.showErrorMessage("Invalid Exposure",
-                            "Please enter valid numeric values for all exposure times.");
+                    Dialogs.showErrorMessage(
+                            "Invalid Exposure", "Please enter valid numeric values for all exposure times.");
                     return null;
                 }
             }
@@ -633,7 +661,8 @@ public class BackgroundCollectionController {
 
             logger.info("Background collection wbMode: {}", wbMode);
 
-            return new BackgroundCollectionResult(modality, objective, finalExposures, outputPath, usePerAngleWB, wbMode);
+            return new BackgroundCollectionResult(
+                    modality, objective, finalExposures, outputPath, usePerAngleWB, wbMode);
 
         } catch (Exception e) {
             logger.error("Error creating result", e);
@@ -642,7 +671,6 @@ public class BackgroundCollectionController {
         }
     }
 
-    
     /**
      * Gets default angle-exposure values for background collection, prioritizing preferences first.
      * This is different from acquisition workflows which prioritize background files first.
@@ -652,7 +680,8 @@ public class BackgroundCollectionController {
      * @param detector the detector ID
      * @return future with default angle-exposure pairs for background collection
      */
-    private CompletableFuture<List<AngleExposure>> getBackgroundCollectionDefaults(String modality, String objective, String detector) {
+    private CompletableFuture<List<AngleExposure>> getBackgroundCollectionDefaults(
+            String modality, String objective, String detector) {
         CompletableFuture<List<AngleExposure>> future = new CompletableFuture<>();
 
         try {
@@ -664,29 +693,31 @@ public class BackgroundCollectionController {
             if (handler.getDefaultAngleCount() > 1) {
                 // Multi-angle modality: get all configured angles directly (no dialog popup)
                 RotationManager rotationManager = new RotationManager(modality, objective, detector);
-                rotationManager.getDefaultAnglesWithExposure(modality)
-                    .thenApply(angles -> {
-                        // Override exposures with background collection defaults from config
-                        List<AngleExposure> defaults = new ArrayList<>();
-                        for (AngleExposure ae : angles) {
-                            double exposure = getBackgroundExposureDefault(ae.ticks(), modality, objective, detector);
-                            defaults.add(new AngleExposure(ae.ticks(), exposure));
-                        }
-                        return defaults;
-                    })
-                    .thenAccept(future::complete)
-                    .exceptionally(ex -> {
-                        future.completeExceptionally(ex);
-                        return null;
-                    });
+                rotationManager
+                        .getDefaultAnglesWithExposure(modality)
+                        .thenApply(angles -> {
+                            // Override exposures with background collection defaults from config
+                            List<AngleExposure> defaults = new ArrayList<>();
+                            for (AngleExposure ae : angles) {
+                                double exposure =
+                                        getBackgroundExposureDefault(ae.ticks(), modality, objective, detector);
+                                defaults.add(new AngleExposure(ae.ticks(), exposure));
+                            }
+                            return defaults;
+                        })
+                        .thenAccept(future::complete)
+                        .exceptionally(ex -> {
+                            future.completeExceptionally(ex);
+                            return null;
+                        });
             } else {
                 // Single-angle modality: use handler's normal angle retrieval
                 handler.getRotationAngles(modality, objective, detector)
-                    .thenAccept(future::complete)
-                    .exceptionally(ex -> {
-                        future.completeExceptionally(ex);
-                        return null;
-                    });
+                        .thenAccept(future::complete)
+                        .exceptionally(ex -> {
+                            future.completeExceptionally(ex);
+                            return null;
+                        });
             }
         } catch (Exception e) {
             future.completeExceptionally(e);
@@ -702,12 +733,18 @@ public class BackgroundCollectionController {
      */
     private double getBackgroundExposureDefault(double angle, String modality, String objective, String detector) {
         boolean perAngleWbEnabled = isPerAngleWbMode();
-        logger.debug("Getting background collection exposure default for angle {} with modality={}, objective={}, detector={}, perAngleWB={}",
-                angle, modality, objective, detector, perAngleWbEnabled);
+        logger.debug(
+                "Getting background collection exposure default for angle {} with modality={}, objective={}, detector={}, perAngleWB={}",
+                angle,
+                modality,
+                objective,
+                detector,
+                perAngleWbEnabled);
 
         // Priority 1: Check config file first (most likely to have good starting values)
         try {
-            String configFileLocation = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            String configFileLocation =
+                    qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configFileLocation);
             Map<String, Object> exposures = configManager.getModalityExposures(modality, objective, detector);
 
@@ -725,16 +762,22 @@ public class BackgroundCollectionController {
                             Object greenValue = perChannelMap.get("g");
                             if (greenValue instanceof Number) {
                                 double configExposure = ((Number) greenValue).doubleValue();
-                                logger.info("Using per-channel config exposure (green) for angle {} (key={}): {}ms",
-                                        angle, angleName, configExposure);
+                                logger.info(
+                                        "Using per-channel config exposure (green) for angle {} (key={}): {}ms",
+                                        angle,
+                                        angleName,
+                                        configExposure);
                                 return configExposure;
                             }
                             // Fallback to 'all' key if present (single exposure mode)
                             Object allValue = perChannelMap.get("all");
                             if (allValue instanceof Number) {
                                 double configExposure = ((Number) allValue).doubleValue();
-                                logger.info("Using config exposure ('all') for angle {} (key={}): {}ms",
-                                        angle, angleName, configExposure);
+                                logger.info(
+                                        "Using config exposure ('all') for angle {} (key={}): {}ms",
+                                        angle,
+                                        angleName,
+                                        configExposure);
                                 return configExposure;
                             }
                         }
@@ -742,8 +785,11 @@ public class BackgroundCollectionController {
                         // Handle simple numeric exposure
                         if (exposureValue instanceof Number) {
                             double configExposure = ((Number) exposureValue).doubleValue();
-                            logger.info("Using config file exposure time for background collection angle {} (key={}): {}ms",
-                                    angle, angleName, configExposure);
+                            logger.info(
+                                    "Using config file exposure time for background collection angle {} (key={}): {}ms",
+                                    angle,
+                                    angleName,
+                                    configExposure);
                             return configExposure;
                         }
                     }
@@ -760,7 +806,10 @@ public class BackgroundCollectionController {
             try {
                 double preferencesValue = bgHandler.getDefaultExposureForAngle(angle);
                 if (preferencesValue > 0) {
-                    logger.info("Using persistent preferences exposure time for background collection angle {}: {}ms", angle, preferencesValue);
+                    logger.info(
+                            "Using persistent preferences exposure time for background collection angle {}: {}ms",
+                            angle,
+                            preferencesValue);
                     return preferencesValue;
                 }
             } catch (Exception e) {
@@ -770,8 +819,11 @@ public class BackgroundCollectionController {
 
         // Priority 3: Fallback default
         double fallback = perAngleWbEnabled ? 50.0 : 1.0; // Higher default for per-angle WB mode
-        logger.info("Using fallback default exposure time for background collection angle {}: {}ms (perAngleWB={})",
-                angle, fallback, perAngleWbEnabled);
+        logger.info(
+                "Using fallback default exposure time for background collection angle {}: {}ms (perAngleWB={})",
+                angle,
+                fallback,
+                perAngleWbEnabled);
         return fallback;
     }
 
@@ -780,17 +832,16 @@ public class BackgroundCollectionController {
      */
     private String[] getAngleNames(double angle) {
         if (Math.abs(angle - 0.0) < 0.001) {
-            return new String[]{"0", "zero", "0.0", "crossed"};
+            return new String[] {"0", "zero", "0.0", "crossed"};
         } else if (angle > 0 && angle < 20) {
-            return new String[]{"plus", "positive", String.valueOf(angle)};
+            return new String[] {"plus", "positive", String.valueOf(angle)};
         } else if (angle < 0 && angle > -20) {
-            return new String[]{"minus", "negative", String.valueOf(angle)};
+            return new String[] {"minus", "negative", String.valueOf(angle)};
         } else if (angle >= 40 && angle <= 100) {
-            return new String[]{"uncrossed", "90", "90.0", String.valueOf(angle)};
+            return new String[] {"uncrossed", "90", "90.0", String.valueOf(angle)};
         }
-        return new String[]{String.valueOf(angle)};
+        return new String[] {String.valueOf(angle)};
     }
-
 
     /**
      * Get a descriptive name for a PPM angle type.
@@ -836,19 +887,20 @@ public class BackgroundCollectionController {
     private void saveExposureChangesToConfig(String modality, List<AngleExposure> angleExposures) {
         try {
             logger.info("Saving exposure changes to config for modality: {}", modality);
-            
+
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             var configManager = MicroscopeConfigManager.getInstance(configPath);
-            
+
             // TODO: Implement exposure time persistence to YAML config
             // This will require updating the MicroscopeConfigManager to support writing values back
             logger.warn("Exposure time persistence not yet implemented - changes will be lost on restart");
-            
+
         } catch (Exception e) {
             logger.error("Failed to save exposure changes to config", e);
-            Platform.runLater(() -> Dialogs.showWarningNotification("Configuration Save Failed", 
-                    "Exposure time changes could not be saved to configuration file. " +
-                    "Changes will be lost when QuPath restarts."));
+            Platform.runLater(() -> Dialogs.showWarningNotification(
+                    "Configuration Save Failed",
+                    "Exposure time changes could not be saved to configuration file. "
+                            + "Changes will be lost when QuPath restarts."));
         }
     }
 }
