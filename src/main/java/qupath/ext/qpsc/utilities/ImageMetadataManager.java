@@ -1,22 +1,15 @@
 package qupath.ext.qpsc.utilities;
 
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.lib.common.GeneralTools;
-import qupath.lib.images.ImageData;
-import qupath.lib.images.servers.ImageServer;
-import qupath.lib.objects.hierarchy.PathObjectHierarchy;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.scripting.QP;
-
-import java.awt.geom.AffineTransform;
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.util.Collections;
-import java.util.Map;
-import java.util.Optional;
 
 /**
  * ImageMetadataManager
@@ -76,8 +69,8 @@ public class ImageMetadataManager {
                     int collection = Integer.parseInt(collectionStr);
                     maxCollection = Math.max(maxCollection, collection);
                 } catch (NumberFormatException e) {
-                    logger.warn("Invalid image_collection value '{}' for entry: {}",
-                            collectionStr, entry.getImageName());
+                    logger.warn(
+                            "Invalid image_collection value '{}' for entry: {}", collectionStr, entry.getImageName());
                 }
             }
         }
@@ -103,13 +96,19 @@ public class ImageMetadataManager {
      * @param annotationName The annotation name (null if not applicable)
      * @param imageIndex The image index number
      */
-    public static void applyImageMetadata(ProjectImageEntry<?> entry,
-                                          ProjectImageEntry<?> parentEntry,
-                                          double xOffset, double yOffset,
-                                          boolean flipX, boolean flipY, String sampleName,
-                                          String modality, String objective,
-                                          String angle, String annotationName,
-                                          Integer imageIndex) {
+    public static void applyImageMetadata(
+            ProjectImageEntry<?> entry,
+            ProjectImageEntry<?> parentEntry,
+            double xOffset,
+            double yOffset,
+            boolean flipX,
+            boolean flipY,
+            String sampleName,
+            String modality,
+            String objective,
+            String angle,
+            String annotationName,
+            Integer imageIndex) {
         if (entry == null) {
             logger.error("Cannot apply metadata to null entry");
             return;
@@ -122,8 +121,7 @@ public class ImageMetadataManager {
         if (parentEntry != null && parentEntry.getMetadata().get(IMAGE_COLLECTION) != null) {
             // Inherit from parent
             collectionNumber = parentEntry.getMetadata().get(IMAGE_COLLECTION);
-            logger.info("Inheriting image_collection {} from parent: {}",
-                    collectionNumber, parentEntry.getImageName());
+            logger.info("Inheriting image_collection {} from parent: {}", collectionNumber, parentEntry.getImageName());
         } else {
             // Get next available number
             Project<?> project = QP.getProject();
@@ -137,8 +135,7 @@ public class ImageMetadataManager {
             // First try to inherit from parent's base_image (follows the chain)
             baseImage = parentEntry.getMetadata().get(BASE_IMAGE);
             if (baseImage != null && !baseImage.isEmpty()) {
-                logger.info("Inheriting base_image '{}' from parent: {}",
-                        baseImage, parentEntry.getImageName());
+                logger.info("Inheriting base_image '{}' from parent: {}", baseImage, parentEntry.getImageName());
             } else {
                 // Parent doesn't have base_image - use parent's image name as base
                 baseImage = GeneralTools.stripExtension(parentEntry.getImageName());
@@ -199,9 +196,21 @@ public class ImageMetadataManager {
             propagatePrefixedMetadata(parentEntry, metadata);
         }
 
-        logger.debug("Applied metadata to {}: collection={}, base_image={}, offset=({},{}), flipX={}, flipY={}, sample={}, modality={}, objective={}, angle={}, annotation={}, index={}",
-                entry.getImageName(), collectionNumber, baseImage, xOffset, yOffset, flipX, flipY, sampleName,
-                modality, objective, angle, annotationName, imageIndex);
+        logger.debug(
+                "Applied metadata to {}: collection={}, base_image={}, offset=({},{}), flipX={}, flipY={}, sample={}, modality={}, objective={}, angle={}, annotation={}, index={}",
+                entry.getImageName(),
+                collectionNumber,
+                baseImage,
+                xOffset,
+                yOffset,
+                flipX,
+                flipY,
+                sampleName,
+                modality,
+                objective,
+                angle,
+                annotationName,
+                imageIndex);
     }
 
     /**
@@ -214,8 +223,8 @@ public class ImageMetadataManager {
      * @param parentEntry The parent image entry to copy metadata from
      * @param targetMetadata The target metadata map to copy into
      */
-    private static void propagatePrefixedMetadata(ProjectImageEntry<?> parentEntry,
-                                                   Map<String, String> targetMetadata) {
+    private static void propagatePrefixedMetadata(
+            ProjectImageEntry<?> parentEntry, Map<String, String> targetMetadata) {
         if (parentEntry == null || targetMetadata == null) {
             return;
         }
@@ -242,8 +251,11 @@ public class ImageMetadataManager {
         }
 
         if (propagatedCount > 0) {
-            logger.info("Propagated {} metadata entries with prefix '{}' from parent: {}",
-                    propagatedCount, prefix, parentEntry.getImageName());
+            logger.info(
+                    "Propagated {} metadata entries with prefix '{}' from parent: {}",
+                    propagatedCount,
+                    prefix,
+                    parentEntry.getImageName());
         }
     }
 
@@ -260,12 +272,16 @@ public class ImageMetadataManager {
      * @param flipY Whether the image has been flipped vertically
      * @param sampleName The sample name
      */
-    public static void applyImageMetadata(ProjectImageEntry<?> entry,
-                                          ProjectImageEntry<?> parentEntry,
-                                          double xOffset, double yOffset,
-                                          boolean flipX, boolean flipY, String sampleName) {
-        applyImageMetadata(entry, parentEntry, xOffset, yOffset, flipX, flipY, sampleName,
-                null, null, null, null, null);
+    public static void applyImageMetadata(
+            ProjectImageEntry<?> entry,
+            ProjectImageEntry<?> parentEntry,
+            double xOffset,
+            double yOffset,
+            boolean flipX,
+            boolean flipY,
+            String sampleName) {
+        applyImageMetadata(
+                entry, parentEntry, xOffset, yOffset, flipX, flipY, sampleName, null, null, null, null, null);
     }
 
     /**
@@ -295,19 +311,22 @@ public class ImageMetadataManager {
         boolean imageFlipY = isFlippedY(entry);
 
         if (requiresFlipX && !imageFlipX) {
-            logger.warn("Image {} is not flipped on X but flipX is required in preferences",
-                    entry.getImageName());
+            logger.warn("Image {} is not flipped on X but flipX is required in preferences", entry.getImageName());
             return false;
         }
 
         if (requiresFlipY && !imageFlipY) {
-            logger.warn("Image {} is not flipped on Y but flipY is required in preferences",
-                    entry.getImageName());
+            logger.warn("Image {} is not flipped on Y but flipY is required in preferences", entry.getImageName());
             return false;
         }
 
-        logger.debug("Image {} validation passed (flipX={}, flipY={}, requiresFlipX={}, requiresFlipY={})",
-                entry.getImageName(), imageFlipX, imageFlipY, requiresFlipX, requiresFlipY);
+        logger.debug(
+                "Image {} validation passed (flipX={}, flipY={}, requiresFlipX={}, requiresFlipY={})",
+                entry.getImageName(),
+                imageFlipX,
+                imageFlipY,
+                requiresFlipX,
+                requiresFlipY);
         return true;
     }
 
@@ -323,7 +342,8 @@ public class ImageMetadataManager {
             return;
         }
 
-        logger.info("Initializing metadata for project with {} images",
+        logger.info(
+                "Initializing metadata for project with {} images",
                 project.getImageList().size());
 
         boolean anyChanges = false;
@@ -406,18 +426,17 @@ public class ImageMetadataManager {
      */
     public static double[] getXYOffset(ProjectImageEntry<?> entry) {
         if (entry == null) {
-            return new double[]{0, 0};
+            return new double[] {0, 0};
         }
 
         Map<String, String> metadata = entry.getMetadata();
         try {
             double x = Double.parseDouble(metadata.get(XY_OFFSET_X));
             double y = Double.parseDouble(metadata.get(XY_OFFSET_Y));
-            return new double[]{x, y};
+            return new double[] {x, y};
         } catch (Exception e) {
-            logger.debug("Could not parse XY offset for {}: {}",
-                    entry.getImageName(), e.getMessage());
-            return new double[]{0, 0};
+            logger.debug("Could not parse XY offset for {}: {}", entry.getImageName(), e.getMessage());
+            return new double[] {0, 0};
         }
     }
 
@@ -541,9 +560,7 @@ public class ImageMetadataManager {
      * @param value The value to set
      * @param syncProject Whether to sync project changes immediately
      */
-    public static void updateMetadataValue(ProjectImageEntry<?> entry,
-                                           String key, String value,
-                                           boolean syncProject) {
+    public static void updateMetadataValue(ProjectImageEntry<?> entry, String key, String value, boolean syncProject) {
         if (entry == null || key == null) {
             logger.warn("Cannot update metadata with null entry or key");
             return;

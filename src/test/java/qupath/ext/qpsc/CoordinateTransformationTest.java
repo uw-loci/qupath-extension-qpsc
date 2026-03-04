@@ -12,7 +12,4 @@ class CoordinateTransformationTest {
     private static final double ACQUISITION_PIXEL_SIZE = 0.2201;
     private static final int CAMERA_WIDTH = 1392;
     private static final int CAMERA_HEIGHT = 1040;
-
-
-
 }

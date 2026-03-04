@@ -1,16 +1,14 @@
 package qupath.ext.qpsc.modality.ppm;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.modality.AngleExposure;
-import qupath.ext.qpsc.modality.ppm.PPMPreferences;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * Manages rotation strategies for different imaging modalities.
@@ -32,9 +30,8 @@ public class RotationManager {
     }
 
     private void initializeStrategies(String modality, String modalityForExposure, String objective, String detector) {
-        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(
-                QPPreferenceDialog.getMicroscopeConfigFileProperty()
-        );
+        MicroscopeConfigManager mgr =
+                MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
         // Check if this is a PPM modality by name
         boolean isPPMModality = modality != null && modality.startsWith("ppm");
@@ -82,11 +79,13 @@ public class RotationManager {
                     new AngleExposure(uncrossedTick, uncrossedExposure),
                     modalityForExposure,
                     objective,
-                    detector
-            ));
+                    detector));
 
-            logger.info("PPM ticks configured with hardware parameters: modality={}, objective={}, detector={}", 
-                    modalityForExposure, objective, detector);
+            logger.info(
+                    "PPM ticks configured with hardware parameters: modality={}, objective={}, detector={}",
+                    modalityForExposure,
+                    objective,
+                    detector);
         }
 
         // Always add NoRotationStrategy as fallback for non-PPM modalities
@@ -103,19 +102,20 @@ public class RotationManager {
         logger.info("Getting rotation angles for modality: {}", modalityName);
 
         for (RotationStrategy strategy : strategies) {
-            logger.debug("Checking strategy {} for modality {}",
-                    strategy.getClass().getSimpleName(), modalityName);
+            logger.debug(
+                    "Checking strategy {} for modality {}", strategy.getClass().getSimpleName(), modalityName);
 
             if (strategy.appliesTo(modalityName)) {
-                logger.info("Using {} for modality {}",
-                        strategy.getClass().getSimpleName(), modalityName);
+                logger.info("Using {} for modality {}", strategy.getClass().getSimpleName(), modalityName);
 
                 CompletableFuture<List<Double>> anglesFuture = strategy.getRotationTicks();
 
                 // Add logging to see what angles are returned
                 return anglesFuture.thenApply(angles -> {
-                    logger.info("Strategy {} returned angles: {}",
-                            strategy.getClass().getSimpleName(), angles);
+                    logger.info(
+                            "Strategy {} returned angles: {}",
+                            strategy.getClass().getSimpleName(),
+                            angles);
                     return angles;
                 });
             }
@@ -135,8 +135,7 @@ public class RotationManager {
 
         for (RotationStrategy strategy : strategies) {
             if (strategy.appliesTo(modalityName)) {
-                logger.info("Using {} for modality {}",
-                        strategy.getClass().getSimpleName(), modalityName);
+                logger.info("Using {} for modality {}", strategy.getClass().getSimpleName(), modalityName);
                 return strategy.getRotationTicksWithExposure();
             }
         }

@@ -1,5 +1,8 @@
 package qupath.ext.qpsc.ui;
 
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
@@ -16,10 +19,6 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
-
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Non-modal dialog for interactive threshold tuning with live mask preview.
@@ -43,10 +42,7 @@ public class ThresholdPreviewDialog {
     /**
      * Result containing the tuned threshold values.
      */
-    public record ThresholdResult(
-        double saturationThreshold,
-        double valueThreshold
-    ) {}
+    public record ThresholdResult(double saturationThreshold, double valueThreshold) {}
 
     /**
      * Shows the threshold preview dialog with live mask visualization.
@@ -99,11 +95,9 @@ public class ThresholdPreviewDialog {
             Label headerLabel = new Label("Interactive Threshold Tuning");
             headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
 
-            Label instructionLabel = new Label(
-                "Adjust the sliders to change threshold values. The mask on the right\n" +
-                "shows which pixels are classified as foreground (white) at the current\n" +
-                "thresholds. When satisfied, click \"Run Calibration\" to re-analyze."
-            );
+            Label instructionLabel = new Label("Adjust the sliders to change threshold values. The mask on the right\n"
+                    + "shows which pixels are classified as foreground (white) at the current\n"
+                    + "thresholds. When satisfied, click \"Run Calibration\" to re-analyze.");
             instructionLabel.setStyle("-fx-font-size: 11px;");
             instructionLabel.setWrapText(true);
 
@@ -236,8 +230,7 @@ public class ThresholdPreviewDialog {
             root.getChildren().add(buttonBar);
 
             runButton.setOnAction(e -> {
-                ThresholdResult result = new ThresholdResult(
-                    satSlider.getValue(), valSlider.getValue());
+                ThresholdResult result = new ThresholdResult(satSlider.getValue(), valSlider.getValue());
                 stage.close();
                 future.complete(result);
             });
@@ -281,8 +274,8 @@ public class ThresholdPreviewDialog {
      * @param countLabel Label to update with foreground pixel count (may be null)
      * @return WritableImage with white foreground and black background
      */
-    private static WritableImage computeMask(BufferedImage image, double satThreshold,
-                                              double valThreshold, Label countLabel) {
+    private static WritableImage computeMask(
+            BufferedImage image, double satThreshold, double valThreshold, Label countLabel) {
         int w = image.getWidth();
         int h = image.getHeight();
         WritableImage mask = new WritableImage(w, h);
@@ -314,8 +307,8 @@ public class ThresholdPreviewDialog {
 
         if (countLabel != null) {
             double percentage = (100.0 * foregroundCount) / totalPixels;
-            final String text = String.format("Foreground: %,d / %,d pixels (%.1f%%)",
-                    foregroundCount, totalPixels, percentage);
+            final String text =
+                    String.format("Foreground: %,d / %,d pixels (%.1f%%)", foregroundCount, totalPixels, percentage);
             countLabel.setText(text);
         }
 

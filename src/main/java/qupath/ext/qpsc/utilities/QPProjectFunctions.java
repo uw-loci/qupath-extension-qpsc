@@ -1,15 +1,22 @@
 package qupath.ext.qpsc.utilities;
 
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.net.URI;
-import java.net.URISyntaxException;
-
+import java.util.HashMap;
+import java.util.Map;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
-import qupath.lib.gui.QuPathGUI;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import qupath.fx.dialogs.Dialogs;
+import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.QPEx;
 import qupath.lib.gui.tools.GuiTools;
 import qupath.lib.images.ImageData;
@@ -22,17 +29,6 @@ import qupath.lib.projects.ProjectIO;
 import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.projects.Projects;
 import qupath.lib.scripting.QP;
-
-import java.awt.geom.AffineTransform;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 
 /**
  * QPProjectFunctions
@@ -70,13 +66,14 @@ public class QPProjectFunctions {
      * @param isSlideFlippedY     flip Y on import?
      * @return a Map containing project details
      */
-    public static Map<String,Object> createAndOpenQuPathProject(
+    public static Map<String, Object> createAndOpenQuPathProject(
             QuPathGUI qupathGUI,
             String projectsFolderPath,
             String sampleLabel,
             String enhancedModality,
             boolean isSlideFlippedX,
-            boolean isSlideFlippedY) throws IOException {
+            boolean isSlideFlippedY)
+            throws IOException {
 
         logger.info("Creating/opening project: {} in {}", sampleLabel, projectsFolderPath);
 
@@ -115,12 +112,13 @@ public class QPProjectFunctions {
                             project,
                             imageFile,
                             null, // no parent
-                            0, 0, // TODO: Calculate actual offsets from slide corner
+                            0,
+                            0, // TODO: Calculate actual offsets from slide corner
                             isSlideFlippedX,
                             isSlideFlippedY,
                             sampleLabel,
-                            null  // no modality handler available in this context
-                    );
+                            null // no modality handler available in this context
+                            );
 
                     if (matchingImage != null) {
                         // Open the image later, after project is set
@@ -157,14 +155,16 @@ public class QPProjectFunctions {
         }
 
         // 4) Package results
-        Map<String,Object> result = new HashMap<>();
+        Map<String, Object> result = new HashMap<>();
         result.put("matchingImage", matchingImage);
         result.put("imagingModeWithIndex", setup.imagingModeWithIndex);
         result.put("currentQuPathProject", project);
         result.put("tempTileDirectory", setup.tempTileDirectory);
 
-        logger.info("Project setup complete. Mode: {}, Tile acquisition parent dir: {}",
-                setup.imagingModeWithIndex, setup.tempTileDirectory);
+        logger.info(
+                "Project setup complete. Mode: {}, Tile acquisition parent dir: {}",
+                setup.imagingModeWithIndex,
+                setup.tempTileDirectory);
 
         return result;
     }
@@ -174,8 +174,7 @@ public class QPProjectFunctions {
      * This checks multiple ways to match images.
      */
     private static ProjectImageEntry<BufferedImage> findImageInProject(
-            Project<BufferedImage> project,
-            ImageData<BufferedImage> imageData) {
+            Project<BufferedImage> project, ImageData<BufferedImage> imageData) {
 
         if (project == null || imageData == null) {
             return null;
@@ -200,8 +199,7 @@ public class QPProjectFunctions {
                     // Check if the URIs match
                     if (entry.getURIs() != null && !entry.getURIs().isEmpty()) {
                         for (URI uri : entry.getURIs()) {
-                            if (uri.toString().equals(serverPath) ||
-                                    serverPath.contains(uri.toString())) {
+                            if (uri.toString().equals(serverPath) || serverPath.contains(uri.toString())) {
                                 logger.debug("Found image via URI match: {}", uri);
                                 return entry;
                             }
@@ -361,56 +359,53 @@ public class QPProjectFunctions {
         return null;
     }
 
-//    /**
-//     * Import an image file to the project and open it in the GUI.
-//     */
-//    private static ProjectImageEntry<BufferedImage> importCurrentImageToNewProject(
-//            QuPathGUI qupathGUI,
-//            Project<BufferedImage> project,
-//            File imageFile,
-//            boolean flipX,
-//            boolean flipY) throws IOException {
-//
-//        // Add image with flips
-//        addImageToProject(imageFile, project, flipX, flipY);
-//
-//        // Find the newly added entry
-//        String baseName = imageFile.getName();
-//        ProjectImageEntry<BufferedImage> entry = project.getImageList().stream()
-//                .filter(e -> baseName.equals(e.getImageName()))
-//                .findFirst()
-//                .orElse(null);
-//
-//        if (entry != null) {
-//            // Open the image
-//            qupathGUI.openImageEntry(entry);
-//            qupathGUI.refreshProject();
-//            logger.info("Opened image in GUI: {}", baseName);
-//        } else {
-//            logger.warn("Could not find newly added image in project: {}", baseName);
-//        }
-//
-//        return entry;
-//    }
+    //    /**
+    //     * Import an image file to the project and open it in the GUI.
+    //     */
+    //    private static ProjectImageEntry<BufferedImage> importCurrentImageToNewProject(
+    //            QuPathGUI qupathGUI,
+    //            Project<BufferedImage> project,
+    //            File imageFile,
+    //            boolean flipX,
+    //            boolean flipY) throws IOException {
+    //
+    //        // Add image with flips
+    //        addImageToProject(imageFile, project, flipX, flipY);
+    //
+    //        // Find the newly added entry
+    //        String baseName = imageFile.getName();
+    //        ProjectImageEntry<BufferedImage> entry = project.getImageList().stream()
+    //                .filter(e -> baseName.equals(e.getImageName()))
+    //                .findFirst()
+    //                .orElse(null);
+    //
+    //        if (entry != null) {
+    //            // Open the image
+    //            qupathGUI.openImageEntry(entry);
+    //            qupathGUI.refreshProject();
+    //            logger.info("Opened image in GUI: {}", baseName);
+    //        } else {
+    //            logger.warn("Could not find newly added image in project: {}", baseName);
+    //        }
+    //
+    //        return entry;
+    //    }
 
     /**
      * Build a unique subfolder for this sample + modality, and compute the
-     * temp–tiles directory path.
+     * temp--tiles directory path.
      */
     private static ProjectSetup prepareProjectFolders(
-            String projectsFolderPath,
-            String sampleLabel,
-            String enhancedModality) {
+            String projectsFolderPath, String sampleLabel, String enhancedModality) {
 
         // Enhanced modality already includes magnification (e.g. "ppm_10x")
         // Apply unique folder naming to get indexed version (e.g. "ppm_10x_1", "ppm_10x_2", ...)
         String imagingModeWithIndex = MinorFunctions.getUniqueFolderName(
                 Paths.get(projectsFolderPath, sampleLabel, enhancedModality).toString());
 
-        // full path: /…/projectsFolder/sampleLabel/ppm_10x_1
-        String tempTileDirectory = Paths.get(
-                        projectsFolderPath, sampleLabel, imagingModeWithIndex)
-                .toString();
+        // full path: /.../projectsFolder/sampleLabel/ppm_10x_1
+        String tempTileDirectory =
+                Paths.get(projectsFolderPath, sampleLabel, imagingModeWithIndex).toString();
 
         return new ProjectSetup(imagingModeWithIndex, tempTileDirectory);
     }
@@ -419,33 +414,31 @@ public class QPProjectFunctions {
      * Create the .qpproj (or load it, if present).
      * Returns the Project<BufferedImage> instance.
      */
-    private static Project<BufferedImage> createOrLoadProject(
-            String projectsFolderPath,
-            String sampleLabel) throws IOException {
+    private static Project<BufferedImage> createOrLoadProject(String projectsFolderPath, String sampleLabel)
+            throws IOException {
         return createProject(projectsFolderPath, sampleLabel);
     }
 
     /**
      * Returns project info for an already open project.
-     * 
+     *
      * @param projectsFolderPath the root folder for all projects
      * @param sampleLabel the sample label/name
      * @param enhancedModality the enhanced imaging mode/modality name (includes magnification)
      * @return map containing project info including "tempTileDirectory" and "imagingModeWithIndex"
      */
-    public static Map<String,Object> getCurrentProjectInformation(
-            String projectsFolderPath,
-            String sampleLabel,
-            String enhancedModality) {
+    public static Map<String, Object> getCurrentProjectInformation(
+            String projectsFolderPath, String sampleLabel, String enhancedModality) {
         Project<?> project = QP.getProject();
         // Enhanced modality already includes magnification (e.g. "ppm_10x")
         // Apply unique folder naming to get indexed version (e.g. "ppm_10x_1", "ppm_10x_2", ...)
         String imagingModeWithIndex = MinorFunctions.getUniqueFolderName(
                 projectsFolderPath + File.separator + sampleLabel + File.separator + enhancedModality);
-        String tempTileDirectory = projectsFolderPath + File.separator + sampleLabel + File.separator + imagingModeWithIndex;
+        String tempTileDirectory =
+                projectsFolderPath + File.separator + sampleLabel + File.separator + imagingModeWithIndex;
         ProjectImageEntry<?> matchingImage = QP.getProjectEntry();
 
-        Map<String,Object> result = new HashMap<>();
+        Map<String, Object> result = new HashMap<>();
         result.put("matchingImage", matchingImage);
         result.put("imagingModeWithIndex", imagingModeWithIndex);
         result.put("currentQuPathProject", project);
@@ -493,18 +486,27 @@ public class QPProjectFunctions {
             String angle,
             String annotationName,
             Integer imageIndex,
-            qupath.ext.qpsc.modality.ModalityHandler modalityHandler) throws IOException {
+            qupath.ext.qpsc.modality.ModalityHandler modalityHandler)
+            throws IOException {
 
         if (project == null) {
             logger.error("Cannot add image: project is null");
             return null;
         }
 
-        logger.info("Adding image with metadata: {} (parent={}, offset=({},{}), flipped={}, sample={}, modality={}, objective={}, angle={}, annotation={}, index={})",
+        logger.info(
+                "Adding image with metadata: {} (parent={}, offset=({},{}), flipped={}, sample={}, modality={}, objective={}, angle={}, annotation={}, index={})",
                 imageFile.getName(),
                 parentEntry != null ? parentEntry.getImageName() : "none",
-                xOffset, yOffset, isFlippedX || isFlippedY, sampleName,
-                modality, objective, angle, annotationName, imageIndex);
+                xOffset,
+                yOffset,
+                isFlippedX || isFlippedY,
+                sampleName,
+                modality,
+                objective,
+                angle,
+                annotationName,
+                imageIndex);
 
         // First add the image using existing logic (preserves original method)
         boolean success = addImageToProject(imageFile, project, isFlippedX, isFlippedY, modalityHandler);
@@ -522,9 +524,18 @@ public class QPProjectFunctions {
         if (newEntry != null) {
             // Apply comprehensive metadata with all identification fields
             ImageMetadataManager.applyImageMetadata(
-                    newEntry, parentEntry, xOffset, yOffset, isFlippedX, isFlippedY, sampleName,
-                    modality, objective, angle, annotationName, imageIndex
-            );
+                    newEntry,
+                    parentEntry,
+                    xOffset,
+                    yOffset,
+                    isFlippedX,
+                    isFlippedY,
+                    sampleName,
+                    modality,
+                    objective,
+                    angle,
+                    annotationName,
+                    imageIndex);
 
             // Save project
             project.syncChanges();
@@ -549,11 +560,24 @@ public class QPProjectFunctions {
             boolean isFlippedX,
             boolean isFlippedY,
             String sampleName,
-            qupath.ext.qpsc.modality.ModalityHandler modalityHandler) throws IOException {
+            qupath.ext.qpsc.modality.ModalityHandler modalityHandler)
+            throws IOException {
 
-        return addImageToProjectWithMetadata(project, imageFile, parentEntry,
-                xOffset, yOffset, isFlippedX, isFlippedY, sampleName,
-                null, null, null, null, null, modalityHandler);
+        return addImageToProjectWithMetadata(
+                project,
+                imageFile,
+                parentEntry,
+                xOffset,
+                yOffset,
+                isFlippedX,
+                isFlippedY,
+                sampleName,
+                null,
+                null,
+                null,
+                null,
+                null,
+                modalityHandler);
     }
 
     /**
@@ -578,15 +602,16 @@ public class QPProjectFunctions {
             ProjectImageEntry<BufferedImage> originalEntry,
             boolean flipX,
             boolean flipY,
-            String sampleName) throws IOException {
+            String sampleName)
+            throws IOException {
 
         if (project == null || originalEntry == null) {
             logger.error("Cannot create flipped duplicate: null project or entry");
             return null;
         }
 
-        logger.info("Creating flipped duplicate of {} (flipX={}, flipY={})",
-                originalEntry.getImageName(), flipX, flipY);
+        logger.info(
+                "Creating flipped duplicate of {} (flipX={}, flipY={})", originalEntry.getImageName(), flipX, flipY);
 
         // Load the original image data to get hierarchy and server
         ImageData<BufferedImage> originalData = originalEntry.readImageData();
@@ -656,13 +681,13 @@ public class QPProjectFunctions {
         double flippedPixelSize = flippedServer.getPixelCalibration().getAveragedPixelSizeMicrons();
 
         logger.info("Pixel calibration check:");
-        logger.info("  Original: {} µm/pixel", originalPixelSize);
-        logger.info("  Flipped:  {} µm/pixel", flippedPixelSize);
+        logger.info("  Original: {} um/pixel", originalPixelSize);
+        logger.info("  Flipped:  {} um/pixel", flippedPixelSize);
 
         if (Math.abs(originalPixelSize - flippedPixelSize) > 0.001) {
             logger.warn("CRITICAL: Pixel calibration mismatch detected!");
             logger.warn("  This will cause incorrect tile sizes during acquisition");
-            logger.warn("  Original={} µm/px, Flipped={} µm/px", originalPixelSize, flippedPixelSize);
+            logger.warn("  Original={} um/px, Flipped={} um/px", originalPixelSize, flippedPixelSize);
         }
 
         // Get hierarchies for transformation
@@ -672,13 +697,7 @@ public class QPProjectFunctions {
         // Transform hierarchy to account for flips
         // Use the ORIGINAL (unflipped) server dimensions for transformation
         TransformationFunctions.transformHierarchy(
-                originalHierarchy,
-                flippedHierarchy,
-                flipX,
-                flipY,
-                imageWidth,
-                imageHeight
-        );
+                originalHierarchy, flippedHierarchy, flipX, flipY, imageWidth, imageHeight);
 
         // Ensure original entry has base_image set before we inherit from it
         // This ensures both original and flipped entries share the same base_image
@@ -694,10 +713,11 @@ public class QPProjectFunctions {
         ImageMetadataManager.applyImageMetadata(
                 flippedEntry,
                 originalEntry, // Use original as parent to inherit collection and base_image
-                offsets[0], offsets[1],
-                flipX, flipY, // Mark which axes are flipped
-                sampleName
-        );
+                offsets[0],
+                offsets[1],
+                flipX,
+                flipY, // Mark which axes are flipped
+                sampleName);
 
         // Save the flipped image data to persist the hierarchy and image type
         flippedEntry.saveImageData(flippedData);
@@ -763,12 +783,17 @@ public class QPProjectFunctions {
             if (modalityType.isPresent()) {
                 ImageData.ImageType requested = modalityType.get();
                 if (requested == ImageData.ImageType.BRIGHTFIELD_H_E && !isRgb) {
-                    logger.info("Modality requested BRIGHTFIELD_H_E but image is non-RGB ({} channels), using OTHER: {}",
-                            server.nChannels(), fileName);
+                    logger.info(
+                            "Modality requested BRIGHTFIELD_H_E but image is non-RGB ({} channels), using OTHER: {}",
+                            server.nChannels(),
+                            fileName);
                     return ImageData.ImageType.OTHER;
                 }
-                logger.info("Using modality-specified image type {} for: {} (modality={})",
-                        requested, fileName, modalityHandler.getClass().getSimpleName());
+                logger.info(
+                        "Using modality-specified image type {} for: {} (modality={})",
+                        requested,
+                        fileName,
+                        modalityHandler.getClass().getSimpleName());
                 return requested;
             }
         }
@@ -776,15 +801,17 @@ public class QPProjectFunctions {
         // Fallback: Check if this is a PPM or BF modality based on the filename
         // PPM files typically contain "ppm" in the name
         // BF (brightfield) files typically contain "bf" or "90" (90 degree angle)
-        if (fileName.contains("ppm") ||
-                fileName.contains("_90") ||
-                fileName.contains("90.") ||
-                fileName.contains("_bf") ||
-                fileName.contains("brightfield")) {
+        if (fileName.contains("ppm")
+                || fileName.contains("_90")
+                || fileName.contains("90.")
+                || fileName.contains("_bf")
+                || fileName.contains("brightfield")) {
 
             if (!isRgb) {
-                logger.info("Filename matches PPM/BF pattern but image is non-RGB ({} channels), using OTHER: {}",
-                        server.nChannels(), fileName);
+                logger.info(
+                        "Filename matches PPM/BF pattern but image is non-RGB ({} channels), using OTHER: {}",
+                        server.nChannels(),
+                        fileName);
                 return ImageData.ImageType.OTHER;
             }
             // Force brightfield H&E for PPM and BF modalities
@@ -839,7 +866,8 @@ public class QPProjectFunctions {
             Project<BufferedImage> project,
             boolean isSlideFlippedX,
             boolean isSlideFlippedY,
-            qupath.ext.qpsc.modality.ModalityHandler modalityHandler) throws IOException {
+            qupath.ext.qpsc.modality.ModalityHandler modalityHandler)
+            throws IOException {
 
         // Validate project parameter
         if (project == null) {
@@ -847,8 +875,11 @@ public class QPProjectFunctions {
             return false;
         }
 
-        logger.info("Adding image to project: {} (flipX={}, flipY={})",
-                imageFile.getName(), isSlideFlippedX, isSlideFlippedY);
+        logger.info(
+                "Adding image to project: {} (flipX={}, flipY={})",
+                imageFile.getName(),
+                isSlideFlippedX,
+                isSlideFlippedY);
 
         // Build an ImageServer for the image file
         String imageUri = imageFile.toURI().toString();
@@ -914,9 +945,8 @@ public class QPProjectFunctions {
         }
 
         // Create a transformed server that applies our affine transformation
-        ImageServer<BufferedImage> flipped = new TransformedServerBuilder(server)
-                .transform(transform)
-                .build();
+        ImageServer<BufferedImage> flipped =
+                new TransformedServerBuilder(server).transform(transform).build();
 
         // Add the transformed server to the project
         ProjectImageEntry<BufferedImage> entry = project.addImage(flipped.getBuilder());
@@ -945,12 +975,11 @@ public class QPProjectFunctions {
      *   {projectsFolderPath}/{sampleLabel}
      * and ensures a "SlideImages" subfolder exists.
      */
-    public static Project<BufferedImage> createProject(String projectsFolderPath,
-                                                       String sampleLabel) {
+    public static Project<BufferedImage> createProject(String projectsFolderPath, String sampleLabel) {
         // Resolve the three directories we need
-        Path rootPath        = Paths.get(projectsFolderPath);
-        Path sampleDir       = rootPath.resolve(sampleLabel);
-        Path slideImagesDir  = sampleDir.resolve("SlideImages");
+        Path rootPath = Paths.get(projectsFolderPath);
+        Path sampleDir = rootPath.resolve(sampleLabel);
+        Path slideImagesDir = sampleDir.resolve("SlideImages");
 
         // 1) Ensure all directories exist (creates parents if needed)
         try {
@@ -958,9 +987,7 @@ public class QPProjectFunctions {
         } catch (IOException e) {
             Dialogs.showErrorNotification(
                     "Error creating directories",
-                    "Could not create project folders under:\n  " + projectsFolderPath +
-                            "\nCause: " + e.getMessage()
-            );
+                    "Could not create project folders under:\n  " + projectsFolderPath + "\nCause: " + e.getMessage());
             return null;
         }
 
@@ -970,7 +997,7 @@ public class QPProjectFunctions {
 
         try {
             if (qpprojFiles == null || qpprojFiles.length == 0) {
-                // No project exists yet → create a new one
+                // No project exists yet -> create a new one
                 logger.info("Creating new project in: {}", sampleDir);
                 project = Projects.createProject(sampleDir.toFile(), BufferedImage.class);
             } else {
@@ -978,9 +1005,8 @@ public class QPProjectFunctions {
                     // Warn if multiple projects found; we'll load the first
                     Dialogs.showErrorNotification(
                             "Warning: Multiple project files",
-                            "Found " + qpprojFiles.length + " .qpproj files in:\n  " +
-                                    sampleDir + "\nLoading the first: " + qpprojFiles[0].getName()
-                    );
+                            "Found " + qpprojFiles.length + " .qpproj files in:\n  " + sampleDir
+                                    + "\nLoading the first: " + qpprojFiles[0].getName());
                 }
                 // Load the first existing project
                 logger.info("Loading existing project: {}", qpprojFiles[0].getName());
@@ -989,9 +1015,7 @@ public class QPProjectFunctions {
         } catch (IOException e) {
             Dialogs.showErrorNotification(
                     "Error opening project",
-                    "Failed to create or load project in:\n  " + sampleDir +
-                            "\nCause: " + e.getMessage()
-            );
+                    "Failed to create or load project in:\n  " + sampleDir + "\nCause: " + e.getMessage());
             return null;
         }
 
@@ -1001,7 +1025,8 @@ public class QPProjectFunctions {
     public static void onImageLoadedInViewer(QuPathGUI qupathGUI, String expectedImagePath, Runnable onLoaded) {
         ChangeListener<ImageData<?>> listener = new ChangeListener<ImageData<?>>() {
             @Override
-            public void changed(ObservableValue<? extends ImageData<?>> obs, ImageData<?> oldImage, ImageData<?> newImage) {
+            public void changed(
+                    ObservableValue<? extends ImageData<?>> obs, ImageData<?> oldImage, ImageData<?> newImage) {
                 if (newImage == null) return;
                 String serverPath = newImage.getServer().getPath();
                 if (serverPath != null && serverPath.contains(expectedImagePath)) {
@@ -1021,5 +1046,4 @@ public class QPProjectFunctions {
             logger.info("Saved current image data to project entry");
         }
     }
-
 }

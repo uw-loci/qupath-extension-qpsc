@@ -1,10 +1,16 @@
 package qupath.ext.qpsc.utilities;
 
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.ui.SampleSetupController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.SampleSetupController;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.common.GeneralTools;
@@ -12,13 +18,6 @@ import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
-
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * Helper utility for managing image flipping in workflows.
@@ -56,9 +55,7 @@ public class ImageFlipHelper {
      * @return CompletableFuture that completes with true if successful, false if failed
      */
     public static CompletableFuture<Boolean> validateAndFlipIfNeeded(
-            QuPathGUI gui,
-            Project<BufferedImage> project,
-            String sampleName) {
+            QuPathGUI gui, Project<BufferedImage> project, String sampleName) {
 
         return CompletableFuture.supplyAsync(() -> {
             // Get flip requirements from preferences
@@ -127,7 +124,8 @@ public class ImageFlipHelper {
             boolean flipYMatches = !requiresFlipY || ImageMetadataManager.isFlippedY(currentEntry);
 
             if (isFlipped && flipXMatches && flipYMatches) {
-                logger.info("Current image flip status matches requirements (flipX={}, flipY={})",
+                logger.info(
+                        "Current image flip status matches requirements (flipX={}, flipY={})",
                         ImageMetadataManager.isFlippedX(currentEntry),
                         ImageMetadataManager.isFlippedY(currentEntry));
 
@@ -147,11 +145,7 @@ public class ImageFlipHelper {
 
             // Show notification
             Platform.runLater(() ->
-                    Dialogs.showInfoNotification(
-                            "Image Preparation",
-                            "Creating flipped image for acquisition..."
-                    )
-            );
+                    Dialogs.showInfoNotification("Image Preparation", "Creating flipped image for acquisition..."));
 
             try {
                 // CRITICAL FIX: Save the current GUI hierarchy to the project entry BEFORE
@@ -165,8 +159,12 @@ public class ImageFlipHelper {
                     try {
                         currentEntry.saveImageData(currentImageData);
                         project.syncChanges();
-                        logger.info("Successfully saved {} annotations before creating flipped duplicate",
-                                currentImageData.getHierarchy().getAnnotationObjects().size());
+                        logger.info(
+                                "Successfully saved {} annotations before creating flipped duplicate",
+                                currentImageData
+                                        .getHierarchy()
+                                        .getAnnotationObjects()
+                                        .size());
                     } catch (IOException e) {
                         logger.warn("Failed to save current image data before flip: {}", e.getMessage());
                         // Continue anyway - the flip might still work if annotations were already saved
@@ -174,12 +172,7 @@ public class ImageFlipHelper {
                 }
 
                 ProjectImageEntry<BufferedImage> flippedEntry = QPProjectFunctions.createFlippedDuplicate(
-                        project,
-                        currentEntry,
-                        requiresFlipX,
-                        requiresFlipY,
-                        sampleName
-                );
+                        project, currentEntry, requiresFlipX, requiresFlipY, sampleName);
 
                 if (flippedEntry != null) {
                     logger.info("Created flipped duplicate: {}", flippedEntry.getImageName());
@@ -204,18 +197,23 @@ public class ImageFlipHelper {
                                     new javafx.beans.value.ChangeListener<ImageData<BufferedImage>>() {
                                         @Override
                                         public void changed(
-                                                javafx.beans.value.ObservableValue<? extends ImageData<BufferedImage>> observable,
+                                                javafx.beans.value.ObservableValue<? extends ImageData<BufferedImage>>
+                                                        observable,
                                                 ImageData<BufferedImage> oldValue,
                                                 ImageData<BufferedImage> newValue) {
 
                                             if (newValue != null && !loadFuture.isDone()) {
                                                 // Check if this is our flipped entry by comparing with project entries
                                                 try {
-                                                    ProjectImageEntry<BufferedImage> currentEntry = project.getEntry(newValue);
+                                                    ProjectImageEntry<BufferedImage> currentEntry =
+                                                            project.getEntry(newValue);
                                                     if (currentEntry != null && currentEntry.equals(flippedEntry)) {
-                                                        logger.info("Flipped image loaded successfully - detected by entry match");
+                                                        logger.info(
+                                                                "Flipped image loaded successfully - detected by entry match");
                                                         // Remove this listener
-                                                        gui.getViewer().imageDataProperty().removeListener(this);
+                                                        gui.getViewer()
+                                                                .imageDataProperty()
+                                                                .removeListener(this);
                                                         // Complete the future
                                                         loadFuture.complete(true);
                                                     }
@@ -234,37 +232,43 @@ public class ImageFlipHelper {
                             gui.openImageEntry(flippedEntry);
 
                             // Set up timeout handler
-                            CompletableFuture.delayedExecutor(30, TimeUnit.SECONDS).execute(() -> {
-                                if (!loadFuture.isDone()) {
-                                    // Check one more time if image actually loaded (must be on JavaFX thread)
-                                    Platform.runLater(() -> {
+                            CompletableFuture.delayedExecutor(30, TimeUnit.SECONDS)
+                                    .execute(() -> {
                                         if (!loadFuture.isDone()) {
-                                            // Remove the listener
-                                            gui.getViewer().imageDataProperty().removeListener(loadListener);
+                                            // Check one more time if image actually loaded (must be on JavaFX thread)
+                                            Platform.runLater(() -> {
+                                                if (!loadFuture.isDone()) {
+                                                    // Remove the listener
+                                                    gui.getViewer()
+                                                            .imageDataProperty()
+                                                            .removeListener(loadListener);
 
-                                            // Check if image actually loaded by comparing entries
-                                            try {
-                                                ImageData<BufferedImage> currentData = gui.getImageData();
-                                                if (currentData != null) {
-                                                    ProjectImageEntry<BufferedImage> loadedEntry = project.getEntry(currentData);
-                                                    if (loadedEntry != null && loadedEntry.equals(flippedEntry)) {
-                                                        logger.warn("Image loaded but listener didn't fire - completing anyway");
-                                                        loadFuture.complete(true);
-                                                        return;
+                                                    // Check if image actually loaded by comparing entries
+                                                    try {
+                                                        ImageData<BufferedImage> currentData = gui.getImageData();
+                                                        if (currentData != null) {
+                                                            ProjectImageEntry<BufferedImage> loadedEntry =
+                                                                    project.getEntry(currentData);
+                                                            if (loadedEntry != null
+                                                                    && loadedEntry.equals(flippedEntry)) {
+                                                                logger.warn(
+                                                                        "Image loaded but listener didn't fire - completing anyway");
+                                                                loadFuture.complete(true);
+                                                                return;
+                                                            }
+                                                        }
+                                                    } catch (Exception e) {
+                                                        logger.debug("Error in timeout check: {}", e.getMessage());
                                                     }
-                                                }
-                                            } catch (Exception e) {
-                                                logger.debug("Error in timeout check: {}", e.getMessage());
-                                            }
 
-                                            // Image truly didn't load
-                                            logger.error("Image failed to load within 30 seconds");
-                                            loadFuture.completeExceptionally(
-                                                    new TimeoutException("Image failed to load within 30 seconds"));
+                                                    // Image truly didn't load
+                                                    logger.error("Image failed to load within 30 seconds");
+                                                    loadFuture.completeExceptionally(new TimeoutException(
+                                                            "Image failed to load within 30 seconds"));
+                                                }
+                                            });
                                         }
                                     });
-                                }
-                            });
 
                         } catch (Exception ex) {
                             logger.error("Error in UI thread while opening image", ex);
@@ -286,22 +290,14 @@ public class ImageFlipHelper {
                 } else {
                     logger.error("Failed to create flipped duplicate");
                     Platform.runLater(() ->
-                            UIFunctions.notifyUserOfError(
-                                    "Failed to create flipped image duplicate",
-                                    "Image Error"
-                            )
-                    );
+                            UIFunctions.notifyUserOfError("Failed to create flipped image duplicate", "Image Error"));
                     return false;
                 }
 
             } catch (Exception e) {
                 logger.error("Error creating flipped duplicate", e);
-                Platform.runLater(() ->
-                        UIFunctions.notifyUserOfError(
-                                "Error creating flipped image: " + e.getMessage(),
-                                "Image Error"
-                        )
-                );
+                Platform.runLater(() -> UIFunctions.notifyUserOfError(
+                        "Error creating flipped image: " + e.getMessage(), "Image Error"));
                 return false;
             }
         });
@@ -316,9 +312,7 @@ public class ImageFlipHelper {
      * @return CompletableFuture that completes with true if successful, false if failed
      */
     public static CompletableFuture<Boolean> validateAndFlipIfNeeded(
-            QuPathGUI gui,
-            Project<BufferedImage> project,
-            SampleSetupController.SampleSetupResult sample) {
+            QuPathGUI gui, Project<BufferedImage> project, SampleSetupController.SampleSetupResult sample) {
 
         String sampleName = sample != null ? sample.sampleName() : null;
         return validateAndFlipIfNeeded(gui, project, sampleName);
@@ -367,9 +361,7 @@ public class ImageFlipHelper {
      * @param project Current project
      * @return Matching entry, or null if not found
      */
-    private static ProjectImageEntry<BufferedImage> findMatchingEntry(
-            QuPathGUI gui,
-            Project<BufferedImage> project) {
+    private static ProjectImageEntry<BufferedImage> findMatchingEntry(QuPathGUI gui, Project<BufferedImage> project) {
 
         ImageData<BufferedImage> currentData = gui.getImageData();
         if (currentData == null || currentData.getServer() == null) {
@@ -396,8 +388,9 @@ public class ImageFlipHelper {
 
             // Try exact name match
             if (entryName != null && currentName != null) {
-                if (entryName.equals(currentName) || entryName.contains(currentName) ||
-                        currentName.contains(entryName)) {
+                if (entryName.equals(currentName)
+                        || entryName.contains(currentName)
+                        || currentName.contains(entryName)) {
                     logger.info("Found matching entry by name: {}", entryName);
                     return entry;
                 }
@@ -435,9 +428,7 @@ public class ImageFlipHelper {
      * @return true if entry was successfully opened, false otherwise
      */
     private static boolean openAndVerifyEntry(
-            QuPathGUI gui,
-            Project<BufferedImage> project,
-            ProjectImageEntry<BufferedImage> entry) {
+            QuPathGUI gui, Project<BufferedImage> project, ProjectImageEntry<BufferedImage> entry) {
 
         CompletableFuture<Boolean> loadFuture = new CompletableFuture<>();
 

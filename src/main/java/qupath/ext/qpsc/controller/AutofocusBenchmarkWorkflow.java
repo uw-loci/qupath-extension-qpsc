@@ -1,5 +1,9 @@
 package qupath.ext.qpsc.controller;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -15,18 +19,12 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
-
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.AutofocusBenchmarkDialog;
 import qupath.fx.dialogs.Dialogs;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.Map;
 
 /**
  * Workflow for running autofocus parameter benchmarks.
@@ -157,26 +155,22 @@ public class AutofocusBenchmarkWorkflow {
 
                             String warningText = "";
                             if (totalHours >= 1.0) {
-                                warningText = "\n\nWARNING: This is a very long benchmark! " +
-                                        "Consider using Quick Mode or reducing test distances.";
+                                warningText = "\n\nWARNING: This is a very long benchmark! "
+                                        + "Consider using Quick Mode or reducing test distances.";
                             }
 
-                            confirm.setContentText(
-                                    String.format(
-                                            "Reference Z: %.2f um\n" +
-                                            "Test distances: %s\n" +
-                                            "Mode: %s\n" +
-                                            "Estimated time: %s\n\n" +
-                                            "The benchmark will systematically test autofocus parameters. " +
-                                            "Do not disturb the microscope during this time.%s\n\n" +
-                                            "Continue?",
-                                            params.referenceZ(),
-                                            params.testDistances(),
-                                            params.quickMode() ? "Quick" : "Full",
-                                            estimatedTime,
-                                            warningText
-                                    )
-                            );
+                            confirm.setContentText(String.format(
+                                    "Reference Z: %.2f um\n" + "Test distances: %s\n"
+                                            + "Mode: %s\n"
+                                            + "Estimated time: %s\n\n"
+                                            + "The benchmark will systematically test autofocus parameters. "
+                                            + "Do not disturb the microscope during this time.%s\n\n"
+                                            + "Continue?",
+                                    params.referenceZ(),
+                                    params.testDistances(),
+                                    params.quickMode() ? "Quick" : "Full",
+                                    estimatedTime,
+                                    warningText));
 
                             confirm.showAndWait().ifPresent(response -> {
                                 if (response == ButtonType.OK) {
@@ -192,8 +186,7 @@ public class AutofocusBenchmarkWorkflow {
                     .exceptionally(ex -> {
                         logger.error("Error in benchmark workflow", ex);
                         Platform.runLater(() -> {
-                            Dialogs.showErrorMessage("Benchmark Error",
-                                    "Error during benchmark: " + ex.getMessage());
+                            Dialogs.showErrorMessage("Benchmark Error", "Error during benchmark: " + ex.getMessage());
                         });
                         closeClient(client);
                         return null;
@@ -259,9 +252,8 @@ public class AutofocusBenchmarkWorkflow {
                 Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
                 confirm.setTitle("Cancel Benchmark");
                 confirm.setHeaderText("Cancel the running benchmark?");
-                confirm.setContentText(
-                        "The benchmark will be stopped. Partial results may have been saved " +
-                        "to the output directory.\n\nCancel the benchmark?");
+                confirm.setContentText("The benchmark will be stopped. Partial results may have been saved "
+                        + "to the output directory.\n\nCancel the benchmark?");
 
                 confirm.showAndWait().ifPresent(response -> {
                     if (response == ButtonType.OK) {
@@ -289,102 +281,104 @@ public class AutofocusBenchmarkWorkflow {
             VBox layout = new VBox(12);
             layout.setAlignment(Pos.CENTER);
             layout.setPadding(new Insets(20));
-            layout.getChildren().addAll(titleLabel, progressIndicator, progressBar,
-                    progressLabel, statusLabel, timeLabel, buttonBox);
+            layout.getChildren()
+                    .addAll(
+                            titleLabel,
+                            progressIndicator,
+                            progressBar,
+                            progressLabel,
+                            statusLabel,
+                            timeLabel,
+                            buttonBox);
 
             Scene scene = new Scene(layout, 340, 280);
             progressStage.setScene(scene);
             progressStage.show();
 
             // Run benchmark in background thread
-            Thread benchmarkThread = new Thread(() -> {
-                try {
-                    logger.info("Sending benchmark command to server");
+            Thread benchmarkThread = new Thread(
+                    () -> {
+                        try {
+                            logger.info("Sending benchmark command to server");
 
-                    // Update status
-                    Platform.runLater(() -> statusLabel.setText("Sending command to server..."));
+                            // Update status
+                            Platform.runLater(() -> statusLabel.setText("Sending command to server..."));
 
-                    // Create progress listener that updates the UI
-                    MicroscopeSocketClient.BenchmarkProgressListener progressListener =
-                            (current, total, statusMsg) -> {
-                                Platform.runLater(() -> {
-                                    // Update progress bar
-                                    double progress = (double) current / total;
-                                    progressBar.setProgress(progress);
+                            // Create progress listener that updates the UI
+                            MicroscopeSocketClient.BenchmarkProgressListener progressListener =
+                                    (current, total, statusMsg) -> {
+                                        Platform.runLater(() -> {
+                                            // Update progress bar
+                                            double progress = (double) current / total;
+                                            progressBar.setProgress(progress);
 
-                                    // Update progress label
-                                    progressLabel.setText(String.format("Trial %d/%d (%.1f%%)",
-                                            current, total, progress * 100));
+                                            // Update progress label
+                                            progressLabel.setText(String.format(
+                                                    "Trial %d/%d (%.1f%%)", current, total, progress * 100));
 
-                                    // Update status with latest trial result
-                                    statusLabel.setText(statusMsg);
-                                });
-                            };
+                                            // Update status with latest trial result
+                                            statusLabel.setText(statusMsg);
+                                        });
+                                    };
 
-                    // Execute benchmark with progress listener
-                    Map<String, Object> results = client.runAutofocusBenchmark(
-                            params.referenceZ(),
-                            params.outputPath(),
-                            params.testDistances(),
-                            params.quickMode(),
-                            params.objective(),
-                            progressListener
-                    );
+                            // Execute benchmark with progress listener
+                            Map<String, Object> results = client.runAutofocusBenchmark(
+                                    params.referenceZ(),
+                                    params.outputPath(),
+                                    params.testDistances(),
+                                    params.quickMode(),
+                                    params.objective(),
+                                    progressListener);
 
-                    logger.info("Benchmark completed successfully");
-                    logger.info("Results: {}", results);
+                            logger.info("Benchmark completed successfully");
+                            logger.info("Results: {}", results);
 
-                    // Close progress dialog
-                    Platform.runLater(progressStage::close);
+                            // Close progress dialog
+                            Platform.runLater(progressStage::close);
 
-                    // Show results
-                    Platform.runLater(() -> showResults(results, params));
+                            // Show results
+                            Platform.runLater(() -> showResults(results, params));
 
-                } catch (IOException e) {
-                    logger.error("Benchmark execution failed", e);
+                        } catch (IOException e) {
+                            logger.error("Benchmark execution failed", e);
 
-                    Platform.runLater(() -> {
-                        progressStage.close();
+                            Platform.runLater(() -> {
+                                progressStage.close();
 
-                        // Check if this was a user cancellation
-                        if (cancelled.get()) {
-                            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                            alert.setTitle("Benchmark Cancelled");
-                            alert.setHeaderText("Benchmark was cancelled by user");
-                            alert.setContentText(
-                                    "The benchmark has been stopped.\n\n" +
-                                    "Partial results may have been saved to:\n" +
-                                    params.outputPath());
-                            alert.showAndWait();
-                            return;
+                                // Check if this was a user cancellation
+                                if (cancelled.get()) {
+                                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                                    alert.setTitle("Benchmark Cancelled");
+                                    alert.setHeaderText("Benchmark was cancelled by user");
+                                    alert.setContentText("The benchmark has been stopped.\n\n"
+                                            + "Partial results may have been saved to:\n"
+                                            + params.outputPath());
+                                    alert.showAndWait();
+                                    return;
+                                }
+
+                                Alert alert = new Alert(Alert.AlertType.ERROR);
+                                alert.setTitle("Benchmark Failed");
+                                alert.setHeaderText("Autofocus benchmark encountered an error");
+
+                                // Check for safety violation
+                                String errorMsg = e.getMessage();
+                                if (errorMsg != null && errorMsg.contains("SAFETY VIOLATION")) {
+                                    alert.setContentText("SAFETY ERROR: The benchmark would exceed Z safety limits.\n\n"
+                                            + errorMsg + "\n\n" + "Please reduce test distances or search range.");
+                                } else {
+                                    alert.setContentText("Error during benchmark execution:\n\n" + errorMsg + "\n\n"
+                                            + "Check server logs for details.");
+                                }
+
+                                alert.showAndWait();
+                            });
+
+                        } finally {
+                            closeClient(client);
                         }
-
-                        Alert alert = new Alert(Alert.AlertType.ERROR);
-                        alert.setTitle("Benchmark Failed");
-                        alert.setHeaderText("Autofocus benchmark encountered an error");
-
-                        // Check for safety violation
-                        String errorMsg = e.getMessage();
-                        if (errorMsg != null && errorMsg.contains("SAFETY VIOLATION")) {
-                            alert.setContentText(
-                                    "SAFETY ERROR: The benchmark would exceed Z safety limits.\n\n" +
-                                    errorMsg + "\n\n" +
-                                    "Please reduce test distances or search range."
-                            );
-                        } else {
-                            alert.setContentText(
-                                    "Error during benchmark execution:\n\n" + errorMsg + "\n\n" +
-                                    "Check server logs for details."
-                            );
-                        }
-
-                        alert.showAndWait();
-                    });
-
-                } finally {
-                    closeClient(client);
-                }
-            }, "BenchmarkExecutionThread");
+                    },
+                    "BenchmarkExecutionThread");
 
             benchmarkThread.setDaemon(true);
             benchmarkThread.start();
@@ -440,13 +434,13 @@ public class AutofocusBenchmarkWorkflow {
             Object maxDuration = timing.get("max_duration_ms");
 
             if (meanDuration != null) {
-                resultsText.append(String.format("  Mean time-to-focus: %.0f ms\n",
-                        ((Number) meanDuration).doubleValue()));
+                resultsText.append(
+                        String.format("  Mean time-to-focus: %.0f ms\n", ((Number) meanDuration).doubleValue()));
             }
             if (minDuration != null && maxDuration != null) {
-                resultsText.append(String.format("  Range: %.0f - %.0f ms\n",
-                        ((Number) minDuration).doubleValue(),
-                        ((Number) maxDuration).doubleValue()));
+                resultsText.append(String.format(
+                        "  Range: %.0f - %.0f ms\n",
+                        ((Number) minDuration).doubleValue(), ((Number) maxDuration).doubleValue()));
             }
         }
 
@@ -459,13 +453,12 @@ public class AutofocusBenchmarkWorkflow {
             Object maxError = accuracy.get("max_z_error_um");
 
             if (meanError != null) {
-                resultsText.append(String.format("  Mean focus error: %.2f um\n",
-                        ((Number) meanError).doubleValue()));
+                resultsText.append(String.format("  Mean focus error: %.2f um\n", ((Number) meanError).doubleValue()));
             }
             if (minError != null && maxError != null) {
-                resultsText.append(String.format("  Error range: %.2f - %.2f um\n",
-                        ((Number) minError).doubleValue(),
-                        ((Number) maxError).doubleValue()));
+                resultsText.append(String.format(
+                        "  Error range: %.2f - %.2f um\n",
+                        ((Number) minError).doubleValue(), ((Number) maxError).doubleValue()));
             }
         }
 
@@ -474,14 +467,15 @@ public class AutofocusBenchmarkWorkflow {
         if (fastestStandard instanceof Map) {
             Map<String, Object> fs = (Map<String, Object>) fastestStandard;
             resultsText.append("\nFastest Standard Config:\n");
-            resultsText.append(String.format("  n_steps=%s, range=%s um, metric=%s\n",
+            resultsText.append(String.format(
+                    "  n_steps=%s, range=%s um, metric=%s\n",
                     fs.get("n_steps"), fs.get("search_range_um"), fs.get("score_metric")));
             Object fsDuration = fs.get("duration_ms");
             Object fsError = fs.get("z_error_um");
             if (fsDuration != null && fsError != null) {
-                resultsText.append(String.format("  Duration: %.0f ms, Error: %.2f um\n",
-                        ((Number) fsDuration).doubleValue(),
-                        ((Number) fsError).doubleValue()));
+                resultsText.append(String.format(
+                        "  Duration: %.0f ms, Error: %.2f um\n",
+                        ((Number) fsDuration).doubleValue(), ((Number) fsError).doubleValue()));
             }
         }
 
@@ -489,14 +483,14 @@ public class AutofocusBenchmarkWorkflow {
         if (fastestAdaptive instanceof Map) {
             Map<String, Object> fa = (Map<String, Object>) fastestAdaptive;
             resultsText.append("\nFastest Adaptive Config:\n");
-            resultsText.append(String.format("  initial_step=%s um, metric=%s\n",
-                    fa.get("initial_step_um"), fa.get("score_metric")));
+            resultsText.append(String.format(
+                    "  initial_step=%s um, metric=%s\n", fa.get("initial_step_um"), fa.get("score_metric")));
             Object faDuration = fa.get("duration_ms");
             Object faError = fa.get("z_error_um");
             if (faDuration != null && faError != null) {
-                resultsText.append(String.format("  Duration: %.0f ms, Error: %.2f um\n",
-                        ((Number) faDuration).doubleValue(),
-                        ((Number) faError).doubleValue()));
+                resultsText.append(String.format(
+                        "  Duration: %.0f ms, Error: %.2f um\n",
+                        ((Number) faDuration).doubleValue(), ((Number) faError).doubleValue()));
             }
         }
 

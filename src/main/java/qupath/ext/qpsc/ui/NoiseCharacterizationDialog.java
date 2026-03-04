@@ -1,5 +1,10 @@
 package qupath.ext.qpsc.ui;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.IntegerProperty;
@@ -12,12 +17,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.lib.gui.prefs.PathPrefs;
-
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Dialog for configuring JAI camera noise characterization.
@@ -53,8 +52,8 @@ public class NoiseCharacterizationDialog {
             PathPrefs.createPersistentPreference("noiseChar.customExposures", "5, 10, 20, 50, 100");
 
     // Preset configuration counts
-    private static final int QUICK_CONFIGS = 16;  // 4 gains x 4 exposures
-    private static final int FULL_CONFIGS = 42;   // 7 gains x 6 exposures
+    private static final int QUICK_CONFIGS = 16; // 4 gains x 4 exposures
+    private static final int FULL_CONFIGS = 42; // 7 gains x 6 exposures
 
     /**
      * Result record for noise characterization parameters.
@@ -118,8 +117,11 @@ public class NoiseCharacterizationDialog {
                         updateConfigCount(configCountLabel, selected, customPane);
                     });
                     // Initial config count
-                    updateConfigCount(configCountLabel,
-                            presetCombo.getValue() != null ? presetCombo.getValue().toString() : "Quick",
+                    updateConfigCount(
+                            configCountLabel,
+                            presetCombo.getValue() != null
+                                    ? presetCombo.getValue().toString()
+                                    : "Quick",
                             customPane);
                 }
 
@@ -127,13 +129,21 @@ public class NoiseCharacterizationDialog {
                 TextField gainsField = (TextField) customPane.getContent().lookup("#customGains");
                 TextField exposuresField = (TextField) customPane.getContent().lookup("#customExposures");
                 if (gainsField != null && exposuresField != null) {
-                    gainsField.textProperty().addListener((obs, o, n) ->
-                            updateConfigCount(configCountLabel,
-                                    presetCombo.getValue() != null ? presetCombo.getValue().toString() : "Quick",
+                    gainsField
+                            .textProperty()
+                            .addListener((obs, o, n) -> updateConfigCount(
+                                    configCountLabel,
+                                    presetCombo.getValue() != null
+                                            ? presetCombo.getValue().toString()
+                                            : "Quick",
                                     customPane));
-                    exposuresField.textProperty().addListener((obs, o, n) ->
-                            updateConfigCount(configCountLabel,
-                                    presetCombo.getValue() != null ? presetCombo.getValue().toString() : "Quick",
+                    exposuresField
+                            .textProperty()
+                            .addListener((obs, o, n) -> updateConfigCount(
+                                    configCountLabel,
+                                    presetCombo.getValue() != null
+                                            ? presetCombo.getValue().toString()
+                                            : "Quick",
                                     customPane));
                 }
 
@@ -152,8 +162,9 @@ public class NoiseCharacterizationDialog {
                 dialog.setResultConverter(buttonType -> {
                     if (buttonType != runButton) return null;
 
-                    String selectedPreset = presetCombo.getValue() != null ?
-                            presetCombo.getValue().toString() : "Quick";
+                    String selectedPreset = presetCombo.getValue() != null
+                            ? presetCombo.getValue().toString()
+                            : "Quick";
                     String preset;
                     if (selectedPreset.startsWith("Quick")) preset = "quick";
                     else if (selectedPreset.startsWith("Full")) preset = "full";
@@ -201,13 +212,10 @@ public class NoiseCharacterizationDialog {
                 });
 
                 // Show dialog
-                dialog.showAndWait().ifPresentOrElse(
-                        future::complete,
-                        () -> {
-                            logger.info("Noise characterization dialog cancelled");
-                            future.complete(null);
-                        }
-                );
+                dialog.showAndWait().ifPresentOrElse(future::complete, () -> {
+                    logger.info("Noise characterization dialog cancelled");
+                    future.complete(null);
+                });
 
             } catch (Exception e) {
                 logger.error("Error showing noise characterization dialog", e);
@@ -225,9 +233,8 @@ public class NoiseCharacterizationDialog {
         VBox vbox = new VBox(10);
         vbox.setPadding(new Insets(10));
 
-        Label descLabel = new Label(
-                "Select a test preset to determine which gain/exposure combinations to test.\n" +
-                "Quick mode tests fewer settings for a fast overview. Full mode tests a comprehensive grid.");
+        Label descLabel = new Label("Select a test preset to determine which gain/exposure combinations to test.\n"
+                + "Quick mode tests fewer settings for a fast overview. Full mode tests a comprehensive grid.");
         descLabel.setWrapText(true);
         descLabel.setStyle("-fx-font-size: 11px;");
 
@@ -240,11 +247,7 @@ public class NoiseCharacterizationDialog {
         ComboBox<String> presetCombo = new ComboBox<>();
         presetCombo.setId("presetCombo");
         presetCombo.setPrefWidth(350);
-        presetCombo.getItems().addAll(
-                "Quick (16 configs, ~5 min)",
-                "Full (42 configs, ~15 min)",
-                "Custom"
-        );
+        presetCombo.getItems().addAll("Quick (16 configs, ~5 min)", "Full (42 configs, ~15 min)", "Custom");
 
         // Restore saved preference
         String savedPreset = presetProperty.get();
@@ -257,9 +260,8 @@ public class NoiseCharacterizationDialog {
         }
 
         presetCombo.setTooltip(new Tooltip(
-                "Quick: 4 gains x 4 exposures (fast overview)\n" +
-                "Full: 7 gains x 6 exposures (comprehensive)\n" +
-                "Custom: Specify your own gain and exposure values"));
+                "Quick: 4 gains x 4 exposures (fast overview)\n" + "Full: 7 gains x 6 exposures (comprehensive)\n"
+                        + "Custom: Specify your own gain and exposure values"));
 
         presetBox.getChildren().addAll(presetLabel, presetCombo);
         vbox.getChildren().addAll(descLabel, presetBox);
@@ -281,8 +283,7 @@ public class NoiseCharacterizationDialog {
         int row = 0;
 
         // Description
-        Label descLabel = new Label(
-                "Enter comma-separated values for gain and exposure settings to test.");
+        Label descLabel = new Label("Enter comma-separated values for gain and exposure settings to test.");
         descLabel.setWrapText(true);
         descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
         grid.add(descLabel, 0, row, 3, 1);
@@ -338,8 +339,8 @@ public class NoiseCharacterizationDialog {
                 validationLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
             } else {
                 int count = g.size() * e.size();
-                validationLabel.setText(String.format("%d gains x %d exposures = %d configurations",
-                        g.size(), e.size(), count));
+                validationLabel.setText(
+                        String.format("%d gains x %d exposures = %d configurations", g.size(), e.size(), count));
                 validationLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
             }
         };
@@ -372,10 +373,9 @@ public class NoiseCharacterizationDialog {
         framesSpinner.setId("numFrames");
         framesSpinner.setEditable(true);
         framesSpinner.setPrefWidth(100);
-        framesSpinner.setTooltip(new Tooltip(
-                "Number of frames to capture and average for each gain/exposure setting.\n" +
-                "More frames = more accurate noise measurement but longer test time.\n" +
-                "Default 10 provides good balance."));
+        framesSpinner.setTooltip(new Tooltip("Number of frames to capture and average for each gain/exposure setting.\n"
+                + "More frames = more accurate noise measurement but longer test time.\n"
+                + "Default 10 provides good balance."));
 
         Label framesNote = new Label("(more = more accurate, slower)");
         framesNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
@@ -391,9 +391,8 @@ public class NoiseCharacterizationDialog {
         CheckBox plotsCheck = new CheckBox();
         plotsCheck.setId("generatePlots");
         plotsCheck.setSelected(generatePlotsProperty.get());
-        plotsCheck.setTooltip(new Tooltip(
-                "Generate noise vs gain curves and SNR heatmap plots.\n" +
-                "Requires matplotlib on the Python server."));
+        plotsCheck.setTooltip(new Tooltip("Generate noise vs gain curves and SNR heatmap plots.\n"
+                + "Requires matplotlib on the Python server."));
 
         Label plotsNote = new Label("(noise curves + SNR heatmap)");
         plotsNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");

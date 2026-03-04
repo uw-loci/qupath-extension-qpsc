@@ -1,28 +1,28 @@
-//package qupath.ext.qpsc.controller;
+// package qupath.ext.qpsc.controller;
 //
-//import javafx.application.Platform;
-//import org.slf4j.Logger;
-//import org.slf4j.LoggerFactory;
-//import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-//import qupath.ext.qpsc.ui.UIFunctions;
-//import qupath.ext.qpsc.utilities.*;
-//import qupath.ext.qpsc.utilities.MacroImageUtility;
+// import javafx.application.Platform;
+// import org.slf4j.Logger;
+// import org.slf4j.LoggerFactory;
+// import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+// import qupath.ext.qpsc.ui.UIFunctions;
+// import qupath.ext.qpsc.utilities.*;
+// import qupath.ext.qpsc.utilities.MacroImageUtility;
 //
-//import qupath.lib.gui.QuPathGUI;
-//import qupath.lib.objects.PathObject;
-//import qupath.lib.objects.PathObjects;
-//import qupath.lib.regions.ImagePlane;
-//import qupath.lib.roi.ROIs;
-//import qupath.lib.roi.interfaces.ROI;
+// import qupath.lib.gui.QuPathGUI;
+// import qupath.lib.objects.PathObject;
+// import qupath.lib.objects.PathObjects;
+// import qupath.lib.regions.ImagePlane;
+// import qupath.lib.roi.ROIs;
+// import qupath.lib.roi.interfaces.ROI;
 //
-//import java.awt.geom.AffineTransform;
-//import java.awt.geom.Point2D;
-//import java.awt.image.BufferedImage;
-//import java.util.ArrayList;
-//import java.util.List;
-//import java.util.Map;
+// import java.awt.geom.AffineTransform;
+// import java.awt.geom.Point2D;
+// import java.awt.image.BufferedImage;
+// import java.util.ArrayList;
+// import java.util.List;
+// import java.util.Map;
 //
-///**
+/// **
 // * Workflow for automatic registration of new slides using green box detection
 // * and pre-saved microscope transforms.
 // *
@@ -33,7 +33,7 @@
 // *
 // * @since 0.3.1
 // */
-//public class AutoRegistrationWorkflow {
+// public class AutoRegistrationWorkflow {
 //    private static final Logger logger = LoggerFactory.getLogger(AutoRegistrationWorkflow.class);
 //
 //    /**
@@ -280,4 +280,4 @@
 //                0.7  // Confidence threshold
 //        );
 //    }
-//}
+// }

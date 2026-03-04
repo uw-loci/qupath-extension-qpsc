@@ -1,14 +1,13 @@
 package qupath.ext.qpsc.service;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.utilities.TransformationFunctions;
-import qupath.lib.objects.PathObject;
-
 import java.awt.geom.AffineTransform;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.utilities.TransformationFunctions;
+import qupath.lib.objects.PathObject;
 
 /**
  * Service for ordering annotations by spatial proximity.
@@ -38,9 +37,7 @@ public class AnnotationOrderingService {
      * @param transform   Affine transform for converting QuPath to stage coordinates
      * @return New list with first element preserved, rest ordered by proximity
      */
-    public static List<PathObject> sortByProximity(
-            List<PathObject> annotations,
-            AffineTransform transform) {
+    public static List<PathObject> sortByProximity(List<PathObject> annotations, AffineTransform transform) {
 
         if (annotations == null || annotations.size() <= 1) {
             return annotations != null ? new ArrayList<>(annotations) : new ArrayList<>();
@@ -65,9 +62,11 @@ public class AnnotationOrderingService {
         List<AnnotationWithCoords> remaining = new ArrayList<>(withCoords.subList(1, withCoords.size()));
 
         // Log starting position
-        logger.info("Starting annotation ordering from: {} at ({:.1f}, {:.1f})",
+        logger.info(
+                "Starting annotation ordering from: {} at ({:.1f}, {:.1f})",
                 withCoords.get(0).annotation.getName(),
-                currentPos[0], currentPos[1]);
+                currentPos[0],
+                currentPos[1]);
 
         // Greedy nearest-neighbor
         while (!remaining.isEmpty()) {
@@ -88,22 +87,21 @@ public class AnnotationOrderingService {
             ordered.add(nearest.annotation);
             currentPos = nearest.stageCoords;
 
-            logger.debug("  Next: {} at ({:.1f}, {:.1f}), distance: {:.1f} um",
+            logger.debug(
+                    "  Next: {} at ({:.1f}, {:.1f}), distance: {:.1f} um",
                     nearest.annotation.getName(),
-                    currentPos[0], currentPos[1],
+                    currentPos[0],
+                    currentPos[1],
                     nearestDist);
         }
 
         // Log final ordering
-        String orderStr = ordered.stream()
-                .map(PathObject::getName)
-                .collect(Collectors.joining(" -> "));
+        String orderStr = ordered.stream().map(PathObject::getName).collect(Collectors.joining(" -> "));
         logger.info("Annotation order: {}", orderStr);
 
         // Calculate and log total travel distance
         double totalDistance = calculateTotalDistance(ordered, transform);
-        logger.info("Total estimated travel distance: {:.1f} um ({:.2f} mm)",
-                totalDistance, totalDistance / 1000.0);
+        logger.info("Total estimated travel distance: {:.1f} um ({:.2f} mm)", totalDistance, totalDistance / 1000.0);
 
         return ordered;
     }
@@ -118,10 +116,7 @@ public class AnnotationOrderingService {
     public static double[] getStageCoordinates(PathObject annotation, AffineTransform transform) {
         double centroidX = annotation.getROI().getCentroidX();
         double centroidY = annotation.getROI().getCentroidY();
-        return TransformationFunctions.transformQuPathFullResToStage(
-                new double[]{centroidX, centroidY},
-                transform
-        );
+        return TransformationFunctions.transformQuPathFullResToStage(new double[] {centroidX, centroidY}, transform);
     }
 
     /**

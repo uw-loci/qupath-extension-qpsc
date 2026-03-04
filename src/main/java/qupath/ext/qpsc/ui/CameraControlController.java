@@ -300,8 +300,7 @@ public class CameraControlController {
             Label wbModeLabel = new Label("Camera WB: Set in MicroManager's Device Property Browser");
             wbModeLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
             wbModeLabel.setWrapText(true);
-            wbModeLabel.setTooltip(new Tooltip(
-                    "Camera AWB cannot be controlled programmatically.\n"
+            wbModeLabel.setTooltip(new Tooltip("Camera AWB cannot be controlled programmatically.\n"
                     + "Open MicroManager's Device Property Browser -> JAICamera -> WhiteBalance\n"
                     + "to set Continuous/Once/Off.\n"
                     + "To clear AWB: restart MicroManager and wait ~30 seconds."));

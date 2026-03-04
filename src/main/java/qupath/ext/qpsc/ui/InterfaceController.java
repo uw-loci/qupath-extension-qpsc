@@ -1,26 +1,19 @@
 package qupath.ext.qpsc.ui;
 
-import javafx.application.Platform;
-import javafx.event.ActionEvent;
+import java.io.IOException;
+import java.util.ResourceBundle;
+import java.util.concurrent.CompletableFuture;
+// TODO maybe remove?
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
-import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.controller.MicroscopeController;
-import qupath.ext.qpsc.controller.QPScopeController;
 import qupath.fx.dialogs.Dialogs;
-import javafx.geometry.Insets;
-import java.io.IOException;
-import java.util.ResourceBundle;
-import java.util.concurrent.CompletableFuture;
-//TODO maybe remove?
 
 /**
  * InterfaceController
@@ -29,12 +22,11 @@ import java.util.concurrent.CompletableFuture;
  *   - Loads `interface.fxml`, binds UI fields (TextField, Spinner, Buttons).
  *   - Collects sample name, pixel size, etc., then completes a CompletableFuture.
  */
-
 public class InterfaceController extends VBox {
 
     private static final ResourceBundle resources = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings");
-    private static final Logger logger =
-            LoggerFactory.getLogger(InterfaceController.class);
+    private static final Logger logger = LoggerFactory.getLogger(InterfaceController.class);
+
     @FXML
     private TextField sampleNameField;
 
@@ -74,7 +66,6 @@ public class InterfaceController extends VBox {
 
         return controller.resultFuture;
     }
-
 
     @FXML
     private void initialize() {
@@ -147,6 +138,4 @@ public class InterfaceController extends VBox {
             return "UserInputResult{sampleName='" + sampleName + "', pixelSize=" + pixelSize + "}";
         }
     }
-
-
 }

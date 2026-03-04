@@ -209,8 +209,7 @@ public class WBComparisonDialog {
 
         // === WB Mode checkboxes ===
         CheckBox cbCameraAWB = new CheckBox("Camera AWB");
-        cbCameraAWB.setTooltip(new Tooltip(
-                "Camera AWB must be set manually in MicroManager's Device Property Browser\n"
+        cbCameraAWB.setTooltip(new Tooltip("Camera AWB must be set manually in MicroManager's Device Property Browser\n"
                 + "before running this comparison. Cannot be controlled programmatically.\n"
                 + "To clear AWB: restart MicroManager and wait ~30 seconds."));
         CheckBox cbSimple = new CheckBox("Simple");

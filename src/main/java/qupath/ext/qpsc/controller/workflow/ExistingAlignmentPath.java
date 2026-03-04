@@ -1,5 +1,13 @@
 package qupath.ext.qpsc.controller.workflow;
 
+import java.awt.*;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.Point2D;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.util.Map;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,21 +18,11 @@ import qupath.ext.qpsc.ui.GreenBoxPreviewController;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.*;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
-import qupath.lib.scripting.QP;
 import qupath.lib.roi.interfaces.ROI;
-import qupath.lib.images.ImageData;
-
-import java.awt.*;
-import java.awt.geom.AffineTransform;
-import java.awt.geom.Point2D;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.util.Map;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Handles Path A: Using existing alignment with green box detection.
@@ -78,19 +76,14 @@ public class ExistingAlignmentPath {
 
         // Validate macro image availability
         BufferedImage macroImage = MacroImageUtility.retrieveMacroImageWithFallback(
-                gui,
-                state.sample != null ? state.sample.sampleName() : null
-        );
+                gui, state.sample != null ? state.sample.sampleName() : null);
 
         if (macroImage == null) {
             logger.error("No macro image available (neither from slide nor saved)");
-            Platform.runLater(() ->
-                    UIFunctions.notifyUserOfError(
-                            "No macro image found in slide and no saved macro image available.\n" +
-                                    "Cannot use existing alignment without a macro image.",
-                            "Macro Image Required"
-                    )
-            );
+            Platform.runLater(() -> UIFunctions.notifyUserOfError(
+                    "No macro image found in slide and no saved macro image available.\n"
+                            + "Cannot use existing alignment without a macro image.",
+                    "Macro Image Required"));
             return CompletableFuture.completedFuture(null);
         }
 
@@ -136,13 +129,10 @@ public class ExistingAlignmentPath {
     private CompletableFuture<MacroImageContext> processMacroImage(double pixelSize) {
         return CompletableFuture.supplyAsync(() -> {
             state.pixelSize = pixelSize;
-            logger.info("Loaded macro pixel size: {} µm", pixelSize);
+            logger.info("Loaded macro pixel size: {} um", pixelSize);
 
             // Get macro image (might be from slide or saved)
-            BufferedImage macroImage = MacroImageUtility.retrieveMacroImageWithFallback(
-                    gui,
-                    state.sample.sampleName()
-            );
+            BufferedImage macroImage = MacroImageUtility.retrieveMacroImageWithFallback(gui, state.sample.sampleName());
 
             if (macroImage == null) {
                 throw new RuntimeException("Cannot retrieve macro image");
@@ -152,13 +142,8 @@ public class ExistingAlignmentPath {
             boolean isSavedImage = !MacroImageUtility.isMacroImageAvailable(gui);
 
             if (isSavedImage) {
-                MacroImageUtility.CroppedMacroResult croppedResult =
-                        new MacroImageUtility.CroppedMacroResult(
-                                macroImage,
-                                macroImage.getWidth(),
-                                macroImage.getHeight(),
-                                0, 0
-                        );
+                MacroImageUtility.CroppedMacroResult croppedResult = new MacroImageUtility.CroppedMacroResult(
+                        macroImage, macroImage.getWidth(), macroImage.getHeight(), 0, 0);
 
                 // Check if the saved image is in new raw format (no flips) or
                 // old format (preference flips baked in).
@@ -168,8 +153,8 @@ public class ExistingAlignmentPath {
                 if (imageName != null) {
                     imageName = qupath.lib.common.GeneralTools.stripExtension(imageName);
                 }
-                boolean isRawFormat = imageName != null
-                        && AffineTransformManager.isSavedMacroRawFormat(project, imageName);
+                boolean isRawFormat =
+                        imageName != null && AffineTransformManager.isSavedMacroRawFormat(project, imageName);
 
                 if (isRawFormat) {
                     // New format: image is raw cropped, no flips baked in.
@@ -208,8 +193,8 @@ public class ExistingAlignmentPath {
     private CompletableFuture<GreenBoxContext> detectGreenBox(MacroImageContext macroContext) {
         // Get initial parameters from saved transform
         GreenBoxDetector.DetectionParams params = new GreenBoxDetector.DetectionParams();
-        if (state.alignmentChoice.selectedTransform() != null &&
-                state.alignmentChoice.selectedTransform().getGreenBoxParams() != null) {
+        if (state.alignmentChoice.selectedTransform() != null
+                && state.alignmentChoice.selectedTransform().getGreenBoxParams() != null) {
             params = state.alignmentChoice.selectedTransform().getGreenBoxParams();
         }
 
@@ -231,15 +216,14 @@ public class ExistingAlignmentPath {
      * @return CompletableFuture with context passed through
      */
     private CompletableFuture<GreenBoxContext> setupProject(GreenBoxContext context) {
-        return ProjectHelper.setupProject(gui, state.sample)
-                .thenApply(projectInfo -> {
-                    if (projectInfo == null) {
-                        throw new RuntimeException("Project setup failed");
-                    }
+        return ProjectHelper.setupProject(gui, state.sample).thenApply(projectInfo -> {
+            if (projectInfo == null) {
+                throw new RuntimeException("Project setup failed");
+            }
 
-                    state.projectInfo = projectInfo;
-                    return context;
-                });
+            state.projectInfo = projectInfo;
+            return context;
+        });
     }
 
     /**
@@ -289,39 +273,38 @@ public class ExistingAlignmentPath {
         // at wrong positions.
 
         // First, ensure annotations exist (may show dialog if none found)
-        return ensureAnnotationsForTransform()
-                .thenApply(annotations -> {
-                    try {
-                        // CRITICAL: Get annotations from the CORRECT source
-                        // The GUI may not have fully switched to the flipped image yet, so gui.getImageData()
-                        // might return the original image's hierarchy with unflipped coordinates.
-                        // We need to read from the flipped entry's saved data directly.
-                        state.annotations = annotations;
-                        logger.info("Found {} annotations for tile creation", state.annotations.size());
+        return ensureAnnotationsForTransform().thenApply(annotations -> {
+            try {
+                // CRITICAL: Get annotations from the CORRECT source
+                // The GUI may not have fully switched to the flipped image yet, so gui.getImageData()
+                // might return the original image's hierarchy with unflipped coordinates.
+                // We need to read from the flipped entry's saved data directly.
+                state.annotations = annotations;
+                logger.info("Found {} annotations for tile creation", state.annotations.size());
 
-                        // Log annotation positions for debugging
-                        logAnnotationPositions(state.annotations);
+                // Log annotation positions for debugging
+                logAnnotationPositions(state.annotations);
 
-                        // Create transform
-                        AffineTransform fullResToStage = createFullResToStageTransform(context);
+                // Create transform
+                AffineTransform fullResToStage = createFullResToStageTransform(context);
 
-                        // Validate transform
-                        if (!validateTransform(fullResToStage)) {
-                            throw new RuntimeException("Transform validation failed - produces out-of-bounds coordinates");
-                        }
+                // Validate transform
+                if (!validateTransform(fullResToStage)) {
+                    throw new RuntimeException("Transform validation failed - produces out-of-bounds coordinates");
+                }
 
-                        state.transform = fullResToStage;
-                        MicroscopeController.getInstance().setCurrentTransform(fullResToStage);
+                state.transform = fullResToStage;
+                MicroscopeController.getInstance().setCurrentTransform(fullResToStage);
 
-                        // Always save alignment - refinement is handled by ExistingImageWorkflowV2.handleRefinement()
-                        // to avoid double execution when single-tile refinement is selected
-                        saveSlideAlignment(context);
-                        return state;
-                    } catch (Exception e) {
-                        logger.error("Error in createTransform", e);
-                        throw new RuntimeException("Error in createTransform: " + e.getMessage(), e);
-                    }
-                });
+                // Always save alignment - refinement is handled by ExistingImageWorkflowV2.handleRefinement()
+                // to avoid double execution when single-tile refinement is selected
+                saveSlideAlignment(context);
+                return state;
+            } catch (Exception e) {
+                logger.error("Error in createTransform", e);
+                throw new RuntimeException("Error in createTransform: " + e.getMessage(), e);
+            }
+        });
     }
 
     /**
@@ -335,29 +318,29 @@ public class ExistingAlignmentPath {
      */
     private AffineTransform createFullResToStageTransform(GreenBoxContext context) {
         // Get the saved transform
-        AffineTransform savedTransform = state.alignmentChoice.selectedTransform().getTransform();
+        AffineTransform savedTransform =
+                state.alignmentChoice.selectedTransform().getTransform();
 
-        // Detect if this is a slide-specific alignment (full-res → stage) or a preset (macro → stage)
-        // Slide-specific alignments have scale close to the full-res pixel size (~0.25 µm/px)
-        // Macro → stage transforms have scale close to the macro pixel size (~81 µm/px)
+        // Detect if this is a slide-specific alignment (full-res -> stage) or a preset (macro -> stage)
+        // Slide-specific alignments have scale close to the full-res pixel size (~0.25 um/px)
+        // Macro -> stage transforms have scale close to the macro pixel size (~81 um/px)
         double transformScale = savedTransform.getScaleX();
-        double fullResPixelSize = gui.getImageData().getServer()
-                .getPixelCalibration().getAveragedPixelSizeMicrons();
+        double fullResPixelSize =
+                gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
 
-        // If transform scale is close to full-res pixel size, it's already a full-res → stage transform
+        // If transform scale is close to full-res pixel size, it's already a full-res -> stage transform
         boolean isSlideSpecific = Math.abs(transformScale - fullResPixelSize) < 1.0;
 
         if (isSlideSpecific) {
-            logger.info("Using slide-specific alignment (already full-res → stage)");
-            logger.info("  Transform scale: {} µm/px (matches full-res pixel size: {})",
-                    transformScale, fullResPixelSize);
+            logger.info("Using slide-specific alignment (already full-res -> stage)");
+            logger.info(
+                    "  Transform scale: {} um/px (matches full-res pixel size: {})", transformScale, fullResPixelSize);
             return new AffineTransform(savedTransform);
         }
 
-        // Otherwise, it's a macro → stage transform, so build full-res → stage
-        logger.info("Using saved preset (macro → stage), building full-res → stage transform");
-        logger.info("  Macro transform scale: {} µm/px, Full-res pixel size: {}",
-                transformScale, fullResPixelSize);
+        // Otherwise, it's a macro -> stage transform, so build full-res -> stage
+        logger.info("Using saved preset (macro -> stage), building full-res -> stage transform");
+        logger.info("  Macro transform scale: {} um/px, Full-res pixel size: {}", transformScale, fullResPixelSize);
 
         AffineTransform macroToStage = savedTransform;
 
@@ -376,8 +359,7 @@ public class ExistingAlignmentPath {
         fullResToMacro.scale(pixelSizeRatio, pixelSizeRatio);
         fullResToMacro.translate(
                 (greenBox.getBoundsX() - dataBounds.x * pixelSizeRatio) / pixelSizeRatio,
-                (greenBox.getBoundsY() - dataBounds.y * pixelSizeRatio) / pixelSizeRatio
-        );
+                (greenBox.getBoundsY() - dataBounds.y * pixelSizeRatio) / pixelSizeRatio);
 
         // Combine transforms
         AffineTransform fullResToStage = new AffineTransform(macroToStage);
@@ -386,23 +368,23 @@ public class ExistingAlignmentPath {
         // Test if the saved transform expects unflipped macro coordinates
 
         logger.info("Green box in flipped macro: ({}, {})", greenBox.getBoundsX(), greenBox.getBoundsY());
-//
-//// Calculate where this would be in unflipped coordinates
-//        double unflippedX = context.macroContext.croppedResult.getCroppedImage().getWidth() - greenBox.getBoundsX() - greenBox.getBoundsWidth();
-//        double unflippedY = context.macroContext.croppedResult.getCroppedImage().getHeight() - greenBox.getBoundsY() - greenBox.getBoundsHeight();
-//        logger.info("Green box in unflipped macro would be: ({}, {})", unflippedX, unflippedY);
+        //
+        //// Calculate where this would be in unflipped coordinates
+        //        double unflippedX = context.macroContext.croppedResult.getCroppedImage().getWidth() -
+        // greenBox.getBoundsX() - greenBox.getBoundsWidth();
+        //        double unflippedY = context.macroContext.croppedResult.getCroppedImage().getHeight() -
+        // greenBox.getBoundsY() - greenBox.getBoundsHeight();
+        //        logger.info("Green box in unflipped macro would be: ({}, {})", unflippedX, unflippedY);
 
-// Test both versions
-        Point2D flippedGreenBoxCenter = new Point2D.Double(
-                greenBox.getCentroidX(), greenBox.getCentroidY());
-
+        // Test both versions
+        Point2D flippedGreenBoxCenter = new Point2D.Double(greenBox.getCentroidX(), greenBox.getCentroidY());
 
         Point2D stageFlipped = new Point2D.Double();
         macroToStage.transform(flippedGreenBoxCenter, stageFlipped);
 
-        logger.info("Macro center → Stage (using flipped): ({}, {})", stageFlipped.getX(), stageFlipped.getY());
+        logger.info("Macro center -> Stage (using flipped): ({}, {})", stageFlipped.getX(), stageFlipped.getY());
 
-        logger.info("Created full-res→stage transform");
+        logger.info("Created full-res->stage transform");
         return fullResToStage;
     }
 
@@ -433,11 +415,10 @@ public class ExistingAlignmentPath {
 
         AffineTransformManager.saveSlideAlignment(
                 project,
-                imageName,  // Use image name without extension for base_image compatibility
+                imageName, // Use image name without extension for base_image compatibility
                 state.sample.modality(),
                 state.transform,
-                processedMacroImage
-        );
+                processedMacroImage);
         logger.info("Saved slide-specific alignment for image: {}", imageName);
     }
 
@@ -461,11 +442,9 @@ public class ExistingAlignmentPath {
         }
 
         // No fallback - throw exception
-        throw new IllegalStateException(
-                "Scanner '" + scannerName + "' has no valid macro pixel size configured.\n" +
-                        "Please add 'macro.pixel_size_um' to the scanner configuration file:\n" +
-                        scannerConfigFile.getAbsolutePath()
-        );
+        throw new IllegalStateException("Scanner '" + scannerName + "' has no valid macro pixel size configured.\n"
+                + "Please add 'macro.pixel_size_um' to the scanner configuration file:\n"
+                + scannerConfigFile.getAbsolutePath());
     }
 
     /**
@@ -532,21 +511,22 @@ public class ExistingAlignmentPath {
                     Rectangle bounds = UIFunctions.executeWithProgress(
                             "Processing Image",
                             "Detecting image boundaries...\nThis may take a moment for large images.",
-                            () -> ImageProcessing.detectOcus40DataBounds(gui, scriptDirectory)
-                    );
+                            () -> ImageProcessing.detectOcus40DataBounds(gui, scriptDirectory));
                     if (bounds != null) {
                         return bounds;
                     }
                 }
             } catch (Exception e) {
-                logger.warn("Ocus40 detection failed!!!! Using green box without changes to bounds, which will likely be wrong", e);
+                logger.warn(
+                        "Ocus40 detection failed!!!! Using green box without changes to bounds, which will likely be wrong",
+                        e);
             }
         }
 
         // Fallback calculation based on green box size
         ROI greenBox = context.greenBoxResult.getDetectedBox();
-        double pixelSizeRatio = state.pixelSize / gui.getImageData().getServer()
-                .getPixelCalibration().getAveragedPixelSizeMicrons();
+        double pixelSizeRatio = state.pixelSize
+                / gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
 
         int calculatedWidth = (int) Math.round(greenBox.getBoundsWidth() * pixelSizeRatio);
         int calculatedHeight = (int) Math.round(greenBox.getBoundsHeight() * pixelSizeRatio);
@@ -554,20 +534,15 @@ public class ExistingAlignmentPath {
         int widthDiff = reportedWidth - calculatedWidth;
         int heightDiff = reportedHeight - calculatedHeight;
 
-        return new Rectangle(
-                widthDiff / 2,
-                heightDiff / 2,
-                calculatedWidth,
-                calculatedHeight
-        );
+        return new Rectangle(widthDiff / 2, heightDiff / 2, calculatedWidth, calculatedHeight);
     }
 
     /**
      * Validates transform against stage boundaries with detailed logging.
      */
     private boolean validateTransform(AffineTransform transform) {
-        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(
-                QPPreferenceDialog.getMicroscopeConfigFileProperty());
+        MicroscopeConfigManager mgr =
+                MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
         double stageXMin = mgr.getStageLimit("x", "low");
         double stageXMax = mgr.getStageLimit("x", "high");
@@ -575,8 +550,8 @@ public class ExistingAlignmentPath {
         double stageYMax = mgr.getStageLimit("y", "high");
 
         logger.info("Stage boundaries from config:");
-        logger.info("  X: {} to {} µm", stageXMin, stageXMax);
-        logger.info("  Y: {} to {} µm", stageYMin, stageYMax);
+        logger.info("  X: {} to {} um", stageXMin, stageXMax);
+        logger.info("  Y: {} to {} um", stageYMin, stageYMax);
 
         int width = gui.getImageData().getServer().getWidth();
         int height = gui.getImageData().getServer().getHeight();
@@ -588,21 +563,21 @@ public class ExistingAlignmentPath {
 
         // Test key points with detailed logging
         double[][] testPoints = {
-                {0, 0},                    // Top-left
-                {width/2, 0},              // Top-center
-                {width, 0},                // Top-right
-                {0, height/2},             // Middle-left
-                {width/2, height/2},       // Center
-                {width, height/2},         // Middle-right
-                {0, height},               // Bottom-left
-                {width/2, height},         // Bottom-center
-                {width, height}            // Bottom-right
+            {0, 0}, // Top-left
+            {width / 2, 0}, // Top-center
+            {width, 0}, // Top-right
+            {0, height / 2}, // Middle-left
+            {width / 2, height / 2}, // Center
+            {width, height / 2}, // Middle-right
+            {0, height}, // Bottom-left
+            {width / 2, height}, // Bottom-center
+            {width, height} // Bottom-right
         };
 
         String[] labels = {
-                "Top-left", "Top-center", "Top-right",
-                "Middle-left", "Center", "Middle-right",
-                "Bottom-left", "Bottom-center", "Bottom-right"
+            "Top-left", "Top-center", "Top-right",
+            "Middle-left", "Center", "Middle-right",
+            "Bottom-left", "Bottom-center", "Bottom-right"
         };
 
         boolean allValid = true;
@@ -610,26 +585,28 @@ public class ExistingAlignmentPath {
 
         for (int i = 0; i < testPoints.length; i++) {
             double[] qpCoords = testPoints[i];
-            double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
-                    qpCoords, transform);
+            double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(qpCoords, transform);
 
             boolean xValid = stageCoords[0] >= stageXMin && stageCoords[0] <= stageXMax;
             boolean yValid = stageCoords[1] >= stageYMin && stageCoords[1] <= stageYMax;
 
             String status = (xValid && yValid) ? "VALID" : "INVALID";
-            logger.info("  {} ({}, {}) → ({}, {}) [{}]",
-                    labels[i], qpCoords[0], qpCoords[1],
-                    stageCoords[0], stageCoords[1], status);
+            logger.info(
+                    "  {} ({}, {}) -> ({}, {}) [{}]",
+                    labels[i],
+                    qpCoords[0],
+                    qpCoords[1],
+                    stageCoords[0],
+                    stageCoords[1],
+                    status);
 
             if (!xValid || !yValid) {
                 allValid = false;
                 if (!xValid) {
-                    logger.warn("    X coordinate {} is outside range [{}, {}]",
-                            stageCoords[0], stageXMin, stageXMax);
+                    logger.warn("    X coordinate {} is outside range [{}, {}]", stageCoords[0], stageXMin, stageXMax);
                 }
                 if (!yValid) {
-                    logger.warn("    Y coordinate {} is outside range [{}, {}]",
-                            stageCoords[1], stageYMin, stageYMax);
+                    logger.warn("    Y coordinate {} is outside range [{}, {}]", stageCoords[1], stageYMin, stageYMax);
                 }
             }
         }
@@ -687,20 +664,23 @@ public class ExistingAlignmentPath {
 
         // If direct lookup worked and entry has correct flip status, we're done
         if (currentEntry != null && hasCorrectFlipStatus(currentEntry, requiresFlipX, requiresFlipY)) {
-            logger.info("Image verification PASSED: {} has correct flip status (flipX={}, flipY={})",
+            logger.info(
+                    "Image verification PASSED: {} has correct flip status (flipX={}, flipY={})",
                     currentEntry.getImageName(),
                     ImageMetadataManager.isFlippedX(currentEntry),
                     ImageMetadataManager.isFlippedY(currentEntry));
 
             // Also verify the hierarchy has annotations (sanity check)
-            int annotationCount = gui.getImageData().getHierarchy().getAnnotationObjects().size();
+            int annotationCount =
+                    gui.getImageData().getHierarchy().getAnnotationObjects().size();
             logger.info("Current image has {} annotations in hierarchy", annotationCount);
 
             return true;
         }
 
         // Strategy 2: Search for a flipped entry and verify the GUI is showing it
-        logger.info("Direct entry lookup returned {}, searching for flipped entry...",
+        logger.info(
+                "Direct entry lookup returned {}, searching for flipped entry...",
                 currentEntry != null ? currentEntry.getImageName() : "null");
 
         ProjectImageEntry<BufferedImage> flippedEntry = null;
@@ -712,8 +692,7 @@ public class ExistingAlignmentPath {
                 boolean entryFlipX = ImageMetadataManager.isFlippedX(entry);
                 boolean entryFlipY = ImageMetadataManager.isFlippedY(entry);
 
-                logger.info("Found flipped entry: {} (flipX={}, flipY={})",
-                        entryName, entryFlipX, entryFlipY);
+                logger.info("Found flipped entry: {} (flipX={}, flipY={})", entryName, entryFlipX, entryFlipY);
 
                 if (hasCorrectFlipStatus(entry, requiresFlipX, requiresFlipY)) {
                     flippedEntry = entry;
@@ -737,8 +716,7 @@ public class ExistingAlignmentPath {
         String flippedName = flippedEntry.getImageName();
         if (currentServerPath != null && flippedName != null) {
             // TransformedServer paths are complex, but they should reference the flipped entry
-            if (currentServerPath.contains(flippedName) ||
-                currentServerPath.contains("(flipped")) {
+            if (currentServerPath.contains(flippedName) || currentServerPath.contains("(flipped")) {
                 guiShowsFlippedEntry = true;
                 logger.info("GUI appears to be showing flipped entry (path contains flipped indicator)");
             }
@@ -749,11 +727,15 @@ public class ExistingAlignmentPath {
         if (!guiShowsFlippedEntry) {
             try {
                 var flippedData = flippedEntry.readImageData();
-                int flippedAnnotationCount = flippedData.getHierarchy().getAnnotationObjects().size();
-                int currentAnnotationCount = gui.getImageData().getHierarchy().getAnnotationObjects().size();
+                int flippedAnnotationCount =
+                        flippedData.getHierarchy().getAnnotationObjects().size();
+                int currentAnnotationCount =
+                        gui.getImageData().getHierarchy().getAnnotationObjects().size();
 
-                logger.info("Annotation count comparison: flipped entry={}, current GUI={}",
-                        flippedAnnotationCount, currentAnnotationCount);
+                logger.info(
+                        "Annotation count comparison: flipped entry={}, current GUI={}",
+                        flippedAnnotationCount,
+                        currentAnnotationCount);
 
                 // If both have the same non-zero annotation count, likely showing flipped entry
                 if (flippedAnnotationCount > 0 && flippedAnnotationCount == currentAnnotationCount) {
@@ -766,13 +748,14 @@ public class ExistingAlignmentPath {
         }
 
         if (guiShowsFlippedEntry) {
-            logger.info("Image verification PASSED (verified GUI shows flipped entry): {}",
-                    flippedEntry.getImageName());
+            logger.info(
+                    "Image verification PASSED (verified GUI shows flipped entry): {}", flippedEntry.getImageName());
             return true;
         }
 
         // GUI is NOT showing the flipped entry - this is the bug we're trying to catch
-        logger.error("Image verification FAILED: Flipped entry '{}' exists but GUI is showing different image",
+        logger.error(
+                "Image verification FAILED: Flipped entry '{}' exists but GUI is showing different image",
                 flippedEntry.getImageName());
         logger.error("Current server path: {}", currentServerPath);
         logger.error("This indicates the flipped image did not load correctly after creation");
@@ -783,8 +766,7 @@ public class ExistingAlignmentPath {
     /**
      * Checks if an entry has the correct flip status for the requirements.
      */
-    private boolean hasCorrectFlipStatus(ProjectImageEntry<?> entry,
-                                          boolean requiresFlipX, boolean requiresFlipY) {
+    private boolean hasCorrectFlipStatus(ProjectImageEntry<?> entry, boolean requiresFlipX, boolean requiresFlipY) {
         boolean isFlippedX = ImageMetadataManager.isFlippedX(entry);
         boolean isFlippedY = ImageMetadataManager.isFlippedY(entry);
 
@@ -819,47 +801,46 @@ public class ExistingAlignmentPath {
      * This method will recursively call itself if the user's choice doesn't result in annotations.
      */
     private CompletableFuture<java.util.List<PathObject>> handleNoAnnotationsForTransform() {
-        return UIFunctions.showAnnotationWarningDialog()
-                .thenCompose(action -> {
-                    switch (action) {
-                        case RUN_TISSUE_DETECTION:
-                            logger.info("User chose to run tissue detection for alignment");
-                            // Run tissue detection - get ALL annotations (no class filter)
-                            // Class filtering happens later during acquisition, not during alignment
-                            java.util.List<PathObject> annotations =
-                                AnnotationHelper.runTissueDetection(gui, null);  // null = no class filter
+        return UIFunctions.showAnnotationWarningDialog().thenCompose(action -> {
+            switch (action) {
+                case RUN_TISSUE_DETECTION:
+                    logger.info("User chose to run tissue detection for alignment");
+                    // Run tissue detection - get ALL annotations (no class filter)
+                    // Class filtering happens later during acquisition, not during alignment
+                    java.util.List<PathObject> annotations =
+                            AnnotationHelper.runTissueDetection(gui, null); // null = no class filter
 
-                            if (annotations.isEmpty()) {
-                                logger.warn("Tissue detection did not create any annotations");
-                                // Show dialog again
-                                return handleNoAnnotationsForTransform();
-                            }
-
-                            logger.info("Tissue detection created {} annotations for alignment", annotations.size());
-                            return CompletableFuture.completedFuture(annotations);
-
-                        case MANUAL_ANNOTATIONS_CREATED:
-                            logger.info("User indicated manual annotations were created");
-                            // Re-check for annotations from correct source
-                            java.util.List<PathObject> manualAnnotations = getAnnotationsFromCorrectSource();
-
-                            if (manualAnnotations.isEmpty()) {
-                                logger.warn("Still no annotations found after user indicated creation");
-                                // Show dialog again
-                                return handleNoAnnotationsForTransform();
-                            }
-
-                            logger.info("Found {} manual annotations", manualAnnotations.size());
-                            return CompletableFuture.completedFuture(manualAnnotations);
-
-                        case CANCEL:
-                            logger.info("User cancelled workflow due to no annotations");
-                            throw new CancellationException("Workflow cancelled - no annotations available");
-
-                        default:
-                            throw new RuntimeException("Unexpected annotation action: " + action);
+                    if (annotations.isEmpty()) {
+                        logger.warn("Tissue detection did not create any annotations");
+                        // Show dialog again
+                        return handleNoAnnotationsForTransform();
                     }
-                });
+
+                    logger.info("Tissue detection created {} annotations for alignment", annotations.size());
+                    return CompletableFuture.completedFuture(annotations);
+
+                case MANUAL_ANNOTATIONS_CREATED:
+                    logger.info("User indicated manual annotations were created");
+                    // Re-check for annotations from correct source
+                    java.util.List<PathObject> manualAnnotations = getAnnotationsFromCorrectSource();
+
+                    if (manualAnnotations.isEmpty()) {
+                        logger.warn("Still no annotations found after user indicated creation");
+                        // Show dialog again
+                        return handleNoAnnotationsForTransform();
+                    }
+
+                    logger.info("Found {} manual annotations", manualAnnotations.size());
+                    return CompletableFuture.completedFuture(manualAnnotations);
+
+                case CANCEL:
+                    logger.info("User cancelled workflow due to no annotations");
+                    throw new CancellationException("Workflow cancelled - no annotations available");
+
+                default:
+                    throw new RuntimeException("Unexpected annotation action: " + action);
+            }
+        });
     }
 
     /**
@@ -884,14 +865,14 @@ public class ExistingAlignmentPath {
         // Class filtering happens later during acquisition, not during alignment
         if (!requiresFlipX && !requiresFlipY) {
             logger.info("No flip required - retrieving all annotations from GUI hierarchy");
-            return AnnotationHelper.getCurrentValidAnnotations(gui, null);  // null = no class filter
+            return AnnotationHelper.getCurrentValidAnnotations(gui, null); // null = no class filter
         }
 
         // Flip is required - we need to read from the flipped entry directly
         Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
         if (project == null) {
             logger.error("No project available - falling back to GUI hierarchy");
-            return AnnotationHelper.getCurrentValidAnnotations(gui, null);  // null = no class filter
+            return AnnotationHelper.getCurrentValidAnnotations(gui, null); // null = no class filter
         }
 
         // Find the flipped entry
@@ -908,7 +889,7 @@ public class ExistingAlignmentPath {
 
         if (flippedEntry == null) {
             logger.error("Could not find flipped entry - falling back to GUI hierarchy");
-            return AnnotationHelper.getCurrentValidAnnotations(gui, null);  // null = no class filter
+            return AnnotationHelper.getCurrentValidAnnotations(gui, null); // null = no class filter
         }
 
         // Read annotations directly from the flipped entry's saved data
@@ -924,12 +905,12 @@ public class ExistingAlignmentPath {
                     .filter(ann -> ann.getROI() != null && !ann.getROI().isEmpty())
                     .collect(java.util.stream.Collectors.toList());
 
-            logger.info("Retrieved {} annotations from flipped entry (no class filter applied)",
-                    annotations.size());
+            logger.info("Retrieved {} annotations from flipped entry (no class filter applied)", annotations.size());
 
             if (!annotations.isEmpty()) {
                 PathObject firstAnn = annotations.get(0);
-                logger.info("Retrieved {} annotations from flipped entry. First at position: ({}, {})",
+                logger.info(
+                        "Retrieved {} annotations from flipped entry. First at position: ({}, {})",
                         annotations.size(),
                         String.format("%.0f", firstAnn.getROI().getCentroidX()),
                         String.format("%.0f", firstAnn.getROI().getCentroidY()));
@@ -939,7 +920,8 @@ public class ExistingAlignmentPath {
                 int imageHeight = flippedData.getServer().getHeight();
                 double xPercent = (firstAnn.getROI().getCentroidX() / imageWidth) * 100;
                 double yPercent = (firstAnn.getROI().getCentroidY() / imageHeight) * 100;
-                logger.info("First annotation position: {}% x, {}% y (flipped coordinates)",
+                logger.info(
+                        "First annotation position: {}% x, {}% y (flipped coordinates)",
                         String.format("%.1f", xPercent), String.format("%.1f", yPercent));
             } else {
                 // No annotations in flipped entry - they need to be created
@@ -951,8 +933,10 @@ public class ExistingAlignmentPath {
             // Ensure annotation names
             for (PathObject ann : annotations) {
                 if (ann.getName() == null || ann.getName().trim().isEmpty()) {
-                    String className = ann.getPathClass() != null ? ann.getPathClass().getName() : "Annotation";
-                    String name = String.format("%s_%d_%d",
+                    String className =
+                            ann.getPathClass() != null ? ann.getPathClass().getName() : "Annotation";
+                    String name = String.format(
+                            "%s_%d_%d",
                             className,
                             Math.round(ann.getROI().getCentroidX()),
                             Math.round(ann.getROI().getCentroidY()));
@@ -966,7 +950,7 @@ public class ExistingAlignmentPath {
         } catch (Exception e) {
             logger.error("Failed to read annotations from flipped entry: {}", e.getMessage());
             logger.error("Falling back to GUI hierarchy (may have wrong coordinates!)");
-            return AnnotationHelper.getCurrentValidAnnotations(gui, null);  // null = no class filter
+            return AnnotationHelper.getCurrentValidAnnotations(gui, null); // null = no class filter
         }
     }
 
@@ -1003,7 +987,8 @@ public class ExistingAlignmentPath {
                     positionNote = " [EDGE - may indicate coordinate issue]";
                 }
 
-                logger.info("  Annotation '{}': centroid=({}, {}), position=({}%, {}%){}",
+                logger.info(
+                        "  Annotation '{}': centroid=({}, {}), position=({}%, {}%){}",
                         ann.getName() != null ? ann.getName() : "unnamed",
                         String.format("%.0f", centroidX),
                         String.format("%.0f", centroidY),
@@ -1033,9 +1018,10 @@ public class ExistingAlignmentPath {
         final BufferedImage displayImage;
         final BufferedImage processedMacroImage;
 
-        MacroImageContext(MacroImageUtility.CroppedMacroResult croppedResult,
-                          BufferedImage displayImage,
-                          BufferedImage processedMacroImage) {
+        MacroImageContext(
+                MacroImageUtility.CroppedMacroResult croppedResult,
+                BufferedImage displayImage,
+                BufferedImage processedMacroImage) {
             this.croppedResult = croppedResult;
             this.displayImage = displayImage;
             this.processedMacroImage = processedMacroImage;
@@ -1053,6 +1039,7 @@ public class ExistingAlignmentPath {
             this.macroContext = macroContext;
             this.greenBoxResult = greenBoxResult;
         }
+
         BufferedImage getProcessedMacroImage() {
             return macroContext.processedMacroImage;
         }

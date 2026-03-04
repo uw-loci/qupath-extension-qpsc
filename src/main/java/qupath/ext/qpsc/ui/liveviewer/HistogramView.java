@@ -135,8 +135,8 @@ public class HistogramView extends VBox {
         });
 
         autoScaleBtn.setOnAction(e -> {
-            contrastSettings.applyAutoScale(currentHistogram,
-                    new FrameData(0, 0, 1, currentMaxValue > 255 ? 2 : 1, new byte[0], 0));
+            contrastSettings.applyAutoScale(
+                    currentHistogram, new FrameData(0, 0, 1, currentMaxValue > 255 ? 2 : 1, new byte[0], 0));
             contrastSettings.setAutoScale(true);
             updateSlidersFromSettings();
             drawHistogram();
@@ -223,8 +223,7 @@ public class HistogramView extends VBox {
         if (pixelCount > 0) {
             if (channels == 1) {
                 double satPct = 100.0 * satR / pixelCount;
-                meanLabel.setText(String.format("Mean: %.1f  |  Sat: %.1f%%",
-                        (double) sumR / pixelCount, satPct));
+                meanLabel.setText(String.format("Mean: %.1f  |  Sat: %.1f%%", (double) sumR / pixelCount, satPct));
                 meanLabel.setTextFill(satPct > 1.0 ? Color.RED : Color.BLACK);
             } else {
                 double satPctR = 100.0 * satR / pixelCount;
@@ -236,7 +235,9 @@ public class HistogramView extends VBox {
                         (double) sumR / pixelCount,
                         (double) sumG / pixelCount,
                         (double) sumB / pixelCount,
-                        satPctR, satPctG, satPctB));
+                        satPctR,
+                        satPctG,
+                        satPctB));
                 meanLabel.setTextFill(anySaturated ? Color.RED : Color.BLACK);
             }
         }

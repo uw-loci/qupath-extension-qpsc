@@ -1,17 +1,16 @@
 package qupath.ext.qpsc.utilities;
 
-import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.yaml.snakeyaml.Yaml;
-
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.yaml.snakeyaml.Yaml;
 
 /**
  * MicroscopeConfigManager
@@ -66,13 +65,12 @@ public class MicroscopeConfigManager {
         for (String section : resourceData.keySet()) {
             if (section.startsWith("ID_") || section.startsWith("id_")) {
                 String field = section.substring(3) // remove "id_"
-                        .replaceAll("_", "")           // e.g. "OBJECTIVE_LENS" → "OBJECTIVELENS"
-                        .toLowerCase();                // "OBJECTIVELENS" → "objectivelens"
+                        .replaceAll("_", "") // e.g. "OBJECTIVE_LENS" -> "OBJECTIVELENS"
+                        .toLowerCase(); // "OBJECTIVELENS" -> "objectivelens"
                 lociSectionMap.put(field, section);
             }
         }
-        if (lociSectionMap.isEmpty())
-            logger.warn("No LOCI sections found in shared resources!");
+        if (lociSectionMap.isEmpty()) logger.warn("No LOCI sections found in shared resources!");
     }
 
     /**
@@ -133,7 +131,7 @@ public class MicroscopeConfigManager {
 
     /**
      * Computes the path to the shared LOCI resources file based on the microscope config path.
-     * For example, transforms ".../microscopes/config_PPM.yml" → ".../resources_LOCI.yml".
+     * For example, transforms ".../microscopes/config_PPM.yml" -> ".../resources_LOCI.yml".
      *
      * @param configPath Path to the microscope YAML file.
      * @return Path to resources_LOCI.yml.
@@ -143,7 +141,8 @@ public class MicroscopeConfigManager {
         // Get the parent folder of the config file
         Path baseDir = cfg.getParent();
         // Append "resources/resources_LOCI.yml"
-        Path resourcePath = baseDir.resolve("resources").resolve("resources_LOCI.yml").toAbsolutePath();
+        Path resourcePath =
+                baseDir.resolve("resources").resolve("resources_LOCI.yml").toAbsolutePath();
 
         File resourceFile = resourcePath.toFile();
         if (!resourceFile.exists()) {
@@ -232,8 +231,10 @@ public class MicroscopeConfigManager {
                     }
                 }
 
-                logger.info("Loaded external autofocus settings for {} objectives from: {}",
-                        autofocusMap.size(), autofocusFile.getAbsolutePath());
+                logger.info(
+                        "Loaded external autofocus settings for {} objectives from: {}",
+                        autofocusMap.size(),
+                        autofocusFile.getAbsolutePath());
             }
 
         } catch (Exception e) {
@@ -340,42 +341,41 @@ public class MicroscopeConfigManager {
                 current = map.get(key);
 
                 // If this is a LOCI reference and more keys remain, switch to resourceData and continue
-                if (current instanceof String id && id.startsWith("LOCI") && i+1 < keys.length) {
-                    logger.info(res.getString("configManager.switchingToResource"),
-                            id, Arrays.toString(keys), i, key);
+                if (current instanceof String id && id.startsWith("LOCI") && i + 1 < keys.length) {
+                    logger.info(res.getString("configManager.switchingToResource"), id, Arrays.toString(keys), i, key);
                     String section = findResourceSectionForID(key, resourceData, res);
                     if (section == null) {
-                        logger.warn(res.getString("configManager.resourceSectionNotFound"),
-                                key, id, Arrays.toString(keys));
+                        logger.warn(
+                                res.getString("configManager.resourceSectionNotFound"), key, id, Arrays.toString(keys));
                         return null;
                     }
                     String normalized = id.replace('-', '_');
                     Object sectionObj = resourceData.get(section);
                     if (sectionObj instanceof Map<?, ?> secMap && secMap.containsKey(normalized)) {
                         current = ((Map<?, ?>) secMap).get(normalized);
-                        logger.info(res.getString("configManager.foundResourceEntry"),
-                                section, normalized, current);
+                        logger.info(res.getString("configManager.foundResourceEntry"), section, normalized, current);
                         continue; // proceed with remaining keys
                     } else {
-                        logger.warn(res.getString("configManager.resourceEntryNotFound"),
-                                normalized, section, Arrays.toString(keys));
+                        logger.warn(
+                                res.getString("configManager.resourceEntryNotFound"),
+                                normalized,
+                                section,
+                                Arrays.toString(keys));
                         return null;
                     }
                 }
                 continue;
             }
             // If at this point current is a Map, attempt descent
-            if (current instanceof Map<?,?> map2 && map2.containsKey(key)) {
+            if (current instanceof Map<?, ?> map2 && map2.containsKey(key)) {
                 current = map2.get(key);
                 continue;
             }
-            // Not found – log full context
-            logger.warn(res.getString("configManager.keyNotFound"),
-                    key, i, current, Arrays.toString(keys));
+            // Not found -- log full context
+            logger.warn(res.getString("configManager.keyNotFound"), key, i, current, Arrays.toString(keys));
             return null;
         }
-        logger.debug(res.getString("configManager.lookupSuccess"),
-                Arrays.toString(keys), current);
+        logger.debug(res.getString("configManager.lookupSuccess"), Arrays.toString(keys), current);
         return current;
     }
 
@@ -388,7 +388,8 @@ public class MicroscopeConfigManager {
      * @param res           The strings ResourceBundle
      * @return Section name in resourceData (e.g., "id_detector"), or null if not found
      */
-    private static String findResourceSectionForID(String parentField, Map<String, Object> resourceData, ResourceBundle res) {
+    private static String findResourceSectionForID(
+            String parentField, Map<String, Object> resourceData, ResourceBundle res) {
         for (String section : resourceData.keySet()) {
             if (section.toLowerCase().contains(parentField.toLowerCase())) {
                 return section;
@@ -511,8 +512,11 @@ public class MicroscopeConfigManager {
     public Map<String, Object> getAcquisitionProfile(String modality, String objective, String detector) {
         // With new hardware config, validate the combination exists
         if (!isValidHardwareCombination(modality, objective, detector)) {
-            logger.warn("Invalid hardware combination: modality={}, objective={}, detector={}",
-                    modality, objective, detector);
+            logger.warn(
+                    "Invalid hardware combination: modality={}, objective={}, detector={}",
+                    modality,
+                    objective,
+                    detector);
             return null;
         }
 
@@ -584,8 +588,12 @@ public class MicroscopeConfigManager {
                         if (detectorProfile != null) {
                             Object value = getNestedValue(detectorProfile, settingPath);
                             if (value != null) {
-                                logger.debug("Found setting in imaging_profiles: {} for {}/{}/{}",
-                                        Arrays.toString(settingPath), modality, objective, detector);
+                                logger.debug(
+                                        "Found setting in imaging_profiles: {} for {}/{}/{}",
+                                        Arrays.toString(settingPath),
+                                        modality,
+                                        objective,
+                                        detector);
                                 return value;
                             }
                         }
@@ -594,8 +602,7 @@ public class MicroscopeConfigManager {
             }
         }
 
-        logger.debug("Setting not found: {} for {}/{}/{}",
-                Arrays.toString(settingPath), modality, objective, detector);
+        logger.debug("Setting not found: {} for {}/{}/{}", Arrays.toString(settingPath), modality, objective, detector);
         return null;
     }
 
@@ -665,9 +672,10 @@ public class MicroscopeConfigManager {
         }
 
         logger.error("No valid pixel size found for {}/{}/{}", modality, objective, detector);
-        throw new IllegalArgumentException(
-                String.format("Cannot determine pixel size for modality '%s', objective '%s', detector '%s'. " +
-                        "Please check hardware configuration.", modality, objective, detector));
+        throw new IllegalArgumentException(String.format(
+                "Cannot determine pixel size for modality '%s', objective '%s', detector '%s'. "
+                        + "Please check hardware configuration.",
+                modality, objective, detector));
     }
 
     /**
@@ -709,8 +717,12 @@ public class MicroscopeConfigManager {
                 try {
                     double pixelSize = getModalityPixelSize(baseModality, objectiveId, detectorId);
                     if (pixelSize > 0) {
-                        logger.debug("Found pixel size {} um for modality {} using {}/{}",
-                                     pixelSize, modalityName, objectiveId, detectorId);
+                        logger.debug(
+                                "Found pixel size {} um for modality {} using {}/{}",
+                                pixelSize,
+                                modalityName,
+                                objectiveId,
+                                detectorId);
                         return pixelSize;
                     }
                 } catch (IllegalArgumentException e) {
@@ -720,9 +732,9 @@ public class MicroscopeConfigManager {
             }
         }
 
-        throw new IllegalArgumentException(
-                String.format("Cannot determine pixel size for modality '%s'. " +
-                        "No valid hardware configuration found.", modalityName));
+        throw new IllegalArgumentException(String.format(
+                "Cannot determine pixel size for modality '%s'. " + "No valid hardware configuration found.",
+                modalityName));
     }
 
     /**
@@ -743,8 +755,10 @@ public class MicroscopeConfigManager {
             return params;
         }
 
-        logger.warn("No autofocus parameters found for objective: {} (check autofocus_{}.yml)",
-                objective, getString("microscope", "name"));
+        logger.warn(
+                "No autofocus parameters found for objective: {} (check autofocus_{}.yml)",
+                objective,
+                getString("microscope", "name"));
         return null;
     }
 
@@ -833,7 +847,7 @@ public class MicroscopeConfigManager {
 
                 if (width != null && height != null && width > 0 && height > 0) {
                     logger.debug("Detector {} dimensions: {}x{}", detector, width, height);
-                    return new int[]{width, height};
+                    return new int[] {width, height};
                 }
             }
         }
@@ -851,8 +865,7 @@ public class MicroscopeConfigManager {
      * @return Array of [width, height] in microns, or null if cannot calculate
      */
     public double[] getModalityFOV(String modality, String objective, String detector) {
-        logger.debug("Calculating FOV for modality: {}, objective: {}, detector: {}",
-                modality, objective, detector);
+        logger.debug("Calculating FOV for modality: {}, objective: {}, detector: {}", modality, objective, detector);
 
         if (detector == null) {
             detector = getDefaultDetector();
@@ -876,8 +889,8 @@ public class MicroscopeConfigManager {
 
         double width = dimensions[0] * pixelSize;
         double height = dimensions[1] * pixelSize;
-        logger.info("FOV for {}/{}/{}: {:.1f} x {:.1f} µm", modality, objective, detector, width, height);
-        return new double[]{width, height};
+        logger.info("FOV for {}/{}/{}: {:.1f} x {:.1f} um", modality, objective, detector, width, height);
+        return new double[] {width, height};
     }
 
     /**
@@ -920,11 +933,9 @@ public class MicroscopeConfigManager {
             if (getConfigItem(path) == null) missing.add(path);
         }
         if (!missing.isEmpty()) {
-            logger.error("Missing required configuration keys: {}",
-                    missing.stream()
-                            .map(p -> String.join("/", p))
-                            .collect(Collectors.toList())
-            );
+            logger.error(
+                    "Missing required configuration keys: {}",
+                    missing.stream().map(p -> String.join("/", p)).collect(Collectors.toList()));
         }
         return missing;
     }
@@ -964,7 +975,7 @@ public class MicroscopeConfigManager {
      * @throws IOException On write error.
      */
     public void writeMetadataAsJson(Map<String, Object> metadata, Path outputPath) throws IOException {
-        try (Writer w = new FileWriter(outputPath.toFile())) {
+        try (Writer w = new FileWriter(outputPath.toFile(), StandardCharsets.UTF_8)) {
             new GsonBuilder().setPrettyPrinting().create().toJson(metadata, w);
         }
     }
@@ -1028,8 +1039,7 @@ public class MicroscopeConfigManager {
 
         boolean valid = x >= xLow && x <= xHigh && y >= yLow && y <= yHigh;
         if (!valid) {
-            logger.warn("Position ({}, {}) outside stage bounds: X[{}, {}], Y[{}, {}]",
-                    x, y, xLow, xHigh, yLow, yHigh);
+            logger.warn("Position ({}, {}) outside stage bounds: X[{}, {}], Y[{}, {}]", x, y, xLow, xHigh, yLow, yHigh);
         }
         return valid;
     }
@@ -1175,7 +1185,10 @@ public class MicroscopeConfigManager {
                 Map<String, Object> modalityBg = (Map<String, Object>) bgCorrection.get(modality);
                 if (modalityBg != null && modalityBg.containsKey("enabled")) {
                     Boolean enabled = (Boolean) modalityBg.get("enabled");
-                    logger.debug("Found background_correction.enabled in imageprocessing config for {}: {}", modality, enabled);
+                    logger.debug(
+                            "Found background_correction.enabled in imageprocessing config for {}: {}",
+                            modality,
+                            enabled);
                     return enabled != null && enabled;
                 }
             }
@@ -1198,7 +1211,10 @@ public class MicroscopeConfigManager {
                 Map<String, Object> modalityBg = (Map<String, Object>) bgCorrection.get(modality);
                 if (modalityBg != null && modalityBg.containsKey("method")) {
                     String method = modalityBg.get("method").toString();
-                    logger.debug("Found background_correction.method in imageprocessing config for {}: {}", modality, method);
+                    logger.debug(
+                            "Found background_correction.method in imageprocessing config for {}: {}",
+                            modality,
+                            method);
                     return method;
                 }
             }
@@ -1246,7 +1262,7 @@ public class MicroscopeConfigManager {
             return null;
         }
 
-        return new int[]{width, height};
+        return new int[] {width, height};
     }
 
     /**
@@ -1346,22 +1362,21 @@ public class MicroscopeConfigManager {
         // Check detailed required configuration keys
         Set<String[]> required = Set.of(
                 // Basic microscope info
-                new String[]{"microscope", "name"},
-                new String[]{"microscope", "type"},
+                new String[] {"microscope", "name"},
+                new String[] {"microscope", "type"},
 
                 // Stage configuration - used for bounds checking
-                new String[]{"stage", "limits", "x_um", "low"},
-                new String[]{"stage", "limits", "x_um", "high"},
-                new String[]{"stage", "limits", "y_um", "low"},
-                new String[]{"stage", "limits", "y_um", "high"},
-                new String[]{"stage", "limits", "z_um", "low"},
-                new String[]{"stage", "limits", "z_um", "high"},
+                new String[] {"stage", "limits", "x_um", "low"},
+                new String[] {"stage", "limits", "x_um", "high"},
+                new String[] {"stage", "limits", "y_um", "low"},
+                new String[] {"stage", "limits", "y_um", "high"},
+                new String[] {"stage", "limits", "z_um", "low"},
+                new String[] {"stage", "limits", "z_um", "high"},
 
                 // Core sections
-                new String[]{"modalities"},
-                new String[]{"hardware"},
-                new String[]{"slide_size_um"}
-        );
+                new String[] {"modalities"},
+                new String[] {"hardware"},
+                new String[] {"slide_size_um"});
 
         // First check the basic required keys
         var missing = validateRequiredKeys(required);
@@ -1433,8 +1448,8 @@ public class MicroscopeConfigManager {
             for (String detectorId : detectors) {
                 Object pixelSize = pixelSizes.get(detectorId);
                 if (!(pixelSize instanceof Number) || ((Number) pixelSize).doubleValue() <= 0) {
-                    errors.add(String.format("Objective %s missing valid pixel size for detector %s",
-                            objectiveId, detectorId));
+                    errors.add(String.format(
+                            "Objective %s missing valid pixel size for detector %s", objectiveId, detectorId));
                 }
             }
         }
@@ -1450,14 +1465,16 @@ public class MicroscopeConfigManager {
             // Validate detector dimensions
             @SuppressWarnings("unchecked")
             Map<String, Object> detectorData = (Map<String, Object>) detectorSection.get(detectorId);
-            Integer width = detectorData != null && detectorData.get("width_px") instanceof Number ?
-                    ((Number) detectorData.get("width_px")).intValue() : null;
-            Integer height = detectorData != null && detectorData.get("height_px") instanceof Number ?
-                    ((Number) detectorData.get("height_px")).intValue() : null;
+            Integer width = detectorData != null && detectorData.get("width_px") instanceof Number
+                    ? ((Number) detectorData.get("width_px")).intValue()
+                    : null;
+            Integer height = detectorData != null && detectorData.get("height_px") instanceof Number
+                    ? ((Number) detectorData.get("height_px")).intValue()
+                    : null;
 
             if (width == null || height == null || width <= 0 || height <= 0) {
-                errors.add(String.format("Detector %s has invalid dimensions: width=%s, height=%s",
-                        detectorId, width, height));
+                errors.add(String.format(
+                        "Detector %s has invalid dimensions: width=%s, height=%s", detectorId, width, height));
             }
         }
 
@@ -1482,7 +1499,8 @@ public class MicroscopeConfigManager {
         }
 
         if (!hasValidExposures) {
-            errors.add("No valid exposure settings found in imageprocessing config for any modality/objective/detector combination");
+            errors.add(
+                    "No valid exposure settings found in imageprocessing config for any modality/objective/detector combination");
         }
 
         // Validate autofocus settings exist for each objective (from external autofocus file)
@@ -1496,8 +1514,11 @@ public class MicroscopeConfigManager {
                 Integer searchRange = getAutofocusIntParam(objectiveId, "search_range_um");
 
                 if (nSteps == null || nSteps <= 0 || searchRange == null || searchRange <= 0) {
-                    logger.warn("Incomplete autofocus configuration for objective {}: n_steps={}, search_range_um={}",
-                            objectiveId, nSteps, searchRange);
+                    logger.warn(
+                            "Incomplete autofocus configuration for objective {}: n_steps={}, search_range_um={}",
+                            objectiveId,
+                            nSteps,
+                            searchRange);
                     // Not an error - autofocus is optional
                 }
             }
@@ -1554,7 +1575,9 @@ public class MicroscopeConfigManager {
         }
 
         // Default to requiring debayering for standard Bayer pattern sensors
-        logger.debug("Detector {} defaulting to no deBayering as there is no indication for this in the config file", detectorId);
+        logger.debug(
+                "Detector {} defaulting to no deBayering as there is no indication for this in the config file",
+                detectorId);
         return false;
     }
 
@@ -1666,8 +1689,8 @@ public class MicroscopeConfigManager {
             }
         }
 
-        logger.debug("No pixel size found in hardware section for objective {} with detector {}",
-                     objectiveId, detectorId);
+        logger.debug(
+                "No pixel size found in hardware section for objective {} with detector {}", objectiveId, detectorId);
         return null;
     }
 
@@ -1719,8 +1742,12 @@ public class MicroscopeConfigManager {
         // With simplified hardware config, all detectors are available for all combinations
         Set<String> detectors = getHardwareDetectors();
 
-        logger.debug("Found {} detectors for modality {} + objective {}: {}",
-                     detectors.size(), modalityName, objectiveId, detectors);
+        logger.debug(
+                "Found {} detectors for modality {} + objective {}: {}",
+                detectors.size(),
+                modalityName,
+                objectiveId,
+                detectors);
         return detectors;
     }
     /**
@@ -1739,8 +1766,8 @@ public class MicroscopeConfigManager {
         }
 
         // Default to true if not specified
-        logger.debug("No white balance setting found for {}/{}/{}, defaulting to enabled",
-                modality, objective, detector);
+        logger.debug(
+                "No white balance setting found for {}/{}/{}, defaulting to enabled", modality, objective, detector);
         return true;
     }
 
@@ -1764,14 +1791,14 @@ public class MicroscopeConfigManager {
     }
     /**
      * Get friendly names for objectives from the resources file.
-     * 
+     *
      * @param objectiveIds Set of objective IDs to get names for
      * @return Map of objective ID to friendly name
      */
     public Map<String, String> getObjectiveFriendlyNames(Set<String> objectiveIds) {
         Map<String, String> friendlyNames = new HashMap<>();
         Map<String, Object> objectiveSection = getResourceSection("id_objective_lens");
-        
+
         if (objectiveSection != null) {
             for (String objectiveId : objectiveIds) {
                 if (objectiveSection.containsKey(objectiveId)) {
@@ -1786,20 +1813,20 @@ public class MicroscopeConfigManager {
                 }
             }
         }
-        
+
         return friendlyNames;
     }
 
     /**
      * Get friendly names for detectors from the resources file.
-     * 
+     *
      * @param detectorIds Set of detector IDs to get names for
      * @return Map of detector ID to friendly name
      */
     public Map<String, String> getDetectorFriendlyNames(Set<String> detectorIds) {
         Map<String, String> friendlyNames = new HashMap<>();
         Map<String, Object> detectorSection = getResourceSection("id_detector");
-        
+
         if (detectorSection != null) {
             for (String detectorId : detectorIds) {
                 if (detectorSection.containsKey(detectorId)) {
@@ -1814,25 +1841,25 @@ public class MicroscopeConfigManager {
                 }
             }
         }
-        
+
         return friendlyNames;
     }
 
     /**
      * Get the default detector for a modality+objective combination.
      * Returns the first available detector if no explicit default is configured.
-     * 
+     *
      * @param modalityName The base modality name
      * @param objectiveId The objective ID
      * @return The default detector ID, or null if none available
      */
     public String getDefaultDetectorForModalityObjective(String modalityName, String objectiveId) {
         Set<String> detectors = getAvailableDetectorsForModalityObjective(modalityName, objectiveId);
-        
+
         if (detectors.isEmpty()) {
             return null;
         }
-        
+
         // For now, just return the first one
         // In the future, could add logic to check for a "default" flag in config
         return detectors.iterator().next();
@@ -1846,7 +1873,8 @@ public class MicroscopeConfigManager {
      * @param detectorId The detector ID
      * @return true if this combination is valid (all components exist in config)
      */
-    public boolean isValidModalityObjectiveDetectorCombination(String modalityName, String objectiveId, String detectorId) {
+    public boolean isValidModalityObjectiveDetectorCombination(
+            String modalityName, String objectiveId, String detectorId) {
         return isValidHardwareCombination(modalityName, objectiveId, detectorId);
     }
 }

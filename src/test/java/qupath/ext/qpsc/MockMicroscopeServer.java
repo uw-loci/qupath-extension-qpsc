@@ -1,22 +1,17 @@
 package qupath.ext.qpsc;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-
 import java.io.*;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Mock microscope server for testing the socket client.
@@ -48,9 +43,8 @@ public class MockMicroscopeServer implements AutoCloseable {
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     // Simulated stage state (thread-safe)
-    private final AtomicReference<StagePosition> currentPosition = new AtomicReference<>(
-            new StagePosition(0.0, 0.0, 0.0, 0.0)
-    );
+    private final AtomicReference<StagePosition> currentPosition =
+            new AtomicReference<>(new StagePosition(0.0, 0.0, 0.0, 0.0));
 
     // Stage limits for validation
     private final double xMin = -21000;
@@ -161,7 +155,7 @@ public class MockMicroscopeServer implements AutoCloseable {
                     // Read command (8 bytes)
                     byte[] commandBytes = new byte[8];
                     input.readFully(commandBytes);
-                    String command = new String(commandBytes).trim();
+                    String command = new String(commandBytes, StandardCharsets.UTF_8).trim();
 
                     logger.debug("Received command '{}' from {}", command, clientId);
 
@@ -260,9 +254,7 @@ public class MockMicroscopeServer implements AutoCloseable {
             simulateMovement();
 
             // Update position
-            currentPosition.updateAndGet(pos ->
-                    new StagePosition(x, y, pos.z, pos.r)
-            );
+            currentPosition.updateAndGet(pos -> new StagePosition(x, y, pos.z, pos.r));
 
             logger.info("Moved to XY ({}, {}) for client {}", x, y, clientId);
         }
@@ -286,9 +278,7 @@ public class MockMicroscopeServer implements AutoCloseable {
             simulateMovement();
 
             // Update position
-            currentPosition.updateAndGet(pos ->
-                    new StagePosition(pos.x, pos.y, z, pos.r)
-            );
+            currentPosition.updateAndGet(pos -> new StagePosition(pos.x, pos.y, z, pos.r));
 
             logger.info("Moved to Z {} for client {}", z, clientId);
         }
@@ -307,9 +297,7 @@ public class MockMicroscopeServer implements AutoCloseable {
             simulateMovement();
 
             // Update position
-            currentPosition.updateAndGet(pos ->
-                    new StagePosition(pos.x, pos.y, pos.z, r)
-            );
+            currentPosition.updateAndGet(pos -> new StagePosition(pos.x, pos.y, pos.z, r));
 
             logger.info("Rotated to tick {} for client {}", r, clientId);
         }
@@ -323,7 +311,7 @@ public class MockMicroscopeServer implements AutoCloseable {
                 int bytesRead = input.read(buffer);
                 if (bytesRead == -1) break;
 
-                String chunk = new String(buffer, 0, bytesRead);
+                String chunk = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
                 message.append(chunk);
 
                 if (message.toString().contains("END_MARKER")) {
@@ -364,15 +352,18 @@ public class MockMicroscopeServer implements AutoCloseable {
 
             try {
                 if (input != null) input.close();
-            } catch (IOException ignored) {}
+            } catch (IOException ignored) {
+            }
 
             try {
                 if (output != null) output.close();
-            } catch (IOException ignored) {}
+            } catch (IOException ignored) {
+            }
 
             try {
                 if (socket != null && !socket.isClosed()) socket.close();
-            } catch (IOException ignored) {}
+            } catch (IOException ignored) {
+            }
         }
     }
 
@@ -390,7 +381,8 @@ public class MockMicroscopeServer implements AutoCloseable {
         activeClients.values().forEach(handler -> {
             try {
                 handler.socket.close();
-            } catch (IOException ignored) {}
+            } catch (IOException ignored) {
+            }
         });
         activeClients.clear();
 
@@ -438,7 +430,7 @@ public class MockMicroscopeServer implements AutoCloseable {
      */
     public double[] getPosition() {
         StagePosition pos = currentPosition.get();
-        return new double[] { pos.x, pos.y, pos.z, pos.r };
+        return new double[] {pos.x, pos.y, pos.z, pos.r};
     }
 
     /**
@@ -474,5 +466,4 @@ public class MockMicroscopeServer implements AutoCloseable {
     public void close() {
         stop();
     }
-
 }

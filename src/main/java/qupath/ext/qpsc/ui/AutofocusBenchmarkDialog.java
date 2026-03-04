@@ -1,5 +1,10 @@
 package qupath.ext.qpsc.ui;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
@@ -15,12 +20,6 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.gui.prefs.PathPrefs;
-
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Dialog for configuring autofocus parameter benchmark testing.
@@ -62,12 +61,7 @@ public class AutofocusBenchmarkDialog {
      * Result record containing user-configured benchmark parameters.
      */
     public record BenchmarkParams(
-            double referenceZ,
-            String outputPath,
-            List<Double> testDistances,
-            boolean quickMode,
-            String objective
-    ) {}
+            double referenceZ, String outputPath, List<Double> testDistances, boolean quickMode, String objective) {}
 
     /**
      * Shows the autofocus benchmark configuration dialog.
@@ -76,9 +70,7 @@ public class AutofocusBenchmarkDialog {
      * @param defaultObjective Default objective identifier (e.g., "20X")
      * @return CompletableFuture with configured parameters, or null if cancelled
      */
-    public static CompletableFuture<BenchmarkParams> showDialog(
-            Double currentZ,
-            String defaultObjective) {
+    public static CompletableFuture<BenchmarkParams> showDialog(Double currentZ, String defaultObjective) {
 
         CompletableFuture<BenchmarkParams> future = new CompletableFuture<>();
 
@@ -228,15 +220,16 @@ public class AutofocusBenchmarkDialog {
 
                     if (!objectiveIds.isEmpty()) {
                         objectiveComboBox.getItems().addAll(objectiveIds);
-                        logger.debug("Loaded {} objectives for benchmark dialog: {}", objectiveIds.size(), objectiveIds);
+                        logger.debug(
+                                "Loaded {} objectives for benchmark dialog: {}", objectiveIds.size(), objectiveIds);
 
                         // Initialize with default or last used value
                         String lastUsed = objectiveProperty.get();
-                        if (defaultObjective != null && !defaultObjective.isEmpty() &&
-                                objectiveIds.contains(defaultObjective)) {
+                        if (defaultObjective != null
+                                && !defaultObjective.isEmpty()
+                                && objectiveIds.contains(defaultObjective)) {
                             objectiveComboBox.setValue(defaultObjective);
-                        } else if (lastUsed != null && !lastUsed.isEmpty() &&
-                                objectiveIds.contains(lastUsed)) {
+                        } else if (lastUsed != null && !lastUsed.isEmpty() && objectiveIds.contains(lastUsed)) {
                             objectiveComboBox.setValue(lastUsed);
                         } else if (!objectiveIds.isEmpty()) {
                             // Select first objective by default
@@ -262,24 +255,19 @@ public class AutofocusBenchmarkDialog {
                 infoArea.setEditable(false);
                 infoArea.setWrapText(true);
                 infoArea.setPrefRowCount(6);
-                infoArea.setText(
-                        "The autofocus parameter benchmark systematically tests different autofocus " +
-                        "configurations to find optimal settings for your microscope and samples.\n\n" +
-
-                        "What is tested:\n" +
-                        "- Standard autofocus: n_steps (5 values), search_range (4 values), " +
-                        "interpolation (3 types), score metrics (3 types)\n" +
-                        "- Adaptive autofocus: initial_step (3 values), min_step (2 values)\n" +
-                        "- Each distance tested both above and below focus\n\n" +
-
-                        "TIMING:\n" +
-                        "- Quick mode: ~100 trials, 5-15 minutes\n" +
-                        "- Full mode with 5 distances: ~1,980 trials, 30+ HOURS\n" +
-                        "- Reduce distances to 2-3 for faster results (e.g., \"10,30\")\n\n" +
-
-                        "Results are saved as CSV and JSON files. Progress updates are shown " +
-                        "during execution. You can cancel long-running benchmarks from the progress dialog."
-                );
+                infoArea.setText("The autofocus parameter benchmark systematically tests different autofocus "
+                        + "configurations to find optimal settings for your microscope and samples.\n\n"
+                        + "What is tested:\n"
+                        + "- Standard autofocus: n_steps (5 values), search_range (4 values), "
+                        + "interpolation (3 types), score metrics (3 types)\n"
+                        + "- Adaptive autofocus: initial_step (3 values), min_step (2 values)\n"
+                        + "- Each distance tested both above and below focus\n\n"
+                        + "TIMING:\n"
+                        + "- Quick mode: ~100 trials, 5-15 minutes\n"
+                        + "- Full mode with 5 distances: ~1,980 trials, 30+ HOURS\n"
+                        + "- Reduce distances to 2-3 for faster results (e.g., \"10,30\")\n\n"
+                        + "Results are saved as CSV and JSON files. Progress updates are shown "
+                        + "during execution. You can cancel long-running benchmarks from the progress dialog.");
 
                 // Validation feedback label (shown at bottom when Run button is disabled)
                 Label validationLabel = new Label();
@@ -287,23 +275,23 @@ public class AutofocusBenchmarkDialog {
                 validationLabel.setWrapText(true);
 
                 // ========== ASSEMBLE CONTENT ==========
-                content.getChildren().addAll(
-                        requiredLabel,
-                        referenceZBox,
-                        referenceZHelp,
-                        outputBox,
-                        new Separator(),
-                        testConfigLabel,
-                        distancesContainer,
-                        quickModeCheck,
-                        estimateLabel,
-                        objectiveBox,
-                        objectiveHelp,
-                        new Separator(),
-                        infoLabel,
-                        infoArea,
-                        validationLabel
-                );
+                content.getChildren()
+                        .addAll(
+                                requiredLabel,
+                                referenceZBox,
+                                referenceZHelp,
+                                outputBox,
+                                new Separator(),
+                                testConfigLabel,
+                                distancesContainer,
+                                quickModeCheck,
+                                estimateLabel,
+                                objectiveBox,
+                                objectiveHelp,
+                                new Separator(),
+                                infoLabel,
+                                infoArea,
+                                validationLabel);
 
                 // ========== DIALOG BUTTONS ==========
                 ButtonType runButton = new ButtonType("Run Benchmark", ButtonBar.ButtonData.OK_DONE);
@@ -456,16 +444,14 @@ public class AutofocusBenchmarkDialog {
                             durationStr = String.format("%.0f minutes", totalMinutes);
                             // Orange warning for long benchmarks
                             warningStyle += "-fx-text-fill: #cc6600;";
-                            estimateLabel.setText(String.format(
-                                    "Estimated: %,d trials, ~%s",
-                                    totalTrials, durationStr));
+                            estimateLabel.setText(
+                                    String.format("Estimated: %,d trials, ~%s", totalTrials, durationStr));
                         } else {
                             durationStr = String.format("%.0f minutes", Math.max(5, totalMinutes));
                             // Blue info for reasonable benchmarks
                             warningStyle += "-fx-text-fill: #0066cc;";
-                            estimateLabel.setText(String.format(
-                                    "Estimated: %,d trials, ~%s",
-                                    totalTrials, durationStr));
+                            estimateLabel.setText(
+                                    String.format("Estimated: %,d trials, ~%s", totalTrials, durationStr));
                         }
 
                         estimateLabel.setStyle(warningStyle);
@@ -500,8 +486,7 @@ public class AutofocusBenchmarkDialog {
 
                         if (!outOfBounds.isEmpty()) {
                             distanceWarningLabel.setText(String.format(
-                                    "Warning: Some distances outside recommended range (1-200 um): %s",
-                                    outOfBounds));
+                                    "Warning: Some distances outside recommended range (1-200 um): %s", outOfBounds));
                             distanceWarningLabel.setManaged(true);
                             distanceWarningLabel.setVisible(true);
                         } else {
@@ -536,7 +521,8 @@ public class AutofocusBenchmarkDialog {
                     if (buttonType == runButton) {
                         try {
                             // Parse reference Z
-                            double refZ = Double.parseDouble(referenceZField.getText().trim());
+                            double refZ =
+                                    Double.parseDouble(referenceZField.getText().trim());
 
                             // Get output path
                             String outPath = outputField.getText().trim();
@@ -603,13 +589,10 @@ public class AutofocusBenchmarkDialog {
                 });
 
                 // Show dialog and complete future
-                dialog.showAndWait().ifPresentOrElse(
-                        future::complete,
-                        () -> {
-                            logger.info("Autofocus benchmark dialog cancelled");
-                            future.complete(null);
-                        }
-                );
+                dialog.showAndWait().ifPresentOrElse(future::complete, () -> {
+                    logger.info("Autofocus benchmark dialog cancelled");
+                    future.complete(null);
+                });
 
             } catch (Exception e) {
                 logger.error("Error showing autofocus benchmark dialog", e);
@@ -627,9 +610,7 @@ public class AutofocusBenchmarkDialog {
      * @param defaultObjective Default objective identifier
      * @return CompletableFuture with configured parameters, or null if cancelled
      */
-    public static CompletableFuture<BenchmarkParams> showQuickDialog(
-            Double currentZ,
-            String defaultObjective) {
+    public static CompletableFuture<BenchmarkParams> showQuickDialog(Double currentZ, String defaultObjective) {
 
         // Pre-configure for quick mode and use showDialog
         quickModeProperty.set(true);

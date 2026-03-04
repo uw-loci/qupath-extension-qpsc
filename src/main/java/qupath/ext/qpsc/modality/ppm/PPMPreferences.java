@@ -1,5 +1,6 @@
 package qupath.ext.qpsc.modality.ppm;
 
+import java.util.Map;
 import javafx.beans.property.StringProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,16 +8,13 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.gui.prefs.PathPrefs;
 
-import java.util.List;
-import java.util.Map;
-
 /**
  * Manages user preferences for PPM (Polarized light Microscopy) modality configuration.
- * 
+ *
  * <p>This utility class stores and retrieves user preferences for PPM angle selection
  * and decimal exposure times. Preferences are persisted using QuPath's preference system
  * and automatically loaded from microscope configuration files when available.</p>
- * 
+ *
  * <p><strong>Supported Preferences:</strong></p>
  * <ul>
  *   <li><strong>Angle Selection:</strong> Boolean flags for each of the four PPM angles</li>
@@ -24,10 +22,10 @@ import java.util.Map;
  *   <li><strong>Angle Overrides:</strong> Custom angle values for per-acquisition customization</li>
  *   <li><strong>Configuration Loading:</strong> Automatic loading of default exposures from YAML config</li>
  * </ul>
- * 
+ *
  * <p>All exposure time values support decimal precision (e.g., 1.2ms, 500.0ms, 0.8ms)
  * for fine-grained exposure control across different illumination conditions.</p>
- * 
+ *
  * @author Mike Nelson
  * @since 1.0
  * @see qupath.lib.gui.prefs.PathPrefs
@@ -40,20 +38,16 @@ public class PPMPreferences {
     // Angle selection flags
     private static final StringProperty minusSelected =
             PathPrefs.createPersistentPreference("PPMMinusSelected", "true");
-    private static final StringProperty zeroSelected =
-            PathPrefs.createPersistentPreference("PPMZeroSelected", "true");
-    private static final StringProperty plusSelected =
-            PathPrefs.createPersistentPreference("PPMPlusSelected", "true");
+    private static final StringProperty zeroSelected = PathPrefs.createPersistentPreference("PPMZeroSelected", "true");
+    private static final StringProperty plusSelected = PathPrefs.createPersistentPreference("PPMPlusSelected", "true");
     private static final StringProperty uncrossedSelected =
             PathPrefs.createPersistentPreference("PPMUncrossedSelected", "false");
 
     // Decimal exposure times in milliseconds for each angle (supports sub-millisecond precision)
     private static final StringProperty minusExposure =
             PathPrefs.createPersistentPreference("PPMMinusExposureMs", "500");
-    private static final StringProperty zeroExposure =
-            PathPrefs.createPersistentPreference("PPMZeroExposureMs", "800");
-    private static final StringProperty plusExposure =
-            PathPrefs.createPersistentPreference("PPMPlusExposureMs", "500");
+    private static final StringProperty zeroExposure = PathPrefs.createPersistentPreference("PPMZeroExposureMs", "800");
+    private static final StringProperty plusExposure = PathPrefs.createPersistentPreference("PPMPlusExposureMs", "500");
     private static final StringProperty uncrossedExposure =
             PathPrefs.createPersistentPreference("PPMUncrossedExposureMs", "10");
 
@@ -172,15 +166,15 @@ public class PPMPreferences {
     /**
      * Loads exposure defaults from the configuration for the specified objective/detector combination.
      * Updates the preference values with the profile-specific exposures if found.
-     * 
+     *
      * @param objective the objective identifier (e.g., "LOCI_OBJECTIVE_OLYMPUS_10X_001")
      * @param detector the detector identifier (e.g., "LOCI_DETECTOR_JAI_001")
      * @return true if exposures were loaded successfully, false otherwise
      */
     public static boolean loadExposuresForProfile(String objective, String detector) {
         try {
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(
-                    QPPreferenceDialog.getMicroscopeConfigFileProperty());
+            MicroscopeConfigManager mgr =
+                    MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
             // Use MicroscopeConfigManager's helper method which checks imageprocessing config first
             Map<String, Object> exposures = mgr.getModalityExposures("ppm", objective, detector);
@@ -192,8 +186,7 @@ public class PPMPreferences {
                 loadExposureForAngle(exposures, "positive", "setPlusExposureMs");
                 loadExposureForAngle(exposures, "uncrossed", "setUncrossedExposureMs");
 
-                logger.info("Loaded PPM exposures for {}/{} from configuration",
-                           objective, detector);
+                logger.info("Loaded PPM exposures for {}/{} from configuration", objective, detector);
                 return true;
             }
 
@@ -205,7 +198,7 @@ public class PPMPreferences {
             return false;
         }
     }
-    
+
     /**
      * Helper method to extract exposure value for a specific angle and set the corresponding preference.
      */
@@ -224,7 +217,7 @@ public class PPMPreferences {
             }
         }
     }
-    
+
     /**
      * Helper method to call the appropriate setter method by name.
      */
@@ -287,6 +280,4 @@ public class PPMPreferences {
     public static void setOverrideMinusAngle(double angle) {
         overrideMinusAngle.set(String.valueOf(angle));
     }
-
 }
-

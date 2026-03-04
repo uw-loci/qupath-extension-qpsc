@@ -13,12 +13,11 @@ public class StitchingConfiguration {
      * Immutable record containing all stitching configuration parameters
      */
     public record StitchingParams(
-        String compressionType,
-        int downsampleFactor,
-        double qualityFactor,
-        StitchingConfig.OutputFormat outputFormat
-    ) {}
-    
+            String compressionType,
+            int downsampleFactor,
+            double qualityFactor,
+            StitchingConfig.OutputFormat outputFormat) {}
+
     /**
      * Creates a standard stitching configuration using current preferences.
      * This ensures consistent stitching parameters across all workflows.
@@ -31,14 +30,9 @@ public class StitchingConfiguration {
         double qualityFactor = 0.85; // Standard quality factor for compression
         StitchingConfig.OutputFormat outputFormat = QPPreferenceDialog.getOutputFormatProperty();
 
-        return new StitchingParams(
-            compressionType,
-            downsampleFactor,
-            qualityFactor,
-            outputFormat
-        );
+        return new StitchingParams(compressionType, downsampleFactor, qualityFactor, outputFormat);
     }
-    
+
     /**
      * Creates a custom stitching configuration with specified parameters.
      * Use this for specialized stitching requirements.
@@ -56,11 +50,11 @@ public class StitchingConfiguration {
             StitchingConfig.OutputFormat outputFormat) {
         return new StitchingParams(compressionType, downsampleFactor, qualityFactor, outputFormat);
     }
-    
+
     /**
      * Gets the appropriate compression type based on modality requirements.
      * Some modalities may require lossless compression while others can use lossy.
-     * 
+     *
      * @param modalityBase The base modality name (e.g., "ppm", "brightfield")
      * @return Appropriate compression type for the modality
      */

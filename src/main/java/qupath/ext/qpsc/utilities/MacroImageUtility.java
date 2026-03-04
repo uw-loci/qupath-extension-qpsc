@@ -1,26 +1,18 @@
 package qupath.ext.qpsc.utilities;
 
-import javafx.application.Platform;
-import javafx.scene.control.Alert;
-import javafx.scene.control.ButtonType;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.lib.gui.QuPathGUI;
-import qupath.lib.images.servers.ImageServer;
-import qupath.lib.images.servers.ImageServerMetadata;
 import qupath.lib.projects.Project;
 import qupath.lib.roi.ROIs;
 import qupath.lib.roi.interfaces.ROI;
 import qupath.lib.scripting.QP;
-
-import java.awt.*;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 /**
  * Utility class for retrieving and working with macro images from QuPath projects.
@@ -43,9 +35,8 @@ public class MacroImageUtility {
         private final int cropOffsetX;
         private final int cropOffsetY;
 
-        public CroppedMacroResult(BufferedImage croppedImage,
-                                  int originalWidth, int originalHeight,
-                                  int cropOffsetX, int cropOffsetY) {
+        public CroppedMacroResult(
+                BufferedImage croppedImage, int originalWidth, int originalHeight, int cropOffsetX, int cropOffsetY) {
             this.croppedImage = croppedImage;
             this.originalWidth = originalWidth;
             this.originalHeight = originalHeight;
@@ -83,31 +74,27 @@ public class MacroImageUtility {
             double adjustedY = originalROI.getBoundsY() - cropOffsetY;
 
             // Ensure the adjusted ROI is within the cropped bounds
-            if (adjustedX < 0 || adjustedY < 0 ||
-                    adjustedX + originalROI.getBoundsWidth() > croppedImage.getWidth() ||
-                    adjustedY + originalROI.getBoundsHeight() > croppedImage.getHeight()) {
+            if (adjustedX < 0
+                    || adjustedY < 0
+                    || adjustedX + originalROI.getBoundsWidth() > croppedImage.getWidth()
+                    || adjustedY + originalROI.getBoundsHeight() > croppedImage.getHeight()) {
                 logger.warn("Adjusted ROI extends beyond cropped image bounds");
             }
 
             return ROIs.createRectangleROI(
-                    adjustedX, adjustedY,
+                    adjustedX,
+                    adjustedY,
                     originalROI.getBoundsWidth(),
                     originalROI.getBoundsHeight(),
-                    originalROI.getImagePlane()
-            );
+                    originalROI.getImagePlane());
         }
 
         /**
          * Converts coordinates from cropped image back to original macro image.
          */
         public double[] toOriginalCoordinates(double croppedX, double croppedY) {
-            return new double[] {
-                    croppedX + cropOffsetX,
-                    croppedY + cropOffsetY
-            };
+            return new double[] {croppedX + cropOffsetX, croppedY + cropOffsetY};
         }
-
-
     }
 
     /**
@@ -121,8 +108,7 @@ public class MacroImageUtility {
     public static CroppedMacroResult cropToSlideArea(BufferedImage macroImage) {
         String scannerName = PersistentPreferences.getSelectedScannerProperty();
         if (scannerName == null || scannerName.isEmpty()) {
-            throw new IllegalStateException(
-                    "No scanner selected in preferences. Cannot determine crop bounds. "
+            throw new IllegalStateException("No scanner selected in preferences. Cannot determine crop bounds. "
                     + "Please select a scanner in Edit > Preferences.");
         }
         return cropToSlideArea(macroImage, scannerName);
@@ -138,9 +124,8 @@ public class MacroImageUtility {
      * @param slideYMax Maximum Y coordinate of the slide area
      * @return CroppedMacroResult containing the cropped image and offset information
      */
-    public static CroppedMacroResult cropToSlideArea(BufferedImage macroImage,
-                                                     int slideXMin, int slideXMax,
-                                                     int slideYMin, int slideYMax) {
+    public static CroppedMacroResult cropToSlideArea(
+            BufferedImage macroImage, int slideXMin, int slideXMax, int slideYMin, int slideYMax) {
         if (macroImage == null) {
             throw new IllegalArgumentException("Macro image cannot be null");
         }
@@ -156,8 +141,7 @@ public class MacroImageUtility {
         slideYMax = Math.min(originalHeight, slideYMax);
 
         if (slideXMin >= slideXMax || slideYMin >= slideYMax) {
-            logger.error("Invalid slide boundaries: X[{}-{}], Y[{}-{}]",
-                    slideXMin, slideXMax, slideYMin, slideYMax);
+            logger.error("Invalid slide boundaries: X[{}-{}], Y[{}-{}]", slideXMin, slideXMax, slideYMin, slideYMax);
             throw new IllegalArgumentException("Invalid slide boundaries");
         }
 
@@ -168,13 +152,23 @@ public class MacroImageUtility {
         // crop dimensions (within 2px tolerance), return it unchanged. This happens
         // when a previously-cropped alignment image is passed through the same pipeline.
         if (Math.abs(originalWidth - cropWidth) <= 2 && Math.abs(originalHeight - cropHeight) <= 2) {
-            logger.info("Image ({}x{}) already matches crop dimensions ({}x{}) - skipping crop",
-                    originalWidth, originalHeight, cropWidth, cropHeight);
+            logger.info(
+                    "Image ({}x{}) already matches crop dimensions ({}x{}) - skipping crop",
+                    originalWidth,
+                    originalHeight,
+                    cropWidth,
+                    cropHeight);
             return new CroppedMacroResult(macroImage, originalWidth, originalHeight, 0, 0);
         }
 
-        logger.info("Cropping macro image from {}x{} to {}x{} (offset: {}, {})",
-                originalWidth, originalHeight, cropWidth, cropHeight, slideXMin, slideYMin);
+        logger.info(
+                "Cropping macro image from {}x{} to {}x{} (offset: {}, {})",
+                originalWidth,
+                originalHeight,
+                cropWidth,
+                cropHeight,
+                slideXMin,
+                slideYMin);
 
         // Perform the crop
         BufferedImage cropped = macroImage.getSubimage(slideXMin, slideYMin, cropWidth, cropHeight);
@@ -185,8 +179,7 @@ public class MacroImageUtility {
         g2d.drawImage(cropped, 0, 0, null);
         g2d.dispose();
 
-        return new CroppedMacroResult(croppedCopy, originalWidth, originalHeight,
-                slideXMin, slideYMin);
+        return new CroppedMacroResult(croppedCopy, originalWidth, originalHeight, slideXMin, slideYMin);
     }
     /**
      * Crops the macro image based on scanner configuration.
@@ -207,8 +200,7 @@ public class MacroImageUtility {
 
         if (!scannerConfigFile.exists()) {
             String error = String.format(
-                    "Scanner config file not found: %s. "
-                    + "Cannot determine crop bounds for scanner '%s'.",
+                    "Scanner config file not found: %s. " + "Cannot determine crop bounds for scanner '%s'.",
                     scannerConfigFile.getAbsolutePath(), scannerName);
             logger.error(error);
             throw new IllegalStateException(error);
@@ -233,14 +225,19 @@ public class MacroImageUtility {
         if (xMin == null || xMax == null || yMin == null || yMax == null) {
             String error = String.format(
                     "Scanner '%s' requires cropping but slide bounds are not properly configured. "
-                    + "Please add x_min_px, x_max_px, y_min_px, y_max_px under macro.slide_bounds in config_%s.yml",
+                            + "Please add x_min_px, x_max_px, y_min_px, y_max_px under macro.slide_bounds in config_%s.yml",
                     scannerName, scannerName);
             logger.error(error);
             throw new IllegalStateException(error);
         }
 
-        logger.info("Cropping macro image for scanner '{}' using bounds: X[{}-{}], Y[{}-{}]",
-                scannerName, xMin, xMax, yMin, yMax);
+        logger.info(
+                "Cropping macro image for scanner '{}' using bounds: X[{}-{}], Y[{}-{}]",
+                scannerName,
+                xMin,
+                xMax,
+                yMin,
+                yMax);
         return cropToSlideArea(macroImage, xMin, xMax, yMin, yMax);
     }
 
@@ -258,10 +255,9 @@ public class MacroImageUtility {
 
         if (!scannerConfigFile.exists()) {
             String error = String.format(
-                    "Scanner configuration file not found: %s\n" +
-                            "Please ensure the scanner '%s' has a configuration file.",
-                    scannerConfigFile.getAbsolutePath(), scannerName
-            );
+                    "Scanner configuration file not found: %s\n"
+                            + "Please ensure the scanner '%s' has a configuration file.",
+                    scannerConfigFile.getAbsolutePath(), scannerName);
             logger.error(error);
             throw new IllegalStateException(error);
         }
@@ -272,16 +268,15 @@ public class MacroImageUtility {
 
         if (pixelSize == null || pixelSize <= 0) {
             String error = String.format(
-                    "Scanner '%s' has no valid macro pixel size configured.\n" +
-                            "This is required for accurate alignment.\n" +
-                            "Please add 'macro: pixel_size_um: <value>' to %s",
-                    scannerName, scannerConfigFile.getName()
-            );
+                    "Scanner '%s' has no valid macro pixel size configured.\n"
+                            + "This is required for accurate alignment.\n"
+                            + "Please add 'macro: pixel_size_um: <value>' to %s",
+                    scannerName, scannerConfigFile.getName());
             logger.error(error);
             throw new IllegalStateException(error);
         }
 
-        logger.info("Using macro pixel size {} µm for scanner '{}'", pixelSize, scannerName);
+        logger.info("Using macro pixel size {} um for scanner '{}'", pixelSize, scannerName);
         return pixelSize;
     }
     /**
@@ -337,7 +332,6 @@ public class MacroImageUtility {
 
         return flipped;
     }
-
 
     /**
      * Retrieves the macro image from the current QuPath image data.
@@ -412,10 +406,8 @@ public class MacroImageUtility {
 
             // Try to load saved macro image using IMAGE name (not sample name)
             logger.info("No macro image in slide, checking for saved version...");
-            macroImage = AffineTransformManager.loadSavedMacroImage(
-                    (Project<BufferedImage>) gui.getProject(),
-                    imageName
-            );
+            macroImage =
+                    AffineTransformManager.loadSavedMacroImage((Project<BufferedImage>) gui.getProject(), imageName);
 
             if (macroImage != null) {
                 logger.info("Successfully loaded saved macro image for image: {}", imageName);
@@ -472,5 +464,4 @@ public class MacroImageUtility {
         }
         return false;
     }
-
 }

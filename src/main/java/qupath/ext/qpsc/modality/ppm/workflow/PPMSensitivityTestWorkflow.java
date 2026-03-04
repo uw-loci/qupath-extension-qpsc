@@ -1,5 +1,12 @@
 package qupath.ext.qpsc.modality.ppm.workflow;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
@@ -9,19 +16,11 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
-import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
-
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * PPMSensitivityTestWorkflow - Systematic testing of PPM rotation sensitivity
@@ -65,26 +64,25 @@ public class PPMSensitivityTestWorkflow {
             try {
                 // Show test parameter dialog
                 showTestDialog()
-                    .thenAccept(params -> {
-                        if (params != null) {
-                            logger.info("PPM sensitivity test parameters received");
-                            // Start test with progress dialog (all on FX thread initially)
-                            startTestWithProgress(params);
-                        } else {
-                            logger.info("PPM sensitivity test cancelled by user");
-                        }
-                    })
-                    .exceptionally(ex -> {
-                        logger.error("Error in PPM sensitivity test dialog", ex);
-                        Platform.runLater(() -> Dialogs.showErrorMessage("Test Error",
-                                "Failed to show test dialog: " + ex.getMessage()));
-                        return null;
-                    });
+                        .thenAccept(params -> {
+                            if (params != null) {
+                                logger.info("PPM sensitivity test parameters received");
+                                // Start test with progress dialog (all on FX thread initially)
+                                startTestWithProgress(params);
+                            } else {
+                                logger.info("PPM sensitivity test cancelled by user");
+                            }
+                        })
+                        .exceptionally(ex -> {
+                            logger.error("Error in PPM sensitivity test dialog", ex);
+                            Platform.runLater(() -> Dialogs.showErrorMessage(
+                                    "Test Error", "Failed to show test dialog: " + ex.getMessage()));
+                            return null;
+                        });
 
             } catch (Exception e) {
                 logger.error("Failed to start PPM sensitivity test workflow", e);
-                Dialogs.showErrorMessage("Test Error",
-                        "Failed to start PPM sensitivity test: " + e.getMessage());
+                Dialogs.showErrorMessage("Test Error", "Failed to start PPM sensitivity test: " + e.getMessage());
             }
         });
     }
@@ -112,17 +110,16 @@ public class PPMSensitivityTestWorkflow {
             Label headerLabel = new Label("Test PPM Rotation Stage Sensitivity");
             headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
 
-            Label instructionLabel = new Label(
-                "Systematically test PPM rotation sensitivity by acquiring images at precise angles.\n" +
-                "This test analyzes the impact of angular deviations on image quality and birefringence.\n\n" +
-                "IMPORTANT: Position microscope at a representative tissue area before starting.\n\n" +
-                "Test types:\n" +
-                "  - Comprehensive - Runs all tests (recommended for thorough analysis)\n" +
-                "  - Standard - Tests all standard angles (0, 7, 14, ..., 91 deg)\n" +
-                "  - Deviation - Fine angular deviations around base angle\n" +
-                "  - Repeatability - Mechanical repeatability test (N repetitions)\n" +
-                "  - Calibration - Compare current vs optimal calibration angles"
-            );
+            Label instructionLabel =
+                    new Label("Systematically test PPM rotation sensitivity by acquiring images at precise angles.\n"
+                            + "This test analyzes the impact of angular deviations on image quality and birefringence.\n\n"
+                            + "IMPORTANT: Position microscope at a representative tissue area before starting.\n\n"
+                            + "Test types:\n"
+                            + "  - Comprehensive - Runs all tests (recommended for thorough analysis)\n"
+                            + "  - Standard - Tests all standard angles (0, 7, 14, ..., 91 deg)\n"
+                            + "  - Deviation - Fine angular deviations around base angle\n"
+                            + "  - Repeatability - Mechanical repeatability test (N repetitions)\n"
+                            + "  - Calibration - Compare current vs optimal calibration angles");
             instructionLabel.setWrapText(true);
             instructionLabel.setStyle("-fx-font-size: 11px;");
 
@@ -170,13 +167,7 @@ public class PPMSensitivityTestWorkflow {
 
             // Test type
             ComboBox<String> testTypeCombo = new ComboBox<>();
-            testTypeCombo.getItems().addAll(
-                "comprehensive",
-                "standard",
-                "deviation",
-                "repeatability",
-                "calibration"
-            );
+            testTypeCombo.getItems().addAll("comprehensive", "standard", "deviation", "repeatability", "calibration");
             testTypeCombo.setValue("comprehensive");
             testTypeCombo.setPrefWidth(200);
 
@@ -200,16 +191,16 @@ public class PPMSensitivityTestWorkflow {
             testTypeCombo.valueProperty().addListener((obs, old, newValue) -> {
                 // Update description
                 switch (newValue) {
-                    case "comprehensive" ->
-                        testDescLabel.setText("Runs all test types in sequence for complete analysis (20-30 min)");
-                    case "standard" ->
-                        testDescLabel.setText("Tests at all standard PPM angles: 0, 7, 14, ..., 91 degrees (5-8 min)");
-                    case "deviation" ->
-                        testDescLabel.setText("Fine angular deviations (0.05-1.0 deg) around base angle (3-5 min)");
-                    case "repeatability" ->
-                        testDescLabel.setText("Returns to same angle N times to measure mechanical precision (2-4 min)");
-                    case "calibration" ->
-                        testDescLabel.setText("Compares current angles vs optimal from polarizer calibration (3-5 min)");
+                    case "comprehensive" -> testDescLabel.setText(
+                            "Runs all test types in sequence for complete analysis (20-30 min)");
+                    case "standard" -> testDescLabel.setText(
+                            "Tests at all standard PPM angles: 0, 7, 14, ..., 91 degrees (5-8 min)");
+                    case "deviation" -> testDescLabel.setText(
+                            "Fine angular deviations (0.05-1.0 deg) around base angle (3-5 min)");
+                    case "repeatability" -> testDescLabel.setText(
+                            "Returns to same angle N times to measure mechanical precision (2-4 min)");
+                    case "calibration" -> testDescLabel.setText(
+                            "Compares current angles vs optimal from polarizer calibration (3-5 min)");
                 }
 
                 // Enable/disable fields based on test type
@@ -228,10 +219,9 @@ public class PPMSensitivityTestWorkflow {
             // Keep images checkbox
             CheckBox keepImagesCheckbox = new CheckBox("Retain acquired images after analysis");
             keepImagesCheckbox.setSelected(true);
-            keepImagesCheckbox.setTooltip(new Tooltip(
-                "If checked, all acquired .tif images are kept for manual inspection.\n" +
-                "If unchecked, images are deleted after analysis to conserve disk space."
-            ));
+            keepImagesCheckbox.setTooltip(
+                    new Tooltip("If checked, all acquired .tif images are kept for manual inspection.\n"
+                            + "If unchecked, images are deleted after analysis to conserve disk space."));
 
             // Info label for duration estimate
             Label durationLabel = new Label();
@@ -240,17 +230,18 @@ public class PPMSensitivityTestWorkflow {
             // Update duration estimate when test type changes
             Runnable updateDuration = () -> {
                 String testType = testTypeCombo.getValue();
-                int estimatedMinutes = switch (testType) {
-                    case "comprehensive" -> 25;
-                    case "standard" -> 6;
-                    case "deviation" -> 4;
-                    case "repeatability" -> {
-                        int repeats = repeatsSpinner.getValue();
-                        yield (repeats * 15) / 60; // ~15 sec per repeat
-                    }
-                    case "calibration" -> 4;
-                    default -> 5;
-                };
+                int estimatedMinutes =
+                        switch (testType) {
+                            case "comprehensive" -> 25;
+                            case "standard" -> 6;
+                            case "deviation" -> 4;
+                            case "repeatability" -> {
+                                int repeats = repeatsSpinner.getValue();
+                                yield (repeats * 15) / 60; // ~15 sec per repeat
+                            }
+                            case "calibration" -> 4;
+                            default -> 5;
+                        };
                 durationLabel.setText(String.format("Estimated duration: ~%d minutes", estimatedMinutes));
             };
 
@@ -314,23 +305,21 @@ public class PPMSensitivityTestWorkflow {
             infoArea.setWrapText(true);
             infoArea.setPrefRowCount(5);
             infoArea.setStyle("-fx-font-size: 10px;");
-            infoArea.setText(
-                "What this test measures:\n" +
-                "The PPM sensitivity test systematically evaluates how rotation stage angular precision affects " +
-                "image quality and birefringence calculations. This helps determine optimal angular tolerances " +
-                "and validate rotation stage performance.\n\n" +
-                "When to use each test type:\n" +
-                "  - Comprehensive: First-time setup or complete system validation (runs all tests)\n" +
-                "  - Standard: Verify angles used in normal PPM acquisitions\n" +
-                "  - Deviation: Analyze impact of small angular errors around critical angles\n" +
-                "  - Repeatability: Measure mechanical precision of rotation stage\n" +
-                "  - Calibration: Compare current system to optimal polarizer calibration\n\n" +
-                "Output files generated:\n" +
-                "  - Test summary report (JSON format with statistics)\n" +
-                "  - Analysis plots showing angular sensitivity curves\n" +
-                "  - Acquired test images (if retention enabled)\n" +
-                "  - Detailed execution logs for debugging"
-            );
+            infoArea.setText("What this test measures:\n"
+                    + "The PPM sensitivity test systematically evaluates how rotation stage angular precision affects "
+                    + "image quality and birefringence calculations. This helps determine optimal angular tolerances "
+                    + "and validate rotation stage performance.\n\n"
+                    + "When to use each test type:\n"
+                    + "  - Comprehensive: First-time setup or complete system validation (runs all tests)\n"
+                    + "  - Standard: Verify angles used in normal PPM acquisitions\n"
+                    + "  - Deviation: Analyze impact of small angular errors around critical angles\n"
+                    + "  - Repeatability: Measure mechanical precision of rotation stage\n"
+                    + "  - Calibration: Compare current system to optimal polarizer calibration\n\n"
+                    + "Output files generated:\n"
+                    + "  - Test summary report (JSON format with statistics)\n"
+                    + "  - Analysis plots showing angular sensitivity curves\n"
+                    + "  - Acquired test images (if retention enabled)\n"
+                    + "  - Detailed execution logs for debugging");
             grid.add(infoArea, 0, row, 4, 1);
             row++;
 
@@ -375,8 +364,8 @@ public class PPMSensitivityTestWorkflow {
                 File outputDir = new File(output);
 
                 if (output.isEmpty() || !outputDir.exists() || !outputDir.isDirectory()) {
-                    Dialogs.showErrorMessage("Invalid Output Folder",
-                            "Please select a valid output folder for the test results.");
+                    Dialogs.showErrorMessage(
+                            "Invalid Output Folder", "Please select a valid output folder for the test results.");
                     event.consume();
                     return;
                 }
@@ -390,8 +379,7 @@ public class PPMSensitivityTestWorkflow {
                             testTypeCombo.getValue(),
                             baseAngleSpinner.getValue(),
                             repeatsSpinner.getValue(),
-                            keepImagesCheckbox.isSelected()
-                    );
+                            keepImagesCheckbox.isSelected());
                 }
                 return null;
             });
@@ -418,17 +406,15 @@ public class PPMSensitivityTestWorkflow {
         Alert progressDialog = new Alert(Alert.AlertType.INFORMATION);
         progressDialog.setTitle("Test In Progress");
         progressDialog.setHeaderText("PPM Rotation Sensitivity Test Running");
-        progressDialog.setContentText(
-                String.format("Test type: %s\n", params.testType()) +
-                "This may take several minutes (typically 5-30 minutes depending on test type).\n\n" +
-                "IMPORTANT: Check the Python server logs for detailed progress information.\n" +
-                "The logs will show:\n" +
-                "  - Angle acquisition progress\n" +
-                "  - Image capture status\n" +
-                "  - Analysis results\n\n" +
-                "Please wait for the test to complete.\n" +
-                "This dialog will close automatically when finished."
-        );
+        progressDialog.setContentText(String.format("Test type: %s\n", params.testType())
+                + "This may take several minutes (typically 5-30 minutes depending on test type).\n\n"
+                + "IMPORTANT: Check the Python server logs for detailed progress information.\n"
+                + "The logs will show:\n"
+                + "  - Angle acquisition progress\n"
+                + "  - Image capture status\n"
+                + "  - Analysis results\n\n"
+                + "Please wait for the test to complete.\n"
+                + "This dialog will close automatically when finished.");
         progressDialog.getDialogPane().setMinWidth(500);
         progressDialog.getButtonTypes().clear();
         progressDialog.getButtonTypes().add(ButtonType.CANCEL);
@@ -438,16 +424,17 @@ public class PPMSensitivityTestWorkflow {
 
         // Now run the actual test on a background thread
         CompletableFuture.runAsync(() -> {
-            executeTest(params, progressDialog);
-        }).exceptionally(ex -> {
-            logger.error("PPM sensitivity test failed", ex);
-            Platform.runLater(() -> {
-                progressDialog.close();
-                Dialogs.showErrorMessage("PPM Sensitivity Test Error",
-                        "Failed to execute test: " + ex.getMessage());
-            });
-            return null;
-        });
+                    executeTest(params, progressDialog);
+                })
+                .exceptionally(ex -> {
+                    logger.error("PPM sensitivity test failed", ex);
+                    Platform.runLater(() -> {
+                        progressDialog.close();
+                        Dialogs.showErrorMessage(
+                                "PPM Sensitivity Test Error", "Failed to execute test: " + ex.getMessage());
+                    });
+                    return null;
+                });
     }
 
     /**
@@ -458,12 +445,16 @@ public class PPMSensitivityTestWorkflow {
      * @param progressDialog Progress dialog to close when done (created on FX thread)
      */
     private static void executeTest(TestParams params, Alert progressDialog) {
-        logger.info("Executing PPM sensitivity test: type={}, base_angle={}, repeats={}",
-                params.testType(), params.baseAngle(), params.nRepeats());
+        logger.info(
+                "Executing PPM sensitivity test: type={}, base_angle={}, repeats={}",
+                params.testType(),
+                params.baseAngle(),
+                params.nRepeats());
 
         try {
             // Get socket client
-            MicroscopeSocketClient socketClient = MicroscopeController.getInstance().getSocketClient();
+            MicroscopeSocketClient socketClient =
+                    MicroscopeController.getInstance().getSocketClient();
 
             // Ensure connection
             if (!MicroscopeController.getInstance().isConnected()) {
@@ -483,14 +474,12 @@ public class PPMSensitivityTestWorkflow {
             logger.info("  Keep images: {}", params.keepImages());
 
             // Create params object for socket client
-            MicroscopeSocketClient.PPMSensitivityParams socketParams =
-                new MicroscopeSocketClient.PPMSensitivityParams(
+            MicroscopeSocketClient.PPMSensitivityParams socketParams = new MicroscopeSocketClient.PPMSensitivityParams(
                     configFileLocation,
                     params.outputFolder(),
                     params.testType(),
                     params.baseAngle(),
-                    params.nRepeats()
-                );
+                    params.nRepeats());
 
             // Call the socket client method
             String resultDir = socketClient.runPPMSensitivityTest(socketParams);
@@ -506,14 +495,12 @@ public class PPMSensitivityTestWorkflow {
                 alert.setTitle("Test Complete");
                 alert.setHeaderText("PPM sensitivity test completed successfully!");
                 alert.setContentText(
-                        "Test results saved to:\n" + resultDir + "\n\n" +
-                        "The output directory contains:\n" +
-                        "  - Test summary report (JSON format)\n" +
-                        "  - Analysis plots and statistics\n" +
-                        "  - Acquired images (if retention enabled)\n" +
-                        "  - Detailed logs\n\n" +
-                        "Would you like to open the results folder?"
-                );
+                        "Test results saved to:\n" + resultDir + "\n\n" + "The output directory contains:\n"
+                                + "  - Test summary report (JSON format)\n"
+                                + "  - Analysis plots and statistics\n"
+                                + "  - Acquired images (if retention enabled)\n"
+                                + "  - Detailed logs\n\n"
+                                + "Would you like to open the results folder?");
 
                 // Make dialog resizable and larger
                 alert.setResizable(true);
@@ -533,8 +520,7 @@ public class PPMSensitivityTestWorkflow {
                         }
                     } catch (IOException e) {
                         logger.error("Failed to open results folder", e);
-                        Dialogs.showErrorMessage("Error",
-                                "Could not open folder: " + e.getMessage());
+                        Dialogs.showErrorMessage("Error", "Could not open folder: " + e.getMessage());
                     }
                 }
             });
@@ -545,8 +531,7 @@ public class PPMSensitivityTestWorkflow {
             // Close progress dialog and show error (on FX thread)
             Platform.runLater(() -> {
                 progressDialog.close();
-                Dialogs.showErrorMessage("Test Failed",
-                        "Failed to complete PPM sensitivity test:\n" + e.getMessage());
+                Dialogs.showErrorMessage("Test Failed", "Failed to complete PPM sensitivity test:\n" + e.getMessage());
             });
         }
         // Note: Don't disconnect - we're using the shared MicroscopeController connection
@@ -556,10 +541,5 @@ public class PPMSensitivityTestWorkflow {
      * Record for test parameters.
      */
     private record TestParams(
-            String outputFolder,
-            String testType,
-            double baseAngle,
-            int nRepeats,
-            boolean keepImages
-    ) {}
+            String outputFolder, String testType, double baseAngle, int nRepeats, boolean keepImages) {}
 }

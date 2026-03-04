@@ -1,5 +1,10 @@
 package qupath.ext.qpsc.ui;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.scene.layout.Pane;
@@ -9,12 +14,6 @@ import javafx.scene.shape.Line;
 import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
 
 /**
  * A circular virtual joystick widget for continuous stage movement.
@@ -173,7 +172,7 @@ public class VirtualJoystick extends Pane {
         double deltaY = Math.sin(angle) * scaledMagnitude;
 
         // Store the latest delta request
-        pendingTarget.set(new double[]{deltaX, deltaY});
+        pendingTarget.set(new double[] {deltaX, deltaY});
 
         // If no move is in progress, start one
         if (moveInProgress.compareAndSet(false, true)) {
@@ -216,9 +215,12 @@ public class VirtualJoystick extends Pane {
                     // After sleeping, check if a newer target arrived
                     double[] newerTarget = pendingTarget.getAndSet(null);
                     if (newerTarget != null) {
-                        logger.debug("Joystick coalesced: skipped ({}, {}) -> ({}, {})",
-                                String.format("%.1f", target[0]), String.format("%.1f", target[1]),
-                                String.format("%.1f", newerTarget[0]), String.format("%.1f", newerTarget[1]));
+                        logger.debug(
+                                "Joystick coalesced: skipped ({}, {}) -> ({}, {})",
+                                String.format("%.1f", target[0]),
+                                String.format("%.1f", target[1]),
+                                String.format("%.1f", newerTarget[0]),
+                                String.format("%.1f", newerTarget[1]));
                         target = newerTarget; // Use the newer position
                     }
                 }
@@ -229,9 +231,12 @@ public class VirtualJoystick extends Pane {
                     long interval = dispatchTime - lastMoveTime;
                     movementCallback.accept(target[0], target[1]);
                     long callbackMs = System.currentTimeMillis() - dispatchTime;
-                    logger.debug("Joystick dispatch: interval={}ms, callback={}ms, delta=({}, {})",
-                            interval, callbackMs,
-                            String.format("%.1f", target[0]), String.format("%.1f", target[1]));
+                    logger.debug(
+                            "Joystick dispatch: interval={}ms, callback={}ms, delta=({}, {})",
+                            interval,
+                            callbackMs,
+                            String.format("%.1f", target[0]),
+                            String.format("%.1f", target[1]));
                     lastMoveTime = System.currentTimeMillis();
                 } catch (Exception e) {
                     logger.warn("Joystick movement callback failed: {}", e.getMessage());

@@ -1,5 +1,8 @@
 package qupath.ext.qpsc.ui;
 
+import java.io.File;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
@@ -9,12 +12,7 @@ import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
-
-import java.io.File;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Dialog for PPM Birefringence Optimization Test parameters.
@@ -39,8 +37,7 @@ public class BirefringenceOptimizationDialog {
             double angleStep,
             String exposureMode,
             Double fixedExposureMs,
-            int targetIntensity
-    ) {}
+            int targetIntensity) {}
 
     /**
      * Shows the birefringence optimization dialog.
@@ -65,12 +62,11 @@ public class BirefringenceOptimizationDialog {
             Label headerLabel = new Label("Find Optimal Polarizer Angle for Maximum Birefringence");
             headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
 
-            Label instructionLabel = new Label(
-                "This test systematically scans polarizer angles to find the optimal angle\n" +
-                "that maximizes birefringence signal contrast (difference between +theta and -theta).\n\n" +
-                "IMPORTANT: Review exposure mode options before starting.\n" +
-                "Default 'interpolate' mode is fastest, using pre-calibrated exposures."
-            );
+            Label instructionLabel =
+                    new Label("This test systematically scans polarizer angles to find the optimal angle\n"
+                            + "that maximizes birefringence signal contrast (difference between +theta and -theta).\n\n"
+                            + "IMPORTANT: Review exposure mode options before starting.\n"
+                            + "Default 'interpolate' mode is fastest, using pre-calibrated exposures.");
             instructionLabel.setWrapText(true);
             instructionLabel.setStyle("-fx-font-size: 11px;");
 
@@ -112,7 +108,8 @@ public class BirefringenceOptimizationDialog {
             }
             outputField.setText(defaultOutput);
 
-            Label outputHint = new Label("A timestamped subfolder (birefringence_YYYYMMDD_HHMMSS) will be created here.");
+            Label outputHint =
+                    new Label("A timestamped subfolder (birefringence_YYYYMMDD_HHMMSS) will be created here.");
             outputHint.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
             Button browseBtn = new Button("Browse...");
@@ -188,16 +185,16 @@ public class BirefringenceOptimizationDialog {
                 double step = stepSpinner.getValue();
                 if (max > min && step > 0) {
                     int numAngles = (int) Math.ceil((max - min) / step) + 1;
-                    int totalImages = numAngles * 2;  // +/- pair for each angle
-                    angleCountLabel.setText(String.format("%d angles tested (%d images total)",
-                            numAngles, totalImages));
+                    int totalImages = numAngles * 2; // +/- pair for each angle
+                    angleCountLabel.setText(
+                            String.format("%d angles tested (%d images total)", numAngles, totalImages));
 
                     // Show warning if total images exceeds 400
                     if (totalImages > 400) {
-                        int estimatedMinutes = (totalImages * 2) / 60;  // ~2 sec per image
+                        int estimatedMinutes = (totalImages * 2) / 60; // ~2 sec per image
                         highCountWarningLabel.setText(String.format(
-                            "WARNING: This will acquire %d images and may take %d+ minutes. Consider increasing step size.",
-                            totalImages, estimatedMinutes));
+                                "WARNING: This will acquire %d images and may take %d+ minutes. Consider increasing step size.",
+                                totalImages, estimatedMinutes));
                         highCountWarningLabel.setVisible(true);
                     } else {
                         highCountWarningLabel.setVisible(false);
@@ -239,11 +236,13 @@ public class BirefringenceOptimizationDialog {
             RadioButton fixedMode = new RadioButton("Fixed");
             fixedMode.setToggleGroup(exposureModeGroup);
 
-            Label interpolateDesc = new Label("Use calibration points from sensitivity test and interpolate between them (fastest)");
+            Label interpolateDesc =
+                    new Label("Use calibration points from sensitivity test and interpolate between them (fastest)");
             interpolateDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
             interpolateDesc.setWrapText(true);
 
-            Label calibrateDesc = new Label("Measure optimal exposures on background first, then acquire (most accurate)");
+            Label calibrateDesc =
+                    new Label("Measure optimal exposures on background first, then acquire (most accurate)");
             calibrateDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
             calibrateDesc.setWrapText(true);
 
@@ -316,15 +315,13 @@ public class BirefringenceOptimizationDialog {
 
             Runnable updatePositioningLabel = () -> {
                 if (exposureModeGroup.getSelectedToggle() == calibrateMode) {
-                    positioningLabel.setText(
-                        "CALIBRATE MODE: Position stage on a BLANK/BACKGROUND area first!\n" +
-                        "The test will calibrate exposures on background, then prompt you to move to tissue."
-                    );
-                    positioningLabel.setStyle("-fx-font-size: 11px; -fx-padding: 8 0 0 0; -fx-text-fill: #cc6600; -fx-font-weight: bold;");
+                    positioningLabel.setText("CALIBRATE MODE: Position stage on a BLANK/BACKGROUND area first!\n"
+                            + "The test will calibrate exposures on background, then prompt you to move to tissue.");
+                    positioningLabel.setStyle(
+                            "-fx-font-size: 11px; -fx-padding: 8 0 0 0; -fx-text-fill: #cc6600; -fx-font-weight: bold;");
                 } else {
                     positioningLabel.setText(
-                        "Position stage on tissue with visible birefringence (e.g., collagen fibers)."
-                    );
+                            "Position stage on tissue with visible birefringence (e.g., collagen fibers).");
                     positioningLabel.setStyle("-fx-font-size: 11px; -fx-padding: 8 0 0 0;");
                 }
             };
@@ -361,20 +358,20 @@ public class BirefringenceOptimizationDialog {
                 if (max > min && step > 0) {
                     int numAngles = (int) Math.ceil((max - min) / step) + 1;
                     int totalImages = numAngles * 2;
-                    int estimatedSeconds = totalImages * 2;  // ~2 sec per image
+                    int estimatedSeconds = totalImages * 2; // ~2 sec per image
                     int minutes = estimatedSeconds / 60;
 
                     // Mode-specific duration estimates
                     String modeDescription;
                     if (exposureModeGroup.getSelectedToggle() == interpolateMode) {
-                        modeDescription = String.format("~%d minutes (%d images, pre-calibrated exposures)",
-                                minutes, totalImages);
+                        modeDescription = String.format(
+                                "~%d minutes (%d images, pre-calibrated exposures)", minutes, totalImages);
                     } else if (exposureModeGroup.getSelectedToggle() == calibrateMode) {
-                        modeDescription = String.format("~%d minutes (background calibration + %d images)",
-                                minutes * 2, totalImages);
-                    } else {  // fixed mode
-                        modeDescription = String.format("~%d minutes (%d images, fixed exposure)",
-                                minutes, totalImages);
+                        modeDescription = String.format(
+                                "~%d minutes (background calibration + %d images)", minutes * 2, totalImages);
+                    } else { // fixed mode
+                        modeDescription =
+                                String.format("~%d minutes (%d images, fixed exposure)", minutes, totalImages);
                     }
                     durationLabel.setText("Estimated duration: " + modeDescription);
                 }
@@ -414,7 +411,7 @@ public class BirefringenceOptimizationDialog {
                 interpolateMode.setSelected(true);
                 fixedExposureSpinner.getValueFactory().setValue(25.0);
                 targetIntensitySlider.setValue(128);
-                event.consume();  // Prevent dialog from closing
+                event.consume(); // Prevent dialog from closing
             });
 
             // Validation
@@ -424,8 +421,8 @@ public class BirefringenceOptimizationDialog {
                 File outputDir = new File(output);
 
                 if (output.isEmpty() || !outputDir.exists() || !outputDir.isDirectory()) {
-                    Dialogs.showErrorMessage("Invalid Output Folder",
-                            "Please select a valid output folder for test results.");
+                    Dialogs.showErrorMessage(
+                            "Invalid Output Folder", "Please select a valid output folder for test results.");
                     event.consume();
                     return;
                 }
@@ -435,23 +432,21 @@ public class BirefringenceOptimizationDialog {
                 double step = stepSpinner.getValue();
 
                 if (min >= max) {
-                    Dialogs.showErrorMessage("Invalid Angle Range",
-                            "Maximum angle must be greater than minimum angle.");
+                    Dialogs.showErrorMessage(
+                            "Invalid Angle Range", "Maximum angle must be greater than minimum angle.");
                     event.consume();
                     return;
                 }
 
                 if (step <= 0 || step > 1.0) {
-                    Dialogs.showErrorMessage("Invalid Step Size",
-                            "Step size must be between 0.01 and 1.0 degrees.");
+                    Dialogs.showErrorMessage("Invalid Step Size", "Step size must be between 0.01 and 1.0 degrees.");
                     event.consume();
                     return;
                 }
 
                 if (exposureModeGroup.getSelectedToggle() == fixedMode) {
                     if (fixedExposureSpinner.getValue() <= 0) {
-                        Dialogs.showErrorMessage("Invalid Exposure",
-                                "Fixed exposure must be greater than 0 ms.");
+                        Dialogs.showErrorMessage("Invalid Exposure", "Fixed exposure must be greater than 0 ms.");
                         event.consume();
                         return;
                     }
@@ -461,15 +456,13 @@ public class BirefringenceOptimizationDialog {
                 if (exposureModeGroup.getSelectedToggle() == calibrateMode) {
                     boolean confirmed = Dialogs.showConfirmDialog(
                             "Calibrate Mode - Stage Positioning",
-                            "CALIBRATE MODE requires TWO-PHASE positioning:\n\n" +
-                            "PHASE 1 (Background Calibration):\n" +
-                            "   The stage must be on a BLANK/BACKGROUND area NOW.\n" +
-                            "   This allows the system to calibrate exposures.\n\n" +
-                            "PHASE 2 (Tissue Acquisition):\n" +
-                            "   After calibration, you will be prompted to move\n" +
-                            "   the stage to tissue with visible birefringence.\n\n" +
-                            "Is the stage currently positioned on a BLANK area?"
-                    );
+                            "CALIBRATE MODE requires TWO-PHASE positioning:\n\n" + "PHASE 1 (Background Calibration):\n"
+                                    + "   The stage must be on a BLANK/BACKGROUND area NOW.\n"
+                                    + "   This allows the system to calibrate exposures.\n\n"
+                                    + "PHASE 2 (Tissue Acquisition):\n"
+                                    + "   After calibration, you will be prompted to move\n"
+                                    + "   the stage to tissue with visible birefringence.\n\n"
+                                    + "Is the stage currently positioned on a BLANK area?");
                     if (!confirmed) {
                         event.consume();
                         return;
@@ -499,8 +492,7 @@ public class BirefringenceOptimizationDialog {
                             stepSpinner.getValue(),
                             exposureMode,
                             fixedExposure,
-                            (int) targetIntensitySlider.getValue()
-                    );
+                            (int) targetIntensitySlider.getValue());
                 }
                 return null;
             });

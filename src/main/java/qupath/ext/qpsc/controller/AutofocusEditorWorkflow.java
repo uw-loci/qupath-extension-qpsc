@@ -1,5 +1,11 @@
 package qupath.ext.qpsc.controller;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.*;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -14,12 +20,6 @@ import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
-
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.util.*;
 
 /**
  * AutofocusEditorWorkflow - Configuration editor for per-objective autofocus settings
@@ -70,11 +70,20 @@ public class AutofocusEditorWorkflow {
         int adaptiveMaxSteps;
         double adaptiveFocusThreshold;
 
-        AutofocusSettings(String objective, int nSteps, double searchRangeUm, int nTiles,
-                         int interpStrength, String interpKind, String scoreMetric,
-                         double textureThreshold, double tissueAreaThreshold,
-                         double adaptiveInitialStepUm, double adaptiveMinStepUm,
-                         int adaptiveMaxSteps, double adaptiveFocusThreshold) {
+        AutofocusSettings(
+                String objective,
+                int nSteps,
+                double searchRangeUm,
+                int nTiles,
+                int interpStrength,
+                String interpKind,
+                String scoreMetric,
+                double textureThreshold,
+                double tissueAreaThreshold,
+                double adaptiveInitialStepUm,
+                double adaptiveMinStepUm,
+                int adaptiveMaxSteps,
+                double adaptiveFocusThreshold) {
             this.objective = objective;
             this.nSteps = nSteps;
             this.searchRangeUm = searchRangeUm;
@@ -176,8 +185,8 @@ public class AutofocusEditorWorkflow {
                 showAutofocusEditorDialog();
             } catch (Exception e) {
                 logger.error("Error in autofocus editor workflow", e);
-                Dialogs.showErrorMessage("Autofocus Editor Error",
-                    "Failed to open autofocus editor: " + e.getMessage());
+                Dialogs.showErrorMessage(
+                        "Autofocus Editor Error", "Failed to open autofocus editor: " + e.getMessage());
             }
         });
     }
@@ -189,15 +198,13 @@ public class AutofocusEditorWorkflow {
         // Get microscope config path from preferences
         String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         if (configPath == null || configPath.isEmpty()) {
-            Dialogs.showErrorMessage("Configuration Error",
-                "No microscope configuration file set in preferences.");
+            Dialogs.showErrorMessage("Configuration Error", "No microscope configuration file set in preferences.");
             return;
         }
 
         File configFile = new File(configPath);
         if (!configFile.exists()) {
-            Dialogs.showErrorMessage("Configuration Error",
-                "Microscope configuration file not found: " + configPath);
+            Dialogs.showErrorMessage("Configuration Error", "Microscope configuration file not found: " + configPath);
             return;
         }
 
@@ -216,8 +223,7 @@ public class AutofocusEditorWorkflow {
         List<String> objectives = loadObjectivesFromConfig(configManager);
 
         if (objectives.isEmpty()) {
-            Dialogs.showErrorMessage("Configuration Error",
-                "No objectives found in microscope configuration.");
+            Dialogs.showErrorMessage("Configuration Error", "No objectives found in microscope configuration.");
             return;
         }
 
@@ -226,8 +232,10 @@ public class AutofocusEditorWorkflow {
 
         // Create working copy with defaults for all objectives
         Map<String, AutofocusSettings> workingSettings = new LinkedHashMap<>();
-        logger.info("Creating working settings from {} objectives and {} existing settings",
-            objectives.size(), existingSettings.size());
+        logger.info(
+                "Creating working settings from {} objectives and {} existing settings",
+                objectives.size(),
+                existingSettings.size());
         logger.info("Objectives list: {}", objectives);
         logger.info("Existing settings keys: {}", existingSettings.keySet());
 
@@ -236,19 +244,44 @@ public class AutofocusEditorWorkflow {
             if (existingSettings.containsKey(obj)) {
                 AutofocusSettings existing = existingSettings.get(obj);
                 logger.info("  FOUND in existingSettings: n_steps={}", existing.nSteps);
-                workingSettings.put(obj, new AutofocusSettings(obj, existing.nSteps, existing.searchRangeUm,
-                    existing.nTiles, existing.interpStrength, existing.interpKind, existing.scoreMetric,
-                    existing.textureThreshold, existing.tissueAreaThreshold,
-                    existing.adaptiveInitialStepUm, existing.adaptiveMinStepUm,
-                    existing.adaptiveMaxSteps, existing.adaptiveFocusThreshold));
+                workingSettings.put(
+                        obj,
+                        new AutofocusSettings(
+                                obj,
+                                existing.nSteps,
+                                existing.searchRangeUm,
+                                existing.nTiles,
+                                existing.interpStrength,
+                                existing.interpKind,
+                                existing.scoreMetric,
+                                existing.textureThreshold,
+                                existing.tissueAreaThreshold,
+                                existing.adaptiveInitialStepUm,
+                                existing.adaptiveMinStepUm,
+                                existing.adaptiveMaxSteps,
+                                existing.adaptiveFocusThreshold));
             } else {
                 logger.info("  NOT FOUND in existingSettings - using defaults");
                 // Use defaults: n_steps=9, search_range=15um, n_tiles=5, interp_strength=100,
                 // interp_kind=quadratic, score_metric=laplacian_variance,
                 // texture_threshold=0.005, tissue_area_threshold=0.2
                 // Adaptive defaults: initial_step=10.0, min_step=2.0, max_steps=25, threshold=0.95
-                workingSettings.put(obj, new AutofocusSettings(obj, 9, 15.0, 5, 100, "quadratic",
-                    "laplacian_variance", 0.005, 0.2, 10.0, 2.0, 25, 0.95));
+                workingSettings.put(
+                        obj,
+                        new AutofocusSettings(
+                                obj,
+                                9,
+                                15.0,
+                                5,
+                                100,
+                                "quadratic",
+                                "laplacian_variance",
+                                0.005,
+                                0.2,
+                                10.0,
+                                2.0,
+                                25,
+                                0.95));
             }
         }
 
@@ -260,8 +293,8 @@ public class AutofocusEditorWorkflow {
             dialog.initOwner(gui.getStage());
         }
         dialog.setTitle("Autofocus Configuration Editor");
-        dialog.setHeaderText("Edit autofocus parameters for " + microscopeName + " microscope\n" +
-                "Settings will be saved to: " + autofocusFile.getName());
+        dialog.setHeaderText("Edit autofocus parameters for " + microscopeName + " microscope\n"
+                + "Settings will be saved to: " + autofocusFile.getName());
 
         // Create UI
         VBox mainLayout = new VBox(10);
@@ -283,20 +316,18 @@ public class AutofocusEditorWorkflow {
         Spinner<Integer> nTilesSpinner = new Spinner<>(1, 50, 5, 1);
         nTilesSpinner.setEditable(true);
         nTilesSpinner.setPrefWidth(100);
-        nTilesSpinner.setTooltip(new Tooltip(
-            "Spatial frequency: Autofocus runs every N tiles.\n\n" +
-            "Lower values (1-3):\n" +
-            "  + More frequent autofocus\n" +
-            "  + Better tracking of uneven samples\n" +
-            "  - Significantly slower acquisition\n" +
-            "  - More wear on Z motor\n\n" +
-            "Higher values (5-10):\n" +
-            "  + Faster acquisition\n" +
-            "  + Less mechanical wear\n" +
-            "  - May lose focus on tilted samples\n\n" +
-            "Typical: 5 tiles (good balance)\n" +
-            "Use 1-3 for tilted or curved samples"
-        ));
+        nTilesSpinner.setTooltip(
+                new Tooltip("Spatial frequency: Autofocus runs every N tiles.\n\n" + "Lower values (1-3):\n"
+                        + "  + More frequent autofocus\n"
+                        + "  + Better tracking of uneven samples\n"
+                        + "  - Significantly slower acquisition\n"
+                        + "  - More wear on Z motor\n\n"
+                        + "Higher values (5-10):\n"
+                        + "  + Faster acquisition\n"
+                        + "  + Less mechanical wear\n"
+                        + "  - May lose focus on tilted samples\n\n"
+                        + "Typical: 5 tiles (good balance)\n"
+                        + "Use 1-3 for tilted or curved samples"));
         Label nTilesDesc = new Label("(Autofocus every N tiles during acquisition)");
         nTilesDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
@@ -316,38 +347,34 @@ public class AutofocusEditorWorkflow {
         Label textureThresholdLabel = new Label("texture_threshold:");
         TextField textureThresholdField = new TextField("0.005");
         textureThresholdField.setPrefWidth(100);
-        textureThresholdField.setTooltip(new Tooltip(
-            "Minimum texture variance required for tissue detection.\n" +
-            "Controls whether autofocus runs at a position.\n\n" +
-            "Lower values (0.005-0.010):\n" +
-            "  + More sensitive - detects smooth tissue\n" +
-            "  + Accepts homogeneous samples\n" +
-            "  - May accept out-of-focus areas\n\n" +
-            "Higher values (0.015-0.030):\n" +
-            "  + More selective - requires textured tissue\n" +
-            "  + Rejects blurry or empty areas\n" +
-            "  - May skip smooth but valid tissue\n\n" +
-            "Typical: 0.005 for smooth tissue, 0.010-0.015 for textured"
-        ));
+        textureThresholdField.setTooltip(new Tooltip("Minimum texture variance required for tissue detection.\n"
+                + "Controls whether autofocus runs at a position.\n\n"
+                + "Lower values (0.005-0.010):\n"
+                + "  + More sensitive - detects smooth tissue\n"
+                + "  + Accepts homogeneous samples\n"
+                + "  - May accept out-of-focus areas\n\n"
+                + "Higher values (0.015-0.030):\n"
+                + "  + More selective - requires textured tissue\n"
+                + "  + Rejects blurry or empty areas\n"
+                + "  - May skip smooth but valid tissue\n\n"
+                + "Typical: 0.005 for smooth tissue, 0.010-0.015 for textured"));
         Label textureThresholdDesc = new Label("(Min texture variance, typical: 0.005-0.030)");
         textureThresholdDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
         Label tissueAreaThresholdLabel = new Label("tissue_area_threshold:");
         TextField tissueAreaThresholdField = new TextField("0.2");
         tissueAreaThresholdField.setPrefWidth(100);
-        tissueAreaThresholdField.setTooltip(new Tooltip(
-            "Minimum fraction of image that must contain tissue.\n" +
-            "Determines if enough tissue is present for autofocus.\n\n" +
-            "Lower values (0.05-0.15):\n" +
-            "  + Accepts sparse tissue coverage\n" +
-            "  + Better for small or fragmented samples\n" +
-            "  - May autofocus on debris\n\n" +
-            "Higher values (0.20-0.30):\n" +
-            "  + Requires substantial tissue presence\n" +
-            "  + More reliable autofocus targets\n" +
-            "  - May skip valid tissue at edges\n\n" +
-            "Typical: 0.2 (20% coverage)"
-        ));
+        tissueAreaThresholdField.setTooltip(new Tooltip("Minimum fraction of image that must contain tissue.\n"
+                + "Determines if enough tissue is present for autofocus.\n\n"
+                + "Lower values (0.05-0.15):\n"
+                + "  + Accepts sparse tissue coverage\n"
+                + "  + Better for small or fragmented samples\n"
+                + "  - May autofocus on debris\n\n"
+                + "Higher values (0.20-0.30):\n"
+                + "  + Requires substantial tissue presence\n"
+                + "  + More reliable autofocus targets\n"
+                + "  - May skip valid tissue at edges\n\n"
+                + "Typical: 0.2 (20% coverage)"));
         Label tissueAreaThresholdDesc = new Label("(Min tissue coverage fraction, typical: 0.05-0.30)");
         tissueAreaThresholdDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
@@ -362,35 +389,29 @@ public class AutofocusEditorWorkflow {
         // Add score_metric to tissue/shared grid (used by both standard and adaptive autofocus)
         Label scoreMetricLabel = new Label("score_metric:");
         ComboBox<String> scoreMetricCombo = new ComboBox<>();
-        scoreMetricCombo.getItems().addAll(
-            "laplacian_variance",
-            "sobel",
-            "brenner_gradient",
-            "robust_sharpness",
-            "hybrid_sharpness"
-        );
+        scoreMetricCombo
+                .getItems()
+                .addAll("laplacian_variance", "sobel", "brenner_gradient", "robust_sharpness", "hybrid_sharpness");
         scoreMetricCombo.setValue("laplacian_variance");
         scoreMetricCombo.setPrefWidth(200);
         scoreMetricCombo.setTooltip(new Tooltip(
-            "Algorithm for measuring image sharpness.\n" +
-            "Used by BOTH standard and adaptive autofocus.\n\n" +
-            "laplacian_variance (~5ms, recommended):\n" +
-            "  + Fast and reliable for most samples\n" +
-            "  + Good for uniform tissue\n\n" +
-            "sobel (~5ms):\n" +
-            "  + Edge-sensitive metric\n" +
-            "  + Good for high-contrast features\n\n" +
-            "brenner_gradient (~3ms):\n" +
-            "  + Fastest option\n" +
-            "  - Less robust on noisy images\n\n" +
-            "robust_sharpness (~20ms):\n" +
-            "  + Resistant to debris/particles\n" +
-            "  + Best for contaminated samples\n" +
-            "  - Slower autofocus\n\n" +
-            "hybrid_sharpness (~8ms):\n" +
-            "  + Balanced speed and robustness\n" +
-            "  + Good compromise for varied samples"
-        ));
+                "Algorithm for measuring image sharpness.\n" + "Used by BOTH standard and adaptive autofocus.\n\n"
+                        + "laplacian_variance (~5ms, recommended):\n"
+                        + "  + Fast and reliable for most samples\n"
+                        + "  + Good for uniform tissue\n\n"
+                        + "sobel (~5ms):\n"
+                        + "  + Edge-sensitive metric\n"
+                        + "  + Good for high-contrast features\n\n"
+                        + "brenner_gradient (~3ms):\n"
+                        + "  + Fastest option\n"
+                        + "  - Less robust on noisy images\n\n"
+                        + "robust_sharpness (~20ms):\n"
+                        + "  + Resistant to debris/particles\n"
+                        + "  + Best for contaminated samples\n"
+                        + "  - Slower autofocus\n\n"
+                        + "hybrid_sharpness (~8ms):\n"
+                        + "  + Balanced speed and robustness\n"
+                        + "  + Good compromise for varied samples"));
         Label scoreMetricDesc = new Label("(Focus sharpness metric - shared by both AF methods)");
         scoreMetricDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
@@ -411,36 +432,32 @@ public class AutofocusEditorWorkflow {
         Spinner<Integer> nStepsSpinner = new Spinner<>(1, 100, 9, 1);
         nStepsSpinner.setEditable(true);
         nStepsSpinner.setPrefWidth(100);
-        nStepsSpinner.setTooltip(new Tooltip(
-            "Number of Z positions sampled during autofocus.\n\n" +
-            "Higher values (15-30):\n" +
-            "  + More accurate focus finding\n" +
-            "  + Better for thick samples\n" +
-            "  - Slower autofocus (~2-3x time)\n\n" +
-            "Lower values (5-11):\n" +
-            "  + Faster autofocus\n" +
-            "  + Adequate for thin, flat samples\n" +
-            "  - May miss optimal focus on thick samples\n\n" +
-            "Typical: 9-15 steps"
-        ));
+        nStepsSpinner.setTooltip(
+                new Tooltip("Number of Z positions sampled during autofocus.\n\n" + "Higher values (15-30):\n"
+                        + "  + More accurate focus finding\n"
+                        + "  + Better for thick samples\n"
+                        + "  - Slower autofocus (~2-3x time)\n\n"
+                        + "Lower values (5-11):\n"
+                        + "  + Faster autofocus\n"
+                        + "  + Adequate for thin, flat samples\n"
+                        + "  - May miss optimal focus on thick samples\n\n"
+                        + "Typical: 9-15 steps"));
         Label nStepsDesc = new Label("(Number of Z positions to sample)");
         nStepsDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
         Label searchRangeLabel = new Label("search_range_um:");
         TextField searchRangeField = new TextField("15.0");
         searchRangeField.setPrefWidth(100);
-        searchRangeField.setTooltip(new Tooltip(
-            "Total Z range to search, centered on current position.\n\n" +
-            "Larger range (30-50um):\n" +
-            "  + Finds focus even when stage is far off\n" +
-            "  + Better for initial acquisition setup\n" +
-            "  - Slower if many steps used\n\n" +
-            "Smaller range (10-20um):\n" +
-            "  + Faster autofocus\n" +
-            "  + Works well when stage is pre-leveled\n" +
-            "  - May fail if sample is very tilted\n\n" +
-            "Typical: 15-25um for most samples"
-        ));
+        searchRangeField.setTooltip(
+                new Tooltip("Total Z range to search, centered on current position.\n\n" + "Larger range (30-50um):\n"
+                        + "  + Finds focus even when stage is far off\n"
+                        + "  + Better for initial acquisition setup\n"
+                        + "  - Slower if many steps used\n\n"
+                        + "Smaller range (10-20um):\n"
+                        + "  + Faster autofocus\n"
+                        + "  + Works well when stage is pre-leveled\n"
+                        + "  - May fail if sample is very tilted\n\n"
+                        + "Typical: 15-25um for most samples"));
         Label searchRangeDesc = new Label("(Total Z range in micrometers)");
         searchRangeDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
@@ -448,18 +465,16 @@ public class AutofocusEditorWorkflow {
         Spinner<Integer> interpStrengthSpinner = new Spinner<>(10, 1000, 100, 10);
         interpStrengthSpinner.setEditable(true);
         interpStrengthSpinner.setPrefWidth(100);
-        interpStrengthSpinner.setTooltip(new Tooltip(
-            "Density of interpolated points in focus curve.\n\n" +
-            "Higher values (150-200):\n" +
-            "  + Smoother focus curve fitting\n" +
-            "  + More precise peak finding\n" +
-            "  - Minimal speed impact\n\n" +
-            "Lower values (50-100):\n" +
-            "  + Slightly faster computation\n" +
-            "  + Usually sufficient for most samples\n\n" +
-            "Typical: 100 (good default)\n" +
-            "Increase to 150-200 if autofocus is inconsistent"
-        ));
+        interpStrengthSpinner.setTooltip(
+                new Tooltip("Density of interpolated points in focus curve.\n\n" + "Higher values (150-200):\n"
+                        + "  + Smoother focus curve fitting\n"
+                        + "  + More precise peak finding\n"
+                        + "  - Minimal speed impact\n\n"
+                        + "Lower values (50-100):\n"
+                        + "  + Slightly faster computation\n"
+                        + "  + Usually sufficient for most samples\n\n"
+                        + "Typical: 100 (good default)\n"
+                        + "Increase to 150-200 if autofocus is inconsistent"));
         Label interpStrengthDesc = new Label("(Interpolation density factor)");
         interpStrengthDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
@@ -468,21 +483,18 @@ public class AutofocusEditorWorkflow {
         interpKindCombo.getItems().addAll("linear", "quadratic", "cubic");
         interpKindCombo.setValue("quadratic");
         interpKindCombo.setPrefWidth(150);
-        interpKindCombo.setTooltip(new Tooltip(
-            "Interpolation method for focus curve fitting.\n\n" +
-            "Linear:\n" +
-            "  + Simple and fast\n" +
-            "  - Less accurate peak detection\n\n" +
-            "Quadratic (recommended):\n" +
-            "  + Good balance of speed and accuracy\n" +
-            "  + Smooth parabolic curve fitting\n" +
-            "  + Works well for most samples\n\n" +
-            "Cubic:\n" +
-            "  + Most accurate curve fitting\n" +
-            "  - Can be sensitive to noise\n" +
-            "  - May overfit sparse data\n\n" +
-            "Typical: quadratic for most applications"
-        ));
+        interpKindCombo.setTooltip(new Tooltip("Interpolation method for focus curve fitting.\n\n" + "Linear:\n"
+                + "  + Simple and fast\n"
+                + "  - Less accurate peak detection\n\n"
+                + "Quadratic (recommended):\n"
+                + "  + Good balance of speed and accuracy\n"
+                + "  + Smooth parabolic curve fitting\n"
+                + "  + Works well for most samples\n\n"
+                + "Cubic:\n"
+                + "  + Most accurate curve fitting\n"
+                + "  - Can be sensitive to noise\n"
+                + "  - May overfit sparse data\n\n"
+                + "Typical: quadratic for most applications"));
         Label interpKindDesc = new Label("(Interpolation method)");
         interpKindDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
@@ -513,38 +525,35 @@ public class AutofocusEditorWorkflow {
         Label adaptiveInitialStepLabel = new Label("initial_step_um:");
         TextField adaptiveInitialStepField = new TextField("10.0");
         adaptiveInitialStepField.setPrefWidth(100);
-        adaptiveInitialStepField.setTooltip(new Tooltip(
-            "Initial step size for adaptive autofocus bidirectional search.\n" +
-            "Adaptive autofocus starts at current Z and searches both directions.\n\n" +
-            "Larger values (15-20um):\n" +
-            "  + Faster initial search\n" +
-            "  + Better for samples far from focus\n" +
-            "  - May overshoot optimal focus\n\n" +
-            "Smaller values (5-10um):\n" +
-            "  + More precise initial steps\n" +
-            "  + Better when near focus\n" +
-            "  - Slower if far from focus\n\n" +
-            "Typical: 10um for balanced performance"
-        ));
+        adaptiveInitialStepField.setTooltip(
+                new Tooltip("Initial step size for adaptive autofocus bidirectional search.\n"
+                        + "Adaptive autofocus starts at current Z and searches both directions.\n\n"
+                        + "Larger values (15-20um):\n"
+                        + "  + Faster initial search\n"
+                        + "  + Better for samples far from focus\n"
+                        + "  - May overshoot optimal focus\n\n"
+                        + "Smaller values (5-10um):\n"
+                        + "  + More precise initial steps\n"
+                        + "  + Better when near focus\n"
+                        + "  - Slower if far from focus\n\n"
+                        + "Typical: 10um for balanced performance"));
         Label adaptiveInitialStepDesc = new Label("(Initial step size for bidirectional search)");
         adaptiveInitialStepDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
         Label adaptiveMinStepLabel = new Label("min_step_um:");
         TextField adaptiveMinStepField = new TextField("2.0");
         adaptiveMinStepField.setPrefWidth(100);
-        adaptiveMinStepField.setTooltip(new Tooltip(
-            "Minimum step size before adaptive autofocus terminates.\n" +
-            "Search continues until steps become this small.\n\n" +
-            "Larger values (3-5um):\n" +
-            "  + Faster convergence\n" +
-            "  + Good enough for most samples\n" +
-            "  - Less precise final focus\n\n" +
-            "Smaller values (1-2um):\n" +
-            "  + More precise final focus\n" +
-            "  + Better for critical applications\n" +
-            "  - Takes more steps to converge\n\n" +
-            "Typical: 2um for good precision"
-        ));
+        adaptiveMinStepField.setTooltip(new Tooltip("Minimum step size before adaptive autofocus terminates.\n"
+                + "Search continues until steps become this small.\n\n"
+                + "Larger values (3-5um):\n"
+                + "  + Faster convergence\n"
+                + "  + Good enough for most samples\n"
+                + "  - Less precise final focus\n\n"
+                + "Smaller values (1-2um):\n"
+                + "  + More precise final focus\n"
+                + "  + Better for critical applications\n"
+                + "  - Takes more steps to converge\n\n"
+                + "Typical: 2um for good precision"));
         Label adaptiveMinStepDesc = new Label("(Minimum step size before termination)");
         adaptiveMinStepDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
@@ -553,37 +562,33 @@ public class AutofocusEditorWorkflow {
         adaptiveMaxStepsSpinner.setEditable(true);
         adaptiveMaxStepsSpinner.setPrefWidth(100);
         adaptiveMaxStepsSpinner.setTooltip(new Tooltip(
-            "Maximum total steps for adaptive autofocus.\n" +
-            "Safety limit to prevent infinite search.\n\n" +
-            "Higher values (30-50):\n" +
-            "  + More thorough search\n" +
-            "  + Better for difficult samples\n" +
-            "  - Longer worst-case time\n\n" +
-            "Lower values (15-25):\n" +
-            "  + Faster timeout on bad positions\n" +
-            "  + Good for most samples\n" +
-            "  - May fail on difficult samples\n\n" +
-            "Typical: 25 steps (good balance)"
-        ));
+                "Maximum total steps for adaptive autofocus.\n" + "Safety limit to prevent infinite search.\n\n"
+                        + "Higher values (30-50):\n"
+                        + "  + More thorough search\n"
+                        + "  + Better for difficult samples\n"
+                        + "  - Longer worst-case time\n\n"
+                        + "Lower values (15-25):\n"
+                        + "  + Faster timeout on bad positions\n"
+                        + "  + Good for most samples\n"
+                        + "  - May fail on difficult samples\n\n"
+                        + "Typical: 25 steps (good balance)"));
         Label adaptiveMaxStepsDesc = new Label("(Maximum steps before timeout)");
         adaptiveMaxStepsDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
         Label adaptiveFocusThresholdLabel = new Label("focus_threshold:");
         TextField adaptiveFocusThresholdField = new TextField("0.95");
         adaptiveFocusThresholdField.setPrefWidth(100);
-        adaptiveFocusThresholdField.setTooltip(new Tooltip(
-            "Focus quality threshold for early termination.\n" +
-            "Adaptive search stops when focus score reaches this fraction of observed peak.\n\n" +
-            "Higher values (0.95-0.98):\n" +
-            "  + More stringent - searches for better focus\n" +
-            "  + Higher final precision\n" +
-            "  - Takes more steps\n\n" +
-            "Lower values (0.85-0.95):\n" +
-            "  + Faster - accepts 'good enough' focus\n" +
-            "  + Fewer steps needed\n" +
-            "  - May terminate slightly sub-optimally\n\n" +
-            "Typical: 0.95 (95% of peak = good enough)"
-        ));
+        adaptiveFocusThresholdField.setTooltip(new Tooltip("Focus quality threshold for early termination.\n"
+                + "Adaptive search stops when focus score reaches this fraction of observed peak.\n\n"
+                + "Higher values (0.95-0.98):\n"
+                + "  + More stringent - searches for better focus\n"
+                + "  + Higher final precision\n"
+                + "  - Takes more steps\n\n"
+                + "Lower values (0.85-0.95):\n"
+                + "  + Faster - accepts 'good enough' focus\n"
+                + "  + Fewer steps needed\n"
+                + "  - May terminate slightly sub-optimally\n\n"
+                + "Typical: 0.95 (95% of peak = good enough)"));
         Label adaptiveFocusThresholdDesc = new Label("(Focus quality threshold for termination, 0-1)");
         adaptiveFocusThresholdDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
@@ -630,10 +635,22 @@ public class AutofocusEditorWorkflow {
                 int adaptiveMaxSteps = adaptiveMaxStepsSpinner.getValue();
                 double adaptiveFocusThreshold = Double.parseDouble(adaptiveFocusThresholdField.getText());
 
-                workingSettings.put(currentObjective[0],
-                    new AutofocusSettings(currentObjective[0], nSteps, searchRange, nTiles,
-                        interpStrength, interpKind, scoreMetric, textureThreshold, tissueAreaThreshold,
-                        adaptiveInitialStep, adaptiveMinStep, adaptiveMaxSteps, adaptiveFocusThreshold));
+                workingSettings.put(
+                        currentObjective[0],
+                        new AutofocusSettings(
+                                currentObjective[0],
+                                nSteps,
+                                searchRange,
+                                nTiles,
+                                interpStrength,
+                                interpKind,
+                                scoreMetric,
+                                textureThreshold,
+                                tissueAreaThreshold,
+                                adaptiveInitialStep,
+                                adaptiveMinStep,
+                                adaptiveMaxSteps,
+                                adaptiveFocusThreshold));
             } catch (NumberFormatException ex) {
                 logger.warn("Invalid numeric input when saving settings");
             }
@@ -651,15 +668,22 @@ public class AutofocusEditorWorkflow {
             currentObjective[0] = selectedObjective;
 
             logger.info("Loading settings for objective: {}", selectedObjective);
-            logger.info("Working settings contains {} objectives: {}", workingSettings.size(), workingSettings.keySet());
-            logger.info("Existing settings contains {} objectives: {}", existingSettings.size(), existingSettings.keySet());
+            logger.info(
+                    "Working settings contains {} objectives: {}", workingSettings.size(), workingSettings.keySet());
+            logger.info(
+                    "Existing settings contains {} objectives: {}", existingSettings.size(), existingSettings.keySet());
 
             // Load from working settings
             AutofocusSettings settings = workingSettings.get(selectedObjective);
 
             if (settings != null) {
-                logger.info("Found settings for {}: n_steps={}, search_range={}, texture_threshold={}, tissue_area_threshold={}",
-                    selectedObjective, settings.nSteps, settings.searchRangeUm, settings.textureThreshold, settings.tissueAreaThreshold);
+                logger.info(
+                        "Found settings for {}: n_steps={}, search_range={}, texture_threshold={}, tissue_area_threshold={}",
+                        selectedObjective,
+                        settings.nSteps,
+                        settings.searchRangeUm,
+                        settings.textureThreshold,
+                        settings.tissueAreaThreshold);
 
                 nStepsSpinner.getValueFactory().setValue(settings.nSteps);
                 searchRangeField.setText(String.valueOf(settings.searchRangeUm));
@@ -702,9 +726,8 @@ public class AutofocusEditorWorkflow {
                     List<String> warnings = settings.validate();
                     if (!warnings.isEmpty()) {
                         boolean proceed = Dialogs.showConfirmDialog(
-                            "Validation Warnings for " + settings.objective,
-                            String.join("\n", warnings) + "\n\nContinue saving?"
-                        );
+                                "Validation Warnings for " + settings.objective,
+                                String.join("\n", warnings) + "\n\nContinue saving?");
                         if (!proceed) {
                             hasErrors = true;
                             break;
@@ -744,8 +767,9 @@ public class AutofocusEditorWorkflow {
                 if (currentSettings != null) {
                     List<String> warnings = currentSettings.validate();
                     if (!warnings.isEmpty()) {
-                        Dialogs.showWarningNotification("Validation Warnings",
-                            "Current settings have warnings:\n" + String.join("\n", warnings));
+                        Dialogs.showWarningNotification(
+                                "Validation Warnings",
+                                "Current settings have warnings:\n" + String.join("\n", warnings));
                     }
                 }
 
@@ -772,12 +796,10 @@ public class AutofocusEditorWorkflow {
                 Dialogs.showErrorMessage("Input Error", "Please enter valid numeric values before testing.");
             } catch (IOException ex) {
                 logger.error("Failed to save autofocus settings before test", ex);
-                Dialogs.showErrorMessage("Save Error",
-                    "Failed to save settings before test: " + ex.getMessage());
+                Dialogs.showErrorMessage("Save Error", "Failed to save settings before test: " + ex.getMessage());
             } catch (Exception ex) {
                 logger.error("Failed to start standard autofocus test", ex);
-                Dialogs.showErrorMessage("Test Error",
-                    "Failed to start standard autofocus test: " + ex.getMessage());
+                Dialogs.showErrorMessage("Test Error", "Failed to start standard autofocus test: " + ex.getMessage());
             }
         });
 
@@ -795,8 +817,9 @@ public class AutofocusEditorWorkflow {
                 if (currentSettings != null) {
                     List<String> warnings = currentSettings.validate();
                     if (!warnings.isEmpty()) {
-                        Dialogs.showWarningNotification("Validation Warnings",
-                            "Current settings have warnings:\n" + String.join("\n", warnings));
+                        Dialogs.showWarningNotification(
+                                "Validation Warnings",
+                                "Current settings have warnings:\n" + String.join("\n", warnings));
                     }
                 }
 
@@ -823,12 +846,10 @@ public class AutofocusEditorWorkflow {
                 Dialogs.showErrorMessage("Input Error", "Please enter valid numeric values before testing.");
             } catch (IOException ex) {
                 logger.error("Failed to save autofocus settings before test", ex);
-                Dialogs.showErrorMessage("Save Error",
-                    "Failed to save settings before test: " + ex.getMessage());
+                Dialogs.showErrorMessage("Save Error", "Failed to save settings before test: " + ex.getMessage());
             } catch (Exception ex) {
                 logger.error("Failed to start adaptive autofocus test", ex);
-                Dialogs.showErrorMessage("Test Error",
-                    "Failed to start adaptive autofocus test: " + ex.getMessage());
+                Dialogs.showErrorMessage("Test Error", "Failed to start adaptive autofocus test: " + ex.getMessage());
             }
         });
 
@@ -854,21 +875,11 @@ public class AutofocusEditorWorkflow {
 
         // Use ScrollPane to handle potentially tall content
         VBox sectionsBox = new VBox(10);
-        sectionsBox.getChildren().addAll(
-            acquisitionPane,
-            tissuePane,
-            standardPane,
-            adaptivePane
-        );
+        sectionsBox.getChildren().addAll(acquisitionPane, tissuePane, standardPane, adaptivePane);
 
-        mainLayout.getChildren().addAll(
-            objectiveRow,
-            new Separator(),
-            sectionsBox,
-            statusLabel,
-            new Separator(),
-            buttonRow
-        );
+        mainLayout
+                .getChildren()
+                .addAll(objectiveRow, new Separator(), sectionsBox, statusLabel, new Separator(), buttonRow);
 
         dialog.getDialogPane().setContent(mainLayout);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -947,33 +958,60 @@ public class AutofocusEditorWorkflow {
                         int nTiles = ((Number) entry.get("n_tiles")).intValue();
 
                         // Optional parameters with defaults
-                        int interpStrength = entry.containsKey("interp_strength") ?
-                            ((Number) entry.get("interp_strength")).intValue() : 100;
-                        String interpKind = entry.containsKey("interp_kind") ?
-                            (String) entry.get("interp_kind") : "quadratic";
-                        String scoreMetric = entry.containsKey("score_metric") ?
-                            (String) entry.get("score_metric") : "laplacian_variance";
-                        double textureThreshold = entry.containsKey("texture_threshold") ?
-                            ((Number) entry.get("texture_threshold")).doubleValue() : 0.005;
-                        double tissueAreaThreshold = entry.containsKey("tissue_area_threshold") ?
-                            ((Number) entry.get("tissue_area_threshold")).doubleValue() : 0.2;
+                        int interpStrength = entry.containsKey("interp_strength")
+                                ? ((Number) entry.get("interp_strength")).intValue()
+                                : 100;
+                        String interpKind =
+                                entry.containsKey("interp_kind") ? (String) entry.get("interp_kind") : "quadratic";
+                        String scoreMetric = entry.containsKey("score_metric")
+                                ? (String) entry.get("score_metric")
+                                : "laplacian_variance";
+                        double textureThreshold = entry.containsKey("texture_threshold")
+                                ? ((Number) entry.get("texture_threshold")).doubleValue()
+                                : 0.005;
+                        double tissueAreaThreshold = entry.containsKey("tissue_area_threshold")
+                                ? ((Number) entry.get("tissue_area_threshold")).doubleValue()
+                                : 0.2;
 
                         // Adaptive autofocus parameters with defaults
-                        double adaptiveInitialStepUm = entry.containsKey("adaptive_initial_step_um") ?
-                            ((Number) entry.get("adaptive_initial_step_um")).doubleValue() : 10.0;
-                        double adaptiveMinStepUm = entry.containsKey("adaptive_min_step_um") ?
-                            ((Number) entry.get("adaptive_min_step_um")).doubleValue() : 2.0;
-                        int adaptiveMaxSteps = entry.containsKey("adaptive_max_steps") ?
-                            ((Number) entry.get("adaptive_max_steps")).intValue() : 25;
-                        double adaptiveFocusThreshold = entry.containsKey("adaptive_focus_threshold") ?
-                            ((Number) entry.get("adaptive_focus_threshold")).doubleValue() : 0.95;
+                        double adaptiveInitialStepUm = entry.containsKey("adaptive_initial_step_um")
+                                ? ((Number) entry.get("adaptive_initial_step_um")).doubleValue()
+                                : 10.0;
+                        double adaptiveMinStepUm = entry.containsKey("adaptive_min_step_um")
+                                ? ((Number) entry.get("adaptive_min_step_um")).doubleValue()
+                                : 2.0;
+                        int adaptiveMaxSteps = entry.containsKey("adaptive_max_steps")
+                                ? ((Number) entry.get("adaptive_max_steps")).intValue()
+                                : 25;
+                        double adaptiveFocusThreshold = entry.containsKey("adaptive_focus_threshold")
+                                ? ((Number) entry.get("adaptive_focus_threshold")).doubleValue()
+                                : 0.95;
 
-                        logger.info("Loaded from YAML - objective='{}', n_steps={}, search_range={}, adaptive_initial_step={}, adaptive_min_step={}, adaptive_max_steps={}",
-                            objective, nSteps, searchRange, adaptiveInitialStepUm, adaptiveMinStepUm, adaptiveMaxSteps);
+                        logger.info(
+                                "Loaded from YAML - objective='{}', n_steps={}, search_range={}, adaptive_initial_step={}, adaptive_min_step={}, adaptive_max_steps={}",
+                                objective,
+                                nSteps,
+                                searchRange,
+                                adaptiveInitialStepUm,
+                                adaptiveMinStepUm,
+                                adaptiveMaxSteps);
 
-                        settings.put(objective, new AutofocusSettings(objective, nSteps, searchRange, nTiles,
-                            interpStrength, interpKind, scoreMetric, textureThreshold, tissueAreaThreshold,
-                            adaptiveInitialStepUm, adaptiveMinStepUm, adaptiveMaxSteps, adaptiveFocusThreshold));
+                        settings.put(
+                                objective,
+                                new AutofocusSettings(
+                                        objective,
+                                        nSteps,
+                                        searchRange,
+                                        nTiles,
+                                        interpStrength,
+                                        interpKind,
+                                        scoreMetric,
+                                        textureThreshold,
+                                        tissueAreaThreshold,
+                                        adaptiveInitialStepUm,
+                                        adaptiveMinStepUm,
+                                        adaptiveMaxSteps,
+                                        adaptiveFocusThreshold));
                     }
                 }
             }
@@ -989,7 +1027,8 @@ public class AutofocusEditorWorkflow {
     /**
      * Save autofocus settings to YAML file
      */
-    private static void saveAutofocusSettings(File autofocusFile, Map<String, AutofocusSettings> settings) throws IOException {
+    private static void saveAutofocusSettings(File autofocusFile, Map<String, AutofocusSettings> settings)
+            throws IOException {
         // Build YAML structure
         List<Map<String, Object>> afSettingsList = new ArrayList<>();
 
@@ -1022,29 +1061,39 @@ public class AutofocusEditorWorkflow {
         Yaml yaml = new Yaml(options);
 
         // Write with header comment
-        try (FileWriter writer = new FileWriter(autofocusFile)) {
+        try (FileWriter writer = new FileWriter(autofocusFile, StandardCharsets.UTF_8)) {
             writer.write("# ========== AUTOFOCUS CONFIGURATION ==========\n");
             writer.write("# Autofocus parameters per objective\n");
             writer.write("# These settings control the autofocus behavior during image acquisition\n");
             writer.write("#\n");
             writer.write("# Parameters:\n");
-            writer.write("#   n_steps: Number of Z positions to sample during autofocus (higher = more accurate but slower)\n");
-            writer.write("#   search_range_um: Total Z range to search in micrometers (centered on current position)\n");
-            writer.write("#   n_tiles: Spatial frequency - autofocus runs every N tiles during large acquisitions (lower = more frequent but slower)\n");
-            writer.write("#   interp_strength: Interpolation density factor for focus curve fitting (typical: 50-200)\n");
+            writer.write(
+                    "#   n_steps: Number of Z positions to sample during autofocus (higher = more accurate but slower)\n");
+            writer.write(
+                    "#   search_range_um: Total Z range to search in micrometers (centered on current position)\n");
+            writer.write(
+                    "#   n_tiles: Spatial frequency - autofocus runs every N tiles during large acquisitions (lower = more frequent but slower)\n");
+            writer.write(
+                    "#   interp_strength: Interpolation density factor for focus curve fitting (typical: 50-200)\n");
             writer.write("#   interp_kind: Interpolation method - 'linear', 'quadratic', or 'cubic'\n");
-            writer.write("#   score_metric: Focus sharpness metric - 'laplacian_variance' (fast ~5ms), 'sobel' (fast ~5ms),\n");
-            writer.write("#                 'brenner_gradient' (fastest ~3ms), 'robust_sharpness' (particle-resistant ~20ms),\n");
+            writer.write(
+                    "#   score_metric: Focus sharpness metric - 'laplacian_variance' (fast ~5ms), 'sobel' (fast ~5ms),\n");
+            writer.write(
+                    "#                 'brenner_gradient' (fastest ~3ms), 'robust_sharpness' (particle-resistant ~20ms),\n");
             writer.write("#                 or 'hybrid_sharpness' (balanced ~8ms)\n");
-            writer.write("#   texture_threshold: Minimum texture variance for tissue detection (typical: 0.005-0.030)\n");
-            writer.write("#                      Lower values accept smoother tissue, higher values require more texture\n");
-            writer.write("#   tissue_area_threshold: Minimum fraction of image that must contain tissue (typical: 0.05-0.30)\n");
-            writer.write("#                          Lower values accept sparse tissue, higher values require fuller coverage\n\n");
+            writer.write(
+                    "#   texture_threshold: Minimum texture variance for tissue detection (typical: 0.005-0.030)\n");
+            writer.write(
+                    "#                      Lower values accept smoother tissue, higher values require more texture\n");
+            writer.write(
+                    "#   tissue_area_threshold: Minimum fraction of image that must contain tissue (typical: 0.05-0.30)\n");
+            writer.write(
+                    "#                          Lower values accept sparse tissue, higher values require fuller coverage\n\n");
 
             yaml.dump(root, writer);
         }
 
-        logger.info("Saved autofocus settings for {} objectives to: {}",
-            settings.size(), autofocusFile.getAbsolutePath());
+        logger.info(
+                "Saved autofocus settings for {} objectives to: {}", settings.size(), autofocusFile.getAbsolutePath());
     }
 }

@@ -1,5 +1,10 @@
 package qupath.ext.qpsc.controller.workflow;
 
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.util.Map;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.ExistingImageWorkflowV2.WorkflowState;
@@ -9,20 +14,11 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.AffineTransformationController;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
-import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
-import qupath.lib.scripting.QP;
-
-import java.awt.geom.AffineTransform;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.util.Map;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Handles Path B: Manual alignment creation.
@@ -137,10 +133,9 @@ public class ManualAlignmentPath {
                     File scannerConfigFile = new File(configDir, "config_" + savedScanner + ".yml");
 
                     if (scannerConfigFile.exists()) {
-                        Map<String, Object> scannerConfig = MinorFunctions.loadYamlFile(
-                                scannerConfigFile.getAbsolutePath());
-                        Double pixelSize = MinorFunctions.getYamlDouble(
-                                scannerConfig, "macro", "pixel_size_um");
+                        Map<String, Object> scannerConfig =
+                                MinorFunctions.loadYamlFile(scannerConfigFile.getAbsolutePath());
+                        Double pixelSize = MinorFunctions.getYamlDouble(scannerConfig, "macro", "pixel_size_um");
 
                         if (pixelSize != null && pixelSize > 0) {
                             logger.info("Loaded pixel size {} from scanner config", pixelSize);
@@ -153,9 +148,7 @@ public class ManualAlignmentPath {
                 return MacroImageUtility.getMacroPixelSize();
             } catch (Exception e) {
                 logger.error("Failed to load pixel size", e);
-                throw new RuntimeException(
-                        "Cannot determine macro image pixel size.\n" + e.getMessage()
-                );
+                throw new RuntimeException("Cannot determine macro image pixel size.\n" + e.getMessage());
             }
         });
     }
@@ -175,7 +168,8 @@ public class ManualAlignmentPath {
      */
     private CompletableFuture<WorkflowState> createManualAlignment() {
         // Get or create annotations
-        state.annotations = AnnotationHelper.ensureAnnotationsExist(gui, state.pixelSize, state.selectedAnnotationClasses);
+        state.annotations =
+                AnnotationHelper.ensureAnnotationsExist(gui, state.pixelSize, state.selectedAnnotationClasses);
 
         if (state.annotations.isEmpty()) {
             throw new RuntimeException("No annotations available for manual alignment");
@@ -191,8 +185,7 @@ public class ManualAlignmentPath {
                 state.sample,
                 state.projectInfo.getTempTileDirectory(),
                 state.projectInfo.getImagingModeWithIndex(),
-                state.pixelSize
-        );
+                state.pixelSize);
 
         // Get inversion settings from preferences for the alignment UI
         boolean invertedX = QPPreferenceDialog.getInvertedXProperty();
@@ -200,42 +193,41 @@ public class ManualAlignmentPath {
 
         // Show manual alignment UI
         return AffineTransformationController.setupAffineTransformationAndValidationGUI(
-                state.pixelSize, invertedX, invertedY
-        ).thenApply(transform -> {
-            if (transform == null) {
-                throw new CancellationException("Manual alignment cancelled by user");
-            }
+                        state.pixelSize, invertedX, invertedY)
+                .thenApply(transform -> {
+                    if (transform == null) {
+                        throw new CancellationException("Manual alignment cancelled by user");
+                    }
 
-            logger.info("Manual transform created successfully");
+                    logger.info("Manual transform created successfully");
 
-            state.transform = transform;
-            MicroscopeController.getInstance().setCurrentTransform(transform);
+                    state.transform = transform;
+                    MicroscopeController.getInstance().setCurrentTransform(transform);
 
-            // Save slide-specific transform
-            @SuppressWarnings("unchecked")
-            Project<BufferedImage> project = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
+                    // Save slide-specific transform
+                    @SuppressWarnings("unchecked")
+                    Project<BufferedImage> project = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
 
-            // Get the actual image file name (not metadata name which may be project name)
-            // Strip extension for consistency with base_image metadata lookups
-            String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
-            if (imageName != null) {
-                imageName = qupath.lib.common.GeneralTools.stripExtension(imageName);
-            }
+                    // Get the actual image file name (not metadata name which may be project name)
+                    // Strip extension for consistency with base_image metadata lookups
+                    String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+                    if (imageName != null) {
+                        imageName = qupath.lib.common.GeneralTools.stripExtension(imageName);
+                    }
 
-            if (imageName != null) {
-                AffineTransformManager.saveSlideAlignment(
-                        project,
-                        imageName,  // Use image name without extension for base_image compatibility
-                        state.sample.modality(),
-                        transform,
-                        null
-                );
-                logger.info("Saved slide-specific transform for image: {}", imageName);
-            } else {
-                logger.warn("Cannot save slide-specific transform - no image name available");
-            }
+                    if (imageName != null) {
+                        AffineTransformManager.saveSlideAlignment(
+                                project,
+                                imageName, // Use image name without extension for base_image compatibility
+                                state.sample.modality(),
+                                transform,
+                                null);
+                        logger.info("Saved slide-specific transform for image: {}", imageName);
+                    } else {
+                        logger.warn("Cannot save slide-specific transform - no image name available");
+                    }
 
-            return state;
-        });
+                    return state;
+                });
     }
 }

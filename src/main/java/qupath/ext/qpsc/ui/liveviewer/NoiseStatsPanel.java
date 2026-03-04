@@ -41,7 +41,7 @@ public class NoiseStatsPanel extends TitledPane {
 
     // Throttling for single-frame updates
     private long lastUpdateMs = 0;
-    private static final long UPDATE_THROTTLE_MS = 500;  // ~2Hz
+    private static final long UPDATE_THROTTLE_MS = 500; // ~2Hz
 
     public NoiseStatsPanel() {
         setText("Noise Stats");

@@ -196,7 +196,6 @@ public class WhiteBalanceDialog {
         public PPMWBParams getPPMParams() {
             return ppmParams;
         }
-
     }
 
     /**
@@ -259,9 +258,7 @@ public class WhiteBalanceDialog {
                 ButtonType runPPMButton = new ButtonType("Run PPM WB", ButtonBar.ButtonData.APPLY);
                 ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
 
-                dialog.getDialogPane()
-                        .getButtonTypes()
-                        .addAll(runSimpleButton, runPPMButton, cancelButton);
+                dialog.getDialogPane().getButtonTypes().addAll(runSimpleButton, runPPMButton, cancelButton);
                 dialog.getDialogPane().setContent(scrollPane);
 
                 // Get references to UI elements for result conversion
@@ -527,7 +524,6 @@ public class WhiteBalanceDialog {
                                 fallbackTarget,
                                 tolerance,
                                 advanced));
-
                     }
 
                     return null;
@@ -942,17 +938,16 @@ public class WhiteBalanceDialog {
         VBox vbox = new VBox(10);
         vbox.setPadding(new Insets(10));
 
-        Label descLabel = new Label(
-                "Camera Auto White Balance -- must be configured in MicroManager.\n\n"
-                        + "Steps:\n"
-                        + "  1. Open MicroManager's Device Property Browser\n"
-                        + "  2. Find JAICamera -> WhiteBalance\n"
-                        + "  3. Set to \"Continuous\" (ensure Live mode is active)\n"
-                        + "  4. Wait for colors to converge (~3-5 seconds)\n"
-                        + "  5. Set WhiteBalance back to \"Off\"\n\n"
-                        + "To clear AWB: restart MicroManager and wait ~30 seconds.\n\n"
-                        + "Camera AWB gains are NOT saved to YAML.\n"
-                        + "For reproducible results, use Simple or PPM WB.");
+        Label descLabel = new Label("Camera Auto White Balance -- must be configured in MicroManager.\n\n"
+                + "Steps:\n"
+                + "  1. Open MicroManager's Device Property Browser\n"
+                + "  2. Find JAICamera -> WhiteBalance\n"
+                + "  3. Set to \"Continuous\" (ensure Live mode is active)\n"
+                + "  4. Wait for colors to converge (~3-5 seconds)\n"
+                + "  5. Set WhiteBalance back to \"Off\"\n\n"
+                + "To clear AWB: restart MicroManager and wait ~30 seconds.\n\n"
+                + "Camera AWB gains are NOT saved to YAML.\n"
+                + "For reproducible results, use Simple or PPM WB.");
         descLabel.setWrapText(true);
         descLabel.setStyle("-fx-font-size: 11px;");
 

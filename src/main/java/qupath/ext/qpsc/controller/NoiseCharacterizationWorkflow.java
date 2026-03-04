@@ -1,5 +1,9 @@
 package qupath.ext.qpsc.controller;
 
+import java.awt.Desktop;
+import java.io.File;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -16,11 +20,6 @@ import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.NoiseCharacterizationDialog;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
-
-import java.awt.Desktop;
-import java.io.File;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * NoiseCharacterizationWorkflow - Systematic camera noise testing across gain/exposure grid.
@@ -58,8 +57,7 @@ public class NoiseCharacterizationWorkflow {
                 if (!MicroscopeController.getInstance().isConnected()) {
                     boolean connect = Dialogs.showConfirmDialog(
                             "Not Connected",
-                            "Not connected to microscope server.\n" +
-                            "Would you like to connect now?");
+                            "Not connected to microscope server.\n" + "Would you like to connect now?");
                     if (connect) {
                         MicroscopeController.getInstance().connect();
                     } else {
@@ -69,27 +67,25 @@ public class NoiseCharacterizationWorkflow {
 
                 // Show dialog and collect parameters
                 NoiseCharacterizationDialog.showDialog()
-                    .thenAccept(params -> {
-                        if (params != null) {
-                            logger.info("Noise characterization parameters received");
-                            // Show confirmation and then start
-                            Platform.runLater(() -> showConfirmationAndStart(params));
-                        } else {
-                            logger.info("Noise characterization cancelled by user");
-                        }
-                    })
-                    .exceptionally(ex -> {
-                        logger.error("Error in noise characterization dialog", ex);
-                        Platform.runLater(() -> Dialogs.showErrorMessage(
-                                "Noise Characterization Error",
-                                "Failed to show dialog: " + ex.getMessage()));
-                        return null;
-                    });
+                        .thenAccept(params -> {
+                            if (params != null) {
+                                logger.info("Noise characterization parameters received");
+                                // Show confirmation and then start
+                                Platform.runLater(() -> showConfirmationAndStart(params));
+                            } else {
+                                logger.info("Noise characterization cancelled by user");
+                            }
+                        })
+                        .exceptionally(ex -> {
+                            logger.error("Error in noise characterization dialog", ex);
+                            Platform.runLater(() -> Dialogs.showErrorMessage(
+                                    "Noise Characterization Error", "Failed to show dialog: " + ex.getMessage()));
+                            return null;
+                        });
 
             } catch (Exception e) {
                 logger.error("Failed to start noise characterization workflow", e);
-                Dialogs.showErrorMessage("Noise Characterization Error",
-                        "Failed to start workflow: " + e.getMessage());
+                Dialogs.showErrorMessage("Noise Characterization Error", "Failed to start workflow: " + e.getMessage());
             }
         });
     }
@@ -113,15 +109,14 @@ public class NoiseCharacterizationWorkflow {
 
         boolean confirmed = Dialogs.showConfirmDialog(
                 "Start Noise Characterization",
-                "Ready to start JAI camera noise characterization.\n\n" +
-                "Preset: " + presetLabel + "\n" +
-                "Frames per test: " + params.numFrames() + "\n" +
-                "Generate plots: " + (params.generatePlots() ? "Yes" : "No") + "\n" +
-                "Output: " + params.outputPath() + "\n\n" +
-                "IMPORTANT: For accurate noise measurements, ensure the camera\n" +
-                "lens is covered or pointing at a uniform target.\n\n" +
-                "Proceed?"
-        );
+                "Ready to start JAI camera noise characterization.\n\n" + "Preset: "
+                        + presetLabel + "\n" + "Frames per test: "
+                        + params.numFrames() + "\n" + "Generate plots: "
+                        + (params.generatePlots() ? "Yes" : "No") + "\n" + "Output: "
+                        + params.outputPath() + "\n\n"
+                        + "IMPORTANT: For accurate noise measurements, ensure the camera\n"
+                        + "lens is covered or pointing at a uniform target.\n\n"
+                        + "Proceed?");
 
         if (confirmed) {
             startWithProgress(params);
@@ -156,10 +151,8 @@ public class NoiseCharacterizationWorkflow {
         Label statusLabel = new Label("Preparing camera...");
         statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: gray;");
 
-        Label infoLabel = new Label(
-                "Testing gain/exposure combinations for noise analysis.\n" +
-                "You can use other QuPath windows while this runs."
-        );
+        Label infoLabel = new Label("Testing gain/exposure combinations for noise analysis.\n"
+                + "You can use other QuPath windows while this runs.");
         infoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
 
         Button cancelButton = new Button("Cancel");
@@ -182,16 +175,16 @@ public class NoiseCharacterizationWorkflow {
 
         // Run on background thread
         CompletableFuture.runAsync(() -> {
-            executeCharacterization(params, progressStage, progressBar, progressLabel, statusLabel, cancelled);
-        }).exceptionally(ex -> {
-            logger.error("Noise characterization failed", ex);
-            Platform.runLater(() -> {
-                progressStage.close();
-                Dialogs.showErrorMessage("Noise Characterization Error",
-                        "Failed: " + ex.getMessage());
-            });
-            return null;
-        });
+                    executeCharacterization(params, progressStage, progressBar, progressLabel, statusLabel, cancelled);
+                })
+                .exceptionally(ex -> {
+                    logger.error("Noise characterization failed", ex);
+                    Platform.runLater(() -> {
+                        progressStage.close();
+                        Dialogs.showErrorMessage("Noise Characterization Error", "Failed: " + ex.getMessage());
+                    });
+                    return null;
+                });
     }
 
     /**
@@ -199,12 +192,13 @@ public class NoiseCharacterizationWorkflow {
      */
     private static void executeCharacterization(
             NoiseCharacterizationDialog.NoiseCharParams params,
-            Stage progressStage, ProgressBar progressBar,
-            Label progressLabel, Label statusLabel,
+            Stage progressStage,
+            ProgressBar progressBar,
+            Label progressLabel,
+            Label statusLabel,
             AtomicBoolean cancelled) {
 
-        logger.info("Executing noise characterization: preset={}, frames={}",
-                params.preset(), params.numFrames());
+        logger.info("Executing noise characterization: preset={}, frames={}", params.preset(), params.numFrames());
 
         // Save and restore live view state
         boolean liveWasRunning = false;
@@ -231,23 +225,21 @@ public class NoiseCharacterizationWorkflow {
                 double progress = (double) current / total;
                 Platform.runLater(() -> {
                     progressBar.setProgress(progress);
-                    progressLabel.setText(String.format("Progress: %d/%d configurations (%.0f%%)",
-                            current, total, progress * 100));
+                    progressLabel.setText(
+                            String.format("Progress: %d/%d configurations (%.0f%%)", current, total, progress * 100));
                     statusLabel.setText(String.format("Testing configuration %d of %d...", current, total));
                 });
             };
 
             // Run characterization
-            MicroscopeSocketClient.NoiseCharacterizationResult result =
-                    socketClient.runNoiseCharacterization(
-                            params.outputPath(),
-                            params.preset(),
-                            params.gains(),
-                            params.exposures(),
-                            params.numFrames(),
-                            params.generatePlots(),
-                            progressCallback
-                    );
+            MicroscopeSocketClient.NoiseCharacterizationResult result = socketClient.runNoiseCharacterization(
+                    params.outputPath(),
+                    params.preset(),
+                    params.gains(),
+                    params.exposures(),
+                    params.numFrames(),
+                    params.generatePlots(),
+                    progressCallback);
 
             if (cancelled.get()) {
                 logger.info("Noise characterization was cancelled");
@@ -287,10 +279,7 @@ public class NoiseCharacterizationWorkflow {
                 }
                 resultMsg.append("\nOpen results folder?");
 
-                boolean openFolder = Dialogs.showConfirmDialog(
-                        "Noise Characterization Complete",
-                        resultMsg.toString()
-                );
+                boolean openFolder = Dialogs.showConfirmDialog("Noise Characterization Complete", resultMsg.toString());
 
                 if (openFolder) {
                     try {
@@ -300,8 +289,7 @@ public class NoiseCharacterizationWorkflow {
                         }
                     } catch (Exception e) {
                         logger.error("Failed to open results folder", e);
-                        Dialogs.showErrorMessage("Error",
-                                "Failed to open results folder: " + e.getMessage());
+                        Dialogs.showErrorMessage("Error", "Failed to open results folder: " + e.getMessage());
                     }
                 }
             });
@@ -315,7 +303,8 @@ public class NoiseCharacterizationWorkflow {
             logger.error("Noise characterization failed", e);
             Platform.runLater(() -> {
                 progressStage.close();
-                Dialogs.showErrorMessage("Noise Characterization Failed",
+                Dialogs.showErrorMessage(
+                        "Noise Characterization Failed",
                         "Failed to complete noise characterization:\n" + e.getMessage());
             });
         } finally {

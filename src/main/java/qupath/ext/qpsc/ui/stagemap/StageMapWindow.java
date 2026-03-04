@@ -1,6 +1,17 @@
 package qupath.ext.qpsc.ui.stagemap;
 
+import java.awt.Desktop;
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import javafx.application.Platform;
+import javafx.beans.value.ChangeListener;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -12,8 +23,8 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
@@ -24,18 +35,6 @@ import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
-
-import javafx.beans.value.ChangeListener;
-import java.awt.Desktop;
-import java.awt.geom.AffineTransform;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Floating window displaying a visual map of the microscope stage.
@@ -72,9 +71,9 @@ public class StageMapWindow {
     // ========== State ==========
     private ScheduledExecutorService positionPoller;
     private volatile boolean isPolling = false;
-    private volatile boolean dialogShowing = false;  // Pause updates while dialogs are shown
-    private volatile int consecutiveErrors = 0;  // Track polling failures
-    private static final int MAX_CONSECUTIVE_ERRORS = 10;  // Pause polling after this many errors
+    private volatile boolean dialogShowing = false; // Pause updates while dialogs are shown
+    private volatile int consecutiveErrors = 0; // Track polling failures
+    private static final int MAX_CONSECUTIVE_ERRORS = 10; // Pause polling after this many errors
     private static boolean movementWarningShownThisSession = false;
 
     // ========== Macro Overlay State ==========
@@ -236,9 +235,13 @@ public class StageMapWindow {
         root.getChildren().addAll(topBar, scrollPane, bottomBar);
 
         Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
-        scene.getStylesheets().add(getClass().getResource("/qupath/ext/qpsc/ui/stagemap/stagemap.css") != null
-                ? getClass().getResource("/qupath/ext/qpsc/ui/stagemap/stagemap.css").toExternalForm()
-                : "");
+        scene.getStylesheets()
+                .add(
+                        getClass().getResource("/qupath/ext/qpsc/ui/stagemap/stagemap.css") != null
+                                ? getClass()
+                                        .getResource("/qupath/ext/qpsc/ui/stagemap/stagemap.css")
+                                        .toExternalForm()
+                                : "");
 
         stage.setScene(scene);
 
@@ -274,33 +277,31 @@ public class StageMapWindow {
         movementWarningLabel.setManaged(false);
 
         // Update warning when Sample Movement checkbox is toggled in Live Viewer
-        PersistentPreferences.stageControlSampleMovementProperty().addListener(
-                (obs, oldVal, newVal) -> Platform.runLater(this::updateMovementWarning));
+        PersistentPreferences.stageControlSampleMovementProperty()
+                .addListener((obs, oldVal, newVal) -> Platform.runLater(this::updateMovementWarning));
 
         // Button to open config folder for calibration
         Button configButton = new Button("Config");
         configButton.setStyle("-fx-font-size: 10; -fx-padding: 2 6;");
-        configButton.setTooltip(new Tooltip(
-                "Open the configuration folder to edit calibration values.\n" +
-                "Edit the YAML file to set aperture and slide reference points."));
+        configButton.setTooltip(new Tooltip("Open the configuration folder to edit calibration values.\n"
+                + "Edit the YAML file to set aperture and slide reference points."));
         configButton.setOnAction(e -> openConfigFolder());
 
         // Tooltip explaining the interface
         Button helpButton = new Button("?");
         helpButton.setStyle("-fx-font-size: 10; -fx-padding: 2 6;");
         helpButton.setTooltip(new Tooltip(
-                "Stage Map shows the microscope stage position.\n\n" +
-                "- Green crosshair: Current objective position\n" +
-                "- Orange rectangle: Camera field of view\n" +
-                "- Blue rectangles: Slide positions\n" +
-                "- Green zones: Safe movement areas\n" +
-                "- Red zones: Off-slide areas\n\n" +
-                "Double-click to move the stage to that position.\n" +
-                "Select insert type to change slide layout.\n\n" +
-                "CALIBRATION: Use Stage Control to find:\n" +
-                "- Left/right aperture edges (X coords)\n" +
-                "- Top/bottom slide edges (Y coords)\n" +
-                "Then edit the config YAML file."));
+                "Stage Map shows the microscope stage position.\n\n" + "- Green crosshair: Current objective position\n"
+                        + "- Orange rectangle: Camera field of view\n"
+                        + "- Blue rectangles: Slide positions\n"
+                        + "- Green zones: Safe movement areas\n"
+                        + "- Red zones: Off-slide areas\n\n"
+                        + "Double-click to move the stage to that position.\n"
+                        + "Select insert type to change slide layout.\n\n"
+                        + "CALIBRATION: Use Stage Control to find:\n"
+                        + "- Left/right aperture edges (X coords)\n"
+                        + "- Top/bottom slide edges (Y coords)\n"
+                        + "Then edit the config YAML file."));
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -308,33 +309,37 @@ public class StageMapWindow {
         // Macro overlay checkbox
         macroOverlayCheckbox = new CheckBox("Overlay Macro");
         macroOverlayCheckbox.setStyle("-fx-text-fill: #ccc;");
-        macroOverlayCheckbox.setTooltip(new Tooltip(
-                "Display the cropped macro image from alignment\n" +
-                "over the stage map at its calibrated position.\n\n" +
-                "This shows the slide-only portion of the macro\n" +
-                "(with slide holder and background removed)\n" +
-                "that was saved during Microscope Alignment.\n\n" +
-                "Only available for images with saved alignments."));
-        macroOverlayCheckbox.setDisable(true);  // Initially disabled until macro is available
+        macroOverlayCheckbox.setTooltip(new Tooltip("Display the cropped macro image from alignment\n"
+                + "over the stage map at its calibrated position.\n\n"
+                + "This shows the slide-only portion of the macro\n"
+                + "(with slide holder and background removed)\n"
+                + "that was saved during Microscope Alignment.\n\n"
+                + "Only available for images with saved alignments."));
+        macroOverlayCheckbox.setDisable(true); // Initially disabled until macro is available
         macroOverlayCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
             logger.info("Overlay Macro checkbox toggled: {} -> {}", oldVal, newVal);
             if (canvas != null) {
                 if (newVal && currentMacroImage != null && currentMacroTransform != null) {
-                    logger.info("Applying macro overlay (image: {}x{}, sample: '{}')",
-                            currentMacroImage.getWidth(), currentMacroImage.getHeight(),
+                    logger.info(
+                            "Applying macro overlay (image: {}x{}, sample: '{}')",
+                            currentMacroImage.getWidth(),
+                            currentMacroImage.getHeight(),
                             currentMacroSampleName);
                     applyMacroOverlayToCanvas();
                 } else {
                     if (newVal) {
-                        logger.info("Checkbox selected but no macro data available (image={}, transform={})",
-                                currentMacroImage != null, currentMacroTransform != null);
+                        logger.info(
+                                "Checkbox selected but no macro data available (image={}, transform={})",
+                                currentMacroImage != null,
+                                currentMacroTransform != null);
                     }
                     canvas.clearMacroOverlay();
                 }
             }
         });
 
-        topBar.getChildren().addAll(insertLabel, insertComboBox, spacer, macroOverlayCheckbox, configButton, helpButton);
+        topBar.getChildren()
+                .addAll(insertLabel, insertComboBox, spacer, macroOverlayCheckbox, configButton, helpButton);
         return topBar;
     }
 
@@ -374,8 +379,7 @@ public class StageMapWindow {
             axes = "Y";
         }
 
-        movementWarningLabel.setText(
-                "Movement in Live View in [" + axes + "] Opposite Live View Controls");
+        movementWarningLabel.setText("Movement in Live View in [" + axes + "] Opposite Live View Controls");
         movementWarningLabel.setVisible(true);
         movementWarningLabel.setManaged(true);
     }
@@ -387,9 +391,9 @@ public class StageMapWindow {
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             if (configPath == null || configPath.isEmpty()) {
-                showWarning("No Config File",
-                        "No microscope configuration file is set.\n" +
-                        "Please set one in QuPath preferences.");
+                showWarning(
+                        "No Config File",
+                        "No microscope configuration file is set.\n" + "Please set one in QuPath preferences.");
                 return;
             }
 
@@ -397,8 +401,7 @@ public class StageMapWindow {
             File configFolder = configFile.getParentFile();
 
             if (configFolder == null || !configFolder.exists()) {
-                showWarning("Folder Not Found",
-                        "Configuration folder not found:\n" + configPath);
+                showWarning("Folder Not Found", "Configuration folder not found:\n" + configPath);
                 return;
             }
 
@@ -445,8 +448,8 @@ public class StageMapWindow {
     private void loadInsertConfigurations() {
         try {
             // Load configurations from YAML
-            MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(
-                    QPPreferenceDialog.getMicroscopeConfigFileProperty());
+            MicroscopeConfigManager configManager =
+                    MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
             if (configManager != null) {
                 StageInsertRegistry.loadFromConfig(configManager);
@@ -485,11 +488,7 @@ public class StageMapWindow {
             t.setDaemon(true);
             return t;
         });
-        positionPoller.scheduleAtFixedRate(
-                this::pollPosition,
-                0,
-                POLL_INTERVAL_MS,
-                TimeUnit.MILLISECONDS);
+        positionPoller.scheduleAtFixedRate(this::pollPosition, 0, POLL_INTERVAL_MS, TimeUnit.MILLISECONDS);
         isPolling = true;
 
         logger.debug("Started position polling ({}ms interval)", POLL_INTERVAL_MS);
@@ -563,7 +562,8 @@ public class StageMapWindow {
 
         // Only update UI once when we hit the error threshold
         if (consecutiveErrors == MAX_CONSECUTIVE_ERRORS) {
-            logger.warn("Stage Map polling paused after {} consecutive errors - microscope may be disconnected",
+            logger.warn(
+                    "Stage Map polling paused after {} consecutive errors - microscope may be disconnected",
                     MAX_CONSECUTIVE_ERRORS);
             Platform.runLater(() -> {
                 if (stage != null && stage.isShowing() && !dialogShowing) {
@@ -590,8 +590,8 @@ public class StageMapWindow {
 
     private void updateFOV() {
         try {
-            MicroscopeConfigManager config = MicroscopeConfigManager.getInstance(
-                    QPPreferenceDialog.getMicroscopeConfigFileProperty());
+            MicroscopeConfigManager config =
+                    MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
             if (config == null) return;
 
@@ -629,11 +629,15 @@ public class StageMapWindow {
         // Note: The aperture calibration points define the valid clickable area.
         // The stage.limits values in config are NOT accurate hardware limits.
         if (!insert.isPositionInInsert(stageX, stageY)) {
-            logger.warn("Invalid position clicked: ({}, {}) - outside aperture for insert '{}'",
-                    String.format("%.1f", stageX), String.format("%.1f", stageY), insert.getId());
-            showWarning("Invalid Position",
-                    "The selected position is outside the visible aperture.\n" +
-                    "Please select a position within the stage insert area.");
+            logger.warn(
+                    "Invalid position clicked: ({}, {}) - outside aperture for insert '{}'",
+                    String.format("%.1f", stageX),
+                    String.format("%.1f", stageY),
+                    insert.getId());
+            showWarning(
+                    "Invalid Position",
+                    "The selected position is outside the visible aperture.\n"
+                            + "Please select a position within the stage insert area.");
             return;
         }
 
@@ -657,13 +661,12 @@ public class StageMapWindow {
             alert.setTitle("Confirm Stage Movement");
             alert.setHeaderText("First Stage Movement This Session");
             alert.setContentText(String.format(
-                    "You are about to move the microscope stage.\n\n" +
-                    "Target position: (%.1f, %.1f) um\n\n" +
-                    "IMPORTANT: Before moving, ensure:\n" +
-                    "- The objective turret has adequate clearance\n" +
-                    "- Lower-power objectives won't collide with the sample\n" +
-                    "- The slide is properly secured in the insert\n\n" +
-                    "This warning will not appear again this session.",
+                    "You are about to move the microscope stage.\n\n" + "Target position: (%.1f, %.1f) um\n\n"
+                            + "IMPORTANT: Before moving, ensure:\n"
+                            + "- The objective turret has adequate clearance\n"
+                            + "- Lower-power objectives won't collide with the sample\n"
+                            + "- The slide is properly secured in the insert\n\n"
+                            + "This warning will not appear again this session.",
                     targetX, targetY));
 
             alert.initOwner(stage);
@@ -692,8 +695,7 @@ public class StageMapWindow {
 
         } catch (Exception e) {
             logger.error("Failed to move stage: {}", e.getMessage(), e);
-            showError("Movement Failed",
-                    "Failed to move stage: " + e.getMessage());
+            showError("Movement Failed", "Failed to move stage: " + e.getMessage());
             statusLabel.setText("Move failed");
             statusLabel.setStyle("-fx-text-fill: #f66;");
         }
@@ -832,14 +834,15 @@ public class StageMapWindow {
             if (presetName != null && !presetName.isEmpty()) {
                 try {
                     String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-                    AffineTransformManager manager = new AffineTransformManager(
-                            new File(configPath).getParent());
+                    AffineTransformManager manager = new AffineTransformManager(new File(configPath).getParent());
                     AffineTransformManager.TransformPreset preset = manager.getTransform(presetName);
                     if (preset != null) {
                         overlayTransform = preset.getTransform();
                         scannerName = preset.getMountingMethod();
-                        logger.info("Macro overlay: loaded preset '{}' (scanner: {}, scale: {} um/px)",
-                                presetName, scannerName,
+                        logger.info(
+                                "Macro overlay: loaded preset '{}' (scanner: {}, scale: {} um/px)",
+                                presetName,
+                                scannerName,
                                 String.format("%.4f", overlayTransform.getScaleX()));
                     } else {
                         logger.warn("Macro overlay: preset '{}' not found in saved_transforms.json", presetName);
@@ -858,11 +861,17 @@ public class StageMapWindow {
                 macroImage = loadAndProcessMacroImage(gui, project, sampleName, scannerName);
             }
 
-            logger.info("Macro overlay: macroImage={}, overlayTransform={}",
+            logger.info(
+                    "Macro overlay: macroImage={}, overlayTransform={}",
                     macroImage != null ? macroImage.getWidth() + "x" + macroImage.getHeight() : "null",
-                    overlayTransform != null ? String.format("scale(%.4f, %.4f) translate(%.1f, %.1f)",
-                            overlayTransform.getScaleX(), overlayTransform.getScaleY(),
-                            overlayTransform.getTranslateX(), overlayTransform.getTranslateY()) : "null");
+                    overlayTransform != null
+                            ? String.format(
+                                    "scale(%.4f, %.4f) translate(%.1f, %.1f)",
+                                    overlayTransform.getScaleX(),
+                                    overlayTransform.getScaleY(),
+                                    overlayTransform.getTranslateX(),
+                                    overlayTransform.getTranslateY())
+                            : "null");
 
             if (macroImage != null && overlayTransform != null) {
                 currentMacroImage = macroImage;
@@ -882,11 +891,15 @@ public class StageMapWindow {
                 macroOverlayCheckbox.setSelected(false);
                 if (canvas != null) canvas.clearMacroOverlay();
                 if (macroImage == null && overlayTransform == null) {
-                    logger.info("Macro overlay: NEITHER macro image nor preset transform available - checkbox disabled");
+                    logger.info(
+                            "Macro overlay: NEITHER macro image nor preset transform available - checkbox disabled");
                 } else if (macroImage == null) {
-                    logger.info("Macro overlay: preset transform found but NO macro image for '{}' - checkbox disabled", sampleName);
+                    logger.info(
+                            "Macro overlay: preset transform found but NO macro image for '{}' - checkbox disabled",
+                            sampleName);
                 } else {
-                    logger.info("Macro overlay: macro image found but NO preset transform available - checkbox disabled");
+                    logger.info(
+                            "Macro overlay: macro image found but NO preset transform available - checkbox disabled");
                 }
             }
         });
@@ -910,10 +923,7 @@ public class StageMapWindow {
      * @return The processed macro image, or null if not available
      */
     private BufferedImage loadAndProcessMacroImage(
-            QuPathGUI gui,
-            Project<BufferedImage> project,
-            String sampleName,
-            String scannerName) {
+            QuPathGUI gui, Project<BufferedImage> project, String sampleName, String scannerName) {
 
         // Try to get the macro image from any available source.
         // For flipped entries (TransformedServer), associated images are not exposed,
@@ -924,16 +934,22 @@ public class StageMapWindow {
 
         if (macroImage != null) {
             source = "QuPath associated images";
-            logger.info("Macro overlay: loaded raw macro ({}x{}) from {}",
-                    macroImage.getWidth(), macroImage.getHeight(), source);
+            logger.info(
+                    "Macro overlay: loaded raw macro ({}x{}) from {}",
+                    macroImage.getWidth(),
+                    macroImage.getHeight(),
+                    source);
         } else {
             // Current image has no associated images (typical for flipped duplicates).
             // Look up the original entry via metadata and load its macro.
             macroImage = loadMacroFromOriginalEntry(gui, project);
             if (macroImage != null) {
                 source = "original entry associated images";
-                logger.info("Macro overlay: loaded raw macro ({}x{}) from {}",
-                        macroImage.getWidth(), macroImage.getHeight(), source);
+                logger.info(
+                        "Macro overlay: loaded raw macro ({}x{}) from {}",
+                        macroImage.getWidth(),
+                        macroImage.getHeight(),
+                        source);
             } else {
                 logger.info("Macro overlay: no macro image available");
                 return null;
@@ -946,9 +962,12 @@ public class StageMapWindow {
                 MacroImageUtility.CroppedMacroResult cropped =
                         MacroImageUtility.cropToSlideArea(macroImage, scannerName);
                 macroImage = cropped.getCroppedImage();
-                logger.info("Macro overlay: cropped to {}x{} (offset: {}, {})",
-                        macroImage.getWidth(), macroImage.getHeight(),
-                        cropped.getCropOffsetX(), cropped.getCropOffsetY());
+                logger.info(
+                        "Macro overlay: cropped to {}x{} (offset: {}, {})",
+                        macroImage.getWidth(),
+                        macroImage.getHeight(),
+                        cropped.getCropOffsetX(),
+                        cropped.getCropOffsetY());
             } catch (Exception e) {
                 logger.warn("Macro overlay: failed to crop macro from {}: {}", source, e.getMessage());
             }
@@ -967,8 +986,14 @@ public class StageMapWindow {
 
         boolean flipX = prefFlipX ^ axisInvertedX;
         boolean flipY = prefFlipY ^ axisInvertedY;
-        logger.info("Macro overlay: prefFlip=({}, {}), axisInverted=({}, {}), effective flip=({}, {})",
-                prefFlipX, prefFlipY, axisInvertedX, axisInvertedY, flipX, flipY);
+        logger.info(
+                "Macro overlay: prefFlip=({}, {}), axisInverted=({}, {}), effective flip=({}, {})",
+                prefFlipX,
+                prefFlipY,
+                axisInvertedX,
+                axisInvertedY,
+                flipX,
+                flipY);
 
         if (flipX || flipY) {
             macroImage = MacroImageUtility.flipMacroImage(macroImage, flipX, flipY);
@@ -1050,8 +1075,11 @@ public class StageMapWindow {
             if (targetName.equals(entryName) || targetName.equals(strippedName)) {
                 BufferedImage macro = readMacroFromEntry(entry);
                 if (macro != null) {
-                    logger.info("Macro overlay: loaded raw macro ({}x{}) from entry '{}'",
-                            macro.getWidth(), macro.getHeight(), entryName);
+                    logger.info(
+                            "Macro overlay: loaded raw macro ({}x{}) from entry '{}'",
+                            macro.getWidth(),
+                            macro.getHeight(),
+                            entryName);
                     return macro;
                 }
             }
@@ -1079,8 +1107,8 @@ public class StageMapWindow {
                 }
             }
         } catch (Exception e) {
-            logger.warn("Macro overlay: failed to read macro from entry '{}': {}",
-                    entry.getImageName(), e.getMessage());
+            logger.warn(
+                    "Macro overlay: failed to read macro from entry '{}': {}", entry.getImageName(), e.getMessage());
         }
         return null;
     }
@@ -1107,8 +1135,7 @@ public class StageMapWindow {
             try {
                 String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
                 File configDir = new File(configPath).getParentFile();
-                File scannerConfigFile = new File(configDir,
-                        "config_" + currentMacroScannerName + ".yml");
+                File scannerConfigFile = new File(configDir, "config_" + currentMacroScannerName + ".yml");
 
                 if (scannerConfigFile.exists()) {
                     Map<String, Object> scannerConfig =
@@ -1119,32 +1146,36 @@ public class StageMapWindow {
                         pixelSizeUm = ps;
                     }
 
-                    Double xOff = MinorFunctions.getYamlDouble(scannerConfig,
-                            "macro", "stagemap_overlay", "x_offset_um");
+                    Double xOff =
+                            MinorFunctions.getYamlDouble(scannerConfig, "macro", "stagemap_overlay", "x_offset_um");
                     if (xOff != null) {
                         xOffsetUm = xOff;
                     }
 
-                    Double yOff = MinorFunctions.getYamlDouble(scannerConfig,
-                            "macro", "stagemap_overlay", "y_offset_um");
+                    Double yOff =
+                            MinorFunctions.getYamlDouble(scannerConfig, "macro", "stagemap_overlay", "y_offset_um");
                     if (yOff != null) {
                         yOffsetUm = yOff;
                     }
 
-                    logger.info("Macro overlay config for '{}': pixelSize={} um, offset=({}, {}) um",
-                            currentMacroScannerName, pixelSizeUm, xOffsetUm, yOffsetUm);
+                    logger.info(
+                            "Macro overlay config for '{}': pixelSize={} um, offset=({}, {}) um",
+                            currentMacroScannerName,
+                            pixelSizeUm,
+                            xOffsetUm,
+                            yOffsetUm);
                 } else {
-                    logger.warn("Scanner config not found for '{}' - using fit-to-slide fallback",
-                            currentMacroScannerName);
+                    logger.warn(
+                            "Scanner config not found for '{}' - using fit-to-slide fallback", currentMacroScannerName);
                 }
             } catch (Exception e) {
-                logger.warn("Failed to load scanner overlay config for '{}': {}",
-                        currentMacroScannerName, e.getMessage());
+                logger.warn(
+                        "Failed to load scanner overlay config for '{}': {}", currentMacroScannerName, e.getMessage());
             }
         }
 
-        canvas.setMacroOverlay(currentMacroImage, currentMacroTransform,
-                axInvX, axInvY, pixelSizeUm, xOffsetUm, yOffsetUm);
+        canvas.setMacroOverlay(
+                currentMacroImage, currentMacroTransform, axInvX, axInvY, pixelSizeUm, xOffsetUm, yOffsetUm);
     }
 
     /**
@@ -1226,7 +1257,8 @@ public class StageMapWindow {
                             if (origBase != null && !origBase.isEmpty()) {
                                 logger.info("  Trying alignment lookup with original's base_image: '{}'", origBase);
                                 if (AffineTransformManager.loadSlideAlignment(project, origBase) != null) {
-                                    logger.info("  -> Found alignment using original image's base_image: '{}'", origBase);
+                                    logger.info(
+                                            "  -> Found alignment using original image's base_image: '{}'", origBase);
                                     return origBase;
                                 }
                             }

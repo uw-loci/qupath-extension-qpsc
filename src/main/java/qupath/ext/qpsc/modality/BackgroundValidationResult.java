@@ -54,8 +54,6 @@ public class BackgroundValidationResult {
      * Returns true if any validation issues were found.
      */
     public boolean hasIssues() {
-        return !anglesWithoutBackground.isEmpty()
-                || !angleswithExposureMismatches.isEmpty()
-                || wbModeMismatch;
+        return !anglesWithoutBackground.isEmpty() || !angleswithExposureMismatches.isEmpty() || wbModeMismatch;
     }
 }

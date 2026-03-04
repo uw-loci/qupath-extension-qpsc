@@ -312,8 +312,10 @@ public class WBComparisonWorkflow {
         // must be controlled through MicroManager's Device Property Browser.
         // If AWB was set manually, it persists until MicroManager is restarted.
         if (!"camera_awb".equals(wbMode)) {
-            logger.info("[{}] Camera AWB Off cannot be set programmatically; "
-                    + "ensure AWB is Off in MicroManager before running non-AWB modes", wbMode);
+            logger.info(
+                    "[{}] Camera AWB Off cannot be set programmatically; "
+                            + "ensure AWB is Off in MicroManager before running non-AWB modes",
+                    wbMode);
         }
 
         String wbFolderName = "wb_" + wbMode;

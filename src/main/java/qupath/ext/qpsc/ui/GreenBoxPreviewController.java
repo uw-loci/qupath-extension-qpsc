@@ -1,5 +1,7 @@
 package qupath.ext.qpsc.ui;
 
+import java.awt.image.BufferedImage;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.embed.swing.SwingFXUtils;
@@ -8,15 +10,11 @@ import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
-import qupath.ext.qpsc.utilities.GreenBoxDetector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.awt.image.BufferedImage;
-import java.util.concurrent.CompletableFuture;
+import qupath.ext.qpsc.utilities.GreenBoxDetector;
 
 /**
  * Controller for interactive green box detection and parameter adjustment.
@@ -93,15 +91,17 @@ public class GreenBoxPreviewController {
      */
     @SuppressWarnings("unchecked")
     public static CompletableFuture<GreenBoxDetector.DetectionResult> showPreviewDialog(
-            BufferedImage macroImage,
-            GreenBoxDetector.DetectionParams savedParams) {
+            BufferedImage macroImage, GreenBoxDetector.DetectionParams savedParams) {
 
         if (macroImage == null) {
             throw new IllegalArgumentException("Macro image cannot be null");
         }
 
-        logger.info("Opening green box preview dialog - Image size: {}x{}, Has saved params: {}",
-                macroImage.getWidth(), macroImage.getHeight(), savedParams != null);
+        logger.info(
+                "Opening green box preview dialog - Image size: {}x{}, Has saved params: {}",
+                macroImage.getWidth(),
+                macroImage.getHeight(),
+                savedParams != null);
 
         CompletableFuture<GreenBoxDetector.DetectionResult> future = new CompletableFuture<>();
 
@@ -114,11 +114,13 @@ public class GreenBoxPreviewController {
                 dialog.setResizable(true);
 
                 // Use saved params or defaults
-                GreenBoxDetector.DetectionParams params = savedParams != null ?
-                        savedParams : new GreenBoxDetector.DetectionParams();
+                GreenBoxDetector.DetectionParams params =
+                        savedParams != null ? savedParams : new GreenBoxDetector.DetectionParams();
 
-                logger.debug("Initial parameters - Edge thickness: {}, Green threshold: {}",
-                        params.edgeThickness, params.greenThreshold);
+                logger.debug(
+                        "Initial parameters - Edge thickness: {}, Green threshold: {}",
+                        params.edgeThickness,
+                        params.greenThreshold);
 
                 // Keep track of current result and detection state
                 final GreenBoxDetector.DetectionResult[] currentResult = new GreenBoxDetector.DetectionResult[1];
@@ -161,10 +163,11 @@ public class GreenBoxPreviewController {
                 saturationMin.setPrefWidth(80);
 
                 VBox basicParamsBox = new VBox(5);
-                basicParamsBox.getChildren().addAll(
-                        new HBox(10, new Label("Green threshold:"), greenThreshold),
-                        new HBox(10, new Label("Min saturation:"), saturationMin)
-                );
+                basicParamsBox
+                        .getChildren()
+                        .addAll(
+                                new HBox(10, new Label("Green threshold:"), greenThreshold),
+                                new HBox(10, new Label("Min saturation:"), saturationMin));
 
                 // === ADVANCED PARAMETERS (in collapsible TitledPane) ===
                 Spinner<Integer> edgeThickness = new Spinner<>(1, 20, params.edgeThickness, 1);
@@ -197,15 +200,16 @@ public class GreenBoxPreviewController {
 
                 VBox advancedParamsContent = new VBox(5);
                 advancedParamsContent.setPadding(new Insets(10));
-                advancedParamsContent.getChildren().addAll(
-                        new HBox(10, new Label("Edge thickness:"), edgeThickness, new Label("pixels")),
-                        new HBox(10, new Label("Hue min:"), hueMin),
-                        new HBox(10, new Label("Hue max:"), hueMax),
-                        new HBox(10, new Label("Min box width:"), minBoxWidth, new Label("pixels")),
-                        new HBox(10, new Label("Min box height:"), minBoxHeight, new Label("pixels")),
-                        new HBox(10, new Label("Brightness min:"), brightnessMin),
-                        new HBox(10, new Label("Brightness max:"), brightnessMax)
-                );
+                advancedParamsContent
+                        .getChildren()
+                        .addAll(
+                                new HBox(10, new Label("Edge thickness:"), edgeThickness, new Label("pixels")),
+                                new HBox(10, new Label("Hue min:"), hueMin),
+                                new HBox(10, new Label("Hue max:"), hueMax),
+                                new HBox(10, new Label("Min box width:"), minBoxWidth, new Label("pixels")),
+                                new HBox(10, new Label("Min box height:"), minBoxHeight, new Label("pixels")),
+                                new HBox(10, new Label("Brightness min:"), brightnessMin),
+                                new HBox(10, new Label("Brightness max:"), brightnessMax));
 
                 TitledPane advancedPane = new TitledPane("Advanced Parameters", advancedParamsContent);
                 advancedPane.setExpanded(false);
@@ -259,7 +263,14 @@ public class GreenBoxPreviewController {
 
                 HBox presetBox = new HBox(10);
                 presetBox.setAlignment(Pos.CENTER_LEFT);
-                presetBox.getChildren().addAll(new Label("Presets:"), presetHighSensitivity, presetBalanced, presetHighPrecision, resetDefaults);
+                presetBox
+                        .getChildren()
+                        .addAll(
+                                new Label("Presets:"),
+                                presetHighSensitivity,
+                                presetBalanced,
+                                presetHighPrecision,
+                                resetDefaults);
 
                 // === PARAMETERS CONTAINER (collapsible based on confidence) ===
                 TitledPane paramsPane = new TitledPane();
@@ -269,13 +280,29 @@ public class GreenBoxPreviewController {
                 allParamsBox.setPadding(new Insets(10));
                 allParamsBox.getChildren().addAll(basicParamsBox, advancedPane, presetBox);
                 paramsPane.setContent(allParamsBox);
-                paramsPane.setExpanded(false);  // Collapsed by default
+                paramsPane.setExpanded(false); // Collapsed by default
 
                 // === ACTION BUTTONS ===
                 Button detectButton = new Button("Detect Again");
-                detectButton.setOnAction(e -> runDetection(macroImage, params, greenThreshold, saturationMin,
-                        edgeThickness, hueMin, hueMax, minBoxWidth, minBoxHeight, brightnessMin, brightnessMax,
-                        previewView, statusLabel, statusRow, progressIndicator, paramsPane, confirmButtonHolder, currentResult));
+                detectButton.setOnAction(e -> runDetection(
+                        macroImage,
+                        params,
+                        greenThreshold,
+                        saturationMin,
+                        edgeThickness,
+                        hueMin,
+                        hueMax,
+                        minBoxWidth,
+                        minBoxHeight,
+                        brightnessMin,
+                        brightnessMax,
+                        previewView,
+                        statusLabel,
+                        statusRow,
+                        progressIndicator,
+                        paramsPane,
+                        confirmButtonHolder,
+                        currentResult));
 
                 Button resetButton = new Button("Reset View");
                 resetButton.setOnAction(e -> {
@@ -297,14 +324,9 @@ public class GreenBoxPreviewController {
                 // Use ScrollPane to handle expanded advanced parameters
                 VBox scrollContent = new VBox(10);
                 scrollContent.setPadding(new Insets(10));
-                scrollContent.getChildren().addAll(
-                        previewView,
-                        statusRow,
-                        skipButton,
-                        new Separator(),
-                        paramsPane,
-                        actionButtonBox
-                );
+                scrollContent
+                        .getChildren()
+                        .addAll(previewView, statusRow, skipButton, new Separator(), paramsPane, actionButtonBox);
 
                 ScrollPane scrollPane = new ScrollPane(scrollContent);
                 scrollPane.setFitToWidth(true);
@@ -369,7 +391,8 @@ public class GreenBoxPreviewController {
                         if (result.getConfidence() > 0.30) {
                             // ACCEPTABLE CONFIDENCE (30%+) - collapse parameters, show success
                             // Note: Typical confidence scores are 30-50% for good detections
-                            statusLabel.setText(String.format("[OK] Green box detected! Confidence: %.0f%% - Location: (%.0f, %.0f)",
+                            statusLabel.setText(String.format(
+                                    "[OK] Green box detected! Confidence: %.0f%% - Location: (%.0f, %.0f)",
                                     result.getConfidence() * 100,
                                     result.getDetectedBox().getBoundsX(),
                                     result.getDetectedBox().getBoundsY()));
@@ -377,10 +400,12 @@ public class GreenBoxPreviewController {
                             paramsPane.setExpanded(false);
                             paramsPane.setText("Detection Parameters (adjust if needed)");
                             confirmButton.setDisable(false);
-                            logger.info("Auto-detection succeeded with acceptable confidence: {}", result.getConfidence());
+                            logger.info(
+                                    "Auto-detection succeeded with acceptable confidence: {}", result.getConfidence());
                         } else {
                             // LOW CONFIDENCE (below 30%) - expand parameters, show warning
-                            statusLabel.setText(String.format("[!] Detection uncertain (%.0f%%) - Consider adjusting parameters",
+                            statusLabel.setText(String.format(
+                                    "[!] Detection uncertain (%.0f%%) - Consider adjusting parameters",
                                     result.getConfidence() * 100));
                             statusLabel.setStyle("-fx-text-fill: #E65100; -fx-font-weight: bold; -fx-font-size: 12px;");
                             paramsPane.setExpanded(true);
@@ -417,8 +442,10 @@ public class GreenBoxPreviewController {
 
                 dialog.setResultConverter(button -> {
                     if (button == confirmType && currentResult[0] != null) {
-                        logger.info("User confirmed green box detection - Final parameters: threshold={}, edge={}",
-                                params.greenThreshold, params.edgeThickness);
+                        logger.info(
+                                "User confirmed green box detection - Final parameters: threshold={}, edge={}",
+                                params.greenThreshold,
+                                params.edgeThickness);
                         params.saveToPreferences();
                         return currentResult[0];
                     } else if (button == cancelType) {
@@ -431,20 +458,20 @@ public class GreenBoxPreviewController {
                 });
 
                 logger.debug("Showing green box detection dialog with auto-detection");
-                dialog.showAndWait().ifPresentOrElse(
-                        result -> {
-                            if (result != null) {
-                                logger.info("Green box detection completed successfully");
-                            } else {
-                                logger.info("Green box detection completed without result");
-                            }
-                            future.complete(result);
-                        },
-                        () -> {
-                            logger.info("Green box detection dialog closed without selection");
-                            future.complete(null);
-                        }
-                );
+                dialog.showAndWait()
+                        .ifPresentOrElse(
+                                result -> {
+                                    if (result != null) {
+                                        logger.info("Green box detection completed successfully");
+                                    } else {
+                                        logger.info("Green box detection completed without result");
+                                    }
+                                    future.complete(result);
+                                },
+                                () -> {
+                                    logger.info("Green box detection dialog closed without selection");
+                                    future.complete(null);
+                                });
 
             } catch (Exception e) {
                 logger.error("Error in green box preview dialog", e);
@@ -458,14 +485,25 @@ public class GreenBoxPreviewController {
     /**
      * Runs detection with current parameter values and updates UI accordingly.
      */
-    private static void runDetection(BufferedImage macroImage, GreenBoxDetector.DetectionParams params,
-                                     Spinner<Double> greenThreshold, Spinner<Double> saturationMin,
-                                     Spinner<Integer> edgeThickness, Spinner<Double> hueMin, Spinner<Double> hueMax,
-                                     Spinner<Integer> minBoxWidth, Spinner<Integer> minBoxHeight,
-                                     Spinner<Double> brightnessMin, Spinner<Double> brightnessMax,
-                                     ImageView previewView, Label statusLabel, HBox statusRow,
-                                     ProgressIndicator progressIndicator, TitledPane paramsPane,
-                                     Button[] confirmButtonHolder, GreenBoxDetector.DetectionResult[] currentResult) {
+    private static void runDetection(
+            BufferedImage macroImage,
+            GreenBoxDetector.DetectionParams params,
+            Spinner<Double> greenThreshold,
+            Spinner<Double> saturationMin,
+            Spinner<Integer> edgeThickness,
+            Spinner<Double> hueMin,
+            Spinner<Double> hueMax,
+            Spinner<Integer> minBoxWidth,
+            Spinner<Integer> minBoxHeight,
+            Spinner<Double> brightnessMin,
+            Spinner<Double> brightnessMax,
+            ImageView previewView,
+            Label statusLabel,
+            HBox statusRow,
+            ProgressIndicator progressIndicator,
+            TitledPane paramsPane,
+            Button[] confirmButtonHolder,
+            GreenBoxDetector.DetectionResult[] currentResult) {
 
         // Update parameters from spinners
         params.greenThreshold = greenThreshold.getValue();
@@ -478,8 +516,11 @@ public class GreenBoxPreviewController {
         params.brightnessMin = brightnessMin.getValue();
         params.brightnessMax = brightnessMax.getValue();
 
-        logger.info("Running manual detection with params - threshold: {}, saturation: {}, edge: {}",
-                params.greenThreshold, params.saturationMin, params.edgeThickness);
+        logger.info(
+                "Running manual detection with params - threshold: {}, saturation: {}, edge: {}",
+                params.greenThreshold,
+                params.saturationMin,
+                params.edgeThickness);
 
         // Show progress
         if (!statusRow.getChildren().contains(progressIndicator)) {
@@ -506,7 +547,8 @@ public class GreenBoxPreviewController {
             if (result != null) {
                 previewView.setImage(SwingFXUtils.toFXImage(result.getDebugImage(), null));
 
-                statusLabel.setText(String.format("Detected at (%.0f, %.0f) - Size: %.0fx%.0f - Confidence: %.0f%%",
+                statusLabel.setText(String.format(
+                        "Detected at (%.0f, %.0f) - Size: %.0fx%.0f - Confidence: %.0f%%",
                         result.getDetectedBox().getBoundsX(),
                         result.getDetectedBox().getBoundsY(),
                         result.getDetectedBox().getBoundsWidth(),

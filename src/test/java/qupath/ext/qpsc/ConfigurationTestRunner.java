@@ -1,22 +1,18 @@
 package qupath.ext.qpsc.test;
 
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import static org.junit.jupiter.api.Assertions.*;
-
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * Unit tests for MicroscopeConfigManager using template configuration files.
@@ -24,62 +20,62 @@ import java.util.Set;
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class ConfigurationTestRunner {
-    
+
     private MicroscopeConfigManager configManager;
     private Path tempDir;
     private Path configPath;
     private Path resourcesPath;
-    
+
     @BeforeAll
     public void setUp() throws IOException {
         // Create temporary directory for test files
         tempDir = Files.createTempDirectory("qpsc_test_");
         Path resourcesDir = tempDir.resolve("resources");
         Files.createDirectories(resourcesDir);
-        
+
         // Write test configuration files
         configPath = tempDir.resolve("config_Test.yml");
         resourcesPath = resourcesDir.resolve("resources_LOCI.yml");
-        
+
         writeTestConfig(configPath);
         writeTestResources(resourcesPath);
-        
+
         // Initialize config manager
         configManager = MicroscopeConfigManager.getInstance(configPath.toString());
     }
-    
+
     @Test
     public void testBasicConfiguration() {
         assertNotNull(configManager, "Config manager should be initialized");
-        
+
         // Test basic microscope info
         assertEquals("TestMicroscope", configManager.getMicroscopeName());
         assertEquals("TestSystem", configManager.getMicroscopeType());
-        
+
         // Test slide size
         int[] slideSize = configManager.getSlideSize();
         assertNotNull(slideSize);
         assertEquals(25000, slideSize[0]);
         assertEquals(15000, slideSize[1]);
     }
-    
+
     @Test
     public void testModalities() {
         Set<String> modalities = configManager.getAvailableModalities();
         assertEquals(2, modalities.size());
         assertTrue(modalities.contains("test_brightfield"));
         assertTrue(modalities.contains("test_ppm"));
-        
+
         // Test modality validation
         assertTrue(configManager.isValidModality("test_brightfield"));
         assertTrue(configManager.isValidModality("test_ppm"));
         assertFalse(configManager.isValidModality("non_existent"));
-        
+
         // Test PPM detection via name containing "ppm"
         assertTrue("test_ppm".contains("ppm"));
         assertFalse("test_brightfield".contains("ppm"));
     }
-    
+
     // TODO: Update test config to include imageprocessing file for exposure/gain data
     @Disabled("Config format changed: exposures and gains now in separate imageprocessing file")
     @Test
@@ -97,77 +93,62 @@ public class ConfigurationTestRunner {
 
         // Test hardware combination validation
         assertTrue(configManager.isValidHardwareCombination(
-            "test_brightfield",
-            "LOCI_OBJECTIVE_TEST_10X_001",
-            "LOCI_DETECTOR_TEST_001"
-        ));
+                "test_brightfield", "LOCI_OBJECTIVE_TEST_10X_001", "LOCI_DETECTOR_TEST_001"));
         assertFalse(configManager.isValidHardwareCombination(
-            "fake_modality",
-            "LOCI_OBJECTIVE_TEST_10X_001",
-            "LOCI_DETECTOR_TEST_001"
-        ));
+                "fake_modality", "LOCI_OBJECTIVE_TEST_10X_001", "LOCI_DETECTOR_TEST_001"));
 
         // Test pixel size from hardware section
         double pixelSize = configManager.getModalityPixelSize(
-            "test_brightfield",
-            "LOCI_OBJECTIVE_TEST_10X_001",
-            "LOCI_DETECTOR_TEST_001"
-        );
+                "test_brightfield", "LOCI_OBJECTIVE_TEST_10X_001", "LOCI_DETECTOR_TEST_001");
         assertEquals(1.0, pixelSize, 0.001);
 
         // Test exposures (from imageprocessing file)
         Map<String, Object> exposures = configManager.getModalityExposures(
-            "test_brightfield",
-            "LOCI_OBJECTIVE_TEST_10X_001",
-            "LOCI_DETECTOR_TEST_001"
-        );
+                "test_brightfield", "LOCI_OBJECTIVE_TEST_10X_001", "LOCI_DETECTOR_TEST_001");
         assertNotNull(exposures);
         assertEquals(100, ((Number) exposures.get("single")).intValue());
 
         // Test gains (from imageprocessing file)
         Object gains = configManager.getModalityGains(
-            "test_brightfield",
-            "LOCI_OBJECTIVE_TEST_10X_001",
-            "LOCI_DETECTOR_TEST_001"
-        );
+                "test_brightfield", "LOCI_OBJECTIVE_TEST_10X_001", "LOCI_DETECTOR_TEST_001");
         assertNotNull(gains);
         assertEquals(1.0, ((Number) gains).doubleValue(), 0.001);
     }
-    
+
     // TODO: Update test config to include autofocus YAML file
     @Disabled("Config format changed: autofocus parameters now in separate autofocus_<name>.yml file")
     @Test
     public void testAutofocus() {
         Map<String, Object> afParams = configManager.getAutofocusParams("LOCI_OBJECTIVE_TEST_10X_001");
         assertNotNull(afParams);
-        
+
         Integer nSteps = configManager.getAutofocusIntParam("LOCI_OBJECTIVE_TEST_10X_001", "n_steps");
         assertEquals(5, nSteps);
-        
+
         Integer searchRange = configManager.getAutofocusIntParam("LOCI_OBJECTIVE_TEST_10X_001", "search_range_um");
         assertEquals(20, searchRange);
-        
+
         Integer nTiles = configManager.getAutofocusIntParam("LOCI_OBJECTIVE_TEST_10X_001", "n_tiles");
         assertEquals(3, nTiles);
     }
-    
+
     @Test
     public void testStageLimits() {
         // Test individual limits
         assertEquals(-10000.0, configManager.getStageLimit("x", "low"), 0.001);
         assertEquals(10000.0, configManager.getStageLimit("x", "high"), 0.001);
-        
+
         // Test bounds checking
         assertTrue(configManager.isWithinStageBounds(0, 0, 0));
         assertFalse(configManager.isWithinStageBounds(15000, 0, 0));
         assertFalse(configManager.isWithinStageBounds(0, 0, 2000));
-        
+
         // Test all limits
         Map<String, Double> allLimits = configManager.getAllStageLimits();
         assertNotNull(allLimits);
         assertEquals(6, allLimits.size());
     }
-    
+
     @Test
     public void testDetectorAccess() {
         // Test detector dimensions
@@ -175,18 +156,15 @@ public class ConfigurationTestRunner {
         assertNotNull(dims);
         assertEquals(1024, dims[0]);
         assertEquals(768, dims[1]);
-        
+
         // Test FOV calculation
         double[] fov = configManager.getModalityFOV(
-            "test_brightfield",
-            "LOCI_OBJECTIVE_TEST_10X_001",
-            "LOCI_DETECTOR_TEST_001"
-        );
+                "test_brightfield", "LOCI_OBJECTIVE_TEST_10X_001", "LOCI_DETECTOR_TEST_001");
         assertNotNull(fov);
-        assertEquals(1024.0, fov[0], 0.001); // 1024 pixels * 1.0 µm/pixel
-        assertEquals(768.0, fov[1], 0.001);  // 768 pixels * 1.0 µm/pixel
+        assertEquals(1024.0, fov[0], 0.001); // 1024 pixels * 1.0 um/pixel
+        assertEquals(768.0, fov[1], 0.001); // 768 pixels * 1.0 um/pixel
     }
-    
+
     // TODO: Update test config to match current background correction lookup
     @Disabled("Config format changed: background correction lookup updated")
     @Test
@@ -195,36 +173,36 @@ public class ConfigurationTestRunner {
         assertTrue(configManager.isBackgroundCorrectionEnabled("test_brightfield"));
         assertEquals("subtract", configManager.getBackgroundCorrectionMethod("test_brightfield"));
         assertEquals("/test/backgrounds", configManager.getBackgroundCorrectionFolder("test_brightfield"));
-        
+
         // Test PPM background correction
         assertFalse(configManager.isBackgroundCorrectionEnabled("test_ppm"));
     }
-    
+
     @Test
     public void testPPMFeatures() {
         List<Map<String, Object>> angles = configManager.getRotationAngles("test_ppm");
         assertNotNull(angles);
         assertEquals(2, angles.size());
-        
+
         // Check first angle
         Map<String, Object> crossed = angles.get(0);
         assertEquals("crossed", crossed.get("name"));
         assertEquals(0, ((Number) crossed.get("tick")).intValue());
     }
-    
+
     @Test
     public void testResourceAccess() {
         // Test detector resource access
         Map<String, Object> detectorSection = configManager.getResourceSection("id_detector");
         assertNotNull(detectorSection);
         assertTrue(detectorSection.containsKey("LOCI_DETECTOR_TEST_001"));
-        
+
         // Test objective resource access
         Map<String, Object> objectiveSection = configManager.getResourceSection("id_objective_lens");
         assertNotNull(objectiveSection);
         assertTrue(objectiveSection.containsKey("LOCI_OBJECTIVE_TEST_10X_001"));
     }
-    
+
     // TODO: Update test config to pass full validation (needs imageprocessing file)
     @Disabled("Config format changed: validation now checks for imageprocessing settings")
     @Test
@@ -232,7 +210,7 @@ public class ConfigurationTestRunner {
         List<String> validationErrors = configManager.validateConfiguration();
         assertTrue(validationErrors.isEmpty(), "Should have no validation errors");
     }
-    
+
     @Test
     public void testErrorHandling() {
         // Test invalid hardware combination
@@ -247,17 +225,17 @@ public class ConfigurationTestRunner {
         double invalidLimit = configManager.getStageLimit("invalid", "low");
         assertEquals(-20000.0, invalidLimit, 0.001); // Should return default
     }
-    
+
     private void writeTestConfig(Path path) throws IOException {
         String config = getTestConfigContent();
         Files.writeString(path, config);
     }
-    
+
     private void writeTestResources(Path path) throws IOException {
         String resources = getTestResourcesContent();
         Files.writeString(path, resources);
     }
-    
+
     private String getTestConfigContent() {
         // Returns the content from config_Test.yml artifact
         return """
@@ -279,7 +257,7 @@ modalities:
       enabled: true
       method: 'subtract'
       base_folder: "/test/backgrounds"
-      
+
   test_ppm:
     type: 'polarized'
     rotation_stage:
@@ -333,7 +311,7 @@ slide_size_um:
   y: 15000
 """;
     }
-    
+
     private String getTestResourcesContent() {
         // Returns the content from test_resources_LOCI.yml artifact
         return """
@@ -350,7 +328,7 @@ id_stage:
             y: 'TestYStage'
             z: 'TestZStage'
             f: null
-            
+
     LOCI_STAGE_TEST_ROT_001:
         name: 'Test Rotation Stage'
         vendor: 'TestVendor'
@@ -370,7 +348,7 @@ id_detector:
         sensor_pixel_width_um: 5.0
         sensor_pixel_height_um: 5.0
         description: 'Basic test camera'
-        
+
     LOCI_DETECTOR_TEST_002:
         name: 'Test Camera 2'
         manufacturer: 'TestCam'
@@ -389,7 +367,7 @@ id_objective_lens:
         description: 'Test 10x objective for unit testing'
         manufacturer_id: 'TEST10X'
         on_scope: 'TestMicroscope'
-        
+
     LOCI_OBJECTIVE_TEST_20X_001:
         name: 'Test 20x Objective'
         magnification: 20.0

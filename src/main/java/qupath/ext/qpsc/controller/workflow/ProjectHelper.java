@@ -1,5 +1,10 @@
 package qupath.ext.qpsc.controller.workflow;
 
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.nio.file.Path;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.util.Duration;
@@ -15,12 +20,6 @@ import qupath.ext.qpsc.utilities.ObjectiveUtils;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.ProjectImageEntry;
-
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.nio.file.Path;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Helper class for QuPath project setup operations.
@@ -149,10 +148,9 @@ public class ProjectHelper {
                     actualSampleName = sample.sampleName();
 
                     // Use enhanced modality name for consistent folder structure
-                    String enhancedModality = ObjectiveUtils.createEnhancedFolderName(
-                            sample.modality(), sample.objective());
-                    logger.info("Using enhanced modality for project: {} -> {}",
-                            sample.modality(), enhancedModality);
+                    String enhancedModality =
+                            ObjectiveUtils.createEnhancedFolderName(sample.modality(), sample.objective());
+                    logger.info("Using enhanced modality for project: {} -> {}", sample.modality(), enhancedModality);
 
                     projectDetails = QPProjectFunctions.createAndOpenQuPathProject(
                             gui,
@@ -160,18 +158,17 @@ public class ProjectHelper {
                             actualSampleName,
                             enhancedModality,
                             flippedX,
-                            flippedY
-                    );
+                            flippedY);
 
                     // Restore preserved annotations if any (from standalone image workflow)
                     // This handles the case where user drew annotations before starting workflow
                     if (AnnotationPreservationService.hasPreservedAnnotations()) {
-                        logger.info("Restoring {} preserved annotations after project creation",
+                        logger.info(
+                                "Restoring {} preserved annotations after project creation",
                                 AnnotationPreservationService.getPreservedAnnotationCount());
 
                         // Restore with flip transformation matching the image import
-                        boolean restored = AnnotationPreservationService.restoreAnnotations(
-                                gui, flippedX, flippedY);
+                        boolean restored = AnnotationPreservationService.restoreAnnotations(gui, flippedX, flippedY);
 
                         if (restored) {
                             // Save the annotations to the project entry
@@ -216,16 +213,15 @@ public class ProjectHelper {
                     logger.info("Derived sample name from project folder: {}", actualSampleName);
 
                     // Use enhanced modality name for consistent folder structure
-                    String enhancedModality = ObjectiveUtils.createEnhancedFolderName(
-                            sample.modality(), sample.objective());
-                    logger.info("Using enhanced modality for existing project: {} -> {}",
-                            sample.modality(), enhancedModality);
+                    String enhancedModality =
+                            ObjectiveUtils.createEnhancedFolderName(sample.modality(), sample.objective());
+                    logger.info(
+                            "Using enhanced modality for existing project: {} -> {}",
+                            sample.modality(),
+                            enhancedModality);
 
                     projectDetails = QPProjectFunctions.getCurrentProjectInformation(
-                            projectsFolder.toString(),
-                            actualSampleName,
-                            enhancedModality
-                    );
+                            projectsFolder.toString(), actualSampleName, enhancedModality);
 
                     // Handle image import if needed
                     handleExistingProjectImageImport(gui, flippedX, flippedY);
@@ -242,10 +238,7 @@ public class ProjectHelper {
 
             } catch (Exception e) {
                 logger.error("Failed to setup project", e);
-                UIFunctions.notifyUserOfError(
-                        "Failed to setup project: " + e.getMessage(),
-                        "Project Error"
-                );
+                UIFunctions.notifyUserOfError("Failed to setup project: " + e.getMessage(), "Project Error");
                 future.complete(null);
             }
         });
@@ -263,8 +256,7 @@ public class ProjectHelper {
      * @param flippedX Whether to flip X axis
      * @param flippedY Whether to flip Y axis
      */
-    private static void handleExistingProjectImageImport(QuPathGUI gui,
-                                                         boolean flippedX, boolean flippedY) {
+    private static void handleExistingProjectImageImport(QuPathGUI gui, boolean flippedX, boolean flippedY) {
 
         var imageData = gui.getImageData();
         if (imageData != null && (flippedX || flippedY)) {
@@ -286,8 +278,8 @@ public class ProjectHelper {
                                 gui.getProject(),
                                 flippedX,
                                 flippedY,
-                                null  // No modality info available here - use auto-detection
-                        );
+                                null // No modality info available here - use auto-detection
+                                );
 
                         gui.refreshProject();
 

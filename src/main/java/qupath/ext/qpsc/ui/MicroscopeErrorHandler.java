@@ -1,5 +1,9 @@
 package qupath.ext.qpsc.ui;
 
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.net.SocketTimeoutException;
 import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
@@ -10,11 +14,6 @@ import javafx.scene.layout.Priority;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.service.microscope.MicroscopeHardwareException;
-
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.net.SocketTimeoutException;
 
 /**
  * Centralized error handler for microscope-related UI errors.
@@ -109,26 +108,22 @@ public class MicroscopeErrorHandler {
      */
     private static String buildGuidance(Exception e) {
         if (e instanceof MicroscopeHardwareException) {
-            return "Please check:\n" +
-                   "1. MicroManager is running\n" +
-                   "2. Hardware devices are loaded in MicroManager\n" +
-                   "3. Stage devices are properly configured";
+            return "Please check:\n" + "1. MicroManager is running\n"
+                    + "2. Hardware devices are loaded in MicroManager\n"
+                    + "3. Stage devices are properly configured";
         } else if (e instanceof SocketTimeoutException) {
-            return "Please check:\n" +
-                   "1. MicroManager is running and responding\n" +
-                   "2. Hardware devices are not in an error state\n" +
-                   "3. Python server logs for errors\n" +
-                   "4. Try restarting MicroManager";
+            return "Please check:\n" + "1. MicroManager is running and responding\n"
+                    + "2. Hardware devices are not in an error state\n"
+                    + "3. Python server logs for errors\n"
+                    + "4. Try restarting MicroManager";
         } else if (e instanceof IOException && e.getMessage().contains("Connection refused")) {
-            return "Please:\n" +
-                   "1. Start the Python microscope server\n" +
-                   "2. Verify the server host/port in Settings\n" +
-                   "3. Check for firewall issues";
+            return "Please:\n" + "1. Start the Python microscope server\n"
+                    + "2. Verify the server host/port in Settings\n"
+                    + "3. Check for firewall issues";
         } else if (e instanceof IOException) {
-            return "Please check:\n" +
-                   "1. Network connection to microscope server\n" +
-                   "2. Server logs for errors\n" +
-                   "3. Try reconnecting via Settings > Server Connection";
+            return "Please check:\n" + "1. Network connection to microscope server\n"
+                    + "2. Server logs for errors\n"
+                    + "3. Try reconnecting via Settings > Server Connection";
         } else {
             return "See technical details below for more information.";
         }

@@ -1,30 +1,27 @@
 package qupath.ext.qpsc.utilities;
 
-import org.yaml.snakeyaml.Yaml;
+import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
 import java.text.SimpleDateFormat;
+import java.util.*;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.yaml.snakeyaml.Yaml;
 import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.classes.PathClass;
 import qupath.lib.objects.classes.PathClassTools;
 import qupath.lib.objects.hierarchy.PathObjectHierarchy;
-
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.IOException;
-
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 
 /**
  * MinorFunctions
@@ -34,7 +31,6 @@ import java.util.regex.Pattern;
  *   - Regex helpers, string parsing, filename manipulation.
  *   - Anything too small to justify its own class.
  */
-
 public class MinorFunctions {
     private static final Logger logger = LoggerFactory.getLogger(MinorFunctions.class);
 
@@ -47,13 +43,12 @@ public class MinorFunctions {
      */
     public static int countTifEntriesInTileConfig(List<String> arguments) {
         String base = String.join(File.separator, arguments);
-        Path pathQP  = Paths.get(base, "TileConfiguration_QP.txt");
+        Path pathQP = Paths.get(base, "TileConfiguration_QP.txt");
         Path pathStd = Paths.get(base, "TileConfiguration.txt");
-        Path file    = Files.exists(pathQP) ? pathQP : pathStd;
+        Path file = Files.exists(pathQP) ? pathQP : pathStd;
 
-        if (! Files.exists(file)) {
-            logger.warn("TileConfiguration not found at {} or {}",
-                    pathQP, pathStd);
+        if (!Files.exists(file)) {
+            logger.warn("TileConfiguration not found at {} or {}", pathQP, pathStd);
             return 0;
         }
 
@@ -92,8 +87,8 @@ public class MinorFunctions {
             }
 
             if (attempt < maxRetries) {
-                logger.debug("Tile count is 0, retrying in {}ms (attempt {}/{})",
-                            retryDelayMs, attempt + 1, maxRetries);
+                logger.debug(
+                        "Tile count is 0, retrying in {}ms (attempt {}/{})", retryDelayMs, attempt + 1, maxRetries);
                 try {
                     Thread.sleep(retryDelayMs);
                 } catch (InterruptedException e) {
@@ -111,17 +106,17 @@ public class MinorFunctions {
         return 0;
     }
 
-    /** Returns a Map of two script-related paths based on the Groovy script’s folder. */
-    public static Map<String,String> calculateScriptPaths(String groovyScriptPath) {
+    /** Returns a Map of two script-related paths based on the Groovy script's folder. */
+    public static Map<String, String> calculateScriptPaths(String groovyScriptPath) {
         Path dir = Paths.get(groovyScriptPath).getParent();
-        String jsonPath   = dir.resolve("tissue.json").toString().replace("\\","/");
-        Map<String,String> map = new HashMap<>();
+        String jsonPath = dir.resolve("tissue.json").toString().replace("\\", "/");
+        Map<String, String> map = new HashMap<>();
         map.put("jsonTissueClassfierPathString", jsonPath);
         return map;
     }
 
     /**
-     * Appends _1, _2, ... to the original folder name until it’s unique.
+     * Appends _1, _2, ... to the original folder name until it's unique.
      * Returns only the new folder name (not full path).
      */
     public static String getUniqueFolderName(String originalFolderPath) {
@@ -232,14 +227,12 @@ public class MinorFunctions {
      * Writes the two extreme coordinate pairs (minX,minY / maxX,maxY) into
      * a text file named "<image>_StageCoordinates.txt".
      */
-    //TODO re-include this in the exported metadata, or validate that the python side does this
-    public static void writeTileExtremesToFile(
-            String imagePath, List<List<Double>> extremes) {
+    // TODO re-include this in the exported metadata, or validate that the python side does this
+    public static void writeTileExtremesToFile(String imagePath, List<List<Double>> extremes) {
         String out = imagePath.replaceAll("\\.[^\\.]+$", "") + "_StageCoordinates.txt";
         logger.info("Writing tile extremes to: {}", out);
 
-        try (BufferedWriter w = Files.newBufferedWriter(
-                Paths.get(out), StandardCharsets.UTF_8)) {
+        try (BufferedWriter w = Files.newBufferedWriter(Paths.get(out), StandardCharsets.UTF_8)) {
             List<Double> min = extremes.get(0);
             List<Double> max = extremes.get(1);
             w.write(String.format("%f, %f%n", min.get(0), min.get(1)));
@@ -259,7 +252,7 @@ public class MinorFunctions {
      *   <li>Line 1: &lt;minX&gt;, &lt;minY&gt;</li>
      *   <li>Line 2: &lt;maxX&gt;, &lt;maxY&gt;</li>
      * </ul>
-     * On success, a 2×2 array is returned where:
+     * On success, a 2x2 array is returned where:
      * <pre>
      *   result[0][0] == minX
      *   result[0][1] == minY
@@ -275,7 +268,7 @@ public class MinorFunctions {
      */
     public static double[][] readTileExtremesFromFile(String imagePath) {
         String inPath = imagePath.replaceAll("\\.[^\\.]+$", "") + "_StageCoordinates.txt";
-        Path file    = Paths.get(inPath);
+        Path file = Paths.get(inPath);
         if (!Files.exists(file)) {
             logger.error("Coordinate file missing: {}", inPath);
             return null;
@@ -295,9 +288,7 @@ public class MinorFunctions {
                 result[i][1] = Double.parseDouble(parts[1].trim());
             }
 
-            logger.info("Read extremes: [[{}, {}], [{}, {}]]",
-                    result[0][0], result[0][1],
-                    result[1][0], result[1][1]);
+            logger.info("Read extremes: [[{}, {}], [{}, {}]]", result[0][0], result[0][1], result[1][0], result[1][1]);
             return result;
 
         } catch (IOException | NumberFormatException e) {
@@ -305,7 +296,6 @@ public class MinorFunctions {
             return null;
         }
     }
-
 
     public static String firstLines(String text, int maxLines) {
         String[] lines = text.split("\r?\n");
@@ -317,8 +307,6 @@ public class MinorFunctions {
         sb.append("... (truncated, see log for full details)");
         return sb.toString();
     }
-
-
 
     /**
      * Loads a YAML file directly into a Map structure.
@@ -431,8 +419,7 @@ public class MinorFunctions {
             PathClass pathClass = pathObject.getPathClass();
 
             // Only add valid, non-ignored classes
-            if (PathClassTools.isValidClass(pathClass) &&
-                    !PathClassTools.isIgnoredClass(pathClass)) {
+            if (PathClassTools.isValidClass(pathClass) && !PathClassTools.isIgnoredClass(pathClass)) {
                 classifications.add(pathClass);
                 logger.debug("Found classification: {}", pathClass);
             }
@@ -452,9 +439,8 @@ public class MinorFunctions {
      * @param regionName The region/annotation name
      * @return The path to the saved command file, or null if saving failed
      */
-    public static String saveAcquisitionCommand(String command, String projectsFolder,
-                                                String sampleName, String scanType,
-                                                String regionName) {
+    public static String saveAcquisitionCommand(
+            String command, String projectsFolder, String sampleName, String scanType, String regionName) {
         try {
             // Build the acquisition folder path
             Path acquisitionDir = Paths.get(projectsFolder, sampleName, scanType, regionName);
@@ -539,5 +525,3 @@ public class MinorFunctions {
         return formatted.toString();
     }
 }
-
-

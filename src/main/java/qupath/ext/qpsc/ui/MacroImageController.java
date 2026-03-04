@@ -1,6 +1,11 @@
 package qupath.ext.qpsc.ui;
 
+import java.awt.image.BufferedImage;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
+import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -8,24 +13,15 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.stage.Modality;
-import javafx.embed.swing.SwingFXUtils;
-import javafx.util.StringConverter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
-import qupath.ext.qpsc.utilities.MacroImageAnalyzer;
 import qupath.ext.qpsc.utilities.GreenBoxDetector;
+import qupath.ext.qpsc.utilities.MacroImageAnalyzer;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.lib.gui.QuPathGUI;
-
-import java.awt.image.BufferedImage;
-import java.text.DecimalFormat;
-import java.text.SimpleDateFormat;
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import qupath.lib.images.ImageData;
 
 /**
@@ -47,18 +43,15 @@ public class MacroImageController {
             String transformName,
             MacroImageAnalyzer.ThresholdMethod thresholdMethod,
             Map<String, Object> thresholdParams,
-            GreenBoxDetector.DetectionParams greenBoxParams,  // Already exists
-            boolean useGreenBoxDetection
-    ) {}
+            GreenBoxDetector.DetectionParams greenBoxParams, // Already exists
+            boolean useGreenBoxDetection) {}
 
     /**
      * Shows the main alignment workflow dialog.
      * This is focused on creating/refining transforms, NOT acquisition.
      */
     public static CompletableFuture<AlignmentConfig> showAlignmentDialog(
-            QuPathGUI gui,
-            AffineTransformManager transformManager,
-            String currentMicroscope) {
+            QuPathGUI gui, AffineTransformManager transformManager, String currentMicroscope) {
 
         CompletableFuture<AlignmentConfig> future = new CompletableFuture<>();
 
@@ -83,19 +76,22 @@ public class MacroImageController {
             // Tab 1: Transform Selection
             Tab transformTab = createTransformTab(transformManager, currentMicroscope);
             Label transformLabel = new Label("1. Transform");
-            transformLabel.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-background-color: #3498db; -fx-padding: 5;");
+            transformLabel.setStyle(
+                    "-fx-text-fill: white; -fx-font-weight: bold; -fx-background-color: #3498db; -fx-padding: 5;");
             transformTab.setGraphic(transformLabel);
 
             // Tab 2: Green Box Detection (with asterisk to show it needs visiting)
             Tab greenBoxTab = createGreenBoxTab(gui);
             Label greenBoxLabel = new Label("2. Green Box Detection *");
-            greenBoxLabel.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-background-color: #27ae60; -fx-padding: 5;");
+            greenBoxLabel.setStyle(
+                    "-fx-text-fill: white; -fx-font-weight: bold; -fx-background-color: #27ae60; -fx-padding: 5;");
             greenBoxTab.setGraphic(greenBoxLabel);
 
             // Tab 3: Tissue Threshold Settings (with asterisk to show it needs visiting)
             Tab thresholdTab = createThresholdTab(gui);
             Label thresholdLabel = new Label("3. Tissue Detection *");
-            thresholdLabel.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-background-color: #e67e22; -fx-padding: 5;");
+            thresholdLabel.setStyle(
+                    "-fx-text-fill: white; -fx-font-weight: bold; -fx-background-color: #e67e22; -fx-padding: 5;");
             thresholdTab.setGraphic(thresholdLabel);
 
             tabs.getTabs().addAll(transformTab, greenBoxTab, thresholdTab);
@@ -115,29 +111,25 @@ public class MacroImageController {
             content.setPadding(new Insets(10));
 
             // Create instructions using a Label with proper sizing
-            Label instructions = new Label(
-                    "This workflow creates an alignment transform between the macro image and main image.\n\n" +
-                            "1. Choose to create new or refine existing transform\n" +
-                            "2. Configure green box detection to find the scanned area (REQUIRED: Visit this tab)\n" +
-                            "3. Configure tissue detection for annotation placement (OR visit this tab)\n\n" +
-                            "You must visit at least one detection tab (2 or 3) before proceeding.\n" +
-                            "The created transform will be saved and available in the Existing Image workflow."
-            );
+            Label instructions =
+                    new Label("This workflow creates an alignment transform between the macro image and main image.\n\n"
+                            + "1. Choose to create new or refine existing transform\n"
+                            + "2. Configure green box detection to find the scanned area (REQUIRED: Visit this tab)\n"
+                            + "3. Configure tissue detection for annotation placement (OR visit this tab)\n\n"
+                            + "You must visit at least one detection tab (2 or 3) before proceeding.\n"
+                            + "The created transform will be saved and available in the Existing Image workflow.");
             instructions.setWrapText(true);
             instructions.setMaxWidth(750);
             instructions.setPrefWidth(750);
             instructions.setMinHeight(Region.USE_COMPUTED_SIZE);
-            instructions.setPrefHeight(Region.USE_COMPUTED_SIZE);  // Allow label to compute its own height
-            instructions.setStyle(
-                    "-fx-background-color: -fx-control-inner-background; " +
-                            "-fx-padding: 15; " +
-                            "-fx-border-color: -fx-box-border; " +
-                            "-fx-border-width: 1; " +
-                            "-fx-border-radius: 5; " +
-                            "-fx-background-radius: 5; " +
-                            "-fx-font-weight: normal; " +
-                            "-fx-text-fill: -fx-text-base-color;"
-            );
+            instructions.setPrefHeight(Region.USE_COMPUTED_SIZE); // Allow label to compute its own height
+            instructions.setStyle("-fx-background-color: -fx-control-inner-background; " + "-fx-padding: 15; "
+                    + "-fx-border-color: -fx-box-border; "
+                    + "-fx-border-width: 1; "
+                    + "-fx-border-radius: 5; "
+                    + "-fx-background-radius: 5; "
+                    + "-fx-font-weight: normal; "
+                    + "-fx-text-fill: -fx-text-base-color;");
 
             // Wrap the instructions in a VBox to ensure proper sizing
             VBox instructionsContainer = new VBox(instructions);
@@ -145,7 +137,7 @@ public class MacroImageController {
             instructionsContainer.setMinHeight(Region.USE_PREF_SIZE);
 
             content.getChildren().addAll(instructionsContainer, tabs);
-            dialog.getDialogPane().setPrefSize(950, 900);  // Increased height to accommodate content
+            dialog.getDialogPane().setPrefSize(950, 900); // Increased height to accommodate content
             dialog.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
             dialog.getDialogPane().setMinWidth(900);
             dialog.getDialogPane().setContent(content);
@@ -167,18 +159,20 @@ public class MacroImageController {
                     // Remove asterisk from visited tab
                     if (newTab == greenBoxTab && greenBoxLabel.getText().endsWith(" *")) {
                         greenBoxLabel.setText("2. Green Box Detection");
-                    } else if (newTab == thresholdTab && thresholdLabel.getText().endsWith(" *")) {
+                    } else if (newTab == thresholdTab
+                            && thresholdLabel.getText().endsWith(" *")) {
                         thresholdLabel.setText("3. Tissue Detection");
                     }
 
                     // Enable OK button only if at least one detection tab has been visited
-                    boolean hasVisitedDetection = visitedTabs.contains(greenBoxTab) ||
-                            visitedTabs.contains(thresholdTab);
+                    boolean hasVisitedDetection =
+                            visitedTabs.contains(greenBoxTab) || visitedTabs.contains(thresholdTab);
                     okButton.setDisable(!hasVisitedDetection);
 
                     // Update button tooltip
                     if (!hasVisitedDetection) {
-                        okButton.setTooltip(new Tooltip("Please visit at least one detection tab (Green Box or Tissue Detection)"));
+                        okButton.setTooltip(
+                                new Tooltip("Please visit at least one detection tab (Green Box or Tissue Detection)"));
                     } else {
                         okButton.setTooltip(null);
                     }
@@ -193,16 +187,16 @@ public class MacroImageController {
                 return null;
             });
 
-            dialog.showAndWait().ifPresentOrElse(
-                    config -> {
-                        if (config != null) {
-                            future.complete(config);
-                        } else {
-                            future.complete(null);
-                        }
-                    },
-                    () -> future.complete(null)
-            );
+            dialog.showAndWait()
+                    .ifPresentOrElse(
+                            config -> {
+                                if (config != null) {
+                                    future.complete(config);
+                                } else {
+                                    future.complete(null);
+                                }
+                            },
+                            () -> future.complete(null));
         });
 
         return future;
@@ -226,62 +220,57 @@ public class MacroImageController {
 
         // Detection parameters - CHANGED TO MULTI-COLUMN LAYOUT
         GridPane paramsGrid = new GridPane();
-        paramsGrid.setHgap(20);  // Increased horizontal gap between columns
-        paramsGrid.setVgap(8);   // Slightly increased vertical gap
+        paramsGrid.setHgap(20); // Increased horizontal gap between columns
+        paramsGrid.setVgap(8); // Slightly increased vertical gap
         paramsGrid.setDisable(false);
 
         // Create spinners with saved values
         Label greenThresholdLabel = new Label("Green Dominance:");
-        Spinner<Double> greenThresholdSpinner = new Spinner<>(0.0, 1.0,
-                PersistentPreferences.getGreenThreshold(), 0.05);
+        Spinner<Double> greenThresholdSpinner =
+                new Spinner<>(0.0, 1.0, PersistentPreferences.getGreenThreshold(), 0.05);
         greenThresholdSpinner.setEditable(true);
         greenThresholdSpinner.setPrefWidth(100);
 
         Label saturationLabel = new Label("Min Saturation:");
-        Spinner<Double> saturationSpinner = new Spinner<>(0.0, 1.0,
-                PersistentPreferences.getGreenSaturationMin(), 0.05);
+        Spinner<Double> saturationSpinner =
+                new Spinner<>(0.0, 1.0, PersistentPreferences.getGreenSaturationMin(), 0.05);
         saturationSpinner.setEditable(true);
         saturationSpinner.setPrefWidth(100);
 
         Label brightnessMinLabel = new Label("Min Brightness:");
-        Spinner<Double> brightnessMinSpinner = new Spinner<>(0.0, 1.0,
-                PersistentPreferences.getGreenBrightnessMin(), 0.05);
+        Spinner<Double> brightnessMinSpinner =
+                new Spinner<>(0.0, 1.0, PersistentPreferences.getGreenBrightnessMin(), 0.05);
         brightnessMinSpinner.setEditable(true);
         brightnessMinSpinner.setPrefWidth(100);
 
         Label brightnessMaxLabel = new Label("Max Brightness:");
-        Spinner<Double> brightnessMaxSpinner = new Spinner<>(0.0, 1.0,
-                PersistentPreferences.getGreenBrightnessMax(), 0.05);
+        Spinner<Double> brightnessMaxSpinner =
+                new Spinner<>(0.0, 1.0, PersistentPreferences.getGreenBrightnessMax(), 0.05);
         brightnessMaxSpinner.setEditable(true);
         brightnessMaxSpinner.setPrefWidth(100);
 
         Label edgeThicknessLabel = new Label("Edge Thickness:");
-        Spinner<Integer> edgeThicknessSpinner = new Spinner<>(1, 50,
-                PersistentPreferences.getGreenEdgeThickness(), 1);
+        Spinner<Integer> edgeThicknessSpinner = new Spinner<>(1, 50, PersistentPreferences.getGreenEdgeThickness(), 1);
         edgeThicknessSpinner.setEditable(true);
         edgeThicknessSpinner.setPrefWidth(100);
 
         Label minWidthLabel = new Label("Min Box Width:");
-        Spinner<Integer> minWidthSpinner = new Spinner<>(10, 5000,
-                PersistentPreferences.getGreenMinBoxWidth(), 10);
+        Spinner<Integer> minWidthSpinner = new Spinner<>(10, 5000, PersistentPreferences.getGreenMinBoxWidth(), 10);
         minWidthSpinner.setEditable(true);
         minWidthSpinner.setPrefWidth(100);
 
         Label minHeightLabel = new Label("Min Box Height:");
-        Spinner<Integer> minHeightSpinner = new Spinner<>(10, 5000,
-                PersistentPreferences.getGreenMinBoxHeight(), 10);
+        Spinner<Integer> minHeightSpinner = new Spinner<>(10, 5000, PersistentPreferences.getGreenMinBoxHeight(), 10);
         minHeightSpinner.setEditable(true);
         minHeightSpinner.setPrefWidth(100);
 
         Label hueMinLabel = new Label("Hue Min:");
-        Spinner<Double> hueMinSpinner = new Spinner<>(0.0, 1.0,
-                PersistentPreferences.getGreenHueMin(), 0.01);
+        Spinner<Double> hueMinSpinner = new Spinner<>(0.0, 1.0, PersistentPreferences.getGreenHueMin(), 0.01);
         hueMinSpinner.setEditable(true);
         hueMinSpinner.setPrefWidth(100);
 
         Label hueMaxLabel = new Label("Hue Max:");
-        Spinner<Double> hueMaxSpinner = new Spinner<>(0.0, 1.0,
-                PersistentPreferences.getGreenHueMax(), 0.01);
+        Spinner<Double> hueMaxSpinner = new Spinner<>(0.0, 1.0, PersistentPreferences.getGreenHueMax(), 0.01);
         hueMaxSpinner.setEditable(true);
         hueMaxSpinner.setPrefWidth(100);
 
@@ -375,9 +364,9 @@ public class MacroImageController {
 
         // CHANGED: Make ScrollPane much larger for better image visibility
         ScrollPane imageScroll = new ScrollPane(previewImage);
-        imageScroll.setPrefViewportHeight(450);  // Increased from 300
-        imageScroll.setPrefViewportWidth(700);   // Set preferred width too
-        imageScroll.setMinHeight(350);           // Set minimum height
+        imageScroll.setPrefViewportHeight(450); // Increased from 300
+        imageScroll.setPrefViewportWidth(700); // Set preferred width too
+        imageScroll.setMinHeight(350); // Set minimum height
         imageScroll.setFitToWidth(true);
         imageScroll.setFitToHeight(true);
         imageScroll.setPannable(true);
@@ -388,8 +377,8 @@ public class MacroImageController {
         // Enable text wrapping for long file paths
         Label resultLabel = new Label();
         resultLabel.setWrapText(true);
-        resultLabel.setMaxWidth(Double.MAX_VALUE);  // Allow full width
-        resultLabel.setPrefHeight(Region.USE_COMPUTED_SIZE);  // Allow height to adjust
+        resultLabel.setMaxWidth(Double.MAX_VALUE); // Allow full width
+        resultLabel.setPrefHeight(Region.USE_COMPUTED_SIZE); // Allow height to adjust
         resultLabel.setMinHeight(Region.USE_PREF_SIZE);
 
         // Add info about flips being applied
@@ -411,7 +400,8 @@ public class MacroImageController {
                     BufferedImage macroImage = MacroImageUtility.retrieveMacroImage(gui);
                     if (macroImage != null) {
                         // Crop the macro image
-                        MacroImageUtility.CroppedMacroResult croppedResult = MacroImageUtility.cropToSlideArea(macroImage);
+                        MacroImageUtility.CroppedMacroResult croppedResult =
+                                MacroImageUtility.cropToSlideArea(macroImage);
                         BufferedImage processedImage = croppedResult.getCroppedImage();
 
                         // Apply flips if needed
@@ -421,7 +411,8 @@ public class MacroImageController {
 
                         Image fxImage = SwingFXUtils.toFXImage(processedImage, null);
                         previewImage.setImage(fxImage);
-                        resultLabel.setText("Macro image loaded (cropped and flipped). Click 'Preview Green Box Detection' to detect the scanned area.");
+                        resultLabel.setText(
+                                "Macro image loaded (cropped and flipped). Click 'Preview Green Box Detection' to detect the scanned area.");
                         resultLabel.setStyle("-fx-text-fill: #059669;");
                     }
                 }
@@ -456,16 +447,19 @@ public class MacroImageController {
                 BufferedImage macroImage = MacroImageUtility.retrieveMacroImage(gui);
 
                 if (macroImage != null) {
-                    logger.info("Successfully retrieved macro image: {}x{}",
-                            macroImage.getWidth(), macroImage.getHeight());
+                    logger.info(
+                            "Successfully retrieved macro image: {}x{}", macroImage.getWidth(), macroImage.getHeight());
 
                     // Crop the macro image to just the slide area
                     MacroImageUtility.CroppedMacroResult croppedResult = MacroImageUtility.cropToSlideArea(macroImage);
                     BufferedImage processedImage = croppedResult.getCroppedImage();
 
-                    logger.info("Cropped to slide area: {}x{} (offset: {}, {})",
-                            processedImage.getWidth(), processedImage.getHeight(),
-                            croppedResult.getCropOffsetX(), croppedResult.getCropOffsetY());
+                    logger.info(
+                            "Cropped to slide area: {}x{} (offset: {}, {})",
+                            processedImage.getWidth(),
+                            processedImage.getHeight(),
+                            croppedResult.getCropOffsetX(),
+                            croppedResult.getCropOffsetY());
 
                     // Apply flips if needed
                     if (flipX || flipY) {
@@ -496,14 +490,13 @@ public class MacroImageController {
                         previewImage.setImage(debugImage);
 
                         resultLabel.setText(String.format(
-                                "Green box detected at (%.0f, %.0f) size %.0fx%.0f with confidence %.2f\n" +
-                                        "Note: Coordinates are in the flipped, cropped macro image",
+                                "Green box detected at (%.0f, %.0f) size %.0fx%.0f with confidence %.2f\n"
+                                        + "Note: Coordinates are in the flipped, cropped macro image",
                                 result.getDetectedBox().getBoundsX(),
                                 result.getDetectedBox().getBoundsY(),
                                 result.getDetectedBox().getBoundsWidth(),
                                 result.getDetectedBox().getBoundsHeight(),
-                                result.getConfidence()
-                        ));
+                                result.getConfidence()));
                         resultLabel.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
 
                         // Save current params since detection was successful
@@ -531,15 +524,15 @@ public class MacroImageController {
         HBox buttonBox = new HBox(10, previewButton, resetButton);
         buttonBox.setAlignment(Pos.CENTER_LEFT);
 
-        content.getChildren().addAll(
-                enableGreenBox,
-                flipInfoLabel,  // Add flip info
-                new Separator(),
-                paramsGrid,
-                buttonBox,
-                resultLabel,
-                imageScroll
-        );
+        content.getChildren()
+                .addAll(
+                        enableGreenBox,
+                        flipInfoLabel, // Add flip info
+                        new Separator(),
+                        paramsGrid,
+                        buttonBox,
+                        resultLabel,
+                        imageScroll);
 
         VBox.setVgrow(imageScroll, Priority.ALWAYS);
 
@@ -560,317 +553,318 @@ public class MacroImageController {
         tab.setContent(content);
         return tab;
     }
-//    /**
-//     * Creates the green box detection tab with persistent preferences support.
-//     */
-//    private static Tab createGreenBoxTab(QuPathGUI gui) {
-//        Tab tab = new Tab();
-//
-//        VBox content = new VBox(10);
-//        content.setPadding(new Insets(10));
-//
-//        // Enable/disable green box detection
-//        CheckBox enableGreenBox = new CheckBox("Use green box detection for initial positioning");
-//        enableGreenBox.setSelected(true);
-//        // Get flip settings for display
-//        boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
-//        boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
-//        // Detection parameters
-//        GridPane paramsGrid = new GridPane();
-//        paramsGrid.setHgap(10);
-//        paramsGrid.setVgap(5);
-//        paramsGrid.setDisable(false);
-//
-//        // Create spinners with saved values
-//        Label greenThresholdLabel = new Label("Green Dominance:");
-//        Spinner<Double> greenThresholdSpinner = new Spinner<>(0.0, 1.0,
-//                PersistentPreferences.getGreenThreshold(), 0.05);
-//        greenThresholdSpinner.setEditable(true);
-//        greenThresholdSpinner.setPrefWidth(100);
-//
-//        Label saturationLabel = new Label("Min Saturation:");
-//        Spinner<Double> saturationSpinner = new Spinner<>(0.0, 1.0,
-//                PersistentPreferences.getGreenSaturationMin(), 0.05);
-//        saturationSpinner.setEditable(true);
-//        saturationSpinner.setPrefWidth(100);
-//
-//        Label brightnessMinLabel = new Label("Min Brightness:");
-//        Spinner<Double> brightnessMinSpinner = new Spinner<>(0.0, 1.0,
-//                PersistentPreferences.getGreenBrightnessMin(), 0.05);
-//        brightnessMinSpinner.setEditable(true);
-//        brightnessMinSpinner.setPrefWidth(100);
-//
-//        Label brightnessMaxLabel = new Label("Max Brightness:");
-//        Spinner<Double> brightnessMaxSpinner = new Spinner<>(0.0, 1.0,
-//                PersistentPreferences.getGreenBrightnessMax(), 0.05);
-//        brightnessMaxSpinner.setEditable(true);
-//        brightnessMaxSpinner.setPrefWidth(100);
-//
-//        Label edgeThicknessLabel = new Label("Edge Thickness:");
-//        Spinner<Integer> edgeThicknessSpinner = new Spinner<>(1, 50,
-//                PersistentPreferences.getGreenEdgeThickness(), 1);
-//        edgeThicknessSpinner.setEditable(true);
-//        edgeThicknessSpinner.setPrefWidth(100);
-//
-//        Label minWidthLabel = new Label("Min Box Width:");
-//        Spinner<Integer> minWidthSpinner = new Spinner<>(10, 5000,
-//                PersistentPreferences.getGreenMinBoxWidth(), 10);
-//        minWidthSpinner.setEditable(true);
-//        minWidthSpinner.setPrefWidth(100);
-//
-//        Label minHeightLabel = new Label("Min Box Height:");
-//        Spinner<Integer> minHeightSpinner = new Spinner<>(10, 5000,
-//                PersistentPreferences.getGreenMinBoxHeight(), 10);
-//        minHeightSpinner.setEditable(true);
-//        minHeightSpinner.setPrefWidth(100);
-//
-//        // Add spinners to grid
-//        int row = 0;
-//        paramsGrid.add(greenThresholdLabel, 0, row);
-//        paramsGrid.add(greenThresholdSpinner, 1, row++);
-//        paramsGrid.add(saturationLabel, 0, row);
-//        paramsGrid.add(saturationSpinner, 1, row++);
-//        paramsGrid.add(brightnessMinLabel, 0, row);
-//        paramsGrid.add(brightnessMinSpinner, 1, row++);
-//        paramsGrid.add(brightnessMaxLabel, 0, row);
-//        paramsGrid.add(brightnessMaxSpinner, 1, row++);
-//        paramsGrid.add(edgeThicknessLabel, 0, row);
-//        paramsGrid.add(edgeThicknessSpinner, 1, row++);
-//        paramsGrid.add(minWidthLabel, 0, row);
-//        paramsGrid.add(minWidthSpinner, 1, row++);
-//        paramsGrid.add(minHeightLabel, 0, row);
-//        paramsGrid.add(minHeightSpinner, 1, row++);
-//
-//        // Add value change listeners to save preferences
-//        greenThresholdSpinner.valueProperty().addListener((obs, old, val) -> {
-//            PersistentPreferences.setGreenThreshold(val);
-//            logger.debug("Green threshold updated to: {}", val);
-//        });
-//
-//        saturationSpinner.valueProperty().addListener((obs, old, val) -> {
-//            PersistentPreferences.setGreenSaturationMin(val);
-//            logger.debug("Green saturation min updated to: {}", val);
-//        });
-//
-//        brightnessMinSpinner.valueProperty().addListener((obs, old, val) -> {
-//            PersistentPreferences.setGreenBrightnessMin(val);
-//            logger.debug("Green brightness min updated to: {}", val);
-//        });
-//
-//        brightnessMaxSpinner.valueProperty().addListener((obs, old, val) -> {
-//            PersistentPreferences.setGreenBrightnessMax(val);
-//            logger.debug("Green brightness max updated to: {}", val);
-//        });
-//
-//        edgeThicknessSpinner.valueProperty().addListener((obs, old, val) -> {
-//            PersistentPreferences.setGreenEdgeThickness(val);
-//            logger.debug("Green edge thickness updated to: {}", val);
-//        });
-//
-//        minWidthSpinner.valueProperty().addListener((obs, old, val) -> {
-//            PersistentPreferences.setGreenMinBoxWidth(val);
-//            logger.debug("Green min box width updated to: {}", val);
-//        });
-//
-//        minHeightSpinner.valueProperty().addListener((obs, old, val) -> {
-//            PersistentPreferences.setGreenMinBoxHeight(val);
-//            logger.debug("Green min box height updated to: {}", val);
-//        });
-//
-//        // Bind enable state
-//        enableGreenBox.selectedProperty().addListener((obs, old, selected) -> {
-//            paramsGrid.setDisable(!selected);
-//        });
-//
-//        // Preview button and image
-//        Button previewButton = new Button("Preview Green Box Detection");
-//        ImageView previewImage = new ImageView();
-//        previewImage.setPreserveRatio(true);
-//        previewImage.setSmooth(true);
-//
-//        ScrollPane imageScroll = new ScrollPane(previewImage);
-//        imageScroll.setPrefViewportHeight(300);
-//        imageScroll.setFitToWidth(true);
-//        imageScroll.setFitToHeight(true);
-//        imageScroll.setPannable(true);
-//
-//        previewImage.fitWidthProperty().bind(imageScroll.widthProperty().subtract(20));
-//        previewImage.fitHeightProperty().bind(imageScroll.heightProperty().subtract(20));
-//
-//        Label resultLabel = new Label();
-//        resultLabel.setWrapText(true);
-//        // Add info about flips being applied
-//        Label flipInfoLabel = new Label();
-//        if (flipX || flipY) {
-//            String flipText = "Image display: ";
-//            if (flipX && flipY) flipText += "Flipped X and Y";
-//            else if (flipX) flipText += "Flipped X";
-//            else flipText += "Flipped Y";
-//            flipInfoLabel.setText(flipText);
-//            flipInfoLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #2c3e50;");
-//        }
-//
-//        // Try to load and display the macro image immediately when tab is created
-//        Platform.runLater(() -> {
-//            try {
-//                ImageData imageData = gui.getImageData();
-//                if (imageData != null) {
-//                    BufferedImage macroImage = MacroImageUtility.retrieveMacroImage(gui);
-//                    if (macroImage != null) {
-//                        // Crop the macro image
-//                        MacroImageUtility.CroppedMacroResult croppedResult = MacroImageUtility.cropToSlideArea(macroImage);
-//                        BufferedImage processedImage = croppedResult.getCroppedImage();
-//
-//                        // Apply flips if needed
-//                        if (flipX || flipY) {
-//                            processedImage = MacroImageUtility.flipMacroImage(processedImage, flipX, flipY);
-//                        }
-//
-//                        Image fxImage = SwingFXUtils.toFXImage(processedImage, null);
-//                        previewImage.setImage(fxImage);
-//                        resultLabel.setText("Macro image loaded (cropped and flipped). Click 'Preview Green Box Detection' to detect the scanned area.");
-//                        resultLabel.setStyle("-fx-text-fill: #059669;");
-//                    }
-//                }
-//            } catch (Exception ex) {
-//                logger.debug("Could not load macro image on tab creation", ex);
-//            }
-//        });
-//        // Reset to defaults button
-//        Button resetButton = new Button("Reset to Defaults");
-//        resetButton.setOnAction(e -> {
-//            logger.info("Resetting green box parameters to defaults");
-//            greenThresholdSpinner.getValueFactory().setValue(0.4);
-//            saturationSpinner.getValueFactory().setValue(0.3);
-//            brightnessMinSpinner.getValueFactory().setValue(0.3);
-//            brightnessMaxSpinner.getValueFactory().setValue(0.9);
-//            edgeThicknessSpinner.getValueFactory().setValue(3);
-//            minWidthSpinner.getValueFactory().setValue(100);
-//            minHeightSpinner.getValueFactory().setValue(100);
-//        });
-//
-//        previewButton.setOnAction(e -> {
-//            ImageData imageData = gui.getImageData();
-//            if (imageData == null) {
-//                resultLabel.setText("No image loaded");
-//                resultLabel.setStyle("-fx-text-fill: red;");
-//                return;
-//            }
-//
-//            try {
-//                // Get macro image using utility
-//                BufferedImage macroImage = MacroImageUtility.retrieveMacroImage(gui);
-//
-//                if (macroImage != null) {
-//                    logger.info("Successfully retrieved macro image: {}x{}",
-//                            macroImage.getWidth(), macroImage.getHeight());
-//
-//                    // Crop the macro image to just the slide area
-//                    MacroImageUtility.CroppedMacroResult croppedResult = MacroImageUtility.cropToSlideArea(macroImage);
-//                    BufferedImage processedImage = croppedResult.getCroppedImage();
-//
-//                    logger.info("Cropped to slide area: {}x{} (offset: {}, {})",
-//                            processedImage.getWidth(), processedImage.getHeight(),
-//                            croppedResult.getCropOffsetX(), croppedResult.getCropOffsetY());
-//
-//                    // Apply flips if needed
-//                    if (flipX || flipY) {
-//                        processedImage = MacroImageUtility.flipMacroImage(processedImage, flipX, flipY);
-//                        logger.info("Applied flips: X={}, Y={}", flipX, flipY);
-//                    }
-//
-//                    // First, always show the processed (cropped and flipped) macro image
-//                    Image originalImage = SwingFXUtils.toFXImage(processedImage, null);
-//                    previewImage.setImage(originalImage);
-//
-//                    // Create detection parameters from current spinner values
-//                    GreenBoxDetector.DetectionParams params = new GreenBoxDetector.DetectionParams();
-//                    params.greenThreshold = greenThresholdSpinner.getValue();
-//                    params.saturationMin = saturationSpinner.getValue();
-//                    params.brightnessMin = brightnessMinSpinner.getValue();
-//                    params.brightnessMax = brightnessMaxSpinner.getValue();
-//                    params.edgeThickness = edgeThicknessSpinner.getValue();
-//                    params.minBoxWidth = minWidthSpinner.getValue();
-//                    params.minBoxHeight = minHeightSpinner.getValue();
-//
-//                    // Run detection on the flipped, cropped image
-//                    var result = GreenBoxDetector.detectGreenBox(processedImage, params);
-//
-//                    if (result != null) {
-//                        // Now update with the debug image showing the detection
-//                        Image debugImage = SwingFXUtils.toFXImage(result.getDebugImage(), null);
-//                        previewImage.setImage(debugImage);
-//
-//                        resultLabel.setText(String.format(
-//                                "Green box detected at (%.0f, %.0f) size %.0fx%.0f with confidence %.2f\n" +
-//                                        "Note: Coordinates are in the flipped, cropped macro image",
-//                                result.getDetectedBox().getBoundsX(),
-//                                result.getDetectedBox().getBoundsY(),
-//                                result.getDetectedBox().getBoundsWidth(),
-//                                result.getDetectedBox().getBoundsHeight(),
-//                                result.getConfidence()
-//                        ));
-//                        resultLabel.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
-//
-//                        // Save current params since detection was successful
-//                        params.saveToPreferences();
-//                        logger.info("Saved successful detection parameters to preferences");
-//                    } else {
-//                        // No detection - keep showing the processed macro image
-//                        resultLabel.setText("No green box detected with current parameters");
-//                        resultLabel.setStyle("-fx-text-fill: orange;");
-//                    }
-//                } else {
-//                    resultLabel.setText("Could not retrieve macro image from current image");
-//                    resultLabel.setStyle("-fx-text-fill: red;");
-//                    logger.error("Failed to retrieve macro image");
-//                }
-//            } catch (Exception ex) {
-//                String errorMsg = "Error during green box detection: " + ex.getMessage();
-//                resultLabel.setText(errorMsg);
-//                resultLabel.setStyle("-fx-text-fill: red;");
-//                logger.error("Error in green box preview", ex);
-//            }
-//        });
-//
-//        // Layout
-//        HBox buttonBox = new HBox(10, previewButton, resetButton);
-//        buttonBox.setAlignment(Pos.CENTER_LEFT);
-//
-//        content.getChildren().addAll(
-//                enableGreenBox,
-//                flipInfoLabel,  // Add flip info
-//                new Separator(),
-//                paramsGrid,
-//                buttonBox,
-//                resultLabel,
-//                imageScroll
-//        );
-//
-//        VBox.setVgrow(imageScroll, Priority.ALWAYS);
-//
-//        // Store components for retrieval
-//        content.setUserData(Map.of(
-//                "enable", enableGreenBox,
-//                "greenThreshold", greenThresholdSpinner,
-//                "saturation", saturationSpinner,
-//                "brightnessMin", brightnessMinSpinner,
-//                "brightnessMax", brightnessMaxSpinner,
-//                "edgeThickness", edgeThicknessSpinner,
-//                "minWidth", minWidthSpinner,
-//                "minHeight", minHeightSpinner
-//        ));
-//
-//        tab.setContent(content);
-//        return tab;
-//    }
+    //    /**
+    //     * Creates the green box detection tab with persistent preferences support.
+    //     */
+    //    private static Tab createGreenBoxTab(QuPathGUI gui) {
+    //        Tab tab = new Tab();
+    //
+    //        VBox content = new VBox(10);
+    //        content.setPadding(new Insets(10));
+    //
+    //        // Enable/disable green box detection
+    //        CheckBox enableGreenBox = new CheckBox("Use green box detection for initial positioning");
+    //        enableGreenBox.setSelected(true);
+    //        // Get flip settings for display
+    //        boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
+    //        boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+    //        // Detection parameters
+    //        GridPane paramsGrid = new GridPane();
+    //        paramsGrid.setHgap(10);
+    //        paramsGrid.setVgap(5);
+    //        paramsGrid.setDisable(false);
+    //
+    //        // Create spinners with saved values
+    //        Label greenThresholdLabel = new Label("Green Dominance:");
+    //        Spinner<Double> greenThresholdSpinner = new Spinner<>(0.0, 1.0,
+    //                PersistentPreferences.getGreenThreshold(), 0.05);
+    //        greenThresholdSpinner.setEditable(true);
+    //        greenThresholdSpinner.setPrefWidth(100);
+    //
+    //        Label saturationLabel = new Label("Min Saturation:");
+    //        Spinner<Double> saturationSpinner = new Spinner<>(0.0, 1.0,
+    //                PersistentPreferences.getGreenSaturationMin(), 0.05);
+    //        saturationSpinner.setEditable(true);
+    //        saturationSpinner.setPrefWidth(100);
+    //
+    //        Label brightnessMinLabel = new Label("Min Brightness:");
+    //        Spinner<Double> brightnessMinSpinner = new Spinner<>(0.0, 1.0,
+    //                PersistentPreferences.getGreenBrightnessMin(), 0.05);
+    //        brightnessMinSpinner.setEditable(true);
+    //        brightnessMinSpinner.setPrefWidth(100);
+    //
+    //        Label brightnessMaxLabel = new Label("Max Brightness:");
+    //        Spinner<Double> brightnessMaxSpinner = new Spinner<>(0.0, 1.0,
+    //                PersistentPreferences.getGreenBrightnessMax(), 0.05);
+    //        brightnessMaxSpinner.setEditable(true);
+    //        brightnessMaxSpinner.setPrefWidth(100);
+    //
+    //        Label edgeThicknessLabel = new Label("Edge Thickness:");
+    //        Spinner<Integer> edgeThicknessSpinner = new Spinner<>(1, 50,
+    //                PersistentPreferences.getGreenEdgeThickness(), 1);
+    //        edgeThicknessSpinner.setEditable(true);
+    //        edgeThicknessSpinner.setPrefWidth(100);
+    //
+    //        Label minWidthLabel = new Label("Min Box Width:");
+    //        Spinner<Integer> minWidthSpinner = new Spinner<>(10, 5000,
+    //                PersistentPreferences.getGreenMinBoxWidth(), 10);
+    //        minWidthSpinner.setEditable(true);
+    //        minWidthSpinner.setPrefWidth(100);
+    //
+    //        Label minHeightLabel = new Label("Min Box Height:");
+    //        Spinner<Integer> minHeightSpinner = new Spinner<>(10, 5000,
+    //                PersistentPreferences.getGreenMinBoxHeight(), 10);
+    //        minHeightSpinner.setEditable(true);
+    //        minHeightSpinner.setPrefWidth(100);
+    //
+    //        // Add spinners to grid
+    //        int row = 0;
+    //        paramsGrid.add(greenThresholdLabel, 0, row);
+    //        paramsGrid.add(greenThresholdSpinner, 1, row++);
+    //        paramsGrid.add(saturationLabel, 0, row);
+    //        paramsGrid.add(saturationSpinner, 1, row++);
+    //        paramsGrid.add(brightnessMinLabel, 0, row);
+    //        paramsGrid.add(brightnessMinSpinner, 1, row++);
+    //        paramsGrid.add(brightnessMaxLabel, 0, row);
+    //        paramsGrid.add(brightnessMaxSpinner, 1, row++);
+    //        paramsGrid.add(edgeThicknessLabel, 0, row);
+    //        paramsGrid.add(edgeThicknessSpinner, 1, row++);
+    //        paramsGrid.add(minWidthLabel, 0, row);
+    //        paramsGrid.add(minWidthSpinner, 1, row++);
+    //        paramsGrid.add(minHeightLabel, 0, row);
+    //        paramsGrid.add(minHeightSpinner, 1, row++);
+    //
+    //        // Add value change listeners to save preferences
+    //        greenThresholdSpinner.valueProperty().addListener((obs, old, val) -> {
+    //            PersistentPreferences.setGreenThreshold(val);
+    //            logger.debug("Green threshold updated to: {}", val);
+    //        });
+    //
+    //        saturationSpinner.valueProperty().addListener((obs, old, val) -> {
+    //            PersistentPreferences.setGreenSaturationMin(val);
+    //            logger.debug("Green saturation min updated to: {}", val);
+    //        });
+    //
+    //        brightnessMinSpinner.valueProperty().addListener((obs, old, val) -> {
+    //            PersistentPreferences.setGreenBrightnessMin(val);
+    //            logger.debug("Green brightness min updated to: {}", val);
+    //        });
+    //
+    //        brightnessMaxSpinner.valueProperty().addListener((obs, old, val) -> {
+    //            PersistentPreferences.setGreenBrightnessMax(val);
+    //            logger.debug("Green brightness max updated to: {}", val);
+    //        });
+    //
+    //        edgeThicknessSpinner.valueProperty().addListener((obs, old, val) -> {
+    //            PersistentPreferences.setGreenEdgeThickness(val);
+    //            logger.debug("Green edge thickness updated to: {}", val);
+    //        });
+    //
+    //        minWidthSpinner.valueProperty().addListener((obs, old, val) -> {
+    //            PersistentPreferences.setGreenMinBoxWidth(val);
+    //            logger.debug("Green min box width updated to: {}", val);
+    //        });
+    //
+    //        minHeightSpinner.valueProperty().addListener((obs, old, val) -> {
+    //            PersistentPreferences.setGreenMinBoxHeight(val);
+    //            logger.debug("Green min box height updated to: {}", val);
+    //        });
+    //
+    //        // Bind enable state
+    //        enableGreenBox.selectedProperty().addListener((obs, old, selected) -> {
+    //            paramsGrid.setDisable(!selected);
+    //        });
+    //
+    //        // Preview button and image
+    //        Button previewButton = new Button("Preview Green Box Detection");
+    //        ImageView previewImage = new ImageView();
+    //        previewImage.setPreserveRatio(true);
+    //        previewImage.setSmooth(true);
+    //
+    //        ScrollPane imageScroll = new ScrollPane(previewImage);
+    //        imageScroll.setPrefViewportHeight(300);
+    //        imageScroll.setFitToWidth(true);
+    //        imageScroll.setFitToHeight(true);
+    //        imageScroll.setPannable(true);
+    //
+    //        previewImage.fitWidthProperty().bind(imageScroll.widthProperty().subtract(20));
+    //        previewImage.fitHeightProperty().bind(imageScroll.heightProperty().subtract(20));
+    //
+    //        Label resultLabel = new Label();
+    //        resultLabel.setWrapText(true);
+    //        // Add info about flips being applied
+    //        Label flipInfoLabel = new Label();
+    //        if (flipX || flipY) {
+    //            String flipText = "Image display: ";
+    //            if (flipX && flipY) flipText += "Flipped X and Y";
+    //            else if (flipX) flipText += "Flipped X";
+    //            else flipText += "Flipped Y";
+    //            flipInfoLabel.setText(flipText);
+    //            flipInfoLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #2c3e50;");
+    //        }
+    //
+    //        // Try to load and display the macro image immediately when tab is created
+    //        Platform.runLater(() -> {
+    //            try {
+    //                ImageData imageData = gui.getImageData();
+    //                if (imageData != null) {
+    //                    BufferedImage macroImage = MacroImageUtility.retrieveMacroImage(gui);
+    //                    if (macroImage != null) {
+    //                        // Crop the macro image
+    //                        MacroImageUtility.CroppedMacroResult croppedResult =
+    // MacroImageUtility.cropToSlideArea(macroImage);
+    //                        BufferedImage processedImage = croppedResult.getCroppedImage();
+    //
+    //                        // Apply flips if needed
+    //                        if (flipX || flipY) {
+    //                            processedImage = MacroImageUtility.flipMacroImage(processedImage, flipX, flipY);
+    //                        }
+    //
+    //                        Image fxImage = SwingFXUtils.toFXImage(processedImage, null);
+    //                        previewImage.setImage(fxImage);
+    //                        resultLabel.setText("Macro image loaded (cropped and flipped). Click 'Preview Green Box
+    // Detection' to detect the scanned area.");
+    //                        resultLabel.setStyle("-fx-text-fill: #059669;");
+    //                    }
+    //                }
+    //            } catch (Exception ex) {
+    //                logger.debug("Could not load macro image on tab creation", ex);
+    //            }
+    //        });
+    //        // Reset to defaults button
+    //        Button resetButton = new Button("Reset to Defaults");
+    //        resetButton.setOnAction(e -> {
+    //            logger.info("Resetting green box parameters to defaults");
+    //            greenThresholdSpinner.getValueFactory().setValue(0.4);
+    //            saturationSpinner.getValueFactory().setValue(0.3);
+    //            brightnessMinSpinner.getValueFactory().setValue(0.3);
+    //            brightnessMaxSpinner.getValueFactory().setValue(0.9);
+    //            edgeThicknessSpinner.getValueFactory().setValue(3);
+    //            minWidthSpinner.getValueFactory().setValue(100);
+    //            minHeightSpinner.getValueFactory().setValue(100);
+    //        });
+    //
+    //        previewButton.setOnAction(e -> {
+    //            ImageData imageData = gui.getImageData();
+    //            if (imageData == null) {
+    //                resultLabel.setText("No image loaded");
+    //                resultLabel.setStyle("-fx-text-fill: red;");
+    //                return;
+    //            }
+    //
+    //            try {
+    //                // Get macro image using utility
+    //                BufferedImage macroImage = MacroImageUtility.retrieveMacroImage(gui);
+    //
+    //                if (macroImage != null) {
+    //                    logger.info("Successfully retrieved macro image: {}x{}",
+    //                            macroImage.getWidth(), macroImage.getHeight());
+    //
+    //                    // Crop the macro image to just the slide area
+    //                    MacroImageUtility.CroppedMacroResult croppedResult =
+    // MacroImageUtility.cropToSlideArea(macroImage);
+    //                    BufferedImage processedImage = croppedResult.getCroppedImage();
+    //
+    //                    logger.info("Cropped to slide area: {}x{} (offset: {}, {})",
+    //                            processedImage.getWidth(), processedImage.getHeight(),
+    //                            croppedResult.getCropOffsetX(), croppedResult.getCropOffsetY());
+    //
+    //                    // Apply flips if needed
+    //                    if (flipX || flipY) {
+    //                        processedImage = MacroImageUtility.flipMacroImage(processedImage, flipX, flipY);
+    //                        logger.info("Applied flips: X={}, Y={}", flipX, flipY);
+    //                    }
+    //
+    //                    // First, always show the processed (cropped and flipped) macro image
+    //                    Image originalImage = SwingFXUtils.toFXImage(processedImage, null);
+    //                    previewImage.setImage(originalImage);
+    //
+    //                    // Create detection parameters from current spinner values
+    //                    GreenBoxDetector.DetectionParams params = new GreenBoxDetector.DetectionParams();
+    //                    params.greenThreshold = greenThresholdSpinner.getValue();
+    //                    params.saturationMin = saturationSpinner.getValue();
+    //                    params.brightnessMin = brightnessMinSpinner.getValue();
+    //                    params.brightnessMax = brightnessMaxSpinner.getValue();
+    //                    params.edgeThickness = edgeThicknessSpinner.getValue();
+    //                    params.minBoxWidth = minWidthSpinner.getValue();
+    //                    params.minBoxHeight = minHeightSpinner.getValue();
+    //
+    //                    // Run detection on the flipped, cropped image
+    //                    var result = GreenBoxDetector.detectGreenBox(processedImage, params);
+    //
+    //                    if (result != null) {
+    //                        // Now update with the debug image showing the detection
+    //                        Image debugImage = SwingFXUtils.toFXImage(result.getDebugImage(), null);
+    //                        previewImage.setImage(debugImage);
+    //
+    //                        resultLabel.setText(String.format(
+    //                                "Green box detected at (%.0f, %.0f) size %.0fx%.0f with confidence %.2f\n" +
+    //                                        "Note: Coordinates are in the flipped, cropped macro image",
+    //                                result.getDetectedBox().getBoundsX(),
+    //                                result.getDetectedBox().getBoundsY(),
+    //                                result.getDetectedBox().getBoundsWidth(),
+    //                                result.getDetectedBox().getBoundsHeight(),
+    //                                result.getConfidence()
+    //                        ));
+    //                        resultLabel.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
+    //
+    //                        // Save current params since detection was successful
+    //                        params.saveToPreferences();
+    //                        logger.info("Saved successful detection parameters to preferences");
+    //                    } else {
+    //                        // No detection - keep showing the processed macro image
+    //                        resultLabel.setText("No green box detected with current parameters");
+    //                        resultLabel.setStyle("-fx-text-fill: orange;");
+    //                    }
+    //                } else {
+    //                    resultLabel.setText("Could not retrieve macro image from current image");
+    //                    resultLabel.setStyle("-fx-text-fill: red;");
+    //                    logger.error("Failed to retrieve macro image");
+    //                }
+    //            } catch (Exception ex) {
+    //                String errorMsg = "Error during green box detection: " + ex.getMessage();
+    //                resultLabel.setText(errorMsg);
+    //                resultLabel.setStyle("-fx-text-fill: red;");
+    //                logger.error("Error in green box preview", ex);
+    //            }
+    //        });
+    //
+    //        // Layout
+    //        HBox buttonBox = new HBox(10, previewButton, resetButton);
+    //        buttonBox.setAlignment(Pos.CENTER_LEFT);
+    //
+    //        content.getChildren().addAll(
+    //                enableGreenBox,
+    //                flipInfoLabel,  // Add flip info
+    //                new Separator(),
+    //                paramsGrid,
+    //                buttonBox,
+    //                resultLabel,
+    //                imageScroll
+    //        );
+    //
+    //        VBox.setVgrow(imageScroll, Priority.ALWAYS);
+    //
+    //        // Store components for retrieval
+    //        content.setUserData(Map.of(
+    //                "enable", enableGreenBox,
+    //                "greenThreshold", greenThresholdSpinner,
+    //                "saturation", saturationSpinner,
+    //                "brightnessMin", brightnessMinSpinner,
+    //                "brightnessMax", brightnessMaxSpinner,
+    //                "edgeThickness", edgeThicknessSpinner,
+    //                "minWidth", minWidthSpinner,
+    //                "minHeight", minHeightSpinner
+    //        ));
+    //
+    //        tab.setContent(content);
+    //        return tab;
+    //    }
 
     /**
      * Creates the transform selection tab.
      */
-
-    private static Tab createTransformTab(AffineTransformManager manager,
-                                          String currentMicroscope) {
+    private static Tab createTransformTab(AffineTransformManager manager, String currentMicroscope) {
         Tab tab = new Tab();
 
         VBox content = new VBox(10);
@@ -910,8 +904,7 @@ public class MacroImageController {
                         preset.getMicroscope(),
                         preset.getMountingMethod(),
                         preset.getCreatedDate(),
-                        preset.getNotes()
-                ));
+                        preset.getNotes()));
             } else {
                 detailsArea.clear();
             }
@@ -982,25 +975,24 @@ public class MacroImageController {
         infoLabel.setText("A new transform will be created from scratch using manual alignment.");
 
         // Layout
-        content.getChildren().addAll(
-                new Label("Transform Mode:"),
-                createNew,
-                useExisting,
-                transformCombo,
-                detailsArea,
-                new Separator(),
-                saveNewTransform,
-                transformName,
-                infoLabel
-        );
+        content.getChildren()
+                .addAll(
+                        new Label("Transform Mode:"),
+                        createNew,
+                        useExisting,
+                        transformCombo,
+                        detailsArea,
+                        new Separator(),
+                        saveNewTransform,
+                        transformName,
+                        infoLabel);
 
         // Store UI components for later retrieval
         content.setUserData(Map.of(
                 "useExisting", useExisting,
                 "transformCombo", transformCombo,
                 "saveNew", saveNewTransform,
-                "transformName", transformName
-        ));
+                "transformName", transformName));
 
         tab.setContent(content);
         return tab;
@@ -1031,8 +1023,7 @@ public class MacroImageController {
         // Load saved method
         try {
             String savedMethod = PersistentPreferences.getTissueDetectionMethod();
-            MacroImageAnalyzer.ThresholdMethod method =
-                    MacroImageAnalyzer.ThresholdMethod.valueOf(savedMethod);
+            MacroImageAnalyzer.ThresholdMethod method = MacroImageAnalyzer.ThresholdMethod.valueOf(savedMethod);
             methodCombo.getSelectionModel().select(method);
             logger.debug("Loaded saved tissue detection method: {}", method);
         } catch (Exception e) {
@@ -1056,51 +1047,48 @@ public class MacroImageController {
 
         // Create all parameter controls with saved values
         Label percentileLabel = new Label("Percentile:");
-        Spinner<Double> percentileSpinner = new Spinner<>(0.0, 1.0,
-                PersistentPreferences.getTissuePercentile(), 0.05);
+        Spinner<Double> percentileSpinner = new Spinner<>(0.0, 1.0, PersistentPreferences.getTissuePercentile(), 0.05);
         percentileSpinner.setEditable(true);
         percentileSpinner.setPrefWidth(120);
 
         Label fixedLabel = new Label("Threshold:");
-        Spinner<Integer> fixedSpinner = new Spinner<>(0, 255,
-                PersistentPreferences.getTissueFixedThreshold());
+        Spinner<Integer> fixedSpinner = new Spinner<>(0, 255, PersistentPreferences.getTissueFixedThreshold());
         fixedSpinner.setEditable(true);
         fixedSpinner.setPrefWidth(120);
 
         Label eosinLabel = new Label("Eosin Sensitivity:");
-        Spinner<Double> eosinSpinner = new Spinner<>(0.0, 2.0,
-                PersistentPreferences.getTissueEosinThreshold(), 0.05);
+        Spinner<Double> eosinSpinner = new Spinner<>(0.0, 2.0, PersistentPreferences.getTissueEosinThreshold(), 0.05);
         eosinSpinner.setEditable(true);
         eosinSpinner.setPrefWidth(120);
 
         Label hematoxylinLabel = new Label("Hematoxylin Sensitivity:");
-        Spinner<Double> hematoxylinSpinner = new Spinner<>(0.0, 1.0,
-                PersistentPreferences.getTissueHematoxylinThreshold(), 0.05);
+        Spinner<Double> hematoxylinSpinner =
+                new Spinner<>(0.0, 1.0, PersistentPreferences.getTissueHematoxylinThreshold(), 0.05);
         hematoxylinSpinner.setEditable(true);
         hematoxylinSpinner.setPrefWidth(120);
 
         Label saturationLabel = new Label("Min Saturation:");
-        Spinner<Double> saturationSpinner = new Spinner<>(0.0, 1.0,
-                PersistentPreferences.getTissueSaturationThreshold(), 0.05);
+        Spinner<Double> saturationSpinner =
+                new Spinner<>(0.0, 1.0, PersistentPreferences.getTissueSaturationThreshold(), 0.05);
         saturationSpinner.setEditable(true);
         saturationSpinner.setPrefWidth(120);
 
         Label brightnessMinLabel = new Label("Min Brightness:");
-        Spinner<Double> brightnessMinSpinner = new Spinner<>(0.0, 1.0,
-                PersistentPreferences.getTissueBrightnessMin(), 0.05);
+        Spinner<Double> brightnessMinSpinner =
+                new Spinner<>(0.0, 1.0, PersistentPreferences.getTissueBrightnessMin(), 0.05);
         brightnessMinSpinner.setEditable(true);
         brightnessMinSpinner.setPrefWidth(120);
 
         Label brightnessMaxLabel = new Label("Max Brightness:");
-        Spinner<Double> brightnessMaxSpinner = new Spinner<>(0.0, 1.0,
-                PersistentPreferences.getTissueBrightnessMax(), 0.05);
+        Spinner<Double> brightnessMaxSpinner =
+                new Spinner<>(0.0, 1.0, PersistentPreferences.getTissueBrightnessMax(), 0.05);
         brightnessMaxSpinner.setEditable(true);
         brightnessMaxSpinner.setPrefWidth(120);
 
         // Min region size - always visible
         Label minSizeLabel = new Label("Min Region Size (pixels):");
-        Spinner<Integer> minSizeSpinner = new Spinner<>(100, 150000,
-                PersistentPreferences.getTissueMinRegionSize(), 100);
+        Spinner<Integer> minSizeSpinner =
+                new Spinner<>(100, 150000, PersistentPreferences.getTissueMinRegionSize(), 100);
         minSizeSpinner.setEditable(true);
         minSizeSpinner.setPrefWidth(120);
 
@@ -1167,25 +1155,41 @@ public class MacroImageController {
 
         // Update parameter visibility based on method
         methodCombo.getSelectionModel().selectedItemProperty().addListener((obs, old, method) -> {
-            updateThresholdParameterVisibility(method,
-                    percentileLabel, percentileSpinner,
-                    fixedLabel, fixedSpinner,
-                    eosinLabel, eosinSpinner,
-                    hematoxylinLabel, hematoxylinSpinner,
-                    saturationLabel, saturationSpinner,
-                    brightnessMinLabel, brightnessMinSpinner,
-                    brightnessMaxLabel, brightnessMaxSpinner);
+            updateThresholdParameterVisibility(
+                    method,
+                    percentileLabel,
+                    percentileSpinner,
+                    fixedLabel,
+                    fixedSpinner,
+                    eosinLabel,
+                    eosinSpinner,
+                    hematoxylinLabel,
+                    hematoxylinSpinner,
+                    saturationLabel,
+                    saturationSpinner,
+                    brightnessMinLabel,
+                    brightnessMinSpinner,
+                    brightnessMaxLabel,
+                    brightnessMaxSpinner);
         });
 
         // Trigger initial visibility update
-        updateThresholdParameterVisibility(methodCombo.getValue(),
-                percentileLabel, percentileSpinner,
-                fixedLabel, fixedSpinner,
-                eosinLabel, eosinSpinner,
-                hematoxylinLabel, hematoxylinSpinner,
-                saturationLabel, saturationSpinner,
-                brightnessMinLabel, brightnessMinSpinner,
-                brightnessMaxLabel, brightnessMaxSpinner);
+        updateThresholdParameterVisibility(
+                methodCombo.getValue(),
+                percentileLabel,
+                percentileSpinner,
+                fixedLabel,
+                fixedSpinner,
+                eosinLabel,
+                eosinSpinner,
+                hematoxylinLabel,
+                hematoxylinSpinner,
+                saturationLabel,
+                saturationSpinner,
+                brightnessMinLabel,
+                brightnessMinSpinner,
+                brightnessMaxLabel,
+                brightnessMaxSpinner);
 
         // Preview button
         Button previewButton = new Button("Preview Tissue Detection");
@@ -1259,14 +1263,12 @@ public class MacroImageController {
                 params.put("brightnessMax", brightnessMaxSpinner.getValue());
                 params.put("minRegionSize", minSizeSpinner.getValue());
 
-                logger.info("Running tissue detection preview with method: {} and params: {}",
-                        methodCombo.getValue(), params);
-
-                var result = MacroImageAnalyzer.analyzeMacroImage(
-                        gui.getImageData(),
+                logger.info(
+                        "Running tissue detection preview with method: {} and params: {}",
                         methodCombo.getValue(),
-                        params
-                );
+                        params);
+
+                var result = MacroImageAnalyzer.analyzeMacroImage(gui.getImageData(), methodCombo.getValue(), params);
 
                 if (result != null) {
                     Image fxImage = SwingFXUtils.toFXImage(result.getThresholdedImage(), null);
@@ -1277,17 +1279,16 @@ public class MacroImageController {
                     String regionStyle = regionCount > 0 ? "-fx-text-fill: green;" : "-fx-text-fill: orange;";
 
                     statsLabel.setText(String.format(
-                            "Detected %d tissue regions (after %d pixel minimum filter)\n" +
-                                    "Total tissue bounds: %.0fx%.0f pixels (%.1fx%.1f mm)\n" +
-                                    "Threshold value used: %d",
+                            "Detected %d tissue regions (after %d pixel minimum filter)\n"
+                                    + "Total tissue bounds: %.0fx%.0f pixels (%.1fx%.1f mm)\n"
+                                    + "Threshold value used: %d",
                             regionCount,
                             minSizeSpinner.getValue(),
                             result.getTissueBounds().getBoundsWidth(),
                             result.getTissueBounds().getBoundsHeight(),
-                            result.getTissueBounds().getBoundsWidth() * 0.08,  // Assuming 80µm macro pixels
+                            result.getTissueBounds().getBoundsWidth() * 0.08, // Assuming 80um macro pixels
                             result.getTissueBounds().getBoundsHeight() * 0.08,
-                            result.getThreshold()
-                    ));
+                            result.getThreshold()));
                     statsLabel.setStyle(regionStyle + " -fx-font-weight: bold;");
 
                     logger.info("Tissue detection successful: {} regions found", regionCount);
@@ -1309,17 +1310,18 @@ public class MacroImageController {
 
         // Layout
         VBox contentBox = new VBox(10);
-        contentBox.getChildren().addAll(
-                new Label("Tissue Detection Method:"),
-                methodCombo,
-                new Separator(),
-                paramsGrid,
-                infoLabel,
-                new Separator(),
-                buttonBox,
-                statsLabel,
-                imageScroll
-        );
+        contentBox
+                .getChildren()
+                .addAll(
+                        new Label("Tissue Detection Method:"),
+                        methodCombo,
+                        new Separator(),
+                        paramsGrid,
+                        infoLabel,
+                        new Separator(),
+                        buttonBox,
+                        statsLabel,
+                        imageScroll);
 
         VBox.setVgrow(imageScroll, Priority.ALWAYS);
         contentBox.setFillWidth(true);
@@ -1334,8 +1336,7 @@ public class MacroImageController {
                 "saturationThreshold", saturationSpinner,
                 "brightnessMin", brightnessMinSpinner,
                 "brightnessMax", brightnessMaxSpinner,
-                "minSize", minSizeSpinner
-        ));
+                "minSize", minSizeSpinner));
 
         tab.setContent(contentBox);
         return tab;
@@ -1346,13 +1347,20 @@ public class MacroImageController {
      */
     private static void updateThresholdParameterVisibility(
             MacroImageAnalyzer.ThresholdMethod method,
-            Label percentileLabel, Spinner<Double> percentileSpinner,
-            Label fixedLabel, Spinner<Integer> fixedSpinner,
-            Label eosinLabel, Spinner<Double> eosinSpinner,
-            Label hematoxylinLabel, Spinner<Double> hematoxylinSpinner,
-            Label saturationLabel, Spinner<Double> saturationSpinner,
-            Label brightnessMinLabel, Spinner<Double> brightnessMinSpinner,
-            Label brightnessMaxLabel, Spinner<Double> brightnessMaxSpinner) {
+            Label percentileLabel,
+            Spinner<Double> percentileSpinner,
+            Label fixedLabel,
+            Spinner<Integer> fixedSpinner,
+            Label eosinLabel,
+            Spinner<Double> eosinSpinner,
+            Label hematoxylinLabel,
+            Spinner<Double> hematoxylinSpinner,
+            Label saturationLabel,
+            Spinner<Double> saturationSpinner,
+            Label brightnessMinLabel,
+            Spinner<Double> brightnessMinSpinner,
+            Label brightnessMaxLabel,
+            Spinner<Double> brightnessMaxSpinner) {
 
         // Hide all first
         percentileLabel.setVisible(false);
@@ -1417,8 +1425,7 @@ public class MacroImageController {
      * Gathers all configuration from the dialog tabs.
      */
     @SuppressWarnings("unchecked")
-    private static AlignmentConfig gatherAlignmentConfig(
-            Tab transformTab, Tab greenBoxTab, Tab thresholdTab) {
+    private static AlignmentConfig gatherAlignmentConfig(Tab transformTab, Tab greenBoxTab, Tab thresholdTab) {
 
         // Get transform settings
         var transformData = (Map<String, Object>) transformTab.getContent().getUserData();
@@ -1483,7 +1490,6 @@ public class MacroImageController {
                 methodCombo.getValue(),
                 thresholdParams,
                 greenBoxParams,
-                enableGreenBox.isSelected()
-        );
+                enableGreenBox.isSelected());
     }
 }

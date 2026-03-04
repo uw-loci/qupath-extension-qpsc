@@ -1,11 +1,10 @@
 package qupath.ext.qpsc.utilities;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalDouble;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Tracks Z-focus values for acquired annotations and predicts focus positions
@@ -31,9 +30,10 @@ public class ZFocusPredictionModel {
     private final List<double[]> dataPoints = new ArrayList<>();
 
     /** Plane coefficients for z = a*x + b*y + c */
-    private double a = 0.0;  // X coefficient
-    private double b = 0.0;  // Y coefficient
-    private double c = 0.0;  // Intercept
+    private double a = 0.0; // X coefficient
+
+    private double b = 0.0; // Y coefficient
+    private double c = 0.0; // Intercept
 
     /** Whether the model has been fitted and is ready for predictions */
     private boolean modelFitted = false;
@@ -48,7 +48,7 @@ public class ZFocusPredictionModel {
     private static final int MIN_POINTS_EARLY = 3;
 
     /** Distance threshold (in micrometers) for enabling early prediction with 3 points */
-    private static final double EARLY_PREDICTION_DISTANCE_UM = 1000.0;  // 1mm
+    private static final double EARLY_PREDICTION_DISTANCE_UM = 1000.0; // 1mm
 
     /**
      * Adds a measured Z-focus data point after successful acquisition.
@@ -58,11 +58,11 @@ public class ZFocusPredictionModel {
      * @param focusZ Final focus Z position in micrometers
      */
     public void addDataPoint(double stageX, double stageY, double focusZ) {
-        dataPoints.add(new double[]{stageX, stageY, focusZ});
-        lastAcquiredPoint = new double[]{stageX, stageY};
+        dataPoints.add(new double[] {stageX, stageY, focusZ});
+        lastAcquiredPoint = new double[] {stageX, stageY};
 
-        logger.info("Added Z focus point #{}: ({:.1f}, {:.1f}) -> Z={:.2f} um",
-                dataPoints.size(), stageX, stageY, focusZ);
+        logger.info(
+                "Added Z focus point #{}: ({:.1f}, {:.1f}) -> Z={:.2f} um", dataPoints.size(), stageX, stageY, focusZ);
 
         // Refit the plane model if we have enough points
         if (dataPoints.size() >= MIN_POINTS_EARLY) {
@@ -91,8 +91,11 @@ public class ZFocusPredictionModel {
         }
 
         if (numPoints >= MIN_POINTS_EARLY && distanceToNextAnnotation > EARLY_PREDICTION_DISTANCE_UM) {
-            logger.info("Early prediction enabled: {} points, distance {:.1f}um > {:.1f}um threshold",
-                    numPoints, distanceToNextAnnotation, EARLY_PREDICTION_DISTANCE_UM);
+            logger.info(
+                    "Early prediction enabled: {} points, distance {:.1f}um > {:.1f}um threshold",
+                    numPoints,
+                    distanceToNextAnnotation,
+                    EARLY_PREDICTION_DISTANCE_UM);
             return modelFitted;
         }
 
@@ -113,8 +116,14 @@ public class ZFocusPredictionModel {
 
         double predictedZ = a * stageX + b * stageY + c;
 
-        logger.debug("Predicted Z for ({:.1f}, {:.1f}): {:.2f} um (plane: z = {:.6f}x + {:.6f}y + {:.2f})",
-                stageX, stageY, predictedZ, a, b, c);
+        logger.debug(
+                "Predicted Z for ({:.1f}, {:.1f}): {:.2f} um (plane: z = {:.6f}x + {:.6f}y + {:.2f})",
+                stageX,
+                stageY,
+                predictedZ,
+                a,
+                b,
+                c);
 
         return OptionalDouble.of(predictedZ);
     }
@@ -177,9 +186,9 @@ public class ZFocusPredictionModel {
         // Using Cramer's rule to solve 3x3 system
 
         double[][] A = {
-                {sumX2, sumXY, sumX},
-                {sumXY, sumY2, sumY},
-                {sumX, sumY, n}
+            {sumX2, sumXY, sumX},
+            {sumXY, sumY2, sumY},
+            {sumX, sumY, n}
         };
 
         double[] rhs = {sumXZ, sumYZ, sumZ};
@@ -206,8 +215,13 @@ public class ZFocusPredictionModel {
 
         // Calculate and log residual error
         double residualError = calculateResidualError();
-        logger.info("Plane fitted with {} points: z = {:.6f}x + {:.6f}y + {:.2f}, residual error: {:.2f} um",
-                n, a, b, c, residualError);
+        logger.info(
+                "Plane fitted with {} points: z = {:.6f}x + {:.6f}y + {:.2f}, residual error: {:.2f} um",
+                n,
+                a,
+                b,
+                c,
+                residualError);
     }
 
     /**
@@ -279,7 +293,7 @@ public class ZFocusPredictionModel {
         if (!modelFitted) {
             return null;
         }
-        return new double[]{a, b, c};
+        return new double[] {a, b, c};
     }
 
     /**

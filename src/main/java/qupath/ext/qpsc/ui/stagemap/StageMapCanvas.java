@@ -1,6 +1,12 @@
 package qupath.ext.qpsc.ui.stagemap;
 
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.BiConsumer;
 import javafx.application.Platform;
+import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.PixelWriter;
 import javafx.scene.image.WritableImage;
@@ -16,13 +22,6 @@ import javafx.scene.text.Text;
 import javafx.scene.text.TextAlignment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javafx.embed.swing.SwingFXUtils;
-import java.awt.geom.AffineTransform;
-import java.awt.image.BufferedImage;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.BiConsumer;
 
 /**
  * Stage map visualization using WritableImage + Shape nodes.
@@ -66,11 +65,11 @@ public class StageMapCanvas extends StackPane {
     private static final Color OUT_OF_BOUNDS_COLOR = Color.rgb(255, 100, 100, 0.8);
 
     // ========== Rendering Constants ==========
-    private static final double CROSSHAIR_RADIUS = 6;  // pixels
-    private static final double CROSSHAIR_LINE_LENGTH = 20;  // pixels
-    private static final double CROSSHAIR_GAP = 2;  // pixels gap between circle and lines
-    private static final double INSERT_PADDING = 20;  // pixels padding around insert
-    private static final double VIEW_MARGIN_UM = 5000.0;  // 5mm margin around slides in view
+    private static final double CROSSHAIR_RADIUS = 6; // pixels
+    private static final double CROSSHAIR_LINE_LENGTH = 20; // pixels
+    private static final double CROSSHAIR_GAP = 2; // pixels gap between circle and lines
+    private static final double INSERT_PADDING = 20; // pixels padding around insert
+    private static final double VIEW_MARGIN_UM = 5000.0; // 5mm margin around slides in view
 
     // ========== Image Layer ==========
     private WritableImage backgroundImage;
@@ -92,12 +91,12 @@ public class StageMapCanvas extends StackPane {
     private AffineTransform macroTransform;
     private int macroWidth, macroHeight;
     private boolean macroOverlayVisible = false;
-    private static final double MACRO_OVERLAY_OPACITY = 0.6;  // 40% transparency
+    private static final double MACRO_OVERLAY_OPACITY = 0.6; // 40% transparency
     private boolean macroTransformFlipX = false;
     private boolean macroTransformFlipY = false;
-    private double macroPixelSizeUm = 0;      // physical size per macro pixel (from scanner config)
-    private double macroOverlayXOffsetUm = 0;  // X offset of overlay vs slide rect (from scanner config)
-    private double macroOverlayYOffsetUm = 0;  // Y offset of overlay vs slide rect (from scanner config)
+    private double macroPixelSizeUm = 0; // physical size per macro pixel (from scanner config)
+    private double macroOverlayXOffsetUm = 0; // X offset of overlay vs slide rect (from scanner config)
+    private double macroOverlayYOffsetUm = 0; // Y offset of overlay vs slide rect (from scanner config)
 
     // ========== State ==========
     private StageInsert currentInsert;
@@ -107,8 +106,8 @@ public class StageMapCanvas extends StackPane {
     private double targetStageY = Double.NaN;
     private double fovWidthUm = 0;
     private double fovHeightUm = 0;
-    private double scale = 1.0;  // pixels per micron
-    private double offsetX = 0;  // canvas offset for centering
+    private double scale = 1.0; // pixels per micron
+    private double offsetX = 0; // canvas offset for centering
     private double offsetY = 0;
     private boolean showLegalZones = true;
     private boolean showTarget = false;
@@ -182,16 +181,22 @@ public class StageMapCanvas extends StackPane {
         macroOverlayView.setOpacity(MACRO_OVERLAY_OPACITY);
         macroOverlayView.setPreserveRatio(false);
         macroOverlayView.setVisible(false);
-        macroOverlayView.setMouseTransparent(true);  // Don't interfere with click events
+        macroOverlayView.setMouseTransparent(true); // Don't interfere with click events
 
         // Add all shapes to overlay (macroOverlayView first so it renders behind other elements)
-        overlayPane.getChildren().addAll(
-                macroOverlayView,  // Renders first (behind everything)
-                insertBorderRect,
-                crosshairCircle, crosshairLineH1, crosshairLineH2, crosshairLineV1, crosshairLineV2,
-                fovRect,
-                targetLineH, targetLineV
-        );
+        overlayPane
+                .getChildren()
+                .addAll(
+                        macroOverlayView, // Renders first (behind everything)
+                        insertBorderRect,
+                        crosshairCircle,
+                        crosshairLineH1,
+                        crosshairLineH2,
+                        crosshairLineV1,
+                        crosshairLineV2,
+                        fovRect,
+                        targetLineH,
+                        targetLineV);
 
         // Stack layers
         getChildren().addAll(backgroundView, overlayPane);
@@ -201,10 +206,8 @@ public class StageMapCanvas extends StackPane {
         Rectangle clipRect = new Rectangle(width, height);
         setClip(clipRect);
         // Update clip when canvas resizes
-        widthProperty().addListener((obs, oldVal, newVal) ->
-                clipRect.setWidth(newVal.doubleValue()));
-        heightProperty().addListener((obs, oldVal, newVal) ->
-                clipRect.setHeight(newVal.doubleValue()));
+        widthProperty().addListener((obs, oldVal, newVal) -> clipRect.setWidth(newVal.doubleValue()));
+        heightProperty().addListener((obs, oldVal, newVal) -> clipRect.setHeight(newVal.doubleValue()));
 
         // Handle mouse events on the overlay pane
         overlayPane.setOnMouseMoved(e -> {
@@ -321,7 +324,7 @@ public class StageMapCanvas extends StackPane {
      */
     public double[] getTargetPosition() {
         if (showTarget && !Double.isNaN(targetStageX)) {
-            return new double[]{targetStageX, targetStageY};
+            return new double[] {targetStageX, targetStageY};
         }
         return null;
     }
@@ -393,7 +396,7 @@ public class StageMapCanvas extends StackPane {
             stageY = currentInsert.getOriginYUm() + insertY;
         }
 
-        return new double[]{stageX, stageY};
+        return new double[] {stageX, stageY};
     }
 
     /**
@@ -420,7 +423,7 @@ public class StageMapCanvas extends StackPane {
         double screenX = offsetX + insertX * scale;
         double screenY = offsetY + insertY * scale;
 
-        return new double[]{screenX, screenY};
+        return new double[] {screenX, screenY};
     }
 
     // ========== Internal Rendering ==========
@@ -458,16 +461,22 @@ public class StageMapCanvas extends StackPane {
         offsetX = (w - viewWidth * scale) / 2.0 - viewX * scale;
         offsetY = (h - viewHeight * scale) / 2.0 - viewY * scale;
 
-        logger.info("calculateScale: canvas={}x{}, aperture={}x{} um, viewBounds=[{}, {}, {}, {}] um, "
+        logger.info(
+                "calculateScale: canvas={}x{}, aperture={}x{} um, viewBounds=[{}, {}, {}, {}] um, "
                         + "scale={}, offset=({}, {}), scaleX={}, scaleY={}",
-                String.format("%.0f", w), String.format("%.0f", h),
+                String.format("%.0f", w),
+                String.format("%.0f", h),
                 String.format("%.0f", currentInsert.getWidthUm()),
                 String.format("%.0f", currentInsert.getHeightUm()),
-                String.format("%.0f", viewX), String.format("%.0f", viewY),
-                String.format("%.0f", viewWidth), String.format("%.0f", viewHeight),
+                String.format("%.0f", viewX),
+                String.format("%.0f", viewY),
+                String.format("%.0f", viewWidth),
+                String.format("%.0f", viewHeight),
                 String.format("%.6f", scale),
-                String.format("%.1f", offsetX), String.format("%.1f", offsetY),
-                String.format("%.6f", scaleX), String.format("%.6f", scaleY));
+                String.format("%.1f", offsetX),
+                String.format("%.1f", offsetY),
+                String.format("%.6f", scaleX),
+                String.format("%.6f", scaleY));
     }
 
     /**
@@ -707,8 +716,11 @@ public class StageMapCanvas extends StackPane {
             return;
         }
 
-        if (Double.isNaN(currentStageX) || Double.isNaN(currentStageY) ||
-            fovWidthUm <= 0 || fovHeightUm <= 0 || currentInsert == null) {
+        if (Double.isNaN(currentStageX)
+                || Double.isNaN(currentStageY)
+                || fovWidthUm <= 0
+                || fovHeightUm <= 0
+                || currentInsert == null) {
             fovRect.setVisible(false);
             return;
         }
@@ -792,12 +804,19 @@ public class StageMapCanvas extends StackPane {
      * @param xOffsetUm       X offset of overlay relative to slide rect in microns (from scanner config)
      * @param yOffsetUm       Y offset of overlay relative to slide rect in microns (from scanner config)
      */
-    public void setMacroOverlay(BufferedImage macroImage, AffineTransform transform,
-                                boolean transformFlipX, boolean transformFlipY,
-                                double pixelSizeUm, double xOffsetUm, double yOffsetUm) {
+    public void setMacroOverlay(
+            BufferedImage macroImage,
+            AffineTransform transform,
+            boolean transformFlipX,
+            boolean transformFlipY,
+            double pixelSizeUm,
+            double xOffsetUm,
+            double yOffsetUm) {
         if (macroImage == null || transform == null) {
-            logger.info("setMacroOverlay called with null args (image={}, transform={}) - clearing",
-                    macroImage != null, transform != null);
+            logger.info(
+                    "setMacroOverlay called with null args (image={}, transform={}) - clearing",
+                    macroImage != null,
+                    transform != null);
             clearMacroOverlay();
             return;
         }
@@ -812,10 +831,16 @@ public class StageMapCanvas extends StackPane {
         this.macroOverlayYOffsetUm = yOffsetUm;
         this.macroOverlayVisible = true;
 
-        logger.info("Setting macro overlay: {}x{} pixels, pixelSize={} um, "
+        logger.info(
+                "Setting macro overlay: {}x{} pixels, pixelSize={} um, "
                         + "offset=({}, {}) um, flipCorrection=({}, {})",
-                macroWidth, macroHeight, pixelSizeUm, xOffsetUm, yOffsetUm,
-                transformFlipX, transformFlipY);
+                macroWidth,
+                macroHeight,
+                pixelSizeUm,
+                xOffsetUm,
+                yOffsetUm,
+                transformFlipX,
+                transformFlipY);
 
         // Convert BufferedImage to JavaFX Image
         javafx.scene.image.Image fxImage = SwingFXUtils.toFXImage(macroImage, null);
@@ -859,8 +884,10 @@ public class StageMapCanvas extends StackPane {
     private void updateMacroOverlayPosition() {
         if (!macroOverlayVisible || currentInsert == null || macroTransform == null) {
             if (macroOverlayVisible) {
-                logger.info("Cannot update macro overlay position: insert={}, transform={}",
-                        currentInsert != null, macroTransform != null);
+                logger.info(
+                        "Cannot update macro overlay position: insert={}, transform={}",
+                        currentInsert != null,
+                        macroTransform != null);
             }
             return;
         }
@@ -877,8 +904,7 @@ public class StageMapCanvas extends StackPane {
             double[] stageCenter = new double[2];
             macroTransform.transform(macroCenter, 0, stageCenter, 0, 1);
 
-            StageInsert.SlidePosition match = currentInsert.getSlideAtPosition(
-                    stageCenter[0], stageCenter[1]);
+            StageInsert.SlidePosition match = currentInsert.getSlideAtPosition(stageCenter[0], stageCenter[1]);
             if (match != null) {
                 logger.debug("Macro overlay: matched to slide '{}' via transform", match.getName());
             }
@@ -891,8 +917,7 @@ public class StageMapCanvas extends StackPane {
             double[] stageCenter = new double[2];
             macroTransform.transform(macroCenter, 0, stageCenter, 0, 1);
 
-            StageInsert.SlidePosition match = currentInsert.getSlideAtPosition(
-                    stageCenter[0], stageCenter[1]);
+            StageInsert.SlidePosition match = currentInsert.getSlideAtPosition(stageCenter[0], stageCenter[1]);
             if (match != null) {
                 targetSlide = match;
                 logger.debug("Macro overlay: matched to slide '{}' via transform", match.getName());
@@ -918,15 +943,18 @@ public class StageMapCanvas extends StackPane {
             overlayX = sx + macroOverlayXOffsetUm * scale;
             overlayY = sy + (sh - overlayH) / 2.0 + macroOverlayYOffsetUm * scale;
 
-            logger.info("Macro overlay (config-driven) on '{}': physical {}x{} um, "
+            logger.info(
+                    "Macro overlay (config-driven) on '{}': physical {}x{} um, "
                             + "offset ({}, {}) um, screen ({}, {}) {}x{} px",
                     targetSlide.getName(),
                     String.format("%.0f", macroPhysicalW),
                     String.format("%.0f", macroPhysicalH),
                     String.format("%.0f", macroOverlayXOffsetUm),
                     String.format("%.0f", macroOverlayYOffsetUm),
-                    String.format("%.1f", overlayX), String.format("%.1f", overlayY),
-                    String.format("%.1f", overlayW), String.format("%.1f", overlayH));
+                    String.format("%.1f", overlayX),
+                    String.format("%.1f", overlayY),
+                    String.format("%.1f", overlayW),
+                    String.format("%.1f", overlayH));
         } else {
             // Fallback: fit macro to slide rectangle width, preserve aspect ratio
             overlayW = sw;
@@ -935,10 +963,13 @@ public class StageMapCanvas extends StackPane {
             overlayX = sx;
             overlayY = sy + (sh - overlayH) / 2.0;
 
-            logger.info("Macro overlay (fit-to-slide) on '{}': screen ({}, {}) {}x{} px",
+            logger.info(
+                    "Macro overlay (fit-to-slide) on '{}': screen ({}, {}) {}x{} px",
                     targetSlide.getName(),
-                    String.format("%.1f", overlayX), String.format("%.1f", overlayY),
-                    String.format("%.1f", overlayW), String.format("%.1f", overlayH));
+                    String.format("%.1f", overlayX),
+                    String.format("%.1f", overlayY),
+                    String.format("%.1f", overlayW),
+                    String.format("%.1f", overlayH));
         }
 
         macroOverlayView.setX(overlayX);

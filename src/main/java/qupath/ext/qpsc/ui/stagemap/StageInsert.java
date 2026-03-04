@@ -1,12 +1,11 @@
 package qupath.ext.qpsc.ui.stagemap;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Data model representing a stage insert configuration with its physical dimensions
@@ -52,9 +51,15 @@ public class StageInsert {
      * @param slideMarginUm Safety margin around slides for legal zone (um)
      * @param slides        List of slide positions within the insert
      */
-    public StageInsert(String id, String name, double widthMm, double heightMm,
-                       double originXUm, double originYUm, double slideMarginUm,
-                       List<SlidePosition> slides) {
+    public StageInsert(
+            String id,
+            String name,
+            double widthMm,
+            double heightMm,
+            double originXUm,
+            double originYUm,
+            double slideMarginUm,
+            List<SlidePosition> slides) {
         this.id = id;
         this.name = name;
         this.widthUm = widthMm * MM_TO_UM;
@@ -88,8 +93,7 @@ public class StageInsert {
      * @return A new StageInsert instance
      */
     @SuppressWarnings("unchecked")
-    public static StageInsert fromConfigMap(String id, Map<String, Object> configMap,
-                                            double slideMarginUm) {
+    public static StageInsert fromConfigMap(String id, Map<String, Object> configMap, double slideMarginUm) {
         String name = (String) configMap.getOrDefault("name", id);
 
         // Read calibration reference points for aperture X bounds
@@ -124,8 +128,7 @@ public class StageInsert {
             // Use actual aperture Y coordinates
             apertureHeightUm = Math.abs(apertureBottomY - apertureTopY);
             // Origin is at visual top (larger Y if inverted, smaller if not)
-            originYUm = yInverted ? Math.max(apertureTopY, apertureBottomY)
-                                  : Math.min(apertureTopY, apertureBottomY);
+            originYUm = yInverted ? Math.max(apertureTopY, apertureBottomY) : Math.min(apertureTopY, apertureBottomY);
         } else {
             // Fall back to estimated height from config
             double apertureHeightMm = getDoubleValue(configMap, "aperture_height_mm", 60.0);
@@ -133,8 +136,7 @@ public class StageInsert {
             // Estimate origin based on slide position (old behavior)
             double slideHeightUm = Math.abs(slideBottomY - slideTopY);
             double slideYOffsetUm = (apertureHeightUm - slideHeightUm) / 2.0;
-            double slideTopStageY = yInverted ? Math.max(slideTopY, slideBottomY)
-                                              : Math.min(slideTopY, slideBottomY);
+            double slideTopStageY = yInverted ? Math.max(slideTopY, slideBottomY) : Math.min(slideTopY, slideBottomY);
             originYUm = slideTopStageY - (yInverted ? -slideYOffsetUm : slideYOffsetUm);
         }
 
@@ -148,8 +150,8 @@ public class StageInsert {
 
         // Origin X is the top-left corner in VISUAL space
         // For inverted X: visual left = larger stage X, so origin = max X
-        double originXUm = xInverted ? Math.max(apertureLeftX, apertureRightX)
-                                     : Math.min(apertureLeftX, apertureRightX);
+        double originXUm =
+                xInverted ? Math.max(apertureLeftX, apertureRightX) : Math.min(apertureLeftX, apertureRightX);
 
         // Calculate slide's position within aperture.
         // Center the full physical slide on the midpoint of the measured (visible) edges.
@@ -166,9 +168,12 @@ public class StageInsert {
             double slideCenterStageX = (slideLeftX + slideRightX) / 2.0;
             double slideCenterInsertX = Math.abs(slideCenterStageX - originXUm);
             slideXOffsetUm = slideCenterInsertX - slideWidthUm / 2.0;
-            logger.info("Slide X from measured edges: left={}, right={}, center={}, offset={} um",
-                    String.format("%.0f", slideLeftX), String.format("%.0f", slideRightX),
-                    String.format("%.0f", slideCenterStageX), String.format("%.0f", slideXOffsetUm));
+            logger.info(
+                    "Slide X from measured edges: left={}, right={}, center={}, offset={} um",
+                    String.format("%.0f", slideLeftX),
+                    String.format("%.0f", slideRightX),
+                    String.format("%.0f", slideCenterStageX),
+                    String.format("%.0f", slideXOffsetUm));
         } else {
             // No measured edges - assume slide is centered in aperture
             slideXOffsetUm = (apertureWidthUm - slideWidthUm) / 2.0;
@@ -185,7 +190,7 @@ public class StageInsert {
             // Multi-slide configuration
             double slideSpacingUm = slideSpacingMm * MM_TO_UM;
             double totalWidth = (numSlides - 1) * slideSpacingUm + slideWidthUm;
-            double startX = (apertureWidthUm - totalWidth) / 2.0;  // Center the group
+            double startX = (apertureWidthUm - totalWidth) / 2.0; // Center the group
 
             for (int i = 0; i < numSlides; i++) {
                 double xOffset = startX + i * slideSpacingUm;
@@ -213,18 +218,23 @@ public class StageInsert {
         double apertureHeightMm = apertureHeightUm / MM_TO_UM;
 
         // Store axis inversion flags in the insert for rendering
-        StageInsert insert = new StageInsert(id, name, apertureWidthMm, apertureHeightMm,
-                               originXUm, originYUm, slideMarginUm, slides);
+        StageInsert insert = new StageInsert(
+                id, name, apertureWidthMm, apertureHeightMm, originXUm, originYUm, slideMarginUm, slides);
         insert.xAxisInverted = xInverted;
         insert.yAxisInverted = yInverted;
 
-        logger.info("fromConfigMap '{}': aperture={}x{} mm, origin=({}, {}) um, "
+        logger.info(
+                "fromConfigMap '{}': aperture={}x{} mm, origin=({}, {}) um, "
                         + "xInverted={}, yInverted={}, slideYOffset={} um, slides={}",
                 id,
-                String.format("%.1f", apertureWidthMm), String.format("%.1f", apertureHeightMm),
-                String.format("%.0f", originXUm), String.format("%.0f", originYUm),
-                xInverted, yInverted,
-                String.format("%.0f", slideYOffsetUm), slides.size());
+                String.format("%.1f", apertureWidthMm),
+                String.format("%.1f", apertureHeightMm),
+                String.format("%.0f", originXUm),
+                String.format("%.0f", originYUm),
+                xInverted,
+                yInverted,
+                String.format("%.0f", slideYOffsetUm),
+                slides.size());
 
         return insert;
     }
@@ -314,7 +324,7 @@ public class StageInsert {
     public double[] getSlideViewBounds(double marginUm) {
         if (slides.isEmpty()) {
             logger.info("getSlideViewBounds: no slides, returning full aperture {}x{} um", widthUm, heightUm);
-            return new double[]{0, 0, widthUm, heightUm};
+            return new double[] {0, 0, widthUm, heightUm};
         }
 
         // Find bounding box of all slides (in insert-relative coordinates)
@@ -324,7 +334,8 @@ public class StageInsert {
         double maxY = -Double.MAX_VALUE;
 
         for (SlidePosition slide : slides) {
-            logger.info("getSlideViewBounds: slide '{}' offset=({}, {}) size={}x{} um",
+            logger.info(
+                    "getSlideViewBounds: slide '{}' offset=({}, {}) size={}x{} um",
                     slide.getName(),
                     String.format("%.0f", slide.getXOffsetUm()),
                     String.format("%.0f", slide.getYOffsetUm()),
@@ -336,9 +347,12 @@ public class StageInsert {
             maxY = Math.max(maxY, slide.getYOffsetUm() + slide.getHeightUm());
         }
 
-        logger.info("getSlideViewBounds: slide bbox [{}, {}] to [{}, {}], margin={} um",
-                String.format("%.0f", minX), String.format("%.0f", minY),
-                String.format("%.0f", maxX), String.format("%.0f", maxY),
+        logger.info(
+                "getSlideViewBounds: slide bbox [{}, {}] to [{}, {}], margin={} um",
+                String.format("%.0f", minX),
+                String.format("%.0f", minY),
+                String.format("%.0f", maxX),
+                String.format("%.0f", maxY),
                 String.format("%.0f", marginUm));
 
         // Add margin
@@ -354,15 +368,21 @@ public class StageInsert {
         maxX = Math.min(widthUm, maxX);
         maxY = Math.min(heightUm, maxY);
 
-        logger.info("getSlideViewBounds: after margin [{}, {}] to [{}, {}], "
+        logger.info(
+                "getSlideViewBounds: after margin [{}, {}] to [{}, {}], "
                         + "after clamp [{}, {}] to [{}, {}], aperture={}x{} um",
-                String.format("%.0f", preClampMinX), String.format("%.0f", preClampMinY),
-                String.format("%.0f", preClampMaxX), String.format("%.0f", preClampMaxY),
-                String.format("%.0f", minX), String.format("%.0f", minY),
-                String.format("%.0f", maxX), String.format("%.0f", maxY),
-                String.format("%.0f", widthUm), String.format("%.0f", heightUm));
+                String.format("%.0f", preClampMinX),
+                String.format("%.0f", preClampMinY),
+                String.format("%.0f", preClampMaxX),
+                String.format("%.0f", preClampMaxY),
+                String.format("%.0f", minX),
+                String.format("%.0f", minY),
+                String.format("%.0f", maxX),
+                String.format("%.0f", maxY),
+                String.format("%.0f", widthUm),
+                String.format("%.0f", heightUm));
 
-        return new double[]{minX, minY, maxX - minX, maxY - minY};
+        return new double[] {minX, minY, maxX - minX, maxY - minY};
     }
 
     // ========== Coordinate Bounds ==========
@@ -422,8 +442,10 @@ public class StageInsert {
      * @return true if the position is within the insert
      */
     public boolean isPositionInInsert(double stageX, double stageY) {
-        return stageX >= getMinStageX() && stageX <= getMaxStageX() &&
-               stageY >= getMinStageY() && stageY <= getMaxStageY();
+        return stageX >= getMinStageX()
+                && stageX <= getMaxStageX()
+                && stageY >= getMinStageY()
+                && stageY <= getMaxStageY();
     }
 
     /**
@@ -452,8 +474,8 @@ public class StageInsert {
      */
     public boolean isPositionLegal(double stageX, double stageY) {
         for (SlidePosition slide : slides) {
-            if (slide.containsStagePositionWithMargin(stageX, stageY, originXUm, originYUm,
-                    slideMarginUm, xAxisInverted, yAxisInverted)) {
+            if (slide.containsStagePositionWithMargin(
+                    stageX, stageY, originXUm, originYUm, slideMarginUm, xAxisInverted, yAxisInverted)) {
                 return true;
             }
         }
@@ -508,8 +530,8 @@ public class StageInsert {
          * @param heightMm    Slide height in millimeters
          * @param rotationDeg Rotation angle in degrees (0 = horizontal, 90 = vertical)
          */
-        public SlidePosition(String name, double xOffsetMm, double yOffsetMm,
-                             double widthMm, double heightMm, double rotationDeg) {
+        public SlidePosition(
+                String name, double xOffsetMm, double yOffsetMm, double widthMm, double heightMm, double rotationDeg) {
             this.name = name;
             this.xOffsetUm = xOffsetMm * MM_TO_UM;
             this.yOffsetUm = yOffsetMm * MM_TO_UM;
@@ -585,11 +607,9 @@ public class StageInsert {
          * @param insertOriginY Insert origin Y in stage coordinates (um)
          * @return true if the position is on this slide
          */
-        public boolean containsStagePosition(double stageX, double stageY,
-                                             double insertOriginX, double insertOriginY) {
+        public boolean containsStagePosition(double stageX, double stageY, double insertOriginX, double insertOriginY) {
             // Default to non-inverted for backward compatibility
-            return containsStagePositionWithMargin(stageX, stageY, insertOriginX, insertOriginY,
-                    0, false, false);
+            return containsStagePositionWithMargin(stageX, stageY, insertOriginX, insertOriginY, 0, false, false);
         }
 
         /**
@@ -605,10 +625,14 @@ public class StageInsert {
          * @param yInverted     True if Y axis is inverted (origin is max Y)
          * @return true if the position is within the slide plus margin
          */
-        public boolean containsStagePositionWithMargin(double stageX, double stageY,
-                                                       double insertOriginX, double insertOriginY,
-                                                       double marginUm,
-                                                       boolean xInverted, boolean yInverted) {
+        public boolean containsStagePositionWithMargin(
+                double stageX,
+                double stageY,
+                double insertOriginX,
+                double insertOriginY,
+                double marginUm,
+                boolean xInverted,
+                boolean yInverted) {
             double slideMinX, slideMaxX, slideMinY, slideMaxY;
 
             if (xInverted) {
@@ -631,8 +655,7 @@ public class StageInsert {
                 slideMaxY = insertOriginY + yOffsetUm + heightUm + marginUm;
             }
 
-            return stageX >= slideMinX && stageX <= slideMaxX &&
-                   stageY >= slideMinY && stageY <= slideMaxY;
+            return stageX >= slideMinX && stageX <= slideMaxX && stageY >= slideMinY && stageY <= slideMaxY;
         }
 
         /**

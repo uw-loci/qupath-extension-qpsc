@@ -1,5 +1,10 @@
 package qupath.ext.qpsc.preferences;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.ResourceBundle;
 import javafx.beans.property.*;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -7,32 +12,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
-import qupath.ext.qpsc.utilities.MacroImageAnalyzer;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.prefs.controlsfx.PropertyItemBuilder;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.images.writers.ome.OMEPyramidWriter;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.ResourceBundle;
-
 /**
  * QPPreferenceDialog
  *
  * <p>Registers and exposes the subset of extension preferences you
- * want in QuPath’s Preferences Pane:
+ * want in QuPath's Preferences Pane:
  *   - Flip, invert, script paths, directories, compression, overlap, etc.
  *   - Provides typed getters so other code can simply call invertedXProperty(), etc.
  */
-
 public class QPPreferenceDialog {
 
     private static final Logger logger = LoggerFactory.getLogger(QPPreferenceDialog.class);
-    private static final String CATEGORY = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings").getString("name");
+    private static final String CATEGORY =
+            ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings").getString("name");
 
     /** False if qupath-extension-tiles-to-pyramid is not installed. */
     private static boolean stitchingAvailable = true;
@@ -55,24 +53,17 @@ public class QPPreferenceDialog {
 
     private static final BooleanProperty autoConnectToServerProperty =
             PathPrefs.createPersistentPreference("microscope.autoConnectToServer", true);
-    private static final StringProperty microscopeConfigFileProperty =
-            PathPrefs.createPersistentPreference(
-                    "microscopeConfigFileProperty",
-                    "F:/QPScopeExtension/smartpath_configurations/microscopes/config_PPM.yml");
+    private static final StringProperty microscopeConfigFileProperty = PathPrefs.createPersistentPreference(
+            "microscopeConfigFileProperty", "F:/QPScopeExtension/smartpath_configurations/microscopes/config_PPM.yml");
 
     private static final StringProperty projectsFolderProperty =
-            PathPrefs.createPersistentPreference(
-                    "projectsFolderProperty",
-                    "F:/QPScopeExtension/data/slides");
-    private static final StringProperty extensionLocationProperty =
-            PathPrefs.createPersistentPreference(
-                    "extensionPathProperty",
-                    "F:\\QPScopeExtension\\qupath-extension-qpsc");
+            PathPrefs.createPersistentPreference("projectsFolderProperty", "F:/QPScopeExtension/data/slides");
+    private static final StringProperty extensionLocationProperty = PathPrefs.createPersistentPreference(
+            "extensionPathProperty", "F:\\QPScopeExtension\\qupath-extension-qpsc");
 
-    private static final StringProperty tissueDetectionScriptProperty =
-            PathPrefs.createPersistentPreference(
-                    "tissueDetectionScriptProperty",
-                    extensionLocationProperty.getValue() + "/src/main/groovyScripts/DetectTissue.groovy");
+    private static final StringProperty tissueDetectionScriptProperty = PathPrefs.createPersistentPreference(
+            "tissueDetectionScriptProperty",
+            extensionLocationProperty.getValue() + "/src/main/groovyScripts/DetectTissue.groovy");
 
     private static final StringProperty tileHandlingMethodProperty =
             PathPrefs.createPersistentPreference("tileHandlingProperty", "None");
@@ -93,9 +84,7 @@ public class QPPreferenceDialog {
     private static ObjectProperty<StitchingConfig.OutputFormat> getOutputFormatPropertyInternal() {
         if (outputFormatProperty == null) {
             outputFormatProperty = PathPrefs.createPersistentPreference(
-                    "stitchingOutputFormat",
-                    StitchingConfig.OutputFormat.OME_TIFF,
-                    StitchingConfig.OutputFormat.class);
+                    "stitchingOutputFormat", StitchingConfig.OutputFormat.OME_TIFF, StitchingConfig.OutputFormat.class);
         }
         return outputFormatProperty;
     }
@@ -148,12 +137,9 @@ public class QPPreferenceDialog {
      * Register all preferences in QuPath's PreferencePane. Call once during extension installation.
      */
     public static void installPreferences(QuPathGUI qupath) {
-        if (qupath == null)
-            return;
+        if (qupath == null) return;
         ObservableList<org.controlsfx.control.PropertySheet.Item> items =
-                qupath.getPreferencePane()
-                        .getPropertySheet()
-                        .getItems();
+                qupath.getPreferencePane().getPropertySheet().getItems();
 
         items.add(new PropertyItemBuilder<>(flipMacroXProperty, Boolean.class)
                 .name("Flip macro image X")
@@ -180,9 +166,9 @@ public class QPPreferenceDialog {
                 .propertyType(PropertyItemBuilder.PropertyType.FILE)
                 .name("Microscope Config File")
                 .category(CATEGORY)
-                .description("Path to YAML config describing your microscope setup.\n\n" +
-                        "⚠️ REQUIRED: This must be set before connecting to the microscope server.\n" +
-                        "⚠️ CRITICAL: Using the wrong config could damage the microscope!")
+                .description("Path to YAML config describing your microscope setup.\n\n"
+                        + "[!] REQUIRED: This must be set before connecting to the microscope server.\n"
+                        + "[!] CRITICAL: Using the wrong config could damage the microscope!")
                 .build());
 
         items.add(new PropertyItemBuilder<>(projectsFolderProperty, String.class)
@@ -195,7 +181,7 @@ public class QPPreferenceDialog {
                 .propertyType(PropertyItemBuilder.PropertyType.DIRECTORY)
                 .name("Extension Location")
                 .category(CATEGORY)
-                .description("Directory of the extension, used to locate built‑in scripts.")
+                .description("Directory of the extension, used to locate built-in scripts.")
                 .build());
 
         items.add(new PropertyItemBuilder<>(tissueDetectionScriptProperty, String.class)
@@ -230,10 +216,10 @@ public class QPPreferenceDialog {
                     .choices(Arrays.asList(StitchingConfig.OutputFormat.values()))
                     .name("Stitching output format")
                     .category(CATEGORY)
-                    .description("Output format for stitched images.\n" +
-                                 "OME-TIFF: Traditional single-file format, widely compatible (standard as of 2025).\n" +
-                                 "OME-ZARR: Cloud-native directory format with better compression and parallel writing,\n" +
-                                 "but less commonly used. ZARR provides 2-3x faster writing and 20-30% smaller files.")
+                    .description("Output format for stitched images.\n"
+                            + "OME-TIFF: Traditional single-file format, widely compatible (standard as of 2025).\n"
+                            + "OME-ZARR: Cloud-native directory format with better compression and parallel writing,\n"
+                            + "but less commonly used. ZARR provides 2-3x faster writing and 20-30% smaller files.")
                     .build());
         } catch (NoClassDefFoundError e) {
             logger.error("qupath-extension-tiles-to-pyramid is missing! "
@@ -263,72 +249,73 @@ public class QPPreferenceDialog {
         items.add(new PropertyItemBuilder<>(skipManualAutofocusProperty, Boolean.class)
                 .name("No Manual Autofocus (Danger)")
                 .category(CATEGORY)
-                .description("WARNING: Enabling this setting may result in out-of-focus regions!\n\n" +
-                             "When enabled, the manual autofocus dialog will never appear. " +
-                             "If autofocus fails, the system will automatically retry once and then " +
-                             "continue imaging with whatever focus level results.\n\n" +
-                             "Only enable this for unattended acquisition where some out-of-focus " +
-                             "regions are acceptable.")
+                .description("WARNING: Enabling this setting may result in out-of-focus regions!\n\n"
+                        + "When enabled, the manual autofocus dialog will never appear. "
+                        + "If autofocus fails, the system will automatically retry once and then "
+                        + "continue imaging with whatever focus level results.\n\n"
+                        + "Only enable this for unattended acquisition where some out-of-focus "
+                        + "regions are acceptable.")
                 .build());
 
         // Filename configuration section
         items.add(new PropertyItemBuilder<>(includeObjectiveInFilenameProperty, Boolean.class)
                 .name("Image name includes: Objective")
                 .category(CATEGORY)
-                .description("Include objective/magnification (e.g., '20x') in image filenames.\n" +
-                             "Default: SampleName_001.ome.tif\n" +
-                             "With objective: SampleName_20x_001.ome.tif\n" +
-                             "Note: All metadata is always stored in QuPath regardless of filename settings.")
+                .description("Include objective/magnification (e.g., '20x') in image filenames.\n"
+                        + "Default: SampleName_001.ome.tif\n"
+                        + "With objective: SampleName_20x_001.ome.tif\n"
+                        + "Note: All metadata is always stored in QuPath regardless of filename settings.")
                 .build());
 
         items.add(new PropertyItemBuilder<>(includeModalityInFilenameProperty, Boolean.class)
                 .name("Image name includes: Modality")
                 .category(CATEGORY)
-                .description("Include imaging modality (e.g., 'ppm', 'bf') in image filenames.\n" +
-                             "With modality: SampleName_ppm_001.ome.tif\n" +
-                             "Note: All metadata is always stored in QuPath regardless of filename settings.")
+                .description("Include imaging modality (e.g., 'ppm', 'bf') in image filenames.\n"
+                        + "With modality: SampleName_ppm_001.ome.tif\n"
+                        + "Note: All metadata is always stored in QuPath regardless of filename settings.")
                 .build());
 
         items.add(new PropertyItemBuilder<>(includeAnnotationInFilenameProperty, Boolean.class)
                 .name("Image name includes: Annotation")
                 .category(CATEGORY)
-                .description("Include annotation name in image filenames when acquiring specific regions.\n" +
-                             "With annotation: SampleName_Tissue_001.ome.tif\n" +
-                             "Note: All metadata is always stored in QuPath regardless of filename settings.")
+                .description("Include annotation name in image filenames when acquiring specific regions.\n"
+                        + "With annotation: SampleName_Tissue_001.ome.tif\n"
+                        + "Note: All metadata is always stored in QuPath regardless of filename settings.")
                 .build());
 
         items.add(new PropertyItemBuilder<>(includeAngleInFilenameProperty, Boolean.class)
                 .name("Image name includes: Angle")
                 .category(CATEGORY)
-                .description("Include angle information in image filenames for multi-angle acquisitions.\n" +
-                             "Critical for PPM and other polarized imaging modalities.\n" +
-                             "With angle: SampleName_001_7.0.ome.zarr, SampleName_001_-7.0.ome.zarr\n" +
-                             "Note: All metadata is always stored in QuPath regardless of filename settings.")
+                .description("Include angle information in image filenames for multi-angle acquisitions.\n"
+                        + "Critical for PPM and other polarized imaging modalities.\n"
+                        + "With angle: SampleName_001_7.0.ome.zarr, SampleName_001_-7.0.ome.zarr\n"
+                        + "Note: All metadata is always stored in QuPath regardless of filename settings.")
                 .build());
 
         items.add(new PropertyItemBuilder<>(metadataPropagationPrefixProperty, String.class)
                 .name("Metadata Propagation Prefix")
                 .category(CATEGORY)
-                .description("Prefix for metadata keys that should be automatically propagated from parent " +
-                             "images to acquired child images.\n" +
-                             "Any metadata key starting with this prefix will be copied.\n" +
-                             "Default: 'OCR' (for OCR-extracted text fields)\n" +
-                             "Examples: 'OCR_PatientID', 'OCR_SlideLabel' would be propagated with prefix 'OCR'")
+                .description("Prefix for metadata keys that should be automatically propagated from parent "
+                        + "images to acquired child images.\n"
+                        + "Any metadata key starting with this prefix will be copied.\n"
+                        + "Default: 'OCR' (for OCR-extracted text fields)\n"
+                        + "Examples: 'OCR_PatientID', 'OCR_SlideLabel' would be propagated with prefix 'OCR'")
                 .build());
-
     }
-
 
     // --- Typed getters for use throughout your code ---
     public static boolean getFlipMacroXProperty() {
         return flipMacroXProperty.get();
     }
+
     public static boolean getFlipMacroYProperty() {
         return flipMacroYProperty.get();
     }
+
     public static boolean getInvertedXProperty() {
         return invertedXProperty.get();
     }
+
     public static boolean getInvertedYProperty() {
         return invertedYProperty.get();
     }
@@ -372,24 +359,31 @@ public class QPPreferenceDialog {
     public static String getMicroscopeConfigFileProperty() {
         return microscopeConfigFileProperty.get();
     }
+
     public static String getProjectsFolderProperty() {
         return projectsFolderProperty.get();
     }
+
     public static String getExtensionLocationProperty() {
         return extensionLocationProperty.get();
     }
+
     public static String getTissueDetectionScriptProperty() {
         return tissueDetectionScriptProperty.get();
     }
+
     public static String getTileHandlingMethodProperty() {
         return tileHandlingMethodProperty.get();
     }
+
     public static Double getTileOverlapPercentProperty() {
         return tileOverlapPercentProperty.get();
     }
+
     public static OMEPyramidWriter.CompressionType getCompressionTypeProperty() {
         return compressionTypeProperty.get();
     }
+
     public static StitchingConfig.OutputFormat getOutputFormatProperty() {
         try {
             return getOutputFormatPropertyInternal().get();
@@ -405,15 +399,13 @@ public class QPPreferenceDialog {
     public static boolean isStitchingAvailable() {
         return stitchingAvailable;
     }
-    //TODO should this be here?
+    // TODO should this be here?
 
     private static ObservableList<String> getScannerChoices() {
         List<String> choices = new ArrayList<>();
 
         try {
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(
-                    microscopeConfigFileProperty.get()
-            );
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(microscopeConfigFileProperty.get());
             List<String> availableScanners = mgr.getAvailableScanners();
 
             if (!availableScanners.isEmpty()) {
@@ -430,8 +422,6 @@ public class QPPreferenceDialog {
         return FXCollections.observableArrayList(choices);
     }
 
-
-
     private static List<String> getAvailableTransforms() {
         List<String> transforms = new ArrayList<>();
         transforms.add(""); // Empty option for no transform
@@ -439,8 +429,7 @@ public class QPPreferenceDialog {
         try {
             String configPath = getMicroscopeConfigFileProperty();
             if (configPath != null && !configPath.isEmpty()) {
-                AffineTransformManager manager = new AffineTransformManager(
-                        new File(configPath).getParent());
+                AffineTransformManager manager = new AffineTransformManager(new File(configPath).getParent());
                 manager.getAllTransforms().forEach(t -> transforms.add(t.getName()));
             }
         } catch (Exception e) {

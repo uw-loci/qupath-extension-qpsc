@@ -2,15 +2,13 @@ package qupath.ext.qpsc.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.DisplayName;
-
-import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.ExistingImageAcquisitionConfig;
-import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.RefinementChoice;
-
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.ExistingImageAcquisitionConfig;
+import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.RefinementChoice;
 
 /**
  * Unit tests for ExistingImageAcquisitionController.
@@ -64,8 +62,9 @@ class ExistingImageAcquisitionControllerTest {
                 0.85,
                 RefinementChoice.NONE,
                 null,
-                false, false, null
-        );
+                false,
+                false,
+                null);
 
         assertEquals("TestSample", config.sampleName());
         assertEquals(folder, config.projectsFolder());
@@ -87,8 +86,9 @@ class ExistingImageAcquisitionControllerTest {
                 0.0,
                 RefinementChoice.FULL_MANUAL,
                 null,
-                false, false, null
-        );
+                false,
+                false,
+                null);
 
         assertEquals("BF", config.modality());
         assertEquals("10x", config.objective());
@@ -110,8 +110,9 @@ class ExistingImageAcquisitionControllerTest {
                 0.92,
                 RefinementChoice.SINGLE_TILE,
                 null,
-                false, false, null
-        );
+                false,
+                false,
+                null);
 
         assertTrue(config.useExistingAlignment());
         assertNull(config.selectedTransform());
@@ -138,8 +139,9 @@ class ExistingImageAcquisitionControllerTest {
                 0.85,
                 RefinementChoice.NONE,
                 overrides,
-                false, false, null
-        );
+                false,
+                false,
+                null);
 
         assertNotNull(config.angleOverrides());
         assertEquals(2, config.angleOverrides().size());
@@ -153,7 +155,7 @@ class ExistingImageAcquisitionControllerTest {
         ExistingImageAcquisitionConfig config = new ExistingImageAcquisitionConfig(
                 "ExistingSample",
                 new File("/existing/project"),
-                true,  // existing project
+                true, // existing project
                 "ppm",
                 "20x",
                 "JAI",
@@ -162,8 +164,9 @@ class ExistingImageAcquisitionControllerTest {
                 0.85,
                 RefinementChoice.NONE,
                 null,
-                false, false, null
-        );
+                false,
+                false,
+                null);
 
         assertTrue(config.isExistingProject());
     }
@@ -174,7 +177,7 @@ class ExistingImageAcquisitionControllerTest {
         ExistingImageAcquisitionConfig config = new ExistingImageAcquisitionConfig(
                 "NewSample",
                 new File("/new/project"),
-                false,  // new project
+                false, // new project
                 "BF",
                 "10x",
                 "Basler",
@@ -183,8 +186,9 @@ class ExistingImageAcquisitionControllerTest {
                 0.0,
                 RefinementChoice.FULL_MANUAL,
                 null,
-                false, false, null
-        );
+                false,
+                false,
+                null);
 
         assertFalse(config.isExistingProject());
         assertFalse(config.useExistingAlignment());
@@ -199,13 +203,22 @@ class ExistingImageAcquisitionControllerTest {
         double highThreshold = 0.8;
 
         ExistingImageAcquisitionConfig highConfig = new ExistingImageAcquisitionConfig(
-                "TestSample", new File("/test"), false, "ppm", "20x", "JAI",
-                true, null, 0.85, RefinementChoice.NONE, null,
-                false, false, null
-        );
+                "TestSample",
+                new File("/test"),
+                false,
+                "ppm",
+                "20x",
+                "JAI",
+                true,
+                null,
+                0.85,
+                RefinementChoice.NONE,
+                null,
+                false,
+                false,
+                null);
 
-        assertTrue(highConfig.alignmentConfidence() >= highThreshold,
-                "85% confidence should be above high threshold");
+        assertTrue(highConfig.alignmentConfidence() >= highThreshold, "85% confidence should be above high threshold");
     }
 
     @Test
@@ -215,14 +228,23 @@ class ExistingImageAcquisitionControllerTest {
         double mediumHigh = 0.8;
 
         ExistingImageAcquisitionConfig medConfig = new ExistingImageAcquisitionConfig(
-                "TestSample", new File("/test"), false, "ppm", "20x", "JAI",
-                true, null, 0.65, RefinementChoice.SINGLE_TILE, null,
-                false, false, null
-        );
+                "TestSample",
+                new File("/test"),
+                false,
+                "ppm",
+                "20x",
+                "JAI",
+                true,
+                null,
+                0.65,
+                RefinementChoice.SINGLE_TILE,
+                null,
+                false,
+                false,
+                null);
 
         double conf = medConfig.alignmentConfidence();
-        assertTrue(conf >= mediumLow && conf < mediumHigh,
-                "65% confidence should be in medium range");
+        assertTrue(conf >= mediumLow && conf < mediumHigh, "65% confidence should be in medium range");
     }
 
     @Test
@@ -231,13 +253,22 @@ class ExistingImageAcquisitionControllerTest {
         double lowThreshold = 0.5;
 
         ExistingImageAcquisitionConfig lowConfig = new ExistingImageAcquisitionConfig(
-                "TestSample", new File("/test"), false, "ppm", "20x", "JAI",
-                true, null, 0.35, RefinementChoice.FULL_MANUAL, null,
-                false, false, null
-        );
+                "TestSample",
+                new File("/test"),
+                false,
+                "ppm",
+                "20x",
+                "JAI",
+                true,
+                null,
+                0.35,
+                RefinementChoice.FULL_MANUAL,
+                null,
+                false,
+                false,
+                null);
 
-        assertTrue(lowConfig.alignmentConfidence() < lowThreshold,
-                "35% confidence should be below low threshold");
+        assertTrue(lowConfig.alignmentConfidence() < lowThreshold, "35% confidence should be below low threshold");
     }
 
     // ==================== Manual Alignment Path Tests ====================
@@ -246,14 +277,20 @@ class ExistingImageAcquisitionControllerTest {
     @DisplayName("Manual alignment path has zero confidence")
     void testManualAlignmentHasZeroConfidence() {
         ExistingImageAcquisitionConfig manualConfig = new ExistingImageAcquisitionConfig(
-                "TestSample", new File("/test"), false, "ppm", "20x", "JAI",
-                false,  // manual alignment
+                "TestSample",
+                new File("/test"),
+                false,
+                "ppm",
+                "20x",
+                "JAI",
+                false, // manual alignment
                 null,
                 0.0,
                 RefinementChoice.FULL_MANUAL,
                 null,
-                false, false, null
-        );
+                false,
+                false,
+                null);
 
         assertFalse(manualConfig.useExistingAlignment());
         assertEquals(0.0, manualConfig.alignmentConfidence(), 0.001);
@@ -266,10 +303,20 @@ class ExistingImageAcquisitionControllerTest {
     @DisplayName("ExistingImageAcquisitionConfig stores WB settings correctly")
     void testConfigStoresWbSettings() {
         ExistingImageAcquisitionConfig config = new ExistingImageAcquisitionConfig(
-                "TestSample", new File("/test"), false, "ppm", "20x", "JAI",
-                true, null, 0.85, RefinementChoice.NONE, null,
-                true, true, "per_angle"
-        );
+                "TestSample",
+                new File("/test"),
+                false,
+                "ppm",
+                "20x",
+                "JAI",
+                true,
+                null,
+                0.85,
+                RefinementChoice.NONE,
+                null,
+                true,
+                true,
+                "per_angle");
 
         assertTrue(config.enableWhiteBalance());
         assertTrue(config.perAngleWhiteBalance());

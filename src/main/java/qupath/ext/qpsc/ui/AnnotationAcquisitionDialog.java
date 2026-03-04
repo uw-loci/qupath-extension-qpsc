@@ -1,5 +1,8 @@
 package qupath.ext.qpsc.ui;
 
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
@@ -15,14 +18,9 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
-import qupath.lib.objects.classes.PathClass;
 import qupath.lib.objects.hierarchy.events.PathObjectHierarchyEvent;
 import qupath.lib.objects.hierarchy.events.PathObjectHierarchyListener;
 import qupath.lib.scripting.QP;
-
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
  * Combined dialog for annotation validation and class selection.
@@ -46,8 +44,7 @@ public class AnnotationAcquisitionDialog {
      */
     @SuppressWarnings("unchecked")
     public static CompletableFuture<AcquisitionResult> showDialog(
-            Set<String> availableClasses,
-            List<String> preselectedClasses) {
+            Set<String> availableClasses, List<String> preselectedClasses) {
 
         CompletableFuture<AcquisitionResult> future = new CompletableFuture<>();
 
@@ -60,8 +57,8 @@ public class AnnotationAcquisitionDialog {
             // Set always-on-top to keep dialog visible during annotation editing
             // Use setOnShown to ensure stage is available when we set alwaysOnTop
             dialog.setOnShown(e -> {
-                if (dialog.getDialogPane().getScene() != null &&
-                    dialog.getDialogPane().getScene().getWindow() instanceof javafx.stage.Stage stage) {
+                if (dialog.getDialogPane().getScene() != null
+                        && dialog.getDialogPane().getScene().getWindow() instanceof javafx.stage.Stage stage) {
                     stage.setAlwaysOnTop(true);
                     stage.toFront();
                     logger.info("Set annotation dialog to always on top");
@@ -124,9 +121,9 @@ public class AnnotationAcquisitionDialog {
                         classTab.setContent(newClassContent);
 
                         // Update summary display
-                        updateSummaryDisplay(selectedClasses,
-                                (ListView<String>) summaryContent.lookup("#annotationList"),
-                                (Label) summaryContent.lookup("#countLabel"));
+                        updateSummaryDisplay(
+                                selectedClasses, (ListView<String>) summaryContent.lookup("#annotationList"), (Label)
+                                        summaryContent.lookup("#countLabel"));
                     });
                 }
             };
@@ -150,12 +147,10 @@ public class AnnotationAcquisitionDialog {
             collectNode.setStyle("-fx-base: #5a9fd4; -fx-font-weight: bold;");
 
             // Disable collect button if no annotations match
-            collectNode.disableProperty().bind(
-                    Bindings.createBooleanBinding(
-                            () -> getMatchingAnnotations(selectedClasses).isEmpty(),
-                            selectedClasses
-                    )
-            );
+            collectNode
+                    .disableProperty()
+                    .bind(Bindings.createBooleanBinding(
+                            () -> getMatchingAnnotations(selectedClasses).isEmpty(), selectedClasses));
 
             // Set up proper result handling
             dialog.setResultConverter(button -> {
@@ -259,8 +254,8 @@ public class AnnotationAcquisitionDialog {
     /**
      * Creates the class selection content.
      */
-    private static VBox createClassSelectionContent(ObservableList<String> availableClasses,
-                                                    ObservableList<String> selectedClasses) {
+    private static VBox createClassSelectionContent(
+            ObservableList<String> availableClasses, ObservableList<String> selectedClasses) {
         VBox content = new VBox(10);
         content.setPadding(new Insets(15));
 
@@ -317,8 +312,8 @@ public class AnnotationAcquisitionDialog {
             // Show annotation count for this class
             long count = QP.getAnnotationObjects().stream()
                     .filter(ann -> ann.getROI() != null && !ann.getROI().isEmpty())
-                    .filter(ann -> ann.getPathClass() != null &&
-                            className.equals(ann.getPathClass().getName()))
+                    .filter(ann -> ann.getPathClass() != null
+                            && className.equals(ann.getPathClass().getName()))
                     .count();
 
             if (count > 0) {
@@ -363,9 +358,8 @@ public class AnnotationAcquisitionDialog {
     /**
      * Updates the summary display with current annotations.
      */
-    private static void updateSummaryDisplay(ObservableList<String> selectedClasses,
-                                             ListView<String> listView,
-                                             Label countLabel) {
+    private static void updateSummaryDisplay(
+            ObservableList<String> selectedClasses, ListView<String> listView, Label countLabel) {
         listView.getItems().clear();
 
         List<PathObject> matchingAnnotations = getMatchingAnnotations(selectedClasses);
@@ -386,27 +380,26 @@ public class AnnotationAcquisitionDialog {
             List<PathObject> classAnnotations = annotationsByClass.getOrDefault(className, Collections.emptyList());
 
             if (!classAnnotations.isEmpty()) {
-                listView.getItems().add(String.format("━━ %s (%d) ━━", className, classAnnotations.size()));
+                listView.getItems().add(String.format("== %s (%d) ==", className, classAnnotations.size()));
 
                 // Show individual annotations with names
                 for (PathObject ann : classAnnotations) {
                     String name = ann.getName();
                     if (name == null || name.isEmpty()) {
-                        name = String.format("Unnamed at (%.0f, %.0f)",
-                                ann.getROI().getCentroidX(),
-                                ann.getROI().getCentroidY());
+                        name = String.format(
+                                "Unnamed at (%.0f, %.0f)",
+                                ann.getROI().getCentroidX(), ann.getROI().getCentroidY());
                     }
-                    listView.getItems().add("   • " + name);
+                    listView.getItems().add("   - " + name);
                 }
             } else {
-                listView.getItems().add(String.format("━━ %s (none found) ━━", className));
+                listView.getItems().add(String.format("== %s (none found) ==", className));
             }
         }
 
         // Update total count
         int totalCount = matchingAnnotations.size();
-        countLabel.setText(String.format("%d annotation%s will be acquired",
-                totalCount, totalCount == 1 ? "" : "s"));
+        countLabel.setText(String.format("%d annotation%s will be acquired", totalCount, totalCount == 1 ? "" : "s"));
 
         if (totalCount == 0) {
             countLabel.setTextFill(Color.RED);
@@ -425,8 +418,8 @@ public class AnnotationAcquisitionDialog {
 
         return QP.getAnnotationObjects().stream()
                 .filter(ann -> ann.getROI() != null && !ann.getROI().isEmpty())
-                .filter(ann -> ann.getPathClass() != null &&
-                        selectedClasses.contains(ann.getPathClass().getName()))
+                .filter(ann -> ann.getPathClass() != null
+                        && selectedClasses.contains(ann.getPathClass().getName()))
                 .collect(Collectors.toList());
     }
 

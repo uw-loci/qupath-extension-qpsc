@@ -51,7 +51,7 @@ uncrossed/90-deg. The camera couldn't determine color ratios from clipped pixels
 
 **Fix:** `run_auto_white_balance()` now uses a safe calibration exposure (0.5ms default) with
 38 Hz frame rate and 3-second equilibration with active buffer draining (~100+ frames).
-AWB adjusts the camera's internal Temperature property, not the analog gain registers.
+AWB adjusts the camera's internal color correction through an opaque pipeline (not the Temperature property, which is physical sensor temperature), not the analog gain registers.
 
 ### Issue 6: AWB drain loop overshoot causing error 11018 (FIXED)
 The drain loop ran for 11+ seconds due to no time check in the inner loop. During this time,
@@ -141,7 +141,7 @@ Also compensates AF exposure for unified_gain. Commit `27f9ba4` (microscope_comm
 ### AWB Fix Commits (2026-03-01)
 - `f8df128` (microscope_control) - AWB calibration exposure + consistent Off write
 - `53af6aa` (microscope_control) - Fix drain loop overshooting with time check
-- `e3c9777` (microscope_control) - AWB Temperature readback diagnostics
+- `e3c9777` (microscope_control) - AWB Temperature readback diagnostics (later removed -- Temperature is physical sensor temp, not AWB-related)
 - `7c3cb72` (microscope_command_server) - Aggressive exposure halving for saturated backgrounds
 - `4788117` (microscope_command_server) - Load saved exposures as starting points
 - `3e412c1` (qupath-extension-qpsc) - 15-second socket timeout for AWB mode 2

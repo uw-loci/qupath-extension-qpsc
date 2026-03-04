@@ -1,5 +1,12 @@
 package qupath.ext.qpsc.modality.ppm.workflow;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -10,19 +17,11 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
-import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
-
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * PolarizerCalibrationWorkflow - Calibrate PPM rotation stage to find crossed polarizer positions
@@ -62,26 +61,26 @@ public class PolarizerCalibrationWorkflow {
             try {
                 // Show calibration parameter dialog
                 showCalibrationDialog()
-                    .thenAccept(params -> {
-                        if (params != null) {
-                            logger.info("Polarizer calibration parameters received");
-                            // Start calibration with progress dialog (all on FX thread initially)
-                            startCalibrationWithProgress(params);
-                        } else {
-                            logger.info("Polarizer calibration cancelled by user");
-                        }
-                    })
-                    .exceptionally(ex -> {
-                        logger.error("Error in polarizer calibration dialog", ex);
-                        Platform.runLater(() -> Dialogs.showErrorMessage("Calibration Error",
-                                "Failed to show calibration dialog: " + ex.getMessage()));
-                        return null;
-                    });
+                        .thenAccept(params -> {
+                            if (params != null) {
+                                logger.info("Polarizer calibration parameters received");
+                                // Start calibration with progress dialog (all on FX thread initially)
+                                startCalibrationWithProgress(params);
+                            } else {
+                                logger.info("Polarizer calibration cancelled by user");
+                            }
+                        })
+                        .exceptionally(ex -> {
+                            logger.error("Error in polarizer calibration dialog", ex);
+                            Platform.runLater(() -> Dialogs.showErrorMessage(
+                                    "Calibration Error", "Failed to show calibration dialog: " + ex.getMessage()));
+                            return null;
+                        });
 
             } catch (Exception e) {
                 logger.error("Failed to start polarizer calibration workflow", e);
-                Dialogs.showErrorMessage("Calibration Error",
-                        "Failed to start polarizer calibration: " + e.getMessage());
+                Dialogs.showErrorMessage(
+                        "Calibration Error", "Failed to start polarizer calibration: " + e.getMessage());
             }
         });
     }
@@ -109,14 +108,12 @@ public class PolarizerCalibrationWorkflow {
             Label headerLabel = new Label("Calibrate PPM Rotation Stage");
             headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
 
-            Label instructionLabel = new Label(
-                "IMPORTANT: Position microscope at a uniform, bright background area.\n" +
-                "This calibration finds crossed polarizer positions by sweeping rotation angles.\n\n" +
-                "When to use:\n" +
-                "  - After installing or repositioning polarization optics\n" +
-                "  - After reseating or replacing rotation stage\n" +
-                "  - To validate/update rotation_angles in config_PPM.yml"
-            );
+            Label instructionLabel = new Label("IMPORTANT: Position microscope at a uniform, bright background area.\n"
+                    + "This calibration finds crossed polarizer positions by sweeping rotation angles.\n\n"
+                    + "When to use:\n"
+                    + "  - After installing or repositioning polarization optics\n"
+                    + "  - After reseating or replacing rotation stage\n"
+                    + "  - To validate/update rotation_angles in config_PPM.yml");
             instructionLabel.setWrapText(true);
             instructionLabel.setStyle("-fx-font-size: 11px;");
 
@@ -176,11 +173,9 @@ public class PolarizerCalibrationWorkflow {
             exposureSpinner.setPrefWidth(100);
 
             // Info label for calibration description
-            Label descriptionLabel = new Label(
-                "Two-stage calibration:\n" +
-                "1. Coarse sweep: 0-360 deg to locate minima\n" +
-                "2. Fine sweep: 0.1 deg steps for exact positions"
-            );
+            Label descriptionLabel =
+                    new Label("Two-stage calibration:\n" + "1. Coarse sweep: 0-360 deg to locate minima\n"
+                            + "2. Fine sweep: 0.1 deg steps for exact positions");
             descriptionLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
             descriptionLabel.setWrapText(true);
 
@@ -195,10 +190,11 @@ public class PolarizerCalibrationWorkflow {
                 int coarseSteps = (int) Math.ceil(360.0 / step) + 1;
                 // Fine sweep: Assume 2 minima, each with (step*2) deg range at 0.1 deg steps
                 int fineStepsPerMinimum = (int) Math.ceil((step * 2) / 0.1);
-                int totalFineSteps = fineStepsPerMinimum * 2;  // 2 minima expected
+                int totalFineSteps = fineStepsPerMinimum * 2; // 2 minima expected
                 int totalSteps = coarseSteps + totalFineSteps;
                 int durationSec = (int) (totalSteps * 0.5);
-                durationLabel.setText(String.format("Estimated: Coarse %d steps + Fine %d steps = ~%d seconds total",
+                durationLabel.setText(String.format(
+                        "Estimated: Coarse %d steps + Fine %d steps = ~%d seconds total",
                         coarseSteps, totalFineSteps, durationSec));
             };
 
@@ -253,8 +249,8 @@ public class PolarizerCalibrationWorkflow {
                 File outputDir = new File(output);
 
                 if (output.isEmpty() || !outputDir.exists() || !outputDir.isDirectory()) {
-                    Dialogs.showErrorMessage("Invalid Output Folder",
-                            "Please select a valid output folder for the calibration report.");
+                    Dialogs.showErrorMessage(
+                            "Invalid Output Folder", "Please select a valid output folder for the calibration report.");
                     event.consume();
                     return;
                 }
@@ -262,8 +258,7 @@ public class PolarizerCalibrationWorkflow {
                 double step = stepSizeSpinner.getValue();
 
                 if (step <= 0 || step > 10.0) {
-                    Dialogs.showErrorMessage("Invalid Step Size",
-                            "Step size must be between 0.5 and 10.0 degrees.");
+                    Dialogs.showErrorMessage("Invalid Step Size", "Step size must be between 0.5 and 10.0 degrees.");
                     event.consume();
                     return;
                 }
@@ -275,11 +270,10 @@ public class PolarizerCalibrationWorkflow {
                 if (button == okType) {
                     return new CalibrationParams(
                             outputField.getText().trim(),
-                            0.0,  // start_angle (not used, always 0)
-                            360.0,  // end_angle (not used, always 360)
+                            0.0, // start_angle (not used, always 0)
+                            360.0, // end_angle (not used, always 360)
                             stepSizeSpinner.getValue(),
-                            exposureSpinner.getValue()
-                    );
+                            exposureSpinner.getValue());
                 }
                 return null;
             });
@@ -308,16 +302,15 @@ public class PolarizerCalibrationWorkflow {
         progressDialog.setTitle("Calibration In Progress");
         progressDialog.setHeaderText("Polarizer Calibration Running");
 
-        Label progressLabel = new Label(
-                "Calibration is in progress. This may take several minutes (typically 5-10 minutes).\n\n" +
-                "IMPORTANT: Check the Python server logs for detailed progress information.\n" +
-                "The logs will show:\n" +
-                "  - Coarse sweep progress (finding approximate minima)\n" +
-                "  - Fine sweep progress (refining exact positions)\n" +
-                "  - Stability check results (if enabled)\n\n" +
-                "Please wait for the calibration to complete.\n" +
-                "This dialog will close automatically when finished."
-        );
+        Label progressLabel =
+                new Label("Calibration is in progress. This may take several minutes (typically 5-10 minutes).\n\n"
+                        + "IMPORTANT: Check the Python server logs for detailed progress information.\n"
+                        + "The logs will show:\n"
+                        + "  - Coarse sweep progress (finding approximate minima)\n"
+                        + "  - Fine sweep progress (refining exact positions)\n"
+                        + "  - Stability check results (if enabled)\n\n"
+                        + "Please wait for the calibration to complete.\n"
+                        + "This dialog will close automatically when finished.");
         progressLabel.setWrapText(true);
 
         javafx.scene.control.ProgressIndicator progressIndicator = new javafx.scene.control.ProgressIndicator();
@@ -337,16 +330,17 @@ public class PolarizerCalibrationWorkflow {
 
         // Now run the actual calibration on a background thread
         CompletableFuture.runAsync(() -> {
-            executeCalibration(params, progressDialog);
-        }).exceptionally(ex -> {
-            logger.error("Polarizer calibration failed", ex);
-            Platform.runLater(() -> {
-                progressDialog.close();
-                Dialogs.showErrorMessage("Polarizer Calibration Error",
-                        "Failed to execute calibration: " + ex.getMessage());
-            });
-            return null;
-        });
+                    executeCalibration(params, progressDialog);
+                })
+                .exceptionally(ex -> {
+                    logger.error("Polarizer calibration failed", ex);
+                    Platform.runLater(() -> {
+                        progressDialog.close();
+                        Dialogs.showErrorMessage(
+                                "Polarizer Calibration Error", "Failed to execute calibration: " + ex.getMessage());
+                    });
+                    return null;
+                });
     }
 
     /**
@@ -357,12 +351,16 @@ public class PolarizerCalibrationWorkflow {
      * @param progressDialog Progress dialog to close when done (created on FX thread)
      */
     private static void executeCalibration(CalibrationParams params, Alert progressDialog) {
-        logger.info("Executing polarizer calibration: {} to {} deg, step {}",
-                params.startAngle(), params.endAngle(), params.stepSize());
+        logger.info(
+                "Executing polarizer calibration: {} to {} deg, step {}",
+                params.startAngle(),
+                params.endAngle(),
+                params.stepSize());
 
         try {
             // Get socket client
-            MicroscopeSocketClient socketClient = MicroscopeController.getInstance().getSocketClient();
+            MicroscopeSocketClient socketClient =
+                    MicroscopeController.getInstance().getSocketClient();
 
             // Ensure connection
             if (!MicroscopeController.getInstance().isConnected()) {
@@ -376,8 +374,7 @@ public class PolarizerCalibrationWorkflow {
             logger.info("Starting calibration with parameters:");
             logger.info("  Config: {}", configFileLocation);
             logger.info("  Output: {}", params.outputFolder());
-            logger.info("  Angles: {} to {} deg, step {}",
-                    params.startAngle(), params.endAngle(), params.stepSize());
+            logger.info("  Angles: {} to {} deg, step {}", params.startAngle(), params.endAngle(), params.stepSize());
             logger.info("  Exposure: {} ms", params.exposure());
 
             // Call the socket client method
@@ -387,8 +384,7 @@ public class PolarizerCalibrationWorkflow {
                     params.startAngle(),
                     params.endAngle(),
                     params.stepSize(),
-                    params.exposure()
-            );
+                    params.exposure());
 
             logger.info("Polarizer calibration completed successfully");
             logger.info("Report saved to: {}", reportPath);
@@ -401,7 +397,8 @@ public class PolarizerCalibrationWorkflow {
                 // Extract just the results section (up to CONFIG_PPM.YML UPDATE)
                 int configSectionStart = reportContent.indexOf("CONFIG_PPM.YML UPDATE");
                 if (configSectionStart > 0) {
-                    resultsSection = reportContent.substring(0, configSectionStart).trim();
+                    resultsSection =
+                            reportContent.substring(0, configSectionStart).trim();
                 } else {
                     resultsSection = reportContent;
                 }
@@ -462,8 +459,7 @@ public class PolarizerCalibrationWorkflow {
                         }
                     } catch (IOException e) {
                         logger.error("Failed to open report folder", e);
-                        Dialogs.showErrorMessage("Error",
-                                "Could not open folder: " + e.getMessage());
+                        Dialogs.showErrorMessage("Error", "Could not open folder: " + e.getMessage());
                     }
                 }
             });
@@ -474,8 +470,8 @@ public class PolarizerCalibrationWorkflow {
             // Close progress dialog and show error (on FX thread)
             Platform.runLater(() -> {
                 progressDialog.close();
-                Dialogs.showErrorMessage("Calibration Failed",
-                        "Failed to complete polarizer calibration:\n" + e.getMessage());
+                Dialogs.showErrorMessage(
+                        "Calibration Failed", "Failed to complete polarizer calibration:\n" + e.getMessage());
             });
         }
         // Note: Don't disconnect - we're using the shared MicroscopeController connection
@@ -485,10 +481,5 @@ public class PolarizerCalibrationWorkflow {
      * Record for calibration parameters.
      */
     private record CalibrationParams(
-            String outputFolder,
-            double startAngle,
-            double endAngle,
-            double stepSize,
-            double exposure
-    ) {}
+            String outputFolder, double startAngle, double endAngle, double stepSize, double exposure) {}
 }

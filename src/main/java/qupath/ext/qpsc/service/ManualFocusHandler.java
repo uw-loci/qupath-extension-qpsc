@@ -1,16 +1,15 @@
 package qupath.ext.qpsc.service;
 
+import java.io.IOException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.UIFunctions;
-
-import java.io.IOException;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Shared handler for the manual focus dialog pattern used during acquisition monitoring.
@@ -32,7 +31,7 @@ public final class ManualFocusHandler {
     /** Keepalive ping interval while waiting for user dialog response. */
     private static final int KEEPALIVE_INTERVAL_SECONDS = 30;
 
-    private ManualFocusHandler() { }
+    private ManualFocusHandler() {}
 
     /**
      * Optional callback interface for pausing/resuming progress timing during
@@ -70,8 +69,10 @@ public final class ManualFocusHandler {
 
         try {
             if (QPPreferenceDialog.getSkipManualAutofocus()) {
-                logger.warn("Manual focus requested but 'No Manual Autofocus' enabled - " +
-                           "skipping autofocus (retries remaining: {})", retriesRemaining);
+                logger.warn(
+                        "Manual focus requested but 'No Manual Autofocus' enabled - "
+                                + "skipping autofocus (retries remaining: {})",
+                        retriesRemaining);
                 try {
                     socketClient.skipAutofocusRetry();
                     logger.info("Autofocus skipped - using current focus position");
@@ -79,8 +80,7 @@ public final class ManualFocusHandler {
                     logger.error("Failed to send skip autofocus", e);
                 }
             } else {
-                logger.info("Manual focus requested - showing dialog (retries remaining: {})",
-                        retriesRemaining);
+                logger.info("Manual focus requested - showing dialog (retries remaining: {})", retriesRemaining);
 
                 if (timingCallback != null) {
                     timingCallback.pauseTiming();
@@ -90,8 +90,7 @@ public final class ManualFocusHandler {
 
                 Platform.runLater(() -> {
                     try {
-                        UIFunctions.ManualFocusResult result =
-                                UIFunctions.showManualFocusDialog(retriesRemaining);
+                        UIFunctions.ManualFocusResult result = UIFunctions.showManualFocusDialog(retriesRemaining);
                         try {
                             switch (result) {
                                 case RETRY_AUTOFOCUS:

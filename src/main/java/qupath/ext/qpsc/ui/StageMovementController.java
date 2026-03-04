@@ -1,5 +1,14 @@
 package qupath.ext.qpsc.ui;
 
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.ResourceBundle;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.UnaryOperator;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.geometry.HPos;
@@ -12,12 +21,11 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
+import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import javafx.stage.Stage;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -28,16 +36,6 @@ import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.Project;
-
-import java.awt.geom.AffineTransform;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.ResourceBundle;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.UnaryOperator;
 
 /**
  * StageMovementController - Manual microscope stage control interface
@@ -86,11 +84,11 @@ public class StageMovementController {
 
     /**
      * Displays the stage movement control dialog for manual microscope positioning.
-     * 
+     *
      * <p>This method creates and shows a non-modal dialog that allows users to control the microscope
      * stage position across X/Y, Z, and R (polarizer) axes. The dialog initializes with current
      * hardware positions and provides real-time movement controls with safety validation.
-     * 
+     *
      * <p>Dialog components:
      * <ul>
      *   <li>Text fields for X, Y, Z, and R coordinate input</li>
@@ -98,11 +96,11 @@ public class StageMovementController {
      *   <li>Status labels showing movement confirmations and errors</li>
      *   <li>Configuration-based boundary validation for X/Y and Z axes</li>
      * </ul>
-     * 
+     *
      * <p>The dialog executes on the JavaFX Application Thread and remains open for multiple
      * movement operations. Stage boundaries are enforced through MicroscopeConfigManager
      * validation before any movement commands are sent to hardware.
-     * 
+     *
      * @throws RuntimeException if resource bundle loading fails or dialog creation encounters errors
      */
     public static void showTestStageMovementDialog() {
@@ -120,7 +118,7 @@ public class StageMovementController {
             logger.debug("Creating stage movement dialog on JavaFX Application Thread");
             ResourceBundle res = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings");
             Dialog<Void> dlg = new Dialog<>();
-            activeDialog = dlg;  // Track the active dialog
+            activeDialog = dlg; // Track the active dialog
             dlg.setTitle(res.getString("stageMovement.title"));
             dlg.setHeaderText(res.getString("stageMovement.header"));
             logger.debug("Dialog created with title: {}", res.getString("stageMovement.title"));
@@ -180,8 +178,8 @@ public class StageMovementController {
             // --- Buttons ---
             logger.debug("Creating movement control buttons");
             Button moveXYBtn = new Button(res.getString("stageMovement.button.moveXY"));
-            Button moveZBtn  = new Button(res.getString("stageMovement.button.moveZ"));
-            Button moveRBtn  = new Button(res.getString("stageMovement.button.moveR"));
+            Button moveZBtn = new Button(res.getString("stageMovement.button.moveZ"));
+            Button moveRBtn = new Button(res.getString("stageMovement.button.moveR"));
 
             // --- Actions (dialog stays open) ---
             logger.debug("Setting up button action handlers for stage movements");
@@ -191,7 +189,7 @@ public class StageMovementController {
                     double x = Double.parseDouble(xField.getText());
                     double y = Double.parseDouble(yField.getText());
                     logger.debug("Parsed XY coordinates for movement: X={}, Y={}", x, y);
-                    
+
                     // *** BOUNDS CHECK using ConfigManager directly ***
                     if (!mgr.isWithinStageBounds(x, y)) {
                         logger.warn("XY movement rejected - coordinates out of bounds: X={}, Y={}", x, y);
@@ -201,11 +199,10 @@ public class StageMovementController {
                         UIFunctions.showAlertDialog(res.getString("stageMovement.error.outOfBoundsXY"));
                         return;
                     }
-                    
+
                     logger.info("Executing XY stage movement to position: X={}, Y={}", x, y);
                     MicroscopeController.getInstance().moveStageXY(x, y);
-                    xyStatus.setText(
-                            String.format(res.getString("stageMovement.status.xyMoved"), x, y));
+                    xyStatus.setText(String.format(res.getString("stageMovement.status.xyMoved"), x, y));
                     logger.info("XY stage movement completed successfully: X={}, Y={}", x, y);
                 } catch (NumberFormatException ex) {
                     logger.warn("Invalid XY coordinate format - X: '{}', Y: '{}'", xField.getText(), yField.getText());
@@ -213,8 +210,7 @@ public class StageMovementController {
                             "Invalid coordinate format: " + ex.getMessage(), res.getString("stageMovement.title"));
                 } catch (Exception ex) {
                     logger.error("XY stage movement failed: {}", ex.getMessage(), ex);
-                    UIFunctions.notifyUserOfError(
-                            ex.getMessage(), res.getString("stageMovement.title"));
+                    UIFunctions.notifyUserOfError(ex.getMessage(), res.getString("stageMovement.title"));
                 }
             });
 
@@ -223,7 +219,7 @@ public class StageMovementController {
                 try {
                     double z = Double.parseDouble(zField.getText());
                     logger.debug("Parsed Z coordinate for movement: {}", z);
-                    
+
                     // *** BOUNDS CHECK using ConfigManager directly ***
                     if (!mgr.isWithinStageBounds(z)) {
                         logger.warn("Z movement rejected - coordinate out of bounds: {}", z);
@@ -233,11 +229,10 @@ public class StageMovementController {
                         UIFunctions.showAlertDialog(res.getString("stageMovement.error.outOfBoundsZ"));
                         return;
                     }
-                    
+
                     logger.info("Executing Z stage movement to position: {}", z);
                     MicroscopeController.getInstance().moveStageZ(z);
-                    zStatus.setText(
-                            String.format(res.getString("stageMovement.status.zMoved"), z));
+                    zStatus.setText(String.format(res.getString("stageMovement.status.zMoved"), z));
                     logger.info("Z stage movement completed successfully: {}", z);
                 } catch (NumberFormatException ex) {
                     logger.warn("Invalid Z coordinate format: '{}'", zField.getText());
@@ -245,8 +240,7 @@ public class StageMovementController {
                             "Invalid coordinate format: " + ex.getMessage(), res.getString("stageMovement.title"));
                 } catch (Exception ex) {
                     logger.error("Z stage movement failed: {}", ex.getMessage(), ex);
-                    UIFunctions.notifyUserOfError(
-                            ex.getMessage(), res.getString("stageMovement.title"));
+                    UIFunctions.notifyUserOfError(ex.getMessage(), res.getString("stageMovement.title"));
                 }
             });
 
@@ -259,8 +253,7 @@ public class StageMovementController {
                     // no bounds for R (polarizer rotation is unrestricted)
                     logger.info("Executing R stage movement to position: {}", r);
                     MicroscopeController.getInstance().moveStageR(r);
-                    rStatus.setText(
-                            String.format(res.getString("stageMovement.status.rMoved"), r));
+                    rStatus.setText(String.format(res.getString("stageMovement.status.rMoved"), r));
                     logger.info("R stage movement completed successfully: {}", r);
                 } catch (NumberFormatException ex) {
                     logger.warn("Invalid R coordinate format: '{}'", rField.getText());
@@ -268,8 +261,7 @@ public class StageMovementController {
                             "Invalid coordinate format: " + ex.getMessage(), res.getString("stageMovement.title"));
                 } catch (Exception ex) {
                     logger.error("R stage movement failed: {}", ex.getMessage(), ex);
-                    UIFunctions.notifyUserOfError(
-                            ex.getMessage(), res.getString("stageMovement.title"));
+                    UIFunctions.notifyUserOfError(ex.getMessage(), res.getString("stageMovement.title"));
                 }
             });
 
@@ -416,10 +408,10 @@ public class StageMovementController {
             // Initialize UI state from saved preferences (show/hide value row based on FOV selection)
             applyFovStep.run();
 
-            Button upBtn = new Button("\u2191");  // Up arrow
-            Button downBtn = new Button("\u2193");  // Down arrow
-            Button leftBtn = new Button("\u2190");  // Left arrow
-            Button rightBtn = new Button("\u2192");  // Right arrow
+            Button upBtn = new Button("\u2191"); // Up arrow
+            Button downBtn = new Button("\u2193"); // Down arrow
+            Button leftBtn = new Button("\u2190"); // Left arrow
+            Button rightBtn = new Button("\u2192"); // Right arrow
 
             // Style arrow buttons (smaller to fit around joystick)
             String arrowBtnStyle = "-fx-font-size: 12px; -fx-min-width: 28px; -fx-min-height: 28px; -fx-padding: 2;";
@@ -432,16 +424,17 @@ public class StageMovementController {
             // Initialize from saved preference
             CheckBox sampleMovementCheckbox = new CheckBox("Sample movement");
             sampleMovementCheckbox.setSelected(PersistentPreferences.getStageControlSampleMovement());
-            Tooltip.install(sampleMovementCheckbox, new Tooltip(
-                    "When checked, controls move the sample rather than the stage.\n" +
-                    "This inverts the X direction to match visual expectations."));
+            Tooltip.install(
+                    sampleMovementCheckbox,
+                    new Tooltip("When checked, controls move the sample rather than the stage.\n"
+                            + "This inverts the X direction to match visual expectations."));
 
             // Thread-safe flag for sample movement mode (used by joystick callback on background thread)
             // Initialize from checkbox's current state and keep in sync via listener
             final AtomicBoolean sampleMovementMode = new AtomicBoolean(sampleMovementCheckbox.isSelected());
             sampleMovementCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
                 sampleMovementMode.set(newVal);
-                PersistentPreferences.setStageControlSampleMovement(newVal);  // Save preference
+                PersistentPreferences.setStageControlSampleMovement(newVal); // Save preference
                 logger.info("Sample movement mode changed: {} -> {}", oldVal, newVal);
             });
             logger.debug("Sample movement checkbox initialized, selected={}", sampleMovementCheckbox.isSelected());
@@ -554,8 +547,11 @@ public class StageMovementController {
 
             VBox stepSettingsSection = new VBox(4);
             stepSettingsSection.setAlignment(Pos.CENTER_LEFT);
-            stepSettingsSection.getChildren().addAll(stepSettingsLabel, fovControlsRow, valueRow, sampleMovementCheckbox);
-            stepSettingsSection.setStyle("-fx-padding: 5; -fx-border-color: #cccccc; -fx-border-radius: 3; -fx-background-color: #f8f8f8; -fx-background-radius: 3;");
+            stepSettingsSection
+                    .getChildren()
+                    .addAll(stepSettingsLabel, fovControlsRow, valueRow, sampleMovementCheckbox);
+            stepSettingsSection.setStyle(
+                    "-fx-padding: 5; -fx-border-color: #cccccc; -fx-border-radius: 3; -fx-background-color: #f8f8f8; -fx-background-radius: 3;");
 
             // --- Navigation Control: arrows around joystick ---
             Label navLabel = new Label("XY Navigation");
@@ -592,8 +588,7 @@ public class StageMovementController {
                 initialX = 0;
                 initialY = 0;
             }
-            final AtomicReference<double[]> joystickPosition = new AtomicReference<>(
-                    new double[]{initialX, initialY});
+            final AtomicReference<double[]> joystickPosition = new AtomicReference<>(new double[] {initialX, initialY});
 
             // Sync position from text fields when user starts dragging
             // This ensures the joystick picks up from wherever the stage actually is
@@ -601,7 +596,7 @@ public class StageMovementController {
                 try {
                     double x = Double.parseDouble(xField.getText().replace(",", ""));
                     double y = Double.parseDouble(yField.getText().replace(",", ""));
-                    joystickPosition.set(new double[]{x, y});
+                    joystickPosition.set(new double[] {x, y});
                     logger.debug("Joystick position synced to: ({}, {})", x, y);
                 } catch (NumberFormatException e) {
                     logger.warn("Failed to sync joystick position from text fields");
@@ -628,7 +623,7 @@ public class StageMovementController {
                     }
 
                     // Update atomic position BEFORE sending command (latest-wins semantics)
-                    joystickPosition.set(new double[]{targetX, targetY});
+                    joystickPosition.set(new double[] {targetX, targetY});
 
                     MicroscopeController.getInstance().moveStageXY(targetX, targetY);
                     Platform.runLater(() -> {
@@ -646,7 +641,8 @@ public class StageMovementController {
             VBox navigationSection = new VBox(6);
             navigationSection.setAlignment(Pos.CENTER);
             navigationSection.getChildren().addAll(navLabel, navGrid, keyboardHint);
-            navigationSection.setStyle("-fx-padding: 5; -fx-border-color: #cccccc; -fx-border-radius: 3; -fx-background-color: #f8f8f8; -fx-background-radius: 3;");
+            navigationSection.setStyle(
+                    "-fx-padding: 5; -fx-border-color: #cccccc; -fx-border-radius: 3; -fx-background-color: #f8f8f8; -fx-background-radius: 3;");
 
             // Combined XY controls section
             VBox xyControlsSection = new VBox(10);
@@ -658,7 +654,8 @@ public class StageMovementController {
             TextField zStepField = new TextField("10");
             zStepField.setPrefWidth(50);
             zStepField.setAlignment(Pos.CENTER);
-            Tooltip.install(zStepField, new Tooltip("Z step size (um, integers only) - use mouse wheel over Z controls"));
+            Tooltip.install(
+                    zStepField, new Tooltip("Z step size (um, integers only) - use mouse wheel over Z controls"));
 
             // Input validation: only allow digits and commas (no decimals)
             zStepField.setTextFormatter(new TextFormatter<>(integerFilter));
@@ -669,14 +666,11 @@ public class StageMovementController {
             // Help button with tooltip explaining Z scroll
             Button zHelpBtn = new Button("?");
             zHelpBtn.setStyle("-fx-font-size: 10px; -fx-min-width: 20px; -fx-min-height: 20px; -fx-padding: 0;");
-            Tooltip zHelpTooltip = new Tooltip(
-                    "Z SCROLL CONTROL\n\n" +
-                    "Use mouse scroll wheel to move Z axis:\n" +
-                    "- Hover over Z field, Move Z button, or Z step field\n" +
-                    "- Scroll UP to INCREASE Z (move up)\n" +
-                    "- Scroll DOWN to DECREASE Z (move down)\n\n" +
-                    "The Z step field sets how far each scroll moves."
-            );
+            Tooltip zHelpTooltip = new Tooltip("Z SCROLL CONTROL\n\n" + "Use mouse scroll wheel to move Z axis:\n"
+                    + "- Hover over Z field, Move Z button, or Z step field\n"
+                    + "- Scroll UP to INCREASE Z (move up)\n"
+                    + "- Scroll DOWN to DECREASE Z (move down)\n\n"
+                    + "The Z step field sets how far each scroll moves.");
             zHelpTooltip.setShowDelay(javafx.util.Duration.ZERO);
             zHelpTooltip.setShowDuration(javafx.util.Duration.INDEFINITE);
             Tooltip.install(zHelpBtn, zHelpTooltip);
@@ -741,7 +735,7 @@ public class StageMovementController {
             grid.add(new Label(res.getString("stageMovement.label.z")), 0, 3);
             grid.add(zField, 1, 3);
             grid.add(moveZBtn, 2, 3);
-            grid.add(zScrollBox, 3, 3);  // Z step control with scroll wheel hint
+            grid.add(zScrollBox, 3, 3); // Z step control with scroll wheel hint
             grid.add(zStatus, 1, 4, 3, 1);
 
             // R
@@ -764,7 +758,8 @@ public class StageMovementController {
             QuPathGUI gui = QuPathGUI.getInstance();
 
             // Try to get alignment - first from MicroscopeController, then from slide-specific storage
-            AffineTransform currentTransform = MicroscopeController.getInstance().getCurrentTransform();
+            AffineTransform currentTransform =
+                    MicroscopeController.getInstance().getCurrentTransform();
 
             // If no active transform, try to load slide-specific alignment for current image
             if (currentTransform == null && gui != null && gui.getProject() != null && gui.getImageData() != null) {
@@ -816,9 +811,8 @@ public class StageMovementController {
                         : "unknown";
 
                 @SuppressWarnings("unchecked")
-                Project<BufferedImage> projectForList = gui != null && gui.getProject() != null
-                        ? (Project<BufferedImage>) gui.getProject()
-                        : null;
+                Project<BufferedImage> projectForList =
+                        gui != null && gui.getProject() != null ? (Project<BufferedImage>) gui.getProject() : null;
                 List<String> availableAlignments = getAvailableAlignments(projectForList);
 
                 if (availableAlignments.isEmpty()) {
@@ -834,7 +828,8 @@ public class StageMovementController {
                     alignmentListView.getItems().addAll(availableAlignments);
                 }
 
-                logger.debug("Go to centroid button disabled - no alignment for current image. {} alignments available in project.",
+                logger.debug(
+                        "Go to centroid button disabled - no alignment for current image. {} alignments available in project.",
                         availableAlignments.size());
             } else {
                 logger.debug("Go to centroid button enabled - alignment available");
@@ -844,7 +839,8 @@ public class StageMovementController {
                 logger.debug("Go to object centroid button clicked");
                 try {
                     // Re-check transform in case it was set after dialog opened
-                    AffineTransform transform = MicroscopeController.getInstance().getCurrentTransform();
+                    AffineTransform transform =
+                            MicroscopeController.getInstance().getCurrentTransform();
 
                     // If still no transform, try slide-specific alignment again
                     if (transform == null && gui != null && gui.getProject() != null && gui.getImageData() != null) {
@@ -867,36 +863,32 @@ public class StageMovementController {
                     if (transform == null) {
                         centroidStatus.setText("No alignment available");
                         UIFunctions.notifyUserOfError(
-                                "No alignment is available. Please perform alignment first.",
-                                "Go to Centroid");
+                                "No alignment is available. Please perform alignment first.", "Go to Centroid");
                         return;
                     }
 
                     // Get selected object
                     if (gui == null || gui.getImageData() == null) {
                         centroidStatus.setText("No image open");
-                        UIFunctions.notifyUserOfError(
-                                "No image is currently open.",
-                                "Go to Centroid");
+                        UIFunctions.notifyUserOfError("No image is currently open.", "Go to Centroid");
                         return;
                     }
 
-                    PathObject selectedObject = gui.getImageData().getHierarchy()
-                            .getSelectionModel().getSelectedObject();
+                    PathObject selectedObject = gui.getImageData()
+                            .getHierarchy()
+                            .getSelectionModel()
+                            .getSelectedObject();
 
                     if (selectedObject == null) {
                         centroidStatus.setText("No object selected");
-                        UIFunctions.notifyUserOfError(
-                                "Please select an object in QuPath first.",
-                                "Go to Centroid");
+                        UIFunctions.notifyUserOfError("Please select an object in QuPath first.", "Go to Centroid");
                         return;
                     }
 
                     if (selectedObject.getROI() == null) {
                         centroidStatus.setText("Selected object has no ROI");
                         UIFunctions.notifyUserOfError(
-                                "The selected object has no region of interest.",
-                                "Go to Centroid");
+                                "The selected object has no region of interest.", "Go to Centroid");
                         return;
                     }
 
@@ -907,16 +899,14 @@ public class StageMovementController {
 
                     // Transform to stage coordinates
                     double[] qpCoords = {centroidX, centroidY};
-                    double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
-                            qpCoords, transform);
+                    double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(qpCoords, transform);
                     logger.info("Transformed to stage coordinates: ({}, {})", stageCoords[0], stageCoords[1]);
 
                     // Validate stage bounds
                     if (!mgr.isWithinStageBounds(stageCoords[0], stageCoords[1])) {
                         logger.warn("Centroid position out of stage bounds: ({}, {})", stageCoords[0], stageCoords[1]);
                         UIFunctions.notifyUserOfError(
-                                "The object centroid position is outside the stage bounds.",
-                                "Go to Centroid");
+                                "The object centroid position is outside the stage bounds.", "Go to Centroid");
                         centroidStatus.setText("Position out of bounds");
                         return;
                     }
@@ -929,15 +919,14 @@ public class StageMovementController {
                     centroidStatus.setText(String.format("Moved to (%.2f, %.2f)", stageCoords[0], stageCoords[1]));
                     xField.setText(String.format("%.2f", stageCoords[0]));
                     yField.setText(String.format("%.2f", stageCoords[1]));
-                    xyStatus.setText(String.format("Moved to object centroid (%.2f, %.2f)", stageCoords[0], stageCoords[1]));
+                    xyStatus.setText(
+                            String.format("Moved to object centroid (%.2f, %.2f)", stageCoords[0], stageCoords[1]));
                     logger.info("Successfully moved to object centroid");
 
                 } catch (Exception ex) {
                     logger.error("Failed to move to object centroid: {}", ex.getMessage(), ex);
                     centroidStatus.setText("Error: " + ex.getMessage());
-                    UIFunctions.notifyUserOfError(
-                            "Failed to move to centroid: " + ex.getMessage(),
-                            "Go to Centroid");
+                    UIFunctions.notifyUserOfError("Failed to move to centroid: " + ex.getMessage(), "Go to Centroid");
                 }
             });
 
@@ -1012,25 +1001,25 @@ public class StageMovementController {
             // Add listener to refresh alignment status when image changes
             if (gui != null) {
                 javafx.beans.value.ChangeListener<qupath.lib.images.ImageData<?>> imageChangeListener =
-                    (obs, oldImage, newImage) -> {
-                        logger.debug("Image changed in viewer, refreshing alignment status");
-                        refreshAlignmentStatus(gui, goToCentroidBtn, centroidStatus,
-                                availableLabel, alignmentListView, mgr);
-                    };
+                        (obs, oldImage, newImage) -> {
+                            logger.debug("Image changed in viewer, refreshing alignment status");
+                            refreshAlignmentStatus(
+                                    gui, goToCentroidBtn, centroidStatus, availableLabel, alignmentListView, mgr);
+                        };
                 gui.imageDataProperty().addListener(imageChangeListener);
 
                 // Remove listener and stop joystick when dialog closes to prevent leaks
                 dlg.setOnHidden(event -> {
                     gui.imageDataProperty().removeListener(imageChangeListener);
                     joystick.stop();
-                    activeDialog = null;  // Clear singleton reference
+                    activeDialog = null; // Clear singleton reference
                     logger.debug("Removed image change listener and stopped joystick on dialog close");
                 });
             } else {
                 // Still stop joystick on close even without GUI
                 dlg.setOnHidden(event -> {
                     joystick.stop();
-                    activeDialog = null;  // Clear singleton reference
+                    activeDialog = null; // Clear singleton reference
                     logger.debug("Stopped joystick on dialog close");
                 });
             }
@@ -1098,8 +1087,12 @@ public class StageMovementController {
      * @param alignmentListView The list view for available alignments
      * @param mgr The config manager (for validation, passed but not used in this method)
      */
-    private static void refreshAlignmentStatus(QuPathGUI gui, Button goToCentroidBtn,
-            Label centroidStatus, Label availableLabel, ListView<String> alignmentListView,
+    private static void refreshAlignmentStatus(
+            QuPathGUI gui,
+            Button goToCentroidBtn,
+            Label centroidStatus,
+            Label availableLabel,
+            ListView<String> alignmentListView,
             MicroscopeConfigManager mgr) {
 
         // Reset state

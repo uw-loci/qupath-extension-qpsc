@@ -2,15 +2,14 @@ package qupath.ext.qpsc.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
-
+import qupath.ext.qpsc.ui.RefinementSelectionController.AlignmentInfo;
 import qupath.ext.qpsc.ui.RefinementSelectionController.RefinementChoice;
 import qupath.ext.qpsc.ui.RefinementSelectionController.RefinementResult;
-import qupath.ext.qpsc.ui.RefinementSelectionController.AlignmentInfo;
 
 /**
  * Unit tests for RefinementSelectionController.
@@ -42,9 +41,9 @@ class RefinementSelectionControllerTest {
 
     @ParameterizedTest
     @CsvSource({
-            "NONE, Proceed without refinement",
-            "SINGLE_TILE, Single-tile refinement",
-            "FULL_MANUAL, Full manual alignment"
+        "NONE, Proceed without refinement",
+        "SINGLE_TILE, Single-tile refinement",
+        "FULL_MANUAL, Full manual alignment"
     })
     @DisplayName("RefinementChoice display names are correct")
     void testRefinementChoiceDisplayNames(String choice, String expectedName) {
@@ -192,11 +191,7 @@ class RefinementSelectionControllerTest {
     @Test
     @DisplayName("AlignmentInfo preserves source description")
     void testAlignmentInfoSourceDescriptions() {
-        String[] sources = {
-                "Slide-specific (MacroSlide_001)",
-                "General (Standard_Alignment)",
-                "Unknown"
-        };
+        String[] sources = {"Slide-specific (MacroSlide_001)", "General (Standard_Alignment)", "Unknown"};
 
         for (String source : sources) {
             AlignmentInfo info = new AlignmentInfo(0.7, source, "Transform");
@@ -209,11 +204,7 @@ class RefinementSelectionControllerTest {
     @Test
     @DisplayName("AlignmentInfo preserves transform name")
     void testAlignmentInfoTransformNames() {
-        String[] names = {
-                "Standard_Alignment_20231215",
-                "MacroSlide_001_refined",
-                "Manual_3point",
-                "Current alignment"
+        String[] names = {"Standard_Alignment_20231215", "MacroSlide_001_refined", "Manual_3point", "Current alignment"
         };
 
         for (String name : names) {

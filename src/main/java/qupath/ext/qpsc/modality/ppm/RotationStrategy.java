@@ -1,11 +1,10 @@
 package qupath.ext.qpsc.modality.ppm;
 
-import qupath.ext.qpsc.modality.AngleExposure;
-import qupath.ext.qpsc.modality.ppm.ui.PPMAngleSelectionController;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.modality.ppm.ui.PPMAngleSelectionController;
 
 /**
  * Strategy interface for handling stage rotation based on imaging modality.
@@ -42,7 +41,6 @@ public interface RotationStrategy {
     String getAngleSuffix(double angle);
 }
 
-
 /**
  * Implementation for PPM (Polarized Light Microscopy) modalities
  */
@@ -56,13 +54,14 @@ class PPMRotationStrategy implements RotationStrategy {
     private final String objective;
     private final String detector;
 
-    public PPMRotationStrategy(AngleExposure plusAngleExposure,
-                               AngleExposure minusAngleExposure,
-                               AngleExposure zeroAngleExposure,
-                               AngleExposure uncrossedAngleExposure,
-                               String modality,
-                               String objective,
-                               String detector) {
+    public PPMRotationStrategy(
+            AngleExposure plusAngleExposure,
+            AngleExposure minusAngleExposure,
+            AngleExposure zeroAngleExposure,
+            AngleExposure uncrossedAngleExposure,
+            String modality,
+            String objective,
+            String detector) {
         this.plusAngleExposure = plusAngleExposure;
         this.minusAngleExposure = minusAngleExposure;
         this.zeroAngleExposure = zeroAngleExposure;
@@ -80,8 +79,13 @@ class PPMRotationStrategy implements RotationStrategy {
     @Override
     public CompletableFuture<List<Double>> getRotationTicks() {
         // Show dialog for angle selection with exposure times
-        return PPMAngleSelectionController.showDialog(plusAngleExposure.ticks(), minusAngleExposure.ticks(), uncrossedAngleExposure.ticks(), 
-                modality, objective, detector)
+        return PPMAngleSelectionController.showDialog(
+                        plusAngleExposure.ticks(),
+                        minusAngleExposure.ticks(),
+                        uncrossedAngleExposure.ticks(),
+                        modality,
+                        objective,
+                        detector)
                 .thenApply(result -> {
                     if (result == null) {
                         return new ArrayList<>();
@@ -93,8 +97,13 @@ class PPMRotationStrategy implements RotationStrategy {
     @Override
     public CompletableFuture<List<AngleExposure>> getRotationTicksWithExposure() {
         // Show dialog for angle selection with exposure times
-        return PPMAngleSelectionController.showDialog(plusAngleExposure.ticks(), minusAngleExposure.ticks(), uncrossedAngleExposure.ticks(), 
-                modality, objective, detector)
+        return PPMAngleSelectionController.showDialog(
+                        plusAngleExposure.ticks(),
+                        minusAngleExposure.ticks(),
+                        uncrossedAngleExposure.ticks(),
+                        modality,
+                        objective,
+                        detector)
                 .thenApply(result -> {
                     if (result == null) {
                         return new ArrayList<>();

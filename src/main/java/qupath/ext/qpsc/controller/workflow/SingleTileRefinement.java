@@ -1,5 +1,9 @@
 package qupath.ext.qpsc.controller.workflow;
 
+import java.awt.geom.AffineTransform;
+import java.io.IOException;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -17,15 +21,10 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
-import qupath.lib.projects.ProjectImageEntry;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
-
-import java.awt.geom.AffineTransform;
-import java.io.IOException;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import qupath.lib.projects.ProjectImageEntry;
 
 /**
  * Helper for single-tile alignment refinement.
@@ -77,39 +76,34 @@ public class SingleTileRefinement {
      * @return CompletableFuture with RefinementResult containing refined transform and selected tile
      */
     public static CompletableFuture<RefinementResult> performRefinement(
-            QuPathGUI gui,
-            List<PathObject> annotations,
-            AffineTransform initialTransform) {
+            QuPathGUI gui, List<PathObject> annotations, AffineTransform initialTransform) {
 
         CompletableFuture<RefinementResult> future = new CompletableFuture<>();
 
         logger.info("Starting single-tile refinement");
 
         // Select tile for refinement
-        UIFunctions.promptTileSelectionDialogAsync(
-                "Select a tile for alignment refinement.\n" +
-                        "The microscope will move to the estimated position for this tile.\n" +
-                        "You will then manually adjust the stage position to match."
-        ).thenAccept(selectedTile -> {
-            if (selectedTile == null) {
-                logger.info("User cancelled tile selection");
-                future.complete(new RefinementResult(initialTransform, null));
-                return;
-            }
+        UIFunctions.promptTileSelectionDialogAsync("Select a tile for alignment refinement.\n"
+                        + "The microscope will move to the estimated position for this tile.\n"
+                        + "You will then manually adjust the stage position to match.")
+                .thenAccept(selectedTile -> {
+                    if (selectedTile == null) {
+                        logger.info("User cancelled tile selection");
+                        future.complete(new RefinementResult(initialTransform, null));
+                        return;
+                    }
 
-            Platform.runLater(() -> {
-                try {
-                    performTileRefinement(gui, selectedTile, initialTransform, future);
-                } catch (Exception e) {
-                    logger.error("Error during refinement", e);
-                    UIFunctions.notifyUserOfError(
-                            "Error during refinement: " + e.getMessage(),
-                            "Refinement Error"
-                    );
-                    future.complete(new RefinementResult(initialTransform, selectedTile));
-                }
-            });
-        });
+                    Platform.runLater(() -> {
+                        try {
+                            performTileRefinement(gui, selectedTile, initialTransform, future);
+                        } catch (Exception e) {
+                            logger.error("Error during refinement", e);
+                            UIFunctions.notifyUserOfError(
+                                    "Error during refinement: " + e.getMessage(), "Refinement Error");
+                            future.complete(new RefinementResult(initialTransform, selectedTile));
+                        }
+                    });
+                });
 
         return future;
     }
@@ -137,12 +131,12 @@ public class SingleTileRefinement {
             QuPathGUI gui,
             PathObject selectedTile,
             AffineTransform initialTransform,
-            CompletableFuture<RefinementResult> future) throws Exception {
+            CompletableFuture<RefinementResult> future)
+            throws Exception {
 
         // Get tile coordinates (centroid)
         double[] tileCoords = {
-                selectedTile.getROI().getCentroidX(),
-                selectedTile.getROI().getCentroidY()
+            selectedTile.getROI().getCentroidX(), selectedTile.getROI().getCentroidY()
         };
 
         // Get frame dimensions from tile ROI (in pixels)
@@ -167,8 +161,15 @@ public class SingleTileRefinement {
             logger.debug("No image entry, using global preferences: flipX={}, flipY={}", flipX, flipY);
         }
 
-        logger.info("Selected tile '{}' at coordinates: ({}, {}), frame size: {}x{}, flips: X={}, Y={}",
-                selectedTile.getName(), tileCoords[0], tileCoords[1], frameWidth, frameHeight, flipX, flipY);
+        logger.info(
+                "Selected tile '{}' at coordinates: ({}, {}), frame size: {}x{}, flips: X={}, Y={}",
+                selectedTile.getName(),
+                tileCoords[0],
+                tileCoords[1],
+                frameWidth,
+                frameHeight,
+                flipX,
+                flipY);
 
         // Apply flip-based correction to pixel coordinates before transform
         // In flipped image space, the prediction is 1 frame higher (Y) and 1 frame right (X)
@@ -186,14 +187,15 @@ public class SingleTileRefinement {
         }
 
         // Transform corrected coordinates to stage position
-        double[] estimatedStageCoords = TransformationFunctions.transformQuPathFullResToStage(
-                correctedCoords, initialTransform);
+        double[] estimatedStageCoords =
+                TransformationFunctions.transformQuPathFullResToStage(correctedCoords, initialTransform);
 
         if (flipX || flipY) {
             // Also log what the uncorrected position would have been for comparison
-            double[] uncorrectedStageCoords = TransformationFunctions.transformQuPathFullResToStage(
-                    tileCoords, initialTransform);
-            logger.info("Stage position: corrected=({}, {}), uncorrected=({}, {})",
+            double[] uncorrectedStageCoords =
+                    TransformationFunctions.transformQuPathFullResToStage(tileCoords, initialTransform);
+            logger.info(
+                    "Stage position: corrected=({}, {}), uncorrected=({}, {})",
                     String.format("%.1f", estimatedStageCoords[0]),
                     String.format("%.1f", estimatedStageCoords[1]),
                     String.format("%.1f", uncorrectedStageCoords[0]),
@@ -204,10 +206,8 @@ public class SingleTileRefinement {
         centerViewerOnTile(gui, selectedTile);
 
         // Move to estimated position
-        logger.info("Moving to estimated position: ({}, {})",
-                estimatedStageCoords[0], estimatedStageCoords[1]);
-        MicroscopeController.getInstance().moveStageXY(
-                estimatedStageCoords[0], estimatedStageCoords[1]);
+        logger.info("Moving to estimated position: ({}, {})", estimatedStageCoords[0], estimatedStageCoords[1]);
+        MicroscopeController.getInstance().moveStageXY(estimatedStageCoords[0], estimatedStageCoords[1]);
 
         // Wait for stage to settle
         Thread.sleep(500);
@@ -215,7 +215,6 @@ public class SingleTileRefinement {
         // Show refinement dialog (non-modal so user can interact with QuPath)
         showRefinementDialog(gui, tileCoords, initialTransform, selectedTile, future);
     }
-
 
     /**
      * Centers the QuPath viewer on the selected tile.
@@ -276,12 +275,11 @@ public class SingleTileRefinement {
         Label headerLabel = new Label("Alignment Refinement");
         headerLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
 
-        Label instructionLabel = new Label(
-                "The microscope has moved to the estimated position for the selected tile.\n\n" +
-                "Please use the microscope controls (or Stage Control dialog) to adjust\n" +
-                "the stage position so that the live view matches the selected tile in QuPath.\n\n" +
-                "When the alignment is correct, click 'Save Refined Position'."
-        );
+        Label instructionLabel =
+                new Label("The microscope has moved to the estimated position for the selected tile.\n\n"
+                        + "Please use the microscope controls (or Stage Control dialog) to adjust\n"
+                        + "the stage position so that the live view matches the selected tile in QuPath.\n\n"
+                        + "When the alignment is correct, click 'Save Refined Position'.");
         instructionLabel.setWrapText(true);
 
         // Tile info label
@@ -291,10 +289,9 @@ public class SingleTileRefinement {
 
         // Restore tile button
         Button restoreButton = new Button("Restore Target Tile Selection");
-        restoreButton.setTooltip(new javafx.scene.control.Tooltip(
-                "Re-select and center view on the original target tile\n" +
-                "if you accidentally changed the selection."
-        ));
+        restoreButton.setTooltip(
+                new javafx.scene.control.Tooltip("Re-select and center view on the original target tile\n"
+                        + "if you accidentally changed the selection."));
         restoreButton.setOnAction(e -> {
             // Restore selection and center view
             centerViewerOnTile(gui, selectedTile);
@@ -308,8 +305,7 @@ public class SingleTileRefinement {
             try {
                 // Get refined position
                 double[] refinedStageCoords = MicroscopeController.getInstance().getStagePositionXY();
-                logger.info("Refined stage position: ({}, {})",
-                        refinedStageCoords[0], refinedStageCoords[1]);
+                logger.info("Refined stage position: ({}, {})", refinedStageCoords[0], refinedStageCoords[1]);
 
                 // Calculate refined transform
                 AffineTransform refinedTransform = TransformationFunctions.addTranslationToScaledAffine(
@@ -318,9 +314,7 @@ public class SingleTileRefinement {
                 logger.info("Calculated refined transform");
 
                 Dialogs.showInfoNotification(
-                        "Alignment Refined",
-                        "The alignment has been refined and saved for this slide."
-                );
+                        "Alignment Refined", "The alignment has been refined and saved for this slide.");
 
                 dialogStage.close();
                 future.complete(new RefinementResult(refinedTransform, selectedTile));
@@ -351,13 +345,7 @@ public class SingleTileRefinement {
         HBox buttonBox = new HBox(10, saveButton, skipButton, newAlignmentButton);
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
 
-        content.getChildren().addAll(
-                headerLabel,
-                instructionLabel,
-                tileInfoLabel,
-                restoreBox,
-                buttonBox
-        );
+        content.getChildren().addAll(headerLabel, instructionLabel, tileInfoLabel, restoreBox, buttonBox);
 
         // Handle window close (X button)
         dialogStage.setOnCloseRequest(e -> {

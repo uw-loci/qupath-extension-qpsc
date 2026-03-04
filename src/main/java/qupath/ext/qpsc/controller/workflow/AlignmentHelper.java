@@ -1,9 +1,9 @@
 package qupath.ext.qpsc.controller.workflow;
 
-import javafx.application.Platform;
-import javafx.scene.control.Alert;
-import javafx.scene.control.ButtonBar;
-import javafx.scene.control.ButtonType;
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.ui.SampleSetupController;
@@ -11,12 +11,6 @@ import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
-
-import java.awt.geom.AffineTransform;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Helper class for alignment-related operations in the workflow.
@@ -64,8 +58,8 @@ public class AlignmentHelper {
             this(transform, refineRequested, 0.7, "Unknown");
         }
 
-        public SlideAlignmentResult(AffineTransform transform, boolean refineRequested,
-                                    double confidence, String source) {
+        public SlideAlignmentResult(
+                AffineTransform transform, boolean refineRequested, double confidence, String source) {
             this.transform = transform;
             this.refineRequested = refineRequested;
             this.confidence = confidence;
@@ -111,8 +105,8 @@ public class AlignmentHelper {
                 double agePenalty = Math.min(daysOld * CONFIDENCE_AGE_PENALTY_PER_DAY, MAX_AGE_PENALTY);
                 confidence -= agePenalty;
 
-                logger.debug("Alignment age: {} days, penalty: {}, final confidence: {}",
-                        daysOld, agePenalty, confidence);
+                logger.debug(
+                        "Alignment age: {} days, penalty: {}, final confidence: {}", daysOld, agePenalty, confidence);
             } catch (Exception e) {
                 logger.debug("Could not parse alignment date: {}", createdDate);
             }
@@ -140,7 +134,8 @@ public class AlignmentHelper {
         java.util.Date createdDate = preset.getCreatedDate();
         if (createdDate != null) {
             try {
-                java.time.LocalDate created = createdDate.toInstant()
+                java.time.LocalDate created = createdDate
+                        .toInstant()
                         .atZone(java.time.ZoneId.systemDefault())
                         .toLocalDate();
                 long daysOld = java.time.temporal.ChronoUnit.DAYS.between(created, java.time.LocalDate.now());
@@ -209,10 +204,8 @@ public class AlignmentHelper {
             // Try from project directory if no project is open
             File projectDir = new File(sample.projectsFolder(), sample.sampleName());
             if (projectDir.exists()) {
-                slideTransform = AffineTransformManager.loadSlideAlignmentFromDirectory(
-                        projectDir, imageName);
-                createdDate = AffineTransformManager.getSlideAlignmentDateFromDirectory(
-                        projectDir, imageName);
+                slideTransform = AffineTransformManager.loadSlideAlignmentFromDirectory(projectDir, imageName);
+                createdDate = AffineTransformManager.getSlideAlignmentDateFromDirectory(projectDir, imageName);
             }
         }
 
@@ -221,8 +214,10 @@ public class AlignmentHelper {
             double confidence = calculateConfidence(true, createdDate);
             String source = "Slide-specific (" + imageName + ")";
 
-            logger.info("Found slide-specific alignment with confidence: {} (source: {})",
-                    String.format("%.2f", confidence), source);
+            logger.info(
+                    "Found slide-specific alignment with confidence: {} (source: {})",
+                    String.format("%.2f", confidence),
+                    source);
 
             // Return result - refinement choice is handled later by RefinementSelectionController
             future.complete(new SlideAlignmentResult(slideTransform, false, confidence, source));

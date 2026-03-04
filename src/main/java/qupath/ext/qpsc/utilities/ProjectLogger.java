@@ -1,14 +1,12 @@
 package qupath.ext.qpsc.utilities;
 
 import ch.qos.logback.classic.LoggerContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import qupath.lib.projects.Project;
-
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-
 import java.io.File;
 import java.nio.file.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.lib.projects.Project;
 
 /**
  * Utility for managing project-specific logging.

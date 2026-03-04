@@ -1,5 +1,12 @@
 package qupath.ext.qpsc.ui.liveviewer;
 
+import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -25,18 +32,8 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
-import qupath.lib.gui.QuPathGUI;
-
 import qupath.ext.qpsc.preferences.PersistentPreferences;
-
-import java.io.IOException;
-import java.nio.IntBuffer;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
+import qupath.lib.gui.QuPathGUI;
 
 /**
  * Singleton floating window that displays a live camera feed from the microscope.
@@ -105,12 +102,12 @@ public class LiveViewerWindow {
     // fitToContainer = false: image renders at explicitScale, scrollbars appear as needed
     private volatile boolean fitToContainer = true;
     private volatile double explicitScale = 1.0;
-    private ScrollPane scrollPane;  // Store reference for mode switching
-    private StackPane imageContainer;  // Inner container for centering
+    private ScrollPane scrollPane; // Store reference for mode switching
+    private StackPane imageContainer; // Inner container for centering
 
     // Configuration
-    private static final long POLL_INTERVAL_MS = 100;  // ~10 FPS max
-    private static final double WINDOW_WIDTH = 900;   // Wider to accommodate side panel
+    private static final long POLL_INTERVAL_MS = 100; // ~10 FPS max
+    private static final double WINDOW_WIDTH = 900; // Wider to accommodate side panel
     private static final double WINDOW_HEIGHT = 720;
 
     private LiveViewerWindow() {
@@ -253,7 +250,7 @@ public class LiveViewerWindow {
         Label scaleLabel = new Label("Display:");
         ComboBox<String> scaleCombo = new ComboBox<>();
         scaleCombo.getItems().addAll("Fit", "25%", "50%", "100%");
-        scaleCombo.setValue("Fit");  // Default to Fit mode
+        scaleCombo.setValue("Fit"); // Default to Fit mode
         scaleCombo.setPrefWidth(75);
         scaleCombo.setOnAction(e -> {
             String selected = scaleCombo.getValue();
@@ -297,7 +294,7 @@ public class LiveViewerWindow {
         // Image display
         imageView = new ImageView();
         imageView.setPreserveRatio(true);
-        imageView.setSmooth(false);  // Nearest-neighbor for microscopy
+        imageView.setSmooth(false); // Nearest-neighbor for microscopy
 
         // Double-click-to-center: click on image to move stage so that point becomes center
         imageView.setOnMouseClicked(event -> {
@@ -315,7 +312,7 @@ public class LiveViewerWindow {
         scrollPane.setStyle("-fx-background-color: black;");
         scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        scrollPane.setPannable(true);  // Allow drag-to-pan
+        scrollPane.setPannable(true); // Allow drag-to-pan
 
         // Inner container for centering when image is smaller than viewport
         imageContainer = new StackPane(imageView);
@@ -331,7 +328,7 @@ public class LiveViewerWindow {
 
         // Stage control panel (on right side, expanded by default for visibility)
         stageControlPanel = new StageControlPanel();
-        stageControlPanel.setExpanded(true);  // Start expanded so user sees controls
+        stageControlPanel.setExpanded(true); // Start expanded so user sees controls
 
         // Wrap in ScrollPane to handle overflow when window is short
         ScrollPane stageScrollPane = new ScrollPane(stageControlPanel);
@@ -367,8 +364,8 @@ public class LiveViewerWindow {
 
         BorderPane root = new BorderPane();
         root.setTop(toolbar);
-        root.setRight(stageScrollPane);  // Stage control on right side
-        root.setCenter(scrollPane);      // Live image in center
+        root.setRight(stageScrollPane); // Stage control on right side
+        root.setCenter(scrollPane); // Live image in center
         root.setBottom(bottomPane);
 
         Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -413,39 +410,41 @@ public class LiveViewerWindow {
         updateStatus(newState ? "Starting live..." : "Stopping live...");
 
         // Run socket operation on background thread
-        Thread toggleThread = new Thread(() -> {
-            try {
-                if (newState) {
-                    controller.startContinuousAcquisition();
-                } else {
-                    controller.stopContinuousAcquisition();
-                }
+        Thread toggleThread = new Thread(
+                () -> {
+                    try {
+                        if (newState) {
+                            controller.startContinuousAcquisition();
+                        } else {
+                            controller.stopContinuousAcquisition();
+                        }
 
-                // Update state and UI on FX thread
-                Platform.runLater(() -> {
-                    liveActive = newState;
-                    updateLiveButtonStyle(newState);
-                    liveToggleButton.setDisable(false);
-                    logger.info("Continuous acquisition toggled to: {}", newState ? "ON" : "OFF");
+                        // Update state and UI on FX thread
+                        Platform.runLater(() -> {
+                            liveActive = newState;
+                            updateLiveButtonStyle(newState);
+                            liveToggleButton.setDisable(false);
+                            logger.info("Continuous acquisition toggled to: {}", newState ? "ON" : "OFF");
 
-                    if (newState) {
-                        updateStatus("Live ON - streaming...");
-                        // Reset FPS counter on start
-                        frameCount.set(0);
-                        fpsWindowStart.set(System.currentTimeMillis());
-                        currentFps = 0;
-                    } else {
-                        updateStatus("Live OFF");
+                            if (newState) {
+                                updateStatus("Live ON - streaming...");
+                                // Reset FPS counter on start
+                                frameCount.set(0);
+                                fpsWindowStart.set(System.currentTimeMillis());
+                                currentFps = 0;
+                            } else {
+                                updateStatus("Live OFF");
+                            }
+                        });
+                    } catch (IOException e) {
+                        logger.error("Failed to toggle continuous acquisition: {}", e.getMessage());
+                        Platform.runLater(() -> {
+                            liveToggleButton.setDisable(false);
+                            updateStatus("Error: " + e.getMessage());
+                        });
                     }
-                });
-            } catch (IOException e) {
-                logger.error("Failed to toggle continuous acquisition: {}", e.getMessage());
-                Platform.runLater(() -> {
-                    liveToggleButton.setDisable(false);
-                    updateStatus("Error: " + e.getMessage());
-                });
-            }
-        }, "LiveViewer-Toggle");
+                },
+                "LiveViewer-Toggle");
         toggleThread.setDaemon(true);
         toggleThread.start();
     }
@@ -518,8 +517,8 @@ public class LiveViewerWindow {
             // Build frame info string
             String bitDepth = frame.bytesPerPixel() == 2 ? "16-bit" : "8-bit";
             String colorMode = frame.isRGB() ? "RGB" : "Grayscale";
-            lastFrameInfo = String.format("FPS: %.1f | %dx%d | %s %s",
-                    currentFps, frame.width(), frame.height(), colorMode, bitDepth);
+            lastFrameInfo = String.format(
+                    "FPS: %.1f | %dx%d | %s %s", currentFps, frame.width(), frame.height(), colorMode, bitDepth);
 
             // Submit histogram computation (throttled internally)
             // Capture local ref: stopAndDispose() may null the field concurrently
@@ -644,11 +643,9 @@ public class LiveViewerWindow {
         }
 
         // Batch write to WritableImage
-        writableImage.getPixelWriter().setPixels(
-                0, 0, dstW, dstH,
-                PixelFormat.getIntArgbInstance(),
-                argbBuffer, 0, dstW
-        );
+        writableImage
+                .getPixelWriter()
+                .setPixels(0, 0, dstW, dstH, PixelFormat.getIntArgbInstance(), argbBuffer, 0, dstW);
 
         updateStatus(lastFrameInfo);
     }
@@ -706,46 +703,51 @@ public class LiveViewerWindow {
         updateStatus("Moving stage...");
 
         // Run socket operations on background thread to avoid blocking FX thread
-        Thread moveThread = new Thread(() -> {
-            try {
-                // Get FOV for pixel-to-micron conversion
-                double[] fov = controller.getCameraFOV();
-                if (fov[0] <= 0 || fov[1] <= 0) {
-                    Platform.runLater(() -> updateStatus("Camera FOV not available"));
-                    return;
-                }
+        Thread moveThread = new Thread(
+                () -> {
+                    try {
+                        // Get FOV for pixel-to-micron conversion
+                        double[] fov = controller.getCameraFOV();
+                        if (fov[0] <= 0 || fov[1] <= 0) {
+                            Platform.runLater(() -> updateStatus("Camera FOV not available"));
+                            return;
+                        }
 
-                // Convert to microns using pixel size
-                double pixelSizeX_um = fov[0] / finalSrcW;
-                double pixelSizeY_um = fov[1] / finalSrcH;
-                double offsetUm_X = offsetPixelsX * pixelSizeX_um;
-                double offsetUm_Y = offsetPixelsY * pixelSizeY_um;
+                        // Convert to microns using pixel size
+                        double pixelSizeX_um = fov[0] / finalSrcW;
+                        double pixelSizeY_um = fov[1] / finalSrcH;
+                        double offsetUm_X = offsetPixelsX * pixelSizeX_um;
+                        double offsetUm_Y = offsetPixelsY * pixelSizeY_um;
 
-                // Get current stage position
-                double[] currentPos = controller.getStagePositionXY();
+                        // Get current stage position
+                        double[] currentPos = controller.getStagePositionXY();
 
-                // Apply sample movement mode (same logic as StageControlPanel)
-                // Default: Match MicroManager - clicking right of center should decrease X
-                // Sample mode: Invert X axis only
-                double xMult = sampleMode ? 1.0 : -1.0;  // Sample: X increases; Default: X decreases
-                double yMult = 1.0;  // Always: clicking below center increases Y (matches MicroManager)
+                        // Apply sample movement mode (same logic as StageControlPanel)
+                        // Default: Match MicroManager - clicking right of center should decrease X
+                        // Sample mode: Invert X axis only
+                        double xMult = sampleMode ? 1.0 : -1.0; // Sample: X increases; Default: X decreases
+                        double yMult = 1.0; // Always: clicking below center increases Y (matches MicroManager)
 
-                double newX = currentPos[0] + (offsetUm_X * xMult);
-                double newY = currentPos[1] + (offsetUm_Y * yMult);
+                        double newX = currentPos[0] + (offsetUm_X * xMult);
+                        double newY = currentPos[1] + (offsetUm_Y * yMult);
 
-                // Move stage (bounds checking handled by controller)
-                controller.moveStageXY(newX, newY);
+                        // Move stage (bounds checking handled by controller)
+                        controller.moveStageXY(newX, newY);
 
-                Platform.runLater(() -> updateStatus(String.format("Centered on (%.0f, %.0f)", newX, newY)));
-                logger.info("Double-click-to-center: offset ({}, {}) um -> ({}, {})",
-                        String.format("%.1f", offsetUm_X), String.format("%.1f", offsetUm_Y),
-                        String.format("%.1f", newX), String.format("%.1f", newY));
+                        Platform.runLater(() -> updateStatus(String.format("Centered on (%.0f, %.0f)", newX, newY)));
+                        logger.info(
+                                "Double-click-to-center: offset ({}, {}) um -> ({}, {})",
+                                String.format("%.1f", offsetUm_X),
+                                String.format("%.1f", offsetUm_Y),
+                                String.format("%.1f", newX),
+                                String.format("%.1f", newY));
 
-            } catch (IOException e) {
-                logger.warn("Failed to center on click: {}", e.getMessage());
-                Platform.runLater(() -> updateStatus("Error: " + e.getMessage()));
-            }
-        }, "LiveViewer-ClickToCenter");
+                    } catch (IOException e) {
+                        logger.warn("Failed to center on click: {}", e.getMessage());
+                        Platform.runLater(() -> updateStatus("Error: " + e.getMessage()));
+                    }
+                },
+                "LiveViewer-ClickToCenter");
         moveThread.setDaemon(true);
         moveThread.start();
     }

@@ -1,11 +1,10 @@
 package qupath.ext.qpsc.controller.workflow;
 
+import java.io.File;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.TileProcessingUtilities;
-
-import java.io.File;
 
 /**
  * Helper for tile cleanup operations after acquisition.

@@ -1,5 +1,12 @@
 package qupath.ext.qpsc.controller.workflow;
 
+import java.io.File;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,14 +19,6 @@ import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 import qupath.lib.scripting.QP;
-
-import java.io.File;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 /**
  * Helper class for annotation management in the workflow.
@@ -41,7 +40,6 @@ import java.util.stream.Collectors;
 public class AnnotationHelper {
     private static final Logger logger = LoggerFactory.getLogger(AnnotationHelper.class);
 
-
     /**
      * Ensures annotations exist for acquisition.
      *
@@ -59,7 +57,8 @@ public class AnnotationHelper {
      * @param validClasses List of class names to consider valid
      * @return List of valid annotations (may be empty if none created)
      */
-    public static List<PathObject> ensureAnnotationsExist(QuPathGUI gui, double macroPixelSize, List<String> validClasses) {
+    public static List<PathObject> ensureAnnotationsExist(
+            QuPathGUI gui, double macroPixelSize, List<String> validClasses) {
         logger.info("Ensuring annotations exist for acquisition with classes: {}", validClasses);
 
         // Get existing annotations using GUI hierarchy (not QP static context)
@@ -87,16 +86,13 @@ public class AnnotationHelper {
                 logger.info("Running tissue detection script: {}", tissueScript);
 
                 // Get current image pixel size
-                double pixelSize = gui.getImageData().getServer()
-                        .getPixelCalibration().getAveragedPixelSizeMicrons();
+                double pixelSize =
+                        gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
 
                 // Calculate script paths and modify script with parameters
                 Map<String, String> scriptPaths = MinorFunctions.calculateScriptPaths(tissueScript);
                 String modifiedScript = TileProcessingUtilities.modifyTissueDetectScript(
-                        tissueScript,
-                        String.valueOf(pixelSize),
-                        scriptPaths.get("jsonTissueClassfierPathString")
-                );
+                        tissueScript, String.valueOf(pixelSize), scriptPaths.get("jsonTissueClassfierPathString"));
 
                 // Run the script
                 gui.runScript(null, modifiedScript);
@@ -113,13 +109,10 @@ public class AnnotationHelper {
 
         if (annotations.isEmpty()) {
             logger.warn("Still no valid annotations after tissue detection");
-            Platform.runLater(() ->
-                    UIFunctions.notifyUserOfError(
-                            "No valid annotations found. Please create annotations with one of these classes:\n" +
-                                    String.join(", ", validClasses),
-                            "No Annotations"
-                    )
-            );
+            Platform.runLater(() -> UIFunctions.notifyUserOfError(
+                    "No valid annotations found. Please create annotations with one of these classes:\n"
+                            + String.join(", ", validClasses),
+                    "No Annotations"));
         } else {
             ensureAnnotationNames(annotations);
         }
@@ -138,7 +131,6 @@ public class AnnotationHelper {
         List<String> selectedClasses = PersistentPreferences.getSelectedAnnotationClasses();
         return ensureAnnotationsExist(gui, macroPixelSize, selectedClasses);
     }
-
 
     /**
      * Gets current valid annotations from the image hierarchy using custom class list.
@@ -172,8 +164,8 @@ public class AnnotationHelper {
 
         // Only filter by class if validClasses is provided and not empty
         if (validClasses != null && !validClasses.isEmpty()) {
-            annotations = annotations.filter(ann -> ann.getPathClass() != null &&
-                    validClasses.contains(ann.getPathClass().getName()));
+            annotations = annotations.filter(ann -> ann.getPathClass() != null
+                    && validClasses.contains(ann.getPathClass().getName()));
             logger.debug("Filtering by annotation classes: {}", validClasses);
         } else {
             logger.debug("No class filter - accepting all annotations with valid ROIs");
@@ -184,7 +176,8 @@ public class AnnotationHelper {
         // Log annotation positions to help diagnose coordinate issues
         if (!finalAnnotations.isEmpty()) {
             PathObject firstAnn = finalAnnotations.get(0);
-            logger.info("Found {} valid annotations. First annotation '{}' at position: ({}, {}) size: {}x{}",
+            logger.info(
+                    "Found {} valid annotations. First annotation '{}' at position: ({}, {}) size: {}x{}",
                     finalAnnotations.size(),
                     firstAnn.getName() != null ? firstAnn.getName() : "unnamed",
                     firstAnn.getROI().getBoundsX(),
@@ -192,8 +185,10 @@ public class AnnotationHelper {
                     firstAnn.getROI().getBoundsWidth(),
                     firstAnn.getROI().getBoundsHeight());
         } else {
-            logger.debug("Found {} valid annotations from {} total (using GUI hierarchy)",
-                    finalAnnotations.size(), allAnnotations.size());
+            logger.debug(
+                    "Found {} valid annotations from {} total (using GUI hierarchy)",
+                    finalAnnotations.size(),
+                    allAnnotations.size());
         }
 
         return finalAnnotations;
@@ -226,14 +221,16 @@ public class AnnotationHelper {
 
         // Only filter by class if validClasses is provided and not empty
         if (validClasses != null && !validClasses.isEmpty()) {
-            annotations = annotations.filter(ann -> ann.getPathClass() != null &&
-                    validClasses.contains(ann.getPathClass().getName()));
+            annotations = annotations.filter(ann -> ann.getPathClass() != null
+                    && validClasses.contains(ann.getPathClass().getName()));
         }
 
         var finalAnnotations = annotations.collect(Collectors.toList());
 
-        logger.debug("Found {} valid annotations from {} total",
-                finalAnnotations.size(), QP.getAnnotationObjects().size());
+        logger.debug(
+                "Found {} valid annotations from {} total",
+                finalAnnotations.size(),
+                QP.getAnnotationObjects().size());
 
         return finalAnnotations;
     }
@@ -264,11 +261,12 @@ public class AnnotationHelper {
         int unnamedCount = 0;
         for (PathObject ann : annotations) {
             if (ann.getName() == null || ann.getName().trim().isEmpty()) {
-                String className = ann.getPathClass() != null ?
-                        ann.getPathClass().getName() : "Annotation";
+                String className =
+                        ann.getPathClass() != null ? ann.getPathClass().getName() : "Annotation";
 
                 // Create name based on class and position
-                String name = String.format("%s_%d_%d",
+                String name = String.format(
+                        "%s_%d_%d",
                         className,
                         Math.round(ann.getROI().getCentroidX()),
                         Math.round(ann.getROI().getCentroidY()));
@@ -307,16 +305,13 @@ public class AnnotationHelper {
                 logger.info("Running tissue detection script: {}", tissueScript);
 
                 // Get current image pixel size
-                double pixelSize = gui.getImageData().getServer()
-                        .getPixelCalibration().getAveragedPixelSizeMicrons();
+                double pixelSize =
+                        gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
 
                 // Calculate script paths and modify script with parameters
                 Map<String, String> scriptPaths = MinorFunctions.calculateScriptPaths(tissueScript);
                 String modifiedScript = TileProcessingUtilities.modifyTissueDetectScript(
-                        tissueScript,
-                        String.valueOf(pixelSize),
-                        scriptPaths.get("jsonTissueClassfierPathString")
-                );
+                        tissueScript, String.valueOf(pixelSize), scriptPaths.get("jsonTissueClassfierPathString"));
 
                 // Run the script
                 gui.runScript(null, modifiedScript);
@@ -334,19 +329,15 @@ public class AnnotationHelper {
 
             } catch (Exception e) {
                 logger.error("Error running tissue detection", e);
-                Platform.runLater(() ->
-                        UIFunctions.notifyUserOfError(
-                                "Error running tissue detection: " + e.getMessage(),
-                                "Tissue Detection"
-                        )
-                );
+                Platform.runLater(() -> UIFunctions.notifyUserOfError(
+                        "Error running tissue detection: " + e.getMessage(), "Tissue Detection"));
             }
         }
 
         return Collections.emptyList();
     }
 
-    //TODO this should probably be a part of another dialog.
+    // TODO this should probably be a part of another dialog.
 
     /**
      * Prompts user to select a tissue detection script.
@@ -362,9 +353,8 @@ public class AnnotationHelper {
         Platform.runLater(() -> {
             var useDetection = Dialogs.showYesNoDialog(
                     "Tissue Detection",
-                    "Would you like to run automatic tissue detection?\n\n" +
-                            "This will create annotations for tissue regions."
-            );
+                    "Would you like to run automatic tissue detection?\n\n"
+                            + "This will create annotations for tissue regions.");
 
             if (!useDetection) {
                 future.complete(null);
@@ -374,10 +364,11 @@ public class AnnotationHelper {
             // Show file chooser for script selection
             javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
             fileChooser.setTitle("Select Tissue Detection Script");
-            fileChooser.getExtensionFilters().addAll(
-                    new javafx.stage.FileChooser.ExtensionFilter("Groovy Scripts", "*.groovy"),
-                    new javafx.stage.FileChooser.ExtensionFilter("All Files", "*.*")
-            );
+            fileChooser
+                    .getExtensionFilters()
+                    .addAll(
+                            new javafx.stage.FileChooser.ExtensionFilter("Groovy Scripts", "*.groovy"),
+                            new javafx.stage.FileChooser.ExtensionFilter("All Files", "*.*"));
 
             File selectedFile = fileChooser.showOpenDialog(null);
             future.complete(selectedFile != null ? selectedFile.getAbsolutePath() : null);

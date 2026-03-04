@@ -1,17 +1,16 @@
 package qupath.ext.qpsc.utilities;
 
+import java.awt.*;
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.lib.regions.ImagePlane;
 import qupath.lib.roi.ROIs;
 import qupath.lib.roi.interfaces.ROI;
-
-import java.awt.*;
-import java.awt.geom.AffineTransform;
-import java.awt.image.BufferedImage;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Detects green bounding boxes in macro images that indicate the scanned region.
@@ -26,15 +25,15 @@ public class GreenBoxDetector {
      * Parameters for green box detection.
      */
     public static class DetectionParams {
-        public double greenThreshold;     // How much green vs other channels
-        public double saturationMin;      // Minimum saturation for green
-        public double brightnessMin;      // Minimum brightness
-        public double brightnessMax;      // Maximum brightness
-        public double hueMin;             // Minimum hue value (0.0-1.0, green ~0.25-0.42)
-        public double hueMax;             // Maximum hue value (0.0-1.0, green ~0.25-0.42)
-        public int minBoxWidth;           // Minimum box width in pixels
-        public int minBoxHeight;          // Minimum box height in pixels
-        public int edgeThickness;        // Expected thickness of box edges
+        public double greenThreshold; // How much green vs other channels
+        public double saturationMin; // Minimum saturation for green
+        public double brightnessMin; // Minimum brightness
+        public double brightnessMax; // Maximum brightness
+        public double hueMin; // Minimum hue value (0.0-1.0, green ~0.25-0.42)
+        public double hueMax; // Maximum hue value (0.0-1.0, green ~0.25-0.42)
+        public int minBoxWidth; // Minimum box width in pixels
+        public int minBoxHeight; // Minimum box height in pixels
+        public int edgeThickness; // Expected thickness of box edges
         public boolean requireRectangle = true; // Only accept rectangular shapes
 
         /**
@@ -60,10 +59,16 @@ public class GreenBoxDetector {
         /**
          * Constructor with all parameters specified.
          */
-        public DetectionParams(double greenThreshold, double saturationMin,
-                               double brightnessMin, double brightnessMax,
-                               double hueMin, double hueMax,
-                               int edgeThickness, int minBoxWidth, int minBoxHeight) {
+        public DetectionParams(
+                double greenThreshold,
+                double saturationMin,
+                double brightnessMin,
+                double brightnessMax,
+                double hueMin,
+                double hueMax,
+                int edgeThickness,
+                int minBoxWidth,
+                int minBoxHeight) {
             this.greenThreshold = greenThreshold;
             this.saturationMin = saturationMin;
             this.brightnessMin = brightnessMin;
@@ -83,10 +88,10 @@ public class GreenBoxDetector {
             this.saturationMin = 0.3;
             this.brightnessMin = 0.3;
             this.brightnessMax = 0.9;
-            this.hueMin = 0.25;  // Green hue range start (90 degrees)
-            this.hueMax = 0.42;  // Green hue range end (151 degrees)
-            this.minBoxWidth = 20;   // Lowered to support small tissue samples
-            this.minBoxHeight = 20;  // Lowered to support small tissue samples
+            this.hueMin = 0.25; // Green hue range start (90 degrees)
+            this.hueMax = 0.42; // Green hue range end (151 degrees)
+            this.minBoxWidth = 20; // Lowered to support small tissue samples
+            this.minBoxHeight = 20; // Lowered to support small tissue samples
             this.edgeThickness = 3;
         }
 
@@ -120,9 +125,17 @@ public class GreenBoxDetector {
             this.confidence = confidence;
         }
 
-        public ROI getDetectedBox() { return detectedBox; }
-        public BufferedImage getDebugImage() { return debugImage; }
-        public double getConfidence() { return confidence; }
+        public ROI getDetectedBox() {
+            return detectedBox;
+        }
+
+        public BufferedImage getDebugImage() {
+            return debugImage;
+        }
+
+        public double getConfidence() {
+            return confidence;
+        }
     }
 
     /**
@@ -135,8 +148,7 @@ public class GreenBoxDetector {
      *         or null if no suitable green box is found
      */
     public static DetectionResult detectGreenBox(BufferedImage macroImage, DetectionParams params) {
-        logger.info("Starting green box detection on {}x{} image",
-                macroImage.getWidth(), macroImage.getHeight());
+        logger.info("Starting green box detection on {}x{} image", macroImage.getWidth(), macroImage.getHeight());
 
         // Create binary mask of green pixels
         BufferedImage greenMask = createGreenMask(macroImage, params);
@@ -162,10 +174,9 @@ public class GreenBoxDetector {
                         detectedBox.getBoundsY() + shrink,
                         detectedBox.getBoundsWidth() - 2 * shrink,
                         detectedBox.getBoundsHeight() - 2 * shrink,
-                        detectedBox.getImagePlane()
-                );
-                logger.info("Adjusted green box bounds inward by {} pixels (factor {})",
-                        shrink, EDGE_ADJUSTMENT_FACTOR);
+                        detectedBox.getImagePlane());
+                logger.info(
+                        "Adjusted green box bounds inward by {} pixels (factor {})", shrink, EDGE_ADJUSTMENT_FACTOR);
             }
             // END TEMPORARY ADJUSTMENT
             // Calculate confidence based on how well it matches expected characteristics
@@ -174,9 +185,12 @@ public class GreenBoxDetector {
             // Create debug image showing detection
             BufferedImage debugImage = createDebugImage(macroImage, greenMask, detectedBox);
 
-            logger.info("Green box detected at ({}, {}, {}, {}) with confidence {}",
-                    detectedBox.getBoundsX(), detectedBox.getBoundsY(),
-                    detectedBox.getBoundsWidth(), detectedBox.getBoundsHeight(),
+            logger.info(
+                    "Green box detected at ({}, {}, {}, {}) with confidence {}",
+                    detectedBox.getBoundsX(),
+                    detectedBox.getBoundsY(),
+                    detectedBox.getBoundsWidth(),
+                    detectedBox.getBoundsHeight(),
                     confidence);
 
             return new DetectionResult(detectedBox, debugImage, confidence);
@@ -209,8 +223,8 @@ public class GreenBoxDetector {
             }
         }
 
-        logger.debug("Found {} green pixels ({}% of image)",
-                greenPixelCount, (100.0 * greenPixelCount) / (width * height));
+        logger.debug(
+                "Found {} green pixels ({}% of image)", greenPixelCount, (100.0 * greenPixelCount) / (width * height));
 
         return mask;
     }
@@ -307,18 +321,26 @@ public class GreenBoxDetector {
 
         if (greenishPixelCount > 0) {
             logger.info("Hue analysis: Found {} green-ish pixels (g > r && g > b)", greenishPixelCount);
-            logger.info("  Hue range in image: [{}, {}] (expected: [{}, {}])",
-                    String.format("%.3f", minHue), String.format("%.3f", maxHue),
-                    String.format("%.3f", params.hueMin), String.format("%.3f", params.hueMax));
+            logger.info(
+                    "  Hue range in image: [{}, {}] (expected: [{}, {}])",
+                    String.format("%.3f", minHue),
+                    String.format("%.3f", maxHue),
+                    String.format("%.3f", params.hueMin),
+                    String.format("%.3f", params.hueMax));
             logger.info("  Filter results: {} passed all filters", passedAllFilters);
-            logger.info("    Failed green ratio (< {}): {}", String.format("%.2f", params.greenThreshold), failedGreenRatio);
+            logger.info(
+                    "    Failed green ratio (< {}): {}",
+                    String.format("%.2f", params.greenThreshold),
+                    failedGreenRatio);
             logger.info("    Failed hue range: {}", failedHue);
-            logger.info("    Failed saturation (< {}): {}", String.format("%.2f", params.saturationMin), failedSaturation);
+            logger.info(
+                    "    Failed saturation (< {}): {}", String.format("%.2f", params.saturationMin), failedSaturation);
             logger.info("    Failed brightness: {}", failedBrightness);
 
             // Suggest adjustments if needed
             if (failedHue > passedAllFilters && failedHue > 100) {
-                logger.warn("Many pixels failed hue filter. Consider adjusting hue range to [{}, {}]",
+                logger.warn(
+                        "Many pixels failed hue filter. Consider adjusting hue range to [{}, {}]",
                         String.format("%.2f", Math.max(0, minHue - 0.02)),
                         String.format("%.2f", Math.min(1, maxHue + 0.02)));
             }
@@ -412,8 +434,7 @@ public class GreenBoxDetector {
     /**
      * Attempts to find a complete rectangular box from the detected edges.
      */
-    private static ROI findCompleteBox(List<Rectangle> edges, int imageWidth, int imageHeight,
-                                       DetectionParams params) {
+    private static ROI findCompleteBox(List<Rectangle> edges, int imageWidth, int imageHeight, DetectionParams params) {
         // Find the four edges that form the most likely box
         Rectangle topEdge = null, bottomEdge = null, leftEdge = null, rightEdge = null;
 
@@ -451,8 +472,7 @@ public class GreenBoxDetector {
 
             // Validate box dimensions
             if (boxWidth >= params.minBoxWidth && boxHeight >= params.minBoxHeight) {
-                return ROIs.createRectangleROI(boxX, boxY, boxWidth, boxHeight,
-                        ImagePlane.getDefaultPlane());
+                return ROIs.createRectangleROI(boxX, boxY, boxWidth, boxHeight, ImagePlane.getDefaultPlane());
             }
         }
 
@@ -463,8 +483,7 @@ public class GreenBoxDetector {
     /**
      * Fallback method to find the largest green region if edge detection fails.
      */
-    private static ROI findLargestGreenRegion(List<Rectangle> edges, int width, int height,
-                                              DetectionParams params) {
+    private static ROI findLargestGreenRegion(List<Rectangle> edges, int width, int height, DetectionParams params) {
         // This would use connected component analysis
         // For now, return null
         return null;
@@ -477,7 +496,8 @@ public class GreenBoxDetector {
         // Check how well the edges match expected characteristics
         double edgeScore = 0.0;
         double rectangularityScore = 1.0; // Since we enforce rectangles
-        double sizeScore = Math.min(1.0, box.getBoundsWidth() * box.getBoundsHeight() / (mask.getWidth() * mask.getHeight() * 0.5));
+        double sizeScore = Math.min(
+                1.0, box.getBoundsWidth() * box.getBoundsHeight() / (mask.getWidth() * mask.getHeight() * 0.5));
 
         return (edgeScore + rectangularityScore + sizeScore) / 3.0;
     }
@@ -486,8 +506,7 @@ public class GreenBoxDetector {
      * Creates a debug image showing the detection result.
      */
     private static BufferedImage createDebugImage(BufferedImage original, BufferedImage mask, ROI box) {
-        BufferedImage debug = new BufferedImage(original.getWidth(), original.getHeight(),
-                BufferedImage.TYPE_INT_ARGB);
+        BufferedImage debug = new BufferedImage(original.getWidth(), original.getHeight(), BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = debug.createGraphics();
 
         // Draw original
@@ -508,8 +527,8 @@ public class GreenBoxDetector {
         g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
         g.setColor(Color.MAGENTA);
         g.setStroke(new BasicStroke(3));
-        g.drawRect((int)box.getBoundsX(), (int)box.getBoundsY(),
-                (int)box.getBoundsWidth(), (int)box.getBoundsHeight());
+        g.drawRect((int) box.getBoundsX(), (int) box.getBoundsY(), (int) box.getBoundsWidth(), (int)
+                box.getBoundsHeight());
 
         g.dispose();
         return debug;
@@ -528,11 +547,7 @@ public class GreenBoxDetector {
      * @return Initial affine transform from macro to main image coordinates
      */
     public static AffineTransform calculateInitialTransform(
-            ROI greenBoxInMacro,
-            int mainImageWidth,
-            int mainImageHeight,
-            double macroPixelSize,
-            double mainPixelSize) {
+            ROI greenBoxInMacro, int mainImageWidth, int mainImageHeight, double macroPixelSize, double mainPixelSize) {
 
         // The green box area in the macro represents the entire main image
         // We need to map macro pixels to main image pixels
@@ -546,8 +561,8 @@ public class GreenBoxDetector {
         double mainHeightMicrons = mainImageHeight * mainPixelSize;
 
         // These should be approximately equal - log any discrepancy
-        logger.info("Green box physical size: {}x{} µm", boxWidthMicrons, boxHeightMicrons);
-        logger.info("Main image physical size: {}x{} µm", mainWidthMicrons, mainHeightMicrons);
+        logger.info("Green box physical size: {}x{} um", boxWidthMicrons, boxHeightMicrons);
+        logger.info("Main image physical size: {}x{} um", mainWidthMicrons, mainHeightMicrons);
 
         // Calculate pixel-to-pixel scale factors
         double scaleX = mainImageWidth / greenBoxInMacro.getBoundsWidth();
@@ -562,12 +577,15 @@ public class GreenBoxDetector {
         transform.translate(translateX, translateY);
         transform.scale(scaleX, scaleY);
 
-        logger.info("Green box transform: scale=({}, {}), translate=({}, {})",
-                scaleX, scaleY, translateX, translateY);
-        logger.info("Maps macro box ({}, {}, {}, {}) to main image (0, 0, {}, {})",
-                greenBoxInMacro.getBoundsX(), greenBoxInMacro.getBoundsY(),
-                greenBoxInMacro.getBoundsWidth(), greenBoxInMacro.getBoundsHeight(),
-                mainImageWidth, mainImageHeight);
+        logger.info("Green box transform: scale=({}, {}), translate=({}, {})", scaleX, scaleY, translateX, translateY);
+        logger.info(
+                "Maps macro box ({}, {}, {}, {}) to main image (0, 0, {}, {})",
+                greenBoxInMacro.getBoundsX(),
+                greenBoxInMacro.getBoundsY(),
+                greenBoxInMacro.getBoundsWidth(),
+                greenBoxInMacro.getBoundsHeight(),
+                mainImageWidth,
+                mainImageHeight);
 
         return transform;
     }

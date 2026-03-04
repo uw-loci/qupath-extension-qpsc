@@ -1,10 +1,18 @@
 package qupath.ext.qpsc.ui;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import javafx.animation.KeyFrame;
 import javafx.animation.PauseTransition;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
-import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -16,30 +24,20 @@ import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
-
 /**
  * Dual progress dialog that shows both total workflow progress and current annotation progress.
- * 
+ *
  * This dialog provides:
  * - Overall progress across all annotations in the acquisition workflow
  * - Current annotation progress (tiles acquired)
  * - Total time estimation for the complete workflow
  * - Cancel support that applies to the entire workflow
- * 
+ *
  * @author Mike Nelson
  */
 public class DualProgressDialog {
     private static final Logger logger = LoggerFactory.getLogger(DualProgressDialog.class);
-    
+
     private final Stage stage;
     private final ProgressBar totalProgressBar;
     private final ProgressBar currentProgressBar;
@@ -49,13 +47,13 @@ public class DualProgressDialog {
     private final Label statusLabel;
     private final Button cancelButton;
     private final Timeline timeline;
-    
+
     // Overall workflow tracking
     private final int totalAnnotations;
     private final AtomicInteger completedAnnotations = new AtomicInteger(0);
     private final AtomicLong workflowStartTime = new AtomicLong(0);
     private final AtomicLong lastProgressTime = new AtomicLong(System.currentTimeMillis());
-    
+
     // Current annotation tracking
     private volatile String currentAnnotationName = "";
     private volatile int currentAnnotationExpectedFiles = 0;
@@ -64,8 +62,10 @@ public class DualProgressDialog {
 
     // Tile timing tracking for better estimation (uses recent actual timing, no hardcoded values)
     // Dynamic timing window size based on autofocus settings (5x n_steps for that objective)
-    private final AtomicInteger timingWindowSize = new AtomicInteger(10); // Default to 10, updated from acquisition metadata
-    private final java.util.concurrent.ConcurrentLinkedDeque<Long> recentTileTimes = new java.util.concurrent.ConcurrentLinkedDeque<>();
+    private final AtomicInteger timingWindowSize =
+            new AtomicInteger(10); // Default to 10, updated from acquisition metadata
+    private final java.util.concurrent.ConcurrentLinkedDeque<Long> recentTileTimes =
+            new java.util.concurrent.ConcurrentLinkedDeque<>();
     private final AtomicLong lastTileCompletionTime = new AtomicLong(0);
     private final AtomicInteger totalTilesCompleted = new AtomicInteger(0);
 
@@ -74,7 +74,8 @@ public class DualProgressDialog {
     private final AtomicInteger afNTiles = new AtomicInteger(5); // Number of AF positions per annotation
     private final AtomicInteger totalTilesPerAnnotation = new AtomicInteger(0); // Total tiles in current annotation
     private volatile long detectedFullAfTime = 0; // Time for full autofocus (detected from first spike)
-    private final java.util.concurrent.ConcurrentLinkedDeque<Long> allTileTimes = new java.util.concurrent.ConcurrentLinkedDeque<>();
+    private final java.util.concurrent.ConcurrentLinkedDeque<Long> allTileTimes =
+            new java.util.concurrent.ConcurrentLinkedDeque<>();
     private final AtomicBoolean firstTileProcessed = new AtomicBoolean(false);
 
     // Per-annotation tracking for tile counts in future annotations
@@ -116,20 +117,20 @@ public class DualProgressDialog {
     public DualProgressDialog(int totalAnnotations, boolean showCancelButton, int timingWindowSize) {
         this.totalAnnotations = totalAnnotations;
         this.timingWindowSize.set(timingWindowSize);
-        
+
         // Create UI components
         stage = new Stage();
         stage.initModality(Modality.NONE);
         stage.setTitle("Acquisition Workflow Progress");
         stage.setAlwaysOnTop(true);
         stage.setResizable(false);
-        
+
         // Total progress components
         totalProgressBar = new ProgressBar(0);
         totalProgressBar.setPrefWidth(350);
         totalProgressLabel = new Label("Overall Progress: 0 of " + totalAnnotations + " annotations complete");
-        
-        // Current annotation progress components  
+
+        // Current annotation progress components
         currentProgressBar = new ProgressBar(0);
         currentProgressBar.setPrefWidth(350);
         currentProgressLabel = new Label("Current Annotation: Waiting to start...");
@@ -155,28 +156,28 @@ public class DualProgressDialog {
         VBox vbox = new VBox(8);
         vbox.setStyle("-fx-padding: 15;");
         vbox.setAlignment(Pos.CENTER);
-        
+
         // Add section headers and progress bars
         Label totalHeader = new Label("Total Workflow Progress");
         totalHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
-        
+
         Label currentHeader = new Label("Current Annotation Progress");
         currentHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
-        
-        vbox.getChildren().addAll(
-            totalHeader,
-            totalProgressBar,
-            totalProgressLabel,
-            new Separator(),
-            currentHeader,
-            currentProgressBar,
-            currentProgressLabel,
-            new Separator(),
-            stitchingSection,  // Stitching status - hidden until active
-            timeLabel,
-            statusLabel
-        );
-        
+
+        vbox.getChildren()
+                .addAll(
+                        totalHeader,
+                        totalProgressBar,
+                        totalProgressLabel,
+                        new Separator(),
+                        currentHeader,
+                        currentProgressBar,
+                        currentProgressLabel,
+                        new Separator(),
+                        stitchingSection, // Stitching status - hidden until active
+                        timeLabel,
+                        statusLabel);
+
         // Add cancel button if requested
         if (showCancelButton) {
             cancelButton = new Button("Cancel Workflow");
@@ -191,25 +192,25 @@ public class DualProgressDialog {
         } else {
             cancelButton = null;
         }
-        
+
         stage.setScene(new Scene(vbox));
-        
+
         // Create update timeline
         timeline = new Timeline();
         KeyFrame keyFrame = new KeyFrame(Duration.millis(500), e -> updateDisplay());
         timeline.getKeyFrames().add(keyFrame);
         timeline.setCycleCount(Timeline.INDEFINITE);
-        
+
         // Set up window close handling
         stage.setOnCloseRequest(e -> {
             if (!isWorkflowComplete()) {
                 e.consume(); // Prevent closing during active workflow
             }
         });
-        
+
         logger.info("Created dual progress dialog for {} annotations", totalAnnotations);
     }
-    
+
     /**
      * Shows the dialog and starts the update timeline.
      */
@@ -222,7 +223,7 @@ public class DualProgressDialog {
             logger.info("Dual progress dialog shown and timeline started");
         });
     }
-    
+
     /**
      * Starts tracking a new annotation acquisition.
      *
@@ -240,10 +241,9 @@ public class DualProgressDialog {
         // Reset first tile flag for this annotation to detect full autofocus time
         this.firstTileProcessed.set(false);
 
-        logger.info("Started tracking annotation '{}' with {} expected files",
-                   annotationName, expectedFiles);
+        logger.info("Started tracking annotation '{}' with {} expected files", annotationName, expectedFiles);
     }
-    
+
     /**
      * Updates the current annotation's progress.
      *
@@ -291,11 +291,10 @@ public class DualProgressDialog {
         }
 
         if (filesCompleted > 0 && filesCompleted % 10 == 0) {
-            logger.debug("Current annotation progress: {}/{} files",
-                        filesCompleted, currentAnnotationExpectedFiles);
+            logger.debug("Current annotation progress: {}/{} files", filesCompleted, currentAnnotationExpectedFiles);
         }
     }
-    
+
     /**
      * Marks the current annotation as complete and advances overall progress.
      */
@@ -303,8 +302,11 @@ public class DualProgressDialog {
         int completed = completedAnnotations.incrementAndGet();
         currentAnnotationProgress.set(currentAnnotationExpectedFiles);
 
-        logger.info("Completed annotation '{}' - {}/{} annotations done",
-                   currentAnnotationName, completed, totalAnnotations);
+        logger.info(
+                "Completed annotation '{}' - {}/{} annotations done",
+                currentAnnotationName,
+                completed,
+                totalAnnotations);
 
         if (completed >= totalAnnotations) {
             logger.info("All annotations completed - workflow finished");
@@ -369,8 +371,7 @@ public class DualProgressDialog {
         futureTileCounts.clear();
         if (tileCounts != null) {
             futureTileCounts.addAll(tileCounts);
-            logger.info("Set future tile counts for {} annotations: {}",
-                    tileCounts.size(), tileCounts);
+            logger.info("Set future tile counts for {} annotations: {}", tileCounts.size(), tileCounts);
         }
     }
 
@@ -414,28 +415,29 @@ public class DualProgressDialog {
         if (cancelled.get()) {
             return;
         }
-        
+
         long now = System.currentTimeMillis();
         int completed = completedAnnotations.get();
         int currentFiles = currentAnnotationProgress.get();
-        
+
         // Update total progress
         double totalFraction = totalAnnotations > 0 ? completed / (double) totalAnnotations : 0.0;
         totalProgressBar.setProgress(totalFraction);
-        totalProgressLabel.setText("Overall Progress: " + completed + " of " + totalAnnotations + " annotations complete");
-        
+        totalProgressLabel.setText(
+                "Overall Progress: " + completed + " of " + totalAnnotations + " annotations complete");
+
         // Update current annotation progress
-        double currentFraction = currentAnnotationExpectedFiles > 0 ? 
-            currentFiles / (double) currentAnnotationExpectedFiles : 0.0;
+        double currentFraction =
+                currentAnnotationExpectedFiles > 0 ? currentFiles / (double) currentAnnotationExpectedFiles : 0.0;
         currentProgressBar.setProgress(currentFraction);
-        
+
         if (currentAnnotationName.isEmpty()) {
             currentProgressLabel.setText("Current Annotation: Waiting to start...");
         } else {
-            currentProgressLabel.setText("Current Annotation: " + currentAnnotationName + 
-                " (" + currentFiles + "/" + currentAnnotationExpectedFiles + " tiles)");
+            currentProgressLabel.setText("Current Annotation: " + currentAnnotationName + " (" + currentFiles + "/"
+                    + currentAnnotationExpectedFiles + " tiles)");
         }
-        
+
         // Update status
         if (completed == 0 && currentFiles == 0) {
             statusLabel.setText("Initializing workflow...");
@@ -444,11 +446,11 @@ public class DualProgressDialog {
         } else {
             statusLabel.setText("Workflow complete!");
         }
-        
+
         // Calculate and display time estimates
         updateTimeEstimate(now, completed);
     }
-    
+
     /**
      * Updates time estimation display for the complete workflow.
      * Uses component-based estimation that separates tile time from autofocus time.
@@ -490,7 +492,8 @@ public class DualProgressDialog {
         int tilesRemainingFutureAnnotations;
         if (!futureTileCounts.isEmpty()) {
             // Use actual tile counts if available
-            tilesRemainingFutureAnnotations = futureTileCounts.stream().mapToInt(Integer::intValue).sum();
+            tilesRemainingFutureAnnotations =
+                    futureTileCounts.stream().mapToInt(Integer::intValue).sum();
         } else {
             // Estimate based on current annotation
             int avgTilesPerAnnotation = totalTilesPerAnnotation.get() > 0
@@ -506,9 +509,8 @@ public class DualProgressDialog {
         int afPositionsPerAnnotation = afNTiles.get();
 
         // Remaining adaptive AF in current annotation (proportional to remaining tiles)
-        int totalTilesCurrentAnnotation = totalTilesPerAnnotation.get() > 0
-                ? totalTilesPerAnnotation.get()
-                : currentAnnotationExpectedFiles;
+        int totalTilesCurrentAnnotation =
+                totalTilesPerAnnotation.get() > 0 ? totalTilesPerAnnotation.get() : currentAnnotationExpectedFiles;
         int remainingAdaptiveAfCurrent = 0;
         if (totalTilesCurrentAnnotation > 0 && afPositionsPerAnnotation > 0) {
             // Calculate how many AF positions remain based on progress
@@ -542,15 +544,23 @@ public class DualProgressDialog {
         // Build informative display
         String estimate = formatTime(remainingSeconds);
         if (logger.isDebugEnabled()) {
-            logger.debug("Time estimate breakdown: {} tiles @ {}ms = {}ms, {} adaptive AF @ {}ms = {}ms, " +
-                            "{} full AF @ {}ms = {}ms, total = {}s",
-                    totalTilesRemaining, timing.baseTileTimeMs, tileTimeMs,
-                    totalRemainingAdaptiveAf, timing.adaptiveAfAddedTimeMs, adaptiveAfTimeMs,
-                    remainingFullAf, timing.fullAfAddedTimeMs, fullAfTimeMs,
+            logger.debug(
+                    "Time estimate breakdown: {} tiles @ {}ms = {}ms, {} adaptive AF @ {}ms = {}ms, "
+                            + "{} full AF @ {}ms = {}ms, total = {}s",
+                    totalTilesRemaining,
+                    timing.baseTileTimeMs,
+                    tileTimeMs,
+                    totalRemainingAdaptiveAf,
+                    timing.adaptiveAfAddedTimeMs,
+                    adaptiveAfTimeMs,
+                    remainingFullAf,
+                    timing.fullAfAddedTimeMs,
+                    fullAfTimeMs,
                     remainingSeconds);
         }
 
-        timeLabel.setText(String.format("Time remaining: %s (%d tiles, %d AF ops)",
+        timeLabel.setText(String.format(
+                "Time remaining: %s (%d tiles, %d AF ops)",
                 estimate, totalTilesRemaining, totalRemainingAdaptiveAf + remainingFullAf));
     }
 
@@ -623,9 +633,9 @@ public class DualProgressDialog {
      * Holds the separated timing components for estimation.
      */
     private static class TimingComponents {
-        final long baseTileTimeMs;        // Time for tile acquisition only (no autofocus)
+        final long baseTileTimeMs; // Time for tile acquisition only (no autofocus)
         final long adaptiveAfAddedTimeMs; // Additional time when adaptive autofocus runs
-        final long fullAfAddedTimeMs;     // Additional time for full autofocus (first tile per annotation)
+        final long fullAfAddedTimeMs; // Additional time for full autofocus (first tile per annotation)
 
         TimingComponents(long baseTileTimeMs, long adaptiveAfAddedTimeMs, long fullAfAddedTimeMs) {
             this.baseTileTimeMs = baseTileTimeMs;
@@ -647,11 +657,7 @@ public class DualProgressDialog {
         }
 
         TimingComponents timing = calculateTimingComponents();
-        return new long[] {
-                timing.baseTileTimeMs,
-                timing.adaptiveAfAddedTimeMs,
-                timing.fullAfAddedTimeMs
-        };
+        return new long[] {timing.baseTileTimeMs, timing.adaptiveAfAddedTimeMs, timing.fullAfAddedTimeMs};
     }
 
     /**
@@ -670,7 +676,7 @@ public class DualProgressDialog {
             return String.format("%d hr %d min", hours, minutes);
         }
     }
-    
+
     /**
      * Shows completion message and closes dialog after a delay.
      * If stitching operations are still active, waits for them to complete.
@@ -687,7 +693,8 @@ public class DualProgressDialog {
         if (hasActiveStitchingOperations()) {
             // Don't close yet - wait for stitching to finish
             statusLabel.setText("Acquisitions complete - waiting for stitching...");
-            logger.info("Acquisitions complete but {} stitching operations still active - keeping dialog open",
+            logger.info(
+                    "Acquisitions complete but {} stitching operations still active - keeping dialog open",
                     activeStitchingOperations.size());
 
             // Start a timer to check periodically for stitching completion
@@ -723,7 +730,7 @@ public class DualProgressDialog {
             pause.play();
         }
     }
-    
+
     /**
      * Closes the dialog and stops the timeline.
      */
@@ -734,28 +741,28 @@ public class DualProgressDialog {
             logger.info("Dual progress dialog closed");
         });
     }
-    
+
     /**
      * Sets a callback to be called when cancel is requested.
      */
     public void setCancelCallback(Consumer<Void> callback) {
         this.cancelCallback = callback;
     }
-    
+
     /**
      * Returns true if the user has cancelled the workflow.
      */
     public boolean isCancelled() {
         return cancelled.get();
     }
-    
+
     /**
      * Returns true if the workflow is complete.
      */
     public boolean isWorkflowComplete() {
         return completedAnnotations.get() >= totalAnnotations;
     }
-    
+
     /**
      * Triggers cancellation and calls the cancel callback.
      */
@@ -763,17 +770,17 @@ public class DualProgressDialog {
         cancelled.set(true);
         statusLabel.setText("Cancelling workflow...");
         statusLabel.setTextFill(Color.RED);
-        
+
         if (cancelCallback != null) {
             cancelCallback.accept(null);
         }
-        
+
         // Close after showing cancel status
         PauseTransition pause = new PauseTransition(Duration.seconds(2));
         pause.setOnFinished(e -> close());
         pause.play();
     }
-    
+
     /**
      * Shows an error state and allows closing.
      */
@@ -900,8 +907,9 @@ public class DualProgressDialog {
             if (hasOps) {
                 // Update list view
                 stitchingListView.getItems().clear();
-                activeStitchingOperations.values().forEach(status ->
-                    stitchingListView.getItems().add("* " + status));
+                activeStitchingOperations
+                        .values()
+                        .forEach(status -> stitchingListView.getItems().add("* " + status));
 
                 // Update count label
                 if (count == 1) {

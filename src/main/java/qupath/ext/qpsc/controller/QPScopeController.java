@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.ui.CameraControlController;
 import qupath.ext.qpsc.ui.ServerConnectionController;
 
-
 /**
  * QPScopeController - Main orchestrator for QuPath-side workflows
  *
@@ -111,15 +110,16 @@ public class QPScopeController {
         CompletableFuture<Void> future = new CompletableFuture<>();
         logger.info("Showing dialog: {} - {}", title, message);
         new Thread(() -> {
-            try {
-                Thread.sleep(1000); // Simulate a delay for user confirmation.
-            } catch (InterruptedException e) {
-                logger.warn("User dialog thread interrupted", e);
-                Thread.currentThread().interrupt();
-            }
-            future.complete(null);
-            logger.debug("Dialog '{}' simulation completed", title);
-        }).start();
+                    try {
+                        Thread.sleep(1000); // Simulate a delay for user confirmation.
+                    } catch (InterruptedException e) {
+                        logger.warn("User dialog thread interrupted", e);
+                        Thread.currentThread().interrupt();
+                    }
+                    future.complete(null);
+                    logger.debug("Dialog '{}' simulation completed", title);
+                })
+                .start();
         return future;
     }
 
@@ -155,9 +155,9 @@ public class QPScopeController {
                 logger.debug("Launching background collection workflow");
                 BackgroundCollectionWorkflow.run();
             }
-            // PPM workflows (polarizerCalibration, birefringenceOptimization,
-            // sunburstCalibration, ppmSensitivityTest) are now registered dynamically
-            // via PPMModalityHandler.getMenuContributions() -- no case statements needed
+                // PPM workflows (polarizerCalibration, birefringenceOptimization,
+                // sunburstCalibration, ppmSensitivityTest) are now registered dynamically
+                // via PPMModalityHandler.getMenuContributions() -- no case statements needed
             case "autofocusEditor" -> {
                 logger.debug("Launching autofocus settings editor");
                 AutofocusEditorWorkflow.run();
@@ -166,7 +166,7 @@ public class QPScopeController {
                 logger.debug("Launching autofocus parameter benchmark");
                 AutofocusBenchmarkWorkflow.run();
             }
-            // ppmSensitivityTest -- handled via dynamic menu registration
+                // ppmSensitivityTest -- handled via dynamic menu registration
             case "whiteBalance" -> {
                 logger.debug("Launching white balance calibration workflow");
                 WhiteBalanceWorkflow.run();
@@ -189,11 +189,10 @@ public class QPScopeController {
             }
             case "serverConnection" -> {
                 logger.debug("Launching server connection dialog");
-                ServerConnectionController.showDialog()
-                        .exceptionally(ex -> {
-                            logger.error("Server connection dialog error: {}", ex.getMessage(), ex);
-                            return null;
-                        });
+                ServerConnectionController.showDialog().exceptionally(ex -> {
+                    logger.error("Server connection dialog error: {}", ex.getMessage(), ex);
+                    return null;
+                });
             }
             default -> {
                 logger.warn("Unknown workflow mode: {}", mode);
@@ -202,7 +201,6 @@ public class QPScopeController {
 
         logger.debug("Workflow mode '{}' startup completed", mode);
     }
-
 
     /**
      * Completes the current user interaction sequence.
@@ -213,5 +211,4 @@ public class QPScopeController {
         logger.info("QPScopeController interaction sequence completed");
         logger.debug("Performing post-interaction cleanup");
     }
-
 }

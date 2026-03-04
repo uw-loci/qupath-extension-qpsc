@@ -1,6 +1,12 @@
 package qupath.ext.qpsc.ui;
 
+import java.awt.Desktop;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.FileInputStream;
+import java.util.List;
 import javafx.application.Platform;
+import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
@@ -14,18 +20,10 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
-
-import javafx.embed.swing.SwingFXUtils;
-
-import java.awt.Desktop;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.FileInputStream;
-import java.util.List;
-import javax.imageio.ImageIO;
 
 /**
  * Non-modal window for displaying calibration results.
@@ -67,25 +65,38 @@ public class CalibrationResultDialog {
             String maskPath,
             String outputFolder,
             List<String> warnings,
-            String errorMessage
-    ) {
+            String errorMessage) {
         /**
          * Create a success result.
          */
-        public static CalibrationResultData success(double rSquared, int spokesDetected,
-                                                    String plotPath, String calibrationPath,
-                                                    String imagePath, String maskPath, List<String> warnings) {
-            return new CalibrationResultData(true, rSquared, spokesDetected,
-                    plotPath, calibrationPath, imagePath, maskPath, null, warnings, null);
+        public static CalibrationResultData success(
+                double rSquared,
+                int spokesDetected,
+                String plotPath,
+                String calibrationPath,
+                String imagePath,
+                String maskPath,
+                List<String> warnings) {
+            return new CalibrationResultData(
+                    true,
+                    rSquared,
+                    spokesDetected,
+                    plotPath,
+                    calibrationPath,
+                    imagePath,
+                    maskPath,
+                    null,
+                    warnings,
+                    null);
         }
 
         /**
          * Create a failure result with optional debug paths and output folder.
          */
-        public static CalibrationResultData failure(String errorMessage, String imagePath,
-                                                     String maskPath, String outputFolder) {
-            return new CalibrationResultData(false, 0, 0, null, null, imagePath, maskPath,
-                    outputFolder, List.of(), errorMessage);
+        public static CalibrationResultData failure(
+                String errorMessage, String imagePath, String maskPath, String outputFolder) {
+            return new CalibrationResultData(
+                    false, 0, 0, null, null, imagePath, maskPath, outputFolder, List.of(), errorMessage);
         }
 
         /**
@@ -122,8 +133,7 @@ public class CalibrationResultDialog {
      * @param onRedo Callback to invoke when user clicks "Go Back and Redo" (null to hide button)
      * @param onCenterRetry Callback to retry with manually selected center (null to hide section)
      */
-    public static void showResult(CalibrationResultData result, Runnable onRedo,
-                                   CenterRetryCallback onCenterRetry) {
+    public static void showResult(CalibrationResultData result, Runnable onRedo, CenterRetryCallback onCenterRetry) {
         showResult(result, onRedo, onCenterRetry, null);
     }
 
@@ -135,8 +145,11 @@ public class CalibrationResultDialog {
      * @param onCenterRetry Callback to retry with manually selected center (null to hide section)
      * @param onTuneThresholds Callback to open threshold tuning preview (null to hide button)
      */
-    public static void showResult(CalibrationResultData result, Runnable onRedo,
-                                   CenterRetryCallback onCenterRetry, Runnable onTuneThresholds) {
+    public static void showResult(
+            CalibrationResultData result,
+            Runnable onRedo,
+            CenterRetryCallback onCenterRetry,
+            Runnable onTuneThresholds) {
         Platform.runLater(() -> {
             Stage stage = new Stage();
             stage.setTitle("PPM Reference Slide Calibration Results");
@@ -168,9 +181,13 @@ public class CalibrationResultDialog {
         });
     }
 
-    private static void buildSuccessContent(VBox root, Stage stage, CalibrationResultData result,
-                                             Runnable onRedo, CenterRetryCallback onCenterRetry,
-                                             Runnable onTuneThresholds) {
+    private static void buildSuccessContent(
+            VBox root,
+            Stage stage,
+            CalibrationResultData result,
+            Runnable onRedo,
+            CenterRetryCallback onCenterRetry,
+            Runnable onTuneThresholds) {
         // Header
         Label headerLabel = new Label("Calibration Completed Successfully");
         headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: green;");
@@ -187,8 +204,8 @@ public class CalibrationResultDialog {
         Label rSquaredLabel = new Label("R-squared:");
         rSquaredLabel.setStyle("-fx-font-weight: bold;");
         String rSquaredStatus = result.rSquared() >= 0.95 ? " [GOOD]" : " [LOW - check results]";
-        String rSquaredStyle = result.rSquared() >= 0.95 ?
-                "-fx-text-fill: green;" : "-fx-text-fill: orange; -fx-font-weight: bold;";
+        String rSquaredStyle =
+                result.rSquared() >= 0.95 ? "-fx-text-fill: green;" : "-fx-text-fill: orange; -fx-font-weight: bold;";
         Label rSquaredValue = new Label(String.format("%.6f%s", result.rSquared(), rSquaredStatus));
         rSquaredValue.setStyle(rSquaredStyle);
         resultsGrid.add(rSquaredLabel, 0, row);
@@ -248,8 +265,7 @@ public class CalibrationResultDialog {
                     // Scale image to fit dialog while maintaining aspect ratio
                     double maxWidth = 1300;
                     double maxHeight = 900;
-                    double scale = Math.min(maxWidth / plotImage.getWidth(),
-                                           maxHeight / plotImage.getHeight());
+                    double scale = Math.min(maxWidth / plotImage.getWidth(), maxHeight / plotImage.getHeight());
                     if (scale < 1.0) {
                         imageView.setFitWidth(plotImage.getWidth() * scale);
                         imageView.setFitHeight(plotImage.getHeight() * scale);
@@ -285,9 +301,13 @@ public class CalibrationResultDialog {
         root.getChildren().add(buttonBar);
     }
 
-    private static void buildErrorContent(VBox root, Stage stage, CalibrationResultData result,
-                                            Runnable onRedo, CenterRetryCallback onCenterRetry,
-                                            Runnable onTuneThresholds) {
+    private static void buildErrorContent(
+            VBox root,
+            Stage stage,
+            CalibrationResultData result,
+            Runnable onRedo,
+            CenterRetryCallback onCenterRetry,
+            Runnable onTuneThresholds) {
         // Header
         Label headerLabel = new Label("Calibration Failed");
         headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: red;");
@@ -333,8 +353,7 @@ public class CalibrationResultDialog {
                         // Scale to fit dialog
                         double maxWidth = 1300;
                         double maxHeight = 900;
-                        double scale = Math.min(maxWidth / maskImage.getWidth(),
-                                               maxHeight / maskImage.getHeight());
+                        double scale = Math.min(maxWidth / maskImage.getWidth(), maxHeight / maskImage.getHeight());
                         if (scale < 1.0) {
                             maskView.setFitWidth(maskImage.getWidth() * scale);
                             maskView.setFitHeight(maskImage.getHeight() * scale);
@@ -345,12 +364,11 @@ public class CalibrationResultDialog {
                         maskBox.setAlignment(Pos.CENTER);
                         root.getChildren().add(maskBox);
 
-                        Label maskHint = new Label(
-                            "White pixels = detected foreground (colored regions above threshold).\n" +
-                            "Black pixels = background (below threshold).\n" +
-                            "All black: thresholds too high - lower saturation/value thresholds.\n" +
-                            "All white: thresholds too low - raise saturation/value thresholds."
-                        );
+                        Label maskHint =
+                                new Label("White pixels = detected foreground (colored regions above threshold).\n"
+                                        + "Black pixels = background (below threshold).\n"
+                                        + "All black: thresholds too high - lower saturation/value thresholds.\n"
+                                        + "All white: thresholds too low - raise saturation/value thresholds.");
                         maskHint.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888;");
                         maskHint.setWrapText(true);
                         root.getChildren().add(maskHint);
@@ -398,12 +416,11 @@ public class CalibrationResultDialog {
         tipsLabel.setStyle("-fx-font-weight: bold;");
         root.getChildren().add(tipsLabel);
 
-        String tips =
-            "1. Ensure the calibration slide is properly positioned and focused\n" +
-            "2. Check that the slide has visible colored spokes\n" +
-            "3. Try adjusting saturation/value thresholds if detection is failing\n" +
-            "4. Verify the microscope server is running and connected\n" +
-            "5. Check the server log for detailed error information";
+        String tips = "1. Ensure the calibration slide is properly positioned and focused\n"
+                + "2. Check that the slide has visible colored spokes\n"
+                + "3. Try adjusting saturation/value thresholds if detection is failing\n"
+                + "4. Verify the microscope server is running and connected\n"
+                + "5. Check the server log for detailed error information";
 
         Label tipsText = new Label(tips);
         tipsText.setStyle("-fx-font-size: 11px;");
@@ -448,9 +465,8 @@ public class CalibrationResultDialog {
     /**
      * Builds the button bar for the results window.
      */
-    private static HBox buildButtonBar(Stage stage, CalibrationResultData result,
-                                        Runnable onRedo, Runnable onTuneThresholds,
-                                        boolean isSuccess) {
+    private static HBox buildButtonBar(
+            Stage stage, CalibrationResultData result, Runnable onRedo, Runnable onTuneThresholds, boolean isSuccess) {
         HBox buttonBar = new HBox(10);
         buttonBar.setAlignment(Pos.CENTER_RIGHT);
         buttonBar.setPadding(new Insets(10, 0, 0, 0));
@@ -475,9 +491,8 @@ public class CalibrationResultDialog {
         // Tune Thresholds button
         if (onTuneThresholds != null) {
             Button tuneButton = new Button("Tune Thresholds...");
-            tuneButton.setTooltip(new Tooltip(
-                "Open interactive threshold preview to adjust saturation/value\n" +
-                "thresholds with a live mask preview before re-running calibration."));
+            tuneButton.setTooltip(new Tooltip("Open interactive threshold preview to adjust saturation/value\n"
+                    + "thresholds with a live mask preview before re-running calibration."));
             tuneButton.setOnAction(event -> {
                 stage.close();
                 onTuneThresholds.run();
@@ -566,9 +581,8 @@ public class CalibrationResultDialog {
      * A "Retry with Selected Center" button becomes enabled after the user clicks on the image.
      * If the image cannot be loaded, the section is not shown at all.
      */
-    private static void addCenterSelectionSection(VBox contentBox, Stage ownerStage,
-                                                   CalibrationResultData result,
-                                                   CenterRetryCallback onCenterRetry) {
+    private static void addCenterSelectionSection(
+            VBox contentBox, Stage ownerStage, CalibrationResultData result, CenterRetryCallback onCenterRetry) {
         if (result.imagePath() == null) {
             return;
         }
@@ -595,10 +609,9 @@ public class CalibrationResultDialog {
         sectionLabel.setStyle("-fx-font-weight: bold;");
         contentBox.getChildren().add(sectionLabel);
 
-        Label instructionLabel = new Label(
-            "Click on the center of the sunburst pattern to manually select the center point, "
-            + "then press \"Retry with Selected Center\" to re-run calibration."
-        );
+        Label instructionLabel =
+                new Label("Click on the center of the sunburst pattern to manually select the center point, "
+                        + "then press \"Retry with Selected Center\" to re-run calibration.");
         instructionLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #555555;");
         instructionLabel.setWrapText(true);
         contentBox.getChildren().add(instructionLabel);

@@ -1,11 +1,10 @@
 package qupath.ext.qpsc.ui.stagemap;
 
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Registry for available stage insert configurations.
@@ -111,13 +110,16 @@ public class StageInsertRegistry {
                     String insertId = entry.getKey();
                     if (entry.getValue() instanceof Map) {
                         Map<String, Object> insertConfig = (Map<String, Object>) entry.getValue();
-                        StageInsert insert = StageInsert.fromConfigMap(
-                                insertId, insertConfig, slideMarginUm);
+                        StageInsert insert = StageInsert.fromConfigMap(insertId, insertConfig, slideMarginUm);
                         inserts.put(insertId, insert);
-                        logger.debug("Loaded insert configuration: {} ({}) - aperture: {}x{} mm, origin: ({}, {}) um",
-                                insertId, insert.getName(),
-                                insert.getWidthUm() / 1000.0, insert.getHeightUm() / 1000.0,
-                                insert.getOriginXUm(), insert.getOriginYUm());
+                        logger.debug(
+                                "Loaded insert configuration: {} ({}) - aperture: {}x{} mm, origin: ({}, {}) um",
+                                insertId,
+                                insert.getName(),
+                                insert.getWidthUm() / 1000.0,
+                                insert.getHeightUm() / 1000.0,
+                                insert.getOriginXUm(),
+                                insert.getOriginYUm());
                     }
                 }
             }
@@ -144,35 +146,53 @@ public class StageInsertRegistry {
      */
     private static void loadDefaultConfigurations() {
         // Default aperture dimensions (viewable area)
-        double apertureWidthMm = 55.0;   // 5.5cm horizontal
-        double apertureHeightMm = 60.0;  // 6cm vertical
+        double apertureWidthMm = 55.0; // 5.5cm horizontal
+        double apertureHeightMm = 60.0; // 6cm vertical
 
         // Single slide horizontal
         // Slide (75mm) extends beyond aperture (55mm) by 10mm on each side
         List<StageInsert.SlidePosition> singleHSlides = new ArrayList<>();
         singleHSlides.add(new StageInsert.SlidePosition(
                 "Slide 1",
-                -10.0,  // Starts 10mm left of aperture
-                (apertureHeightMm - STANDARD_SLIDE_HEIGHT_MM) / 2.0,  // Centered vertically
-                STANDARD_SLIDE_WIDTH_MM, STANDARD_SLIDE_HEIGHT_MM, 0));
+                -10.0, // Starts 10mm left of aperture
+                (apertureHeightMm - STANDARD_SLIDE_HEIGHT_MM) / 2.0, // Centered vertically
+                STANDARD_SLIDE_WIDTH_MM,
+                STANDARD_SLIDE_HEIGHT_MM,
+                0));
 
-        inserts.put("single_h", new StageInsert(
-                "single_h", "Single Slide (Horizontal)",
-                apertureWidthMm, apertureHeightMm,
-                0, 0, DEFAULT_SLIDE_MARGIN_UM, singleHSlides));
+        inserts.put(
+                "single_h",
+                new StageInsert(
+                        "single_h",
+                        "Single Slide (Horizontal)",
+                        apertureWidthMm,
+                        apertureHeightMm,
+                        0,
+                        0,
+                        DEFAULT_SLIDE_MARGIN_UM,
+                        singleHSlides));
 
         // Single slide vertical
         List<StageInsert.SlidePosition> singleVSlides = new ArrayList<>();
         singleVSlides.add(new StageInsert.SlidePosition(
                 "Slide 1",
-                (apertureHeightMm - STANDARD_SLIDE_HEIGHT_MM) / 2.0,  // Centered horizontally
-                -10.0,  // Starts 10mm above aperture
-                STANDARD_SLIDE_HEIGHT_MM, STANDARD_SLIDE_WIDTH_MM, 90));
+                (apertureHeightMm - STANDARD_SLIDE_HEIGHT_MM) / 2.0, // Centered horizontally
+                -10.0, // Starts 10mm above aperture
+                STANDARD_SLIDE_HEIGHT_MM,
+                STANDARD_SLIDE_WIDTH_MM,
+                90));
 
-        inserts.put("single_v", new StageInsert(
-                "single_v", "Single Slide (Vertical)",
-                apertureHeightMm, apertureWidthMm,  // Swapped for vertical
-                0, 0, DEFAULT_SLIDE_MARGIN_UM, singleVSlides));
+        inserts.put(
+                "single_v",
+                new StageInsert(
+                        "single_v",
+                        "Single Slide (Vertical)",
+                        apertureHeightMm,
+                        apertureWidthMm, // Swapped for vertical
+                        0,
+                        0,
+                        DEFAULT_SLIDE_MARGIN_UM,
+                        singleVSlides));
 
         // Four slides vertical (larger aperture)
         double quadApertureWidth = 120.0;
@@ -181,14 +201,20 @@ public class StageInsertRegistry {
         for (int i = 0; i < 4; i++) {
             double xOffset = spacing + i * (STANDARD_SLIDE_HEIGHT_MM + spacing);
             quadVSlides.add(new StageInsert.SlidePosition(
-                    "Slide " + (i + 1), xOffset, -10.0,
-                    STANDARD_SLIDE_HEIGHT_MM, STANDARD_SLIDE_WIDTH_MM, 90));
+                    "Slide " + (i + 1), xOffset, -10.0, STANDARD_SLIDE_HEIGHT_MM, STANDARD_SLIDE_WIDTH_MM, 90));
         }
 
-        inserts.put("quad_v", new StageInsert(
-                "quad_v", "Four Slides (Vertical)",
-                quadApertureWidth, apertureWidthMm,
-                0, 0, DEFAULT_SLIDE_MARGIN_UM, quadVSlides));
+        inserts.put(
+                "quad_v",
+                new StageInsert(
+                        "quad_v",
+                        "Four Slides (Vertical)",
+                        quadApertureWidth,
+                        apertureWidthMm,
+                        0,
+                        0,
+                        DEFAULT_SLIDE_MARGIN_UM,
+                        quadVSlides));
 
         defaultInsertId = "single_h";
         logger.info("Loaded default insert configurations");

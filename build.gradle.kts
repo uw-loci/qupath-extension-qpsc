@@ -5,6 +5,10 @@ plugins {
     id("com.gradleup.shadow") version "8.3.5"
     // QuPath Gradle extension convention plugin
     id("qupath-conventions")
+    // Code formatting (like Black for Python)
+    id("com.diffplug.spotless") version "7.0.2"
+    // Static bug detection
+    id("com.github.spotbugs") version "6.1.2"
 }
 
 // Configure your extension here
@@ -96,4 +100,64 @@ tasks.test {
             )
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Spotless -- auto-formatting
+// ---------------------------------------------------------------------------
+spotless {
+    java {
+        target("src/**/*.java")
+        palantirJavaFormat("2.50.0")
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ASCII-only enforcement (CLAUDE.md policy: no chars > 0x7F in Java sources).
+// Prevents the recurring Windows cp1252 encoding failures.
+// Runs as part of "check" so it gates the build just like spotlessCheck.
+// ---------------------------------------------------------------------------
+tasks.register("checkAsciiOnly") {
+    description = "Fails if any Java source file contains non-ASCII characters (> 0x7F)"
+    group = "verification"
+    val srcDirs = fileTree("src") { include("**/*.java") }
+    inputs.files(srcDirs)
+    doLast {
+        val violations = mutableListOf<String>()
+        srcDirs.forEach { file ->
+            file.readText().lines().forEachIndexed { idx, line ->
+                line.forEachIndexed { col, ch ->
+                    if (ch.code > 0x7F) {
+                        violations.add(
+                            "${file.relativeTo(projectDir)}:${idx + 1}:${col + 1}  " +
+                            "'$ch' (U+${"04X".format(ch.code)})"
+                        )
+                    }
+                }
+            }
+        }
+        if (violations.isNotEmpty()) {
+            throw GradleException(
+                "Non-ASCII characters found (will break on Windows cp1252):\n" +
+                violations.joinToString("\n")
+            )
+        }
+        logger.lifecycle("checkAsciiOnly: all Java sources are ASCII-clean")
+    }
+}
+tasks.named("check") { dependsOn("checkAsciiOnly") }
+
+// ---------------------------------------------------------------------------
+// SpotBugs -- static bug detection
+// ---------------------------------------------------------------------------
+spotbugs {
+    effort.set(com.github.spotbugs.snom.Effort.MAX)
+    reportLevel.set(com.github.spotbugs.snom.Confidence.HIGH)
+    excludeFilter.set(file("config/spotbugs/exclude.xml"))
+}
+
+tasks.withType<com.github.spotbugs.snom.SpotBugsTask>().configureEach {
+    reports.create("html") { required.set(true) }
 }

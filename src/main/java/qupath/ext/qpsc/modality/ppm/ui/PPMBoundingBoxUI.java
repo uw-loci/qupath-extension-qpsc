@@ -1,5 +1,7 @@
 package qupath.ext.qpsc.modality.ppm.ui;
 
+import java.util.HashMap;
+import java.util.Map;
 import javafx.scene.Node;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
@@ -12,9 +14,6 @@ import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ppm.PPMPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * UI component allowing per-acquisition override of PPM angles.
@@ -30,8 +29,8 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
     public PPMBoundingBoxUI() {
         root = new VBox(5);
 
-        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(
-                QPPreferenceDialog.getMicroscopeConfigFileProperty());
+        MicroscopeConfigManager mgr =
+                MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
         double defaultPlus = 7.0;
         double defaultMinus = -7.0;
@@ -72,7 +71,8 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
         plusSpinner.setPrefWidth(100);
 
         minusSpinner = new Spinner<>();
-        minusSpinner.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(-180, 180, savedMinusAngle, 0.5));
+        minusSpinner.setValueFactory(
+                new SpinnerValueFactory.DoubleSpinnerValueFactory(-180, 180, savedMinusAngle, 0.5));
         minusSpinner.setEditable(true);
         minusSpinner.setPrefWidth(100);
 

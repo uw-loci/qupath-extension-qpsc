@@ -1,5 +1,12 @@
 package qupath.ext.qpsc.utilities;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
@@ -12,14 +19,6 @@ import qupath.lib.regions.ImagePlane;
 import qupath.lib.roi.ROIs;
 import qupath.lib.roi.interfaces.ROI;
 import qupath.lib.scripting.QP;
-
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Utilities for creating tile configurations for microscope acquisition.
@@ -56,7 +55,9 @@ public class TilingUtilities {
             logger.info("Creating tiles for bounding box");
             processBoundingBoxTilingRequest(request);
         } else if (request.hasAnnotations()) {
-            logger.info("Creating tiles for {} annotations", request.getAnnotations().size());
+            logger.info(
+                    "Creating tiles for {} annotations",
+                    request.getAnnotations().size());
             processAnnotationTilingRequest(request);
         } else {
             throw new IllegalArgumentException("Must provide either bounding box or annotations");
@@ -83,17 +84,17 @@ public class TilingUtilities {
         double minY = bb.getMinY();
         double maxY = bb.getMaxY();
 
-//        // Apply axis inversions if needed
-//        if (request.isInvertX()) {
-//            double temp = minX;
-//            minX = maxX;
-//            maxX = temp;
-//        }
-//        if (request.isInvertY()) {
-//            double temp = minY;
-//            minY = maxY;
-//            maxY = temp;
-//        }
+        //        // Apply axis inversions if needed
+        //        if (request.isInvertX()) {
+        //            double temp = minX;
+        //            minX = maxX;
+        //            maxX = temp;
+        //        }
+        //        if (request.isInvertY()) {
+        //            double temp = minY;
+        //            minY = maxY;
+        //            maxY = temp;
+        //        }
 
         // Expand bounds by half frame to ensure full coverage
         double startX = minX - request.getFrameWidth() / 2.0;
@@ -106,8 +107,7 @@ public class TilingUtilities {
         Files.createDirectories(boundsDir);
         String configPath = boundsDir.resolve("TileConfiguration.txt").toString();
 
-        logger.info("Creating bounding box tiles: start=({}, {}), size={}x{}",
-                startX, startY, width, height);
+        logger.info("Creating bounding box tiles: start=({}, {}), size={}x{}", startX, startY, width, height);
 
         // Generate the tile grid
         processTileGridRequest(startX, startY, width, height, request, configPath, null, null);
@@ -126,10 +126,10 @@ public class TilingUtilities {
     private static void processAnnotationTilingRequest(TilingRequest request) throws IOException {
         // First, name and lock all annotations
         for (PathObject annotation : request.getAnnotations()) {
-            String name = String.format("%d_%d",
+            String name = String.format(
+                    "%d_%d",
                     (int) annotation.getROI().getCentroidX(),
-                    (int) annotation.getROI().getCentroidY()
-            );
+                    (int) annotation.getROI().getCentroidY());
             annotation.setName(name);
             annotation.setLocked(true);
         }
@@ -142,9 +142,13 @@ public class TilingUtilities {
             ROI roi = annotation.getROI();
             String annotationName = annotation.getName();
 
-            logger.info("Processing annotation: {} at bounds ({}, {}, {}, {})",
-                    annotationName, roi.getBoundsX(), roi.getBoundsY(),
-                    roi.getBoundsWidth(), roi.getBoundsHeight());
+            logger.info(
+                    "Processing annotation: {} at bounds ({}, {}, {}, {})",
+                    annotationName,
+                    roi.getBoundsX(),
+                    roi.getBoundsY(),
+                    roi.getBoundsWidth(),
+                    roi.getBoundsHeight());
 
             // Calculate bounds with optional buffer
             double x = roi.getBoundsX();
@@ -197,13 +201,16 @@ public class TilingUtilities {
      * @param annotationName
      * @throws IOException if unable to write the configuration file
      */
-
     private static void processTileGridRequest(
-            double startX, double startY,
-            double width, double height,
+            double startX,
+            double startY,
+            double width,
+            double height,
             TilingRequest request,
             String configPath,
-            ROI filterROI, String annotationName) throws IOException {
+            ROI filterROI,
+            String annotationName)
+            throws IOException {
 
         // Calculate step sizes based on overlap
         double overlapFraction = request.getOverlapPercent() / 100.0;
@@ -223,14 +230,14 @@ public class TilingUtilities {
         logger.info("  Frame size: {} x {} (in input units)", request.getFrameWidth(), request.getFrameHeight());
         logger.info("  Step size: {} x {} ({}% overlap)", xStep, yStep, request.getOverlapPercent());
         logger.info("  Grid: {} columns x {} rows", nCols, nRows);
-        logger.info("  Pixel size for coordinate conversion: {} µm/px", request.getPixelSizeMicrons());
+        logger.info("  Pixel size for coordinate conversion: {} um/px", request.getPixelSizeMicrons());
         logger.info("  X-axis inverted: {}, Y-axis inverted: {}", request.isInvertX(), request.isInvertY());
 
         // Prepare output structures
         // NOTE: Both files start with pixel coordinates. TileConfiguration.txt will be transformed
         // to stage coordinates later by TransformationFunctions.transformTileConfiguration()
-        List<String> configLinesForTransform = new ArrayList<>();  // For transformation to stage
-        List<String> configLinesPixels = new ArrayList<>();   // For QuPath (pixel coordinates)
+        List<String> configLinesForTransform = new ArrayList<>(); // For transformation to stage
+        List<String> configLinesPixels = new ArrayList<>(); // For QuPath (pixel coordinates)
         configLinesForTransform.add("dim = 2");
         configLinesPixels.add("dim = 2");
         List<PathObject> detectionTiles = new ArrayList<>();
@@ -256,17 +263,13 @@ public class TilingUtilities {
 
                 // Create tile ROI
                 ROI tileROI = ROIs.createRectangleROI(
-                        x, y,
-                        request.getFrameWidth(),
-                        request.getFrameHeight(),
-                        ImagePlane.getDefaultPlane()
-                );
+                        x, y, request.getFrameWidth(), request.getFrameHeight(), ImagePlane.getDefaultPlane());
 
                 // Check if we should include this tile
                 boolean includeTile = true;
                 if (filterROI != null) {
-                    includeTile = filterROI.contains(tileROI.getCentroidX(), tileROI.getCentroidY()) ||
-                            filterROI.getGeometry().intersects(tileROI.getGeometry());
+                    includeTile = filterROI.contains(tileROI.getCentroidX(), tileROI.getCentroidY())
+                            || filterROI.getGeometry().intersects(tileROI.getGeometry());
                 }
 
                 if (!includeTile) {
@@ -278,25 +281,17 @@ public class TilingUtilities {
                 // 1. TileConfiguration.txt - QuPath pixel coordinates (will be transformed to stage later)
                 // NOTE: These are in PIXELS, not microns! The transformation to stage coordinates
                 // happens later in TransformationFunctions.transformTileConfiguration()
-                configLinesForTransform.add(String.format("%d.tif; ; (%.3f, %.3f)",
-                        tileIndex,
-                        tileROI.getCentroidX(),
-                        tileROI.getCentroidY()
-                ));
+                configLinesForTransform.add(String.format(
+                        "%d.tif; ; (%.3f, %.3f)", tileIndex, tileROI.getCentroidX(), tileROI.getCentroidY()));
 
                 // 2. TileConfiguration_QP.txt - QuPath pixel coordinates (for stitching back into QuPath)
-                configLinesPixels.add(String.format("%d.tif; ; (%.3f, %.3f)",
-                        tileIndex,
-                        tileROI.getCentroidX(),
-                        tileROI.getCentroidY()
-                ));
+                configLinesPixels.add(String.format(
+                        "%d.tif; ; (%.3f, %.3f)", tileIndex, tileROI.getCentroidX(), tileROI.getCentroidY()));
 
                 // Create QuPath detection object if requested
                 if (request.isCreateDetections()) {
-                    PathObject tile = PathObjects.createDetectionObject(
-                            tileROI,
-                            QP.getPathClass(request.getModalityName())
-                    );
+                    PathObject tile =
+                            PathObjects.createDetectionObject(tileROI, QP.getPathClass(request.getModalityName()));
                     // Set name to include both tile number and annotation name
                     if (annotationName != null) {
                         tile.setName(String.format("%d_%s", tileIndex, annotationName));
@@ -336,7 +331,10 @@ public class TilingUtilities {
             QuPathGUI gui = QuPathGUI.getInstance();
             if (gui != null && gui.getImageData() != null) {
                 gui.getImageData().getHierarchy().addObjects(detectionTiles);
-                gui.getImageData().getHierarchy().fireHierarchyChangedEvent(gui.getImageData().getHierarchy().getRootObject());
+                gui.getImageData()
+                        .getHierarchy()
+                        .fireHierarchyChangedEvent(
+                                gui.getImageData().getHierarchy().getRootObject());
             } else {
                 // Fallback to QP static context if GUI not available
                 QP.getCurrentHierarchy().addObjects(detectionTiles);
@@ -369,14 +367,14 @@ public class TilingUtilities {
             List<PathObject> annotations,
             SampleSetupController.SampleSetupResult sampleSetup,
             String tempTileDirectory,
-            String modeWithIndex) throws IOException {
+            String modeWithIndex)
+            throws IOException {
 
         if (annotations == null || annotations.isEmpty()) {
             throw new IllegalArgumentException("No annotations provided for tiling");
         }
 
-        logger.info("Creating tiles for {} annotations in modality {}",
-                annotations.size(), modeWithIndex);
+        logger.info("Creating tiles for {} annotations in modality {}", annotations.size(), modeWithIndex);
 
         QuPathGUI gui = QuPathGUI.getInstance();
         if (gui.getImageData() == null) {
@@ -389,27 +387,26 @@ public class TilingUtilities {
 
         // Get FOV using the explicit hardware configuration from sample setup
         // This ensures we use the correct detector (e.g., JAI vs TELEDYNE) that was selected by the user
-        double[] fovMicrons = MicroscopeController.getInstance().getCameraFOVFromConfig(
-                sampleSetup.modality(),
-                sampleSetup.objective(),
-                sampleSetup.detector());
+        double[] fovMicrons = MicroscopeController.getInstance()
+                .getCameraFOVFromConfig(sampleSetup.modality(), sampleSetup.objective(), sampleSetup.detector());
         double frameWidthMicrons = fovMicrons[0];
         double frameHeightMicrons = fovMicrons[1];
 
-        logger.info("Camera FOV from server: {} x {} microns",
-                frameWidthMicrons, frameHeightMicrons);
+        logger.info("Camera FOV from server: {} x {} microns", frameWidthMicrons, frameHeightMicrons);
 
         // Validate FOV is reasonable (between 0.1mm and 50mm)
-        if (frameWidthMicrons < 100 || frameWidthMicrons > 50000 ||
-                frameHeightMicrons < 100 || frameHeightMicrons > 50000) {
+        if (frameWidthMicrons < 100
+                || frameWidthMicrons > 50000
+                || frameHeightMicrons < 100
+                || frameHeightMicrons > 50000) {
             throw new IOException(String.format(
-                    "Camera FOV seems unreasonable: %.1f x %.1f µm. Expected between 100-50000 µm",
+                    "Camera FOV seems unreasonable: %.1f x %.1f um. Expected between 100-50000 um",
                     frameWidthMicrons, frameHeightMicrons));
         }
 
         // Get the actual image pixel size from QuPath
-        double imagePixelSize = gui.getImageData().getServer()
-                .getPixelCalibration().getAveragedPixelSizeMicrons();
+        double imagePixelSize =
+                gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
 
         // Convert to image pixels for QuPath visualization and tile calculation
         double frameWidthPixels = frameWidthMicrons / imagePixelSize;
@@ -420,7 +417,8 @@ public class TilingUtilities {
         boolean invertedX = QPPreferenceDialog.getInvertedXProperty();
         boolean invertedY = QPPreferenceDialog.getInvertedYProperty();
 
-        logger.info("Frame size in QuPath pixels: {} x {} ({}% overlap)",
+        logger.info(
+                "Frame size in QuPath pixels: {} x {} ({}% overlap)",
                 frameWidthPixels, frameHeightPixels, overlapPercent);
         logger.info("Pixel size: {} microns/pixel", imagePixelSize);
 
@@ -432,13 +430,13 @@ public class TilingUtilities {
         TilingRequest request = new TilingRequest.Builder()
                 .outputFolder(tempTileDirectory)
                 .modalityName(modeWithIndex)
-                .frameSize(frameWidthPixels, frameHeightPixels)  // In pixels for tile ROI creation
+                .frameSize(frameWidthPixels, frameHeightPixels) // In pixels for tile ROI creation
                 .overlapPercent(overlapPercent)
                 .annotations(annotations)
                 .invertAxes(invertedX, invertedY)
                 .createDetections(true)
                 .addBuffer(true)
-                .pixelSizeMicrons(imagePixelSize)  // For converting tile coordinates to microns
+                .pixelSizeMicrons(imagePixelSize) // For converting tile coordinates to microns
                 .build();
 
         createTiles(request);
@@ -467,14 +465,19 @@ public class TilingUtilities {
             String tempTileDirectory,
             String modeWithIndex,
             boolean invertedX,
-            boolean invertedY) throws IOException {
+            boolean invertedY)
+            throws IOException {
 
         if (annotations == null || annotations.isEmpty()) {
             throw new IllegalArgumentException("No annotations provided for tiling");
         }
 
-        logger.info("Creating tiles for {} annotations in modality {} (invertX={}, invertY={})",
-                annotations.size(), modeWithIndex, invertedX, invertedY);
+        logger.info(
+                "Creating tiles for {} annotations in modality {} (invertX={}, invertY={})",
+                annotations.size(),
+                modeWithIndex,
+                invertedX,
+                invertedY);
 
         QuPathGUI gui = QuPathGUI.getInstance();
         if (gui.getImageData() == null) {
@@ -486,27 +489,26 @@ public class TilingUtilities {
         removeExistingModalityTiles(gui, modalityBase);
 
         // Get FOV using the explicit hardware configuration from sample setup
-        double[] fovMicrons = MicroscopeController.getInstance().getCameraFOVFromConfig(
-                sampleSetup.modality(),
-                sampleSetup.objective(),
-                sampleSetup.detector());
+        double[] fovMicrons = MicroscopeController.getInstance()
+                .getCameraFOVFromConfig(sampleSetup.modality(), sampleSetup.objective(), sampleSetup.detector());
         double frameWidthMicrons = fovMicrons[0];
         double frameHeightMicrons = fovMicrons[1];
 
-        logger.info("Camera FOV from server: {} x {} microns",
-                frameWidthMicrons, frameHeightMicrons);
+        logger.info("Camera FOV from server: {} x {} microns", frameWidthMicrons, frameHeightMicrons);
 
         // Validate FOV is reasonable (between 0.1mm and 50mm)
-        if (frameWidthMicrons < 100 || frameWidthMicrons > 50000 ||
-                frameHeightMicrons < 100 || frameHeightMicrons > 50000) {
+        if (frameWidthMicrons < 100
+                || frameWidthMicrons > 50000
+                || frameHeightMicrons < 100
+                || frameHeightMicrons > 50000) {
             throw new IOException(String.format(
                     "Camera FOV seems unreasonable: %.1f x %.1f um. Expected between 100-50000 um",
                     frameWidthMicrons, frameHeightMicrons));
         }
 
         // Get the actual image pixel size from QuPath
-        double imagePixelSize = gui.getImageData().getServer()
-                .getPixelCalibration().getAveragedPixelSizeMicrons();
+        double imagePixelSize =
+                gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
 
         // Convert to image pixels for QuPath visualization and tile calculation
         double frameWidthPixels = frameWidthMicrons / imagePixelSize;
@@ -515,7 +517,8 @@ public class TilingUtilities {
         // Get overlap from preferences (flip params are explicit)
         double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
 
-        logger.info("Frame size in QuPath pixels: {} x {} ({}% overlap)",
+        logger.info(
+                "Frame size in QuPath pixels: {} x {} ({}% overlap)",
                 frameWidthPixels, frameHeightPixels, overlapPercent);
         logger.info("Pixel size: {} microns/pixel", imagePixelSize);
 
@@ -529,7 +532,7 @@ public class TilingUtilities {
                 .frameSize(frameWidthPixels, frameHeightPixels)
                 .overlapPercent(overlapPercent)
                 .annotations(annotations)
-                .invertAxes(invertedX, invertedY)  // Use explicit parameters
+                .invertAxes(invertedX, invertedY) // Use explicit parameters
                 .createDetections(true)
                 .addBuffer(true)
                 .pixelSizeMicrons(imagePixelSize)
@@ -548,13 +551,12 @@ public class TilingUtilities {
     private static void removeExistingModalityTiles(QuPathGUI gui, String modalityBase) {
         var hierarchy = gui.getViewer().getHierarchy();
         List<PathObject> tilesToRemove = hierarchy.getDetectionObjects().stream()
-                .filter(o -> o.getPathClass() != null &&
-                        o.getPathClass().toString().contains(modalityBase))
+                .filter(o ->
+                        o.getPathClass() != null && o.getPathClass().toString().contains(modalityBase))
                 .toList();
 
         if (!tilesToRemove.isEmpty()) {
-            logger.info("Removing {} existing tiles for modality: {}",
-                    tilesToRemove.size(), modalityBase);
+            logger.info("Removing {} existing tiles for modality: {}", tilesToRemove.size(), modalityBase);
             hierarchy.removeObjects(tilesToRemove, true);
             hierarchy.fireHierarchyChangedEvent(gui.getViewer());
         }
@@ -569,8 +571,8 @@ public class TilingUtilities {
      * @param overlapPercent Overlap percentage
      * @throws IllegalArgumentException if any annotation would create too many tiles
      */
-    private static void validateAnnotationTileCounts(List<PathObject> annotations,
-                                                     double frameWidth, double frameHeight, double overlapPercent) {
+    private static void validateAnnotationTileCounts(
+            List<PathObject> annotations, double frameWidth, double frameHeight, double overlapPercent) {
 
         final int MAX_TILES_PER_ANNOTATION = 10000;
 
@@ -580,8 +582,8 @@ public class TilingUtilities {
                 double annHeight = ann.getROI().getBoundsHeight();
 
                 // Calculate effective frame size considering overlap
-                double effectiveFrameWidth = frameWidth * (1 - overlapPercent/100.0);
-                double effectiveFrameHeight = frameHeight * (1 - overlapPercent/100.0);
+                double effectiveFrameWidth = frameWidth * (1 - overlapPercent / 100.0);
+                double effectiveFrameHeight = frameHeight * (1 - overlapPercent / 100.0);
 
                 double tilesX = Math.ceil(annWidth / effectiveFrameWidth);
                 double tilesY = Math.ceil(annHeight / effectiveFrameHeight);
@@ -589,15 +591,21 @@ public class TilingUtilities {
 
                 if (totalTiles > MAX_TILES_PER_ANNOTATION) {
                     throw new IllegalArgumentException(String.format(
-                            "Annotation '%s' would require %.0f tiles (%.0fx%.0f). Maximum allowed is %d.\n" +
-                                    "This usually indicates incorrect pixel size settings.\n" +
-                                    "Annotation size: %.0fx%.0f pixels, Frame size: %.0fx%.0f pixels",
-                            ann.getName(), totalTiles, tilesX, tilesY, MAX_TILES_PER_ANNOTATION,
-                            annWidth, annHeight, frameWidth, frameHeight));
+                            "Annotation '%s' would require %.0f tiles (%.0fx%.0f). Maximum allowed is %d.\n"
+                                    + "This usually indicates incorrect pixel size settings.\n"
+                                    + "Annotation size: %.0fx%.0f pixels, Frame size: %.0fx%.0f pixels",
+                            ann.getName(),
+                            totalTiles,
+                            tilesX,
+                            tilesY,
+                            MAX_TILES_PER_ANNOTATION,
+                            annWidth,
+                            annHeight,
+                            frameWidth,
+                            frameHeight));
                 }
 
-                logger.debug("Annotation '{}' will create {} tiles ({}x{})",
-                        ann.getName(), totalTiles, tilesX, tilesY);
+                logger.debug("Annotation '{}' will create {} tiles ({}x{})", ann.getName(), totalTiles, tilesX, tilesY);
             }
         }
     }

@@ -1,5 +1,9 @@
 package qupath.ext.qpsc.utilities;
 
+import java.awt.geom.AffineTransform;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
@@ -7,12 +11,6 @@ import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.PathObjectTools;
 import qupath.lib.objects.hierarchy.PathObjectHierarchy;
-
-import java.awt.geom.AffineTransform;
-import java.awt.image.BufferedImage;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
 
 /**
  * Service for preserving annotations when transitioning from standalone images to projects.
@@ -108,18 +106,23 @@ public class AnnotationPreservationService {
                 if (copy != null) {
                     preservedAnnotations.add(copy);
                     preservedCount++;
-                    logger.debug("Preserved annotation: {} (class: {})",
+                    logger.debug(
+                            "Preserved annotation: {} (class: {})",
                             annotation.getDisplayedName(),
-                            annotation.getPathClass() != null ? annotation.getPathClass().getName() : "unclassified");
+                            annotation.getPathClass() != null
+                                    ? annotation.getPathClass().getName()
+                                    : "unclassified");
                 }
             } catch (Exception e) {
-                logger.warn("Failed to preserve annotation {}: {}",
-                        annotation.getDisplayedName(), e.getMessage());
+                logger.warn("Failed to preserve annotation {}: {}", annotation.getDisplayedName(), e.getMessage());
             }
         }
 
-        logger.info("Captured {} annotations from standalone image ({}x{} pixels)",
-                preservedCount, sourceImageWidth, sourceImageHeight);
+        logger.info(
+                "Captured {} annotations from standalone image ({}x{} pixels)",
+                preservedCount,
+                sourceImageWidth,
+                sourceImageHeight);
 
         return preservedCount > 0;
     }
@@ -162,8 +165,13 @@ public class AnnotationPreservationService {
         int targetWidth = imageData.getServer().getWidth();
         int targetHeight = imageData.getServer().getHeight();
 
-        logger.info("Restoring {} annotations to image ({}x{} pixels, flipX={}, flipY={})",
-                preservedAnnotations.size(), targetWidth, targetHeight, flipX, flipY);
+        logger.info(
+                "Restoring {} annotations to image ({}x{} pixels, flipX={}, flipY={})",
+                preservedAnnotations.size(),
+                targetWidth,
+                targetHeight,
+                flipX,
+                flipY);
 
         // Create flip transform if needed
         AffineTransform flipTransform = null;
@@ -190,14 +198,14 @@ public class AnnotationPreservationService {
                 if (restored != null) {
                     restoredAnnotations.add(restored);
                     restoredCount++;
-                    logger.debug("Restored annotation: {} at ({}, {})",
+                    logger.debug(
+                            "Restored annotation: {} at ({}, {})",
                             restored.getDisplayedName(),
                             restored.getROI() != null ? restored.getROI().getCentroidX() : "N/A",
                             restored.getROI() != null ? restored.getROI().getCentroidY() : "N/A");
                 }
             } catch (Exception e) {
-                logger.warn("Failed to restore annotation {}: {}",
-                        preserved.getDisplayedName(), e.getMessage());
+                logger.warn("Failed to restore annotation {}: {}", preserved.getDisplayedName(), e.getMessage());
             }
         }
 
@@ -281,8 +289,8 @@ public class AnnotationPreservationService {
      * @param imageHeight Image height in pixels
      * @return AffineTransform for the specified flip operation
      */
-    private static AffineTransform createFlipTransform(boolean flipX, boolean flipY,
-                                                        double imageWidth, double imageHeight) {
+    private static AffineTransform createFlipTransform(
+            boolean flipX, boolean flipY, double imageWidth, double imageHeight) {
         AffineTransform transform = new AffineTransform();
 
         if (flipX && flipY) {

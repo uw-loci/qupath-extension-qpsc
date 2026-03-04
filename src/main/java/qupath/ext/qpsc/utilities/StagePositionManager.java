@@ -1,15 +1,14 @@
 package qupath.ext.qpsc.utilities;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.controller.MicroscopeController;
-
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.MicroscopeController;
 
 /**
  * Centralized manager for stage position polling and event notification.
@@ -174,12 +173,7 @@ public class StagePositionManager {
             return t;
         });
 
-        poller.scheduleWithFixedDelay(
-                this::pollPositions,
-                0,
-                POLL_INTERVAL_MS,
-                TimeUnit.MILLISECONDS
-        );
+        poller.scheduleWithFixedDelay(this::pollPositions, 0, POLL_INTERVAL_MS, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -259,8 +253,8 @@ public class StagePositionManager {
      * @param newValue The new value from the hardware
      * @param setter A function to update the cached value
      */
-    private void updatePosition(String propertyName, double oldValue, double newValue,
-                                 java.util.function.DoubleConsumer setter) {
+    private void updatePosition(
+            String propertyName, double oldValue, double newValue, java.util.function.DoubleConsumer setter) {
         // Check if value changed beyond tolerance
         boolean isInitialValue = Double.isNaN(oldValue);
         boolean hasChanged = isInitialValue || Math.abs(newValue - oldValue) > POSITION_TOLERANCE;

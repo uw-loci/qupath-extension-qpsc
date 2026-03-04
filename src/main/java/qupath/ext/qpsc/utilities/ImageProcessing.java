@@ -1,16 +1,14 @@
 package qupath.ext.qpsc.utilities;
 
+import java.awt.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.roi.interfaces.ROI;
 import qupath.lib.scripting.QP;
-
-import java.awt.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
 
 public class ImageProcessing {
     private static final Logger logger = LoggerFactory.getLogger(ImageProcessing.class);
@@ -49,20 +47,17 @@ public class ImageProcessing {
 
             // Build the detection script
             String script = String.format(
-                    "resetSelection()\n" +
-                            "createAnnotationsFromPixelClassifier(\"%s\", 1000000.0, 0, \"SELECT_NEW\")\n" +
-                            "whitespace = getAnnotationObjects().findAll{it.getPathClass().toString().contains(\"Other\")}\n" +
-                            "makeInverseAnnotation()\n" +
-                            "removeObjects(whitespace, true)\n" +
-                            "getSelectedObjects().each{it.setPathClass(getPathClass(\"Bounds\"))}\n",
-                    classifierPath.toString().replace("\\", "\\\\")
-            );
+                    "resetSelection()\n"
+                            + "createAnnotationsFromPixelClassifier(\"%s\", 1000000.0, 0, \"SELECT_NEW\")\n"
+                            + "whitespace = getAnnotationObjects().findAll{it.getPathClass().toString().contains(\"Other\")}\n"
+                            + "makeInverseAnnotation()\n"
+                            + "removeObjects(whitespace, true)\n"
+                            + "getSelectedObjects().each{it.setPathClass(getPathClass(\"Bounds\"))}\n",
+                    classifierPath.toString().replace("\\", "\\\\"));
 
             logger.debug("Running white background detection script");
 
-            // Store current annotations to restore later if needed
             var hierarchy = gui.getViewer().getHierarchy();
-            var existingAnnotations = new ArrayList<>(hierarchy.getAnnotationObjects());
 
             // Run the script
             gui.runScript(null, script);
@@ -73,8 +68,8 @@ public class ImageProcessing {
 
             // Find the Bounds annotation
             var boundsAnnotation = hierarchy.getAnnotationObjects().stream()
-                    .filter(ann -> ann.getPathClass() != null &&
-                            "Bounds".equals(ann.getPathClass().getName()))
+                    .filter(ann -> ann.getPathClass() != null
+                            && "Bounds".equals(ann.getPathClass().getName()))
                     .findFirst()
                     .orElse(null);
 
@@ -93,13 +88,18 @@ public class ImageProcessing {
                         (int) boundsROI.getBoundsX(),
                         (int) boundsROI.getBoundsY(),
                         (int) boundsROI.getBoundsWidth(),
-                        (int) boundsROI.getBoundsHeight()
-                );
+                        (int) boundsROI.getBoundsHeight());
 
-                logger.info("Detected data bounds: x={}, y={}, width={}, height={}",
-                        dataBounds.x, dataBounds.y, dataBounds.width, dataBounds.height);
-                logger.info("Centroid in QuPath pixels of data bounds X {} Y {}",
-                        boundsROI.getCentroidX(), boundsROI.getCentroidY());
+                logger.info(
+                        "Detected data bounds: x={}, y={}, width={}, height={}",
+                        dataBounds.x,
+                        dataBounds.y,
+                        dataBounds.width,
+                        dataBounds.height);
+                logger.info(
+                        "Centroid in QuPath pixels of data bounds X {} Y {}",
+                        boundsROI.getCentroidX(),
+                        boundsROI.getCentroidY());
 
                 // Calculate padding amounts for logging
                 int leftPadding = dataBounds.x;
@@ -107,8 +107,12 @@ public class ImageProcessing {
                 int rightPadding = imageWidth - (dataBounds.x + dataBounds.width);
                 int bottomPadding = imageHeight - (dataBounds.y + dataBounds.height);
 
-                logger.info("Detected padding - Left: {}, Top: {}, Right: {}, Bottom: {}",
-                        leftPadding, topPadding, rightPadding, bottomPadding);
+                logger.info(
+                        "Detected padding - Left: {}, Top: {}, Right: {}, Bottom: {}",
+                        leftPadding,
+                        topPadding,
+                        rightPadding,
+                        bottomPadding);
 
                 // Remove the Bounds annotation to clean up
                 hierarchy.removeObject(boundsAnnotation, true);

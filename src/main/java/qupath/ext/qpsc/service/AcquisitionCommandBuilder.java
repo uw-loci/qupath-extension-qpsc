@@ -1,12 +1,11 @@
 package qupath.ext.qpsc.service;
 
+import java.util.*;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.utilities.ObjectiveUtils;
-
-import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Centralized builder for acquisition commands for socket-based communication.
@@ -40,7 +39,7 @@ public class AcquisitionCommandBuilder {
     // White balance parameters
     private boolean whiteBalanceEnabled = true;
     private boolean perAngleWhiteBalance = false;
-    private String wbMode = null;  // "camera_awb", "simple", "per_angle", "off"
+    private String wbMode = null; // "camera_awb", "simple", "per_angle", "off"
 
     // Autofocus parameters
     private Integer autofocusNTiles;
@@ -114,11 +113,11 @@ public class AcquisitionCommandBuilder {
 
     /**
      * Sets the angle-exposure pairs for multi-angle acquisition sequences.
-     * 
+     *
      * <p>This method configures the rotation angles and their associated decimal exposure times
      * for modalities that require multiple acquisitions at different polarizer or rotation positions.
      * The angles and exposures are formatted into separate comma-separated lists in the socket message.</p>
-     * 
+     *
      * @param angleExposures list of angle-exposure pairs with decimal precision exposure times
      * @return this builder instance for method chaining
      * @see AngleExposure
@@ -151,7 +150,8 @@ public class AcquisitionCommandBuilder {
      * @param folder Path to background images folder
      * @param disabledAngles List of angles where background correction should be disabled
      */
-    public AcquisitionCommandBuilder backgroundCorrection(boolean enabled, String method, String folder, List<Double> disabledAngles) {
+    public AcquisitionCommandBuilder backgroundCorrection(
+            boolean enabled, String method, String folder, List<Double> disabledAngles) {
         this.backgroundCorrectionEnabled = enabled;
         this.backgroundCorrectionMethod = method;
         this.backgroundCorrectionFolder = folder;
@@ -278,7 +278,7 @@ public class AcquisitionCommandBuilder {
      * Gets the enhanced scan type that includes magnification from the objective.
      * If no objective is set, magnification cannot be extracted, or scan type is already enhanced,
      * returns the original scanType.
-     * 
+     *
      * @return Enhanced scan type with magnification (e.g., "ppm_20x_1")
      */
     public String getEnhancedScanType() {
@@ -286,13 +286,13 @@ public class AcquisitionCommandBuilder {
             logger.debug("No objective set, using original scan type: {}", scanType);
             return scanType;
         }
-        
+
         // Check if scan type is already enhanced (contains magnification pattern like "10x", "20x")
         if (scanType != null && scanType.matches(".*\\d+x.*")) {
             logger.debug("Scan type already enhanced, using as-is: {}", scanType);
             return scanType;
         }
-        
+
         return ObjectiveUtils.createEnhancedFolderName(scanType, objective);
     }
 
@@ -329,16 +329,14 @@ public class AcquisitionCommandBuilder {
                 "--projects", projectsFolder,
                 "--sample", sampleLabel,
                 "--scan-type", enhancedScanType,
-                "--region", regionName
-        ));
+                "--region", regionName));
 
         // Add hardware parameters (should be before optional params)
         if (objective != null && detector != null && pixelSize != null) {
             args.addAll(Arrays.asList(
                     "--objective", objective,
                     "--detector", detector,
-                    "--pixel-size", String.valueOf(pixelSize)
-            ));
+                    "--pixel-size", String.valueOf(pixelSize)));
         }
 
         // Add angle/exposure parameters
@@ -392,14 +390,12 @@ public class AcquisitionCommandBuilder {
             args.addAll(Arrays.asList(
                     "--af-tiles", String.valueOf(autofocusNTiles),
                     "--af-steps", String.valueOf(autofocusNSteps),
-                    "--af-range", String.valueOf(autofocusSearchRange)
-            ));
+                    "--af-range", String.valueOf(autofocusSearchRange)));
         }
 
         // Add processing pipeline
         if (!processingSteps.isEmpty()) {
-            String pipelineStr = processingSteps.stream()
-                    .collect(Collectors.joining(",", "(", ")"));
+            String pipelineStr = processingSteps.stream().collect(Collectors.joining(",", "(", ")"));
             args.addAll(Arrays.asList("--processing", pipelineStr));
         }
 
@@ -452,5 +448,4 @@ public class AcquisitionCommandBuilder {
         logger.info("Built socket message: {}", message);
         return message;
     }
-
 }

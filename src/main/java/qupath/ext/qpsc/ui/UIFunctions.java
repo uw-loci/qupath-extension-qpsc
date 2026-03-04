@@ -1,49 +1,37 @@
 package qupath.ext.qpsc.ui;
 
-import javafx.animation.KeyFrame;
-import javafx.animation.PauseTransition;
-import javafx.animation.Timeline;
-import javafx.application.Platform;
-
-import javafx.geometry.Pos;
-import javafx.scene.Node;
-import javafx.scene.Scene;
-import javafx.scene.control.*;
-import javafx.scene.control.Button;
-import javafx.scene.control.Dialog;
-import javafx.scene.control.Label;
-import javafx.scene.control.TextField;
-import javafx.scene.layout.GridPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.VBox;
-import javafx.stage.DirectoryChooser;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
-
-import javafx.util.Duration;
-import javafx.scene.paint.Color;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import qupath.lib.gui.QuPathGUI;
-import qupath.lib.gui.viewer.tools.PathTools;
-import qupath.lib.objects.PathObject;
-import qupath.lib.scripting.QP;
-
-import javafx.geometry.Insets;
-
 import java.awt.Toolkit;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import javafx.animation.KeyFrame;
+import javafx.animation.PauseTransition;
+import javafx.animation.Timeline;
+import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
-
-import java.util.concurrent.atomic.AtomicBoolean;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
+import javafx.util.Duration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.lib.gui.QuPathGUI;
+import qupath.lib.gui.viewer.tools.PathTools;
+import qupath.lib.objects.PathObject;
+import qupath.lib.scripting.QP;
 
 /**
  * UIFunctions
@@ -53,12 +41,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *   - Error and warning pop-ups.
  *   - Stage alignment GUIs (tile selection, confirmation dialogs).
  */
-
 public class UIFunctions {
     private static final Logger logger = LoggerFactory.getLogger(UIFunctions.class);
     private static Stage progressBarStage;
-
-
 
     public static class ProgressHandle {
         private final Stage stage;
@@ -110,10 +95,7 @@ public class UIFunctions {
      * @return a ProgressHandle you can .close() when you're done, and set cancel callback on
      */
     public static ProgressHandle showProgressBarAsync(
-            AtomicInteger progressCounter,
-            int totalFiles,
-            int timeoutMs,
-            boolean showCancelButton) {
+            AtomicInteger progressCounter, int totalFiles, int timeoutMs, boolean showCancelButton) {
 
         final ProgressHandle[] handleHolder = new ProgressHandle[1];
 
@@ -122,7 +104,7 @@ public class UIFunctions {
             Stage stage = new Stage();
             ProgressBar progressBar = new ProgressBar(0);
             progressBar.setPrefWidth(300);
-            Label timeLabel = new Label("Estimating time…");
+            Label timeLabel = new Label("Estimating time...");
             Label progressLabel = new Label("Tiles acquired: 0 of " + totalFiles);
             Label statusLabel = new Label("Acquisition in progress...");
 
@@ -161,8 +143,10 @@ public class UIFunctions {
                 if (evt.getSource() instanceof Timeline) {
                     Timeline tl = (Timeline) evt.getSource();
                     if (tl.getCycleCount() % 10 == 0) {
-                        logger.debug("Progress bar reading counter (id: {}): value = {}",
-                                System.identityHashCode(progressCounter), current);
+                        logger.debug(
+                                "Progress bar reading counter (id: {}): value = {}",
+                                System.identityHashCode(progressCounter),
+                                current);
                     }
                 }
 
@@ -242,8 +226,11 @@ public class UIFunctions {
                     stalled = timeSinceProgress > timeoutMs;
 
                     if (stalled) {
-                        logger.warn("Progress stalled: no new files for {} ms (current: {}, total: {})",
-                                timeSinceProgress, current, totalFiles);
+                        logger.warn(
+                                "Progress stalled: no new files for {} ms (current: {}, total: {})",
+                                timeSinceProgress,
+                                current,
+                                totalFiles);
                         statusLabel.setText("Timeout - acquisition may have stalled");
                         statusLabel.setTextFill(Color.RED);
                     }
@@ -251,8 +238,12 @@ public class UIFunctions {
 
                 // Close only when complete or truly stalled
                 if (complete || stalled) {
-                    logger.info("Progress bar closing - complete: {}, stalled: {}, files: {}/{}",
-                            complete, stalled, current, totalFiles);
+                    logger.info(
+                            "Progress bar closing - complete: {}, stalled: {}, files: {}/{}",
+                            complete,
+                            stalled,
+                            current,
+                            totalFiles);
                     timeline.stop();
 
                     // Show final status for a moment before closing
@@ -290,17 +281,15 @@ public class UIFunctions {
         while (handleHolder[0] == null) {
             try {
                 Thread.sleep(10);
-            } catch (InterruptedException ignored) {}
+            } catch (InterruptedException ignored) {
+            }
         }
 
         logger.info("Progress bar initialized for {} files with {} ms timeout", totalFiles, timeoutMs);
         return handleHolder[0];
     }
 
-    public static ProgressHandle showProgressBarAsync(
-            AtomicInteger progressCounter,
-            int totalFiles,
-            int timeoutMs) {
+    public static ProgressHandle showProgressBarAsync(AtomicInteger progressCounter, int totalFiles, int timeoutMs) {
         return showProgressBarAsync(progressCounter, totalFiles, timeoutMs, false);
     }
     /**
@@ -320,7 +309,8 @@ public class UIFunctions {
             alert.getDialogPane().setPrefWidth(600);
 
             // Force content text to wrap
-            javafx.scene.control.Label contentLabel = (javafx.scene.control.Label) alert.getDialogPane().lookup(".content");
+            javafx.scene.control.Label contentLabel =
+                    (javafx.scene.control.Label) alert.getDialogPane().lookup(".content");
             if (contentLabel != null) {
                 contentLabel.setWrapText(true);
                 contentLabel.setMaxWidth(550);
@@ -333,8 +323,7 @@ public class UIFunctions {
     /**
      * Prompts the user to validate annotated regions; calls back with true/false.
      */
-    public static void checkValidAnnotationsGUI(List<String> validNames,
-                                                Consumer<Boolean> callback) {
+    public static void checkValidAnnotationsGUI(List<String> validNames, Consumer<Boolean> callback) {
         Platform.runLater(() -> {
             Stage stage = new Stage();
             stage.initModality(Modality.NONE);
@@ -346,21 +335,31 @@ public class UIFunctions {
             Button yes = new Button("Collect regions");
             Button no = new Button("Do not collect ANY regions");
 
-            yes.setOnAction(e -> { stage.close(); callback.accept(true); });
-            no.setOnAction(e -> { stage.close(); callback.accept(false); });
+            yes.setOnAction(e -> {
+                stage.close();
+                callback.accept(true);
+            });
+            no.setOnAction(e -> {
+                stage.close();
+                callback.accept(false);
+            });
 
             ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
-            exec.scheduleAtFixedRate(() -> {
-                Platform.runLater(() -> {
-                    int count = (int) QP.getAnnotationObjects().stream()
-                            .filter(o -> o.getPathClass() != null)  // Add null check
-                            .filter(o -> validNames.contains(o.getClassification()))
-                            .count();
-                    info.setText("Total Annotation count in image: " + count +
-                            "\nADD, MODIFY or DELETE annotations to select regions to be scanned.");
-                    yes.setText("Collect " + count + " regions");
-                });
-            }, 0, 500, TimeUnit.MILLISECONDS);
+            exec.scheduleAtFixedRate(
+                    () -> {
+                        Platform.runLater(() -> {
+                            int count = (int) QP.getAnnotationObjects().stream()
+                                    .filter(o -> o.getPathClass() != null) // Add null check
+                                    .filter(o -> validNames.contains(o.getClassification()))
+                                    .count();
+                            info.setText("Total Annotation count in image: " + count
+                                    + "\nADD, MODIFY or DELETE annotations to select regions to be scanned.");
+                            yes.setText("Collect " + count + " regions");
+                        });
+                    },
+                    0,
+                    500,
+                    TimeUnit.MILLISECONDS);
 
             layout.getChildren().addAll(info, yes, no);
             stage.setScene(new Scene(layout, 400, 200));
@@ -368,23 +367,22 @@ public class UIFunctions {
         });
     }
 
-
-//    /**
-//     * Confirmation dialog for current stage position accuracy.
-//     */
-//    public static boolean stageToQuPathAlignmentGUI2() {
-//        Dialog<Boolean> dlg = new Dialog<>();
-//        dlg.initModality(Modality.NONE);
-//        dlg.setTitle("Position Confirmation");
-//        dlg.setHeaderText(
-//                "Is the current position accurate?\nCompare with the uManager live view.");
-//        ButtonType ok = new ButtonType("Current Position is Accurate", ButtonBar.ButtonData.OK_DONE);
-//        ButtonType cancel = new ButtonType("Cancel acquisition", ButtonBar.ButtonData.CANCEL_CLOSE);
-//        dlg.getDialogPane().getButtonTypes().addAll(ok, cancel);
-//
-//        dlg.setResultConverter(btn -> btn == ok);
-//        return dlg.showAndWait().orElse(false);
-//    }
+    //    /**
+    //     * Confirmation dialog for current stage position accuracy.
+    //     */
+    //    public static boolean stageToQuPathAlignmentGUI2() {
+    //        Dialog<Boolean> dlg = new Dialog<>();
+    //        dlg.initModality(Modality.NONE);
+    //        dlg.setTitle("Position Confirmation");
+    //        dlg.setHeaderText(
+    //                "Is the current position accurate?\nCompare with the uManager live view.");
+    //        ButtonType ok = new ButtonType("Current Position is Accurate", ButtonBar.ButtonData.OK_DONE);
+    //        ButtonType cancel = new ButtonType("Cancel acquisition", ButtonBar.ButtonData.CANCEL_CLOSE);
+    //        dlg.getDialogPane().getButtonTypes().addAll(ok, cancel);
+    //
+    //        dlg.setResultConverter(btn -> btn == ok);
+    //        return dlg.showAndWait().orElse(false);
+    //    }
     /**
      * Confirmation dialog for current stage position accuracy.
      * Uses a custom Stage with alwaysOnTop to ensure visibility while remaining non-modal.
@@ -461,7 +459,6 @@ public class UIFunctions {
         return result.get();
     }
 
-
     /** Pops up a modal warning dialog. */
     public static void showAlertDialog(String message) {
         Alert alert = new Alert(Alert.AlertType.WARNING);
@@ -476,9 +473,9 @@ public class UIFunctions {
      * Result of manual focus dialog indicating user's choice.
      */
     public enum ManualFocusResult {
-        RETRY_AUTOFOCUS,    // Run autofocus again after manual adjustment
-        USE_CURRENT_FOCUS,  // Accept current focus and continue
-        CANCEL_ACQUISITION  // Cancel the entire acquisition
+        RETRY_AUTOFOCUS, // Run autofocus again after manual adjustment
+        USE_CURRENT_FOCUS, // Accept current focus and continue
+        CANCEL_ACQUISITION // Cancel the entire acquisition
     }
 
     /**
@@ -504,16 +501,17 @@ public class UIFunctions {
         // Update message based on retries remaining
         String message;
         if (retriesRemaining > 0) {
-            message = "Autofocus was unable to find a reliable focus position.\n\n" +
-                    "Please manually focus the microscope on the tissue, then choose:\n\n" +
-                    "• Retry Autofocus - Run autofocus again after manual adjustment (" + retriesRemaining + " retries left)\n" +
-                    "• Use Current Focus - Accept current focus and continue\n" +
-                    "• Cancel - Stop the acquisition";
+            message = "Autofocus was unable to find a reliable focus position.\n\n"
+                    + "Please manually focus the microscope on the tissue, then choose:\n\n"
+                    + "- Retry Autofocus - Run autofocus again after manual adjustment ("
+                    + retriesRemaining + " retries left)\n"
+                    + "- Use Current Focus - Accept current focus and continue\n"
+                    + "- Cancel - Stop the acquisition";
         } else {
-            message = "Autofocus was unable to find a reliable focus position after all retry attempts.\n\n" +
-                    "Please manually focus the microscope on the tissue, then choose:\n\n" +
-                    "• Use Current Focus - Accept current focus and continue\n" +
-                    "• Cancel - Stop the acquisition";
+            message = "Autofocus was unable to find a reliable focus position after all retry attempts.\n\n"
+                    + "Please manually focus the microscope on the tissue, then choose:\n\n"
+                    + "- Use Current Focus - Accept current focus and continue\n"
+                    + "- Cancel - Stop the acquisition";
         }
         alert.setContentText(message);
         alert.initModality(Modality.APPLICATION_MODAL);
@@ -575,7 +573,6 @@ public class UIFunctions {
         }
     }
 
-
     /**
      * Prompts the user to select exactly one tile (detection object) in QuPath.
      * Shows a non-modal dialog that allows the user to interact with QuPath while open.
@@ -614,36 +611,37 @@ public class UIFunctions {
             layout.getChildren().addAll(instructionLabel, statusLabel, buttonBox);
 
             // Check selection periodically
-            Timeline selectionChecker = new Timeline(new KeyFrame(
-                    Duration.millis(500),
-                    e -> {
-                        Collection<PathObject> selected = QP.getSelectedObjects();
+            Timeline selectionChecker = new Timeline(new KeyFrame(Duration.millis(500), e -> {
+                Collection<PathObject> selected = QP.getSelectedObjects();
 
-                        // Filter for detection objects that have a "TileNumber" measurement
-                        // This identifies objects created by our tiling system
-                        List<PathObject> tiles = selected.stream()
-                                .filter(PathObject::isDetection)
-                                .filter(obj -> obj.getMeasurements().containsKey("TileNumber"))
-                                .collect(Collectors.toList());
+                // Filter for detection objects that have a "TileNumber" measurement
+                // This identifies objects created by our tiling system
+                List<PathObject> tiles = selected.stream()
+                        .filter(PathObject::isDetection)
+                        .filter(obj -> obj.getMeasurements().containsKey("TileNumber"))
+                        .collect(Collectors.toList());
 
-                        if (tiles.size() == 1) {
-                            PathObject tile = tiles.get(0);
-                            String tileName = tile.getName() != null ? tile.getName() :
-                                    "Tile " + (int)tile.getMeasurements().get("TileNumber").doubleValue();
-                            statusLabel.setText("Selected Tile Name: " + tileName);
-                            statusLabel.setTextFill(javafx.scene.paint.Color.GREEN);
-                            confirmButton.setDisable(false);
-                        } else if (tiles.isEmpty()) {
-                            statusLabel.setText("No tile selected");
-                            statusLabel.setTextFill(javafx.scene.paint.Color.BLACK);
-                            confirmButton.setDisable(true);
-                        } else {
-                            statusLabel.setText("Multiple tiles selected - please select only one");
-                            statusLabel.setTextFill(javafx.scene.paint.Color.RED);
-                            confirmButton.setDisable(true);
-                        }
-                    }
-            ));
+                if (tiles.size() == 1) {
+                    PathObject tile = tiles.get(0);
+                    String tileName = tile.getName() != null
+                            ? tile.getName()
+                            : "Tile "
+                                    + (int) tile.getMeasurements()
+                                            .get("TileNumber")
+                                            .doubleValue();
+                    statusLabel.setText("Selected Tile Name: " + tileName);
+                    statusLabel.setTextFill(javafx.scene.paint.Color.GREEN);
+                    confirmButton.setDisable(false);
+                } else if (tiles.isEmpty()) {
+                    statusLabel.setText("No tile selected");
+                    statusLabel.setTextFill(javafx.scene.paint.Color.BLACK);
+                    confirmButton.setDisable(true);
+                } else {
+                    statusLabel.setText("Multiple tiles selected - please select only one");
+                    statusLabel.setTextFill(javafx.scene.paint.Color.RED);
+                    confirmButton.setDisable(true);
+                }
+            }));
             selectionChecker.setCycleCount(Timeline.INDEFINITE);
             selectionChecker.play();
 
@@ -698,10 +696,8 @@ public class UIFunctions {
         Alert dialog = new Alert(Alert.AlertType.CONFIRMATION);
         dialog.setTitle(title);
         dialog.setHeaderText(message);
-        dialog.getButtonTypes().setAll(
-                new ButtonType("Yes", ButtonBar.ButtonData.YES),
-                new ButtonType("No", ButtonBar.ButtonData.NO)
-        );
+        dialog.getButtonTypes()
+                .setAll(new ButtonType("Yes", ButtonBar.ButtonData.YES), new ButtonType("No", ButtonBar.ButtonData.NO));
         var result = dialog.showAndWait();
         return result.isPresent() && result.get().getButtonData() == ButtonBar.ButtonData.YES;
     }
@@ -874,17 +870,20 @@ public class UIFunctions {
 
             // Add timeout to prevent infinite waiting
             ScheduledExecutorService timeoutExecutor = Executors.newSingleThreadScheduledExecutor();
-            timeoutExecutor.schedule(() -> {
-                if (!future.isDone()) {
-                    logger.warn("Task timed out after 5 minutes");
-                    Platform.runLater(() -> {
-                        if (stageHolder[0] != null) {
-                            stageHolder[0].close();
+            timeoutExecutor.schedule(
+                    () -> {
+                        if (!future.isDone()) {
+                            logger.warn("Task timed out after 5 minutes");
+                            Platform.runLater(() -> {
+                                if (stageHolder[0] != null) {
+                                    stageHolder[0].close();
+                                }
+                            });
+                            future.completeExceptionally(new TimeoutException("Task timed out after 5 minutes"));
                         }
-                    });
-                    future.completeExceptionally(new TimeoutException("Task timed out after 5 minutes"));
-                }
-            }, 5, TimeUnit.MINUTES);
+                    },
+                    5,
+                    TimeUnit.MINUTES);
 
             try {
                 T result = future.get();
@@ -953,8 +952,10 @@ public class UIFunctions {
             notificationStage.setScene(scene);
 
             // Position in corner
-            notificationStage.setX(javafx.stage.Screen.getPrimary().getVisualBounds().getMaxX() - 320);
-            notificationStage.setY(javafx.stage.Screen.getPrimary().getVisualBounds().getMaxY() - 120);
+            notificationStage.setX(
+                    javafx.stage.Screen.getPrimary().getVisualBounds().getMaxX() - 320);
+            notificationStage.setY(
+                    javafx.stage.Screen.getPrimary().getVisualBounds().getMaxY() - 120);
 
             notificationStage.show();
 
@@ -1016,9 +1017,7 @@ public class UIFunctions {
             Label warningLabel = new Label("No annotations detected");
             warningLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
 
-            Label infoLabel = new Label(
-                "Annotations are needed for subsequent steps.\nPlease choose an option below:"
-            );
+            Label infoLabel = new Label("Annotations are needed for subsequent steps.\nPlease choose an option below:");
             infoLabel.setWrapText(true);
 
             Separator separator = new Separator();
@@ -1057,14 +1056,14 @@ public class UIFunctions {
                 }
             });
 
-            layout.getChildren().addAll(
-                warningLabel,
-                infoLabel,
-                separator,
-                tissueDetectionButton,
-                manualAnnotationsButton,
-                cancelButton
-            );
+            layout.getChildren()
+                    .addAll(
+                            warningLabel,
+                            infoLabel,
+                            separator,
+                            tissueDetectionButton,
+                            manualAnnotationsButton,
+                            cancelButton);
 
             Scene scene = new Scene(layout);
             stage.setScene(scene);
@@ -1073,5 +1072,4 @@ public class UIFunctions {
 
         return future;
     }
-
 }

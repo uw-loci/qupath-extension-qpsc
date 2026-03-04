@@ -1,13 +1,12 @@
 package qupath.ext.qpsc;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * Test class to verify configuration accessor methods work correctly.
@@ -95,15 +94,20 @@ public class ConfigurationAccessorTest {
             // Test bounds checking
             double[] testPoints = {0, 0, 0};
             boolean inBounds = mgr.isWithinStageBounds(testPoints[0], testPoints[1], testPoints[2]);
-            logger.info("Position ({}, {}, {}) is {} bounds",
-                    testPoints[0], testPoints[1], testPoints[2],
+            logger.info(
+                    "Position ({}, {}, {}) is {} bounds",
+                    testPoints[0],
+                    testPoints[1],
+                    testPoints[2],
                     inBounds ? "within" : "outside");
 
             // Test extreme position
             double xMax = mgr.getStageLimit("x", "high");
             boolean outOfBounds = mgr.isWithinStageBounds(xMax + 1000, 0, 0);
-            logger.info("Position ({}, 0, 0) is {} bounds (should be outside)",
-                    xMax + 1000, outOfBounds ? "within" : "outside");
+            logger.info(
+                    "Position ({}, 0, 0) is {} bounds (should be outside)",
+                    xMax + 1000,
+                    outOfBounds ? "within" : "outside");
         } else {
             logger.error("Could not retrieve stage limits");
         }
@@ -117,8 +121,11 @@ public class ConfigurationAccessorTest {
         Set<String> detectors = mgr.getHardwareDetectors();
         Set<String> modalities = mgr.getAvailableModalities();
 
-        logger.info("Found {} objectives, {} detectors, {} modalities",
-                objectives.size(), detectors.size(), modalities.size());
+        logger.info(
+                "Found {} objectives, {} detectors, {} modalities",
+                objectives.size(),
+                detectors.size(),
+                modalities.size());
 
         if (!objectives.isEmpty() && !detectors.isEmpty() && !modalities.isEmpty()) {
             // Test a sample combination
@@ -158,8 +165,7 @@ public class ConfigurationAccessorTest {
         logger.info("\n--- Testing Detector and FOV ---");
 
         String defaultDetector = mgr.getDefaultDetector();
-        logger.info("Default detector: {}",
-                defaultDetector.isEmpty() ? "Not configured" : defaultDetector);
+        logger.info("Default detector: {}", defaultDetector.isEmpty() ? "Not configured" : defaultDetector);
 
         // Test with hardware detectors and objectives
         Set<String> detectors = mgr.getHardwareDetectors();
@@ -179,8 +185,7 @@ public class ConfigurationAccessorTest {
 
                 double[] fov = mgr.getModalityFOV(modality, objectiveId, detectorId);
                 if (fov != null) {
-                    logger.info("  FOV for {}/{}: {} x {} um",
-                            modality, objectiveId, fov[0], fov[1]);
+                    logger.info("  FOV for {}/{}: {} x {} um", modality, objectiveId, fov[0], fov[1]);
                 }
             } else {
                 logger.warn("  Detector dimensions not found");
@@ -201,9 +206,7 @@ public class ConfigurationAccessorTest {
                 logger.info("  Found {} rotation angles:", angles.size());
 
                 for (Map<String, Object> angle : angles) {
-                    logger.info("    {} - Tick: {} (1 tick = 2 degrees)",
-                            angle.get("name"),
-                            angle.get("tick"));
+                    logger.info("    {} - Tick: {} (1 tick = 2 degrees)", angle.get("name"), angle.get("tick"));
                 }
 
                 // Test rotation stage
@@ -231,8 +234,7 @@ public class ConfigurationAccessorTest {
                 Integer searchRange = mgr.getAutofocusIntParam(objectiveId, "search_range_um");
                 Integer nTiles = mgr.getAutofocusIntParam(objectiveId, "n_tiles");
 
-                logger.info("  n_steps: {}, search_range_um: {}, n_tiles: {}",
-                        nSteps, searchRange, nTiles);
+                logger.info("  n_steps: {}, search_range_um: {}, n_tiles: {}", nSteps, searchRange, nTiles);
             } else {
                 logger.warn("  No autofocus parameters found (may be in external autofocus file)");
             }
@@ -250,8 +252,7 @@ public class ConfigurationAccessorTest {
             String method = mgr.getBackgroundCorrectionMethod(modality);
             String folder = mgr.getBackgroundCorrectionFolder(modality);
 
-            logger.info("  {} - Enabled: {}, Method: {}, Folder: {}",
-                    modality, enabled, method, folder);
+            logger.info("  {} - Enabled: {}, Method: {}, Folder: {}", modality, enabled, method, folder);
         }
     }
 

@@ -1,5 +1,10 @@
 package qupath.ext.qpsc.controller;
 
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.stream.Collectors;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,20 +17,11 @@ import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.ExistingImageAcquis
 import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.RefinementChoice;
 import qupath.ext.qpsc.utilities.*;
 import qupath.ext.qpsc.utilities.AnnotationPreservationService;
-import qupath.lib.objects.classes.PathClass;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.Project;
-import qupath.lib.projects.ProjectImageEntry;
-
-import java.awt.geom.AffineTransform;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.stream.Collectors;
 
 /**
  * ExistingImageWorkflowV2 - Existing Image acquisition workflow.
@@ -90,12 +86,14 @@ public class ExistingImageWorkflowV2 {
             // when the new project is created.
             if (gui.getProject() == null) {
                 ImageData<?> imageData = gui.getImageData();
-                if (imageData != null && imageData.getHierarchy() != null &&
-                        !imageData.getHierarchy().getAnnotationObjects().isEmpty()) {
+                if (imageData != null
+                        && imageData.getHierarchy() != null
+                        && !imageData.getHierarchy().getAnnotationObjects().isEmpty()) {
                     logger.info("Standalone image with annotations detected - preserving for project creation");
                     boolean captured = AnnotationPreservationService.captureAnnotations(gui);
                     if (captured) {
-                        logger.info("Preserved {} annotations from standalone image",
+                        logger.info(
+                                "Preserved {} annotations from standalone image",
                                 AnnotationPreservationService.getPreservedAnnotationCount());
                     }
                 }
@@ -106,7 +104,8 @@ public class ExistingImageWorkflowV2 {
 
             if (!existingClasses.isEmpty()) {
                 // Annotations exist - show annotation selection dialog first
-                logger.info("Found {} annotation classes in image, showing selection dialog first", existingClasses.size());
+                logger.info(
+                        "Found {} annotation classes in image, showing selection dialog first", existingClasses.size());
 
                 List<String> preselected = PersistentPreferences.getSelectedAnnotationClasses();
                 String defaultSampleName = getDefaultSampleName();
@@ -121,12 +120,16 @@ public class ExistingImageWorkflowV2 {
                             // Store selected classes in state for later use
                             // Note: angle overrides will come from the combined dialog's Advanced Options
                             state.selectedAnnotationClasses = annotationResult.selectedClasses;
-                            logger.info("User selected {} classes: {}",
-                                    annotationResult.selectedClasses.size(), annotationResult.selectedClasses);
+                            logger.info(
+                                    "User selected {} classes: {}",
+                                    annotationResult.selectedClasses.size(),
+                                    annotationResult.selectedClasses);
 
                             // Get actual annotations for the selected classes
-                            List<PathObject> selectedAnnotations = getAnnotationsForClasses(annotationResult.selectedClasses);
-                            return ExistingImageAcquisitionController.showDialog(defaultSampleName, selectedAnnotations);
+                            List<PathObject> selectedAnnotations =
+                                    getAnnotationsForClasses(annotationResult.selectedClasses);
+                            return ExistingImageAcquisitionController.showDialog(
+                                    defaultSampleName, selectedAnnotations);
                         })
                         .thenCompose(this::initializeFromConfig)
                         .thenCompose(this::checkExistingSlideAlignment)
@@ -150,7 +153,7 @@ public class ExistingImageWorkflowV2 {
                         .thenCompose(this::initializeFromConfig)
                         .thenCompose(this::checkExistingSlideAlignment)
                         .thenCompose(this::routeSubWorkflow)
-                        .thenCompose(this::ensureAnnotationsExist)  // Call annotation helper if none exist
+                        .thenCompose(this::ensureAnnotationsExist) // Call annotation helper if none exist
                         .thenCompose(this::handleRefinement)
                         .thenCompose(this::performAcquisition)
                         .thenCompose(this::waitForCompletion)
@@ -194,8 +197,8 @@ public class ExistingImageWorkflowV2 {
             }
 
             return imageData.getHierarchy().getAnnotationObjects().stream()
-                    .filter(ann -> ann.getPathClass() != null &&
-                            selectedClasses.contains(ann.getPathClass().getName()))
+                    .filter(ann -> ann.getPathClass() != null
+                            && selectedClasses.contains(ann.getPathClass().getName()))
                     .collect(Collectors.toList());
         }
 
@@ -212,9 +215,10 @@ public class ExistingImageWorkflowV2 {
             }
 
             // Determine valid annotation classes
-            List<String> validClasses = state.selectedAnnotationClasses != null && !state.selectedAnnotationClasses.isEmpty()
-                    ? state.selectedAnnotationClasses
-                    : PersistentPreferences.getSelectedAnnotationClasses();
+            List<String> validClasses =
+                    state.selectedAnnotationClasses != null && !state.selectedAnnotationClasses.isEmpty()
+                            ? state.selectedAnnotationClasses
+                            : PersistentPreferences.getSelectedAnnotationClasses();
 
             // CRITICAL: If no annotation classes are configured, we MUST show the dialog
             // to let the user either run tissue detection or create annotations manually.
@@ -245,45 +249,44 @@ public class ExistingImageWorkflowV2 {
          * This method will recursively call itself if the user's choice doesn't result in annotations.
          */
         private CompletableFuture<WorkflowState> handleNoAnnotations(WorkflowState state, List<String> validClasses) {
-            return UIFunctions.showAnnotationWarningDialog()
-                    .thenCompose(action -> {
-                        switch (action) {
-                            case RUN_TISSUE_DETECTION:
-                                logger.info("User chose to run tissue detection");
-                                // Run tissue detection
-                                state.annotations = AnnotationHelper.runTissueDetection(gui, validClasses);
+            return UIFunctions.showAnnotationWarningDialog().thenCompose(action -> {
+                switch (action) {
+                    case RUN_TISSUE_DETECTION:
+                        logger.info("User chose to run tissue detection");
+                        // Run tissue detection
+                        state.annotations = AnnotationHelper.runTissueDetection(gui, validClasses);
 
-                                if (state.annotations.isEmpty()) {
-                                    logger.warn("Tissue detection did not create any annotations");
-                                    // Show dialog again
-                                    return handleNoAnnotations(state, validClasses);
-                                }
-
-                                logger.info("Tissue detection created {} annotations", state.annotations.size());
-                                return CompletableFuture.completedFuture(state);
-
-                            case MANUAL_ANNOTATIONS_CREATED:
-                                logger.info("User indicated manual annotations were created");
-                                // Re-check for annotations
-                                state.annotations = AnnotationHelper.getCurrentValidAnnotations(gui, validClasses);
-
-                                if (state.annotations.isEmpty()) {
-                                    logger.warn("Still no annotations found after user indicated creation");
-                                    // Show dialog again
-                                    return handleNoAnnotations(state, validClasses);
-                                }
-
-                                logger.info("Found {} manual annotations", state.annotations.size());
-                                return CompletableFuture.completedFuture(state);
-
-                            case CANCEL:
-                                logger.info("User cancelled workflow due to no annotations");
-                                throw new CancellationException("Workflow cancelled - no annotations available");
-
-                            default:
-                                throw new RuntimeException("Unexpected annotation action: " + action);
+                        if (state.annotations.isEmpty()) {
+                            logger.warn("Tissue detection did not create any annotations");
+                            // Show dialog again
+                            return handleNoAnnotations(state, validClasses);
                         }
-                    });
+
+                        logger.info("Tissue detection created {} annotations", state.annotations.size());
+                        return CompletableFuture.completedFuture(state);
+
+                    case MANUAL_ANNOTATIONS_CREATED:
+                        logger.info("User indicated manual annotations were created");
+                        // Re-check for annotations
+                        state.annotations = AnnotationHelper.getCurrentValidAnnotations(gui, validClasses);
+
+                        if (state.annotations.isEmpty()) {
+                            logger.warn("Still no annotations found after user indicated creation");
+                            // Show dialog again
+                            return handleNoAnnotations(state, validClasses);
+                        }
+
+                        logger.info("Found {} manual annotations", state.annotations.size());
+                        return CompletableFuture.completedFuture(state);
+
+                    case CANCEL:
+                        logger.info("User cancelled workflow due to no annotations");
+                        throw new CancellationException("Workflow cancelled - no annotations available");
+
+                    default:
+                        throw new RuntimeException("Unexpected annotation action: " + action);
+                }
+            });
         }
 
         /**
@@ -292,15 +295,13 @@ public class ExistingImageWorkflowV2 {
         private boolean validatePrerequisites() {
             if (gui.getImageData() == null) {
                 Platform.runLater(() -> Dialogs.showErrorMessage(
-                        "No Image Open",
-                        "Please open an image before starting the workflow."));
+                        "No Image Open", "Please open an image before starting the workflow."));
                 return false;
             }
 
             if (!MicroscopeController.getInstance().isConnected()) {
-                Platform.runLater(() -> Dialogs.showErrorMessage(
-                        "Not Connected",
-                        "Please connect to the microscope server first."));
+                Platform.runLater(() ->
+                        Dialogs.showErrorMessage("Not Connected", "Please connect to the microscope server first."));
                 return false;
             }
 
@@ -335,16 +336,15 @@ public class ExistingImageWorkflowV2 {
                     config.projectsFolder(),
                     config.modality(),
                     config.objective(),
-                    config.detector()
-            );
+                    config.detector());
 
             // Store alignment choice
             state.alignmentChoice = new AlignmentSelectionController.AlignmentChoice(
                     config.useExistingAlignment(),
                     config.selectedTransform(),
                     config.alignmentConfidence(),
-                    false  // Not auto-selected since user explicitly chose
-            );
+                    false // Not auto-selected since user explicitly chose
+                    );
 
             // Store hardware selections
             state.modality = config.modality();
@@ -367,9 +367,12 @@ public class ExistingImageWorkflowV2 {
             state.perAngleWhiteBalance = config.perAngleWhiteBalance();
             state.wbMode = config.wbMode();
 
-            logger.info("Config initialized: sample={}, modality={}, useExisting={}, refinement={}, wbMode={}",
-                    config.sampleName(), config.modality(),
-                    config.useExistingAlignment(), config.refinementChoice(),
+            logger.info(
+                    "Config initialized: sample={}, modality={}, useExisting={}, refinement={}, wbMode={}",
+                    config.sampleName(),
+                    config.modality(),
+                    config.useExistingAlignment(),
+                    config.refinementChoice(),
                     config.wbMode());
 
             return CompletableFuture.completedFuture(state);
@@ -394,18 +397,18 @@ public class ExistingImageWorkflowV2 {
 
             logger.info("Checking for existing slide-specific alignment");
 
-            return AlignmentHelper.checkForSlideAlignment(gui, state.sample)
-                    .thenApply(slideResult -> {
-                        if (slideResult != null) {
-                            state.useExistingSlideAlignment = true;
-                            state.transform = slideResult.getTransform();
-                            state.alignmentConfidence = slideResult.getConfidence();
-                            state.alignmentSource = slideResult.getSource();
-                            logger.info("Found slide-specific alignment - confidence: {}",
-                                    String.format("%.2f", state.alignmentConfidence));
-                        }
-                        return state;
-                    });
+            return AlignmentHelper.checkForSlideAlignment(gui, state.sample).thenApply(slideResult -> {
+                if (slideResult != null) {
+                    state.useExistingSlideAlignment = true;
+                    state.transform = slideResult.getTransform();
+                    state.alignmentConfidence = slideResult.getConfidence();
+                    state.alignmentSource = slideResult.getSource();
+                    logger.info(
+                            "Found slide-specific alignment - confidence: {}",
+                            String.format("%.2f", state.alignmentConfidence));
+                }
+                return state;
+            });
         }
 
         /**
@@ -417,8 +420,8 @@ public class ExistingImageWorkflowV2 {
 
             // If we have slide-specific alignment with no refinement, use the fast path
             // This still delegates to the working implementation
-            if (state.useExistingSlideAlignment &&
-                    state.refinementChoice == RefinementSelectionController.RefinementChoice.NONE) {
+            if (state.useExistingSlideAlignment
+                    && state.refinementChoice == RefinementSelectionController.RefinementChoice.NONE) {
                 logger.info("Using slide-specific alignment - delegating to existing workflow logic");
                 return processSlideSpecificAlignment(state);
             }
@@ -467,15 +470,17 @@ public class ExistingImageWorkflowV2 {
                         state.pixelSize = getPixelSizeFromPreferences();
 
                         // Use selected classes or preferences
-                        state.selectedAnnotationClasses = (state.selectedAnnotationClasses != null && !state.selectedAnnotationClasses.isEmpty())
-                                ? state.selectedAnnotationClasses
-                                : PersistentPreferences.getSelectedAnnotationClasses();
+                        state.selectedAnnotationClasses =
+                                (state.selectedAnnotationClasses != null && !state.selectedAnnotationClasses.isEmpty())
+                                        ? state.selectedAnnotationClasses
+                                        : PersistentPreferences.getSelectedAnnotationClasses();
 
                         // Use the new dialog-based annotation handling (non-blocking)
                         return ensureAnnotationsExist(state);
                     })
                     .thenApply(finalState -> {
-                        logger.info("Slide-specific alignment ready with {} annotations", finalState.annotations.size());
+                        logger.info(
+                                "Slide-specific alignment ready with {} annotations", finalState.annotations.size());
                         return finalState;
                     });
         }
@@ -489,10 +494,8 @@ public class ExistingImageWorkflowV2 {
 
             if (pixelSizeStr == null || pixelSizeStr.trim().isEmpty()) {
                 logger.error("Macro image pixel size is not configured in preferences");
-                throw new IllegalStateException(
-                        "Macro image pixel size is not configured.\n" +
-                                "This value must be set before running the workflow."
-                );
+                throw new IllegalStateException("Macro image pixel size is not configured.\n"
+                        + "This value must be set before running the workflow.");
             }
 
             try {
@@ -517,15 +520,14 @@ public class ExistingImageWorkflowV2 {
             logger.info("Delegating to ExistingAlignmentPath for transform pipeline");
 
             // Delegate to the existing working implementation
-            return new ExistingAlignmentPath(gui, state).execute()
-                    .thenApply(legacyState -> {
-                        // Copy back relevant state from the working implementation
-                        state.transform = legacyState.transform;
-                        state.annotations = legacyState.annotations;
-                        state.projectInfo = legacyState.projectInfo;
-                        state.pixelSize = legacyState.pixelSize;
-                        return state;
-                    });
+            return new ExistingAlignmentPath(gui, state).execute().thenApply(legacyState -> {
+                // Copy back relevant state from the working implementation
+                state.transform = legacyState.transform;
+                state.annotations = legacyState.annotations;
+                state.projectInfo = legacyState.projectInfo;
+                state.pixelSize = legacyState.pixelSize;
+                return state;
+            });
         }
 
         /**
@@ -538,15 +540,14 @@ public class ExistingImageWorkflowV2 {
             logger.info("Delegating to ManualAlignmentPath for alignment");
 
             // Delegate to the existing working implementation
-            return new ManualAlignmentPath(gui, state).execute()
-                    .thenApply(legacyState -> {
-                        // Copy back relevant state
-                        state.transform = legacyState.transform;
-                        state.annotations = legacyState.annotations;
-                        state.projectInfo = legacyState.projectInfo;
-                        state.pixelSize = legacyState.pixelSize;
-                        return state;
-                    });
+            return new ManualAlignmentPath(gui, state).execute().thenApply(legacyState -> {
+                // Copy back relevant state
+                state.transform = legacyState.transform;
+                state.annotations = legacyState.annotations;
+                state.projectInfo = legacyState.projectInfo;
+                state.pixelSize = legacyState.pixelSize;
+                return state;
+            });
         }
 
         /**
@@ -604,23 +605,22 @@ public class ExistingImageWorkflowV2 {
                         state.projectInfo.getTempTileDirectory(),
                         state.projectInfo.getImagingModeWithIndex(),
                         state.pixelSize,
-                        false,  // Don't flip X - annotations already in correct space
-                        false   // Don't flip Y - annotations already in correct space
-                );
+                        false, // Don't flip X - annotations already in correct space
+                        false // Don't flip Y - annotations already in correct space
+                        );
             }
 
-            return SingleTileRefinement.performRefinement(
-                    gui, state.annotations, state.transform
-            ).thenApply(result -> {
-                if (result.transform != null) {
-                    state.transform = result.transform;
-                    MicroscopeController.getInstance().setCurrentTransform(result.transform);
-                    logger.info("Updated transform with refined alignment");
-                }
-                state.refinementTile = result.selectedTile;
-                saveRefinedAlignment(state);
-                return state;
-            });
+            return SingleTileRefinement.performRefinement(gui, state.annotations, state.transform)
+                    .thenApply(result -> {
+                        if (result.transform != null) {
+                            state.transform = result.transform;
+                            MicroscopeController.getInstance().setCurrentTransform(result.transform);
+                            logger.info("Updated transform with refined alignment");
+                        }
+                        state.refinementTile = result.selectedTile;
+                        saveRefinedAlignment(state);
+                        return state;
+                    });
         }
 
         /**
@@ -644,8 +644,7 @@ public class ExistingImageWorkflowV2 {
             }
 
             if (imageName != null) {
-                AffineTransformManager.saveSlideAlignment(
-                        project, imageName, state.modality, state.transform, null);
+                AffineTransformManager.saveSlideAlignment(project, imageName, state.modality, state.transform, null);
                 logger.info("Saved refined alignment for image: {}", imageName);
             }
         }
@@ -660,8 +659,8 @@ public class ExistingImageWorkflowV2 {
             try {
                 String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
                 MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
-                double configPixelSize = configManager.getModalityPixelSize(
-                        state.modality, state.objective, state.detector);
+                double configPixelSize =
+                        configManager.getModalityPixelSize(state.modality, state.objective, state.detector);
                 if (!QPScopeChecks.validateObjectivePixelSize(
                         state.objective, state.detector, state.modality, configPixelSize)) {
                     return CompletableFuture.completedFuture(null); // user cancelled
@@ -673,14 +672,13 @@ public class ExistingImageWorkflowV2 {
 
             logger.info("Starting acquisition phase");
 
-            return new AcquisitionManager(gui, state).execute()
-                    .thenApply(legacyState -> {
-                        if (legacyState != null) {
-                            // Copy stitching futures back from legacy state to V2 state
-                            state.stitchingFutures.addAll(legacyState.stitchingFutures);
-                        }
-                        return state;
-                    });
+            return new AcquisitionManager(gui, state).execute().thenApply(legacyState -> {
+                if (legacyState != null) {
+                    // Copy stitching futures back from legacy state to V2 state
+                    state.stitchingFutures.addAll(legacyState.stitchingFutures);
+                }
+                return state;
+            });
         }
 
         /**
@@ -693,9 +691,8 @@ public class ExistingImageWorkflowV2 {
 
             logger.info("Waiting for {} stitching operations to complete", state.stitchingFutures.size());
 
-            return CompletableFuture.allOf(
-                    state.stitchingFutures.toArray(new CompletableFuture[0])
-            ).thenApply(v -> state);
+            return CompletableFuture.allOf(state.stitchingFutures.toArray(new CompletableFuture[0]))
+                    .thenApply(v -> state);
         }
 
         /**
@@ -715,8 +712,7 @@ public class ExistingImageWorkflowV2 {
             UIFunctions.playWorkflowCompletionBeep();
 
             Platform.runLater(() -> {
-                Dialogs.showInfoNotification("Acquisition Complete",
-                        "All acquisitions have completed successfully.");
+                Dialogs.showInfoNotification("Acquisition Complete", "All acquisitions have completed successfully.");
             });
         }
 
@@ -737,8 +733,7 @@ public class ExistingImageWorkflowV2 {
                 logger.error("Workflow error", cause);
                 final Throwable displayCause = cause;
                 Platform.runLater(() -> {
-                    Dialogs.showErrorMessage("Workflow Error",
-                            "An error occurred: " + displayCause.getMessage());
+                    Dialogs.showErrorMessage("Workflow Error", "An error occurred: " + displayCause.getMessage());
                 });
             }
 

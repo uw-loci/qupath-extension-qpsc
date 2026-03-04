@@ -1,5 +1,9 @@
 package qupath.ext.qpsc.ui;
 
+import java.io.File;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -9,19 +13,13 @@ import javafx.scene.layout.*;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Modality;
 import javafx.stage.Window;
-import qupath.ext.qpsc.preferences.PersistentPreferences;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.ext.qpsc.utilities.SampleNameValidator;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.lib.gui.QuPathGUI;
-
-import java.io.File;
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.SampleNameValidator;
+import qupath.lib.gui.QuPathGUI;
 
 /**
  * Controller for sample setup dialog that collects project information.
@@ -47,7 +45,7 @@ public class SampleSetupController {
      *         or is cancelled if the user hits "Cancel."
      */
     public static CompletableFuture<SampleSetupResult> showDialog() {
-        return showDialog(null);  // No default sample name
+        return showDialog(null); // No default sample name
     }
 
     /**
@@ -75,8 +73,7 @@ public class SampleSetupController {
                 File projectFile = gui.getProject().getPath().toFile();
                 existingProjectFolder = projectFile.getParentFile();
                 existingProjectName = existingProjectFolder.getName();
-                logger.info("Found open project: {} in {}", existingProjectName,
-                        existingProjectFolder.getParent());
+                logger.info("Found open project: {} in {}", existingProjectName, existingProjectFolder.getParent());
             }
 
             Dialog<SampleSetupResult> dlg = new Dialog<>();
@@ -85,16 +82,15 @@ public class SampleSetupController {
 
             // Adapt header based on whether project exists
             if (hasOpenProject) {
-                dlg.setHeaderText("Adding to existing project: " + existingProjectName +
-                        "\nPlease select the imaging modality:");
+                dlg.setHeaderText(
+                        "Adding to existing project: " + existingProjectName + "\nPlease select the imaging modality:");
             } else {
                 dlg.setHeaderText(res.getString("sampleSetup.header"));
             }
 
-            ButtonType okType = new ButtonType(res.getString("sampleSetup.button.ok"),
-                    ButtonBar.ButtonData.OK_DONE);
-            ButtonType cancelType = new ButtonType(res.getString("sampleSetup.button.cancel"),
-                    ButtonBar.ButtonData.CANCEL_CLOSE);
+            ButtonType okType = new ButtonType(res.getString("sampleSetup.button.ok"), ButtonBar.ButtonData.OK_DONE);
+            ButtonType cancelType =
+                    new ButtonType(res.getString("sampleSetup.button.cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
             dlg.getDialogPane().getButtonTypes().addAll(okType, cancelType);
 
             // --- Fields ---
@@ -134,7 +130,6 @@ public class SampleSetupController {
             folderField.setText(projectsFolder);
             logger.debug("Loaded projects folder from QPPreferenceDialog: {}", projectsFolder);
 
-
             Button browseBtn = new Button(res.getString("sampleSetup.button.browse"));
             browseBtn.setOnAction(e -> {
                 Window win = dlg.getDialogPane().getScene().getWindow();
@@ -163,15 +158,13 @@ public class SampleSetupController {
             HBox.setHgrow(folderField, Priority.ALWAYS);
 
             // Get config manager instance
-            MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(
-                    QPPreferenceDialog.getMicroscopeConfigFileProperty());
+            MicroscopeConfigManager configManager =
+                    MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
             // Load modalities from config
             Set<String> modalities = configManager.getSection("modalities").keySet();
 
-            ComboBox<String> modalityBox = new ComboBox<>(
-                    FXCollections.observableArrayList(modalities)
-            );
+            ComboBox<String> modalityBox = new ComboBox<>(FXCollections.observableArrayList(modalities));
 
             // Create objective and detector dropdowns (initially empty)
             ComboBox<String> objectiveBox = new ComboBox<>();
@@ -318,7 +311,6 @@ public class SampleSetupController {
             errorLabel.setWrapText(true);
             errorLabel.setVisible(false);
 
-
             // --- Layout ---
             GridPane grid = new GridPane();
             grid.setHgap(10);
@@ -337,7 +329,7 @@ public class SampleSetupController {
             row++;
 
             // Add sample name validation error label
-            grid.add(new Label(""), 0, row);  // Empty label for alignment
+            grid.add(new Label(""), 0, row); // Empty label for alignment
             grid.add(sampleNameErrorLabel, 1, row);
             row++;
 
@@ -394,23 +386,23 @@ public class SampleSetupController {
                 // ALWAYS validate sample name (required for all workflows)
                 String sampleNameError = SampleNameValidator.getValidationError(name);
                 if (sampleNameError != null) {
-                    errors.append("• ").append(sampleNameError).append("\n");
+                    errors.append("- ").append(sampleNameError).append("\n");
                 }
 
                 if (!hasOpenProject && (!folder.exists() || !folder.isDirectory())) {
-                    errors.append("• Projects folder must be a valid directory\n");
+                    errors.append("- Projects folder must be a valid directory\n");
                 }
 
                 if (mod == null || mod.isEmpty()) {
-                    errors.append("• Please select a modality\n");
+                    errors.append("- Please select a modality\n");
                 }
 
                 if (obj == null || obj.isEmpty()) {
-                    errors.append("• Please select an objective\n");
+                    errors.append("- Please select an objective\n");
                 }
 
                 if (det == null || det.isEmpty()) {
-                    errors.append("• Please select a detector\n");
+                    errors.append("- Please select a detector\n");
                 }
 
                 if (errors.length() > 0) {
@@ -441,8 +433,13 @@ public class SampleSetupController {
                     PersistentPreferences.setLastObjective(obj);
                     PersistentPreferences.setLastDetector(det);
 
-                    logger.info("Saved sample setup preferences - name: {}, folder: {}, modality: {}, objective: {}, detector: {}",
-                            name, folder.getAbsolutePath(), mod, obj, det);
+                    logger.info(
+                            "Saved sample setup preferences - name: {}, folder: {}, modality: {}, objective: {}, detector: {}",
+                            name,
+                            folder.getAbsolutePath(),
+                            mod,
+                            obj,
+                            det);
                 }
             });
 
@@ -461,8 +458,12 @@ public class SampleSetupController {
                     PersistentPreferences.setLastDetector(det);
                     // DO NOT save projects folder - it comes from QPPreferenceDialog
 
-                    logger.info("Saved sample setup preferences - name: {}, modality: {}, objective: {}, detector: {}",
-                            name, mod, obj, det);
+                    logger.info(
+                            "Saved sample setup preferences - name: {}, modality: {}, objective: {}, detector: {}",
+                            name,
+                            mod,
+                            obj,
+                            det);
 
                     return new SampleSetupResult(name, folder, mod, obj, det);
                 }
@@ -500,31 +501,34 @@ public class SampleSetupController {
      */
     private static String extractIdFromDisplayString(String displayString) {
         if (displayString == null) return null;
-        
+
         int openParen = displayString.lastIndexOf('(');
         int closeParen = displayString.lastIndexOf(')');
-        
+
         if (openParen != -1 && closeParen != -1 && closeParen > openParen) {
             return displayString.substring(openParen + 1, closeParen);
         }
-        
+
         return displayString; // fallback to original string
     }
 
     /** Holds the user's choices from the "sample setup" dialog. */
-    public record SampleSetupResult(String sampleName, File projectsFolder, String modality, String objective, String detector) { }
+    public record SampleSetupResult(
+            String sampleName, File projectsFolder, String modality, String objective, String detector) {}
 
     // ==================== Variant Detection Banner ====================
 
     /**
      * Banner background color for creating a new project (blue tint).
      */
-    private static final String BANNER_COLOR_NEW_PROJECT = "-fx-background-color: #E3F2FD; -fx-border-color: #90CAF9; -fx-border-width: 0 0 1 0;";
+    private static final String BANNER_COLOR_NEW_PROJECT =
+            "-fx-background-color: #E3F2FD; -fx-border-color: #90CAF9; -fx-border-width: 0 0 1 0;";
 
     /**
      * Banner background color for adding to an existing project (green tint).
      */
-    private static final String BANNER_COLOR_EXISTING_PROJECT = "-fx-background-color: #E8F5E9; -fx-border-color: #A5D6A7; -fx-border-width: 0 0 1 0;";
+    private static final String BANNER_COLOR_EXISTING_PROJECT =
+            "-fx-background-color: #E8F5E9; -fx-border-color: #A5D6A7; -fx-border-width: 0 0 1 0;";
 
     /**
      * Creates a variant detection banner that shows context about whether
@@ -536,8 +540,8 @@ public class SampleSetupController {
      * @param sampleNameField The sample name text field (for dynamic updates to new project path)
      * @return HBox containing the styled banner
      */
-    private static HBox createVariantBanner(boolean hasOpenProject, String existingProjectName,
-                                            TextField folderField, TextField sampleNameField) {
+    private static HBox createVariantBanner(
+            boolean hasOpenProject, String existingProjectName, TextField folderField, TextField sampleNameField) {
         HBox banner = new HBox(10);
         banner.setPadding(new Insets(12, 15, 12, 15));
         banner.setAlignment(Pos.CENTER_LEFT);

@@ -2,18 +2,17 @@ package qupath.ext.qpsc;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
-import qupath.ext.qpsc.utilities.QPProjectFunctions;
+
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.Map;
-
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.junit.jupiter.api.extension.ExtendWith;
-
+import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
 
@@ -23,7 +22,8 @@ import qupath.lib.projects.Project;
 @ExtendWith(MockitoExtension.class)
 class QPProjectFunctionsTest {
 
-    @TempDir Path tmp;
+    @TempDir
+    Path tmp;
 
     // TODO: QuPath project file format may have changed - verify .qpproj creation behavior
     @Disabled("QuPath Projects.createProject may not write .qpproj file immediately in current version")
@@ -41,12 +41,10 @@ class QPProjectFunctionsTest {
         Path sampleDir = tmp.resolve("projects").resolve(sampleLabel);
         assertTrue(Files.isDirectory(sampleDir), "Sample directory must be created");
         // .qpproj file created
-        boolean hasQpproj = Files.list(sampleDir)
-                .anyMatch(p -> p.toString().endsWith(".qpproj"));
+        boolean hasQpproj = Files.list(sampleDir).anyMatch(p -> p.toString().endsWith(".qpproj"));
         assertTrue(hasQpproj, "Should have created a .qpproj file");
         // SlideImages folder
-        assertTrue(Files.isDirectory(sampleDir.resolve("SlideImages")),
-                "Should have created SlideImages directory");
+        assertTrue(Files.isDirectory(sampleDir.resolve("SlideImages")), "Should have created SlideImages directory");
     }
 
     @Test
@@ -58,15 +56,18 @@ class QPProjectFunctionsTest {
         Project<BufferedImage> first = QPProjectFunctions.createProject(projectsRoot, sampleLabel);
         // count .qpproj files
         Path sampleDir = tmp.resolve("projects").resolve(sampleLabel);
-        long count1 = Files.list(sampleDir).filter(p -> p.toString().endsWith(".qpproj")).count();
+        long count1 = Files.list(sampleDir)
+                .filter(p -> p.toString().endsWith(".qpproj"))
+                .count();
 
         // second call should load the same project (not duplicate .qpproj)
         Project<BufferedImage> second = QPProjectFunctions.createProject(projectsRoot, sampleLabel);
-        long count2 = Files.list(sampleDir).filter(p -> p.toString().endsWith(".qpproj")).count();
+        long count2 = Files.list(sampleDir)
+                .filter(p -> p.toString().endsWith(".qpproj"))
+                .count();
 
         assertNotNull(second);
-        assertEquals(count1, count2,
-                "Reloading an existing project should not create additional .qpproj files");
+        assertEquals(count1, count2, "Reloading an existing project should not create additional .qpproj files");
     }
 
     // TODO: Tile directory creation may now happen at acquisition time, not project setup
@@ -77,22 +78,17 @@ class QPProjectFunctionsTest {
         QuPathGUI gui = mock(QuPathGUI.class);
 
         // call under test -- method now takes String enhancedModality instead of ObservableList
-        Map<String,Object> result = QPProjectFunctions.createAndOpenQuPathProject(
-                gui,
-                tmpDir.toString(),
-                "SampleA",
-                "10x_bf",
-                /*flipX*/ false,
-                /*flipY*/ true
-        );
+        Map<String, Object> result = QPProjectFunctions.createAndOpenQuPathProject(
+                gui, tmpDir.toString(), "SampleA", "10x_bf", /*flipX*/ false, /*flipY*/ true);
 
         assertNotNull(result.get("currentQuPathProject"), "Project must be returned");
         String modeWithIndex = (String) result.get("imagingModeWithIndex");
-        assertTrue(modeWithIndex.startsWith("10x_bf"),
+        assertTrue(
+                modeWithIndex.startsWith("10x_bf"),
                 "imagingModeWithIndex should start with the enhancedModality value");
-        assertNull(result.get("matchingImage"),
-                "When no image is open, matchingImage should be null");
-        assertTrue(Files.isDirectory(tmpDir.resolve("SampleA").resolve(modeWithIndex)),
+        assertNull(result.get("matchingImage"), "When no image is open, matchingImage should be null");
+        assertTrue(
+                Files.isDirectory(tmpDir.resolve("SampleA").resolve(modeWithIndex)),
                 "tempTileDirectory must exist on disk");
     }
 }

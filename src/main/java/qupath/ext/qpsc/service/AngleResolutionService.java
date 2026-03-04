@@ -1,14 +1,13 @@
 package qupath.ext.qpsc.service;
 
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
-
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Shared service for resolving rotation angles for a given modality/hardware combination.
@@ -26,7 +25,7 @@ public final class AngleResolutionService {
 
     private static final Logger logger = LoggerFactory.getLogger(AngleResolutionService.class);
 
-    private AngleResolutionService() { }
+    private AngleResolutionService() {}
 
     /**
      * Resolves the rotation angle/exposure list for an acquisition.
@@ -38,13 +37,11 @@ public final class AngleResolutionService {
      * @return future containing the resolved angle-exposure list
      */
     public static CompletableFuture<List<AngleExposure>> resolve(
-            String modality, String objective, String detector,
-            Map<String, Double> angleOverrides) {
+            String modality, String objective, String detector, Map<String, Double> angleOverrides) {
 
         ModalityHandler handler = ModalityRegistry.getHandler(modality);
 
-        logger.info("Resolving rotation angles for modality={} obj={} det={}",
-                modality, objective, detector);
+        logger.info("Resolving rotation angles for modality={} obj={} det={}", modality, objective, detector);
 
         // Load modality-specific profile defaults (e.g. PPM exposure profiles)
         handler.prepareForAcquisition(modality, objective, detector);
@@ -52,8 +49,7 @@ public final class AngleResolutionService {
         // Resolve angles -- handler decides whether to show dialog, apply overrides, etc.
         if (angleOverrides != null && !angleOverrides.isEmpty()) {
             logger.info("Applying angle overrides from user dialog: {}", angleOverrides);
-            return handler.getRotationAnglesWithOverrides(
-                    modality, objective, detector, angleOverrides);
+            return handler.getRotationAnglesWithOverrides(modality, objective, detector, angleOverrides);
         } else {
             return handler.getRotationAngles(modality, objective, detector);
         }

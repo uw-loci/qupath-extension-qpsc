@@ -1,5 +1,8 @@
 package qupath.ext.qpsc.ui;
 
+import java.io.File;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -14,10 +17,6 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.gui.QuPathGUI;
-
-import java.io.File;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Controller for selecting between existing alignment transforms or creating new ones.
@@ -49,16 +48,16 @@ public class AlignmentSelectionController {
             boolean useExistingAlignment,
             AffineTransformManager.TransformPreset selectedTransform,
             double confidence,
-            boolean wasAutoSelected
-    ) {
+            boolean wasAutoSelected) {
         /**
          * Legacy constructor for backward compatibility.
          * @deprecated Use the full constructor with confidence and wasAutoSelected
          */
         @Deprecated
-        public AlignmentChoice(boolean useExistingAlignment,
-                               AffineTransformManager.TransformPreset selectedTransform,
-                               boolean refinementRequested) {
+        public AlignmentChoice(
+                boolean useExistingAlignment,
+                AffineTransformManager.TransformPreset selectedTransform,
+                boolean refinementRequested) {
             this(useExistingAlignment, selectedTransform, 0.7, false);
         }
     }
@@ -70,14 +69,15 @@ public class AlignmentSelectionController {
      * @param transformInfo The TextArea to update
      * @param selectedTransform The selected transform preset, or null if none selected
      */
-    private static void updateTransformInfoDisplay(TextArea transformInfo,
-                                                   AffineTransformManager.TransformPreset selectedTransform) {
+    private static void updateTransformInfoDisplay(
+            TextArea transformInfo, AffineTransformManager.TransformPreset selectedTransform) {
         if (selectedTransform != null) {
             StringBuilder info = new StringBuilder();
             info.append("Transform: ").append(selectedTransform.getName()).append("\n");
             info.append("Created: ").append(selectedTransform.getCreatedDate()).append("\n");
 
-            if (selectedTransform.getNotes() != null && !selectedTransform.getNotes().isEmpty()) {
+            if (selectedTransform.getNotes() != null
+                    && !selectedTransform.getNotes().isEmpty()) {
                 info.append("Notes: ").append(selectedTransform.getNotes()).append("\n");
             }
 
@@ -90,8 +90,8 @@ public class AlignmentSelectionController {
             info.append(String.format("  [%.4f, %.4f, %.4f]\n", matrix[1], matrix[3], matrix[5]));
 
             // Add scale information
-            info.append(String.format("\nScale: X=%.4f, Y=%.4f µm/pixel\n",
-                    transform.getScaleX(), transform.getScaleY()));
+            info.append(
+                    String.format("\nScale: X=%.4f, Y=%.4f um/pixel\n", transform.getScaleX(), transform.getScaleY()));
 
             // Add green box parameters if available
             if (selectedTransform.getGreenBoxParams() != null) {
@@ -99,8 +99,7 @@ public class AlignmentSelectionController {
                 info.append("\nGreen Box Parameters:\n");
                 info.append(String.format("  Green threshold: %.2f\n", params.greenThreshold));
                 info.append(String.format("  Min saturation: %.2f\n", params.saturationMin));
-                info.append(String.format("  Brightness: %.2f - %.2f\n",
-                        params.brightnessMin, params.brightnessMax));
+                info.append(String.format("  Brightness: %.2f - %.2f\n", params.brightnessMin, params.brightnessMax));
             }
 
             transformInfo.setText(info.toString());
@@ -124,15 +123,16 @@ public class AlignmentSelectionController {
                 // Initialize transform manager
                 String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
                 logger.debug("Retrieved config path: {}", configPath);
-                AffineTransformManager transformManager = new AffineTransformManager(
-                        new File(configPath).getParent());
+                AffineTransformManager transformManager = new AffineTransformManager(new File(configPath).getParent());
 
                 // Get current microscope name from config
                 MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
                 String microscopeName = mgr.getMicroscopeName();
 
-                logger.info("Loading transforms for microscope: '{}' from directory: '{}'",
-                        microscopeName, new File(configPath).getParent());
+                logger.info(
+                        "Loading transforms for microscope: '{}' from directory: '{}'",
+                        microscopeName,
+                        new File(configPath).getParent());
 
                 // Create dialog
                 Dialog<AlignmentChoice> dialog = new Dialog<>();
@@ -171,8 +171,10 @@ public class AlignmentSelectionController {
                 List<AffineTransformManager.TransformPreset> availableTransforms =
                         transformManager.getTransformsForMicroscope(microscopeName);
 
-                logger.info("Found {} transforms for microscope '{}' in file: {}",
-                        availableTransforms.size(), microscopeName,
+                logger.info(
+                        "Found {} transforms for microscope '{}' in file: {}",
+                        availableTransforms.size(),
+                        microscopeName,
                         new File(configPath).getParent() + "/saved_transforms.json");
 
                 transformCombo.getItems().addAll(availableTransforms);
@@ -203,8 +205,10 @@ public class AlignmentSelectionController {
                 transformCombo.valueProperty().addListener((obs, old, newVal) -> {
                     if (newVal != null) {
                         PersistentPreferences.setLastSelectedTransform(newVal.getName());
-                        logger.info("User selected transform: '{}' (mounting method: {})",
-                                newVal.getName(), newVal.getMountingMethod());
+                        logger.info(
+                                "User selected transform: '{}' (mounting method: {})",
+                                newVal.getName(),
+                                newVal.getMountingMethod());
                     }
                 });
 
@@ -248,25 +252,22 @@ public class AlignmentSelectionController {
                                 preset.getMicroscope(),
                                 preset.getMountingMethod(),
                                 preset.getCreatedDate(),
-                                preset.getNotes()
-                        ));
+                                preset.getNotes()));
                     } else {
                         detailsArea.clear();
                     }
                 });
 
-// RIGHT AFTER the listener above, add this line to populate the initial selection:
-// Trigger initial update for the already selected item
+                // RIGHT AFTER the listener above, add this line to populate the initial selection:
+                // Trigger initial update for the already selected item
                 if (transformCombo.getValue() != null) {
                     detailsArea.setText(String.format(
                             "Microscope: %s\nMounting: %s\nCreated: %s\nNotes: %s",
                             transformCombo.getValue().getMicroscope(),
                             transformCombo.getValue().getMountingMethod(),
                             transformCombo.getValue().getCreatedDate(),
-                            transformCombo.getValue().getNotes()
-                    ));
+                            transformCombo.getValue().getNotes()));
                 }
-
 
                 // Confidence label - shows calculated confidence for selected transform
                 Label confidenceLabel = new Label();
@@ -280,7 +281,8 @@ public class AlignmentSelectionController {
                         String level = conf >= 0.8 ? "HIGH" : (conf >= 0.5 ? "MEDIUM" : "LOW");
                         String color = conf >= 0.8 ? "#2E7D32" : (conf >= 0.5 ? "#F57F17" : "#C62828");
                         confidenceLabel.setText(String.format("Confidence: %s (%.0f%%)", level, conf * 100));
-                        confidenceLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
+                        confidenceLabel.setStyle(
+                                "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
                     } else {
                         confidenceLabel.setText("");
                     }
@@ -292,7 +294,8 @@ public class AlignmentSelectionController {
                     String level = conf >= 0.8 ? "HIGH" : (conf >= 0.5 ? "MEDIUM" : "LOW");
                     String color = conf >= 0.8 ? "#2E7D32" : (conf >= 0.5 ? "#F57F17" : "#C62828");
                     confidenceLabel.setText(String.format("Confidence: %s (%.0f%%)", level, conf * 100));
-                    confidenceLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
+                    confidenceLabel.setStyle(
+                            "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
                 }
 
                 // Note: Refinement options moved to RefinementSelectionController
@@ -300,13 +303,14 @@ public class AlignmentSelectionController {
                 refinementNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666; -fx-font-style: italic;");
                 refinementNote.setDisable(!useExistingRadio.isSelected());
 
-                transformSelectionBox.getChildren().addAll(
-                        new Label("Select saved transform:"),
-                        transformCombo,
-                        detailsArea,
-                        confidenceLabel,
-                        refinementNote
-                );
+                transformSelectionBox
+                        .getChildren()
+                        .addAll(
+                                new Label("Select saved transform:"),
+                                transformCombo,
+                                detailsArea,
+                                confidenceLabel,
+                                refinementNote);
 
                 // Enable/disable based on radio selection
                 useExistingRadio.selectedProperty().addListener((obs, old, selected) -> {
@@ -316,7 +320,6 @@ public class AlignmentSelectionController {
                     refinementNote.setDisable(!selected);
                     // Save preference when changed
                     PersistentPreferences.setUseExistingAlignment(selected);
-
                 });
 
                 createNewRadio.selectedProperty().addListener((obs, old, selected) -> {
@@ -338,8 +341,8 @@ public class AlignmentSelectionController {
                 // Create comparison cards
                 java.util.List<RequirementItem> existingReqs = java.util.List.of(
                         new RequirementItem("Saved transform available", hasTransforms),
-                        new RequirementItem("Macro image with green box", true)  // Assumed available if in this workflow
-                );
+                        new RequirementItem("Macro image with green box", true) // Assumed available if in this workflow
+                        );
 
                 VBox existingCard = createPathComparisonCard(
                         "Use Existing Alignment",
@@ -347,13 +350,11 @@ public class AlignmentSelectionController {
                         "Good Accuracy (+/- 20 um)",
                         existingReqs,
                         "Repeated acquisitions, same scanner setup",
-                        hasTransforms
-                );
+                        hasTransforms);
 
                 java.util.List<RequirementItem> manualReqs = java.util.List.of(
                         new RequirementItem("Manual microscope control", true),
-                        new RequirementItem("Multiple tile selections", true)
-                );
+                        new RequirementItem("Multiple tile selections", true));
 
                 VBox manualCard = createPathComparisonCard(
                         "Perform Manual Alignment",
@@ -361,8 +362,8 @@ public class AlignmentSelectionController {
                         "Excellent Accuracy (+/- 5 um)",
                         manualReqs,
                         "First-time setup, new slides, maximum precision",
-                        true  // Always available
-                );
+                        true // Always available
+                        );
 
                 // Make cards clickable to select radio buttons
                 existingCard.setOnMouseClicked(e -> {
@@ -378,16 +379,20 @@ public class AlignmentSelectionController {
                 // Visual feedback for selected card
                 useExistingRadio.selectedProperty().addListener((obs, old, selected) -> {
                     if (selected) {
-                        existingCard.setStyle("-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4; -fx-background-color: #E3F2FD; -fx-background-radius: 4;");
-                        manualCard.setStyle("-fx-border-color: #CCCCCC; -fx-border-radius: 4; -fx-background-color: #FAFAFA; -fx-background-radius: 4;");
+                        existingCard.setStyle(
+                                "-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4; -fx-background-color: #E3F2FD; -fx-background-radius: 4;");
+                        manualCard.setStyle(
+                                "-fx-border-color: #CCCCCC; -fx-border-radius: 4; -fx-background-color: #FAFAFA; -fx-background-radius: 4;");
                     }
                 });
 
                 createNewRadio.selectedProperty().addListener((obs, old, selected) -> {
                     if (selected) {
-                        manualCard.setStyle("-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4; -fx-background-color: #E3F2FD; -fx-background-radius: 4;");
+                        manualCard.setStyle(
+                                "-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4; -fx-background-color: #E3F2FD; -fx-background-radius: 4;");
                         if (hasTransforms) {
-                            existingCard.setStyle("-fx-border-color: #CCCCCC; -fx-border-radius: 4; -fx-background-color: #FAFAFA; -fx-background-radius: 4;");
+                            existingCard.setStyle(
+                                    "-fx-border-color: #CCCCCC; -fx-border-radius: 4; -fx-background-color: #FAFAFA; -fx-background-radius: 4;");
                         }
                     }
                 });
@@ -407,23 +412,25 @@ public class AlignmentSelectionController {
                 HBox.setHgrow(manualCard, Priority.ALWAYS);
 
                 // Assemble content with comparison cards
-                content.getChildren().addAll(
-                        headerLabel,
-                        new Separator(),
-                        existingRow,
-                        transformSelectionBox,
-                        new Separator(),
-                        manualRow,
-                        new Separator(),
-                        recommendationLabel
-                );
+                content.getChildren()
+                        .addAll(
+                                headerLabel,
+                                new Separator(),
+                                existingRow,
+                                transformSelectionBox,
+                                new Separator(),
+                                manualRow,
+                                new Separator(),
+                                recommendationLabel);
 
                 // Apply initial card highlighting based on selection
                 Platform.runLater(() -> {
                     if (useExistingRadio.isSelected()) {
-                        existingCard.setStyle("-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4; -fx-background-color: #E3F2FD; -fx-background-radius: 4;");
+                        existingCard.setStyle(
+                                "-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4; -fx-background-color: #E3F2FD; -fx-background-radius: 4;");
                     } else if (createNewRadio.isSelected()) {
-                        manualCard.setStyle("-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4; -fx-background-color: #E3F2FD; -fx-background-radius: 4;");
+                        manualCard.setStyle(
+                                "-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4; -fx-background-color: #E3F2FD; -fx-background-radius: 4;");
                     }
                 });
 
@@ -449,14 +456,12 @@ public class AlignmentSelectionController {
                         if (useExistingRadio.isSelected() && transformCombo.getValue() != null) {
                             AffineTransformManager.TransformPreset selected = transformCombo.getValue();
                             double confidence = AlignmentHelper.calculateConfidence(selected);
-                            logger.info("Dialog result: Use existing alignment - transform: '{}', confidence: {:.2f}, auto-selected: {}",
-                                    selected.getName(), confidence, wasAutoSelected[0]);
-                            return new AlignmentChoice(
-                                    true,
-                                    selected,
+                            logger.info(
+                                    "Dialog result: Use existing alignment - transform: '{}', confidence: {:.2f}, auto-selected: {}",
+                                    selected.getName(),
                                     confidence,
-                                    wasAutoSelected[0]
-                            );
+                                    wasAutoSelected[0]);
+                            return new AlignmentChoice(true, selected, confidence, wasAutoSelected[0]);
                         } else {
                             logger.info("Dialog result: Manual alignment selected");
                             return new AlignmentChoice(false, null, 0.0, wasAutoSelected[0]);
@@ -493,12 +498,17 @@ public class AlignmentSelectionController {
      * @param isAvailable Whether this option is currently available
      * @return VBox containing the styled card
      */
-    private static VBox createPathComparisonCard(String title, String timeInfo, String accuracyInfo,
-                                                  java.util.List<RequirementItem> requirements,
-                                                  String bestFor, boolean isAvailable) {
+    private static VBox createPathComparisonCard(
+            String title,
+            String timeInfo,
+            String accuracyInfo,
+            java.util.List<RequirementItem> requirements,
+            String bestFor,
+            boolean isAvailable) {
         VBox card = new VBox(8);
         card.setPadding(new Insets(12));
-        card.setStyle("-fx-border-color: #CCCCCC; -fx-border-radius: 4; -fx-background-color: #FAFAFA; -fx-background-radius: 4;");
+        card.setStyle(
+                "-fx-border-color: #CCCCCC; -fx-border-radius: 4; -fx-background-color: #FAFAFA; -fx-background-radius: 4;");
 
         if (!isAvailable) {
             card.setStyle(card.getStyle() + " -fx-opacity: 0.6;");
@@ -561,8 +571,8 @@ public class AlignmentSelectionController {
         label.setStyle("-fx-background-color: #FFF8E1; -fx-background-radius: 4; -fx-font-size: 11px;");
 
         if (hasTransforms) {
-            label.setText("[i] Recommendation: Use Existing Alignment (found " + transformCount +
-                    " saved transform" + (transformCount > 1 ? "s" : "") + " for this microscope)");
+            label.setText("[i] Recommendation: Use Existing Alignment (found " + transformCount + " saved transform"
+                    + (transformCount > 1 ? "s" : "") + " for this microscope)");
             label.setStyle(label.getStyle() + " -fx-text-fill: #F57F17;");
         } else {
             label.setText("[i] Recommendation: Perform Manual Alignment (no saved transforms found)");

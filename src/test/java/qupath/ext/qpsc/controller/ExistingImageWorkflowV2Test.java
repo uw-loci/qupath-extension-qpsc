@@ -2,16 +2,14 @@ package qupath.ext.qpsc.controller;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.BeforeEach;
-
-import qupath.ext.qpsc.controller.ExistingImageWorkflowV2.WorkflowState;
-import qupath.ext.qpsc.ui.RefinementSelectionController.RefinementChoice;
-
 import java.awt.geom.AffineTransform;
 import java.util.HashMap;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import qupath.ext.qpsc.controller.ExistingImageWorkflowV2.WorkflowState;
+import qupath.ext.qpsc.ui.RefinementSelectionController.RefinementChoice;
 
 /**
  * Unit tests for ExistingImageWorkflowV2 workflow state.
@@ -207,7 +205,7 @@ class ExistingImageWorkflowV2Test {
         state.detector = "Basler";
         state.isExistingProject = false;
         state.useExistingSlideAlignment = false;
-        state.alignmentConfidence = 0.0;  // No alignment yet
+        state.alignmentConfidence = 0.0; // No alignment yet
         state.alignmentSource = "Unknown";
         state.refinementChoice = RefinementChoice.FULL_MANUAL;
         state.transform = null;
@@ -232,7 +230,7 @@ class ExistingImageWorkflowV2Test {
         state.useExistingSlideAlignment = true;
         state.alignmentConfidence = 0.92;
         state.alignmentSource = "Slide-specific (MacroSlide_001)";
-        state.refinementChoice = RefinementChoice.NONE;  // High confidence - no refinement needed
+        state.refinementChoice = RefinementChoice.NONE; // High confidence - no refinement needed
         state.transform = AffineTransform.getScaleInstance(0.1, 0.1);
         state.pixelSize = 0.5;
 

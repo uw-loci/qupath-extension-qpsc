@@ -1,5 +1,16 @@
 package qupath.ext.qpsc.ui.liveviewer;
 
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.ResourceBundle;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.UnaryOperator;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.geometry.HPos;
@@ -24,11 +35,10 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.ScrollEvent;
-import javafx.util.Duration;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
@@ -44,18 +54,6 @@ import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.Project;
-
-import java.awt.geom.AffineTransform;
-import java.awt.image.BufferedImage;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.ResourceBundle;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.UnaryOperator;
 
 /**
  * Collapsible panel for Live Viewer containing stage movement controls.
@@ -95,7 +93,7 @@ public class StageControlPanel extends TitledPane {
 
     // Step size controls
     private final TextField xyStepField;
-    private final TextField zStepField;  // Shared between Position and Navigate tabs
+    private final TextField zStepField; // Shared between Position and Navigate tabs
     private final ComboBox<String> fovStepCombo;
     private final Label fovInfoLabel;
     private final double[] cachedFovUm = {0, 0};
@@ -108,17 +106,17 @@ public class StageControlPanel extends TitledPane {
     private final Button leftBtn = new Button("\u2190");
     private final Button rightBtn = new Button("\u2192");
     // Double-step arrows (move 2x distance)
-    private final Button upBtn2x = new Button("\u21C8");      // Double up arrow
-    private final Button downBtn2x = new Button("\u21CA");    // Double down arrow
-    private final Button leftBtn2x = new Button("\u21C7");    // Double left arrow
-    private final Button rightBtn2x = new Button("\u21C9");   // Double right arrow
+    private final Button upBtn2x = new Button("\u21C8"); // Double up arrow
+    private final Button downBtn2x = new Button("\u21CA"); // Double down arrow
+    private final Button leftBtn2x = new Button("\u21C7"); // Double left arrow
+    private final Button rightBtn2x = new Button("\u21C9"); // Double right arrow
 
     // Sample movement mode
     private final CheckBox sampleMovementCheckbox;
     private final AtomicBoolean sampleMovementMode = new AtomicBoolean(false);
 
     // Thread-safe position tracking for joystick
-    private final AtomicReference<double[]> joystickPosition = new AtomicReference<>(new double[]{0, 0});
+    private final AtomicReference<double[]> joystickPosition = new AtomicReference<>(new double[] {0, 0});
 
     // Go to centroid components
     private final Button goToCentroidBtn;
@@ -149,10 +147,21 @@ public class StageControlPanel extends TitledPane {
             this.z = z;
         }
 
-        public String getName() { return name; }
-        public double getX() { return x; }
-        public double getY() { return y; }
-        public double getZ() { return z; }
+        public String getName() {
+            return name;
+        }
+
+        public double getX() {
+            return x;
+        }
+
+        public double getY() {
+            return y;
+        }
+
+        public double getZ() {
+            return z;
+        }
 
         @Override
         public String toString() {
@@ -165,8 +174,7 @@ public class StageControlPanel extends TitledPane {
         public String toJson() {
             // Escape quotes in name for JSON safety
             String escapedName = name.replace("\\", "\\\\").replace("\"", "\\\"");
-            return String.format("{\"name\":\"%s\",\"x\":%.2f,\"y\":%.2f,\"z\":%.2f}",
-                    escapedName, x, y, z);
+            return String.format("{\"name\":\"%s\",\"x\":%.2f,\"y\":%.2f,\"z\":%.2f}", escapedName, x, y, z);
         }
 
         /**
@@ -206,8 +214,8 @@ public class StageControlPanel extends TitledPane {
             if (start < 0) return 0;
             start += pattern.length();
             int end = start;
-            while (end < json.length() && (Character.isDigit(json.charAt(end))
-                    || json.charAt(end) == '.' || json.charAt(end) == '-')) {
+            while (end < json.length()
+                    && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '.' || json.charAt(end) == '-')) {
                 end++;
             }
             return Double.parseDouble(json.substring(start, end));
@@ -259,9 +267,8 @@ public class StageControlPanel extends TitledPane {
         sampleMovementCheckbox = new CheckBox("Sample Movement");
         sampleMovementCheckbox.setSelected(PersistentPreferences.getStageControlSampleMovement());
         sampleMovementCheckbox.setStyle("-fx-font-size: 10px;");
-        Tooltip sampleMvmtTooltip = new Tooltip(
-                "When unchecked, controls match MicroManager stage behavior.\n" +
-                "When checked, inverts X axis so sample appears to move with controls.");
+        Tooltip sampleMvmtTooltip = new Tooltip("When unchecked, controls match MicroManager stage behavior.\n"
+                + "When checked, inverts X axis so sample appears to move with controls.");
         sampleMvmtTooltip.setShowDelay(Duration.millis(300));
         Tooltip.install(sampleMovementCheckbox, sampleMvmtTooltip);
         sampleMovementMode.set(sampleMovementCheckbox.isSelected());
@@ -277,10 +284,8 @@ public class StageControlPanel extends TitledPane {
             }
             return null;
         }));
-        Tooltip zStepTooltip = new Tooltip(
-                "Z step size in micrometers.\n" +
-                "Use mouse scroll wheel over this field, Z field,\n" +
-                "or Move Z button to adjust focus.");
+        Tooltip zStepTooltip = new Tooltip("Z step size in micrometers.\n"
+                + "Use mouse scroll wheel over this field, Z field,\n" + "or Move Z button to adjust focus.");
         zStepTooltip.setShowDelay(Duration.millis(300));
         Tooltip.install(zStepField, zStepTooltip);
 
@@ -351,9 +356,8 @@ public class StageControlPanel extends TitledPane {
         Label zLabel = new Label("Z:");
         zLabel.setStyle("-fx-font-size: 10px;");
         zField.setPrefWidth(70);
-        Tooltip zFieldTooltip = new Tooltip(
-                "Current Z position in micrometers.\n" +
-                "Use mouse scroll wheel to adjust focus.");
+        Tooltip zFieldTooltip =
+                new Tooltip("Current Z position in micrometers.\n" + "Use mouse scroll wheel to adjust focus.");
         zFieldTooltip.setShowDelay(Duration.millis(300));
         Tooltip.install(zField, zFieldTooltip);
 
@@ -368,16 +372,15 @@ public class StageControlPanel extends TitledPane {
         // Help button for Z scroll behavior
         Button zHelpBtn = new Button("?");
         zHelpBtn.setStyle("-fx-font-size: 9px; -fx-min-width: 18px; -fx-min-height: 18px; -fx-padding: 0;");
-        Tooltip zHelpTooltip = new Tooltip(
-                "Z Focus Control via Mouse Scroll Wheel\n" +
-                "=========================================\n\n" +
-                "Hover your mouse over any of these controls and scroll:\n" +
-                "  - Z position field\n" +
-                "  - Step size field\n" +
-                "  - Move Z button\n\n" +
-                "Scroll UP = Move Z up (toward sample)\n" +
-                "Scroll DOWN = Move Z down (away from sample)\n\n" +
-                "The step size determines how much Z moves per scroll tick.");
+        Tooltip zHelpTooltip =
+                new Tooltip("Z Focus Control via Mouse Scroll Wheel\n" + "=========================================\n\n"
+                        + "Hover your mouse over any of these controls and scroll:\n"
+                        + "  - Z position field\n"
+                        + "  - Step size field\n"
+                        + "  - Move Z button\n\n"
+                        + "Scroll UP = Move Z up (toward sample)\n"
+                        + "Scroll DOWN = Move Z down (away from sample)\n\n"
+                        + "The step size determines how much Z moves per scroll tick.");
         zHelpTooltip.setShowDelay(Duration.ZERO);
         zHelpTooltip.setShowDuration(Duration.INDEFINITE);
         zHelpTooltip.setHideDelay(Duration.millis(200));
@@ -413,12 +416,7 @@ public class StageControlPanel extends TitledPane {
         centroidRow.setAlignment(Pos.CENTER_LEFT);
         VBox centroidSection = new VBox(4, new Separator(), centroidRow, availableLabel, alignmentListView);
 
-        positionContent.getChildren().addAll(
-                xyRow, xyStatus,
-                zRow, zStatus,
-                rRow, rStatus,
-                centroidSection
-        );
+        positionContent.getChildren().addAll(xyRow, xyStatus, zRow, zStatus, rRow, rStatus, centroidSection);
         positionTab.setContent(positionContent);
 
         // ============ TAB 2: NAVIGATE (Arrows, joystick, step controls) ============
@@ -433,10 +431,9 @@ public class StageControlPanel extends TitledPane {
         valueUmLabel.setStyle("-fx-font-size: 10px;");
 
         // Add tooltip to xyStepField
-        Tooltip xyStepTooltip = new Tooltip(
-                "Step size in micrometers for arrow keys and joystick movement.\n" +
-                "Arrow buttons move exactly this distance.\n" +
-                "Joystick uses this as the max speed at full deflection.");
+        Tooltip xyStepTooltip = new Tooltip("Step size in micrometers for arrow keys and joystick movement.\n"
+                + "Arrow buttons move exactly this distance.\n"
+                + "Joystick uses this as the max speed at full deflection.");
         xyStepTooltip.setShowDelay(Duration.millis(300));
         Tooltip.install(xyStepField, xyStepTooltip);
 
@@ -454,29 +451,26 @@ public class StageControlPanel extends TitledPane {
         // Help button for step controls
         Button stepHelpBtn = new Button("?");
         stepHelpBtn.setStyle("-fx-font-size: 9px; -fx-min-width: 18px; -fx-min-height: 18px; -fx-padding: 0;");
-        Tooltip stepHelpTooltip = new Tooltip(
-                "XY Step Size Controls\n" +
-                "======================\n\n" +
-                "FOV Presets:\n" +
-                "  - 1 FOV: Move one full field of view\n" +
-                "  - 0.5 FOV: Half field (for overlap)\n" +
-                "  - 0.25 FOV: Quarter field (fine positioning)\n" +
-                "  - 0.1 FOV: Fine movement\n" +
-                "  - Value: Enter custom step size\n\n" +
-                "Controls:\n" +
-                "  - Arrow buttons: Move exactly one step\n" +
-                "  - WASD/Arrow keys: Move exactly one step\n" +
-                "  - Joystick: Continuous movement, speed scales with deflection");
+        Tooltip stepHelpTooltip = new Tooltip("XY Step Size Controls\n" + "======================\n\n"
+                + "FOV Presets:\n"
+                + "  - 1 FOV: Move one full field of view\n"
+                + "  - 0.5 FOV: Half field (for overlap)\n"
+                + "  - 0.25 FOV: Quarter field (fine positioning)\n"
+                + "  - 0.1 FOV: Fine movement\n"
+                + "  - Value: Enter custom step size\n\n"
+                + "Controls:\n"
+                + "  - Arrow buttons: Move exactly one step\n"
+                + "  - WASD/Arrow keys: Move exactly one step\n"
+                + "  - Joystick: Continuous movement, speed scales with deflection");
         stepHelpTooltip.setShowDelay(Duration.ZERO);
         stepHelpTooltip.setShowDuration(Duration.INDEFINITE);
         stepHelpTooltip.setHideDelay(Duration.millis(200));
         Tooltip.install(stepHelpBtn, stepHelpTooltip);
 
         // Add tooltip to FOV combo
-        Tooltip fovComboTooltip = new Tooltip(
-                "Select step size based on camera field of view.\n" +
-                "Choose a fraction of FOV for consistent tile spacing,\n" +
-                "or 'Value' to enter a custom step size.");
+        Tooltip fovComboTooltip = new Tooltip("Select step size based on camera field of view.\n"
+                + "Choose a fraction of FOV for consistent tile spacing,\n"
+                + "or 'Value' to enter a custom step size.");
         fovComboTooltip.setShowDelay(Duration.millis(300));
         Tooltip.install(fovStepCombo, fovComboTooltip);
 
@@ -487,16 +481,20 @@ public class StageControlPanel extends TitledPane {
 
         // Navigation grid: arrows around joystick
         // Single-step buttons: half dimensions (up/down half height, left/right half width)
-        String singleUpDownStyle = "-fx-font-size: 10px; -fx-min-width: 28px; -fx-min-height: 14px; -fx-max-height: 14px; -fx-padding: 0;";
-        String singleLeftRightStyle = "-fx-font-size: 10px; -fx-min-width: 14px; -fx-max-width: 14px; -fx-min-height: 28px; -fx-padding: 0;";
+        String singleUpDownStyle =
+                "-fx-font-size: 10px; -fx-min-width: 28px; -fx-min-height: 14px; -fx-max-height: 14px; -fx-padding: 0;";
+        String singleLeftRightStyle =
+                "-fx-font-size: 10px; -fx-min-width: 14px; -fx-max-width: 14px; -fx-min-height: 28px; -fx-padding: 0;";
         upBtn.setStyle(singleUpDownStyle);
         downBtn.setStyle(singleUpDownStyle);
         leftBtn.setStyle(singleLeftRightStyle);
         rightBtn.setStyle(singleLeftRightStyle);
 
         // Double-step buttons: same half dimensions as single buttons
-        String doubleUpDownStyle = "-fx-font-size: 10px; -fx-min-width: 28px; -fx-min-height: 14px; -fx-max-height: 14px; -fx-padding: 0;";
-        String doubleLeftRightStyle = "-fx-font-size: 10px; -fx-min-width: 14px; -fx-max-width: 14px; -fx-min-height: 28px; -fx-padding: 0;";
+        String doubleUpDownStyle =
+                "-fx-font-size: 10px; -fx-min-width: 28px; -fx-min-height: 14px; -fx-max-height: 14px; -fx-padding: 0;";
+        String doubleLeftRightStyle =
+                "-fx-font-size: 10px; -fx-min-width: 14px; -fx-max-width: 14px; -fx-min-height: 28px; -fx-padding: 0;";
         upBtn2x.setStyle(doubleUpDownStyle);
         downBtn2x.setStyle(doubleUpDownStyle);
         leftBtn2x.setStyle(doubleLeftRightStyle);
@@ -518,7 +516,8 @@ public class StageControlPanel extends TitledPane {
         Tooltip.install(rightBtn2x, doubleArrowTooltip);
 
         // Add tooltip to joystick
-        Tooltip joystickTooltip = new Tooltip("Drag to move stage continuously.\nSpeed scales with deflection from center.");
+        Tooltip joystickTooltip =
+                new Tooltip("Drag to move stage continuously.\nSpeed scales with deflection from center.");
         joystickTooltip.setShowDelay(Duration.millis(500));
         Tooltip.install(joystick, joystickTooltip);
 
@@ -574,9 +573,8 @@ public class StageControlPanel extends TitledPane {
         TextField navZField = new TextField();
         navZField.setPrefWidth(70);
         navZField.textProperty().bindBidirectional(zField.textProperty());
-        Tooltip navZFieldTooltip = new Tooltip(
-                "Current Z position. Scroll mouse wheel here to adjust focus.\n" +
-                "Step size is controlled by the step field to the right.");
+        Tooltip navZFieldTooltip = new Tooltip("Current Z position. Scroll mouse wheel here to adjust focus.\n"
+                + "Step size is controlled by the step field to the right.");
         navZFieldTooltip.setShowDelay(Duration.millis(300));
         Tooltip.install(navZField, navZFieldTooltip);
 
@@ -588,9 +586,8 @@ public class StageControlPanel extends TitledPane {
         navZStepFieldMirror.setPrefWidth(45);
         navZStepFieldMirror.setAlignment(Pos.CENTER);
         navZStepFieldMirror.textProperty().bindBidirectional(zStepField.textProperty());
-        Tooltip navZStepTooltip = new Tooltip(
-                "Z step size in micrometers.\n" +
-                "Scroll mouse wheel over Z controls to adjust focus.");
+        Tooltip navZStepTooltip =
+                new Tooltip("Z step size in micrometers.\n" + "Scroll mouse wheel over Z controls to adjust focus.");
         navZStepTooltip.setShowDelay(Duration.millis(300));
         Tooltip.install(navZStepFieldMirror, navZStepTooltip);
 
@@ -600,15 +597,14 @@ public class StageControlPanel extends TitledPane {
         // Help button for Z in Navigate tab
         Button navZHelpBtn = new Button("?");
         navZHelpBtn.setStyle("-fx-font-size: 9px; -fx-min-width: 18px; -fx-min-height: 18px; -fx-padding: 0;");
-        Tooltip navZHelpTooltip = new Tooltip(
-                "Z Focus Control via Mouse Scroll Wheel\n" +
-                "=========================================\n\n" +
-                "Hover your mouse over any of these controls and scroll:\n" +
-                "  - Z position field\n" +
-                "  - Step size field\n\n" +
-                "Scroll UP = Move Z up (toward sample)\n" +
-                "Scroll DOWN = Move Z down (away from sample)\n\n" +
-                "The step size determines how much Z moves per scroll tick.");
+        Tooltip navZHelpTooltip =
+                new Tooltip("Z Focus Control via Mouse Scroll Wheel\n" + "=========================================\n\n"
+                        + "Hover your mouse over any of these controls and scroll:\n"
+                        + "  - Z position field\n"
+                        + "  - Step size field\n\n"
+                        + "Scroll UP = Move Z up (toward sample)\n"
+                        + "Scroll DOWN = Move Z down (away from sample)\n\n"
+                        + "The step size determines how much Z moves per scroll tick.");
         navZHelpTooltip.setShowDelay(Duration.ZERO);
         navZHelpTooltip.setShowDuration(Duration.INDEFINITE);
         navZHelpTooltip.setHideDelay(Duration.millis(200));
@@ -636,15 +632,18 @@ public class StageControlPanel extends TitledPane {
         // Bind to xyStatus text
         navXyStatus.textProperty().bind(xyStatus.textProperty());
 
-        navigateContent.getChildren().addAll(
-                stepRow1, stepRow2, fovInfoLabel,
-                new Separator(),
-                navSection,
-                navXyStatus,
-                new Separator(),
-                navZSection,
-                navZStatus
-        );
+        navigateContent
+                .getChildren()
+                .addAll(
+                        stepRow1,
+                        stepRow2,
+                        fovInfoLabel,
+                        new Separator(),
+                        navSection,
+                        navXyStatus,
+                        new Separator(),
+                        navZSection,
+                        navZStatus);
         navigateTab.setContent(navigateContent);
 
         // ============ TAB 3: SAVED POINTS ============
@@ -697,13 +696,9 @@ public class StageControlPanel extends TitledPane {
         savedPointsStatus = new Label();
         savedPointsStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
 
-        savedPointsContent.getChildren().addAll(
-                addPointBtn,
-                savedPointsListView,
-                goButtons,
-                manageButtons,
-                savedPointsStatus
-        );
+        savedPointsContent
+                .getChildren()
+                .addAll(addPointBtn, savedPointsListView, goButtons, manageButtons, savedPointsStatus);
         savedPointsTab.setContent(savedPointsContent);
 
         // Wire up Saved Points event handlers
@@ -777,7 +772,7 @@ public class StageControlPanel extends TitledPane {
             try {
                 double x = Double.parseDouble(xField.getText().replace(",", ""));
                 double y = Double.parseDouble(yField.getText().replace(",", ""));
-                joystickPosition.set(new double[]{x, y});
+                joystickPosition.set(new double[] {x, y});
                 logger.debug("Joystick position synced to: ({}, {})", x, y);
             } catch (NumberFormatException e) {
                 logger.warn("Failed to sync joystick position from text fields");
@@ -797,35 +792,37 @@ public class StageControlPanel extends TitledPane {
 
     private void initializeFromHardware() {
         // Run socket operations on background thread to avoid blocking FX thread
-        Thread initThread = new Thread(() -> {
-            try {
-                double[] xy = MicroscopeController.getInstance().getStagePositionXY();
-                Platform.runLater(() -> {
-                    xField.setText(String.format("%.2f", xy[0]));
-                    yField.setText(String.format("%.2f", xy[1]));
-                    joystickPosition.set(new double[]{xy[0], xy[1]});
-                });
-                logger.debug("Initialized XY fields with current position: X={}, Y={}", xy[0], xy[1]);
-            } catch (Exception e) {
-                logger.debug("Failed to retrieve current XY stage position: {}", e.getMessage());
-            }
+        Thread initThread = new Thread(
+                () -> {
+                    try {
+                        double[] xy = MicroscopeController.getInstance().getStagePositionXY();
+                        Platform.runLater(() -> {
+                            xField.setText(String.format("%.2f", xy[0]));
+                            yField.setText(String.format("%.2f", xy[1]));
+                            joystickPosition.set(new double[] {xy[0], xy[1]});
+                        });
+                        logger.debug("Initialized XY fields with current position: X={}, Y={}", xy[0], xy[1]);
+                    } catch (Exception e) {
+                        logger.debug("Failed to retrieve current XY stage position: {}", e.getMessage());
+                    }
 
-            try {
-                double z = MicroscopeController.getInstance().getStagePositionZ();
-                Platform.runLater(() -> zField.setText(String.format("%.2f", z)));
-                logger.debug("Initialized Z field with current position: {}", z);
-            } catch (Exception e) {
-                logger.debug("Failed to retrieve current Z stage position: {}", e.getMessage());
-            }
+                    try {
+                        double z = MicroscopeController.getInstance().getStagePositionZ();
+                        Platform.runLater(() -> zField.setText(String.format("%.2f", z)));
+                        logger.debug("Initialized Z field with current position: {}", z);
+                    } catch (Exception e) {
+                        logger.debug("Failed to retrieve current Z stage position: {}", e.getMessage());
+                    }
 
-            try {
-                double r = MicroscopeController.getInstance().getStagePositionR();
-                Platform.runLater(() -> rField.setText(String.format("%.2f", r)));
-                logger.debug("Initialized R field with current position: {}", r);
-            } catch (Exception e) {
-                logger.debug("Failed to retrieve current R stage position: {}", e.getMessage());
-            }
-        }, "StageControl-Init");
+                    try {
+                        double r = MicroscopeController.getInstance().getStagePositionR();
+                        Platform.runLater(() -> rField.setText(String.format("%.2f", r)));
+                        logger.debug("Initialized R field with current position: {}", r);
+                    } catch (Exception e) {
+                        logger.debug("Failed to retrieve current R stage position: {}", e.getMessage());
+                    }
+                },
+                "StageControl-Init");
         initThread.setDaemon(true);
         initThread.start();
     }
@@ -854,13 +851,13 @@ public class StageControlPanel extends TitledPane {
                 xField.setText(String.format("%.2f", newVal));
                 // Update joystick tracking
                 double[] current = joystickPosition.get();
-                joystickPosition.set(new double[]{newVal, current[1]});
+                joystickPosition.set(new double[] {newVal, current[1]});
             }
             case StagePositionManager.PROP_POS_Y -> {
                 yField.setText(String.format("%.2f", newVal));
                 // Update joystick tracking
                 double[] current = joystickPosition.get();
-                joystickPosition.set(new double[]{current[0], newVal});
+                joystickPosition.set(new double[] {current[0], newVal});
             }
             case StagePositionManager.PROP_POS_Z -> zField.setText(String.format("%.2f", newVal));
             case StagePositionManager.PROP_POS_R -> rField.setText(String.format("%.2f", newVal));
@@ -945,28 +942,29 @@ public class StageControlPanel extends TitledPane {
             if (!mgr.isWithinStageBounds(x, y)) {
                 logger.warn("XY movement rejected - coordinates out of bounds: X={}, Y={}", x, y);
                 UIFunctions.notifyUserOfError(
-                        res.getString("stageMovement.error.outOfBoundsXY"),
-                        res.getString("stageMovement.title"));
+                        res.getString("stageMovement.error.outOfBoundsXY"), res.getString("stageMovement.title"));
                 return;
             }
 
             logger.info("Executing XY stage movement to position: X={}, Y={}", x, y);
             xyStatus.setText("Moving...");
-            joystickPosition.set(new double[]{x, y});
+            joystickPosition.set(new double[] {x, y});
 
             // Run socket operation on background thread to avoid blocking FX thread
-            Thread moveThread = new Thread(() -> {
-                try {
-                    MicroscopeController.getInstance().moveStageXY(x, y);
-                    Platform.runLater(() -> xyStatus.setText(String.format("Moved to (%.0f, %.0f)", x, y)));
-                } catch (Exception ex) {
-                    logger.error("XY stage movement failed: {}", ex.getMessage(), ex);
-                    Platform.runLater(() -> {
-                        xyStatus.setText("Move failed");
-                        UIFunctions.notifyUserOfError(ex.getMessage(), res.getString("stageMovement.title"));
-                    });
-                }
-            }, "StageControl-MoveXY");
+            Thread moveThread = new Thread(
+                    () -> {
+                        try {
+                            MicroscopeController.getInstance().moveStageXY(x, y);
+                            Platform.runLater(() -> xyStatus.setText(String.format("Moved to (%.0f, %.0f)", x, y)));
+                        } catch (Exception ex) {
+                            logger.error("XY stage movement failed: {}", ex.getMessage(), ex);
+                            Platform.runLater(() -> {
+                                xyStatus.setText("Move failed");
+                                UIFunctions.notifyUserOfError(ex.getMessage(), res.getString("stageMovement.title"));
+                            });
+                        }
+                    },
+                    "StageControl-MoveXY");
             moveThread.setDaemon(true);
             moveThread.start();
         } catch (NumberFormatException ex) {
@@ -983,8 +981,7 @@ public class StageControlPanel extends TitledPane {
             if (!mgr.isWithinStageBounds(z)) {
                 logger.warn("Z movement rejected - coordinate out of bounds: {}", z);
                 UIFunctions.notifyUserOfError(
-                        res.getString("stageMovement.error.outOfBoundsZ"),
-                        res.getString("stageMovement.title"));
+                        res.getString("stageMovement.error.outOfBoundsZ"), res.getString("stageMovement.title"));
                 return;
             }
 
@@ -992,18 +989,20 @@ public class StageControlPanel extends TitledPane {
             zStatus.setText("Moving...");
 
             // Run socket operation on background thread to avoid blocking FX thread
-            Thread moveThread = new Thread(() -> {
-                try {
-                    MicroscopeController.getInstance().moveStageZ(z);
-                    Platform.runLater(() -> zStatus.setText(String.format("Moved Z to %.2f", z)));
-                } catch (Exception ex) {
-                    logger.error("Z stage movement failed: {}", ex.getMessage(), ex);
-                    Platform.runLater(() -> {
-                        zStatus.setText("Move failed");
-                        UIFunctions.notifyUserOfError(ex.getMessage(), res.getString("stageMovement.title"));
-                    });
-                }
-            }, "StageControl-MoveZ");
+            Thread moveThread = new Thread(
+                    () -> {
+                        try {
+                            MicroscopeController.getInstance().moveStageZ(z);
+                            Platform.runLater(() -> zStatus.setText(String.format("Moved Z to %.2f", z)));
+                        } catch (Exception ex) {
+                            logger.error("Z stage movement failed: {}", ex.getMessage(), ex);
+                            Platform.runLater(() -> {
+                                zStatus.setText("Move failed");
+                                UIFunctions.notifyUserOfError(ex.getMessage(), res.getString("stageMovement.title"));
+                            });
+                        }
+                    },
+                    "StageControl-MoveZ");
             moveThread.setDaemon(true);
             moveThread.start();
         } catch (NumberFormatException ex) {
@@ -1021,18 +1020,20 @@ public class StageControlPanel extends TitledPane {
             rStatus.setText("Moving...");
 
             // Run socket operation on background thread to avoid blocking FX thread
-            Thread moveThread = new Thread(() -> {
-                try {
-                    MicroscopeController.getInstance().moveStageR(r);
-                    Platform.runLater(() -> rStatus.setText(String.format("Moved R to %.2f", r)));
-                } catch (Exception ex) {
-                    logger.error("R stage movement failed: {}", ex.getMessage(), ex);
-                    Platform.runLater(() -> {
-                        rStatus.setText("Move failed");
-                        UIFunctions.notifyUserOfError(ex.getMessage(), res.getString("stageMovement.title"));
-                    });
-                }
-            }, "StageControl-MoveR");
+            Thread moveThread = new Thread(
+                    () -> {
+                        try {
+                            MicroscopeController.getInstance().moveStageR(r);
+                            Platform.runLater(() -> rStatus.setText(String.format("Moved R to %.2f", r)));
+                        } catch (Exception ex) {
+                            logger.error("R stage movement failed: {}", ex.getMessage(), ex);
+                            Platform.runLater(() -> {
+                                rStatus.setText("Move failed");
+                                UIFunctions.notifyUserOfError(ex.getMessage(), res.getString("stageMovement.title"));
+                            });
+                        }
+                    },
+                    "StageControl-MoveR");
             moveThread.setDaemon(true);
             moveThread.start();
         } catch (NumberFormatException ex) {
@@ -1042,7 +1043,10 @@ public class StageControlPanel extends TitledPane {
     }
 
     private void handleZScroll(ScrollEvent event, TextField zStepField) {
-        if (isAcquisitionBlocked()) { event.consume(); return; }
+        if (isAcquisitionBlocked()) {
+            event.consume();
+            return;
+        }
         try {
             double step = Double.parseDouble(zStepField.getText().replace(",", ""));
             double currentZ = Double.parseDouble(zField.getText().replace(",", ""));
@@ -1060,15 +1064,17 @@ public class StageControlPanel extends TitledPane {
             logger.debug("Scroll Z movement to: {}", newZ);
 
             // Run socket operation on background thread to avoid blocking FX thread
-            Thread moveThread = new Thread(() -> {
-                try {
-                    MicroscopeController.getInstance().moveStageZ(newZ);
-                    Platform.runLater(() -> zStatus.setText(String.format("Scrolled Z to %.2f", newZ)));
-                } catch (Exception ex) {
-                    logger.warn("Z scroll movement failed: {}", ex.getMessage());
-                    Platform.runLater(() -> zStatus.setText("Z scroll failed"));
-                }
-            }, "StageControl-ZScroll");
+            Thread moveThread = new Thread(
+                    () -> {
+                        try {
+                            MicroscopeController.getInstance().moveStageZ(newZ);
+                            Platform.runLater(() -> zStatus.setText(String.format("Scrolled Z to %.2f", newZ)));
+                        } catch (Exception ex) {
+                            logger.warn("Z scroll movement failed: {}", ex.getMessage());
+                            Platform.runLater(() -> zStatus.setText("Z scroll failed"));
+                        }
+                    },
+                    "StageControl-ZScroll");
             moveThread.setDaemon(true);
             moveThread.start();
         } catch (Exception ex) {
@@ -1092,8 +1098,8 @@ public class StageControlPanel extends TitledPane {
             //   - Right increases X, Left decreases X
             //   - Up decreases Y, Down increases Y (unchanged)
             boolean sampleMode = sampleMovementCheckbox.isSelected();
-            double xMult = sampleMode ? 1 : -1;  // Sample: right increases X; Default: right decreases X
-            double yMult = -1;  // Always: up decreases Y (matches MicroManager)
+            double xMult = sampleMode ? 1 : -1; // Sample: right increases X; Default: right decreases X
+            double yMult = -1; // Always: up decreases Y (matches MicroManager)
 
             double newX = currentX + (step * xDir * xMult);
             double newY = currentY + (step * yDir * yMult);
@@ -1106,23 +1112,26 @@ public class StageControlPanel extends TitledPane {
             // Update UI immediately with expected position
             xField.setText(String.format("%.2f", newX));
             yField.setText(String.format("%.2f", newY));
-            joystickPosition.set(new double[]{newX, newY});
+            joystickPosition.set(new double[] {newX, newY});
             xyStatus.setText("Moving...");
 
             // Run socket operation on background thread to avoid blocking FX thread
             // (which could cause "Not Responding" if socket is held by another operation)
-            Thread moveThread = new Thread(() -> {
-                try {
-                    long t0 = System.nanoTime();
-                    MicroscopeController.getInstance().moveStageXY(newX, newY);
-                    long ms = (System.nanoTime() - t0) / 1_000_000;
-                    logger.debug("Arrow move to ({}, {}) took {}ms", newX, newY, ms);
-                    Platform.runLater(() -> xyStatus.setText(String.format("Moved to (%.0f, %.0f)", newX, newY)));
-                } catch (Exception ex) {
-                    logger.warn("Arrow movement failed: {}", ex.getMessage());
-                    Platform.runLater(() -> xyStatus.setText("Move failed"));
-                }
-            }, "StageControl-ArrowMove");
+            Thread moveThread = new Thread(
+                    () -> {
+                        try {
+                            long t0 = System.nanoTime();
+                            MicroscopeController.getInstance().moveStageXY(newX, newY);
+                            long ms = (System.nanoTime() - t0) / 1_000_000;
+                            logger.debug("Arrow move to ({}, {}) took {}ms", newX, newY, ms);
+                            Platform.runLater(
+                                    () -> xyStatus.setText(String.format("Moved to (%.0f, %.0f)", newX, newY)));
+                        } catch (Exception ex) {
+                            logger.warn("Arrow movement failed: {}", ex.getMessage());
+                            Platform.runLater(() -> xyStatus.setText("Move failed"));
+                        }
+                    },
+                    "StageControl-ArrowMove");
             moveThread.setDaemon(true);
             moveThread.start();
         } catch (Exception ex) {
@@ -1146,8 +1155,8 @@ public class StageControlPanel extends TitledPane {
             //   - Right (deltaX > 0) -> X increases
             //   - Up (deltaY < 0) -> Y decreases (unchanged)
             boolean sampleMode = sampleMovementMode.get();
-            double xMult = sampleMode ? 1 : -1;  // Sample: right increases X; Default: right decreases X
-            double yMult = 1;  // Always: up decreases Y (matches MicroManager)
+            double xMult = sampleMode ? 1 : -1; // Sample: right increases X; Default: right decreases X
+            double yMult = 1; // Always: up decreases Y (matches MicroManager)
             double targetX = currentX + (deltaX * xMult);
             double targetY = currentY + (deltaY * yMult);
 
@@ -1156,7 +1165,7 @@ public class StageControlPanel extends TitledPane {
                 return;
             }
 
-            joystickPosition.set(new double[]{targetX, targetY});
+            joystickPosition.set(new double[] {targetX, targetY});
 
             MicroscopeController.getInstance().moveStageXY(targetX, targetY);
             Platform.runLater(() -> {
@@ -1203,9 +1212,8 @@ public class StageControlPanel extends TitledPane {
                     : "unknown";
 
             @SuppressWarnings("unchecked")
-            Project<BufferedImage> projectForList = gui != null && gui.getProject() != null
-                    ? (Project<BufferedImage>) gui.getProject()
-                    : null;
+            Project<BufferedImage> projectForList =
+                    gui != null && gui.getProject() != null ? (Project<BufferedImage>) gui.getProject() : null;
             List<String> availableAlignments = getAvailableAlignments(projectForList);
 
             if (availableAlignments.isEmpty()) {
@@ -1248,8 +1256,7 @@ public class StageControlPanel extends TitledPane {
         if (transform == null) {
             centroidStatus.setText("No alignment available");
             UIFunctions.notifyUserOfError(
-                    "No alignment is available. Please perform alignment first.",
-                    "Go to Centroid");
+                    "No alignment is available. Please perform alignment first.", "Go to Centroid");
             return;
         }
 
@@ -1258,14 +1265,12 @@ public class StageControlPanel extends TitledPane {
             return;
         }
 
-        PathObject selectedObject = gui.getImageData().getHierarchy()
-                .getSelectionModel().getSelectedObject();
+        PathObject selectedObject =
+                gui.getImageData().getHierarchy().getSelectionModel().getSelectedObject();
 
         if (selectedObject == null) {
             centroidStatus.setText("No object selected");
-            UIFunctions.notifyUserOfError(
-                    "Please select an object in QuPath first.",
-                    "Go to Centroid");
+            UIFunctions.notifyUserOfError("Please select an object in QuPath first.", "Go to Centroid");
             return;
         }
 
@@ -1279,13 +1284,11 @@ public class StageControlPanel extends TitledPane {
             double centroidY = selectedObject.getROI().getCentroidY();
 
             double[] qpCoords = {centroidX, centroidY};
-            double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
-                    qpCoords, transform);
+            double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(qpCoords, transform);
 
             if (!mgr.isWithinStageBounds(stageCoords[0], stageCoords[1])) {
                 UIFunctions.notifyUserOfError(
-                        "The object centroid position is outside the stage bounds.",
-                        "Go to Centroid");
+                        "The object centroid position is outside the stage bounds.", "Go to Centroid");
                 centroidStatus.setText("Position out of bounds");
                 return;
             }
@@ -1295,26 +1298,28 @@ public class StageControlPanel extends TitledPane {
             double targetY = stageCoords[1];
             xField.setText(String.format("%.2f", targetX));
             yField.setText(String.format("%.2f", targetY));
-            joystickPosition.set(new double[]{targetX, targetY});
+            joystickPosition.set(new double[] {targetX, targetY});
             centroidStatus.setText("Moving...");
             xyStatus.setText("Moving to centroid...");
 
             // Run socket operation on background thread to avoid blocking FX thread
-            Thread moveThread = new Thread(() -> {
-                try {
-                    MicroscopeController.getInstance().moveStageXY(targetX, targetY);
-                    Platform.runLater(() -> {
-                        centroidStatus.setText(String.format("Moved to (%.0f, %.0f)", targetX, targetY));
-                        xyStatus.setText(String.format("Moved to centroid (%.0f, %.0f)", targetX, targetY));
-                    });
-                } catch (Exception ex) {
-                    logger.error("Failed to move to object centroid: {}", ex.getMessage(), ex);
-                    Platform.runLater(() -> {
-                        centroidStatus.setText("Move failed");
-                        xyStatus.setText("Centroid move failed");
-                    });
-                }
-            }, "StageControl-GoToCentroid");
+            Thread moveThread = new Thread(
+                    () -> {
+                        try {
+                            MicroscopeController.getInstance().moveStageXY(targetX, targetY);
+                            Platform.runLater(() -> {
+                                centroidStatus.setText(String.format("Moved to (%.0f, %.0f)", targetX, targetY));
+                                xyStatus.setText(String.format("Moved to centroid (%.0f, %.0f)", targetX, targetY));
+                            });
+                        } catch (Exception ex) {
+                            logger.error("Failed to move to object centroid: {}", ex.getMessage(), ex);
+                            Platform.runLater(() -> {
+                                centroidStatus.setText("Move failed");
+                                xyStatus.setText("Centroid move failed");
+                            });
+                        }
+                    },
+                    "StageControl-GoToCentroid");
             moveThread.setDaemon(true);
             moveThread.start();
         } catch (Exception ex) {
@@ -1326,7 +1331,8 @@ public class StageControlPanel extends TitledPane {
     // ============ SAVED POINTS TAB HANDLERS ============
 
     private void handleAddSavedPoint() {
-        TextInputDialog dialog = new TextInputDialog("Point " + (savedPointsListView.getItems().size() + 1));
+        TextInputDialog dialog =
+                new TextInputDialog("Point " + (savedPointsListView.getItems().size() + 1));
         dialog.setTitle("Add Saved Point");
         dialog.setHeaderText("Save current position");
         dialog.setContentText("Point name:");
@@ -1378,34 +1384,44 @@ public class StageControlPanel extends TitledPane {
 
         savedPointsStatus.setText("Moving...");
         String moveType = includeZ ? "XYZ" : "XY";
-        logger.info("Moving to saved point '{}' ({}) at X={}, Y={}{}", selected.getName(), moveType,
-                targetX, targetY, includeZ ? ", Z=" + targetZ : "");
+        logger.info(
+                "Moving to saved point '{}' ({}) at X={}, Y={}{}",
+                selected.getName(),
+                moveType,
+                targetX,
+                targetY,
+                includeZ ? ", Z=" + targetZ : "");
 
-        Thread moveThread = new Thread(() -> {
-            try {
-                MicroscopeController controller = MicroscopeController.getInstance();
-                controller.moveStageXY(targetX, targetY);
-                if (targetZ != null) {
-                    controller.moveStageZ(targetZ);
-                }
+        Thread moveThread = new Thread(
+                () -> {
+                    try {
+                        MicroscopeController controller = MicroscopeController.getInstance();
+                        controller.moveStageXY(targetX, targetY);
+                        if (targetZ != null) {
+                            controller.moveStageZ(targetZ);
+                        }
 
-                Platform.runLater(() -> {
-                    xField.setText(String.format("%.2f", targetX));
-                    yField.setText(String.format("%.2f", targetY));
-                    if (targetZ != null) {
-                        zField.setText(String.format("%.2f", targetZ));
+                        Platform.runLater(() -> {
+                            xField.setText(String.format("%.2f", targetX));
+                            yField.setText(String.format("%.2f", targetY));
+                            if (targetZ != null) {
+                                zField.setText(String.format("%.2f", targetZ));
+                            }
+                            joystickPosition.set(new double[] {targetX, targetY});
+                            savedPointsStatus.setText(String.format(
+                                    "Moved to %s (%.0f, %.0f%s)",
+                                    selected.getName(),
+                                    targetX,
+                                    targetY,
+                                    targetZ != null ? String.format(", %.1f", targetZ) : ""));
+                            xyStatus.setText(String.format("Moved to saved point (%.0f, %.0f)", targetX, targetY));
+                        });
+                    } catch (Exception ex) {
+                        logger.error("Failed to move to saved point: {}", ex.getMessage());
+                        Platform.runLater(() -> savedPointsStatus.setText("Move failed: " + ex.getMessage()));
                     }
-                    joystickPosition.set(new double[]{targetX, targetY});
-                    savedPointsStatus.setText(String.format("Moved to %s (%.0f, %.0f%s)",
-                            selected.getName(), targetX, targetY,
-                            targetZ != null ? String.format(", %.1f", targetZ) : ""));
-                    xyStatus.setText(String.format("Moved to saved point (%.0f, %.0f)", targetX, targetY));
-                });
-            } catch (Exception ex) {
-                logger.error("Failed to move to saved point: {}", ex.getMessage());
-                Platform.runLater(() -> savedPointsStatus.setText("Move failed: " + ex.getMessage()));
-            }
-        }, "StageControl-GoToSavedPoint");
+                },
+                "StageControl-GoToSavedPoint");
         moveThread.setDaemon(true);
         moveThread.start();
     }
@@ -1483,7 +1499,9 @@ public class StageControlPanel extends TitledPane {
                     }
                 }
             }
-            logger.debug("Loaded {} saved points from preferences", savedPointsListView.getItems().size());
+            logger.debug(
+                    "Loaded {} saved points from preferences",
+                    savedPointsListView.getItems().size());
         } catch (Exception e) {
             logger.warn("Failed to load saved points from preferences: {}", e.getMessage());
         }
@@ -1497,7 +1515,8 @@ public class StageControlPanel extends TitledPane {
         }
         sb.append("]");
         PersistentPreferences.setSavedStagePoints(sb.toString());
-        logger.debug("Saved {} points to preferences", savedPointsListView.getItems().size());
+        logger.debug(
+                "Saved {} points to preferences", savedPointsListView.getItems().size());
     }
 
     private List<String> getAvailableAlignments(Project<BufferedImage> project) {

@@ -1,5 +1,7 @@
 package qupath.ext.qpsc.ui;
 
+import java.io.File;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -14,9 +16,6 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
-
-import java.io.File;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Non-modal window for Sunburst Calibration parameters.
@@ -47,8 +46,7 @@ public class SunburstCalibrationDialog {
             double valueThreshold,
             String calibrationName,
             int radiusInner,
-            int radiusOuter
-    ) {}
+            int radiusOuter) {}
 
     /**
      * Creates a label with a tooltip indicator (?) that shows additional help on hover.
@@ -109,25 +107,22 @@ public class SunburstCalibrationDialog {
             Label headerLabel = new Label("Create Hue-to-Angle Calibration from PPM Reference Slide");
             headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
 
-            Label instructionLabel = new Label(
-                "Position the PPM reference slide (sunburst/fan pattern)\n" +
-                "under the microscope and ensure it is properly focused.\n\n" +
-                "This workflow will:\n" +
-                "  1. Acquire an image using the current camera settings\n" +
-                "  2. Sample hue values along radial spokes from the pattern center\n" +
-                "  3. Create a linear regression mapping hue to orientation angle (0-180 deg)\n" +
-                "  4. Save the calibration for use in PPM analysis\n\n" +
-                "Hover over (?) icons for detailed parameter descriptions."
-            );
+            Label instructionLabel = new Label("Position the PPM reference slide (sunburst/fan pattern)\n"
+                    + "under the microscope and ensure it is properly focused.\n\n"
+                    + "This workflow will:\n"
+                    + "  1. Acquire an image using the current camera settings\n"
+                    + "  2. Sample hue values along radial spokes from the pattern center\n"
+                    + "  3. Create a linear regression mapping hue to orientation angle (0-180 deg)\n"
+                    + "  4. Save the calibration for use in PPM analysis\n\n"
+                    + "Hover over (?) icons for detailed parameter descriptions.");
             instructionLabel.setWrapText(true);
             instructionLabel.setStyle("-fx-font-size: 11px;");
 
             // Important note about angle settings
             Label angleNote = new Label(
-                "IMPORTANT: Use low-angle PPM settings (crossed or near-crossed angles) for calibration.\n" +
-                "These angles provide the best color saturation for detecting the spokes.\n" +
-                "Use the Camera Control button below to set the camera to the correct angle."
-            );
+                    "IMPORTANT: Use low-angle PPM settings (crossed or near-crossed angles) for calibration.\n"
+                            + "These angles provide the best color saturation for detecting the spokes.\n"
+                            + "Use the Camera Control button below to set the camera to the correct angle.");
             angleNote.setWrapText(true);
             angleNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #cc6600; -fx-font-weight: bold;");
 
@@ -142,11 +137,11 @@ public class SunburstCalibrationDialog {
             int row = 0;
 
             // === Output folder ===
-            HBox outputLabelBox = createLabelWithTooltip("Calibration Folder:",
-                "Folder where calibration files will be saved.\n\n" +
-                "All calibration output files are saved directly\n" +
-                "into this folder."
-            );
+            HBox outputLabelBox = createLabelWithTooltip(
+                    "Calibration Folder:",
+                    "Folder where calibration files will be saved.\n\n"
+                            + "All calibration output files are saved directly\n"
+                            + "into this folder.");
             outputLabelBox.getChildren().get(0).setStyle("-fx-font-weight: bold;");
 
             TextField outputField = new TextField();
@@ -163,7 +158,8 @@ public class SunburstCalibrationDialog {
                 File current = new File(outputField.getText());
                 if (current.exists() && current.isDirectory()) {
                     chooser.setInitialDirectory(current);
-                } else if (current.getParentFile() != null && current.getParentFile().exists()) {
+                } else if (current.getParentFile() != null
+                        && current.getParentFile().exists()) {
                     chooser.setInitialDirectory(current.getParentFile());
                 }
                 File chosen = chooser.showDialog(stage);
@@ -186,10 +182,9 @@ public class SunburstCalibrationDialog {
             grid.add(cameraSetupLabel, 0, row, 3, 1);
             row++;
 
-            Label cameraInstructions = new Label(
-                "Open Camera Control to set the polarizer to a low angle (crossed or near-crossed)\n" +
-                "and verify the camera settings before running calibration."
-            );
+            Label cameraInstructions =
+                    new Label("Open Camera Control to set the polarizer to a low angle (crossed or near-crossed)\n"
+                            + "and verify the camera settings before running calibration.");
             cameraInstructions.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
             cameraInstructions.setWrapText(true);
             grid.add(cameraInstructions, 0, row, 3, 1);
@@ -212,16 +207,15 @@ public class SunburstCalibrationDialog {
             row++;
 
             // Number of spokes
-            HBox spokesLabelBox = createLabelWithTooltip("Number of Spokes:",
-                "Number of radial spokes (unique orientations) in the sunburst pattern.\n\n" +
-                "Common values:\n" +
-                "  - 16: Standard sunburst slides (11.25 deg spacing)\n" +
-                "  - 12: Some older slides (15 deg spacing)\n" +
-                "  - 8: Simplified slides (22.5 deg spacing)\n\n" +
-                "Valid range: 4-32\n\n" +
-                "The calibrator samples hue values along radial lines\n" +
-                "at each spoke angle to build the hue-to-angle mapping."
-            );
+            HBox spokesLabelBox = createLabelWithTooltip(
+                    "Number of Spokes:",
+                    "Number of radial spokes (unique orientations) in the sunburst pattern.\n\n" + "Common values:\n"
+                            + "  - 16: Standard sunburst slides (11.25 deg spacing)\n"
+                            + "  - 12: Some older slides (15 deg spacing)\n"
+                            + "  - 8: Simplified slides (22.5 deg spacing)\n\n"
+                            + "Valid range: 4-32\n\n"
+                            + "The calibrator samples hue values along radial lines\n"
+                            + "at each spoke angle to build the hue-to-angle mapping.");
 
             int savedSpokes = QPPreferenceDialog.getSunburstExpectedSpokes();
             Spinner<Integer> spokesSpinner = new Spinner<>(4, 32, savedSpokes, 4);
@@ -233,20 +227,20 @@ public class SunburstCalibrationDialog {
             row++;
 
             // Saturation threshold
-            HBox saturationLabelBox = createLabelWithTooltip("Saturation Threshold:",
-                "Minimum HSV saturation to classify a pixel as foreground (colored).\n\n" +
-                "Range: 0.0 - 1.0 (default: 0.1)\n\n" +
-                "In HSV color space, saturation measures color intensity:\n" +
-                "  - 0.0 = grayscale (no color)\n" +
-                "  - 1.0 = fully saturated color\n\n" +
-                "In the debug mask image:\n" +
-                "  WHITE = detected foreground (above threshold)\n" +
-                "  BLACK = background (below threshold)\n\n" +
-                "Lower values (0.05-0.1): Include more pixels, may pick up noise\n" +
-                "Higher values (0.2-0.3): Stricter, may miss pale spokes\n\n" +
-                "If mask is all BLACK -> lower this value (threshold too high)\n" +
-                "If mask is all WHITE -> raise this value (threshold too low)"
-            );
+            HBox saturationLabelBox = createLabelWithTooltip(
+                    "Saturation Threshold:",
+                    "Minimum HSV saturation to classify a pixel as foreground (colored).\n\n"
+                            + "Range: 0.0 - 1.0 (default: 0.1)\n\n"
+                            + "In HSV color space, saturation measures color intensity:\n"
+                            + "  - 0.0 = grayscale (no color)\n"
+                            + "  - 1.0 = fully saturated color\n\n"
+                            + "In the debug mask image:\n"
+                            + "  WHITE = detected foreground (above threshold)\n"
+                            + "  BLACK = background (below threshold)\n\n"
+                            + "Lower values (0.05-0.1): Include more pixels, may pick up noise\n"
+                            + "Higher values (0.2-0.3): Stricter, may miss pale spokes\n\n"
+                            + "If mask is all BLACK -> lower this value (threshold too high)\n"
+                            + "If mask is all WHITE -> raise this value (threshold too low)");
 
             double savedSaturation = QPPreferenceDialog.getSunburstSaturationThreshold();
             Spinner<Double> saturationSpinner = new Spinner<>(0.01, 0.5, savedSaturation, 0.01);
@@ -258,21 +252,21 @@ public class SunburstCalibrationDialog {
             row++;
 
             // Value threshold
-            HBox valueLabelBox = createLabelWithTooltip("Value Threshold:",
-                "Minimum HSV value (brightness) to classify a pixel as foreground.\n\n" +
-                "Range: 0.0 - 1.0 (default: 0.1)\n\n" +
-                "In HSV color space, value measures brightness:\n" +
-                "  - 0.0 = black\n" +
-                "  - 1.0 = maximum brightness\n\n" +
-                "This helps exclude dark regions (slide edges, shadows).\n\n" +
-                "In the debug mask image:\n" +
-                "  WHITE = detected foreground (above threshold)\n" +
-                "  BLACK = background (below threshold)\n\n" +
-                "Lower values (0.05-0.1): Include dimmer pixels\n" +
-                "Higher values (0.2-0.3): Only bright pixels\n\n" +
-                "If mask is all BLACK -> lower this value (threshold too high)\n" +
-                "If mask is all WHITE -> raise this value (threshold too low)"
-            );
+            HBox valueLabelBox = createLabelWithTooltip(
+                    "Value Threshold:",
+                    "Minimum HSV value (brightness) to classify a pixel as foreground.\n\n"
+                            + "Range: 0.0 - 1.0 (default: 0.1)\n\n"
+                            + "In HSV color space, value measures brightness:\n"
+                            + "  - 0.0 = black\n"
+                            + "  - 1.0 = maximum brightness\n\n"
+                            + "This helps exclude dark regions (slide edges, shadows).\n\n"
+                            + "In the debug mask image:\n"
+                            + "  WHITE = detected foreground (above threshold)\n"
+                            + "  BLACK = background (below threshold)\n\n"
+                            + "Lower values (0.05-0.1): Include dimmer pixels\n"
+                            + "Higher values (0.2-0.3): Only bright pixels\n\n"
+                            + "If mask is all BLACK -> lower this value (threshold too high)\n"
+                            + "If mask is all WHITE -> raise this value (threshold too low)");
 
             double savedValue = QPPreferenceDialog.getSunburstValueThreshold();
             Spinner<Double> valueSpinner = new Spinner<>(0.01, 0.5, savedValue, 0.01);
@@ -299,12 +293,12 @@ public class SunburstCalibrationDialog {
             int advRow = 0;
 
             // Inner radius
-            HBox innerRadiusLabelBox = createLabelWithTooltip("Inner Radius (px):",
-                "Inner radius for radial sampling, in pixels from pattern center.\n\n" +
-                "Sampling starts at this distance from the detected center.\n" +
-                "Increase to skip noisy/dark pixels near the center of the pattern.\n\n" +
-                "Default: 30, Range: 10-200"
-            );
+            HBox innerRadiusLabelBox = createLabelWithTooltip(
+                    "Inner Radius (px):",
+                    "Inner radius for radial sampling, in pixels from pattern center.\n\n"
+                            + "Sampling starts at this distance from the detected center.\n"
+                            + "Increase to skip noisy/dark pixels near the center of the pattern.\n\n"
+                            + "Default: 30, Range: 10-200");
             int savedInnerRadius = QPPreferenceDialog.getSunburstRadiusInner();
             Spinner<Integer> innerRadiusSpinner = new Spinner<>(10, 200, savedInnerRadius, 5);
             innerRadiusSpinner.setEditable(true);
@@ -314,12 +308,12 @@ public class SunburstCalibrationDialog {
             advRow++;
 
             // Outer radius
-            HBox outerRadiusLabelBox = createLabelWithTooltip("Outer Radius (px):",
-                "Outer radius for radial sampling, in pixels from pattern center.\n\n" +
-                "Sampling ends at this distance. Should reach into the colored\n" +
-                "spokes but not extend past them into the background.\n\n" +
-                "Default: 150, Range: 50-500"
-            );
+            HBox outerRadiusLabelBox = createLabelWithTooltip(
+                    "Outer Radius (px):",
+                    "Outer radius for radial sampling, in pixels from pattern center.\n\n"
+                            + "Sampling ends at this distance. Should reach into the colored\n"
+                            + "spokes but not extend past them into the background.\n\n"
+                            + "Default: 150, Range: 50-500");
             int savedOuterRadius = QPPreferenceDialog.getSunburstRadiusOuter();
             Spinner<Integer> outerRadiusSpinner = new Spinner<>(50, 500, savedOuterRadius, 10);
             outerRadiusSpinner.setEditable(true);
@@ -335,17 +329,17 @@ public class SunburstCalibrationDialog {
             row++;
 
             // === Calibration name ===
-            HBox nameLabelBox = createLabelWithTooltip("Calibration Name:",
-                "Optional custom name for the calibration files.\n\n" +
-                "If left empty, an automatic name is generated:\n" +
-                "  sunburst_cal_YYYYMMDD_HHMMSS\n\n" +
-                "Custom names can help identify calibrations:\n" +
-                "  - slide_batch1\n" +
-                "  - before_realignment\n" +
-                "  - optimal_exposure\n\n" +
-                "Allowed characters: letters, numbers, underscore, hyphen\n" +
-                "Spaces and special characters are not allowed."
-            );
+            HBox nameLabelBox = createLabelWithTooltip(
+                    "Calibration Name:",
+                    "Optional custom name for the calibration files.\n\n"
+                            + "If left empty, an automatic name is generated:\n"
+                            + "  sunburst_cal_YYYYMMDD_HHMMSS\n\n"
+                            + "Custom names can help identify calibrations:\n"
+                            + "  - slide_batch1\n"
+                            + "  - before_realignment\n"
+                            + "  - optimal_exposure\n\n"
+                            + "Allowed characters: letters, numbers, underscore, hyphen\n"
+                            + "Spaces and special characters are not allowed.");
             nameLabelBox.getChildren().get(0).setStyle("-fx-font-weight: bold;");
 
             TextField nameField = new TextField();
@@ -361,11 +355,9 @@ public class SunburstCalibrationDialog {
 
             // === Output info ===
             Label outputInfoLabel = new Label(
-                "Output files saved to: {folder}/\n" +
-                "  - {name}_image.tif    Acquired calibration image\n" +
-                "  - {name}.npz          Calibration data (used by PPM analysis)\n" +
-                "  - {name}_plot.png     Visual verification of calibration fit"
-            );
+                    "Output files saved to: {folder}/\n" + "  - {name}_image.tif    Acquired calibration image\n"
+                            + "  - {name}.npz          Calibration data (used by PPM analysis)\n"
+                            + "  - {name}_plot.png     Visual verification of calibration fit");
             outputInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666; -fx-font-family: monospace;");
             outputInfoLabel.setWrapText(true);
             grid.add(outputInfoLabel, 0, row, 3, 1);
@@ -410,20 +402,20 @@ public class SunburstCalibrationDialog {
                 String output = outputField.getText().trim();
 
                 if (output.isEmpty()) {
-                    Dialogs.showErrorMessage("Invalid Output Folder",
-                            "Please specify an output folder for calibration files.");
+                    Dialogs.showErrorMessage(
+                            "Invalid Output Folder", "Please specify an output folder for calibration files.");
                     return;
                 }
 
                 if (spokesSpinner.getValue() < 4) {
-                    Dialogs.showErrorMessage("Invalid Spoke Count",
-                            "Number of spokes must be at least 4.");
+                    Dialogs.showErrorMessage("Invalid Spoke Count", "Number of spokes must be at least 4.");
                     return;
                 }
 
                 String name = nameField.getText().trim();
                 if (!name.isEmpty() && !name.matches("[a-zA-Z0-9_\\-]+")) {
-                    Dialogs.showErrorMessage("Invalid Calibration Name",
+                    Dialogs.showErrorMessage(
+                            "Invalid Calibration Name",
                             "Calibration name can only contain letters, numbers, underscores, and hyphens.");
                     return;
                 }
@@ -451,8 +443,7 @@ public class SunburstCalibrationDialog {
                         value,
                         name.isEmpty() ? null : name,
                         innerRadius,
-                        outerRadius
-                );
+                        outerRadius);
 
                 stage.close();
                 future.complete(params);

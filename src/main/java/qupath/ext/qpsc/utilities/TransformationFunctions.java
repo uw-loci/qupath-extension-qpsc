@@ -1,24 +1,22 @@
 package qupath.ext.qpsc.utilities;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import qupath.lib.objects.PathObject;
-import qupath.lib.objects.PathObjectTools;
-import qupath.lib.objects.hierarchy.PathObjectHierarchy;
-import qupath.lib.roi.RoiTools;
-import qupath.lib.roi.interfaces.ROI;
-
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Point2D;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.ArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.lib.objects.PathObject;
+import qupath.lib.objects.PathObjectTools;
+import qupath.lib.objects.hierarchy.PathObjectHierarchy;
+import qupath.lib.roi.interfaces.ROI;
 
 /**
  * TransformationFunctions - Enhanced version with comprehensive coordinate transformations
@@ -33,7 +31,7 @@ import java.util.regex.Pattern;
  *
  * <p>Transform Chain:
  * <pre>
- * QuPath Full-Res ←→ Macro (Flipped) ←→ Macro (Original) ←→ Stage
+ * QuPath Full-Res <--> Macro (Flipped) <--> Macro (Original) <--> Stage
  * </pre>
  *
  * @author Mike Nelson
@@ -53,8 +51,7 @@ public class TransformationFunctions {
      * @return Stage coordinates in micrometers [x, y]
      */
     public static double[] transformQuPathFullResToStage(
-            double[] qpFullResCoords,
-            AffineTransform fullResToStageTransform) {
+            double[] qpFullResCoords, AffineTransform fullResToStageTransform) {
 
         if (qpFullResCoords == null || qpFullResCoords.length != 2) {
             throw new IllegalArgumentException("Coordinates must be [x, y]");
@@ -64,10 +61,10 @@ public class TransformationFunctions {
         Point2D.Double dst = new Point2D.Double();
         fullResToStageTransform.transform(src, dst);
 
-        logger.debug("QuPath full-res ({}, {}) → Stage ({}, {})",
-                qpFullResCoords[0], qpFullResCoords[1], dst.x, dst.y);
+        logger.debug(
+                "QuPath full-res ({}, {}) -> Stage ({}, {})", qpFullResCoords[0], qpFullResCoords[1], dst.x, dst.y);
 
-        return new double[]{dst.x, dst.y};
+        return new double[] {dst.x, dst.y};
     }
 
     /**
@@ -77,9 +74,7 @@ public class TransformationFunctions {
      * @param macroToStageTransform Transform mapping macro pixels to stage micrometers
      * @return Stage coordinates in micrometers [x, y]
      */
-    public static double[] transformMacroOriginalToStage(
-            double[] macroCoords,
-            AffineTransform macroToStageTransform) {
+    public static double[] transformMacroOriginalToStage(double[] macroCoords, AffineTransform macroToStageTransform) {
 
         if (macroCoords == null || macroCoords.length != 2) {
             throw new IllegalArgumentException("Coordinates must be [x, y]");
@@ -89,10 +84,9 @@ public class TransformationFunctions {
         Point2D.Double dst = new Point2D.Double();
         macroToStageTransform.transform(src, dst);
 
-        logger.debug("Macro original ({}, {}) → Stage ({}, {})",
-                macroCoords[0], macroCoords[1], dst.x, dst.y);
+        logger.debug("Macro original ({}, {}) -> Stage ({}, {})", macroCoords[0], macroCoords[1], dst.x, dst.y);
 
-        return new double[]{dst.x, dst.y};
+        return new double[] {dst.x, dst.y};
     }
 
     /**
@@ -103,8 +97,7 @@ public class TransformationFunctions {
      * @return Stage coordinates in micrometers [x, y]
      */
     public static double[] transformMacroFlippedToStage(
-            double[] macroFlippedCoords,
-            AffineTransform macroFlippedToStageTransform) {
+            double[] macroFlippedCoords, AffineTransform macroFlippedToStageTransform) {
 
         return transformMacroOriginalToStage(macroFlippedCoords, macroFlippedToStageTransform);
     }
@@ -118,8 +111,7 @@ public class TransformationFunctions {
      * @throws IllegalStateException if transform is not invertible
      */
     public static double[] transformStageToQuPathFullRes(
-            double[] stageCoords,
-            AffineTransform fullResToStageTransform) {
+            double[] stageCoords, AffineTransform fullResToStageTransform) {
 
         try {
             AffineTransform inverse = fullResToStageTransform.createInverse();
@@ -127,10 +119,9 @@ public class TransformationFunctions {
             Point2D.Double dst = new Point2D.Double();
             inverse.transform(src, dst);
 
-            logger.debug("Stage ({}, {}) → QuPath full-res ({}, {})",
-                    stageCoords[0], stageCoords[1], dst.x, dst.y);
+            logger.debug("Stage ({}, {}) -> QuPath full-res ({}, {})", stageCoords[0], stageCoords[1], dst.x, dst.y);
 
-            return new double[]{dst.x, dst.y};
+            return new double[] {dst.x, dst.y};
         } catch (Exception e) {
             throw new IllegalStateException("Cannot invert transform", e);
         }
@@ -210,10 +201,13 @@ public class TransformationFunctions {
                         transformedObjects.add(transformedObj);
                         transformedCount++;
 
-                        logger.debug("Transformed {} from ({}, {}) to ({}, {})",
+                        logger.debug(
+                                "Transformed {} from ({}, {}) to ({}, {})",
                                 obj.getDisplayedName(),
-                                obj.getROI().getCentroidX(), obj.getROI().getCentroidY(),
-                                transformedObj.getROI().getCentroidX(), transformedObj.getROI().getCentroidY());
+                                obj.getROI().getCentroidX(),
+                                obj.getROI().getCentroidY(),
+                                transformedObj.getROI().getCentroidX(),
+                                transformedObj.getROI().getCentroidY());
                     }
 
                 } catch (Exception e) {
@@ -235,8 +229,8 @@ public class TransformationFunctions {
      * Creates a flip transform following QuPath coordinate system conventions.
      * Origin (0,0) is at top-left corner of full-resolution image.
      */
-    private static AffineTransform createFlipTransform(boolean flipX, boolean flipY,
-                                                       double imageWidth, double imageHeight) {
+    private static AffineTransform createFlipTransform(
+            boolean flipX, boolean flipY, double imageWidth, double imageHeight) {
         AffineTransform transform = new AffineTransform();
 
         if (flipX && flipY) {
@@ -261,9 +255,14 @@ public class TransformationFunctions {
      * Formats transform matrix for readable logging.
      */
     private static String formatTransformMatrix(AffineTransform transform) {
-        return String.format("[%.3f, %.3f, %.3f, %.3f, %.3f, %.3f]",
-                transform.getScaleX(), transform.getShearX(), transform.getShearY(),
-                transform.getScaleY(), transform.getTranslateX(), transform.getTranslateY());
+        return String.format(
+                "[%.3f, %.3f, %.3f, %.3f, %.3f, %.3f]",
+                transform.getScaleX(),
+                transform.getShearX(),
+                transform.getShearY(),
+                transform.getScaleY(),
+                transform.getTranslateX(),
+                transform.getTranslateY());
     }
 
     // ==================== TRANSFORM CALCULATION FUNCTIONS ====================
@@ -279,7 +278,7 @@ public class TransformationFunctions {
      * @param fullResHeight Height of the full-resolution image in pixels
      * @param flipX Whether the macro image should be flipped horizontally
      * @param flipY Whether the macro image should be flipped vertically
-     * @return Transform mapping macro (original) → full-res coordinates
+     * @return Transform mapping macro (original) -> full-res coordinates
      */
     public static AffineTransform calculateMacroOriginalToFullResTransform(
             ROI greenBox,
@@ -295,7 +294,7 @@ public class TransformationFunctions {
         double gbWidth = greenBox.getBoundsWidth();
         double gbHeight = greenBox.getBoundsHeight();
 
-        logger.info("Creating macro→full-res transform:");
+        logger.info("Creating macro->full-res transform:");
         logger.info("  Green box (original): ({}, {}, {}, {})", gbX, gbY, gbWidth, gbHeight);
         logger.info("  Macro size: {} x {}", macroWidth, macroHeight);
         logger.info("  Full-res size: {} x {}", fullResWidth, fullResHeight);
@@ -313,10 +312,10 @@ public class TransformationFunctions {
         AffineTransform transform = new AffineTransform();
 
         // The transform should map:
-        // - Green box top-left (gbX, gbY) → (0, 0) in full-res
-        // - Green box top-right (gbX + gbWidth, gbY) → (fullResWidth, 0) in full-res
-        // - Green box bottom-left (gbX, gbY + gbHeight) → (0, fullResHeight) in full-res
-        // - Green box bottom-right (gbX + gbWidth, gbY + gbHeight) → (fullResWidth, fullResHeight) in full-res
+        // - Green box top-left (gbX, gbY) -> (0, 0) in full-res
+        // - Green box top-right (gbX + gbWidth, gbY) -> (fullResWidth, 0) in full-res
+        // - Green box bottom-left (gbX, gbY + gbHeight) -> (0, fullResHeight) in full-res
+        // - Green box bottom-right (gbX + gbWidth, gbY + gbHeight) -> (fullResWidth, fullResHeight) in full-res
 
         // This is achieved by:
         // 1. Translate by -gbX, -gbY to move green box origin to (0,0)
@@ -334,10 +333,10 @@ public class TransformationFunctions {
         // Validate the transform by testing the corners
         logger.info("  Validation - green box corners map to:");
         double[][] testPoints = {
-                {gbX, gbY},                           // top-left
-                {gbX + gbWidth, gbY},                 // top-right
-                {gbX, gbY + gbHeight},                // bottom-left
-                {gbX + gbWidth, gbY + gbHeight}       // bottom-right
+            {gbX, gbY}, // top-left
+            {gbX + gbWidth, gbY}, // top-right
+            {gbX, gbY + gbHeight}, // bottom-left
+            {gbX + gbWidth, gbY + gbHeight} // bottom-right
         };
         String[] labels = {"top-left", "top-right", "bottom-left", "bottom-right"};
 
@@ -345,8 +344,7 @@ public class TransformationFunctions {
             Point2D src = new Point2D.Double(testPoints[i][0], testPoints[i][1]);
             Point2D dst = new Point2D.Double();
             transform.transform(src, dst);
-            logger.info("    {} ({}, {}) → ({}, {})",
-                    labels[i], src.getX(), src.getY(), dst.getX(), dst.getY());
+            logger.info("    {} ({}, {}) -> ({}, {})", labels[i], src.getX(), src.getY(), dst.getX(), dst.getY());
         }
 
         return transform;
@@ -358,12 +356,10 @@ public class TransformationFunctions {
      * @param greenBoxFlipped ROI of the green box in flipped macro coordinates
      * @param fullResWidth Width of the full-resolution image in pixels
      * @param fullResHeight Height of the full-resolution image in pixels
-     * @return Transform mapping macro (flipped) → full-res coordinates
+     * @return Transform mapping macro (flipped) -> full-res coordinates
      */
     public static AffineTransform calculateMacroFlippedToFullResTransform(
-            ROI greenBoxFlipped,
-            int fullResWidth,
-            int fullResHeight) {
+            ROI greenBoxFlipped, int fullResWidth, int fullResHeight) {
 
         double gbX = greenBoxFlipped.getBoundsX();
         double gbY = greenBoxFlipped.getBoundsY();
@@ -379,8 +375,8 @@ public class TransformationFunctions {
         transform.translate(-gbX, -gbY);
         transform.scale(scaleX, scaleY);
 
-        logger.info("Macro (flipped) → Full-res transform: translate({}, {}), scale({}, {})",
-                -gbX, -gbY, scaleX, scaleY);
+        logger.info(
+                "Macro (flipped) -> Full-res transform: translate({}, {}), scale({}, {})", -gbX, -gbY, scaleX, scaleY);
 
         return transform;
     }
@@ -393,7 +389,7 @@ public class TransformationFunctions {
      * @param imagePixelSizeMicrons Pixel size of the full-resolution image in micrometers
      * @param stageInvertedX Whether the stage X axis is inverted
      * @param stageInvertedY Whether the stage Y axis is inverted
-     * @return Transform mapping full-res pixels → stage micrometers
+     * @return Transform mapping full-res pixels -> stage micrometers
      */
     public static AffineTransform calculateFullResToStageTransform(
             Map<Point2D, Point2D> alignmentPoints,
@@ -460,7 +456,7 @@ public class TransformationFunctions {
      * @param fullResToStage Transform from full-res (flipped) pixels to stage
      * @param flipX Whether the full-res image was flipped horizontally
      * @param flipY Whether the full-res image was flipped vertically
-     * @return Transform mapping macro (original/unflipped) pixels → stage micrometers
+     * @return Transform mapping macro (original/unflipped) pixels -> stage micrometers
      */
     public static AffineTransform createGeneralMacroToStageTransform(
             ROI greenBox,
@@ -472,13 +468,15 @@ public class TransformationFunctions {
             boolean flipX,
             boolean flipY) {
 
-        logger.info("Creating general macro→stage transform");
-        logger.info("  Green box (original): ({}, {}, {}, {})",
-                greenBox.getBoundsX(), greenBox.getBoundsY(),
-                greenBox.getBoundsWidth(), greenBox.getBoundsHeight());
+        logger.info("Creating general macro->stage transform");
+        logger.info(
+                "  Green box (original): ({}, {}, {}, {})",
+                greenBox.getBoundsX(),
+                greenBox.getBoundsY(),
+                greenBox.getBoundsWidth(),
+                greenBox.getBoundsHeight());
         logger.info("  Macro size: {} x {}", macroWidth, macroHeight);
-        logger.info("  Full-res size: {} x {} (flipped: X={}, Y={})",
-                fullResWidth, fullResHeight, flipX, flipY);
+        logger.info("  Full-res size: {} x {} (flipped: X={}, Y={})", fullResWidth, fullResHeight, flipX, flipY);
 
         double gbX = greenBox.getBoundsX();
         double gbY = greenBox.getBoundsY();
@@ -497,20 +495,20 @@ public class TransformationFunctions {
         // should map directly to the full-res image without additional flipping
 
         // The green box represents the full resolution image area
-        // Simple mapping: green box → full-res image
+        // Simple mapping: green box -> full-res image
         macroToFullRes.scale(scaleX, scaleY);
         macroToFullRes.translate(-gbX, -gbY);
 
         // Log for debugging
-        logger.info("  Macro→FullRes transform: {}", macroToFullRes);
+        logger.info("  Macro->FullRes transform: {}", macroToFullRes);
 
         // Test the green box corners to verify the transform
         logger.info("  Testing green box corner mappings:");
         double[][] corners = {
-                {gbX, gbY},                             // top-left
-                {gbX + gbWidth, gbY},                   // top-right
-                {gbX, gbY + gbHeight},                  // bottom-left
-                {gbX + gbWidth, gbY + gbHeight}         // bottom-right
+            {gbX, gbY}, // top-left
+            {gbX + gbWidth, gbY}, // top-right
+            {gbX, gbY + gbHeight}, // bottom-left
+            {gbX + gbWidth, gbY + gbHeight} // bottom-right
         };
         String[] labels = {"top-left", "top-right", "bottom-left", "bottom-right"};
 
@@ -518,16 +516,15 @@ public class TransformationFunctions {
             Point2D src = new Point2D.Double(corners[i][0], corners[i][1]);
             Point2D dst = new Point2D.Double();
             macroToFullRes.transform(src, dst);
-            logger.info("    {} ({}, {}) → ({}, {})",
-                    labels[i], src.getX(), src.getY(), dst.getX(), dst.getY());
+            logger.info("    {} ({}, {}) -> ({}, {})", labels[i], src.getX(), src.getY(), dst.getX(), dst.getY());
         }
 
         // Now combine with full-res to stage
         AffineTransform macroToStage = new AffineTransform(fullResToStage);
         macroToStage.concatenate(macroToFullRes);
 
-        logger.info("  FullRes→Stage transform: {}", fullResToStage);
-        logger.info("  Combined Macro→Stage: {}", macroToStage);
+        logger.info("  FullRes->Stage transform: {}", fullResToStage);
+        logger.info("  Combined Macro->Stage: {}", macroToStage);
 
         return macroToStage;
     }
@@ -556,11 +553,11 @@ public class TransformationFunctions {
 
         // Test key points
         double[][] testPoints = {
-                {0, 0},                          // Top-left
-                {inputWidth, 0},                 // Top-right
-                {0, inputHeight},                // Bottom-left
-                {inputWidth, inputHeight},       // Bottom-right
-                {inputWidth/2, inputHeight/2}    // Center
+            {0, 0}, // Top-left
+            {inputWidth, 0}, // Top-right
+            {0, inputHeight}, // Bottom-left
+            {inputWidth, inputHeight}, // Bottom-right
+            {inputWidth / 2, inputHeight / 2} // Center
         };
 
         boolean allValid = true;
@@ -574,8 +571,14 @@ public class TransformationFunctions {
             boolean yValid = dst.y >= stageYMin && dst.y <= stageYMax;
 
             if (!xValid || !yValid) {
-                logger.warn("Transform validation failed at ({}, {}) → ({}, {}) - X valid: {}, Y valid: {}",
-                        point[0], point[1], dst.x, dst.y, xValid, yValid);
+                logger.warn(
+                        "Transform validation failed at ({}, {}) -> ({}, {}) - X valid: {}, Y valid: {}",
+                        point[0],
+                        point[1],
+                        dst.x,
+                        dst.y,
+                        xValid,
+                        yValid);
                 allValid = false;
             }
         }
@@ -592,9 +595,7 @@ public class TransformationFunctions {
      * @return true if all points are within tolerance
      */
     public static boolean validateTransformWithGroundTruth(
-            AffineTransform transform,
-            Map<Point2D, Point2D> groundTruthPoints,
-            double tolerance) {
+            AffineTransform transform, Map<Point2D, Point2D> groundTruthPoints, double tolerance) {
 
         boolean allValid = true;
 
@@ -614,10 +615,10 @@ public class TransformationFunctions {
                 logger.warn("  Input: ({}, {})", input.getX(), input.getY());
                 logger.warn("  Expected: ({}, {})", expected.getX(), expected.getY());
                 logger.warn("  Actual: ({}, {})", actual.getX(), actual.getY());
-                logger.warn("  Error: {} µm (X: {}, Y: {})", totalError, errorX, errorY);
+                logger.warn("  Error: {} um (X: {}, Y: {})", totalError, errorX, errorY);
                 allValid = false;
             } else {
-                logger.debug("Ground truth point validated with error {} µm", totalError);
+                logger.debug("Ground truth point validated with error {} um", totalError);
             }
         }
 
@@ -638,11 +639,7 @@ public class TransformationFunctions {
      * @return Flipped coordinates [x, y]
      */
     public static double[] applyFlipsToCoordinates(
-            double[] coords,
-            double imageWidth,
-            double imageHeight,
-            boolean flipX,
-            boolean flipY) {
+            double[] coords, double imageWidth, double imageHeight, boolean flipX, boolean flipY) {
 
         double x = coords[0];
         double y = coords[1];
@@ -654,7 +651,7 @@ public class TransformationFunctions {
             y = imageHeight - y;
         }
 
-        return new double[]{x, y};
+        return new double[] {x, y};
     }
 
     /**
@@ -669,11 +666,7 @@ public class TransformationFunctions {
      * @return Original unflipped coordinates [x, y]
      */
     public static double[] reverseFlipsOnCoordinates(
-            double[] flippedCoords,
-            double imageWidth,
-            double imageHeight,
-            boolean flipX,
-            boolean flipY) {
+            double[] flippedCoords, double imageWidth, double imageHeight, boolean flipX, boolean flipY) {
 
         // Reversing a flip is the same as applying it again
         return applyFlipsToCoordinates(flippedCoords, imageWidth, imageHeight, flipX, flipY);
@@ -690,11 +683,7 @@ public class TransformationFunctions {
      * @return New coordinates [x, y, width, height] after flips
      */
     public static double[] applyFlipsToROI(
-            ROI roi,
-            double imageWidth,
-            double imageHeight,
-            boolean flipX,
-            boolean flipY) {
+            ROI roi, double imageWidth, double imageHeight, boolean flipX, boolean flipY) {
 
         double x = roi.getBoundsX();
         double y = roi.getBoundsY();
@@ -708,7 +697,7 @@ public class TransformationFunctions {
             y = imageHeight - y - height;
         }
 
-        return new double[]{x, y, width, height};
+        return new double[] {x, y, width, height};
     }
 
     /**
@@ -722,8 +711,14 @@ public class TransformationFunctions {
         transform.getMatrix(matrix);
 
         logger.info("{} transform details:", name);
-        logger.info("  Matrix: [m00={}, m10={}, m01={}, m11={}, m02={}, m12={}]",
-                matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]);
+        logger.info(
+                "  Matrix: [m00={}, m10={}, m01={}, m11={}, m02={}, m12={}]",
+                matrix[0],
+                matrix[1],
+                matrix[2],
+                matrix[3],
+                matrix[4],
+                matrix[5]);
         logger.info("  Scale X: {}, Scale Y: {}", transform.getScaleX(), transform.getScaleY());
         logger.info("  Shear X: {}, Shear Y: {}", transform.getShearX(), transform.getShearY());
         logger.info("  Translate X: {}, Translate Y: {}", transform.getTranslateX(), transform.getTranslateY());
@@ -736,7 +731,7 @@ public class TransformationFunctions {
      */
     private static String describeTransformType(int type) {
         List<String> types = new ArrayList<>();
-        if ((type & AffineTransform.TYPE_IDENTITY) != 0) types.add("IDENTITY");
+        if (type == AffineTransform.TYPE_IDENTITY) types.add("IDENTITY");
         if ((type & AffineTransform.TYPE_TRANSLATION) != 0) types.add("TRANSLATION");
         if ((type & AffineTransform.TYPE_UNIFORM_SCALE) != 0) types.add("UNIFORM_SCALE");
         if ((type & AffineTransform.TYPE_GENERAL_SCALE) != 0) types.add("GENERAL_SCALE");
@@ -750,9 +745,8 @@ public class TransformationFunctions {
     /**
      * Walks each subdirectory looking for TileConfiguration files and transforms them.
      */
-    public static List<String> transformTileConfiguration(
-            String parentDirPath,
-            AffineTransform transform) throws IOException {
+    public static List<String> transformTileConfiguration(String parentDirPath, AffineTransform transform)
+            throws IOException {
 
         File parent = new File(parentDirPath);
         List<String> modified = new ArrayList<>();
@@ -775,9 +769,7 @@ public class TransformationFunctions {
         return modified;
     }
 
-    private static void processTileConfigurationFile(
-            File inFile,
-            AffineTransform transform) throws IOException {
+    private static void processTileConfigurationFile(File inFile, AffineTransform transform) throws IOException {
         logger.info("CRITICAL: Transform being applied to tiles:");
         logger.info("  Transform scale X: {}", transform.getScaleX());
         logger.info("  Transform scale Y: {}", transform.getScaleY());
@@ -801,14 +793,14 @@ public class TransformationFunctions {
                     logger.info("CRITICAL: First tile transformation:");
                     logger.info("  Input (QuPath pixels): ({}, {})", x, y);
                 }
-                double[] coords = transformQuPathFullResToStage(new double[]{x, y}, transform);
+                double[] coords = transformQuPathFullResToStage(new double[] {x, y}, transform);
                 if (filename.equals("0.tif")) {
-                    logger.info("  Output (stage µm): ({}, {})", coords[0], coords[1]);
-                    logger.info("  Transform verification: stage_x/qp_x = {} µm/pixel (should match transform scale)",
+                    logger.info("  Output (stage um): ({}, {})", coords[0], coords[1]);
+                    logger.info(
+                            "  Transform verification: stage_x/qp_x = {} um/pixel (should match transform scale)",
                             Math.abs(coords[0] / x));
                 }
-                String transformedLine = String.format("%s; ; (%.3f, %.3f)",
-                        filename, coords[0], coords[1]);
+                String transformedLine = String.format("%s; ; (%.3f, %.3f)", filename, coords[0], coords[1]);
                 out.add(transformedLine);
                 transformedCount++;
             } else {
@@ -851,11 +843,10 @@ public class TransformationFunctions {
      * @return Array of [xOffset, yOffset] in micrometers from slide corner
      */
     public static double[] calculateAnnotationOffsetFromSlideCorner(
-            PathObject annotation,
-            AffineTransform fullResToStage) {
+            PathObject annotation, AffineTransform fullResToStage) {
 
         if (annotation == null || annotation.getROI() == null) {
-            return new double[]{0, 0};
+            return new double[] {0, 0};
         }
 
         ROI roi = annotation.getROI();
@@ -865,13 +856,15 @@ public class TransformationFunctions {
         double minY = roi.getBoundsY();
 
         // Transform to stage coordinates
-        double[] stageCoords = transformQuPathFullResToStage(
-                new double[]{minX, minY}, fullResToStage);
+        double[] stageCoords = transformQuPathFullResToStage(new double[] {minX, minY}, fullResToStage);
 
         // For now, we consider the offset to be the stage coordinates themselves
         // In the future, this could subtract the actual slide corner position
-        logger.debug("Annotation {} offset from slide corner: ({}, {}) µm",
-                annotation.getName(), stageCoords[0], stageCoords[1]);
+        logger.debug(
+                "Annotation {} offset from slide corner: ({}, {}) um",
+                annotation.getName(),
+                stageCoords[0],
+                stageCoords[1]);
 
         return stageCoords;
     }
@@ -879,15 +872,10 @@ public class TransformationFunctions {
      * Adds translation to a scaling-only AffineTransform based on a single control point.
      */
     public static AffineTransform addTranslationToScaledAffine(
-            AffineTransform scalingTransform,
-            double[] qpCoordinateArray,
-            double[] stageCoordinateArray) {
+            AffineTransform scalingTransform, double[] qpCoordinateArray, double[] stageCoordinateArray) {
 
         // Reset to pure scale
-        scalingTransform.setTransform(
-                scalingTransform.getScaleX(), 0,
-                0, scalingTransform.getScaleY(),
-                0, 0);
+        scalingTransform.setTransform(scalingTransform.getScaleX(), 0, 0, scalingTransform.getScaleY(), 0, 0);
 
         Point2D.Double scaled = new Point2D.Double();
         scalingTransform.transform(new Point2D.Double(qpCoordinateArray[0], qpCoordinateArray[1]), scaled);
@@ -911,14 +899,11 @@ public class TransformationFunctions {
         if (sorted.isEmpty()) return null;
 
         double minY = sorted.get(0).getROI().getCentroidY();
-        List<PathObject> top = sorted.stream()
-                .filter(o -> o.getROI().getCentroidY() == minY)
-                .toList();
+        List<PathObject> top =
+                sorted.stream().filter(o -> o.getROI().getCentroidY() == minY).toList();
 
-        List<Double> xs = top.stream()
-                .map(o -> o.getROI().getCentroidX())
-                .sorted()
-                .toList();
+        List<Double> xs =
+                top.stream().map(o -> o.getROI().getCentroidX()).sorted().toList();
         double medianX = xs.get(xs.size() / 2);
 
         return top.stream()
@@ -937,14 +922,11 @@ public class TransformationFunctions {
         if (sorted.isEmpty()) return null;
 
         double minX = sorted.get(0).getROI().getCentroidX();
-        List<PathObject> left = sorted.stream()
-                .filter(o -> o.getROI().getCentroidX() == minX)
-                .toList();
+        List<PathObject> left =
+                sorted.stream().filter(o -> o.getROI().getCentroidX() == minX).toList();
 
-        List<Double> ys = left.stream()
-                .map(o -> o.getROI().getCentroidY())
-                .sorted()
-                .toList();
+        List<Double> ys =
+                left.stream().map(o -> o.getROI().getCentroidY()).sorted().toList();
         double medianY = ys.get(ys.size() / 2);
 
         return left.stream()
@@ -956,9 +938,7 @@ public class TransformationFunctions {
      * Initializes a scaling transform from pixel size and flip prefs.
      */
     public static AffineTransform setupAffineTransformation(
-            double pixelSizeSourceImage,
-            boolean invertedX,
-            boolean invertedY) {
+            double pixelSizeSourceImage, boolean invertedX, boolean invertedY) {
 
         double sx = invertedX ? -pixelSizeSourceImage : pixelSizeSourceImage;
         double sy = invertedY ? -pixelSizeSourceImage : pixelSizeSourceImage;

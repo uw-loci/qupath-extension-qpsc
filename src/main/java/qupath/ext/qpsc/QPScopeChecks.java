@@ -1,15 +1,14 @@
 package qupath.ext.qpsc;
 
+import java.util.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.ObjectiveUtils;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import java.util.*;
-
 
 /**
  * QPScopeChecks contains helper functions to verify that the QuPath environment is ready
@@ -35,14 +34,15 @@ public class QPScopeChecks {
     public static boolean checkEnvironment() {
         // 1. Check if a project is open in QuPath.
         if (QuPathGUI.getInstance() == null || QuPathGUI.getInstance().getProject() == null) {
-            Dialogs.showWarningNotification("No Project Open",
-                    "You must open a project in QuPath before launching the extension.");
+            Dialogs.showWarningNotification(
+                    "No Project Open", "You must open a project in QuPath before launching the extension.");
             return false;
         }
 
         // 2. Check if the expected hardware is accessible (dummy check for now).
         if (!checkHardwareAccessible()) {
-            Dialogs.showWarningNotification("Hardware Not Accessible",
+            Dialogs.showWarningNotification(
+                    "Hardware Not Accessible",
                     "The hardware expected by the current preferences is not accessible.\n"
                             + "Please verify your hardware connection.");
             return false;
@@ -50,7 +50,8 @@ public class QPScopeChecks {
 
         // 3. Check if QuPath is in the correct state (dummy check for now).
         if (!checkQuPathState()) {
-            Dialogs.showWarningNotification("Incorrect QuPath State",
+            Dialogs.showWarningNotification(
+                    "Incorrect QuPath State",
                     "QuPath is not in the expected state.\n"
                             + "Please ensure QuPath is properly configured before launching the extension.");
             return false;
@@ -60,7 +61,7 @@ public class QPScopeChecks {
         if (!validateMicroscopeConfig()) {
             return false; // Error dialogs are shown inside validateMicroscopeConfig
         }
-        
+
         // 5. Validate stage limits configuration
         if (!validateStageLimitsConfig()) {
             return false; // Error dialogs are shown inside validateStageLimitsConfig
@@ -83,8 +84,7 @@ public class QPScopeChecks {
 
             if (!errors.isEmpty()) {
                 logger.error("Configuration validation failed: {}", errors);
-                String errorMessage = "Configuration validation errors:\n\n• " +
-                        String.join("\n• ", errors);
+                String errorMessage = "Configuration validation errors:\n\n- " + String.join("\n- ", errors);
                 Dialogs.showWarningNotification("Configuration Errors", errorMessage);
                 return false;
             }
@@ -93,11 +93,10 @@ public class QPScopeChecks {
             return true;
         } catch (Exception e) {
             logger.error("Error during configuration validation", e);
-            Dialogs.showErrorNotification("Configuration Validation Error",
-                    "Failed to validate configuration: " + e.getMessage());
+            Dialogs.showErrorNotification(
+                    "Configuration Validation Error", "Failed to validate configuration: " + e.getMessage());
             return false;
         }
-
     }
 
     /**
@@ -147,15 +146,19 @@ public class QPScopeChecks {
         String magnification = ObjectiveUtils.extractMagnification(objective);
         String displayMag = (magnification != null) ? magnification : objective;
 
-        logger.info("Pixel size check: config={} um ({}), MicroManager={} um, diff={} percent",
-                configPixelSize, displayMag, mmPixelSize, String.format("%.1f", ratio * 100));
+        logger.info(
+                "Pixel size check: config={} um ({}), MicroManager={} um, diff={} percent",
+                configPixelSize,
+                displayMag,
+                mmPixelSize,
+                String.format("%.1f", ratio * 100));
 
         if (ratio > 0.25) {
             String message = String.format(
                     "Selected objective (%s) expects pixel size %.4f um, "
-                    + "but MicroManager reports %.4f um.\n\n"
-                    + "This may indicate a different objective is active in MicroManager.\n\n"
-                    + "Continue anyway?",
+                            + "but MicroManager reports %.4f um.\n\n"
+                            + "This may indicate a different objective is active in MicroManager.\n\n"
+                            + "Continue anyway?",
                     displayMag, configPixelSize, mmPixelSize);
 
             return Dialogs.showConfirmDialog("Objective Mismatch Warning", message);
@@ -194,5 +197,4 @@ public class QPScopeChecks {
         // - Check available memory
         return true;
     }
-
 }

@@ -2,18 +2,14 @@ package qupath.ext.qpsc.controller;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
-
-import qupath.ext.qpsc.controller.workflow.AlignmentHelper;
-import qupath.ext.qpsc.controller.workflow.AlignmentHelper.SlideAlignmentResult;
-
 import java.awt.geom.AffineTransform;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import qupath.ext.qpsc.controller.workflow.AlignmentHelper;
+import qupath.ext.qpsc.controller.workflow.AlignmentHelper.SlideAlignmentResult;
 
 /**
  * Unit tests for AlignmentHelper confidence scoring.
@@ -164,8 +160,8 @@ class AlignmentHelperTest {
     @DisplayName("SlideAlignmentResult full constructor stores all fields")
     void testSlideAlignmentResultFullConstructor() {
         AffineTransform transform = new AffineTransform();
-        SlideAlignmentResult result = new SlideAlignmentResult(
-                transform, false, 0.92, "Slide-specific (MacroSlide_001)");
+        SlideAlignmentResult result =
+                new SlideAlignmentResult(transform, false, 0.92, "Slide-specific (MacroSlide_001)");
 
         assertEquals(transform, result.getTransform());
         assertFalse(result.isRefineRequested());
@@ -187,20 +183,19 @@ class AlignmentHelperTest {
 
     @ParameterizedTest
     @CsvSource({
-            "true, 0.65, 0.85",   // Slide-specific range
-            "false, 0.45, 0.65"   // General range (after max penalty)
+        "true, 0.65, 0.85", // Slide-specific range
+        "false, 0.45, 0.65" // General range (after max penalty)
     })
     @DisplayName("Confidence stays within expected range")
     void testConfidenceRange(boolean isSlideSpecific, double minExpected, double maxExpected) {
         // Test with various dates
-        double fresh = AlignmentHelper.calculateConfidence(isSlideSpecific, LocalDate.now().toString());
-        double old = AlignmentHelper.calculateConfidence(isSlideSpecific,
-                LocalDate.now().minusDays(100).toString());
+        double fresh = AlignmentHelper.calculateConfidence(
+                isSlideSpecific, LocalDate.now().toString());
+        double old = AlignmentHelper.calculateConfidence(
+                isSlideSpecific, LocalDate.now().minusDays(100).toString());
 
-        assertTrue(fresh <= maxExpected && fresh >= minExpected,
-                "Fresh confidence should be in range");
-        assertTrue(old >= 0.1,
-                "Old confidence should be at least 0.1");
+        assertTrue(fresh <= maxExpected && fresh >= minExpected, "Fresh confidence should be in range");
+        assertTrue(old >= 0.1, "Old confidence should be at least 0.1");
     }
 
     // ==================== Source Description Tests ====================

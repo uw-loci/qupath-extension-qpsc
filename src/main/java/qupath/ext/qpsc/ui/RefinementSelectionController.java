@@ -1,5 +1,6 @@
 package qupath.ext.qpsc.ui;
 
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -10,8 +11,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.lib.gui.QuPathGUI;
-
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Controller for selecting alignment refinement options.
@@ -67,10 +66,7 @@ public class RefinementSelectionController {
      * @param choice The user's selected refinement option
      * @param wasAutoSelected Whether the choice was auto-selected based on confidence
      */
-    public record RefinementResult(
-            RefinementChoice choice,
-            boolean wasAutoSelected
-    ) {}
+    public record RefinementResult(RefinementChoice choice, boolean wasAutoSelected) {}
 
     /**
      * Information about the current alignment state.
@@ -79,11 +75,7 @@ public class RefinementSelectionController {
      * @param source Description of alignment source (e.g., "Slide-specific", "General")
      * @param transformName Name of the transform being used
      */
-    public record AlignmentInfo(
-            double confidence,
-            String source,
-            String transformName
-    ) {
+    public record AlignmentInfo(double confidence, String source, String transformName) {
         /**
          * Creates alignment info with default medium confidence.
          */
@@ -112,12 +104,12 @@ public class RefinementSelectionController {
      * @param alignmentInfo Information about the current alignment
      * @return CompletableFuture with the user's choice, or null if cancelled
      */
-    public static CompletableFuture<RefinementResult> showDialog(
-            QuPathGUI gui,
-            AlignmentInfo alignmentInfo) {
+    public static CompletableFuture<RefinementResult> showDialog(QuPathGUI gui, AlignmentInfo alignmentInfo) {
 
-        logger.info("Showing refinement selection dialog - confidence: {}, source: {}",
-                String.format("%.2f", alignmentInfo.confidence()), alignmentInfo.source());
+        logger.info(
+                "Showing refinement selection dialog - confidence: {}, source: {}",
+                String.format("%.2f", alignmentInfo.confidence()),
+                alignmentInfo.source());
 
         CompletableFuture<RefinementResult> future = new CompletableFuture<>();
 
@@ -153,8 +145,7 @@ public class RefinementSelectionController {
                         "Proceed without refinement",
                         "Fastest option - use existing alignment as-is",
                         "Accuracy: +/- 20 um | Time: No additional time",
-                        toggleGroup
-                );
+                        toggleGroup);
 
                 // Option 2: Single-tile refinement
                 RadioButton singleTileRadio = new RadioButton();
@@ -163,8 +154,7 @@ public class RefinementSelectionController {
                         "Single-tile refinement",
                         "Acquire one tile to verify and adjust position",
                         "Accuracy: +/- 5 um | Time: +2-3 minutes",
-                        toggleGroup
-                );
+                        toggleGroup);
 
                 // Option 3: Full manual alignment
                 RadioButton fullManualRadio = new RadioButton();
@@ -173,8 +163,7 @@ public class RefinementSelectionController {
                         "Start manual alignment over",
                         "Complete re-alignment with multiple points",
                         "Accuracy: +/- 2 um | Time: +10-15 minutes",
-                        toggleGroup
-                );
+                        toggleGroup);
 
                 optionsBox.getChildren().addAll(noRefineOption, singleTileOption, fullManualOption);
 
@@ -207,14 +196,14 @@ public class RefinementSelectionController {
                 // Recommendation label
                 Label recommendationLabel = createRecommendationLabel(alignmentInfo.confidence(), recommendedChoice);
 
-                content.getChildren().addAll(
-                        infoSection,
-                        new Separator(),
-                        questionLabel,
-                        optionsBox,
-                        new Separator(),
-                        recommendationLabel
-                );
+                content.getChildren()
+                        .addAll(
+                                infoSection,
+                                new Separator(),
+                                questionLabel,
+                                optionsBox,
+                                new Separator(),
+                                recommendationLabel);
 
                 // Dialog buttons
                 ButtonType continueButton = new ButtonType("Continue", ButtonBar.ButtonData.OK_DONE);
@@ -243,8 +232,7 @@ public class RefinementSelectionController {
 
                         // Save preference
                         PersistentPreferences.setLastRefinementChoice(choice.name());
-                        logger.info("User selected refinement: {} (auto-selected: {})",
-                                choice, wasAutoSelected[0]);
+                        logger.info("User selected refinement: {} (auto-selected: {})", choice, wasAutoSelected[0]);
 
                         return new RefinementResult(choice, wasAutoSelected[0]);
                     } else if (buttonType == backButton) {
@@ -284,8 +272,7 @@ public class RefinementSelectionController {
         confidenceLabel.setStyle("-fx-font-weight: bold;");
 
         String confidenceLevel = info.getConfidenceLevel();
-        Label confidenceValue = new Label(
-                String.format("%s (%.0f%%)", confidenceLevel, info.confidence() * 100));
+        Label confidenceValue = new Label(String.format("%s (%.0f%%)", confidenceLevel, info.confidence() * 100));
 
         // Color code based on confidence
         String confidenceColor;
@@ -316,14 +303,14 @@ public class RefinementSelectionController {
     /**
      * Creates an option card with radio button, title, description, and metrics.
      */
-    private static VBox createOptionCard(RadioButton radio, String title, String description,
-                                          String metrics, ToggleGroup group) {
+    private static VBox createOptionCard(
+            RadioButton radio, String title, String description, String metrics, ToggleGroup group) {
         radio.setToggleGroup(group);
 
         VBox card = new VBox(4);
         card.setPadding(new Insets(10));
-        card.setStyle("-fx-background-color: #FAFAFA; -fx-background-radius: 4; " +
-                "-fx-border-color: #E0E0E0; -fx-border-radius: 4;");
+        card.setStyle("-fx-background-color: #FAFAFA; -fx-background-radius: 4; "
+                + "-fx-border-color: #E0E0E0; -fx-border-radius: 4;");
 
         // Title row with radio button
         HBox titleRow = new HBox(8);
@@ -353,11 +340,11 @@ public class RefinementSelectionController {
         // Visual feedback for selection
         radio.selectedProperty().addListener((obs, old, selected) -> {
             if (selected) {
-                card.setStyle("-fx-background-color: #E3F2FD; -fx-background-radius: 4; " +
-                        "-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4;");
+                card.setStyle("-fx-background-color: #E3F2FD; -fx-background-radius: 4; "
+                        + "-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4;");
             } else {
-                card.setStyle("-fx-background-color: #FAFAFA; -fx-background-radius: 4; " +
-                        "-fx-border-color: #E0E0E0; -fx-border-radius: 4;");
+                card.setStyle("-fx-background-color: #FAFAFA; -fx-background-radius: 4; "
+                        + "-fx-border-color: #E0E0E0; -fx-border-radius: 4;");
             }
         });
 

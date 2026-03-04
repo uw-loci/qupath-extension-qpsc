@@ -3,18 +3,7 @@ package qupath.ext.qpsc.utilities;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.controller.MicroscopeController;
-import qupath.ext.qpsc.preferences.PersistentPreferences;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.ui.SampleSetupController;
-import qupath.lib.projects.Project;
-import qupath.lib.roi.interfaces.ROI;
-
-import javax.imageio.ImageIO;
 import java.awt.geom.AffineTransform;
-import java.awt.geom.NoninvertibleTransformException;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileReader;
@@ -26,6 +15,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import javax.imageio.ImageIO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.lib.projects.Project;
 
 /**
  * Manages saved affine transforms for different microscopes and mounting configurations.
@@ -68,8 +64,13 @@ public class AffineTransformManager {
         private final String notes;
         private final GreenBoxDetector.DetectionParams greenBoxParams;
 
-        public TransformPreset(String name, String microscope, String mountingMethod,
-                               AffineTransform transform, String notes, GreenBoxDetector.DetectionParams greenBoxParams) {
+        public TransformPreset(
+                String name,
+                String microscope,
+                String mountingMethod,
+                AffineTransform transform,
+                String notes,
+                GreenBoxDetector.DetectionParams greenBoxParams) {
             this.name = name;
             this.microscope = microscope;
             this.mountingMethod = mountingMethod;
@@ -82,22 +83,40 @@ public class AffineTransformManager {
          * Constructor without green box parameters.
          * Uses default detection parameters.
          */
-        public TransformPreset(String name, String microscope, String mountingMethod,
-                               AffineTransform transform, String notes) {
-            this(name, microscope, mountingMethod, transform, notes,
-                    new GreenBoxDetector.DetectionParams());
+        public TransformPreset(
+                String name, String microscope, String mountingMethod, AffineTransform transform, String notes) {
+            this(name, microscope, mountingMethod, transform, notes, new GreenBoxDetector.DetectionParams());
         }
 
         // Getters
-        public String getName() { return name; }
-        public String getMicroscope() { return microscope; }
-        public String getMountingMethod() { return mountingMethod; }
-        public AffineTransform getTransform() { return new AffineTransform(transform); }
-        public Date getCreatedDate() { return createdDate; }
-        public String getNotes() { return notes; }
+        public String getName() {
+            return name;
+        }
+
+        public String getMicroscope() {
+            return microscope;
+        }
+
+        public String getMountingMethod() {
+            return mountingMethod;
+        }
+
+        public AffineTransform getTransform() {
+            return new AffineTransform(transform);
+        }
+
+        public Date getCreatedDate() {
+            return createdDate;
+        }
+
+        public String getNotes() {
+            return notes;
+        }
+
         public GreenBoxDetector.DetectionParams getGreenBoxParams() {
             return greenBoxParams;
         }
+
         @Override
         public String toString() {
             return String.format("%s (%s - %s)", name, microscope, mountingMethod);
@@ -107,12 +126,10 @@ public class AffineTransformManager {
     /**
      * Custom Gson adapter for AffineTransform serialization.
      */
-    private static class AffineTransformAdapter
-            extends com.google.gson.TypeAdapter<AffineTransform> {
+    private static class AffineTransformAdapter extends com.google.gson.TypeAdapter<AffineTransform> {
 
         @Override
-        public void write(com.google.gson.stream.JsonWriter out, AffineTransform transform)
-                throws IOException {
+        public void write(com.google.gson.stream.JsonWriter out, AffineTransform transform) throws IOException {
             if (transform == null) {
                 out.nullValue();
                 return;
@@ -132,8 +149,7 @@ public class AffineTransformManager {
         }
 
         @Override
-        public AffineTransform read(com.google.gson.stream.JsonReader in)
-                throws IOException {
+        public AffineTransform read(com.google.gson.stream.JsonReader in) throws IOException {
             if (in.peek() == com.google.gson.stream.JsonToken.NULL) {
                 in.nextNull();
                 return null;
@@ -171,7 +187,7 @@ public class AffineTransformManager {
 
         try {
             String json = Files.readString(transformsPath);
-            var type = new TypeToken<Map<String, TransformPreset>>(){}.getType();
+            var type = new TypeToken<Map<String, TransformPreset>>() {}.getType();
             Map<String, TransformPreset> loaded = gson.fromJson(json, type);
 
             // Verify all presets have green box params
@@ -218,7 +234,7 @@ public class AffineTransformManager {
      * Writes all transforms to the JSON file.
      * This is called automatically when presets are added or removed.
      */
-    private void persistTransforms() {  // renamed from saveTransforms
+    private void persistTransforms() { // renamed from saveTransforms
         try {
             String json = gson.toJson(transforms);
             Files.writeString(transformsPath, json);
@@ -287,28 +303,36 @@ public class AffineTransformManager {
      * @param stageYMax Maximum expected stage Y coordinate
      * @return true if the transform produces coordinates within expected bounds
      */
-    public static boolean validateTransform(AffineTransform transform,
-                                            double imageWidth, double imageHeight,
-                                            double stageXMin, double stageXMax,
-                                            double stageYMin, double stageYMax) {
+    public static boolean validateTransform(
+            AffineTransform transform,
+            double imageWidth,
+            double imageHeight,
+            double stageXMin,
+            double stageXMax,
+            double stageYMin,
+            double stageYMax) {
         // Test corners of the image
         double[][] testPoints = {
-                {0, 0},
-                {imageWidth, 0},
-                {0, imageHeight},
-                {imageWidth, imageHeight},
-                {imageWidth/2, imageHeight/2}
+            {0, 0},
+            {imageWidth, 0},
+            {0, imageHeight},
+            {imageWidth, imageHeight},
+            {imageWidth / 2, imageHeight / 2}
         };
 
         for (double[] point : testPoints) {
-            double[] transformed = TransformationFunctions.transformQuPathFullResToStage(
-                    point, transform);
+            double[] transformed = TransformationFunctions.transformQuPathFullResToStage(point, transform);
 
-            if (transformed[0] < stageXMin || transformed[0] > stageXMax ||
-                    transformed[1] < stageYMin || transformed[1] > stageYMax) {
-                logger.warn("Transform validation failed: point ({}, {}) -> ({}, {}) " +
-                                "is outside stage bounds",
-                        point[0], point[1], transformed[0], transformed[1]);
+            if (transformed[0] < stageXMin
+                    || transformed[0] > stageXMax
+                    || transformed[1] < stageYMin
+                    || transformed[1] > stageYMax) {
+                logger.warn(
+                        "Transform validation failed: point ({}, {}) -> ({}, {}) " + "is outside stage bounds",
+                        point[0],
+                        point[1],
+                        transformed[0],
+                        transformed[1]);
                 return false;
             }
         }
@@ -334,8 +358,7 @@ public class AffineTransformManager {
 
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            AffineTransformManager manager = new AffineTransformManager(
-                    new File(configPath).getParent());
+            AffineTransformManager manager = new AffineTransformManager(new File(configPath).getParent());
 
             TransformPreset savedPreset = manager.getTransform(savedTransformName);
 
@@ -371,8 +394,7 @@ public class AffineTransformManager {
 
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            AffineTransformManager manager = new AffineTransformManager(
-                    new File(configPath).getParent());
+            AffineTransformManager manager = new AffineTransformManager(new File(configPath).getParent());
             return manager.getTransform(savedName) != null;
         } catch (Exception e) {
             return false;
@@ -457,12 +479,12 @@ public class AffineTransformManager {
             alignmentData.put("modality", modality);
             alignmentData.put("timestamp", new Date().toString());
             alignmentData.put("transform", new double[] {
-                    transform.getScaleX(),
-                    transform.getShearY(),
-                    transform.getShearX(),
-                    transform.getScaleY(),
-                    transform.getTranslateX(),
-                    transform.getTranslateY()
+                transform.getScaleX(),
+                transform.getShearY(),
+                transform.getShearX(),
+                transform.getScaleY(),
+                transform.getTranslateX(),
+                transform.getTranslateY()
             });
 
             // Mark that the saved macro image is in raw format (no display flips baked in).
@@ -474,8 +496,8 @@ public class AffineTransformManager {
                 // macroImageRaw flag from the previous JSON so that the on-disk PNG's
                 // format continues to be correctly detected by downstream consumers.
                 try {
-                    String existingJson = new String(
-                            Files.readAllBytes(alignmentFile.toPath()), StandardCharsets.UTF_8);
+                    String existingJson =
+                            new String(Files.readAllBytes(alignmentFile.toPath()), StandardCharsets.UTF_8);
                     @SuppressWarnings("unchecked")
                     Map<String, Object> existingData = new Gson().fromJson(existingJson, Map.class);
                     Object rawFlag = existingData.get("macroImageRaw");
@@ -484,8 +506,8 @@ public class AffineTransformManager {
                         logger.debug("Preserved macroImageRaw=true from existing alignment JSON");
                     }
                 } catch (Exception e) {
-                    logger.debug("Could not read existing alignment JSON to preserve macroImageRaw: {}",
-                            e.getMessage());
+                    logger.debug(
+                            "Could not read existing alignment JSON to preserve macroImageRaw: {}", e.getMessage());
                 }
             }
 
@@ -508,9 +530,8 @@ public class AffineTransformManager {
             logger.error("Failed to save slide alignment", e);
         }
     }
-    public static AffineTransform loadSlideAlignment(
-            Project<BufferedImage> project,
-            String sampleName) {
+
+    public static AffineTransform loadSlideAlignment(Project<BufferedImage> project, String sampleName) {
 
         try {
             // Get project folder
@@ -533,7 +554,7 @@ public class AffineTransformManager {
 
             // Read and parse the file
             String json = new String(Files.readAllBytes(alignmentFile.toPath()), StandardCharsets.UTF_8);
-            Type mapType = new TypeToken<Map<String, Object>>(){}.getType();
+            Type mapType = new TypeToken<Map<String, Object>>() {}.getType();
             Map<String, Object> alignmentData = new Gson().fromJson(json, mapType);
 
             // Extract transform values
@@ -542,19 +563,21 @@ public class AffineTransformManager {
 
             if (transformValues != null && transformValues.size() == 6) {
                 AffineTransform transform = new AffineTransform(
-                        transformValues.get(0),  // m00 (scaleX)
-                        transformValues.get(1),  // m10 (shearY)
-                        transformValues.get(2),  // m01 (shearX)
-                        transformValues.get(3),  // m11 (scaleY)
-                        transformValues.get(4),  // m02 (translateX)
-                        transformValues.get(5)   // m12 (translateY)
-                );
+                        transformValues.get(0), // m00 (scaleX)
+                        transformValues.get(1), // m10 (shearY)
+                        transformValues.get(2), // m01 (shearX)
+                        transformValues.get(3), // m11 (scaleY)
+                        transformValues.get(4), // m02 (translateX)
+                        transformValues.get(5) // m12 (translateY)
+                        );
 
                 logger.info("Loaded slide-specific alignment from: {}", alignmentFile.getAbsolutePath());
                 logger.info("Alignment created on: {}", alignmentData.get("timestamp"));
                 if (transform != null) {
-                    logger.info("CRITICAL: Loaded slide alignment with scale: X={}, Y={}",
-                            transform.getScaleX(), transform.getScaleY());
+                    logger.info(
+                            "CRITICAL: Loaded slide alignment with scale: X={}, Y={}",
+                            transform.getScaleX(),
+                            transform.getScaleY());
                 }
                 return transform;
             }
@@ -590,7 +613,7 @@ public class AffineTransformManager {
             return null;
         }
 
-        try (Reader reader = new FileReader(alignmentFile)) {
+        try (Reader reader = new FileReader(alignmentFile, StandardCharsets.UTF_8)) {
             Gson gson = new GsonBuilder()
                     .registerTypeAdapter(AffineTransform.class, new AffineTransformAdapter())
                     .create();
@@ -650,7 +673,7 @@ public class AffineTransformManager {
 
         try {
             String json = new String(Files.readAllBytes(alignmentFile.toPath()), StandardCharsets.UTF_8);
-            Type mapType = new TypeToken<Map<String, Object>>(){}.getType();
+            Type mapType = new TypeToken<Map<String, Object>>() {}.getType();
             Map<String, Object> alignmentData = new Gson().fromJson(json, mapType);
 
             Object timestamp = alignmentData.get("timestamp");
@@ -733,5 +756,4 @@ public class AffineTransformManager {
             return null;
         }
     }
-
 }

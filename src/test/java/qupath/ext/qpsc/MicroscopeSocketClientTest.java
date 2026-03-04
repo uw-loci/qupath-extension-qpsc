@@ -1,16 +1,15 @@
 package qupath.ext.qpsc;
 
-import org.junit.jupiter.api.*;
-import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
-import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.*;
+import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
+import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 
 /**
  * Unit tests for the MicroscopeSocketClient using a mock server.
@@ -229,24 +228,25 @@ class MicroscopeSocketClientTest {
         // Create threads that will all query position simultaneously
         for (int i = 0; i < threadCount; i++) {
             new Thread(() -> {
-                try {
-                    startLatch.await(); // Wait for signal to start
+                        try {
+                            startLatch.await(); // Wait for signal to start
 
-                    // Perform multiple operations
-                    for (int j = 0; j < 5; j++) {
-                        client.getStageXY();
-                        client.getStageZ();
-                        client.moveStageXY(j * 10, j * 20);
-                    }
+                            // Perform multiple operations
+                            for (int j = 0; j < 5; j++) {
+                                client.getStageXY();
+                                client.getStageZ();
+                                client.moveStageXY(j * 10, j * 20);
+                            }
 
-                    successCount.incrementAndGet();
-                } catch (Exception e) {
-                    hasErrors.set(true);
-                    e.printStackTrace();
-                } finally {
-                    doneLatch.countDown();
-                }
-            }).start();
+                            successCount.incrementAndGet();
+                        } catch (Exception e) {
+                            hasErrors.set(true);
+                            e.printStackTrace();
+                        } finally {
+                            doneLatch.countDown();
+                        }
+                    })
+                    .start();
         }
 
         // Start all threads simultaneously
@@ -267,12 +267,11 @@ class MicroscopeSocketClientTest {
         MicroscopeSocketClient badClient = new MicroscopeSocketClient(
                 "localhost",
                 12345, // Invalid port
-                500,   // Short timeout
+                500, // Short timeout
                 1000,
                 1,
                 1000,
-                30000
-        );
+                30000);
 
         // Should timeout quickly
         assertThrows(IOException.class, badClient::connect);
@@ -369,11 +368,11 @@ class MicroscopeSocketClientTest {
 
         // Test extreme values
         double[][] testCases = {
-                {0.0, 0.0},
-                {-21000.0, -9000.0}, // Min bounds
-                {33000.0, 11000.0},  // Max bounds
-                {0.000001, 0.000001}, // Very small
-                {-0.000001, -0.000001}
+            {0.0, 0.0},
+            {-21000.0, -9000.0}, // Min bounds
+            {33000.0, 11000.0}, // Max bounds
+            {0.000001, 0.000001}, // Very small
+            {-0.000001, -0.000001}
         };
 
         for (double[] coords : testCases) {

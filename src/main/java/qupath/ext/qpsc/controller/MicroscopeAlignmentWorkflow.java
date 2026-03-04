@@ -1,18 +1,5 @@
 package qupath.ext.qpsc.controller;
 
-import javafx.application.Platform;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.preferences.PersistentPreferences;
-import qupath.ext.qpsc.ui.*;
-import qupath.ext.qpsc.utilities.*;
-
-import qupath.lib.gui.QuPathGUI;
-import qupath.lib.objects.PathObject;
-import qupath.lib.projects.Project;
-import qupath.lib.roi.interfaces.ROI;
-
 import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Point2D;
@@ -24,6 +11,17 @@ import java.util.*;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import javafx.application.Platform;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.*;
+import qupath.ext.qpsc.utilities.*;
+import qupath.lib.gui.QuPathGUI;
+import qupath.lib.objects.PathObject;
+import qupath.lib.projects.Project;
+import qupath.lib.roi.interfaces.ROI;
 
 /**
  * Enhanced workflow for creating and saving microscope alignment transforms.
@@ -64,9 +62,7 @@ public class MicroscopeAlignmentWorkflow {
         // Check prerequisites
         if (gui.getImageData() == null) {
             Platform.runLater(() -> UIFunctions.notifyUserOfError(
-                    "No image is currently open. Please open an image first.",
-                    "No Image"
-            ));
+                    "No image is currently open. Please open an image first.", "No Image"));
             return;
         }
 
@@ -81,12 +77,11 @@ public class MicroscopeAlignmentWorkflow {
                     // Check if microscope supports macro images
                     if (!microscopeSelection.hasMacroSupport()) {
                         Platform.runLater(() -> UIFunctions.notifyUserOfError(
-                                "The selected microscope '" + microscopeSelection.microscopeName() +
-                                        "' does not support macro images.\n\n" +
-                                        "Manual alignment is the only option for non-macro image scanners.\n" +
-                                        "Please use a different workflow or select a microscope with macro image support.",
-                                "No Macro Image Support"
-                        ));
+                                "The selected microscope '" + microscopeSelection.microscopeName()
+                                        + "' does not support macro images.\n\n"
+                                        + "Manual alignment is the only option for non-macro image scanners.\n"
+                                        + "Please use a different workflow or select a microscope with macro image support.",
+                                "No Macro Image Support"));
                         return;
                     }
 
@@ -98,16 +93,16 @@ public class MicroscopeAlignmentWorkflow {
                     BufferedImage macroImage = MacroImageUtility.retrieveMacroImage(gui);
                     if (macroImage == null) {
                         Platform.runLater(() -> UIFunctions.notifyUserOfError(
-                                "No macro image found in the current image. " +
-                                        "A macro image is required for alignment workflow.",
+                                "No macro image found in the current image. "
+                                        + "A macro image is required for alignment workflow.",
                                 "No Macro Image"));
                         return;
                     }
 
                     // Initialize transform manager
                     String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-                    AffineTransformManager transformManager = new AffineTransformManager(
-                            new File(configPath).getParent());
+                    AffineTransformManager transformManager =
+                            new AffineTransformManager(new File(configPath).getParent());
 
                     // Get current microscope from config
                     MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
@@ -122,19 +117,27 @@ public class MicroscopeAlignmentWorkflow {
                                 }
 
                                 // Now show alignment dialog with proper parameters
-                                return MacroImageController.showAlignmentDialog(gui, transformManager, currentMicroscope)
+                                return MacroImageController.showAlignmentDialog(
+                                                gui, transformManager, currentMicroscope)
                                         .thenApply(alignConfig -> {
                                             if (alignConfig == null) {
                                                 return null;
                                             }
 
                                             // Run detection NOW before project creation
-                                            MacroImageResults macroImageResults = performDetection(gui, alignConfig,
-                                                    selectedScanner, microscopeSelection.configPath());
+                                            MacroImageResults macroImageResults = performDetection(
+                                                    gui,
+                                                    alignConfig,
+                                                    selectedScanner,
+                                                    microscopeSelection.configPath());
 
                                             // Package everything together with the selected scanner
-                                            return new CombinedConfig(sampleSetup, alignConfig, macroImageResults,
-                                                    selectedScanner, microscopeSelection.configPath());
+                                            return new CombinedConfig(
+                                                    sampleSetup,
+                                                    alignConfig,
+                                                    macroImageResults,
+                                                    selectedScanner,
+                                                    microscopeSelection.configPath());
                                         });
                             })
                             .thenAccept(combinedConfig -> {
@@ -155,17 +158,14 @@ public class MicroscopeAlignmentWorkflow {
 
                                 logger.error("Alignment workflow failed", ex);
                                 Platform.runLater(() -> UIFunctions.notifyUserOfError(
-                                        "Workflow error: " + ex.getMessage(),
-                                        "Alignment Error"));
+                                        "Workflow error: " + ex.getMessage(), "Alignment Error"));
                                 return null;
                             });
-
                 })
                 .exceptionally(ex -> {
                     logger.error("Microscope selection failed", ex);
                     Platform.runLater(() -> UIFunctions.notifyUserOfError(
-                            "Failed to select microscope: " + ex.getMessage(),
-                            "Selection Error"));
+                            "Failed to select microscope: " + ex.getMessage(), "Selection Error"));
                     return null;
                 });
     }
@@ -178,8 +178,7 @@ public class MicroscopeAlignmentWorkflow {
             MacroImageController.AlignmentConfig alignmentConfig,
             MacroImageResults macroImageResults,
             String selectedScanner,
-            String selectedScannerConfigPath
-    ) {}
+            String selectedScannerConfigPath) {}
 
     /**
      * Container for detection results that need to survive project creation.
@@ -195,8 +194,7 @@ public class MicroscopeAlignmentWorkflow {
             int originalMacroWidth,
             int originalMacroHeight,
             Rectangle dataBounds,
-            BufferedImage processedMacroImag
-    ) {}
+            BufferedImage processedMacroImag) {}
 
     /**
      * Performs all detection BEFORE project creation while macro image is still available.
@@ -253,8 +251,13 @@ public class MicroscopeAlignmentWorkflow {
 
             if (xMin != null && xMax != null && yMin != null && yMax != null) {
                 croppedResult = MacroImageUtility.cropToSlideArea(originalMacroImage, xMin, xMax, yMin, yMax);
-                logger.info("Cropped macro image using bounds from {}: X[{}-{}], Y[{}-{}]",
-                        selectedScanner, xMin, xMax, yMin, yMax);
+                logger.info(
+                        "Cropped macro image using bounds from {}: X[{}-{}], Y[{}-{}]",
+                        selectedScanner,
+                        xMin,
+                        xMax,
+                        yMin,
+                        yMax);
             } else {
                 logger.warn("Scanner '{}' requires cropping but bounds are not properly configured", selectedScanner);
                 croppedResult = new MacroImageUtility.CroppedMacroResult(
@@ -271,14 +274,18 @@ public class MicroscopeAlignmentWorkflow {
 
         int macroWidth = croppedMacroImage.getWidth();
         int macroHeight = croppedMacroImage.getHeight();
-        logger.info("Cropped macro dimensions: {}x{} (offset: {}, {})",
-                macroWidth, macroHeight, croppedResult.getCropOffsetX(), croppedResult.getCropOffsetY());
+        logger.info(
+                "Cropped macro dimensions: {}x{} (offset: {}, {})",
+                macroWidth,
+                macroHeight,
+                croppedResult.getCropOffsetX(),
+                croppedResult.getCropOffsetY());
 
         // Get flip settings
         boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
         boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
 
-        //save a copy of the cropped macro image for future use/realignment
+        // save a copy of the cropped macro image for future use/realignment
         BufferedImage processedMacroImage = null;
         if (flipX || flipY) {
             processedMacroImage = MacroImageUtility.flipMacroImage(croppedMacroImage, flipX, flipY);
@@ -302,28 +309,35 @@ public class MicroscopeAlignmentWorkflow {
                 greenBoxResult = GreenBoxDetector.detectGreenBox(imageForDetection, config.greenBoxParams());
 
                 if (greenBoxResult != null && greenBoxResult.getConfidence() > 0.7) {
-                    logger.info("Green box detected in flipped macro with confidence {}", greenBoxResult.getConfidence());
+                    logger.info(
+                            "Green box detected in flipped macro with confidence {}", greenBoxResult.getConfidence());
 
                     // The green box coordinates are now in FLIPPED cropped image space
                     ROI greenBoxFlipped = greenBoxResult.getDetectedBox();
-                    logger.info("Green box in flipped cropped macro: ({}, {}, {}, {})",
-                            greenBoxFlipped.getBoundsX(), greenBoxFlipped.getBoundsY(),
-                            greenBoxFlipped.getBoundsWidth(), greenBoxFlipped.getBoundsHeight());
+                    logger.info(
+                            "Green box in flipped cropped macro: ({}, {}, {}, {})",
+                            greenBoxFlipped.getBoundsX(),
+                            greenBoxFlipped.getBoundsY(),
+                            greenBoxFlipped.getBoundsWidth(),
+                            greenBoxFlipped.getBoundsHeight());
 
                     // Use data bounds if available, otherwise full image dimensions
-                    int mainWidth = dataBounds != null ? dataBounds.width : gui.getImageData().getServer().getWidth();
-                    int mainHeight = dataBounds != null ? dataBounds.height : gui.getImageData().getServer().getHeight();
+                    int mainWidth = dataBounds != null
+                            ? dataBounds.width
+                            : gui.getImageData().getServer().getWidth();
+                    int mainHeight = dataBounds != null
+                            ? dataBounds.height
+                            : gui.getImageData().getServer().getHeight();
 
                     logger.info("Creating green box transform for main image size: {}x{}", mainWidth, mainHeight);
-                    logger.info("Green box size in macro: {}x{}",
-                            greenBoxFlipped.getBoundsWidth(), greenBoxFlipped.getBoundsHeight());
+                    logger.info(
+                            "Green box size in macro: {}x{}",
+                            greenBoxFlipped.getBoundsWidth(),
+                            greenBoxFlipped.getBoundsHeight());
 
                     // Use the transform function for flipped coordinates
                     greenBoxTransform = TransformationFunctions.calculateMacroFlippedToFullResTransform(
-                            greenBoxFlipped,
-                            mainWidth,
-                            mainHeight
-                    );
+                            greenBoxFlipped, mainWidth, mainHeight);
                 }
             } catch (Exception e) {
                 logger.error("Error during green box detection", e);
@@ -334,13 +348,12 @@ public class MicroscopeAlignmentWorkflow {
         MacroImageAnalyzer.MacroAnalysisResult tissueResult = null;
         try {
             tissueResult = MacroImageAnalyzer.analyzeMacroImage(
-                    gui.getImageData(),
-                    config.thresholdMethod(),
-                    config.thresholdParams()
-            );
+                    gui.getImageData(), config.thresholdMethod(), config.thresholdParams());
 
             if (tissueResult != null) {
-                logger.info("Tissue analysis found {} regions", tissueResult.getTissueRegions().size());
+                logger.info(
+                        "Tissue analysis found {} regions",
+                        tissueResult.getTissueRegions().size());
             }
         } catch (Exception e) {
             logger.error("Error during tissue analysis", e);
@@ -357,8 +370,8 @@ public class MicroscopeAlignmentWorkflow {
                 originalMacroWidth,
                 originalMacroHeight,
                 dataBounds,
-                processedMacroImage  // Add this
-        );
+                processedMacroImage // Add this
+                );
     }
 
     /**
@@ -366,9 +379,7 @@ public class MicroscopeAlignmentWorkflow {
      * ENHANCED: Uses early-detected bounds for proper alignment.
      */
     private static void processAlignmentWithProject(
-            QuPathGUI gui,
-            CombinedConfig combinedConfig,
-            AffineTransformManager transformManager) {
+            QuPathGUI gui, CombinedConfig combinedConfig, AffineTransformManager transformManager) {
 
         Platform.runLater(() -> {
             try {
@@ -389,28 +400,19 @@ public class MicroscopeAlignmentWorkflow {
 
                 if (gui.getProject() == null) {
                     // Create new project
-                    String imagePath = MinorFunctions.extractFilePath(
-                            gui.getImageData().getServerPath()
-                    );
+                    String imagePath =
+                            MinorFunctions.extractFilePath(gui.getImageData().getServerPath());
 
                     if (imagePath == null) {
-                        UIFunctions.notifyUserOfError(
-                                "Cannot extract image path",
-                                "Import Error"
-                        );
+                        UIFunctions.notifyUserOfError("Cannot extract image path", "Import Error");
                         return;
                     }
 
                     Project<BufferedImage> project = QPProjectFunctions.createProject(
-                            sampleSetup.projectsFolder().getAbsolutePath(),
-                            sampleSetup.sampleName()
-                    );
+                            sampleSetup.projectsFolder().getAbsolutePath(), sampleSetup.sampleName());
 
                     if (project == null) {
-                        UIFunctions.notifyUserOfError(
-                                "Failed to create project",
-                                "Project Error"
-                        );
+                        UIFunctions.notifyUserOfError("Failed to create project", "Project Error");
                         return;
                     }
 
@@ -421,8 +423,8 @@ public class MicroscopeAlignmentWorkflow {
                             project,
                             flipX,
                             flipY,
-                            null  // No modality info in alignment workflow - use auto-detection
-                    );
+                            null // No modality info in alignment workflow - use auto-detection
+                            );
 
                     gui.refreshProject();
 
@@ -441,15 +443,13 @@ public class MicroscopeAlignmentWorkflow {
                     projectDetails = QPProjectFunctions.getCurrentProjectInformation(
                             sampleSetup.projectsFolder().getAbsolutePath(),
                             sampleSetup.sampleName(),
-                            sampleSetup.modality()
-                    );
+                            sampleSetup.modality());
                 } else {
                     // Use existing project
                     projectDetails = QPProjectFunctions.getCurrentProjectInformation(
                             sampleSetup.projectsFolder().getAbsolutePath(),
                             sampleSetup.sampleName(),
-                            sampleSetup.modality()
-                    );
+                            sampleSetup.modality());
                 }
 
                 // Create annotations from detection
@@ -468,40 +468,46 @@ public class MicroscopeAlignmentWorkflow {
 
                     if (pixelSize == null || pixelSize <= 0) {
                         String error = String.format(
-                                "Scanner '%s' has no valid macro pixel size configured. " +
-                                        "This is required for accurate alignment. " +
-                                        "Please add 'macro: pixel_size_um:' to the scanner configuration.",
-                                selectedScanner
-                        );
+                                "Scanner '%s' has no valid macro pixel size configured. "
+                                        + "This is required for accurate alignment. "
+                                        + "Please add 'macro: pixel_size_um:' to the scanner configuration.",
+                                selectedScanner);
                         logger.error(error);
-                        UIFunctions.notifyUserOfError(error + "\n\nCannot proceed with alignment.", "Configuration Error");
+                        UIFunctions.notifyUserOfError(
+                                error + "\n\nCannot proceed with alignment.", "Configuration Error");
                         return;
                     }
 
                     macroPixelSize = pixelSize;
-                    logger.info("Using macro pixel size {} µm from scanner '{}' configuration",
-                            macroPixelSize, selectedScanner);
+                    logger.info(
+                            "Using macro pixel size {} um from scanner '{}' configuration",
+                            macroPixelSize,
+                            selectedScanner);
                 } catch (Exception e) {
                     logger.error("Failed to get macro pixel size: {}", e.getMessage());
                     UIFunctions.notifyUserOfError(
-                            e.getMessage() + "\n\nCannot proceed with alignment.",
-                            "Configuration Error"
-                    );
+                            e.getMessage() + "\n\nCannot proceed with alignment.", "Configuration Error");
                     return;
                 }
 
-                double mainPixelSize = gui.getImageData().getServer()
-                        .getPixelCalibration().getAveragedPixelSizeMicrons();
+                double mainPixelSize =
+                        gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
 
                 // Create tiles for manual alignment
                 String tempTileDirectory = (String) projectDetails.get("tempTileDirectory");
                 String modeWithIndex = (String) projectDetails.get("imagingModeWithIndex");
 
                 // Create tiles for alignment (in full resolution coordinates)
-                createAlignmentTiles(gui, sampleSetup, tempTileDirectory,
-                        modeWithIndex, invertedX, invertedY, null);  // Pass null for bounds
+                createAlignmentTiles(
+                        gui,
+                        sampleSetup,
+                        tempTileDirectory,
+                        modeWithIndex,
+                        invertedX,
+                        invertedY,
+                        null); // Pass null for bounds
 
-                // Setup manual transform - this returns a full-res→stage transform
+                // Setup manual transform - this returns a full-res->stage transform
                 AffineTransformationController.setupAffineTransformationAndValidationGUI(
                                 mainPixelSize, invertedX, invertedY)
                         .thenAccept(fullResToStageTransform -> {
@@ -510,31 +516,33 @@ public class MicroscopeAlignmentWorkflow {
                                 return;
                             }
 
-                            logger.info("Alignment transform complete (full-res→stage): {}", fullResToStageTransform);
+                            logger.info("Alignment transform complete (full-res->stage): {}", fullResToStageTransform);
 
                             // Set the current transform for immediate use
                             MicroscopeController.getInstance().setCurrentTransform(fullResToStageTransform);
 
-                            // Create and save the general macro→stage transform
-                            saveGeneralTransform(gui, alignConfig, fullResToStageTransform,
-                                    detectionResultsHolder[0], macroPixelSize, invertedX, invertedY,
-                                    transformManager, selectedScanner);
-
-                        }).exceptionally(ex -> {
+                            // Create and save the general macro->stage transform
+                            saveGeneralTransform(
+                                    gui,
+                                    alignConfig,
+                                    fullResToStageTransform,
+                                    detectionResultsHolder[0],
+                                    macroPixelSize,
+                                    invertedX,
+                                    invertedY,
+                                    transformManager,
+                                    selectedScanner);
+                        })
+                        .exceptionally(ex -> {
                             logger.error("Error in transform setup", ex);
                             Platform.runLater(() -> UIFunctions.notifyUserOfError(
-                                    "Transform setup failed: " + ex.getMessage(),
-                                    "Transform Error"
-                            ));
+                                    "Transform setup failed: " + ex.getMessage(), "Transform Error"));
                             return null;
                         });
 
             } catch (Exception e) {
                 logger.error("Error processing alignment", e);
-                UIFunctions.notifyUserOfError(
-                        "Failed to process alignment: " + e.getMessage(),
-                        "Alignment Error"
-                );
+                UIFunctions.notifyUserOfError("Failed to process alignment: " + e.getMessage(), "Alignment Error");
             }
         });
     }
@@ -554,8 +562,7 @@ public class MicroscopeAlignmentWorkflow {
 
         // First, try to get tissue annotations specifically
         var tissueAnnotations = gui.getViewer().getHierarchy().getAnnotationObjects().stream()
-                .filter(a -> a.getClassification() != null &&
-                        "Tissue".equals(a.getClassification()))
+                .filter(a -> a.getClassification() != null && "Tissue".equals(a.getClassification()))
                 .toList();
 
         // Get flip settings to log them
@@ -567,37 +574,41 @@ public class MicroscopeAlignmentWorkflow {
         Rectangle boundsForTiling = dataBounds;
         if (boundsForTiling == null) {
             // Fallback to full image
-            boundsForTiling = new Rectangle(0, 0,
+            boundsForTiling = new Rectangle(
+                    0,
+                    0,
                     gui.getImageData().getServer().getWidth(),
                     gui.getImageData().getServer().getHeight());
         }
-        logger.info("Using data bounds for tiling: x={}, y={}, width={}, height={}",
-                boundsForTiling.x, boundsForTiling.y, boundsForTiling.width, boundsForTiling.height);
+        logger.info(
+                "Using data bounds for tiling: x={}, y={}, width={}, height={}",
+                boundsForTiling.x,
+                boundsForTiling.y,
+                boundsForTiling.width,
+                boundsForTiling.height);
 
         // If we have tissue annotations, use those for tiling
         if (!tissueAnnotations.isEmpty()) {
             logger.info("Found {} tissue annotations for tiling", tissueAnnotations.size());
-            createTilesForAnnotations(gui, tissueAnnotations, sampleSetup, tempTileDirectory,
-                    modeWithIndex, invertedX, invertedY);
+            createTilesForAnnotations(
+                    gui, tissueAnnotations, sampleSetup, tempTileDirectory, modeWithIndex, invertedX, invertedY);
             return;
         }
 
         // Otherwise fall back to any valid annotation class
         logger.info("No tissue annotations found, checking for other valid annotation types");
         var annotations = gui.getViewer().getHierarchy().getAnnotationObjects().stream()
-                .filter(a -> a.getClassification() != null &&
-                        VALID_ANNOTATION_CLASSES.contains(a.getClassification()))
+                .filter(a -> a.getClassification() != null && VALID_ANNOTATION_CLASSES.contains(a.getClassification()))
                 .toList();
 
         if (annotations.isEmpty()) {
-            logger.warn("No annotations found for tiling. Looking for classes: {}",
-                    VALID_ANNOTATION_CLASSES);
+            logger.warn("No annotations found for tiling. Looking for classes: {}", VALID_ANNOTATION_CLASSES);
             return;
         }
 
         logger.info("Found {} annotations for tiling (non-tissue)", annotations.size());
-        createTilesForAnnotations(gui, annotations, sampleSetup, tempTileDirectory,
-                modeWithIndex, invertedX, invertedY);
+        createTilesForAnnotations(
+                gui, annotations, sampleSetup, tempTileDirectory, modeWithIndex, invertedX, invertedY);
     }
 
     private static void createTilesForAnnotations(
@@ -613,29 +624,16 @@ public class MicroscopeAlignmentWorkflow {
             // Delegate to TilingUtilities with explicit inversion parameters
             // These control tile positioning in the grid to match stage coordinate system
             TilingUtilities.createTilesForAnnotations(
-                    annotations,
-                    sampleSetup,
-                    tempTileDirectory,
-                    modeWithIndex,
-                    invertedX,
-                    invertedY
-            );
+                    annotations, sampleSetup, tempTileDirectory, modeWithIndex, invertedX, invertedY);
 
-            logger.info("Created detection tiles for alignment (invertX={}, invertY={})",
-                    invertedX, invertedY);
+            logger.info("Created detection tiles for alignment (invertX={}, invertY={})", invertedX, invertedY);
 
         } catch (IOException e) {
             logger.error("Failed to create tiles", e);
-            UIFunctions.notifyUserOfError(
-                    "Failed to create tiles: " + e.getMessage(),
-                    "Tiling Error"
-            );
+            UIFunctions.notifyUserOfError("Failed to create tiles: " + e.getMessage(), "Tiling Error");
         } catch (IllegalArgumentException e) {
             logger.error("Invalid tile configuration", e);
-            UIFunctions.notifyUserOfError(
-                    "Invalid tile configuration: " + e.getMessage(),
-                    "Configuration Error"
-            );
+            UIFunctions.notifyUserOfError("Invalid tile configuration: " + e.getMessage(), "Configuration Error");
         }
     }
 
@@ -683,8 +681,7 @@ public class MicroscopeAlignmentWorkflow {
                     dataBounds = UIFunctions.executeWithProgress(
                             "Processing Image",
                             "Detecting image boundaries...\nAnalyzing image data - this may take a moment for large images.",
-                            () -> ImageProcessing.detectOcus40DataBounds(gui, scriptDir)
-                    );
+                            () -> ImageProcessing.detectOcus40DataBounds(gui, scriptDir));
                 }
 
                 if (dataBounds == null) {
@@ -695,12 +692,12 @@ public class MicroscopeAlignmentWorkflow {
             // Data dimensions represent the actual tissue area excluding padding
             int fullResWidth = dataBounds.width;
             int fullResHeight = dataBounds.height;
-            logger.info("Using data bounds: {}x{} at ({}, {})",
-                    fullResWidth, fullResHeight, dataBounds.x, dataBounds.y);
+            logger.info(
+                    "Using data bounds: {}x{} at ({}, {})", fullResWidth, fullResHeight, dataBounds.x, dataBounds.y);
 
             // Step 2: Verify green box detection exists
-            if (macroImageResults.greenBoxResult() == null ||
-                    macroImageResults.greenBoxResult().getDetectedBox() == null) {
+            if (macroImageResults.greenBoxResult() == null
+                    || macroImageResults.greenBoxResult().getDetectedBox() == null) {
                 throw new IllegalStateException("Green box detection is required for alignment");
             }
 
@@ -708,15 +705,18 @@ public class MicroscopeAlignmentWorkflow {
 
             // Step 3: Log key measurements for debugging
             logger.info("=== TRANSFORM CALCULATION ===");
-            logger.info("Macro pixel size: {} µm/pixel", macroPixelSize);
-            logger.info("Green box: ({}, {}) size {} x {} pixels",
-                    greenBox.getBoundsX(), greenBox.getBoundsY(),
-                    greenBox.getBoundsWidth(), greenBox.getBoundsHeight());
+            logger.info("Macro pixel size: {} um/pixel", macroPixelSize);
+            logger.info(
+                    "Green box: ({}, {}) size {} x {} pixels",
+                    greenBox.getBoundsX(),
+                    greenBox.getBoundsY(),
+                    greenBox.getBoundsWidth(),
+                    greenBox.getBoundsHeight());
             logger.info("Data region: {} x {} pixels", fullResWidth, fullResHeight);
 
             // Calculate and log the scale relationship
-            double fullResPixelSize = gui.getImageData().getServer()
-                    .getPixelCalibration().getAveragedPixelSizeMicrons();
+            double fullResPixelSize =
+                    gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
             double pixelScale = macroPixelSize / fullResPixelSize;
             logger.info("Scale relationship: {} macro pixels = 1 full-res pixel", pixelScale);
 
@@ -735,8 +735,7 @@ public class MicroscopeAlignmentWorkflow {
             Point2D fullResCenter = new Point2D.Double(fullResCenterX, fullResCenterY);
             Point2D stageCenter = new Point2D.Double();
             fullResToStageTransform.transform(fullResCenter, stageCenter);
-            logger.info("Data center maps to stage: ({}, {})",
-                    stageCenter.getX(), stageCenter.getY());
+            logger.info("Data center maps to stage: ({}, {})", stageCenter.getX(), stageCenter.getY());
 
             // Step 6: Create the macro-to-stage transform
             // This transform will map macro pixel coordinates directly to stage micrometers
@@ -756,21 +755,27 @@ public class MicroscopeAlignmentWorkflow {
             macroToStageTransform.translate(-greenBoxCenterX, -greenBoxCenterY);
 
             logger.info("Transform created:");
-            logger.info("  Green box center ({}, {}) pixels -> Stage center ({}, {}) µm",
-                    greenBoxCenterX, greenBoxCenterY, stageCenter.getX(), stageCenter.getY());
+            logger.info(
+                    "  Green box center ({}, {}) pixels -> Stage center ({}, {}) um",
+                    greenBoxCenterX,
+                    greenBoxCenterY,
+                    stageCenter.getX(),
+                    stageCenter.getY());
 
             // Step 7: Validate the transform
             // Log some key point transformations for debugging
-            TransformationFunctions.logTransformDetails("Macro→Stage", macroToStageTransform);
+            TransformationFunctions.logTransformDetails("Macro->Stage", macroToStageTransform);
 
             // Check if transform produces valid stage coordinates
             boolean isValid = TransformationFunctions.validateTransform(
                     macroToStageTransform,
                     macroImageResults.macroWidth(),
                     macroImageResults.macroHeight(),
-                    -21000, 33000,  // Stage X limits in micrometers
-                    -9000, 11000     // Stage Y limits in micrometers
-            );
+                    -21000,
+                    33000, // Stage X limits in micrometers
+                    -9000,
+                    11000 // Stage Y limits in micrometers
+                    );
 
             if (!isValid) {
                 logger.warn("Transform may produce out-of-bounds stage coordinates");
@@ -784,10 +789,10 @@ public class MicroscopeAlignmentWorkflow {
             // Step 8: Save the transform
             String transformName = config.transformName();
             if (transformName == null || transformName.isBlank()) {
-                transformName = String.format("%s_to_%s_%s",
+                transformName = String.format(
+                        "%s_to_%s_%s",
                         selectedScanner,
-                        MicroscopeConfigManager.getInstance(
-                                        QPPreferenceDialog.getMicroscopeConfigFileProperty())
+                        MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty())
                                 .getString("microscope", "name"),
                         new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()));
             }
@@ -797,19 +802,16 @@ public class MicroscopeAlignmentWorkflow {
                     selectedScanner,
                     macroImageResults.macroWidth(),
                     macroImageResults.macroHeight(),
-                    isValid ? "PASSED" : "WARNING"
-            );
+                    isValid ? "PASSED" : "WARNING");
 
             AffineTransformManager.TransformPreset preset = new AffineTransformManager.TransformPreset(
                     transformName,
-                    MicroscopeConfigManager.getInstance(
-                                    QPPreferenceDialog.getMicroscopeConfigFileProperty())
+                    MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty())
                             .getString("microscope", "name"),
                     selectedScanner,
                     macroToStageTransform,
                     description,
-                    config.greenBoxParams()
-            );
+                    config.greenBoxParams());
 
             transformManager.savePreset(preset);
             PersistentPreferences.setSavedTransformName(transformName);
@@ -820,17 +822,13 @@ public class MicroscopeAlignmentWorkflow {
             Platform.runLater(() -> {
                 qupath.fx.dialogs.Dialogs.showInfoNotification(
                         "Transform Saved",
-                        String.format("Successfully saved alignment transform: %s", finalTransformName)
-                );
+                        String.format("Successfully saved alignment transform: %s", finalTransformName));
             });
 
         } catch (Exception e) {
             logger.error("Failed to save transform", e);
             Platform.runLater(() -> {
-                UIFunctions.notifyUserOfError(
-                        "Failed to save transform: " + e.getMessage(),
-                        "Save Error"
-                );
+                UIFunctions.notifyUserOfError("Failed to save transform: " + e.getMessage(), "Save Error");
             });
         }
     }
@@ -840,28 +838,26 @@ public class MicroscopeAlignmentWorkflow {
      * This is primarily for debugging and development.
      */
     private static void validateWithKnownGroundTruth(
-            AffineTransform macroToStageTransform,
-            AffineTransform fullResToStageTransform) {
+            AffineTransform macroToStageTransform, AffineTransform fullResToStageTransform) {
 
-        // Validate macro→stage transform with known tissue points
+        // Validate macro->stage transform with known tissue points
         Map<Point2D, Point2D> macroGroundTruth = new HashMap<>();
         macroGroundTruth.put(new Point2D.Double(700, 43), new Point2D.Double(16286.456640000002, -8112.192));
         macroGroundTruth.put(new Point2D.Double(486, 202), new Point2D.Double(-1275, 4864));
 
-        logger.info("=== MACRO→STAGE GROUND TRUTH VALIDATION ===");
+        logger.info("=== MACRO->STAGE GROUND TRUTH VALIDATION ===");
         boolean macroValid = TransformationFunctions.validateTransformWithGroundTruth(
-                macroToStageTransform, macroGroundTruth, 500.0); // 500µm tolerance for macro
+                macroToStageTransform, macroGroundTruth, 500.0); // 500um tolerance for macro
 
-        // Validate full-res→stage transform with known points
+        // Validate full-res->stage transform with known points
         Map<Point2D, Point2D> fullResGroundTruth = new HashMap<>();
-        fullResGroundTruth.put(new Point2D.Double(88945, 2680.11807528976),
-                new Point2D.Double(16286.456640000002, -8112.192));
-        fullResGroundTruth.put(new Point2D.Double(15934, 54469),
-                new Point2D.Double(-1275, 4864));
+        fullResGroundTruth.put(
+                new Point2D.Double(88945, 2680.11807528976), new Point2D.Double(16286.456640000002, -8112.192));
+        fullResGroundTruth.put(new Point2D.Double(15934, 54469), new Point2D.Double(-1275, 4864));
 
-        logger.info("=== FULL-RES→STAGE GROUND TRUTH VALIDATION ===");
+        logger.info("=== FULL-RES->STAGE GROUND TRUTH VALIDATION ===");
         boolean fullResValid = TransformationFunctions.validateTransformWithGroundTruth(
-                fullResToStageTransform, fullResGroundTruth, 100.0); // 100µm tolerance for full-res
+                fullResToStageTransform, fullResGroundTruth, 100.0); // 100um tolerance for full-res
 
         if (!macroValid || !fullResValid) {
             logger.warn("Ground truth validation failed - transform may need adjustment");
@@ -881,15 +877,15 @@ public class MicroscopeAlignmentWorkflow {
 
         try {
             // Get the pixel size for the script
-            double pixelSize = gui.getImageData().getServer()
-                    .getPixelCalibration().getAveragedPixelSizeMicrons();
+            double pixelSize =
+                    gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
 
             // If we have a scanned area annotation, select it first so tissue detection
             // runs within it
             var scannedAreas = gui.getViewer().getHierarchy().getAnnotationObjects().stream()
-                    .filter(a -> a.getClassification() != null &&
-                            ("Scanned Area".equals(a.getClassification()) ||
-                                    "Bounding Box".equals(a.getClassification())))
+                    .filter(a -> a.getClassification() != null
+                            && ("Scanned Area".equals(a.getClassification())
+                                    || "Bounding Box".equals(a.getClassification())))
                     .toList();
 
             if (!scannedAreas.isEmpty()) {
@@ -901,10 +897,7 @@ public class MicroscopeAlignmentWorkflow {
             // Prepare the script with proper parameters
             Map<String, String> scriptPaths = MinorFunctions.calculateScriptPaths(tissueScript);
             String modifiedScript = TileProcessingUtilities.modifyTissueDetectScript(
-                    tissueScript,
-                    String.valueOf(pixelSize),
-                    scriptPaths.get("jsonTissueClassfierPathString")
-            );
+                    tissueScript, String.valueOf(pixelSize), scriptPaths.get("jsonTissueClassfierPathString"));
 
             // Run the script
             gui.runScript(null, modifiedScript);
@@ -915,8 +908,7 @@ public class MicroscopeAlignmentWorkflow {
 
             // Log results
             var tissueAnnotations = gui.getViewer().getHierarchy().getAnnotationObjects().stream()
-                    .filter(a -> a.getClassification() != null &&
-                            "Tissue".equals(a.getClassification()))
+                    .filter(a -> a.getClassification() != null && "Tissue".equals(a.getClassification()))
                     .toList();
             logger.info("Found {} tissue annotations after script", tissueAnnotations.size());
 

@@ -1,5 +1,10 @@
 package qupath.ext.qpsc.controller;
 
+import java.awt.Desktop;
+import java.io.File;
+import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,14 +12,6 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
-
-import java.awt.Desktop;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * TestAutofocusWorkflow - Runs autofocus test at current microscope position
@@ -139,16 +136,16 @@ public class TestAutofocusWorkflow {
             try {
                 // Validate microscope connection
                 if (!MicroscopeController.getInstance().isConnected()) {
-                    boolean connect = Dialogs.showConfirmDialog("Connection Required",
-                            "Microscope server is not connected. Connect now?");
+                    boolean connect = Dialogs.showConfirmDialog(
+                            "Connection Required", "Microscope server is not connected. Connect now?");
 
                     if (connect) {
                         try {
                             MicroscopeController.getInstance().connect();
                         } catch (IOException e) {
                             logger.error("Failed to connect to microscope server", e);
-                            Dialogs.showErrorMessage("Connection Failed",
-                                    "Could not connect to microscope server: " + e.getMessage());
+                            Dialogs.showErrorMessage(
+                                    "Connection Failed", "Could not connect to microscope server: " + e.getMessage());
                             return;
                         }
                     } else {
@@ -160,15 +157,15 @@ public class TestAutofocusWorkflow {
                 // Get configuration
                 String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
                 if (configPath == null || configPath.isEmpty()) {
-                    Dialogs.showErrorMessage("Configuration Error",
-                            "No microscope configuration file set in preferences.");
+                    Dialogs.showErrorMessage(
+                            "Configuration Error", "No microscope configuration file set in preferences.");
                     return;
                 }
 
                 File configFile = new File(configPath);
                 if (!configFile.exists()) {
-                    Dialogs.showErrorMessage("Configuration Error",
-                            "Microscope configuration file not found: " + configPath);
+                    Dialogs.showErrorMessage(
+                            "Configuration Error", "Microscope configuration file not found: " + configPath);
                     return;
                 }
 
@@ -184,9 +181,10 @@ public class TestAutofocusWorkflow {
                     objective = getCurrentObjective(configManager);
 
                     if (objective == null) {
-                        Dialogs.showErrorMessage("Configuration Error",
-                                "Could not determine current objective from configuration.\n" +
-                                "Please check microscope/objective_in_use setting.");
+                        Dialogs.showErrorMessage(
+                                "Configuration Error",
+                                "Could not determine current objective from configuration.\n"
+                                        + "Please check microscope/objective_in_use setting.");
                         return;
                     }
                     logger.info("Using objective from config: {}", objective);
@@ -197,15 +195,16 @@ public class TestAutofocusWorkflow {
                 // Show confirmation dialog
                 String dialogTitle = isAdaptive ? "Test Adaptive Autofocus" : "Test Standard Autofocus";
                 String algorithmDesc = isAdaptive
-                    ? "The microscope will perform an intelligent bidirectional search (same algorithm used during acquisitions)."
-                    : "The microscope will perform a symmetric Z-sweep centered on current position.";
+                        ? "The microscope will perform an intelligent bidirectional search (same algorithm used during acquisitions)."
+                        : "The microscope will perform a symmetric Z-sweep centered on current position.";
 
-                boolean proceed = Dialogs.showConfirmDialog(dialogTitle,
-                        String.format("Test %s autofocus at current position?\n\n" +
-                                "Objective: %s\n" +
-                                "Settings: autofocus_%s.yml\n" +
-                                "Output: %s\n\n" +
-                                "%s",
+                boolean proceed = Dialogs.showConfirmDialog(
+                        dialogTitle,
+                        String.format(
+                                "Test %s autofocus at current position?\n\n" + "Objective: %s\n"
+                                        + "Settings: autofocus_%s.yml\n"
+                                        + "Output: %s\n\n"
+                                        + "%s",
                                 testType,
                                 objective,
                                 extractMicroscopeName(configFile.getName()),
@@ -219,20 +218,20 @@ public class TestAutofocusWorkflow {
 
                 // Execute test in background
                 CompletableFuture.runAsync(() -> {
-                    executeAutofocusTest(configPath, outputPath, objective, isAdaptive);
-                }).exceptionally(ex -> {
-                    logger.error("Autofocus test failed", ex);
-                    Platform.runLater(() -> {
-                        Dialogs.showErrorMessage("Autofocus Test Error",
-                                "Failed to execute autofocus test: " + ex.getMessage());
-                    });
-                    return null;
-                });
+                            executeAutofocusTest(configPath, outputPath, objective, isAdaptive);
+                        })
+                        .exceptionally(ex -> {
+                            logger.error("Autofocus test failed", ex);
+                            Platform.runLater(() -> {
+                                Dialogs.showErrorMessage(
+                                        "Autofocus Test Error", "Failed to execute autofocus test: " + ex.getMessage());
+                            });
+                            return null;
+                        });
 
             } catch (Exception e) {
                 logger.error("Failed to start autofocus test workflow", e);
-                Dialogs.showErrorMessage("Autofocus Test Error",
-                        "Failed to start autofocus test: " + e.getMessage());
+                Dialogs.showErrorMessage("Autofocus Test Error", "Failed to start autofocus test: " + e.getMessage());
             }
         });
     }
@@ -242,13 +241,15 @@ public class TestAutofocusWorkflow {
      *
      * @param isAdaptive True for adaptive autofocus, false for standard
      */
-    private static void executeAutofocusTest(String configPath, String outputPath, String objective, boolean isAdaptive) {
+    private static void executeAutofocusTest(
+            String configPath, String outputPath, String objective, boolean isAdaptive) {
         String testType = isAdaptive ? "adaptive" : "standard";
         logger.info("Executing {} autofocus test for objective: {}", testType, objective);
 
         try {
             // Get socket client from MicroscopeController
-            MicroscopeSocketClient socketClient = MicroscopeController.getInstance().getSocketClient();
+            MicroscopeSocketClient socketClient =
+                    MicroscopeController.getInstance().getSocketClient();
 
             // Ensure connection
             if (!MicroscopeController.getInstance().isConnected()) {
@@ -289,8 +290,8 @@ public class TestAutofocusWorkflow {
         } catch (Exception e) {
             logger.error("Autofocus test failed", e);
             Platform.runLater(() -> {
-                Dialogs.showErrorMessage("Autofocus Test Failed",
-                        "Failed to execute autofocus test: " + e.getMessage());
+                Dialogs.showErrorMessage(
+                        "Autofocus Test Failed", "Failed to execute autofocus test: " + e.getMessage());
             });
         }
     }
@@ -337,14 +338,14 @@ public class TestAutofocusWorkflow {
      * Show autofocus result dialog with improved formatting and readability.
      * Uses larger, bold text with system colors for better dark mode support.
      */
-    private static void showAutofocusResultDialog(String testType, String initialZ,
-                                                   String finalZ, String zShift, String plotPath) {
+    private static void showAutofocusResultDialog(
+            String testType, String initialZ, String finalZ, String zShift, String plotPath) {
         // Create custom dialog for better formatting
-        javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
-                javafx.scene.control.Alert.AlertType.INFORMATION);
+        javafx.scene.control.Alert alert =
+                new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.INFORMATION);
         alert.setTitle("Autofocus Test Complete");
-        alert.setHeaderText(testType.substring(0, 1).toUpperCase() + testType.substring(1) +
-                           " autofocus test completed successfully!");
+        alert.setHeaderText(testType.substring(0, 1).toUpperCase() + testType.substring(1)
+                + " autofocus test completed successfully!");
 
         // Build formatted message with larger, bold text
         javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(10);
@@ -356,12 +357,10 @@ public class TestAutofocusWorkflow {
             resultsLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 13px; -fx-text-fill: -fx-text-base-color;");
 
             javafx.scene.text.TextFlow resultsFlow = new javafx.scene.text.TextFlow();
-            javafx.scene.text.Text initialText = new javafx.scene.text.Text(
-                    String.format("Initial Z: %s um\n", initialZ));
-            javafx.scene.text.Text finalText = new javafx.scene.text.Text(
-                    String.format("Final Z: %s um\n", finalZ));
-            javafx.scene.text.Text shiftText = new javafx.scene.text.Text(
-                    String.format("Z Shift: %s um", zShift));
+            javafx.scene.text.Text initialText =
+                    new javafx.scene.text.Text(String.format("Initial Z: %s um\n", initialZ));
+            javafx.scene.text.Text finalText = new javafx.scene.text.Text(String.format("Final Z: %s um\n", finalZ));
+            javafx.scene.text.Text shiftText = new javafx.scene.text.Text(String.format("Z Shift: %s um", zShift));
 
             // Use theme-adaptive text color that works in both light and dark modes
             initialText.setStyle("-fx-font-size: 12px; -fx-fill: -fx-text-base-color;");
@@ -375,20 +374,16 @@ public class TestAutofocusWorkflow {
             try {
                 double shift = Double.parseDouble(zShift);
                 if (Math.abs(shift) > 5.0) {
-                    javafx.scene.control.Label warningLabel = new javafx.scene.control.Label(
-                            "WARNING: Large Z shift detected!");
-                    warningLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px; " +
-                                        "-fx-text-fill: #FF6B6B;"); // Soft red for visibility
+                    javafx.scene.control.Label warningLabel =
+                            new javafx.scene.control.Label("WARNING: Large Z shift detected!");
+                    warningLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px; "
+                            + "-fx-text-fill: #FF6B6B;"); // Soft red for visibility
 
-                    javafx.scene.control.Label warningDetail = new javafx.scene.control.Label(
-                            "Starting position may have been out of focus.");
+                    javafx.scene.control.Label warningDetail =
+                            new javafx.scene.control.Label("Starting position may have been out of focus.");
                     warningDetail.setStyle("-fx-font-size: 11px; -fx-text-fill: -fx-text-base-color;");
 
-                    content.getChildren().addAll(
-                        new javafx.scene.control.Separator(),
-                        warningLabel,
-                        warningDetail
-                    );
+                    content.getChildren().addAll(new javafx.scene.control.Separator(), warningLabel, warningDetail);
                 }
             } catch (NumberFormatException e) {
                 // Ignore parsing error
@@ -396,35 +391,28 @@ public class TestAutofocusWorkflow {
         }
 
         if (plotPath != null) {
-            javafx.scene.control.Label plotLabel = new javafx.scene.control.Label(
-                    "Diagnostic plot saved:");
+            javafx.scene.control.Label plotLabel = new javafx.scene.control.Label("Diagnostic plot saved:");
             plotLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: -fx-text-base-color;");
 
             javafx.scene.control.Label plotPathLabel = new javafx.scene.control.Label(plotPath);
-            plotPathLabel.setStyle("-fx-font-size: 11px; -fx-font-family: monospace; -fx-text-fill: -fx-text-base-color;");
+            plotPathLabel.setStyle(
+                    "-fx-font-size: 11px; -fx-font-family: monospace; -fx-text-fill: -fx-text-base-color;");
             plotPathLabel.setWrapText(true);
 
-            content.getChildren().addAll(
-                new javafx.scene.control.Separator(),
-                plotLabel,
-                plotPathLabel
-            );
+            content.getChildren().addAll(new javafx.scene.control.Separator(), plotLabel, plotPathLabel);
         }
 
         alert.getDialogPane().setContent(content);
         alert.getDialogPane().setMinWidth(500);
 
         // Add "Open Plot" and "Close" buttons
-        alert.getButtonTypes().setAll(
-                javafx.scene.control.ButtonType.YES,
-                javafx.scene.control.ButtonType.NO
-        );
+        alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.YES, javafx.scene.control.ButtonType.NO);
 
         // Customize button text
-        ((javafx.scene.control.Button) alert.getDialogPane().lookupButton(
-                javafx.scene.control.ButtonType.YES)).setText("Open Plot");
-        ((javafx.scene.control.Button) alert.getDialogPane().lookupButton(
-                javafx.scene.control.ButtonType.NO)).setText("Close");
+        ((javafx.scene.control.Button) alert.getDialogPane().lookupButton(javafx.scene.control.ButtonType.YES))
+                .setText("Open Plot");
+        ((javafx.scene.control.Button) alert.getDialogPane().lookupButton(javafx.scene.control.ButtonType.NO))
+                .setText("Close");
 
         // Show dialog and handle response
         alert.showAndWait().ifPresent(response -> {
@@ -435,13 +423,11 @@ public class TestAutofocusWorkflow {
                         Desktop.getDesktop().open(plotFile);
                         logger.info("Opened diagnostic plot: {}", plotPath);
                     } else {
-                        Dialogs.showErrorMessage("File Not Found",
-                                "Diagnostic plot file not found: " + plotPath);
+                        Dialogs.showErrorMessage("File Not Found", "Diagnostic plot file not found: " + plotPath);
                     }
                 } catch (IOException e) {
                     logger.error("Failed to open diagnostic plot", e);
-                    Dialogs.showErrorMessage("Error Opening Plot",
-                            "Could not open diagnostic plot: " + e.getMessage());
+                    Dialogs.showErrorMessage("Error Opening Plot", "Could not open diagnostic plot: " + e.getMessage());
                 }
             }
         });

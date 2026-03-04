@@ -1,22 +1,17 @@
 package qupath.ext.qpsc.controller.workflow;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.controller.MicroscopeController;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.ui.SampleSetupController;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.ext.qpsc.utilities.TilingRequest;
-import qupath.ext.qpsc.utilities.TilingUtilities;
-import qupath.lib.gui.QuPathGUI;
-import qupath.lib.objects.PathObject;
-import qupath.lib.scripting.QP;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.ui.SampleSetupController;
+import qupath.ext.qpsc.utilities.TilingUtilities;
+import qupath.lib.gui.QuPathGUI;
+import qupath.lib.objects.PathObject;
+import qupath.lib.scripting.QP;
 
 /**
  * Helper class for tile management operations.
@@ -58,27 +53,19 @@ public class TileHelper {
             String modeWithIndex,
             double macroPixelSize) {
 
-        logger.info("Creating tiles for {} annotations in modality {}",
-                annotations.size(), modeWithIndex);
+        logger.info("Creating tiles for {} annotations in modality {}", annotations.size(), modeWithIndex);
 
         try {
             // Delegate to the unified method in TilingUtilities
-            TilingUtilities.createTilesForAnnotations(
-                    annotations,
-                    sample,
-                    tempTileDirectory,
-                    modeWithIndex
-            );
+            TilingUtilities.createTilesForAnnotations(annotations, sample, tempTileDirectory, modeWithIndex);
 
         } catch (IOException e) {
             logger.error("Failed to get camera FOV from server", e);
             throw new RuntimeException(
-                    "Failed to get camera FOV from server: " + e.getMessage() +
-                            "\nPlease check server connection.", e);
+                    "Failed to get camera FOV from server: " + e.getMessage() + "\nPlease check server connection.", e);
         } catch (IllegalArgumentException e) {
             logger.error("Invalid tile configuration", e);
-            throw new RuntimeException(
-                    "Invalid tile configuration: " + e.getMessage(), e);
+            throw new RuntimeException("Invalid tile configuration: " + e.getMessage(), e);
         }
     }
 
@@ -105,29 +92,25 @@ public class TileHelper {
             boolean invertedX,
             boolean invertedY) {
 
-        logger.info("Creating tiles for {} annotations in modality {} (invertX={}, invertY={})",
-                annotations.size(), modeWithIndex, invertedX, invertedY);
+        logger.info(
+                "Creating tiles for {} annotations in modality {} (invertX={}, invertY={})",
+                annotations.size(),
+                modeWithIndex,
+                invertedX,
+                invertedY);
 
         try {
             // Delegate to the unified method in TilingUtilities with explicit flip params
             TilingUtilities.createTilesForAnnotations(
-                    annotations,
-                    sample,
-                    tempTileDirectory,
-                    modeWithIndex,
-                    invertedX,
-                    invertedY
-            );
+                    annotations, sample, tempTileDirectory, modeWithIndex, invertedX, invertedY);
 
         } catch (IOException e) {
             logger.error("Failed to get camera FOV from server", e);
             throw new RuntimeException(
-                    "Failed to get camera FOV from server: " + e.getMessage() +
-                            "\nPlease check server connection.", e);
+                    "Failed to get camera FOV from server: " + e.getMessage() + "\nPlease check server connection.", e);
         } catch (IllegalArgumentException e) {
             logger.error("Invalid tile configuration", e);
-            throw new RuntimeException(
-                    "Invalid tile configuration: " + e.getMessage(), e);
+            throw new RuntimeException("Invalid tile configuration: " + e.getMessage(), e);
         }
     }
 
@@ -147,8 +130,8 @@ public class TileHelper {
      * @param overlapPercent Overlap percentage
      * @throws RuntimeException if any annotation would create too many tiles
      */
-    private static void validateTileCounts(List<PathObject> annotations,
-                                           double frameWidth, double frameHeight, double overlapPercent) {
+    private static void validateTileCounts(
+            List<PathObject> annotations, double frameWidth, double frameHeight, double overlapPercent) {
 
         for (PathObject ann : annotations) {
             if (ann.getROI() != null) {
@@ -156,8 +139,8 @@ public class TileHelper {
                 double annHeight = ann.getROI().getBoundsHeight();
 
                 // Calculate effective frame size considering overlap
-                double effectiveFrameWidth = frameWidth * (1 - overlapPercent/100.0);
-                double effectiveFrameHeight = frameHeight * (1 - overlapPercent/100.0);
+                double effectiveFrameWidth = frameWidth * (1 - overlapPercent / 100.0);
+                double effectiveFrameHeight = frameHeight * (1 - overlapPercent / 100.0);
 
                 double tilesX = Math.ceil(annWidth / effectiveFrameWidth);
                 double tilesY = Math.ceil(annHeight / effectiveFrameHeight);
@@ -165,15 +148,21 @@ public class TileHelper {
 
                 if (totalTiles > MAX_TILES_PER_ANNOTATION) {
                     throw new RuntimeException(String.format(
-                            "Annotation '%s' would require %.0f tiles (%.0fx%.0f). Maximum allowed is %d.\n" +
-                                    "This usually indicates incorrect pixel size settings.\n" +
-                                    "Annotation size: %.0fx%.0f pixels, Frame size: %.0fx%.0f pixels",
-                            ann.getName(), totalTiles, tilesX, tilesY, MAX_TILES_PER_ANNOTATION,
-                            annWidth, annHeight, frameWidth, frameHeight));
+                            "Annotation '%s' would require %.0f tiles (%.0fx%.0f). Maximum allowed is %d.\n"
+                                    + "This usually indicates incorrect pixel size settings.\n"
+                                    + "Annotation size: %.0fx%.0f pixels, Frame size: %.0fx%.0f pixels",
+                            ann.getName(),
+                            totalTiles,
+                            tilesX,
+                            tilesY,
+                            MAX_TILES_PER_ANNOTATION,
+                            annWidth,
+                            annHeight,
+                            frameWidth,
+                            frameHeight));
                 }
 
-                logger.debug("Annotation '{}' will create {} tiles ({}x{})",
-                        ann.getName(), totalTiles, tilesX, tilesY);
+                logger.debug("Annotation '{}' will create {} tiles ({}x{})", ann.getName(), totalTiles, tilesX, tilesY);
             }
         }
     }
@@ -195,13 +184,16 @@ public class TileHelper {
 
         // Find tiles to remove based on class name
         List<PathObject> tilesToRemove = hierarchy.getDetectionObjects().stream()
-                .filter(o -> o.getPathClass() != null &&
-                        o.getPathClass().toString().contains(modalityBase))
+                .filter(o ->
+                        o.getPathClass() != null && o.getPathClass().toString().contains(modalityBase))
                 .collect(Collectors.toList());
 
         if (!tilesToRemove.isEmpty()) {
-            logger.info("Removing {} of {} total detections for modality: {}",
-                    tilesToRemove.size(), totalDetections, modalityBase);
+            logger.info(
+                    "Removing {} of {} total detections for modality: {}",
+                    tilesToRemove.size(),
+                    totalDetections,
+                    modalityBase);
 
             // Use batch removal for performance
             if (tilesToRemove.size() > totalDetections * 0.8) {
@@ -230,8 +222,7 @@ public class TileHelper {
      * @param tempTileDirectory Root temporary tile directory
      * @param currentAnnotations List of current valid annotations
      */
-    public static void cleanupStaleFolders(String tempTileDirectory,
-                                           List<PathObject> currentAnnotations) {
+    public static void cleanupStaleFolders(String tempTileDirectory, List<PathObject> currentAnnotations) {
 
         try {
             File tempDir = new File(tempTileDirectory);

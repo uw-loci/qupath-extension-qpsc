@@ -83,7 +83,7 @@ public class ImageNameGenerator {
         if (QPPreferenceDialog.getFilenameIncludeAnnotation() && annotationName != null && !annotationName.isEmpty()) {
             // Sanitize annotation name to remove path separators
             String sanitized = sanitizeForFilename(annotationName);
-            if (!sanitized.equals("bounds")) {  // Skip "bounds" as it's the default
+            if (!sanitized.equals("bounds")) { // Skip "bounds" as it's the default
                 nameBuilder.append("_").append(sanitized);
             }
         }
@@ -99,8 +99,14 @@ public class ImageNameGenerator {
         nameBuilder.append(extension);
 
         String generatedName = nameBuilder.toString();
-        logger.debug("Generated image name: {} (modality={}, objective={}, annotation={}, angle={}, index={})",
-                generatedName, modality, objective, annotationName, angle, imageIndex);
+        logger.debug(
+                "Generated image name: {} (modality={}, objective={}, annotation={}, angle={}, index={})",
+                generatedName,
+                modality,
+                objective,
+                annotationName,
+                angle,
+                imageIndex);
 
         return generatedName;
     }
@@ -133,7 +139,7 @@ public class ImageNameGenerator {
      */
     public static String[] parseImagingMode(String imagingMode) {
         if (imagingMode == null || imagingMode.isEmpty()) {
-            return new String[]{null, null};
+            return new String[] {null, null};
         }
 
         // Remove any trailing index (e.g., "ppm_20x_1" -> "ppm_20x")
@@ -142,9 +148,9 @@ public class ImageNameGenerator {
         // Split on underscore
         String[] parts = withoutIndex.split("_", 2);
         if (parts.length == 2) {
-            return parts;  // [modality, objective]
+            return parts; // [modality, objective]
         } else {
-            return new String[]{withoutIndex, null};  // No separator found
+            return new String[] {withoutIndex, null}; // No separator found
         }
     }
 

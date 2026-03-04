@@ -1,5 +1,7 @@
 package qupath.ext.qpsc.modality.ppm;
 
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
@@ -8,12 +10,8 @@ import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityMenuItem;
 import qupath.ext.qpsc.modality.ppm.ui.PPMAngleSelectionController;
 import qupath.ext.qpsc.modality.ppm.ui.PPMBoundingBoxUI;
-import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.lib.images.ImageData;
-
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Modality handler for Polarized light Microscopy (PPM) multi-angle acquisition sequences.
@@ -60,7 +58,8 @@ public class PPMModalityHandler implements ModalityHandler {
      * @return a future containing the angle-exposure pairs for this PPM configuration
      */
     @Override
-    public CompletableFuture<List<AngleExposure>> getRotationAngles(String modalityName, String objective, String detector) {
+    public CompletableFuture<List<AngleExposure>> getRotationAngles(
+            String modalityName, String objective, String detector) {
         RotationManager rotationManager = new RotationManager(modalityName, objective, detector);
         return rotationManager.getRotationTicksWithExposure(modalityName);
     }
@@ -92,8 +91,7 @@ public class PPMModalityHandler implements ModalityHandler {
      * @return new angle sequence with overrides applied, preserving original exposures
      */
     @Override
-    public List<AngleExposure> applyAngleOverrides(List<AngleExposure> angles,
-                                                   Map<String, Double> overrides) {
+    public List<AngleExposure> applyAngleOverrides(List<AngleExposure> angles, Map<String, Double> overrides) {
         if (overrides == null || overrides.isEmpty()) {
             return angles;
         }
@@ -123,8 +121,7 @@ public class PPMModalityHandler implements ModalityHandler {
         try {
             PPMPreferences.loadExposuresForProfile(objective, detector);
         } catch (Exception e) {
-            logger.warn("Failed to load PPM exposure defaults for {}/{}: {}",
-                    objective, detector, e.getMessage());
+            logger.warn("Failed to load PPM exposure defaults for {}/{}: {}", objective, detector, e.getMessage());
         }
     }
 
@@ -138,8 +135,7 @@ public class PPMModalityHandler implements ModalityHandler {
      */
     @Override
     public CompletableFuture<List<AngleExposure>> getRotationAnglesWithOverrides(
-            String modality, String objective, String detector,
-            Map<String, Double> overrides) {
+            String modality, String objective, String detector, Map<String, Double> overrides) {
 
         if (overrides == null || overrides.isEmpty()) {
             // No overrides -- use normal flow (which shows the dialog)
@@ -148,32 +144,30 @@ public class PPMModalityHandler implements ModalityHandler {
 
         // Get defaults without dialog, apply overrides, then show dialog with overridden values
         RotationManager rotationManager = new RotationManager(modality, objective, detector);
-        return rotationManager.getDefaultAnglesWithExposure(modality)
-                .thenCompose(defaultAngles -> {
-                    List<AngleExposure> overriddenAngles = applyAngleOverrides(defaultAngles, overrides);
+        return rotationManager.getDefaultAnglesWithExposure(modality).thenCompose(defaultAngles -> {
+            List<AngleExposure> overriddenAngles = applyAngleOverrides(defaultAngles, overrides);
 
-                    // Extract overridden plus/minus/uncrossed angles for dialog initialization
-                    double plusAngle = 7.0, minusAngle = -7.0, uncrossedAngle = 90.0;
-                    for (AngleExposure ae : overriddenAngles) {
-                        if (ae.ticks() > 0 && ae.ticks() < 45) plusAngle = ae.ticks();
-                        else if (ae.ticks() < 0) minusAngle = ae.ticks();
-                        else if (ae.ticks() >= 45) uncrossedAngle = ae.ticks();
-                    }
+            // Extract overridden plus/minus/uncrossed angles for dialog initialization
+            double plusAngle = 7.0, minusAngle = -7.0, uncrossedAngle = 90.0;
+            for (AngleExposure ae : overriddenAngles) {
+                if (ae.ticks() > 0 && ae.ticks() < 45) plusAngle = ae.ticks();
+                else if (ae.ticks() < 0) minusAngle = ae.ticks();
+                else if (ae.ticks() >= 45) uncrossedAngle = ae.ticks();
+            }
 
-                    return PPMAngleSelectionController.showDialog(
-                            plusAngle, minusAngle, uncrossedAngle,
-                            modality, objective, detector)
-                            .thenApply(dialogResult -> {
-                                if (dialogResult == null) {
-                                    throw new RuntimeException("ANGLE_SELECTION_CANCELLED");
-                                }
-                                List<AngleExposure> finalAngles = new ArrayList<>();
-                                for (PPMAngleSelectionController.AngleExposure ae : dialogResult.angleExposures) {
-                                    finalAngles.add(new AngleExposure(ae.angle, ae.exposureMs));
-                                }
-                                return finalAngles;
-                            });
-                });
+            return PPMAngleSelectionController.showDialog(
+                            plusAngle, minusAngle, uncrossedAngle, modality, objective, detector)
+                    .thenApply(dialogResult -> {
+                        if (dialogResult == null) {
+                            throw new RuntimeException("ANGLE_SELECTION_CANCELLED");
+                        }
+                        List<AngleExposure> finalAngles = new ArrayList<>();
+                        for (PPMAngleSelectionController.AngleExposure ae : dialogResult.angleExposures) {
+                            finalAngles.add(new AngleExposure(ae.angle, ae.exposureMs));
+                        }
+                        return finalAngles;
+                    });
+        });
     }
 
     /**
@@ -205,9 +199,7 @@ public class PPMModalityHandler implements ModalityHandler {
      */
     @Override
     public BackgroundValidationResult validateBackgroundSettings(
-            BackgroundSettingsReader.BackgroundSettings backgroundSettings,
-            List<AngleExposure> angles,
-            String wbMode) {
+            BackgroundSettingsReader.BackgroundSettings backgroundSettings, List<AngleExposure> angles, String wbMode) {
 
         // Build maps from both sides
         Map<Double, Double> userAngleMap = new LinkedHashMap<>();
@@ -250,13 +242,17 @@ public class PPMModalityHandler implements ModalityHandler {
 
         // Generate user-facing message
         String userMessage = generateValidationMessage(
-                anglesWithoutBackground, anglesWithExposureMismatches,
-                userAngleMap, bgAngleMap, tolerance,
-                wbModeMismatch, bgWbMode, wbMode);
+                anglesWithoutBackground,
+                anglesWithExposureMismatches,
+                userAngleMap,
+                bgAngleMap,
+                tolerance,
+                wbModeMismatch,
+                bgWbMode,
+                wbMode);
 
         return new BackgroundValidationResult(
-                anglesWithoutBackground, anglesWithExposureMismatches,
-                wbModeMismatch, bgWbMode, wbMode, userMessage);
+                anglesWithoutBackground, anglesWithExposureMismatches, wbModeMismatch, bgWbMode, wbMode, userMessage);
     }
 
     /**
@@ -286,31 +282,34 @@ public class PPMModalityHandler implements ModalityHandler {
     @Override
     public List<ModalityMenuItem> getMenuContributions() {
         return List.of(
-                new ModalityMenuItem("polarizerCalibration",
+                new ModalityMenuItem(
+                        "polarizerCalibration",
                         "Polarizer Calibration (PPM)...",
-                        "Calibrate the polarizer rotation stage for polarized light microscopy (PPM). " +
-                        "Determines the correct rotation angles for optimal birefringence imaging.",
+                        "Calibrate the polarizer rotation stage for polarized light microscopy (PPM). "
+                                + "Determines the correct rotation angles for optimal birefringence imaging.",
                         () -> qupath.ext.qpsc.modality.ppm.workflow.PolarizerCalibrationWorkflow.run()),
-                new ModalityMenuItem("ppmSensitivityTest",
+                new ModalityMenuItem(
+                        "ppmSensitivityTest",
                         "PPM Rotation Sensitivity Test...",
-                        "Test PPM rotation stage sensitivity by acquiring images at precise angles. " +
-                        "Analyzes the impact of angular deviations on image quality and birefringence calculations. " +
-                        "Provides comprehensive analysis reports for validation and optimization.",
+                        "Test PPM rotation stage sensitivity by acquiring images at precise angles. "
+                                + "Analyzes the impact of angular deviations on image quality and birefringence calculations. "
+                                + "Provides comprehensive analysis reports for validation and optimization.",
                         () -> qupath.ext.qpsc.modality.ppm.workflow.PPMSensitivityTestWorkflow.run()),
-                new ModalityMenuItem("birefringenceOptimization",
+                new ModalityMenuItem(
+                        "birefringenceOptimization",
                         "PPM Birefringence Optimization...",
-                        "Find the optimal polarizer angle for maximum birefringence signal contrast. " +
-                        "Systematically tests angles by acquiring paired images (+theta, -theta) and " +
-                        "computing their difference. Results include optimal angles, signal metrics, and " +
-                        "visualization plots. Supports multiple exposure modes (interpolate, calibrate, fixed).",
+                        "Find the optimal polarizer angle for maximum birefringence signal contrast. "
+                                + "Systematically tests angles by acquiring paired images (+theta, -theta) and "
+                                + "computing their difference. Results include optimal angles, signal metrics, and "
+                                + "visualization plots. Supports multiple exposure modes (interpolate, calibrate, fixed).",
                         () -> qupath.ext.qpsc.modality.ppm.workflow.BirefringenceOptimizationWorkflow.run()),
-                new ModalityMenuItem("sunburstCalibration",
+                new ModalityMenuItem(
+                        "sunburstCalibration",
                         "PPM Reference Slide...",
-                        "Create a hue-to-angle calibration from a PPM reference slide with sunburst pattern. " +
-                        "Acquires an image of radial spokes and creates a linear regression mapping " +
-                        "hue values to orientation angles for use in PPM analysis.",
-                        () -> qupath.ext.qpsc.modality.ppm.workflow.SunburstCalibrationWorkflow.run())
-        );
+                        "Create a hue-to-angle calibration from a PPM reference slide with sunburst pattern. "
+                                + "Acquires an image of radial spokes and creates a linear regression mapping "
+                                + "hue values to orientation angles for use in PPM analysis.",
+                        () -> qupath.ext.qpsc.modality.ppm.workflow.SunburstCalibrationWorkflow.run()));
     }
 
     // ========================================================================
@@ -327,7 +326,8 @@ public class PPMModalityHandler implements ModalityHandler {
             Map<Double, Double> bgAngleMap,
             double tolerance,
             boolean wbModeMismatch,
-            String bgWbMode, String currentWbMode) {
+            String bgWbMode,
+            String currentWbMode) {
 
         StringBuilder info = new StringBuilder();
 
@@ -350,7 +350,8 @@ public class PPMModalityHandler implements ModalityHandler {
                 double userExposure = userAngleMap.get(angle);
                 double bgExposure = bgAngleMap.get(angle);
                 double diff = Math.abs(userExposure - bgExposure);
-                info.append(String.format("    %.1f deg: selected %.1f ms vs background %.1f ms (diff: %.1f ms)\n",
+                info.append(String.format(
+                        "    %.1f deg: selected %.1f ms vs background %.1f ms (diff: %.1f ms)\n",
                         angle, userExposure, bgExposure, diff));
             }
         }

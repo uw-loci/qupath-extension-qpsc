@@ -1,5 +1,8 @@
 package qupath.ext.qpsc.ui;
 
+import java.io.File;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
@@ -12,10 +15,6 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 
-import java.io.File;
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
-
 /**
  * Dialog for selecting the source microscope/scanner for alignment.
  * Ensures only microscopes with macro image support are selectable.
@@ -26,11 +25,7 @@ public class MicroscopeSelectionDialog {
     /**
      * Result of microscope selection
      */
-    public record MicroscopeSelection(
-            String microscopeName,
-            boolean hasMacroSupport,
-            String configPath
-    ) {}
+    public record MicroscopeSelection(String microscopeName, boolean hasMacroSupport, String configPath) {}
 
     /**
      * Shows the microscope selection dialog.
@@ -52,7 +47,8 @@ public class MicroscopeSelectionDialog {
                     Alert alert = new Alert(Alert.AlertType.ERROR);
                     alert.setTitle("Configuration Error");
                     alert.setHeaderText("Current microscope configuration is invalid");
-                    alert.setContentText("The current microscope configuration file does not have a 'microscope: name:' entry.");
+                    alert.setContentText(
+                            "The current microscope configuration file does not have a 'microscope: name:' entry.");
                     alert.showAndWait();
                     future.complete(null);
                     return;
@@ -66,8 +62,8 @@ public class MicroscopeSelectionDialog {
 
                 // Find all config files
                 Map<String, File> microscopeConfigs = new HashMap<>();
-                File[] yamlFiles = configDir.listFiles((dir, name) ->
-                        name.startsWith("config_") && name.endsWith(".yml"));
+                File[] yamlFiles =
+                        configDir.listFiles((dir, name) -> name.startsWith("config_") && name.endsWith(".yml"));
 
                 if (yamlFiles != null) {
                     logger.info("Found {} YAML files", yamlFiles.length);
@@ -107,11 +103,9 @@ public class MicroscopeSelectionDialog {
                     Alert alert = new Alert(Alert.AlertType.ERROR);
                     alert.setTitle("No Microscopes Found");
                     alert.setHeaderText("No other microscope configurations found");
-                    alert.setContentText(
-                            "No microscope configuration files were found in:\n" + configDir + "\n\n" +
-                                    "To create alignments, you need configuration files for the source microscopes.\n" +
-                                    "Create a config_[MicroscopeName].yml file for each microscope you want to align from."
-                    );
+                    alert.setContentText("No microscope configuration files were found in:\n" + configDir + "\n\n"
+                            + "To create alignments, you need configuration files for the source microscopes.\n"
+                            + "Create a config_[MicroscopeName].yml file for each microscope you want to align from.");
                     alert.showAndWait();
                     future.complete(null);
                     return;
@@ -166,7 +160,9 @@ public class MicroscopeSelectionDialog {
                             boolean hasMacro = configData.containsKey("macro");
 
                             StringBuilder info = new StringBuilder();
-                            info.append("Config file: ").append(configFile.getName()).append("\n");
+                            info.append("Config file: ")
+                                    .append(configFile.getName())
+                                    .append("\n");
 
                             // Get microscope type
                             String type = (String) MinorFunctions.getYamlValue(configData, "microscope", "type");
@@ -179,12 +175,13 @@ public class MicroscopeSelectionDialog {
 
                                 info.append("Macro image: SUPPORTED");
                                 if (pixelSize != null) {
-                                    info.append(" (").append(pixelSize).append(" µm/pixel)");
+                                    info.append(" (").append(pixelSize).append(" um/pixel)");
                                 }
                                 info.append("\n");
 
                                 // Check if cropping is required
-                                Boolean cropRequired = MinorFunctions.getYamlBoolean(configData, "macro", "requires_cropping");
+                                Boolean cropRequired =
+                                        MinorFunctions.getYamlBoolean(configData, "macro", "requires_cropping");
                                 if (cropRequired != null && cropRequired) {
                                     info.append("Requires slide area cropping\n");
                                 }
@@ -192,8 +189,8 @@ public class MicroscopeSelectionDialog {
                                 warningLabel.setVisible(false);
                             } else {
                                 info.append("Macro image: NOT SUPPORTED\n");
-                                warningLabel.setText("⚠ This microscope does not have macro image support. " +
-                                        "Manual alignment is the only option for non-macro image scanners.");
+                                warningLabel.setText("[!] This microscope does not have macro image support. "
+                                        + "Manual alignment is the only option for non-macro image scanners.");
                                 warningLabel.setVisible(true);
                             }
 
@@ -214,20 +211,20 @@ public class MicroscopeSelectionDialog {
                 }
 
                 // Info about current microscope
-                Label currentInfo = new Label("Current microscope: " + currentMicroscope +
-                        " (alignments cannot be created to the same microscope)");
+                Label currentInfo = new Label("Current microscope: " + currentMicroscope
+                        + " (alignments cannot be created to the same microscope)");
                 currentInfo.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
 
                 // Assemble content
-                content.getChildren().addAll(
-                        new Label("Source microscope/scanner:"),
-                        microscopeCombo,
-                        new Label("Configuration details:"),
-                        infoArea,
-                        warningLabel,
-                        new Separator(),
-                        currentInfo
-                );
+                content.getChildren()
+                        .addAll(
+                                new Label("Source microscope/scanner:"),
+                                microscopeCombo,
+                                new Label("Configuration details:"),
+                                infoArea,
+                                warningLabel,
+                                new Separator(),
+                                currentInfo);
 
                 // Set up dialog buttons
                 ButtonType okButton = new ButtonType("Continue", ButtonBar.ButtonData.OK_DONE);

@@ -8,7 +8,8 @@ import java.util.concurrent.CompletableFuture;
  */
 public class NoOpModalityHandler implements ModalityHandler {
     @Override
-    public CompletableFuture<List<AngleExposure>> getRotationAngles(String modalityName, String objective, String detector) {
+    public CompletableFuture<List<AngleExposure>> getRotationAngles(
+            String modalityName, String objective, String detector) {
         return CompletableFuture.completedFuture(List.of());
     }
 }

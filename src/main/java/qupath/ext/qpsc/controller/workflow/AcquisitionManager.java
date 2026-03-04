@@ -1,38 +1,5 @@
 package qupath.ext.qpsc.controller.workflow;
 
-import javafx.application.Platform;
-import javafx.scene.control.Alert;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.controller.ExistingImageWorkflowV2.WorkflowState;
-import qupath.ext.qpsc.controller.MicroscopeController;
-import qupath.ext.qpsc.modality.AngleExposure;
-import qupath.ext.qpsc.modality.ModalityHandler;
-import qupath.ext.qpsc.modality.ModalityRegistry;
-import qupath.ext.qpsc.preferences.PersistentPreferences;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
-import qupath.ext.qpsc.service.AngleResolutionService;
-import qupath.ext.qpsc.service.ManualFocusHandler;
-import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
-import qupath.ext.qpsc.ui.AnnotationAcquisitionDialog;
-import qupath.ext.qpsc.ui.DualProgressDialog;
-import qupath.ext.qpsc.ui.UIFunctions;
-import qupath.ext.qpsc.service.AnnotationOrderingService;
-import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.ext.qpsc.utilities.MinorFunctions;
-import qupath.ext.qpsc.utilities.TransformationFunctions;
-import qupath.ext.qpsc.utilities.ZFocusPredictionModel;
-import qupath.fx.dialogs.Dialogs;
-import qupath.lib.gui.QuPathGUI;
-import qupath.lib.objects.PathObject;
-
-import java.util.ArrayList;
-import qupath.lib.objects.classes.PathClass;
-import qupath.lib.projects.Project;
-import qupath.lib.scripting.QP;
-
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -45,6 +12,35 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import javafx.application.Platform;
+import javafx.scene.control.Alert;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.ExistingImageWorkflowV2.WorkflowState;
+import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.modality.ModalityHandler;
+import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.AngleResolutionService;
+import qupath.ext.qpsc.service.AnnotationOrderingService;
+import qupath.ext.qpsc.service.ManualFocusHandler;
+import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.AnnotationAcquisitionDialog;
+import qupath.ext.qpsc.ui.DualProgressDialog;
+import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.MinorFunctions;
+import qupath.ext.qpsc.utilities.TransformationFunctions;
+import qupath.ext.qpsc.utilities.ZFocusPredictionModel;
+import qupath.fx.dialogs.Dialogs;
+import qupath.lib.gui.QuPathGUI;
+import qupath.lib.objects.PathObject;
+import qupath.lib.objects.classes.PathClass;
+import qupath.lib.projects.Project;
+import qupath.lib.scripting.QP;
 
 /**
  * Manages the acquisition phase of the microscope workflow.
@@ -67,7 +63,6 @@ import java.util.stream.Collectors;
  */
 public class AcquisitionManager {
     private static final Logger logger = LoggerFactory.getLogger(AcquisitionManager.class);
-
 
     /** Maximum time to wait for acquisition completion (5 minutes) */
     private static final int ACQUISITION_TIMEOUT_MS = 300000;
@@ -158,11 +153,15 @@ public class AcquisitionManager {
                 timingData[1], // adaptiveAfTimeMs
                 timingData[2], // fullAfTimeMs
                 modality,
-                objective
-        );
+                objective);
 
-        logger.info("Saved timing data for {}/{}: base={}ms, adaptive={}ms, full={}ms",
-                modality, objective, timingData[0], timingData[1], timingData[2]);
+        logger.info(
+                "Saved timing data for {}/{}: base={}ms, adaptive={}ms, full={}ms",
+                modality,
+                objective,
+                timingData[0],
+                timingData[1],
+                timingData[2]);
     }
 
     /**
@@ -178,19 +177,19 @@ public class AcquisitionManager {
     private CompletableFuture<Boolean> validateAnnotations() {
         // If classes were already selected earlier in the workflow, skip the dialog
         if (state.selectedAnnotationClasses != null && !state.selectedAnnotationClasses.isEmpty()) {
-            logger.info("Using {} pre-selected annotation classes: {}",
-                    state.selectedAnnotationClasses.size(), state.selectedAnnotationClasses);
+            logger.info(
+                    "Using {} pre-selected annotation classes: {}",
+                    state.selectedAnnotationClasses.size(),
+                    state.selectedAnnotationClasses);
             return CompletableFuture.completedFuture(true);
         }
 
         // Get all unique annotation classes in current image
         Set<PathClass> existingClasses = MinorFunctions.getExistingClassifications(QP.getCurrentImageData());
-        Set<String> existingClassNames = existingClasses.stream()
-                .map(PathClass::toString)
-                .collect(Collectors.toSet());
+        Set<String> existingClassNames =
+                existingClasses.stream().map(PathClass::toString).collect(Collectors.toSet());
 
-        logger.info("Found {} unique annotation classes: {}",
-                existingClassNames.size(), existingClassNames);
+        logger.info("Found {} unique annotation classes: {}", existingClassNames.size(), existingClassNames);
 
         // Get preferences
         List<String> preselected = PersistentPreferences.getSelectedAnnotationClasses();
@@ -207,8 +206,10 @@ public class AcquisitionManager {
 
                     // Store selected classes in state
                     state.selectedAnnotationClasses = result.selectedClasses;
-                    logger.info("User selected {} classes for acquisition: {}",
-                            result.selectedClasses.size(), result.selectedClasses);
+                    logger.info(
+                            "User selected {} classes for acquisition: {}",
+                            result.selectedClasses.size(),
+                            result.selectedClasses);
 
                     return true;
                 });
@@ -225,8 +226,7 @@ public class AcquisitionManager {
      */
     private CompletableFuture<List<AngleExposure>> getRotationAngles() {
         return AngleResolutionService.resolve(
-                state.sample.modality(), state.sample.objective(),
-                state.sample.detector(), state.angleOverrides);
+                state.sample.modality(), state.sample.objective(), state.sample.detector(), state.angleOverrides);
     }
 
     /**
@@ -243,8 +243,7 @@ public class AcquisitionManager {
      * @param angleExposures List of rotation angles, or null for single acquisition
      * @return CompletableFuture with angle exposures for next phase
      */
-    private CompletableFuture<List<AngleExposure>> prepareForAcquisition(
-            List<AngleExposure> angleExposures) {
+    private CompletableFuture<List<AngleExposure>> prepareForAcquisition(List<AngleExposure> angleExposures) {
 
         return CompletableFuture.supplyAsync(() -> {
             // Check for cancellation (null angleExposures indicates cancelled/failed)
@@ -270,9 +269,8 @@ public class AcquisitionManager {
             }
 
             // Get current annotations using GUI hierarchy for reliable retrieval
-            List<PathObject> currentAnnotations = AnnotationHelper.getCurrentValidAnnotations(
-                    gui, state.selectedAnnotationClasses
-            );
+            List<PathObject> currentAnnotations =
+                    AnnotationHelper.getCurrentValidAnnotations(gui, state.selectedAnnotationClasses);
             if (currentAnnotations.isEmpty()) {
                 throw new RuntimeException("No valid annotations for acquisition");
             }
@@ -281,10 +279,7 @@ public class AcquisitionManager {
 
             // Clean up old tiles
             TileHelper.deleteAllTiles(gui, state.sample.modality());
-            TileHelper.cleanupStaleFolders(
-                    state.projectInfo.getTempTileDirectory(),
-                    currentAnnotations
-            );
+            TileHelper.cleanupStaleFolders(state.projectInfo.getTempTileDirectory(), currentAnnotations);
 
             // Create fresh tiles
             TileHelper.createTilesForAnnotations(
@@ -292,15 +287,12 @@ public class AcquisitionManager {
                     state.sample,
                     state.projectInfo.getTempTileDirectory(),
                     state.projectInfo.getImagingModeWithIndex(),
-                    state.pixelSize
-            );
+                    state.pixelSize);
 
             // Transform tile configurations to stage coordinates
             try {
                 List<String> modifiedDirs = TransformationFunctions.transformTileConfiguration(
-                        state.projectInfo.getTempTileDirectory(),
-                        state.transform
-                );
+                        state.projectInfo.getTempTileDirectory(), state.transform);
                 logger.info("Transformed tile configurations for: {}", modifiedDirs);
             } catch (IOException e) {
                 logger.error("Failed to transform tile configurations", e);
@@ -326,8 +318,7 @@ public class AcquisitionManager {
      * @param angleExposures Rotation angles for multi-modal acquisition
      * @return CompletableFuture with true if all successful, false if any failed/cancelled
      */
-    private CompletableFuture<Boolean> processAnnotations(
-            List<AngleExposure> angleExposures) {
+    private CompletableFuture<Boolean> processAnnotations(List<AngleExposure> angleExposures) {
 
         // Check for cancellation (null angleExposures indicates cancelled/failed)
         if (angleExposures == null) {
@@ -382,10 +373,10 @@ public class AcquisitionManager {
                 dialogSetup.completeExceptionally(e);
             }
         });
-        
+
         // Wait for dialog setup to complete and get final reference
         final DualProgressDialog progressDialog = getDialogSafely(dialogSetup);
-        
+
         // If dialog creation failed, return early
         if (progressDialog == null) {
             return CompletableFuture.completedFuture(false);
@@ -414,16 +405,21 @@ public class AcquisitionManager {
                             if (success) {
                                 // Capture final Z for tilt correction model
                                 try {
-                                    MicroscopeSocketClient socketClient = MicroscopeController.getInstance().getSocketClient();
+                                    MicroscopeSocketClient socketClient =
+                                            MicroscopeController.getInstance().getSocketClient();
                                     Double finalZ = socketClient.getLastAcquisitionFinalZ();
                                     if (finalZ != null && state.transform != null) {
                                         double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
-                                                new double[]{annotation.getROI().getCentroidX(), annotation.getROI().getCentroidY()},
-                                                state.transform
-                                        );
+                                                new double[] {
+                                                    annotation.getROI().getCentroidX(),
+                                                    annotation.getROI().getCentroidY()
+                                                },
+                                                state.transform);
                                         zFocusModel.addDataPoint(stageCoords[0], stageCoords[1], finalZ);
-                                        logger.info("Updated Z-focus model: {} points, residual error: {:.2f} um",
-                                                zFocusModel.getPointCount(), zFocusModel.calculateResidualError());
+                                        logger.info(
+                                                "Updated Z-focus model: {} points, residual error: {:.2f} um",
+                                                zFocusModel.getPointCount(),
+                                                zFocusModel.calculateResidualError());
                                     }
                                     // Clear for next acquisition
                                     socketClient.clearLastAcquisitionFinalZ();
@@ -440,7 +436,8 @@ public class AcquisitionManager {
                             } else {
                                 // Show error in dual progress dialog
                                 if (progressDialog != null) {
-                                    Platform.runLater(() -> progressDialog.showError("Failed to acquire " + annotation.getName()));
+                                    Platform.runLater(() ->
+                                            progressDialog.showError("Failed to acquire " + annotation.getName()));
                                 }
                             }
                             return success;
@@ -482,9 +479,7 @@ public class AcquisitionManager {
      * @return CompletableFuture with true if successful, false if failed/cancelled
      */
     private CompletableFuture<Boolean> performSingleAnnotationAcquisition(
-            PathObject annotation,
-            List<AngleExposure> angleExposures,
-            DualProgressDialog progressDialog) {
+            PathObject annotation, List<AngleExposure> angleExposures, DualProgressDialog progressDialog) {
 
         return CompletableFuture.supplyAsync(() -> {
             try {
@@ -501,12 +496,17 @@ public class AcquisitionManager {
                 // Get WSI pixel size using explicit hardware configuration
                 double WSI_pixelSize_um;
                 try {
-                    WSI_pixelSize_um = configManager.getModalityPixelSize(baseModality, state.sample.objective(), state.sample.detector());
-                    logger.debug("Using explicit hardware config: obj={}, det={}, px={}",
-                            state.sample.objective(), state.sample.detector(), WSI_pixelSize_um);
+                    WSI_pixelSize_um = configManager.getModalityPixelSize(
+                            baseModality, state.sample.objective(), state.sample.detector());
+                    logger.debug(
+                            "Using explicit hardware config: obj={}, det={}, px={}",
+                            state.sample.objective(),
+                            state.sample.detector(),
+                            WSI_pixelSize_um);
                 } catch (IllegalArgumentException e) {
-                    throw new RuntimeException("Failed to get pixel size for selected hardware configuration: " + 
-                            baseModality + "/" + state.sample.objective() + "/" + state.sample.detector() + " - " + e.getMessage());
+                    throw new RuntimeException("Failed to get pixel size for selected hardware configuration: "
+                            + baseModality + "/" + state.sample.objective() + "/" + state.sample.detector() + " - "
+                            + e.getMessage());
                 }
 
                 // Use the actual sample name from projectInfo (derived from project folder)
@@ -515,32 +515,38 @@ public class AcquisitionManager {
 
                 // Build acquisition configuration using shared builder
                 AcquisitionConfigurationBuilder.AcquisitionConfiguration config =
-                    AcquisitionConfigurationBuilder.buildConfiguration(
-                        state.sample,
-                        configFileLocation,
-                        modalityWithIndex,
-                        annotation.getName(),
-                        angleExposures,
-                        state.sample.projectsFolder().getAbsolutePath(),
-                        actualSampleName,  // Use actual sample name from project folder
-                        WSI_pixelSize_um,
-                        state.wbMode
-                    );
+                        AcquisitionConfigurationBuilder.buildConfiguration(
+                                state.sample,
+                                configFileLocation,
+                                modalityWithIndex,
+                                annotation.getName(),
+                                angleExposures,
+                                state.sample.projectsFolder().getAbsolutePath(),
+                                actualSampleName, // Use actual sample name from project folder
+                                WSI_pixelSize_um,
+                                state.wbMode);
 
                 // Apply user's explicit white balance mode choice (required)
                 if (state.wbMode != null) {
                     config.commandBuilder().wbMode(state.wbMode);
                 } else {
-                    throw new IllegalStateException(
-                            "White balance mode must be explicitly selected. "
+                    throw new IllegalStateException("White balance mode must be explicitly selected. "
                             + "The acquisition dialog should always provide a wbMode value.");
                 }
 
                 logger.info("Acquisition parameters for {}:", annotation.getName());
                 logger.info("  Config: {}", configFileLocation);
                 logger.info("  Sample: {}", actualSampleName);
-                logger.info("  Hardware: {} / {} @ {} um/px", config.objective(), config.detector(), config.WSI_pixelSize_um());
-                logger.info("  Autofocus: {} tiles, {} steps, {} um range", config.afTiles(), config.afSteps(), config.afRange());
+                logger.info(
+                        "  Hardware: {} / {} @ {} um/px",
+                        config.objective(),
+                        config.detector(),
+                        config.WSI_pixelSize_um());
+                logger.info(
+                        "  Autofocus: {} tiles, {} steps, {} um range",
+                        config.afTiles(),
+                        config.afSteps(),
+                        config.afRange());
                 logger.info("  Processing: {}", config.processingSteps());
                 logger.info("  White balance: wbMode={}", state.wbMode);
                 if (config.bgEnabled()) {
@@ -553,28 +559,35 @@ public class AcquisitionManager {
                 MinorFunctions.saveAcquisitionCommand(
                         commandString,
                         state.sample.projectsFolder().getAbsolutePath(),
-                        actualSampleName,  // Use actual sample name from project folder
+                        actualSampleName, // Use actual sample name from project folder
                         modalityWithIndex,
-                        annotation.getName()
-                );
+                        annotation.getName());
 
                 // Apply Z-focus prediction if model is ready (tilt correction)
                 if (state.transform != null) {
                     double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
-                            new double[]{annotation.getROI().getCentroidX(), annotation.getROI().getCentroidY()},
-                            state.transform
-                    );
+                            new double[] {
+                                annotation.getROI().getCentroidX(),
+                                annotation.getROI().getCentroidY()
+                            },
+                            state.transform);
                     double distFromLast = zFocusModel.distanceFromLastPoint(stageCoords[0], stageCoords[1]);
 
                     if (zFocusModel.canPredict(distFromLast)) {
                         zFocusModel.predictZ(stageCoords[0], stageCoords[1]).ifPresent(predictedZ -> {
                             config.commandBuilder().hintZ(predictedZ);
-                            logger.info("Z-focus prediction for {}: {:.2f} um (from {} points, dist={:.0f} um)",
-                                    annotation.getName(), predictedZ, zFocusModel.getPointCount(), distFromLast);
+                            logger.info(
+                                    "Z-focus prediction for {}: {:.2f} um (from {} points, dist={:.0f} um)",
+                                    annotation.getName(),
+                                    predictedZ,
+                                    zFocusModel.getPointCount(),
+                                    distFromLast);
                         });
                     } else {
-                        logger.debug("Z prediction not ready: {} points, dist={:.0f} um",
-                                zFocusModel.getPointCount(), distFromLast);
+                        logger.debug(
+                                "Z prediction not ready: {} points, dist={:.0f} um",
+                                zFocusModel.getPointCount(),
+                                distFromLast);
                     }
                 }
 
@@ -607,18 +620,16 @@ public class AcquisitionManager {
      * @return true if completed successfully, false if cancelled/failed
      * @throws IOException if communication with microscope fails
      */
-    private boolean monitorAcquisition(PathObject annotation,
-                                       List<AngleExposure> angleExposures,
-                                       DualProgressDialog progressDialog) throws IOException {
+    private boolean monitorAcquisition(
+            PathObject annotation, List<AngleExposure> angleExposures, DualProgressDialog progressDialog)
+            throws IOException {
 
         MicroscopeSocketClient socketClient = MicroscopeController.getInstance().getSocketClient();
 
         // Calculate expected files with retry logic to handle timing issues
         // Use tempTileDirectory from projectInfo which has the correct path (including actual sample name)
-        String tileDirPath = Paths.get(
-                state.projectInfo.getTempTileDirectory(),
-                annotation.getName()
-        ).toString();
+        String tileDirPath = Paths.get(state.projectInfo.getTempTileDirectory(), annotation.getName())
+                .toString();
 
         // Try to count tiles with retry logic (3 attempts, 200ms delay)
         int tilesPerAngle = MinorFunctions.countExpectedTilesWithRetry(List.of(tileDirPath), 3, 200);
@@ -631,10 +642,13 @@ public class AcquisitionManager {
         }
 
         final int expectedFiles = angleExposures != null && !angleExposures.isEmpty()
-            ? tilesPerAngle * angleExposures.size()
-            : tilesPerAngle;
+                ? tilesPerAngle * angleExposures.size()
+                : tilesPerAngle;
 
-        logger.info("Expected files: {} ({}x{} angles)", expectedFiles, tilesPerAngle,
+        logger.info(
+                "Expected files: {} ({}x{} angles)",
+                expectedFiles,
+                tilesPerAngle,
                 angleExposures != null ? angleExposures.size() : 1);
 
         // Create progress counter
@@ -652,70 +666,77 @@ public class AcquisitionManager {
 
         try {
             // Monitor acquisition with regular status updates
-            MicroscopeSocketClient.AcquisitionState finalState =
-                    socketClient.monitorAcquisition(
-                            progress -> {
-                                progressCounter.set(progress.current);
-                                // Update dual progress dialog
-                                if (progressDialog != null && !progressDialog.isCancelled()) {
-                                    Platform.runLater(() -> progressDialog.updateCurrentAnnotationProgress(progress.current));
-                                }
+            MicroscopeSocketClient.AcquisitionState finalState = socketClient.monitorAcquisition(
+                    progress -> {
+                        progressCounter.set(progress.current);
+                        // Update dual progress dialog
+                        if (progressDialog != null && !progressDialog.isCancelled()) {
+                            Platform.runLater(() -> progressDialog.updateCurrentAnnotationProgress(progress.current));
+                        }
 
-                                // Check for acquisition metadata file (only once)
-                                if (!metadataRead.get() && progressDialog != null) {
-                                    java.nio.file.Path metadataPath = java.nio.file.Paths.get(tileDirPath, "acquisition_metadata.txt");
-                                    if (java.nio.file.Files.exists(metadataPath)) {
-                                        metadataRead.set(true);
-                                        try {
-                                            java.util.List<String> lines = java.nio.file.Files.readAllLines(metadataPath);
-                                            int timingWindowSize = 10;
-                                            int afNTiles = 5;
-                                            int totalTiles = 0;
+                        // Check for acquisition metadata file (only once)
+                        if (!metadataRead.get() && progressDialog != null) {
+                            java.nio.file.Path metadataPath =
+                                    java.nio.file.Paths.get(tileDirPath, "acquisition_metadata.txt");
+                            if (java.nio.file.Files.exists(metadataPath)) {
+                                metadataRead.set(true);
+                                try {
+                                    java.util.List<String> lines = java.nio.file.Files.readAllLines(metadataPath);
+                                    int timingWindowSize = 10;
+                                    int afNTiles = 5;
+                                    int totalTiles = 0;
 
-                                            for (String line : lines) {
-                                                if (line.startsWith("timing_window_size=")) {
-                                                    timingWindowSize = Integer.parseInt(line.substring("timing_window_size=".length()));
-                                                } else if (line.startsWith("af_n_tiles=")) {
-                                                    afNTiles = Integer.parseInt(line.substring("af_n_tiles=".length()));
-                                                } else if (line.startsWith("total_tiles=")) {
-                                                    totalTiles = Integer.parseInt(line.substring("total_tiles=".length()));
-                                                }
-                                            }
-
-                                            logger.info("Read acquisition metadata: window={}, af_positions={}, total_tiles={}",
-                                                    timingWindowSize, afNTiles, totalTiles);
-
-                                            // Update dialog with all timing parameters
-                                            final int finalTimingWindow = timingWindowSize;
-                                            final int finalAfNTiles = afNTiles;
-                                            final int finalTotalTiles = totalTiles;
-                                            Platform.runLater(() -> {
-                                                progressDialog.setTimingWindowSize(finalTimingWindow);
-                                                progressDialog.setAfNTiles(finalAfNTiles);
-                                                if (finalTotalTiles > 0) {
-                                                    progressDialog.setTotalTilesForAnnotation(finalTotalTiles);
-                                                }
-                                            });
-                                        } catch (Exception e) {
-                                            logger.warn("Failed to read acquisition metadata: {}", e.getMessage());
+                                    for (String line : lines) {
+                                        if (line.startsWith("timing_window_size=")) {
+                                            timingWindowSize =
+                                                    Integer.parseInt(line.substring("timing_window_size=".length()));
+                                        } else if (line.startsWith("af_n_tiles=")) {
+                                            afNTiles = Integer.parseInt(line.substring("af_n_tiles=".length()));
+                                        } else if (line.startsWith("total_tiles=")) {
+                                            totalTiles = Integer.parseInt(line.substring("total_tiles=".length()));
                                         }
                                     }
-                                }
-                            },
-                            // Manual focus callback - delegates to shared ManualFocusHandler
-                            retriesRemaining -> {
-                                ManualFocusHandler.TimingCallback timing = progressDialog != null
-                                        ? new ManualFocusHandler.TimingCallback() {
-                                            public void pauseTiming()  { progressDialog.pauseTimingForManualFocus(); }
-                                            public void resumeTiming() { progressDialog.resumeTimingAfterManualFocus(); }
+
+                                    logger.info(
+                                            "Read acquisition metadata: window={}, af_positions={}, total_tiles={}",
+                                            timingWindowSize,
+                                            afNTiles,
+                                            totalTiles);
+
+                                    // Update dialog with all timing parameters
+                                    final int finalTimingWindow = timingWindowSize;
+                                    final int finalAfNTiles = afNTiles;
+                                    final int finalTotalTiles = totalTiles;
+                                    Platform.runLater(() -> {
+                                        progressDialog.setTimingWindowSize(finalTimingWindow);
+                                        progressDialog.setAfNTiles(finalAfNTiles);
+                                        if (finalTotalTiles > 0) {
+                                            progressDialog.setTotalTilesForAnnotation(finalTotalTiles);
                                         }
-                                        : null;
-                                ManualFocusHandler.handle(
-                                        socketClient, retriesRemaining, handlingManualFocus, timing);
-                            },
-                            500,    // Poll every 500ms for responsive UI
-                            ACQUISITION_TIMEOUT_MS
-                    );
+                                    });
+                                } catch (Exception e) {
+                                    logger.warn("Failed to read acquisition metadata: {}", e.getMessage());
+                                }
+                            }
+                        }
+                    },
+                    // Manual focus callback - delegates to shared ManualFocusHandler
+                    retriesRemaining -> {
+                        ManualFocusHandler.TimingCallback timing = progressDialog != null
+                                ? new ManualFocusHandler.TimingCallback() {
+                                    public void pauseTiming() {
+                                        progressDialog.pauseTimingForManualFocus();
+                                    }
+
+                                    public void resumeTiming() {
+                                        progressDialog.resumeTimingAfterManualFocus();
+                                    }
+                                }
+                                : null;
+                        ManualFocusHandler.handle(socketClient, retriesRemaining, handlingManualFocus, timing);
+                    },
+                    500, // Poll every 500ms for responsive UI
+                    ACQUISITION_TIMEOUT_MS);
 
             // Check final state
             switch (finalState) {
@@ -764,8 +785,7 @@ public class AcquisitionManager {
      * @param annotation The annotation that was acquired
      * @param angleExposures Rotation angles used in acquisition
      */
-    private void launchStitching(PathObject annotation,
-                                 List<AngleExposure> angleExposures) {
+    private void launchStitching(PathObject annotation, List<AngleExposure> angleExposures) {
 
         // Get required parameters for stitching
         String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
@@ -775,21 +795,22 @@ public class AcquisitionManager {
         String baseModality = state.sample.modality().replaceAll("(_\\d+)$", "");
         String objective = state.sample.objective();
         String detector = state.sample.detector();
-        
+
         double WSI_pixelSize_um;
         try {
             WSI_pixelSize_um = configManager.getModalityPixelSize(baseModality, objective, detector);
-            logger.info("Using stitching WSI pixel size for {}/{}/{}: {} µm", 
-                    baseModality, objective, detector, WSI_pixelSize_um);
+            logger.info(
+                    "Using stitching WSI pixel size for {}/{}/{}: {} um",
+                    baseModality,
+                    objective,
+                    detector,
+                    WSI_pixelSize_um);
         } catch (IllegalArgumentException e) {
             logger.error("Failed to determine pixel size for stitching: {}", e.getMessage());
-            Platform.runLater(() ->
-                    UIFunctions.notifyUserOfError(
-                            "Cannot determine pixel size for hardware: " + baseModality + "/" + objective + "/" + detector +
-                                    "\n\nPlease check configuration. This should match the acquisition hardware settings.",
-                            "Configuration Error"
-                    )
-            );
+            Platform.runLater(() -> UIFunctions.notifyUserOfError(
+                    "Cannot determine pixel size for hardware: " + baseModality + "/" + objective + "/" + detector
+                            + "\n\nPlease check configuration. This should match the acquisition hardware settings.",
+                    "Configuration Error"));
             return;
         }
         @SuppressWarnings("unchecked")
@@ -798,15 +819,14 @@ public class AcquisitionManager {
         ModalityHandler handler = ModalityRegistry.getHandler(state.sample.modality());
 
         // Calculate offset for this annotation (for metadata)
-        double[] offset = TransformationFunctions.calculateAnnotationOffsetFromSlideCorner(
-                annotation, state.transform);
-        logger.info("Annotation {} offset from slide corner: ({}, {}) µm",
-                annotation.getName(), offset[0], offset[1]);
+        double[] offset = TransformationFunctions.calculateAnnotationOffsetFromSlideCorner(annotation, state.transform);
+        logger.info("Annotation {} offset from slide corner: ({}, {}) um", annotation.getName(), offset[0], offset[1]);
 
         // Derive projectsFolder from tempTileDirectory
         // tempTileDirectory structure: projectsFolder/sampleName/modeWithIndex
         String tempTileDir = state.projectInfo.getTempTileDirectory();
-        java.nio.file.Path projectsFolder = java.nio.file.Paths.get(tempTileDir).getParent().getParent();
+        java.nio.file.Path projectsFolder =
+                java.nio.file.Paths.get(tempTileDir).getParent().getParent();
         logger.debug("Derived projectsFolder for stitching: {}", projectsFolder);
 
         // Create stitching future - use projectInfo.getSampleName() for correct folder path
@@ -824,8 +844,7 @@ public class AcquisitionManager {
                 MicroscopeController.getInstance().getCurrentTransform(),
                 state.projectInfo.getSampleName(),
                 projectsFolder.toString(),
-                dualProgressDialog
-        );
+                dualProgressDialog);
 
         state.stitchingFutures.add(stitchFuture);
         logger.info("Launched stitching for annotation: {}", annotation.getName());
@@ -845,18 +864,19 @@ public class AcquisitionManager {
             double annHeight = annotation.getROI().getBoundsHeight();
 
             // Get image pixel size
-            double imagePixelSize = QuPathGUI.getInstance().getImageData()
-                    .getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
+            double imagePixelSize = QuPathGUI.getInstance()
+                    .getImageData()
+                    .getServer()
+                    .getPixelCalibration()
+                    .getAveragedPixelSizeMicrons();
 
             // Convert to microns
             double annWidthMicrons = annWidth * imagePixelSize;
             double annHeightMicrons = annHeight * imagePixelSize;
 
             // Get camera FOV from configuration
-            double[] fovMicrons = MicroscopeController.getInstance().getCameraFOVFromConfig(
-                    state.sample.modality(),
-                    state.sample.objective(),
-                    state.sample.detector());
+            double[] fovMicrons = MicroscopeController.getInstance()
+                    .getCameraFOVFromConfig(state.sample.modality(), state.sample.objective(), state.sample.detector());
 
             double fovWidthMicrons = fovMicrons[0];
             double fovHeightMicrons = fovMicrons[1];
@@ -871,10 +891,16 @@ public class AcquisitionManager {
             int tilesY = (int) Math.ceil(annHeightMicrons / effectiveHeight);
             int totalTiles = tilesX * tilesY;
 
-            logger.info("Tile estimate: annotation {}x{} um, FOV {}x{} um, overlap {}%, grid {}x{} = {} tiles",
-                    Math.round(annWidthMicrons), Math.round(annHeightMicrons),
-                    Math.round(fovWidthMicrons), Math.round(fovHeightMicrons),
-                    Math.round(overlapPercent), tilesX, tilesY, totalTiles);
+            logger.info(
+                    "Tile estimate: annotation {}x{} um, FOV {}x{} um, overlap {}%, grid {}x{} = {} tiles",
+                    Math.round(annWidthMicrons),
+                    Math.round(annHeightMicrons),
+                    Math.round(fovWidthMicrons),
+                    Math.round(fovHeightMicrons),
+                    Math.round(overlapPercent),
+                    tilesX,
+                    tilesY,
+                    totalTiles);
 
             // Return at least 1 tile to avoid division by zero
             return Math.max(1, totalTiles);
@@ -911,14 +937,14 @@ public class AcquisitionManager {
         int annotationIndex = state.annotations.indexOf(parentAnnotation);
 
         if (annotationIndex == -1) {
-            logger.warn("Refinement tile's parent annotation '{}' not found in acquisition list",
+            logger.warn(
+                    "Refinement tile's parent annotation '{}' not found in acquisition list",
                     parentAnnotation.getName());
             return;
         }
 
         if (annotationIndex == 0) {
-            logger.info("Refinement annotation '{}' is already first in acquisition order",
-                    parentAnnotation.getName());
+            logger.info("Refinement annotation '{}' is already first in acquisition order", parentAnnotation.getName());
             return;
         }
 
@@ -926,8 +952,10 @@ public class AcquisitionManager {
         state.annotations.remove(annotationIndex);
         state.annotations.add(0, parentAnnotation);
 
-        logger.info("Prioritized annotation '{}' to be acquired first (contains refinement tile '{}')",
-                parentAnnotation.getName(), state.refinementTile.getName());
+        logger.info(
+                "Prioritized annotation '{}' to be acquired first (contains refinement tile '{}')",
+                parentAnnotation.getName(),
+                state.refinementTile.getName());
     }
 
     // UI notification methods
@@ -941,11 +969,10 @@ public class AcquisitionManager {
             alert.setTitle("Acquisition Progress");
             alert.setHeaderText("Starting acquisition workflow");
             alert.setContentText(String.format(
-                    "Processing %d annotations with %d rotation angles each.\n" +
-                            "This may take several minutes per annotation.",
+                    "Processing %d annotations with %d rotation angles each.\n"
+                            + "This may take several minutes per annotation.",
                     state.annotations.size(),
-                    angleExposures == null || angleExposures.isEmpty() ? 1 : angleExposures.size()
-            ));
+                    angleExposures == null || angleExposures.isEmpty() ? 1 : angleExposures.size()));
             alert.show();
 
             // Auto-close after 3 seconds
@@ -961,8 +988,7 @@ public class AcquisitionManager {
      */
     private void showProgressNotification(int current, int total, String annotationName) {
         Platform.runLater(() -> {
-            String message = String.format("Acquiring annotation %d of %d: %s",
-                    current, total, annotationName);
+            String message = String.format("Acquiring annotation %d of %d: %s", current, total, annotationName);
             Dialogs.showInfoNotification("Acquisition Progress", message);
         });
     }
@@ -983,12 +1009,8 @@ public class AcquisitionManager {
      * Shows error notification for failed acquisition.
      */
     private void showAcquisitionError(String annotationName, String errorMessage) {
-        Platform.runLater(() ->
-                UIFunctions.notifyUserOfError(
-                        "Acquisition failed for " + annotationName + ":\n\n" + errorMessage,
-                        "Acquisition Error"
-                )
-        );
+        Platform.runLater(() -> UIFunctions.notifyUserOfError(
+                "Acquisition failed for " + annotationName + ":\n\n" + errorMessage, "Acquisition Error"));
     }
 
     /**
@@ -1012,5 +1034,4 @@ public class AcquisitionManager {
     public DualProgressDialog getDualProgressDialog() {
         return dualProgressDialog;
     }
-
 }

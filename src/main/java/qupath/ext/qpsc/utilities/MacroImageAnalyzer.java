@@ -1,22 +1,19 @@
 package qupath.ext.qpsc.utilities;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import qupath.lib.images.ImageData;
-import qupath.lib.images.servers.ImageServer;
-import qupath.lib.objects.PathObject;
-import qupath.lib.objects.PathObjects;
-import qupath.lib.regions.ImagePlane;
-import qupath.lib.roi.ROIs;
-import qupath.lib.roi.interfaces.ROI;
-
-import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.List;
+import javax.imageio.ImageIO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.lib.images.ImageData;
+import qupath.lib.images.servers.ImageServer;
+import qupath.lib.regions.ImagePlane;
+import qupath.lib.roi.ROIs;
+import qupath.lib.roi.interfaces.ROI;
 
 /**
  * Analyzes macro images to detect tissue regions and compute bounding boxes
@@ -64,9 +61,14 @@ public class MacroImageAnalyzer {
         private final double scaleFactorY;
         private final int threshold;
 
-        public MacroAnalysisResult(BufferedImage macroImage, BufferedImage thresholdedImage,
-                                   ROI tissueBounds, List<ROI> tissueRegions,
-                                   double scaleFactorX, double scaleFactorY, int threshold) {
+        public MacroAnalysisResult(
+                BufferedImage macroImage,
+                BufferedImage thresholdedImage,
+                ROI tissueBounds,
+                List<ROI> tissueRegions,
+                double scaleFactorX,
+                double scaleFactorY,
+                int threshold) {
             this.macroImage = macroImage;
             this.thresholdedImage = thresholdedImage;
             this.tissueBounds = tissueBounds;
@@ -77,13 +79,33 @@ public class MacroImageAnalyzer {
         }
 
         // Getters
-        public BufferedImage getMacroImage() { return macroImage; }
-        public BufferedImage getThresholdedImage() { return thresholdedImage; }
-        public ROI getTissueBounds() { return tissueBounds; }
-        public List<ROI> getTissueRegions() { return tissueRegions; }
-        public double getScaleFactorX() { return scaleFactorX; }
-        public double getScaleFactorY() { return scaleFactorY; }
-        public int getThreshold() { return threshold; }
+        public BufferedImage getMacroImage() {
+            return macroImage;
+        }
+
+        public BufferedImage getThresholdedImage() {
+            return thresholdedImage;
+        }
+
+        public ROI getTissueBounds() {
+            return tissueBounds;
+        }
+
+        public List<ROI> getTissueRegions() {
+            return tissueRegions;
+        }
+
+        public double getScaleFactorX() {
+            return scaleFactorX;
+        }
+
+        public double getScaleFactorY() {
+            return scaleFactorY;
+        }
+
+        public int getThreshold() {
+            return threshold;
+        }
 
         /**
          * Converts a ROI from macro coordinates to main image coordinates.
@@ -94,8 +116,7 @@ public class MacroImageAnalyzer {
             double width = macroROI.getBoundsWidth() * scaleFactorX;
             double height = macroROI.getBoundsHeight() * scaleFactorY;
 
-            return ROIs.createRectangleROI(minX, minY, width, height,
-                    ImagePlane.getDefaultPlane());
+            return ROIs.createRectangleROI(minX, minY, width, height, ImagePlane.getDefaultPlane());
         }
     }
 
@@ -107,9 +128,8 @@ public class MacroImageAnalyzer {
      * @param params Additional parameters for the threshold method
      * @return Analysis results, or null if no macro image is available
      */
-    public static MacroAnalysisResult analyzeMacroImage(ImageData<?> imageData,
-                                                        ThresholdMethod method,
-                                                        Map<String, Object> params) {
+    public static MacroAnalysisResult analyzeMacroImage(
+            ImageData<?> imageData, ThresholdMethod method, Map<String, Object> params) {
         logger.info("Starting macro image analysis with method: {}", method);
 
         ImageServer<?> server = imageData.getServer();
@@ -170,7 +190,9 @@ public class MacroImageAnalyzer {
 
         // If still null, let's try to understand what keys the server expects
         if (macro == null) {
-            logger.error("Failed to extract macro image. Server class: {}", server.getClass().getName());
+            logger.error(
+                    "Failed to extract macro image. Server class: {}",
+                    server.getClass().getName());
             logger.error("Tried keys: '{}', series extract, and 'macro'", macroName);
 
             // Debug what's happening
@@ -179,8 +201,7 @@ public class MacroImageAnalyzer {
             return null;
         }
 
-        logger.info("Extracted macro image: {}x{} pixels",
-                macro.getWidth(), macro.getHeight());
+        logger.info("Extracted macro image: {}x{} pixels", macro.getWidth(), macro.getHeight());
 
         // Calculate scale factors between macro and main image
         double scaleX = (double) server.getWidth() / macro.getWidth();
@@ -191,8 +212,9 @@ public class MacroImageAnalyzer {
         BufferedImage thresholded;
 
         // For H&E methods, we need special handling
-        if (method == ThresholdMethod.HE_EOSIN || method == ThresholdMethod.HE_DUAL ||
-                method == ThresholdMethod.COLOR_DECONVOLUTION) {
+        if (method == ThresholdMethod.HE_EOSIN
+                || method == ThresholdMethod.HE_DUAL
+                || method == ThresholdMethod.COLOR_DECONVOLUTION) {
             thresholded = applyColorThreshold(macro, method, params);
         } else {
             thresholded = applyThreshold(macro, threshold);
@@ -203,19 +225,21 @@ public class MacroImageAnalyzer {
         List<ROI> regions = findTissueRegions(thresholded, minRegionSize);
         ROI bounds = computeBoundingBox(regions);
 
-        logger.info("Found {} tissue regions with overall bounds: ({}, {}, {}, {})",
-                regions.size(), bounds.getBoundsX(), bounds.getBoundsY(),
-                bounds.getBoundsWidth(), bounds.getBoundsHeight());
+        logger.info(
+                "Found {} tissue regions with overall bounds: ({}, {}, {}, {})",
+                regions.size(),
+                bounds.getBoundsX(),
+                bounds.getBoundsY(),
+                bounds.getBoundsWidth(),
+                bounds.getBoundsHeight());
 
-        return new MacroAnalysisResult(macro, thresholded, bounds, regions,
-                scaleX, scaleY, threshold);
+        return new MacroAnalysisResult(macro, thresholded, bounds, regions, scaleX, scaleY, threshold);
     }
 
     /**
      * Calculates the threshold value using the specified method.
      */
-    private static int calculateThreshold(BufferedImage image, ThresholdMethod method,
-                                          Map<String, Object> params) {
+    private static int calculateThreshold(BufferedImage image, ThresholdMethod method, Map<String, Object> params) {
         // Convert to grayscale if needed
         BufferedImage gray = convertToGrayscale(image);
 
@@ -255,8 +279,7 @@ public class MacroImageAnalyzer {
      * Converts image to grayscale.
      */
     private static BufferedImage convertToGrayscale(BufferedImage image) {
-        BufferedImage gray = new BufferedImage(image.getWidth(), image.getHeight(),
-                BufferedImage.TYPE_BYTE_GRAY);
+        BufferedImage gray = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
         Graphics2D g = gray.createGraphics();
         g.drawImage(image, 0, 0, null);
         g.dispose();
@@ -341,15 +364,12 @@ public class MacroImageAnalyzer {
      * Applies threshold to create binary image.
      */
     private static BufferedImage applyThreshold(BufferedImage image, int threshold) {
-        BufferedImage binary = new BufferedImage(image.getWidth(), image.getHeight(),
-                BufferedImage.TYPE_BYTE_BINARY);
+        BufferedImage binary = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_BYTE_BINARY);
 
         for (int y = 0; y < image.getHeight(); y++) {
             for (int x = 0; x < image.getWidth(); x++) {
                 int rgb = image.getRGB(x, y);
-                int gray = (int) (0.299 * ((rgb >> 16) & 0xFF) +
-                        0.587 * ((rgb >> 8) & 0xFF) +
-                        0.114 * (rgb & 0xFF));
+                int gray = (int) (0.299 * ((rgb >> 16) & 0xFF) + 0.587 * ((rgb >> 8) & 0xFF) + 0.114 * (rgb & 0xFF));
 
                 // Tissue is typically darker than background
                 int newPixel = gray < threshold ? 0x000000 : 0xFFFFFF;
@@ -363,11 +383,9 @@ public class MacroImageAnalyzer {
     /**
      * Applies color-based thresholding for H&E stained images.
      */
-    private static BufferedImage applyColorThreshold(BufferedImage image,
-                                                     ThresholdMethod method,
-                                                     Map<String, Object> params) {
-        BufferedImage binary = new BufferedImage(image.getWidth(), image.getHeight(),
-                BufferedImage.TYPE_BYTE_BINARY);
+    private static BufferedImage applyColorThreshold(
+            BufferedImage image, ThresholdMethod method, Map<String, Object> params) {
+        BufferedImage binary = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_BYTE_BINARY);
 
         // Get threshold parameters
         double eosinThreshold = (Double) params.getOrDefault("eosinThreshold", 0.15);
@@ -385,15 +403,13 @@ public class MacroImageAnalyzer {
                 switch (method) {
                     case HE_EOSIN -> {
                         // Detect pink/red eosin stain
-                        isTissue = detectEosin(rgb, eosinThreshold, saturationThreshold,
-                                brightnessMin, brightnessMax);
+                        isTissue = detectEosin(rgb, eosinThreshold, saturationThreshold, brightnessMin, brightnessMax);
                     }
                     case HE_DUAL -> {
                         // Detect both eosin (pink) and hematoxylin (purple/blue)
-                        isTissue = detectEosin(rgb, eosinThreshold, saturationThreshold,
-                                brightnessMin, brightnessMax) ||
-                                detectHematoxylin(rgb, hematoxylinThreshold, saturationThreshold,
-                                        brightnessMin, brightnessMax);
+                        isTissue = detectEosin(rgb, eosinThreshold, saturationThreshold, brightnessMin, brightnessMax)
+                                || detectHematoxylin(
+                                        rgb, hematoxylinThreshold, saturationThreshold, brightnessMin, brightnessMax);
                     }
                     case COLOR_DECONVOLUTION -> {
                         // Simple color deconvolution for H&E
@@ -412,8 +428,8 @@ public class MacroImageAnalyzer {
     /**
      * Detects eosin (pink/red) staining in H&E images.
      */
-    private static boolean detectEosin(int rgb, double threshold, double saturationMin,
-                                       double brightnessMin, double brightnessMax) {
+    private static boolean detectEosin(
+            int rgb, double threshold, double saturationMin, double brightnessMin, double brightnessMax) {
         int r = (rgb >> 16) & 0xFF;
         int g = (rgb >> 8) & 0xFF;
         int b = rgb & 0xFF;
@@ -430,7 +446,7 @@ public class MacroImageAnalyzer {
         float brightness = hsb[2];
 
         // Eosin is pink/red: hue around 0-20 or 340-360 degrees
-        boolean isEosinHue = (hue < 0.055 || hue > 0.944);  // Convert degrees to 0-1 range
+        boolean isEosinHue = (hue < 0.055 || hue > 0.944); // Convert degrees to 0-1 range
 
         // Also check if red channel is dominant
         boolean redDominant = rNorm > gNorm * (1 + threshold) && rNorm > bNorm * (1 + threshold);
@@ -445,8 +461,8 @@ public class MacroImageAnalyzer {
     /**
      * Detects hematoxylin (purple/blue) staining in H&E images.
      */
-    private static boolean detectHematoxylin(int rgb, double threshold, double saturationMin,
-                                             double brightnessMin, double brightnessMax) {
+    private static boolean detectHematoxylin(
+            int rgb, double threshold, double saturationMin, double brightnessMin, double brightnessMax) {
         int r = (rgb >> 16) & 0xFF;
         int g = (rgb >> 8) & 0xFF;
         int b = rgb & 0xFF;
@@ -523,9 +539,8 @@ public class MacroImageAnalyzer {
                     Rectangle bounds = floodFill(binary, visited, x, y);
                     int area = bounds.width * bounds.height;
                     if (area > minSize) {
-                        ROI roi = ROIs.createRectangleROI(bounds.x, bounds.y,
-                                bounds.width, bounds.height,
-                                ImagePlane.getDefaultPlane());
+                        ROI roi = ROIs.createRectangleROI(
+                                bounds.x, bounds.y, bounds.width, bounds.height, ImagePlane.getDefaultPlane());
                         regions.add(roi);
                     }
                 }
@@ -538,8 +553,7 @@ public class MacroImageAnalyzer {
     /**
      * Simple flood fill to find connected region bounds.
      */
-    private static Rectangle floodFill(BufferedImage binary, boolean[][] visited,
-                                       int startX, int startY) {
+    private static Rectangle floodFill(BufferedImage binary, boolean[][] visited, int startX, int startY) {
         Queue<Point> queue = new LinkedList<>();
         queue.add(new Point(startX, startY));
 
@@ -548,9 +562,7 @@ public class MacroImageAnalyzer {
 
         while (!queue.isEmpty()) {
             Point p = queue.poll();
-            if (p.x < 0 || p.x >= binary.getWidth() ||
-                    p.y < 0 || p.y >= binary.getHeight() ||
-                    visited[p.y][p.x]) {
+            if (p.x < 0 || p.x >= binary.getWidth() || p.y < 0 || p.y >= binary.getHeight() || visited[p.y][p.x]) {
                 continue;
             }
 
@@ -592,34 +604,27 @@ public class MacroImageAnalyzer {
             maxY = Math.max(maxY, roi.getBoundsY() + roi.getBoundsHeight());
         }
 
-        return ROIs.createRectangleROI(minX, minY, maxX - minX, maxY - minY,
-                ImagePlane.getDefaultPlane());
+        return ROIs.createRectangleROI(minX, minY, maxX - minX, maxY - minY, ImagePlane.getDefaultPlane());
     }
 
     /**
      * Saves the analysis images for debugging/review.
      */
-    public static void saveAnalysisImages(MacroAnalysisResult result, String outputPath)
-            throws IOException {
+    public static void saveAnalysisImages(MacroAnalysisResult result, String outputPath) throws IOException {
         File dir = new File(outputPath);
         if (!dir.exists()) {
             dir.mkdirs();
         }
 
         // Save original macro
-        ImageIO.write(result.getMacroImage(), "png",
-                new File(dir, "macro_original.png"));
+        ImageIO.write(result.getMacroImage(), "png", new File(dir, "macro_original.png"));
 
         // Save thresholded
-        ImageIO.write(result.getThresholdedImage(), "png",
-                new File(dir, "macro_thresholded.png"));
+        ImageIO.write(result.getThresholdedImage(), "png", new File(dir, "macro_thresholded.png"));
 
         // Save with bounds overlay
         BufferedImage overlay = new BufferedImage(
-                result.getMacroImage().getWidth(),
-                result.getMacroImage().getHeight(),
-                BufferedImage.TYPE_INT_ARGB
-        );
+                result.getMacroImage().getWidth(), result.getMacroImage().getHeight(), BufferedImage.TYPE_INT_ARGB);
 
         Graphics2D g = overlay.createGraphics();
         g.drawImage(result.getMacroImage(), 0, 0, null);
@@ -627,8 +632,8 @@ public class MacroImageAnalyzer {
         g.setStroke(new BasicStroke(2));
 
         ROI bounds = result.getTissueBounds();
-        g.drawRect((int) bounds.getBoundsX(), (int) bounds.getBoundsY(),
-                (int) bounds.getBoundsWidth(), (int) bounds.getBoundsHeight());
+        g.drawRect((int) bounds.getBoundsX(), (int) bounds.getBoundsY(), (int) bounds.getBoundsWidth(), (int)
+                bounds.getBoundsHeight());
         g.dispose();
 
         ImageIO.write(overlay, "png", new File(dir, "macro_bounds.png"));
@@ -655,8 +660,7 @@ public class MacroImageAnalyzer {
             try {
                 BufferedImage img = (BufferedImage) server.getAssociatedImage(name);
                 if (img != null) {
-                    logger.info("  SUCCESS with exact name: {} ({}x{})",
-                            name, img.getWidth(), img.getHeight());
+                    logger.info("  SUCCESS with exact name: {} ({}x{})", name, img.getWidth(), img.getHeight());
                 }
             } catch (Exception e) {
                 logger.info("  FAILED with exact name: {}", e.getMessage());
@@ -670,8 +674,11 @@ public class MacroImageAnalyzer {
                     try {
                         BufferedImage img = (BufferedImage) server.getAssociatedImage(seriesOnly);
                         if (img != null) {
-                            logger.info("  SUCCESS with series only: {} ({}x{})",
-                                    seriesOnly, img.getWidth(), img.getHeight());
+                            logger.info(
+                                    "  SUCCESS with series only: {} ({}x{})",
+                                    seriesOnly,
+                                    img.getWidth(),
+                                    img.getHeight());
                         }
                     } catch (Exception e) {
                         logger.info("  FAILED with series only: {}", e.getMessage());
@@ -682,8 +689,11 @@ public class MacroImageAnalyzer {
                 try {
                     BufferedImage img = (BufferedImage) server.getAssociatedImage(name.toLowerCase());
                     if (img != null) {
-                        logger.info("  SUCCESS with lowercase: {} ({}x{})",
-                                name.toLowerCase(), img.getWidth(), img.getHeight());
+                        logger.info(
+                                "  SUCCESS with lowercase: {} ({}x{})",
+                                name.toLowerCase(),
+                                img.getWidth(),
+                                img.getHeight());
                     }
                 } catch (Exception e) {
                     logger.info("  FAILED with lowercase: {}", e.getMessage());

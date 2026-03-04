@@ -15,9 +15,4 @@ package qupath.ext.qpsc.modality;
  * @author Mike Nelson
  * @since 2.0
  */
-public record ModalityMenuItem(
-        String id,
-        String label,
-        String tooltip,
-        Runnable action
-) {}
+public record ModalityMenuItem(String id, String label, String tooltip, Runnable action) {}

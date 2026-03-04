@@ -1,30 +1,23 @@
 package qupath.ext.qpsc.ui;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.ResourceBundle;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
-import javafx.stage.Stage;
-import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
-import qupath.fx.dialogs.Dialogs;
-
-import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.concurrent.CompletableFuture;
-import java.util.ResourceBundle;
 
 /**
  * UI controller for managing microscope server connections.
@@ -111,16 +104,10 @@ public class ServerConnectionController {
 
         // Create main layout
         TabPane tabPane = new TabPane();
-        tabPane.getTabs().addAll(
-                createConnectionTab(),
-                createAdvancedTab()
-        );
+        tabPane.getTabs().addAll(createConnectionTab(), createAdvancedTab());
 
         // Add control buttons
-        dialog.getDialogPane().getButtonTypes().addAll(
-                ButtonType.OK,
-                ButtonType.CANCEL
-        );
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
         // Set content
         dialog.getDialogPane().setContent(tabPane);
@@ -175,9 +162,7 @@ public class ServerConnectionController {
 
         // Auto-connect
         autoConnectCheckBox = new CheckBox(res.getString("server.connection.autoConnect"));
-        autoConnectCheckBox.setTooltip(new Tooltip(
-                "Automatically connect to the server when QuPath starts"
-        ));
+        autoConnectCheckBox.setTooltip(new Tooltip("Automatically connect to the server when QuPath starts"));
         grid.add(autoConnectCheckBox, 0, row++, 2, 1);
 
         // Separator
@@ -191,7 +176,8 @@ public class ServerConnectionController {
         connectButton.setOnAction(e -> connectNow());
 
         Button probeButton = new Button("Probe Server");
-        probeButton.setTooltip(new Tooltip("Quick check if server is responding (helps diagnose multi-instance issues)"));
+        probeButton.setTooltip(
+                new Tooltip("Quick check if server is responding (helps diagnose multi-instance issues)"));
         probeButton.setOnAction(e -> probeServerStatus());
 
         HBox buttonBox = new HBox(10, testButton, connectButton, probeButton);
@@ -334,7 +320,8 @@ public class ServerConnectionController {
         readTimeoutSpinner.getValueFactory().setValue(PersistentPreferences.getSocketReadTimeoutMs());
         maxReconnectSpinner.getValueFactory().setValue(PersistentPreferences.getSocketMaxReconnectAttempts());
         reconnectDelaySpinner.getValueFactory().setValue((int) PersistentPreferences.getSocketReconnectDelayMs());
-        healthCheckIntervalSpinner.getValueFactory().setValue((int) PersistentPreferences.getSocketHealthCheckIntervalMs());
+        healthCheckIntervalSpinner.getValueFactory().setValue((int)
+                PersistentPreferences.getSocketHealthCheckIntervalMs());
 
         // Update connection status display
         updateConnectionStatus();
@@ -381,16 +368,16 @@ public class ServerConnectionController {
         String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
         if (configPath == null || configPath.trim().isEmpty()) {
             Platform.runLater(() -> {
-                statusLabel.setText("❌ Config Not Set");
+                statusLabel.setText("[X] Config Not Set");
                 statusLabel.setTextFill(Color.RED);
 
-                javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.ERROR);
+                javafx.scene.control.Alert alert =
+                        new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.ERROR);
                 alert.setTitle("Config Not Set");
                 alert.setHeaderText("Microscope configuration file not set");
                 alert.setContentText(
-                    "Please set the microscope configuration file path in the Preferences tab below.\n\n" +
-                    "This is required for safe operation - the wrong config could damage the microscope!"
-                );
+                        "Please set the microscope configuration file path in the Preferences tab below.\n\n"
+                                + "This is required for safe operation - the wrong config could damage the microscope!");
                 alert.showAndWait();
 
                 logMessage("ERROR: Microscope config file not set!");
@@ -418,8 +405,7 @@ public class ServerConnectionController {
                         readTimeoutSpinner.getValue(),
                         1, // Only try once for test
                         1000,
-                        30000
-                );
+                        30000);
 
                 logMessage("Testing connection to " + hostField.getText() + ":" + portSpinner.getValue());
 
@@ -437,10 +423,7 @@ public class ServerConnectionController {
 
                 // Success
                 Platform.runLater(() -> {
-                    statusLabel.setText(String.format(
-                            res.getString("server.status.success"),
-                            pos[0], pos[1], z
-                    ));
+                    statusLabel.setText(String.format(res.getString("server.status.success"), pos[0], pos[1], z));
                     statusLabel.setTextFill(Color.GREEN);
                 });
 
@@ -484,10 +467,7 @@ public class ServerConnectionController {
                 }
 
                 Platform.runLater(() -> {
-                    statusLabel.setText(String.format(
-                            res.getString("server.status.failed"),
-                            error
-                    ));
+                    statusLabel.setText(String.format(res.getString("server.status.failed"), error));
                     statusLabel.setTextFill(Color.RED);
                 });
 
@@ -539,10 +519,7 @@ public class ServerConnectionController {
                 logMessage("Failed to connect via controller: " + error);
 
                 Platform.runLater(() -> {
-                    statusLabel.setText(String.format(
-                            res.getString("server.status.failed"),
-                            error
-                    ));
+                    statusLabel.setText(String.format(res.getString("server.status.failed"), error));
                     statusLabel.setTextFill(Color.RED);
                 });
 
@@ -572,8 +549,7 @@ public class ServerConnectionController {
 
             logMessage("Probing server at " + host + ":" + port + "...");
 
-            MicroscopeSocketClient.ServerProbeResult result =
-                    MicroscopeSocketClient.probeServer(host, port, timeout);
+            MicroscopeSocketClient.ServerProbeResult result = MicroscopeSocketClient.probeServer(host, port, timeout);
 
             if (result.isResponding()) {
                 logMessage("Server probe successful: " + result.getMessage());
@@ -617,8 +593,8 @@ public class ServerConnectionController {
         try {
             MicroscopeController controller = MicroscopeController.getInstance();
             boolean connected = controller.isConnected();
-            statusLabel.setText(res.getString("server.connection.status") + " " +
-                    (connected ? "Connected" : "Disconnected"));
+            statusLabel.setText(
+                    res.getString("server.connection.status") + " " + (connected ? "Connected" : "Disconnected"));
             statusLabel.setTextFill(connected ? Color.GREEN : Color.GRAY);
         } catch (Exception e) {
             statusLabel.setText(res.getString("server.connection.status") + " Not initialized");

@@ -12,14 +12,7 @@ package qupath.ext.qpsc.ui.liveviewer;
  *                     uint16 data is in big-endian byte order from the wire.
  * @param timestampMs  Timestamp when the frame was received (System.currentTimeMillis)
  */
-public record FrameData(
-        int width,
-        int height,
-        int channels,
-        int bytesPerPixel,
-        byte[] rawPixels,
-        long timestampMs
-) {
+public record FrameData(int width, int height, int channels, int bytesPerPixel, byte[] rawPixels, long timestampMs) {
     /**
      * Returns the maximum pixel value for this bit depth.
      */

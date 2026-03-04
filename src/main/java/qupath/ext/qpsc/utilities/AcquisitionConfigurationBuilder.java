@@ -1,5 +1,8 @@
 package qupath.ext.qpsc.utilities;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
@@ -9,36 +12,30 @@ import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.ui.SampleSetupController;
 
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
 /**
  * Centralized builder for acquisition configuration that consolidates duplicated logic
  * from BoundedAcquisitionWorkflow and AcquisitionManager.
  */
 public class AcquisitionConfigurationBuilder {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(AcquisitionConfigurationBuilder.class);
-    
+
     /**
      * Configuration record containing all acquisition parameters
      */
     public record AcquisitionConfiguration(
-        String objective,
-        String detector,
-        double WSI_pixelSize_um,
-        boolean bgEnabled,
-        String bgMethod,
-        String bgFolder,
-        int afTiles,
-        int afSteps,
-        double afRange,
-        List<String> processingSteps,
-        AcquisitionCommandBuilder commandBuilder
-    ) {}
-    
+            String objective,
+            String detector,
+            double WSI_pixelSize_um,
+            boolean bgEnabled,
+            String bgMethod,
+            String bgFolder,
+            int afTiles,
+            int afSteps,
+            double afRange,
+            List<String> processingSteps,
+            AcquisitionCommandBuilder commandBuilder) {}
+
     /**
      * Builds a complete acquisition configuration from the provided parameters.
      * Overload without wbMode for backward compatibility (skips WB mode mismatch validation).
@@ -52,8 +49,16 @@ public class AcquisitionConfigurationBuilder {
             String projectsFolder,
             String sampleName,
             double explicitPixelSize) {
-        return buildConfiguration(sample, configFileLocation, modalityWithIndex, regionName,
-                angleExposures, projectsFolder, sampleName, explicitPixelSize, null);
+        return buildConfiguration(
+                sample,
+                configFileLocation,
+                modalityWithIndex,
+                regionName,
+                angleExposures,
+                projectsFolder,
+                sampleName,
+                explicitPixelSize,
+                null);
     }
 
     /**
@@ -87,12 +92,12 @@ public class AcquisitionConfigurationBuilder {
         String objective = sample.objective();
         String detector = sample.detector();
         String baseModality = sample.modality();
-        
+
         // Get background correction settings (checks imageprocessing config first, then main config)
         boolean bgEnabled = configManager.isBackgroundCorrectionEnabled(baseModality);
         String bgMethod = configManager.getBackgroundCorrectionMethod(baseModality);
         String bgBaseFolder = configManager.getBackgroundCorrectionFolder(baseModality);
-        
+
         // Resolve detector-specific background folder path (WB-mode aware)
         String bgFolder = null;
         if (bgEnabled && bgBaseFolder != null) {
@@ -100,13 +105,13 @@ public class AcquisitionConfigurationBuilder {
                     bgBaseFolder, baseModality, objective, detector, wbMode);
             logger.info("Resolved background folder path: {}", bgFolder);
         }
-        
+
         // Get autofocus parameters
         Map<String, Object> afParams = configManager.getAutofocusParams(objective);
-        int afTiles = 5;    // defaults
+        int afTiles = 5; // defaults
         int afSteps = 11;
         double afRange = 50.0;
-        
+
         if (afParams != null) {
             if (afParams.get("n_tiles") instanceof Number) {
                 afTiles = ((Number) afParams.get("n_tiles")).intValue();
@@ -117,17 +122,25 @@ public class AcquisitionConfigurationBuilder {
             if (afParams.get("search_range_um") instanceof Number) {
                 afRange = ((Number) afParams.get("search_range_um")).doubleValue();
             }
-            logger.info("Using objective-specific autofocus parameters for {}: tiles={}, steps={}, range={}μm", 
-                    objective, afTiles, afSteps, afRange);
+            logger.info(
+                    "Using objective-specific autofocus parameters for {}: tiles={}, steps={}, range={}um",
+                    objective,
+                    afTiles,
+                    afSteps,
+                    afRange);
         } else {
-            logger.warn("No autofocus parameters found for objective {}. Using generic defaults: tiles={}, steps={}, range={}μm. " +
-                    "This may result in suboptimal focus quality. Consider adding autofocus configuration for this objective.", 
-                    objective, afTiles, afSteps, afRange);
-            
+            logger.warn(
+                    "No autofocus parameters found for objective {}. Using generic defaults: tiles={}, steps={}, range={}um. "
+                            + "This may result in suboptimal focus quality. Consider adding autofocus configuration for this objective.",
+                    objective,
+                    afTiles,
+                    afSteps,
+                    afRange);
+
             // Show user warning for missing autofocus configuration
             showAutofocusConfigurationWarning(objective, afTiles, afSteps, afRange);
         }
-        
+
         // Determine processing pipeline based on detector properties
         List<String> processingSteps = new ArrayList<>();
         if (configManager.detectorRequiresDebayering(detector)) {
@@ -136,7 +149,7 @@ public class AcquisitionConfigurationBuilder {
         if (bgEnabled && bgFolder != null) {
             processingSteps.add("background_correction");
         }
-        
+
         // Build enhanced acquisition command
         // White balance mode is set later by the caller via .wbMode() from the dialog selection.
         // Use the sampleName parameter (from ProjectInfo) - NOT sample.sampleName() which may differ
@@ -150,14 +163,15 @@ public class AcquisitionConfigurationBuilder {
                 .hardware(objective, detector, explicitPixelSize)
                 .autofocus(afTiles, afSteps, afRange)
                 .processingPipeline(processingSteps);
-        
+
         // Only add background correction if enabled and configured
         if (bgEnabled && bgMethod != null && bgFolder != null) {
             // Perform background validation to determine which angles should have correction disabled
             List<Double> disabledAngles = new ArrayList<>();
             try {
                 BackgroundSettingsReader.BackgroundSettings backgroundSettings =
-                    BackgroundSettingsReader.findBackgroundSettings(bgBaseFolder, baseModality, objective, detector, wbMode);
+                        BackgroundSettingsReader.findBackgroundSettings(
+                                bgBaseFolder, baseModality, objective, detector, wbMode);
 
                 if (backgroundSettings != null) {
                     ModalityHandler handler = ModalityRegistry.getHandler(baseModality);
@@ -169,37 +183,41 @@ public class AcquisitionConfigurationBuilder {
                     disabledAngles.addAll(validation.angleswithExposureMismatches);
 
                     if (validation.wbModeMismatch) {
-                        logger.warn("WB mode mismatch: background was collected with '{}' but acquisition uses '{}'",
-                                validation.backgroundWbMode, validation.currentWbMode);
+                        logger.warn(
+                                "WB mode mismatch: background was collected with '{}' but acquisition uses '{}'",
+                                validation.backgroundWbMode,
+                                validation.currentWbMode);
                     }
 
-                    logger.info("Background validation: {} angles will have correction disabled", disabledAngles.size());
+                    logger.info(
+                            "Background validation: {} angles will have correction disabled", disabledAngles.size());
                     if (!disabledAngles.isEmpty()) {
                         logger.info("Disabled angles: {}", disabledAngles);
                     }
                 }
             } catch (Exception e) {
-                logger.warn("Error during background validation, proceeding without angle-specific disabling: {}", e.getMessage());
+                logger.warn(
+                        "Error during background validation, proceeding without angle-specific disabling: {}",
+                        e.getMessage());
             }
 
             acquisitionBuilder.backgroundCorrection(true, bgMethod, bgFolder, disabledAngles);
         }
-        
+
         return new AcquisitionConfiguration(
-            objective,
-            detector,
-            explicitPixelSize,
-            bgEnabled,
-            bgMethod,
-            bgFolder,
-            afTiles,
-            afSteps,
-            afRange,
-            processingSteps,
-            acquisitionBuilder
-        );
+                objective,
+                detector,
+                explicitPixelSize,
+                bgEnabled,
+                bgMethod,
+                bgFolder,
+                afTiles,
+                afSteps,
+                afRange,
+                processingSteps,
+                acquisitionBuilder);
     }
-    
+
     /**
      * Helper method to extract magnification from objective name
      * Extracted from duplicated code in both workflows
@@ -215,32 +233,35 @@ public class AcquisitionConfigurationBuilder {
         }
         return "unknown";
     }
-    
+
     /**
      * Shows a warning dialog when autofocus parameters are missing for an objective.
      * This prevents silent degradation of focus quality.
      */
-    private static void showAutofocusConfigurationWarning(String objective, int defaultTiles, int defaultSteps, double defaultRange) {
+    private static void showAutofocusConfigurationWarning(
+            String objective, int defaultTiles, int defaultSteps, double defaultRange) {
         javafx.application.Platform.runLater(() -> {
-            javafx.scene.control.Alert warning = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+            javafx.scene.control.Alert warning =
+                    new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
             warning.setTitle("Autofocus Configuration Missing");
             warning.setHeaderText("No autofocus parameters found for " + objective);
-            
+
             StringBuilder message = new StringBuilder();
             message.append("No objective-specific autofocus parameters were found in the configuration.\n\n");
             message.append("Using generic defaults:\n");
-            message.append(String.format("• Focus tiles: %d\n", defaultTiles));
-            message.append(String.format("• Focus steps: %d\n", defaultSteps));
-            message.append(String.format("• Search range: %.1f μm\n\n", defaultRange));
-            message.append("This may result in suboptimal focus quality, especially for high-magnification objectives.\n\n");
+            message.append(String.format("- Focus tiles: %d\n", defaultTiles));
+            message.append(String.format("- Focus steps: %d\n", defaultSteps));
+            message.append(String.format("- Search range: %.1f um\n\n", defaultRange));
+            message.append(
+                    "This may result in suboptimal focus quality, especially for high-magnification objectives.\n\n");
             message.append("Recommendation: Add autofocus configuration for ").append(objective);
             message.append(" in the microscope configuration file for optimal performance.");
-            
+
             warning.setContentText(message.toString());
             warning.setResizable(true);
             warning.getDialogPane().setPrefWidth(500);
             warning.getDialogPane().setPrefHeight(350);
-            
+
             warning.showAndWait();
         });
     }
