@@ -1,7 +1,18 @@
 package qupath.ext.qpsc.controller;
 
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Paths;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import javafx.application.Platform;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.QPScopeChecks;
+import qupath.ext.qpsc.controller.workflow.StitchingHelper;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -11,21 +22,9 @@ import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UnifiedAcquisitionController;
 import qupath.ext.qpsc.utilities.*;
-import qupath.ext.qpsc.controller.workflow.StitchingHelper;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.QPEx;
 import qupath.lib.projects.Project;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Paths;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 /**
  * Bounded acquisition workflow using the unified acquisition dialog.
@@ -74,169 +73,164 @@ public class BoundedAcquisitionWorkflow {
             logger.error("Failed to connect to microscope server: {}", e.getMessage());
             UIFunctions.notifyUserOfError(
                     "Cannot connect to microscope server.\nPlease check server is running and try again.",
-                    "Connection Error"
-            );
+                    "Connection Error");
             return;
         }
 
         // Show the unified acquisition dialog
-        UnifiedAcquisitionController.showDialog()
-                .thenAccept(result -> {
-                    if (result == null) {
-                        logger.info("Unified acquisition dialog cancelled");
-                        return;
+        UnifiedAcquisitionController.showDialog().thenAccept(result -> {
+            if (result == null) {
+                logger.info("Unified acquisition dialog cancelled");
+                return;
+            }
+
+            logger.info(
+                    "Starting bounded acquisition: sample={}, modality={}, " + "bounds=({},{}) to ({},{})",
+                    result.sampleName(),
+                    result.modality(),
+                    result.x1(),
+                    result.y1(),
+                    result.x2(),
+                    result.y2());
+
+            // Read persistent prefs
+            String prefProjectsFolder = QPPreferenceDialog.getProjectsFolderProperty();
+            double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
+            boolean invertX = QPPreferenceDialog.getInvertedXProperty();
+            boolean invertY = QPPreferenceDialog.getInvertedYProperty();
+
+            // Create/open the QuPath project
+            QuPathGUI qupathGUI = QPEx.getQuPath();
+            Map<String, Object> pd;
+            // If a project is already open, derive the output folder from its
+            // actual location rather than the user preference (which is only
+            // correct for creating brand-new projects).
+            String projectsFolder;
+            try {
+                // Use enhanced scan type for consistent folder structure
+                String enhancedModality =
+                        ObjectiveUtils.createEnhancedFolderName(result.modality(), result.objective());
+                logger.info("Using enhanced modality for project: {} -> {}", result.modality(), enhancedModality);
+
+                // Check if a project is already open
+                Project<BufferedImage> existingProject = qupathGUI.getProject();
+                if (existingProject != null) {
+                    logger.info("Using existing project: {}", existingProject.getPath());
+                    // Derive projectsFolder AND sampleName from the project's actual location
+                    // Project structure: <projectsFolder>/<sampleName>/project.qpproj
+                    java.nio.file.Path projectPath = existingProject.getPath();
+                    if (projectPath != null
+                            && projectPath.getParent() != null
+                            && projectPath.getParent().getParent() != null) {
+                        projectsFolder = projectPath.getParent().getParent().toString();
+                        logger.info(
+                                "Overriding projectsFolder from project path: {} -> {}",
+                                prefProjectsFolder,
+                                projectsFolder);
+                    } else {
+                        projectsFolder = prefProjectsFolder;
                     }
+                    // Use the actual project folder name, NOT the user-entered sample name.
+                    // The user may type a new name, but tiles must go inside the existing project.
+                    String existingFolderName =
+                            projectPath.getParent().getFileName().toString();
+                    logger.info(
+                            "Using existing project folder name '{}' (user entered '{}')",
+                            existingFolderName,
+                            result.sampleName());
+                    pd = QPProjectFunctions.getCurrentProjectInformation(
+                            projectsFolder, existingFolderName, enhancedModality);
+                } else {
+                    projectsFolder = prefProjectsFolder;
+                    logger.info("Creating new project with sample name: {}", result.sampleName());
+                    pd = QPProjectFunctions.createAndOpenQuPathProject(
+                            qupathGUI, projectsFolder, result.sampleName(), enhancedModality, invertX, invertY);
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
 
-                    logger.info("Starting bounded acquisition: sample={}, modality={}, " +
-                               "bounds=({},{}) to ({},{})",
-                            result.sampleName(), result.modality(),
-                            result.x1(), result.y1(), result.x2(), result.y2());
+            String tempTileDir = (String) pd.get("tempTileDirectory");
+            String modeWithIndex = (String) pd.get("imagingModeWithIndex");
+            @SuppressWarnings("unchecked")
+            Project<BufferedImage> project = (Project<BufferedImage>) pd.get("currentQuPathProject");
 
-                    // Read persistent prefs
-                    String prefProjectsFolder = QPPreferenceDialog.getProjectsFolderProperty();
-                    double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
-                    boolean invertX = QPPreferenceDialog.getInvertedXProperty();
-                    boolean invertY = QPPreferenceDialog.getInvertedYProperty();
+            // Derive actual sample name and projectsFolder from tempTileDir path structure:
+            // tempTileDir = <projectsFolder>/<sampleName>/<modeWithIndex>
+            // Get parent (sampleName dir) then get its name
+            java.nio.file.Path tempTilePath = java.nio.file.Paths.get(tempTileDir);
+            String actualSampleName = tempTilePath.getParent().getFileName().toString();
+            String actualProjectsFolder = tempTilePath.getParent().getParent().toString();
+            logger.debug(
+                    "Derived sample name '{}' and projectsFolder '{}' from tempTileDir path",
+                    actualSampleName,
+                    actualProjectsFolder);
 
-                    // Create/open the QuPath project
-                    QuPathGUI qupathGUI = QPEx.getQuPath();
-                    Map<String, Object> pd;
-                    // If a project is already open, derive the output folder from its
-                    // actual location rather than the user preference (which is only
-                    // correct for creating brand-new projects).
-                    String projectsFolder;
-                    try {
-                        // Use enhanced scan type for consistent folder structure
-                        String enhancedModality = ObjectiveUtils.createEnhancedFolderName(
-                                result.modality(), result.objective());
-                        logger.info("Using enhanced modality for project: {} -> {}",
-                                result.modality(), enhancedModality);
+            // Get camera FOV using explicit hardware selections
+            String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configFileLocation);
 
-                        // Check if a project is already open
-                        Project<BufferedImage> existingProject = qupathGUI.getProject();
-                        if (existingProject != null) {
-                            logger.info("Using existing project: {}", existingProject.getPath());
-                            // Derive projectsFolder from the project's actual location
-                            // Project structure: <projectsFolder>/<sampleName>/project.qpproj
-                            java.nio.file.Path projectPath = existingProject.getPath();
-                            if (projectPath != null && projectPath.getParent() != null
-                                    && projectPath.getParent().getParent() != null) {
-                                projectsFolder = projectPath.getParent().getParent().toString();
-                                logger.info("Overriding projectsFolder from project path: {} -> {}",
-                                        prefProjectsFolder, projectsFolder);
-                            } else {
-                                projectsFolder = prefProjectsFolder;
-                            }
-                            pd = QPProjectFunctions.getCurrentProjectInformation(
-                                    projectsFolder,
-                                    result.sampleName(),
-                                    enhancedModality
-                            );
-                        } else {
-                            projectsFolder = prefProjectsFolder;
-                            logger.info("Creating new project with sample name: {}", result.sampleName());
-                            pd = QPProjectFunctions.createAndOpenQuPathProject(
-                                    qupathGUI,
-                                    projectsFolder,
-                                    result.sampleName(),
-                                    enhancedModality,
-                                    invertX,
-                                    invertY
-                            );
-                        }
-                    } catch (IOException e) {
-                        throw new UncheckedIOException(e);
-                    }
+            double frameWidthMicrons, frameHeightMicrons;
+            try {
+                double[] fov = configManager.getModalityFOV(result.modality(), result.objective(), result.detector());
+                if (fov == null) {
+                    throw new IOException("Could not calculate FOV for the selected hardware configuration");
+                }
+                frameWidthMicrons = fov[0];
+                frameHeightMicrons = fov[1];
+                logger.info("Camera FOV: {} x {} microns", frameWidthMicrons, frameHeightMicrons);
+            } catch (Exception e) {
+                UIFunctions.notifyUserOfError("Failed to get camera FOV: " + e.getMessage(), "FOV Error");
+                return;
+            }
 
-                    String tempTileDir = (String) pd.get("tempTileDirectory");
-                    String modeWithIndex = (String) pd.get("imagingModeWithIndex");
-                    @SuppressWarnings("unchecked")
-                    Project<BufferedImage> project = (Project<BufferedImage>) pd.get("currentQuPathProject");
+            // Get pixel size for stitching
+            double WSI_pixelSize_um;
+            try {
+                WSI_pixelSize_um =
+                        configManager.getModalityPixelSize(result.modality(), result.objective(), result.detector());
+            } catch (IllegalArgumentException e) {
+                UIFunctions.notifyUserOfError("Failed to get pixel size: " + e.getMessage(), "Configuration Error");
+                return;
+            }
 
-                    // Derive actual sample name and projectsFolder from tempTileDir path structure:
-                    // tempTileDir = <projectsFolder>/<sampleName>/<modeWithIndex>
-                    // Get parent (sampleName dir) then get its name
-                    java.nio.file.Path tempTilePath = java.nio.file.Paths.get(tempTileDir);
-                    String actualSampleName = tempTilePath.getParent().getFileName().toString();
-                    String actualProjectsFolder = tempTilePath.getParent().getParent().toString();
-                    logger.debug("Derived sample name '{}' and projectsFolder '{}' from tempTileDir path", actualSampleName, actualProjectsFolder);
+            // Validate pixel size against MicroManager's active calibration
+            if (!QPScopeChecks.validateObjectivePixelSize(
+                    result.objective(), result.detector(), result.modality(), WSI_pixelSize_um)) {
+                return; // user cancelled
+            }
 
-                    // Get camera FOV using explicit hardware selections
-                    String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-                    MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configFileLocation);
+            // Create tile configuration
+            TilingRequest request = new TilingRequest.Builder()
+                    .outputFolder(tempTileDir)
+                    .modalityName(modeWithIndex)
+                    .frameSize(frameWidthMicrons, frameHeightMicrons)
+                    .overlapPercent(overlapPercent)
+                    .boundingBox(result.x1(), result.y1(), result.x2(), result.y2())
+                    .invertAxes(invertX, invertY)
+                    .createDetections(false)
+                    .build();
 
-                    double frameWidthMicrons, frameHeightMicrons;
-                    try {
-                        double[] fov = configManager.getModalityFOV(
-                                result.modality(), result.objective(), result.detector());
-                        if (fov == null) {
-                            throw new IOException("Could not calculate FOV for the selected hardware configuration");
-                        }
-                        frameWidthMicrons = fov[0];
-                        frameHeightMicrons = fov[1];
-                        logger.info("Camera FOV: {} x {} microns", frameWidthMicrons, frameHeightMicrons);
-                    } catch (Exception e) {
-                        UIFunctions.notifyUserOfError(
-                                "Failed to get camera FOV: " + e.getMessage(),
-                                "FOV Error"
-                        );
-                        return;
-                    }
+            try {
+                TilingUtilities.createTiles(request);
+            } catch (IOException e) {
+                UIFunctions.notifyUserOfError("Failed to create tile configuration: " + e.getMessage(), "Tiling Error");
+                return;
+            }
 
-                    // Get pixel size for stitching
-                    double WSI_pixelSize_um;
-                    try {
-                        WSI_pixelSize_um = configManager.getModalityPixelSize(
-                                result.modality(), result.objective(), result.detector());
-                    } catch (IllegalArgumentException e) {
-                        UIFunctions.notifyUserOfError(
-                                "Failed to get pixel size: " + e.getMessage(),
-                                "Configuration Error"
-                        );
-                        return;
-                    }
+            ModalityHandler modalityHandler = ModalityRegistry.getHandler(result.modality());
 
-                    // Validate pixel size against MicroManager's active calibration
-                    if (!QPScopeChecks.validateObjectivePixelSize(
-                            result.objective(), result.detector(), result.modality(), WSI_pixelSize_um)) {
-                        return; // user cancelled
-                    }
+            double finalWSI_pixelSize_um = WSI_pixelSize_um;
 
-                    // Create tile configuration
-                    TilingRequest request = new TilingRequest.Builder()
-                            .outputFolder(tempTileDir)
-                            .modalityName(modeWithIndex)
-                            .frameSize(frameWidthMicrons, frameHeightMicrons)
-                            .overlapPercent(overlapPercent)
-                            .boundingBox(result.x1(), result.y1(), result.x2(), result.y2())
-                            .invertAxes(invertX, invertY)
-                            .createDetections(false)
-                            .build();
+            // Resolve angles via shared service (prepares handler + applies overrides)
+            CompletableFuture<List<qupath.ext.qpsc.modality.AngleExposure>> anglesFuture =
+                    AngleResolutionService.resolve(
+                            result.modality(), result.objective(), result.detector(), result.angleOverrides());
 
-                    try {
-                        TilingUtilities.createTiles(request);
-                    } catch (IOException e) {
-                        UIFunctions.notifyUserOfError(
-                                "Failed to create tile configuration: " + e.getMessage(),
-                                "Tiling Error"
-                        );
-                        return;
-                    }
-
-                    ModalityHandler modalityHandler = ModalityRegistry.getHandler(result.modality());
-
-                    double finalWSI_pixelSize_um = WSI_pixelSize_um;
-
-                    // Resolve angles via shared service (prepares handler + applies overrides)
-                    CompletableFuture<List<qupath.ext.qpsc.modality.AngleExposure>> anglesFuture =
-                            AngleResolutionService.resolve(
-                                    result.modality(), result.objective(), result.detector(),
-                                    result.angleOverrides());
-
-                    anglesFuture.thenAccept(angleExposures -> {
-                        List<Double> rotationAngles = angleExposures.stream()
-                                .map(ae -> ae.ticks())
-                                .collect(Collectors.toList());
+            anglesFuture
+                    .thenAccept(angleExposures -> {
+                        List<Double> rotationAngles =
+                                angleExposures.stream().map(ae -> ae.ticks()).collect(Collectors.toList());
                         logger.info("Rotation angles: {}", rotationAngles);
 
                         String boundsMode = "bounds";
@@ -256,8 +250,7 @@ public class BoundedAcquisitionWorkflow {
                                         result.projectsFolder(),
                                         result.modality(),
                                         result.objective(),
-                                        result.detector()
-                                );
+                                        result.detector());
 
                                 // For new projects, sample name from dialog is correct
                                 AcquisitionConfigurationBuilder.AcquisitionConfiguration config =
@@ -268,32 +261,28 @@ public class BoundedAcquisitionWorkflow {
                                                 boundsMode,
                                                 angleExposures,
                                                 projectsFolder,
-                                                result.sampleName(),  // For new projects, dialog name is correct
+                                                result.sampleName(), // For new projects, dialog name is correct
                                                 finalWSI_pixelSize_um,
-                                                result.wbMode()
-                                        );
+                                                result.wbMode());
 
                                 // Apply user's explicit white balance mode choice (required)
                                 if (result.wbMode() != null) {
                                     config.commandBuilder().wbMode(result.wbMode());
                                 } else {
-                                    throw new IllegalStateException(
-                                            "White balance mode must be explicitly selected. "
+                                    throw new IllegalStateException("White balance mode must be explicitly selected. "
                                             + "The acquisition dialog should always provide a wbMode value.");
                                 }
 
-                                logger.info("Starting acquisition - Sample: {}, Mode: {}, Angles: {}, wbMode: {}",
-                                        result.sampleName(), modeWithIndex, angleExposures.size(),
+                                logger.info(
+                                        "Starting acquisition - Sample: {}, Mode: {}, Angles: {}, wbMode: {}",
+                                        result.sampleName(),
+                                        modeWithIndex,
+                                        angleExposures.size(),
                                         result.wbMode());
 
                                 String commandString = config.commandBuilder().buildSocketMessage();
                                 MinorFunctions.saveAcquisitionCommand(
-                                        commandString,
-                                        projectsFolder,
-                                        result.sampleName(),
-                                        modeWithIndex,
-                                        boundsMode
-                                );
+                                        commandString, projectsFolder, result.sampleName(), modeWithIndex, boundsMode);
 
                                 MicroscopeController.getInstance().startAcquisition(config.commandBuilder());
 
@@ -303,8 +292,9 @@ public class BoundedAcquisitionWorkflow {
 
                                 int angleCount = Math.max(1, angleExposures.size());
                                 int expectedFiles = MinorFunctions.countTifEntriesInTileConfig(
-                                        List.of(Paths.get(tempTileDir, boundsMode).toString())
-                                ) * angleCount;
+                                                List.of(Paths.get(tempTileDir, boundsMode)
+                                                        .toString()))
+                                        * angleCount;
 
                                 AtomicInteger progressCounter = new AtomicInteger(0);
 
@@ -326,13 +316,12 @@ public class BoundedAcquisitionWorkflow {
 
                                 Thread.sleep(1000);
 
-                                MicroscopeSocketClient.AcquisitionState finalState =
-                                        socketClient.monitorAcquisition(
-                                                progress -> progressCounter.set(progress.current),
-                                                retriesRemaining -> ManualFocusHandler.handle(
-                                                        socketClient, retriesRemaining, null, null),
-                                                500, 300000
-                                        );
+                                MicroscopeSocketClient.AcquisitionState finalState = socketClient.monitorAcquisition(
+                                        progress -> progressCounter.set(progress.current),
+                                        retriesRemaining ->
+                                                ManualFocusHandler.handle(socketClient, retriesRemaining, null, null),
+                                        500,
+                                        300000);
 
                                 if (progressHandle != null) {
                                     progressHandle.close();
@@ -342,17 +331,13 @@ public class BoundedAcquisitionWorkflow {
                                     logger.info("Acquisition completed successfully");
                                 } else if (finalState == MicroscopeSocketClient.AcquisitionState.CANCELLED) {
                                     logger.warn("Acquisition was cancelled");
-                                    Platform.runLater(() ->
-                                            UIFunctions.notifyUserOfError(
-                                                    "Acquisition was cancelled",
-                                                    "Acquisition Cancelled"
-                                            )
-                                    );
+                                    Platform.runLater(() -> UIFunctions.notifyUserOfError(
+                                            "Acquisition was cancelled", "Acquisition Cancelled"));
                                     throw new java.util.concurrent.CancellationException("Acquisition was cancelled");
                                 } else if (finalState == MicroscopeSocketClient.AcquisitionState.FAILED) {
                                     String failureMessage = socketClient.getLastFailureMessage();
-                                    throw new RuntimeException("Acquisition failed: " +
-                                            (failureMessage != null ? failureMessage : "Unknown error"));
+                                    throw new RuntimeException("Acquisition failed: "
+                                            + (failureMessage != null ? failureMessage : "Unknown error"));
                                 }
 
                             } catch (java.util.concurrent.CancellationException e) {
@@ -367,92 +352,85 @@ public class BoundedAcquisitionWorkflow {
                         // Restore live viewing and release acquisition lock when acquisition completes
                         // (stitching continues in background but does not use the stage)
                         acquisitionFuture.whenComplete((ignored0, ex0) -> {
-                                MicroscopeController.getInstance().restoreLiveViewState(liveState);
-                                MicroscopeController.getInstance().setAcquisitionActive(false);
+                            MicroscopeController.getInstance().restoreLiveViewState(liveState);
+                            MicroscopeController.getInstance().setAcquisitionActive(false);
                         });
 
                         // Handle stitching after acquisition
-                        acquisitionFuture.thenCompose(ignored -> {
-                            CompletableFuture<Void> stitchFuture = StitchingHelper.performRegionStitching(
-                                    boundsMode,
-                                    new qupath.ext.qpsc.ui.SampleSetupController.SampleSetupResult(
-                                            result.sampleName(),
-                                            result.projectsFolder(),
-                                            result.modality(),
-                                            result.objective(),
-                                            result.detector()
-                                    ),
-                                    modeWithIndex,
-                                    angleExposures,
-                                    finalWSI_pixelSize_um,
-                                    qupathGUI,
-                                    project,
-                                    STITCH_EXECUTOR,
-                                    modalityHandler,
-                                    actualSampleName,  // Use derived sample name for correct path
-                                    actualProjectsFolder  // Use derived projectsFolder for correct path
-                            ).thenRun(() -> {
-                                // Play beep to alert user that workflow is complete
-                                UIFunctions.playWorkflowCompletionBeep();
+                        acquisitionFuture
+                                .thenCompose(ignored -> {
+                                    CompletableFuture<Void> stitchFuture = StitchingHelper.performRegionStitching(
+                                                    boundsMode,
+                                                    new qupath.ext.qpsc.ui.SampleSetupController.SampleSetupResult(
+                                                            result.sampleName(),
+                                                            result.projectsFolder(),
+                                                            result.modality(),
+                                                            result.objective(),
+                                                            result.detector()),
+                                                    modeWithIndex,
+                                                    angleExposures,
+                                                    finalWSI_pixelSize_um,
+                                                    qupathGUI,
+                                                    project,
+                                                    STITCH_EXECUTOR,
+                                                    modalityHandler,
+                                                    actualSampleName, // Use derived sample name for correct path
+                                                    actualProjectsFolder // Use derived projectsFolder for correct path
+                                                    )
+                                            .thenRun(() -> {
+                                                // Play beep to alert user that workflow is complete
+                                                UIFunctions.playWorkflowCompletionBeep();
 
-                                Platform.runLater(() ->
-                                        qupath.fx.dialogs.Dialogs.showInfoNotification(
-                                                "Stitching complete",
-                                                angleExposures.size() > 1
-                                                        ? "All angles stitched successfully"
-                                                        : "Stitching complete"
-                                        )
-                                );
-                            }).exceptionally(ex -> {
-                                logger.error("Stitching failed", ex);
-                                Platform.runLater(() ->
-                                        UIFunctions.notifyUserOfError(
-                                                "Stitching failed:\n" + ex.getMessage(),
-                                                "Stitching Error"
-                                        )
-                                );
-                                return null;
-                            });
+                                                Platform.runLater(() -> qupath.fx.dialogs.Dialogs.showInfoNotification(
+                                                        "Stitching complete",
+                                                        angleExposures.size() > 1
+                                                                ? "All angles stitched successfully"
+                                                                : "Stitching complete"));
+                                            })
+                                            .exceptionally(ex -> {
+                                                logger.error("Stitching failed", ex);
+                                                Platform.runLater(() -> UIFunctions.notifyUserOfError(
+                                                        "Stitching failed:\n" + ex.getMessage(), "Stitching Error"));
+                                                return null;
+                                            });
 
-                            // Handle cleanup after stitching
-                            stitchFuture.thenRun(() -> {
-                                String handling = QPPreferenceDialog.getTileHandlingMethodProperty();
-                                if ("Delete".equals(handling)) {
-                                    TileProcessingUtilities.deleteTilesAndFolder(tempTileDir);
-                                } else if ("Zip".equals(handling)) {
-                                    TileProcessingUtilities.zipTilesAndMove(tempTileDir);
-                                    TileProcessingUtilities.deleteTilesAndFolder(tempTileDir);
-                                }
-                            });
+                                    // Handle cleanup after stitching
+                                    stitchFuture.thenRun(() -> {
+                                        String handling = QPPreferenceDialog.getTileHandlingMethodProperty();
+                                        if ("Delete".equals(handling)) {
+                                            TileProcessingUtilities.deleteTilesAndFolder(tempTileDir);
+                                        } else if ("Zip".equals(handling)) {
+                                            TileProcessingUtilities.zipTilesAndMove(tempTileDir);
+                                            TileProcessingUtilities.deleteTilesAndFolder(tempTileDir);
+                                        }
+                                    });
 
-                            return stitchFuture;
-                        }).exceptionally(ex -> {
-                            Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-                            if (cause instanceof java.util.concurrent.CancellationException) {
-                                logger.info("Acquisition workflow cancelled by user");
-                            } else {
-                                logger.error("Workflow failed", ex);
-                                String errorMessage = cause.getMessage() != null ? cause.getMessage() : ex.getMessage();
-                                Platform.runLater(() ->
-                                        UIFunctions.notifyUserOfError(errorMessage, "Acquisition Error")
-                                );
-                            }
-                            return null;
-                        });
-
-                    }).exceptionally(ex -> {
+                                    return stitchFuture;
+                                })
+                                .exceptionally(ex -> {
+                                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                                    if (cause instanceof java.util.concurrent.CancellationException) {
+                                        logger.info("Acquisition workflow cancelled by user");
+                                    } else {
+                                        logger.error("Workflow failed", ex);
+                                        String errorMessage =
+                                                cause.getMessage() != null ? cause.getMessage() : ex.getMessage();
+                                        Platform.runLater(
+                                                () -> UIFunctions.notifyUserOfError(errorMessage, "Acquisition Error"));
+                                    }
+                                    return null;
+                                });
+                    })
+                    .exceptionally(ex -> {
                         Throwable cause = ex.getCause();
                         String message = cause != null ? cause.getMessage() : ex.getMessage();
 
-                        if (message != null && (message.contains("BACKGROUND_MISMATCH_CANCELLED") ||
-                                               message.contains("ANGLE_SELECTION_CANCELLED"))) {
+                        if (message != null
+                                && (message.contains("BACKGROUND_MISMATCH_CANCELLED")
+                                        || message.contains("ANGLE_SELECTION_CANCELLED"))) {
                             logger.info("Acquisition cancelled by user: {}", message);
-                            Platform.runLater(() ->
-                                    qupath.fx.dialogs.Dialogs.showInfoNotification(
-                                            "Acquisition Cancelled",
-                                            "Acquisition was cancelled by user request"
-                                    )
-                            );
+                            Platform.runLater(() -> qupath.fx.dialogs.Dialogs.showInfoNotification(
+                                    "Acquisition Cancelled", "Acquisition was cancelled by user request"));
                         } else {
                             logger.error("Workflow failed", ex);
                             String msg = ex.getMessage();
@@ -460,13 +438,10 @@ public class BoundedAcquisitionWorkflow {
                                 msg = cause != null ? cause.getMessage() : "Unknown error occurred";
                             }
                             final String finalErrorMsg = msg;
-                            Platform.runLater(() ->
-                                    UIFunctions.notifyUserOfError(finalErrorMsg, "Acquisition Error")
-                            );
+                            Platform.runLater(() -> UIFunctions.notifyUserOfError(finalErrorMsg, "Acquisition Error"));
                         }
                         return null;
                     });
-
-                });
+        });
     }
 }
