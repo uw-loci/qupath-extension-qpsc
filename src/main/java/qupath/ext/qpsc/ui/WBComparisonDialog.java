@@ -1,5 +1,11 @@
 package qupath.ext.qpsc.ui;
 
+import java.io.File;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -7,20 +13,12 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.prefs.PathPrefs;
-
-import java.io.File;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Configuration dialog for the WB Comparison Test workflow.
@@ -76,14 +74,24 @@ public class WBComparisonDialog {
      * Result record containing all dialog parameters.
      */
     public record WBComparisonParams(
-            double blankX, double blankY, double blankZ,
-            double tissueX, double tissueY, double tissueZ,
-            int gridCols, int gridRows,
-            boolean doCameraAWB, boolean doSimple, boolean doPerAngle,
-            String sampleName, String outputFolder,
-            double overlapPercent, double targetIntensity,
-            int afTiles, int afSteps, double afRange
-    ) {
+            double blankX,
+            double blankY,
+            double blankZ,
+            double tissueX,
+            double tissueY,
+            double tissueZ,
+            int gridCols,
+            int gridRows,
+            boolean doCameraAWB,
+            boolean doSimple,
+            boolean doPerAngle,
+            String sampleName,
+            String outputFolder,
+            double overlapPercent,
+            double targetIntensity,
+            int afTiles,
+            int afSteps,
+            double afRange) {
         /**
          * Returns the list of selected WB mode names.
          * camera_awb runs LAST because it activates AWB Continuous on the camera,
@@ -110,10 +118,7 @@ public class WBComparisonDialog {
         Platform.runLater(() -> {
             try {
                 Dialog<WBComparisonParams> dialog = buildDialog();
-                dialog.showAndWait().ifPresentOrElse(
-                        future::complete,
-                        () -> future.complete(null)
-                );
+                dialog.showAndWait().ifPresentOrElse(future::complete, () -> future.complete(null));
             } catch (Exception e) {
                 logger.error("Failed to show WB Comparison dialog", e);
                 future.completeExceptionally(e);
@@ -195,9 +200,8 @@ public class WBComparisonDialog {
         colsSpinner.setPrefWidth(80);
         rowsSpinner.setPrefWidth(80);
 
-        HBox gridSizeBox = new HBox(6,
-                new Label("Grid size:"),
-                colsSpinner, new Label("x"), rowsSpinner, new Label("tiles"));
+        HBox gridSizeBox =
+                new HBox(6, new Label("Grid size:"), colsSpinner, new Label("x"), rowsSpinner, new Label("tiles"));
         gridSizeBox.setAlignment(Pos.CENTER_LEFT);
 
         TitledPane positionsPane = new TitledPane("Positions", new VBox(8, posGrid, gridSizeBox));
@@ -205,14 +209,17 @@ public class WBComparisonDialog {
 
         // === WB Mode checkboxes ===
         CheckBox cbCameraAWB = new CheckBox("Camera AWB");
+        cbCameraAWB.setTooltip(new Tooltip(
+                "Camera AWB must be set manually in MicroManager's Device Property Browser\n"
+                + "before running this comparison. Cannot be controlled programmatically.\n"
+                + "To clear AWB: restart MicroManager and wait ~30 seconds."));
         CheckBox cbSimple = new CheckBox("Simple");
         CheckBox cbPerAngle = new CheckBox("Per-Angle (PPM)");
         cbCameraAWB.setSelected(true);
         cbSimple.setSelected(true);
         cbPerAngle.setSelected(true);
 
-        TitledPane modesPane = new TitledPane("White Balance Modes",
-                new VBox(4, cbCameraAWB, cbSimple, cbPerAngle));
+        TitledPane modesPane = new TitledPane("White Balance Modes", new VBox(4, cbCameraAWB, cbSimple, cbPerAngle));
         modesPane.setCollapsible(false);
 
         // === Output settings ===
@@ -328,22 +335,20 @@ public class WBComparisonDialog {
 
                 boolean anyMode = cbCameraAWB.isSelected() || cbSimple.isSelected() || cbPerAngle.isSelected();
                 if (!anyMode) {
-                    qupath.fx.dialogs.Dialogs.showErrorMessage("WB Comparison",
-                            "Please select at least one white balance mode.");
+                    qupath.fx.dialogs.Dialogs.showErrorMessage(
+                            "WB Comparison", "Please select at least one white balance mode.");
                     return null;
                 }
 
                 String sampleName = sampleNameField.getText().trim();
                 if (sampleName.isEmpty()) {
-                    qupath.fx.dialogs.Dialogs.showErrorMessage("WB Comparison",
-                            "Please enter a sample name.");
+                    qupath.fx.dialogs.Dialogs.showErrorMessage("WB Comparison", "Please enter a sample name.");
                     return null;
                 }
 
                 String outputFolder = outputFolderField.getText().trim();
                 if (outputFolder.isEmpty()) {
-                    qupath.fx.dialogs.Dialogs.showErrorMessage("WB Comparison",
-                            "Please select an output folder.");
+                    qupath.fx.dialogs.Dialogs.showErrorMessage("WB Comparison", "Please select an output folder.");
                     return null;
                 }
 
@@ -363,17 +368,28 @@ public class WBComparisonDialog {
                 afRangeProp.set(afRange);
 
                 return new WBComparisonParams(
-                        blankX, blankY, blankZ, tissueX, tissueY, tissueZ,
-                        cols, rows,
-                        cbCameraAWB.isSelected(), cbSimple.isSelected(), cbPerAngle.isSelected(),
-                        sampleName, outputFolder,
-                        overlap, targetIntensity,
-                        afTilesSpinner.getValue(), afStepsSpinner.getValue(), afRange
-                );
+                        blankX,
+                        blankY,
+                        blankZ,
+                        tissueX,
+                        tissueY,
+                        tissueZ,
+                        cols,
+                        rows,
+                        cbCameraAWB.isSelected(),
+                        cbSimple.isSelected(),
+                        cbPerAngle.isSelected(),
+                        sampleName,
+                        outputFolder,
+                        overlap,
+                        targetIntensity,
+                        afTilesSpinner.getValue(),
+                        afStepsSpinner.getValue(),
+                        afRange);
 
             } catch (NumberFormatException ex) {
-                qupath.fx.dialogs.Dialogs.showErrorMessage("WB Comparison",
-                        "Invalid numeric value: " + ex.getMessage());
+                qupath.fx.dialogs.Dialogs.showErrorMessage(
+                        "WB Comparison", "Invalid numeric value: " + ex.getMessage());
                 return null;
             }
         });
@@ -398,8 +414,8 @@ public class WBComparisonDialog {
             logger.info("Filled current stage position: ({}, {}, {})", pos[0], pos[1], z);
         } catch (Exception e) {
             logger.error("Failed to get current stage position", e);
-            qupath.fx.dialogs.Dialogs.showErrorMessage("Stage Position",
-                    "Could not read current stage position: " + e.getMessage());
+            qupath.fx.dialogs.Dialogs.showErrorMessage(
+                    "Stage Position", "Could not read current stage position: " + e.getMessage());
         }
     }
 

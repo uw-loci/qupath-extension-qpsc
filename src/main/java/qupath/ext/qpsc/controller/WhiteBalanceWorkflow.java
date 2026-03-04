@@ -1,26 +1,22 @@
 package qupath.ext.qpsc.controller;
 
+import java.awt.Desktop;
+import java.io.File;
+import java.io.IOException;
+import java.util.Map;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.WhiteBalanceDialog;
 import qupath.fx.dialogs.Dialogs;
-
-import java.awt.Desktop;
-import java.io.File;
-import java.io.IOException;
-import java.util.Map;
 
 /**
  * Workflow for running JAI camera white balance calibration.
@@ -77,41 +73,10 @@ public class WhiteBalanceWorkflow {
                         return;
                     }
 
-                    // Camera AWB is a special case - no output directory needed
-                    if (result.isCameraAWB()) {
-                        Platform.runLater(() -> {
-                            var params = result.getCameraAWBParams();
-                            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-                            confirm.setTitle("Confirm Camera AWB");
-                            confirm.setHeaderText("Ready to run Camera Auto White Balance");
-                            confirm.setContentText(String.format(
-                                    "Mode: Camera AWB (one-shot auto)\n" +
-                                    "Objective: %s\n" +
-                                    "Rotation: %.1f deg (uncrossed)\n\n" +
-                                    "IMPORTANT: Ensure a neutral gray/white target or blank slide\n" +
-                                    "is in the field of view before continuing.\n\n" +
-                                    "The camera will rotate to uncrossed position,\n" +
-                                    "run auto white balance, then disable AWB.\n" +
-                                    "Estimated time: ~10 seconds",
-                                    params.objective() != null ? params.objective() : "unknown",
-                                    params.rotationAngle()
-                            ));
-
-                            confirm.showAndWait().ifPresent(response -> {
-                                if (response == ButtonType.OK) {
-                                    runCameraAWBCalibration(client, params);
-                                } else {
-                                    logger.info("Camera AWB cancelled by user at confirmation");
-                                }
-                            });
-                        });
-                        return;
-                    }
-
                     // Validate output directory (for Simple and PPM modes)
-                    String outputPath = result.isSimple() ?
-                            result.getSimpleParams().outputPath() :
-                            result.getPPMParams().outputPath();
+                    String outputPath = result.isSimple()
+                            ? result.getSimpleParams().outputPath()
+                            : result.getPPMParams().outputPath();
 
                     File outputDir = new File(outputPath);
                     if (!outputDir.exists()) {
@@ -141,45 +106,42 @@ public class WhiteBalanceWorkflow {
                         if (result.isSimple()) {
                             var params = result.getSimpleParams();
                             details.append(String.format(
-                                    "Mode: Simple White Balance\n" +
-                                    "Objective: %s\n" +
-                                    "Base Exposure: %.1f ms\n" +
-                                    "Target Intensity: %.0f\n" +
-                                    "Tolerance: %.1f\n",
+                                    "Mode: Simple White Balance\n" + "Objective: %s\n"
+                                            + "Base Exposure: %.1f ms\n"
+                                            + "Target Intensity: %.0f\n"
+                                            + "Tolerance: %.1f\n",
                                     params.objective() != null ? params.objective() : "unknown",
                                     params.baseExposureMs(),
                                     params.targetIntensity(),
-                                    params.tolerance()
-                            ));
+                                    params.tolerance()));
                         } else {
                             var params = result.getPPMParams();
                             details.append(String.format(
-                                    "Mode: PPM White Balance (4 angles)\n" +
-                                    "Objective: %s\n" +
-                                    "Positive (%.1f deg): %.1f ms\n" +
-                                    "Negative (%.1f deg): %.1f ms\n" +
-                                    "Crossed (%.1f deg): %.1f ms\n" +
-                                    "Uncrossed (%.1f deg): %.1f ms\n" +
-                                    "Target Intensity: %.0f\n" +
-                                    "Tolerance: %.1f\n",
+                                    "Mode: PPM White Balance (4 angles)\n" + "Objective: %s\n"
+                                            + "Positive (%.1f deg): %.1f ms\n"
+                                            + "Negative (%.1f deg): %.1f ms\n"
+                                            + "Crossed (%.1f deg): %.1f ms\n"
+                                            + "Uncrossed (%.1f deg): %.1f ms\n"
+                                            + "Target Intensity: %.0f\n"
+                                            + "Tolerance: %.1f\n",
                                     params.objective() != null ? params.objective() : "unknown",
-                                    params.positiveAngle(), params.positiveExposureMs(),
-                                    params.negativeAngle(), params.negativeExposureMs(),
-                                    params.crossedAngle(), params.crossedExposureMs(),
-                                    params.uncrossedAngle(), params.uncrossedExposureMs(),
+                                    params.positiveAngle(),
+                                    params.positiveExposureMs(),
+                                    params.negativeAngle(),
+                                    params.negativeExposureMs(),
+                                    params.crossedAngle(),
+                                    params.crossedExposureMs(),
+                                    params.uncrossedAngle(),
+                                    params.uncrossedExposureMs(),
                                     params.targetIntensity(),
-                                    params.tolerance()
-                            ));
+                                    params.tolerance()));
                         }
 
                         details.append(String.format(
-                                "\nOutput: %s\n" +
-                                "Estimated time: %s\n\n" +
-                                "IMPORTANT: Ensure a neutral gray/white target or blank slide\n" +
-                                "is in the field of view before continuing.",
-                                outputPath,
-                                timeEstimate
-                        ));
+                                "\nOutput: %s\n" + "Estimated time: %s\n\n"
+                                        + "IMPORTANT: Ensure a neutral gray/white target or blank slide\n"
+                                        + "is in the field of view before continuing.",
+                                outputPath, timeEstimate));
 
                         confirm.setContentText(details.toString());
 
@@ -199,8 +161,7 @@ public class WhiteBalanceWorkflow {
                 .exceptionally(ex -> {
                     logger.error("Error in white balance workflow", ex);
                     Platform.runLater(() -> {
-                        Dialogs.showErrorMessage("White Balance Error",
-                                "Error during calibration: " + ex.getMessage());
+                        Dialogs.showErrorMessage("White Balance Error", "Error during calibration: " + ex.getMessage());
                     });
                     return null;
                 });
@@ -209,8 +170,7 @@ public class WhiteBalanceWorkflow {
     /**
      * Runs simple white balance calibration.
      */
-    private static void runSimpleCalibration(MicroscopeSocketClient client,
-                                             WhiteBalanceDialog.SimpleWBParams params) {
+    private static void runSimpleCalibration(MicroscopeSocketClient client, WhiteBalanceDialog.SimpleWBParams params) {
         // Show progress dialog
         Stage progressStage = new Stage();
         progressStage.initModality(Modality.NONE);
@@ -242,63 +202,72 @@ public class WhiteBalanceWorkflow {
         progressStage.show();
 
         // Run calibration in background thread
-        Thread calibrationThread = new Thread(() -> {
-            // Stop all live viewing before starting calibration
-            MicroscopeController.LiveViewState liveViewState =
-                    MicroscopeController.getInstance().stopAllLiveViewing();
+        Thread calibrationThread = new Thread(
+                () -> {
+                    // Stop all live viewing before starting calibration
+                    MicroscopeController.LiveViewState liveViewState =
+                            MicroscopeController.getInstance().stopAllLiveViewing();
 
-            try {
-                var advanced = params.advanced();
-                String yamlPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                    try {
+                        var advanced = params.advanced();
+                        String yamlPath =
+                                qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
 
-                // Resolve modality from config so calibration results are saved to YAML
-                String modality = null;
-                try {
-                    var configManager = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(yamlPath);
-                    var modalities = configManager.getAvailableModalities();
-                    modality = modalities.contains("ppm") ? "ppm" : modalities.iterator().next();
-                } catch (Exception e2) {
-                    logger.warn("Could not resolve modality from config, calibration won't be saved to YAML: {}", e2.getMessage());
-                }
+                        // Resolve modality from config so calibration results are saved to YAML
+                        String modality = null;
+                        try {
+                            var configManager = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(yamlPath);
+                            var modalities = configManager.getAvailableModalities();
+                            modality = modalities.contains("ppm")
+                                    ? "ppm"
+                                    : modalities.iterator().next();
+                        } catch (Exception e2) {
+                            logger.warn(
+                                    "Could not resolve modality from config, calibration won't be saved to YAML: {}",
+                                    e2.getMessage());
+                        }
 
-                logger.info("Simple WB calibration: objective={}, detector={}, modality={}", params.objective(), params.detector(), modality);
+                        logger.info(
+                                "Simple WB calibration: objective={}, detector={}, modality={}",
+                                params.objective(),
+                                params.detector(),
+                                modality);
 
-                MicroscopeSocketClient.WhiteBalanceResult result = client.runSimpleWhiteBalance(
-                        params.outputPath(),
-                        params.baseExposureMs(),
-                        params.targetIntensity(),
-                        params.tolerance(),
-                        advanced.maxGainDb(),
-                        advanced.gainThresholdRatio(),
-                        advanced.maxIterations(),
-                        advanced.calibrateBlackLevel(),
-                        advanced.baseGain(),
-                        advanced.exposureSoftCapMs(),
-                        advanced.boostedMaxGainDb(),
-                        yamlPath,
-                        params.objective(),
-                        params.detector(),
-                        modality
-                );
+                        MicroscopeSocketClient.WhiteBalanceResult result = client.runSimpleWhiteBalance(
+                                params.outputPath(),
+                                params.baseExposureMs(),
+                                params.targetIntensity(),
+                                params.tolerance(),
+                                advanced.maxGainDb(),
+                                advanced.gainThresholdRatio(),
+                                advanced.maxIterations(),
+                                advanced.calibrateBlackLevel(),
+                                advanced.baseGain(),
+                                advanced.exposureSoftCapMs(),
+                                advanced.boostedMaxGainDb(),
+                                yamlPath,
+                                params.objective(),
+                                params.detector(),
+                                modality);
 
-                Platform.runLater(() -> {
-                    progressStage.close();
-                    showSimpleResults(result, params.outputPath());
-                });
+                        Platform.runLater(() -> {
+                            progressStage.close();
+                            showSimpleResults(result, params.outputPath());
+                        });
 
-            } catch (Exception e) {
-                logger.error("Simple white balance failed", e);
-                Platform.runLater(() -> {
-                    progressStage.close();
-                    Dialogs.showErrorMessage("White Balance Failed",
-                            "Calibration failed: " + e.getMessage());
-                });
-            } finally {
-                // Restore live viewing state after calibration completes
-                MicroscopeController.getInstance().restoreLiveViewState(liveViewState);
-            }
-            // Don't close client - it's the singleton's shared connection
-        }, "WhiteBalanceCalibration");
+                    } catch (Exception e) {
+                        logger.error("Simple white balance failed", e);
+                        Platform.runLater(() -> {
+                            progressStage.close();
+                            Dialogs.showErrorMessage("White Balance Failed", "Calibration failed: " + e.getMessage());
+                        });
+                    } finally {
+                        // Restore live viewing state after calibration completes
+                        MicroscopeController.getInstance().restoreLiveViewState(liveViewState);
+                    }
+                    // Don't close client - it's the singleton's shared connection
+                },
+                "WhiteBalanceCalibration");
         calibrationThread.setDaemon(true);
         calibrationThread.start();
     }
@@ -306,8 +275,7 @@ public class WhiteBalanceWorkflow {
     /**
      * Runs PPM white balance calibration (4 angles).
      */
-    private static void runPPMCalibration(MicroscopeSocketClient client,
-                                          WhiteBalanceDialog.PPMWBParams params) {
+    private static void runPPMCalibration(MicroscopeSocketClient client, WhiteBalanceDialog.PPMWBParams params) {
         // Show progress dialog
         Stage progressStage = new Stage();
         progressStage.initModality(Modality.NONE);
@@ -329,8 +297,8 @@ public class WhiteBalanceWorkflow {
         ProgressIndicator progress = new ProgressIndicator();
         progress.setStyle("-fx-min-width: 50px; -fx-min-height: 50px;");
 
-        Label detailLabel = new Label("Calibrating 4 PPM angles:\n" +
-                "Positive (7 deg) -> Negative (-7 deg) -> Crossed (0 deg) -> Uncrossed (90 deg)");
+        Label detailLabel = new Label("Calibrating 4 PPM angles:\n"
+                + "Positive (7 deg) -> Negative (-7 deg) -> Crossed (0 deg) -> Uncrossed (90 deg)");
         detailLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
         detailLabel.setWrapText(true);
 
@@ -341,186 +309,81 @@ public class WhiteBalanceWorkflow {
         progressStage.show();
 
         // Run calibration in background thread
-        Thread calibrationThread = new Thread(() -> {
-            // Stop all live viewing before starting calibration
-            MicroscopeController.LiveViewState liveViewState =
-                    MicroscopeController.getInstance().stopAllLiveViewing();
+        Thread calibrationThread = new Thread(
+                () -> {
+                    // Stop all live viewing before starting calibration
+                    MicroscopeController.LiveViewState liveViewState =
+                            MicroscopeController.getInstance().stopAllLiveViewing();
 
-            try {
-                var advanced = params.advanced();
-                String yamlPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                    try {
+                        var advanced = params.advanced();
+                        String yamlPath =
+                                qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
 
-                logger.info("WB calibration: objective={}, detector={}", params.objective(), params.detector());
+                        logger.info("WB calibration: objective={}, detector={}", params.objective(), params.detector());
 
-                Map<String, MicroscopeSocketClient.WhiteBalanceResult> results = client.runPPMWhiteBalance(
-                        params.outputPath(),
-                        params.positiveAngle(), params.positiveExposureMs(), params.positiveTarget(),
-                        params.negativeAngle(), params.negativeExposureMs(), params.negativeTarget(),
-                        params.crossedAngle(), params.crossedExposureMs(), params.crossedTarget(),
-                        params.uncrossedAngle(), params.uncrossedExposureMs(), params.uncrossedTarget(),
-                        params.targetIntensity(),
-                        params.tolerance(),
-                        advanced.maxGainDb(),
-                        advanced.gainThresholdRatio(),
-                        advanced.maxIterations(),
-                        advanced.calibrateBlackLevel(),
-                        advanced.baseGain(),
-                        advanced.exposureSoftCapMs(),
-                        advanced.boostedMaxGainDb(),
-                        yamlPath,
-                        params.objective(),
-                        params.detector()
-                );
+                        Map<String, MicroscopeSocketClient.WhiteBalanceResult> results = client.runPPMWhiteBalance(
+                                params.outputPath(),
+                                params.positiveAngle(),
+                                params.positiveExposureMs(),
+                                params.positiveTarget(),
+                                params.negativeAngle(),
+                                params.negativeExposureMs(),
+                                params.negativeTarget(),
+                                params.crossedAngle(),
+                                params.crossedExposureMs(),
+                                params.crossedTarget(),
+                                params.uncrossedAngle(),
+                                params.uncrossedExposureMs(),
+                                params.uncrossedTarget(),
+                                params.targetIntensity(),
+                                params.tolerance(),
+                                advanced.maxGainDb(),
+                                advanced.gainThresholdRatio(),
+                                advanced.maxIterations(),
+                                advanced.calibrateBlackLevel(),
+                                advanced.baseGain(),
+                                advanced.exposureSoftCapMs(),
+                                advanced.boostedMaxGainDb(),
+                                yamlPath,
+                                params.objective(),
+                                params.detector());
 
-                Platform.runLater(() -> {
-                    progressStage.close();
-                    showPPMResults(results, params.outputPath());
-                });
+                        Platform.runLater(() -> {
+                            progressStage.close();
+                            showPPMResults(results, params.outputPath());
+                        });
 
-            } catch (Exception e) {
-                logger.error("PPM white balance failed", e);
-                Platform.runLater(() -> {
-                    progressStage.close();
-                    Dialogs.showErrorMessage("PPM White Balance Failed",
-                            "Calibration failed: " + e.getMessage());
-                });
-            } finally {
-                // Restore live viewing state after calibration completes
-                MicroscopeController.getInstance().restoreLiveViewState(liveViewState);
-            }
-            // Don't close client - it's the singleton's shared connection
-        }, "PPMWhiteBalanceCalibration");
+                    } catch (Exception e) {
+                        logger.error("PPM white balance failed", e);
+                        Platform.runLater(() -> {
+                            progressStage.close();
+                            Dialogs.showErrorMessage(
+                                    "PPM White Balance Failed", "Calibration failed: " + e.getMessage());
+                        });
+                    } finally {
+                        // Restore live viewing state after calibration completes
+                        MicroscopeController.getInstance().restoreLiveViewState(liveViewState);
+                    }
+                    // Don't close client - it's the singleton's shared connection
+                },
+                "PPMWhiteBalanceCalibration");
         calibrationThread.setDaemon(true);
         calibrationThread.start();
     }
 
-    /**
-     * Runs Camera AWB calibration (one-shot auto white balance at uncrossed position).
-     */
-    private static void runCameraAWBCalibration(MicroscopeSocketClient client,
-                                                 WhiteBalanceDialog.CameraAWBParams params) {
-        // Show progress dialog
-        Stage progressStage = new Stage();
-        progressStage.initModality(Modality.NONE);
-        qupath.lib.gui.QuPathGUI gui = qupath.lib.gui.QuPathGUI.getInstance();
-        if (gui != null && gui.getStage() != null) {
-            progressStage.initOwner(gui.getStage());
-        }
-        progressStage.setTitle("Camera AWB");
-        progressStage.setResizable(false);
-
-        VBox root = new VBox(15);
-        root.setPadding(new Insets(20));
-        root.setAlignment(Pos.CENTER);
-        root.setPrefWidth(400);
-
-        Label statusLabel = new Label("Running camera auto white balance...");
-        statusLabel.setStyle("-fx-font-size: 14px;");
-
-        ProgressIndicator progress = new ProgressIndicator();
-        progress.setStyle("-fx-min-width: 50px; -fx-min-height: 50px;");
-
-        Label detailLabel = new Label("Rotating to uncrossed position, resetting gains, then running AWB");
-        detailLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
-
-        root.getChildren().addAll(statusLabel, progress, detailLabel);
-
-        Scene scene = new Scene(root);
-        progressStage.setScene(scene);
-        progressStage.show();
-
-        // Run in background thread
-        Thread calibrationThread = new Thread(() -> {
-            // Stop all live viewing before starting
-            MicroscopeController.LiveViewState liveViewState =
-                    MicroscopeController.getInstance().stopAllLiveViewing();
-
-            try {
-                // Step 1: Rotate to uncrossed position (90deg)
-                logger.info("Camera AWB: Rotating to {} deg (uncrossed)",
-                        params.rotationAngle());
-                Platform.runLater(() -> detailLabel.setText(
-                        "Step 1/4: Rotating to uncrossed position..."));
-                client.moveStageR(params.rotationAngle());
-
-                // Brief pause for rotation to settle
-                Thread.sleep(1000);
-
-                // Step 2a: Reset gains to neutral before AWB so camera
-                // starts from a known state (avoids gain contamination from
-                // previous WB modes)
-                logger.info("Camera AWB: Resetting gains to neutral before AWB");
-                Platform.runLater(() -> detailLabel.setText(
-                        "Step 2/4: Resetting gains to neutral..."));
-                try {
-                    client.setGains(new float[]{1.0f, 1.0f, 1.0f});
-                } catch (Exception e) {
-                    logger.warn("Could not reset gains before AWB: {}", e.getMessage());
-                }
-
-                // Step 2b: Run one-shot auto white balance (mode=2)
-                logger.info("Camera AWB: Running one-shot auto white balance");
-                Platform.runLater(() -> detailLabel.setText(
-                        "Step 3/4: Running camera auto white balance..."));
-                client.setWhiteBalanceMode(2);  // 2 = Once (one-shot auto)
-
-                // Wait for camera AWB to complete
-                Thread.sleep(2000);
-
-                // Step 4: Disable AWB so it doesn't change during acquisition
-                logger.info("Camera AWB: Disabling auto white balance");
-                Platform.runLater(() -> detailLabel.setText(
-                        "Step 4/4: Disabling auto WB (camera remembers gains)..."));
-                client.setWhiteBalanceMode(0);  // 0 = Off
-
-                logger.info("Camera AWB calibration completed successfully");
-
-                Platform.runLater(() -> {
-                    progressStage.close();
-
-                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                    alert.setTitle("Camera AWB Complete");
-                    alert.setHeaderText("Camera Auto White Balance Completed");
-                    alert.setContentText(
-                            "Camera AWB has been applied successfully.\n\n" +
-                            "The camera's internal R/B gains have been adjusted\n" +
-                            "based on the current scene at uncrossed position.\n\n" +
-                            "WARNING: These gains persist in the camera until\n" +
-                            "power-cycled or AWB is run again. Switching to Simple\n" +
-                            "or Per-angle WB will NOT clear the internal AWB gains.\n" +
-                            "Run Camera AWB on a neutral target to reset them.\n\n" +
-                            "Note: Camera AWB gains are NOT saved to YAML config.\n" +
-                            "For reproducible results, use Simple or PPM WB instead."
-                    );
-                    alert.initModality(Modality.NONE);
-                    alert.getButtonTypes().setAll(ButtonType.CLOSE);
-                    alert.show();
-                });
-
-            } catch (Exception e) {
-                logger.error("Camera AWB calibration failed", e);
-                Platform.runLater(() -> {
-                    progressStage.close();
-                    Dialogs.showErrorMessage("Camera AWB Failed",
-                            "Auto white balance failed: " + e.getMessage());
-                });
-            } finally {
-                // Restore live viewing state
-                MicroscopeController.getInstance().restoreLiveViewState(liveViewState);
-            }
-        }, "CameraAWBCalibration");
-        calibrationThread.setDaemon(true);
-        calibrationThread.start();
-    }
+    // NOTE: runCameraAWBCalibration() was removed -- JAI hardware AWB cannot be
+    // reliably controlled through Pycromanager. The isCameraAWB() branch above
+    // now shows instructions for manual setup in MicroManager.
 
     /**
      * Shows results dialog for simple white balance.
      */
-    private static void showSimpleResults(MicroscopeSocketClient.WhiteBalanceResult result,
-                                          String outputPath) {
+    private static void showSimpleResults(MicroscopeSocketClient.WhiteBalanceResult result, String outputPath) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("White Balance Complete");
-        alert.setHeaderText(result.converged ? "Calibration Converged" : "Calibration Complete (did not fully converge)");
+        alert.setHeaderText(
+                result.converged ? "Calibration Converged" : "Calibration Complete (did not fully converge)");
 
         // Check if any gains are not 1.0 (meaning gain was applied)
         boolean hasGain = result.unifiedGain != 1.0 || result.analogRed != 1.0 || result.analogBlue != 1.0;
@@ -551,15 +414,14 @@ public class WhiteBalanceWorkflow {
     /**
      * Shows results dialog for PPM white balance.
      */
-    private static void showPPMResults(Map<String, MicroscopeSocketClient.WhiteBalanceResult> results,
-                                       String outputPath) {
+    private static void showPPMResults(
+            Map<String, MicroscopeSocketClient.WhiteBalanceResult> results, String outputPath) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("PPM White Balance Complete");
 
         boolean allConverged = results.values().stream().allMatch(r -> r.converged);
-        alert.setHeaderText(allConverged ?
-                "All Angles Converged" :
-                "Calibration Complete (some angles did not converge)");
+        alert.setHeaderText(
+                allConverged ? "All Angles Converged" : "Calibration Complete (some angles did not converge)");
 
         // Check if any gains are not 1.0
         boolean hasGain = results.values().stream()
@@ -574,13 +436,9 @@ public class WhiteBalanceWorkflow {
         for (String name : angleOrder) {
             MicroscopeSocketClient.WhiteBalanceResult r = results.get(name);
             if (r != null) {
-                content.append(String.format("%-10s %7.2f %7.2f %7.2f  %s\n",
-                        capitalize(name),
-                        r.exposureRed,
-                        r.exposureGreen,
-                        r.exposureBlue,
-                        r.converged ? "Yes" : "No"
-                ));
+                content.append(String.format(
+                        "%-10s %7.2f %7.2f %7.2f  %s\n",
+                        capitalize(name), r.exposureRed, r.exposureGreen, r.exposureBlue, r.converged ? "Yes" : "No"));
             }
         }
 
@@ -591,12 +449,8 @@ public class WhiteBalanceWorkflow {
             for (String name : angleOrder) {
                 MicroscopeSocketClient.WhiteBalanceResult r = results.get(name);
                 if (r != null) {
-                    content.append(String.format("%-10s %6.1fx %7.3f %7.3f\n",
-                            capitalize(name),
-                            r.unifiedGain,
-                            r.analogRed,
-                            r.analogBlue
-                    ));
+                    content.append(String.format(
+                            "%-10s %6.1fx %7.3f %7.3f\n", capitalize(name), r.unifiedGain, r.analogRed, r.analogBlue));
                 }
             }
         }
@@ -626,11 +480,10 @@ public class WhiteBalanceWorkflow {
         alert.getButtonTypes().add(openFolderButton);
 
         // Handle Open Folder without closing the dialog
-        alert.getDialogPane().lookupButton(openFolderButton).addEventFilter(
-                javafx.event.ActionEvent.ACTION, event -> {
-                    event.consume(); // Prevent dialog from closing
-                    openFolder(outputPath);
-                });
+        alert.getDialogPane().lookupButton(openFolderButton).addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            event.consume(); // Prevent dialog from closing
+            openFolder(outputPath);
+        });
     }
 
     /**
@@ -660,5 +513,4 @@ public class WhiteBalanceWorkflow {
         if (s == null || s.isEmpty()) return s;
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
-
 }

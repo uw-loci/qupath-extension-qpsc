@@ -705,7 +705,7 @@ public class ExistingImageAcquisitionController {
                 wbModeComboBox.setValue("Per-angle (PPM)");
             }
             wbModeComboBox.setTooltip(new Tooltip("White balance mode:\n" + "  Off - No white balance correction\n"
-                    + "  Camera AWB - Camera auto white balance at 90deg, then off\n"
+                    + "  Camera AWB - Set in MicroManager before acquisition; clear by restarting MM (wait 30s)\n"
                     + "  Simple (90deg) - Use 90deg R:G:B ratios, uniformly scaled per angle\n"
                     + "  Per-angle (PPM) - Independent calibration per angle (default)"));
 

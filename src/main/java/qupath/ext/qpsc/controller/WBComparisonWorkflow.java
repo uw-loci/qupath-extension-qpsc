@@ -1,5 +1,12 @@
 package qupath.ext.qpsc.controller;
 
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.*;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.stream.Collectors;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,25 +17,16 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
-import qupath.ext.qpsc.controller.workflow.StitchingHelper;
 import qupath.ext.qpsc.ui.WBComparisonDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
+import qupath.ext.qpsc.utilities.TileProcessingUtilities;
 import qupath.ext.qpsc.utilities.TilingRequest;
 import qupath.ext.qpsc.utilities.TilingUtilities;
-import qupath.ext.qpsc.utilities.TileProcessingUtilities;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
-
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.*;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.stream.Collectors;
 
 /**
  * WBComparisonWorkflow - Compares white balance modes under identical conditions.
@@ -71,25 +69,29 @@ public class WBComparisonWorkflow {
                         return;
                     }
 
-                    logger.info("WB Comparison parameters: modes={}, grid={}x{}, blank=({},{},{}), tissue=({},{},{})",
-                            params.selectedModes(), params.gridCols(), params.gridRows(),
-                            params.blankX(), params.blankY(), params.blankZ(),
-                            params.tissueX(), params.tissueY(), params.tissueZ());
+                    logger.info(
+                            "WB Comparison parameters: modes={}, grid={}x{}, blank=({},{},{}), tissue=({},{},{})",
+                            params.selectedModes(),
+                            params.gridCols(),
+                            params.gridRows(),
+                            params.blankX(),
+                            params.blankY(),
+                            params.blankZ(),
+                            params.tissueX(),
+                            params.tissueY(),
+                            params.tissueZ());
 
-                    CompletableFuture.runAsync(() -> executeWorkflow(params))
-                            .exceptionally(ex -> {
-                                logger.error("WB Comparison workflow failed", ex);
-                                Platform.runLater(() -> Dialogs.showErrorMessage(
-                                        "WB Comparison Error",
-                                        "Workflow failed: " + ex.getMessage()));
-                                return null;
-                            });
+                    CompletableFuture.runAsync(() -> executeWorkflow(params)).exceptionally(ex -> {
+                        logger.error("WB Comparison workflow failed", ex);
+                        Platform.runLater(() ->
+                                Dialogs.showErrorMessage("WB Comparison Error", "Workflow failed: " + ex.getMessage()));
+                        return null;
+                    });
                 })
                 .exceptionally(ex -> {
                     logger.error("Error in WB Comparison dialog", ex);
                     Platform.runLater(() -> Dialogs.showErrorMessage(
-                            "WB Comparison Error",
-                            "Failed to show dialog: " + ex.getMessage()));
+                            "WB Comparison Error", "Failed to show dialog: " + ex.getMessage()));
                     return null;
                 });
     }
@@ -120,8 +122,12 @@ public class WBComparisonWorkflow {
         String detector = resolveDetector(configManager, modality, objective);
         double pixelSize = configManager.getHardwarePixelSize(objective, detector);
 
-        logger.info("Hardware: modality={}, objective={}, detector={}, pixelSize={}",
-                modality, objective, detector, pixelSize);
+        logger.info(
+                "Hardware: modality={}, objective={}, detector={}, pixelSize={}",
+                modality,
+                objective,
+                detector,
+                pixelSize);
 
         // Get FOV (frame size in microns)
         double[] fov = configManager.getModalityFOV(modality, objective, detector);
@@ -144,8 +150,8 @@ public class WBComparisonWorkflow {
 
         try {
             // Create QuPath project
-            Project<BufferedImage> project = QPProjectFunctions.createProject(
-                    params.outputFolder(), params.sampleName());
+            Project<BufferedImage> project =
+                    QPProjectFunctions.createProject(params.outputFolder(), params.sampleName());
             if (project == null) {
                 throw new RuntimeException("Failed to create QuPath project");
             }
@@ -179,8 +185,8 @@ public class WBComparisonWorkflow {
             // Generate tile grid once (reused for all modes)
             // TilingUtilities.processBoundingBoxTilingRequest() auto-appends a "bounds/"
             // subdirectory, so outputFolder should be one level above.
-            String tilingOutputDir = Paths.get(params.outputFolder(), params.sampleName(),
-                    modeWithIndex).toString();
+            String tilingOutputDir = Paths.get(params.outputFolder(), params.sampleName(), modeWithIndex)
+                    .toString();
             File tilingOutputDirFile = new File(tilingOutputDir);
             if (!tilingOutputDirFile.exists() && !tilingOutputDirFile.mkdirs()) {
                 throw new RuntimeException("Failed to create tile directory: " + tilingOutputDir);
@@ -228,10 +234,27 @@ public class WBComparisonWorkflow {
                 logger.info("=== Processing WB mode: {} ({}/{}) ===", wbMode, modeIndex, modes.size());
 
                 try {
-                    focusZ = processMode(wbMode, modeIndex, params, socketClient, configPath, configManager,
-                            modality, objective, detector, pixelSize, modeWithIndex,
-                            angleExposures, handler, project, tileConfigContent,
-                            bbX1, bbY1, bbX2, bbY2, focusZ);
+                    focusZ = processMode(
+                            wbMode,
+                            modeIndex,
+                            params,
+                            socketClient,
+                            configPath,
+                            configManager,
+                            modality,
+                            objective,
+                            detector,
+                            pixelSize,
+                            modeWithIndex,
+                            angleExposures,
+                            handler,
+                            project,
+                            tileConfigContent,
+                            bbX1,
+                            bbY1,
+                            bbX2,
+                            bbY2,
+                            focusZ);
                     results.put(wbMode, "success");
                     logger.info("WB mode '{}' completed successfully (focusZ={})", wbMode, focusZ);
                 } catch (Exception e) {
@@ -263,31 +286,34 @@ public class WBComparisonWorkflow {
      *         before autofocus can run.
      */
     private static double processMode(
-            String wbMode, int modeIndex,
+            String wbMode,
+            int modeIndex,
             WBComparisonDialog.WBComparisonParams params,
             MicroscopeSocketClient socketClient,
             String configPath,
             MicroscopeConfigManager configManager,
-            String modality, String objective, String detector, double pixelSize,
+            String modality,
+            String objective,
+            String detector,
+            double pixelSize,
             String modeWithIndex,
             List<AngleExposure> angleExposures,
             ModalityHandler handler,
             Project<BufferedImage> project,
             byte[] tileConfigContent,
-            double bbX1, double bbY1, double bbX2, double bbY2,
-            double focusZ
-    ) throws Exception {
+            double bbX1,
+            double bbY1,
+            double bbX2,
+            double bbY2,
+            double focusZ)
+            throws Exception {
 
-        // Ensure camera AWB is off before starting any mode.
-        // camera_awb runs last (see WBComparisonDialog.selectedModes()), but this
-        // provides defense-in-depth in case Continuous wasn't properly deactivated.
+        // NOTE: Camera AWB Off cannot be set programmatically -- JAI hardware AWB
+        // must be controlled through MicroManager's Device Property Browser.
+        // If AWB was set manually, it persists until MicroManager is restarted.
         if (!"camera_awb".equals(wbMode)) {
-            try {
-                socketClient.setWhiteBalanceMode(0); // Off
-                logger.info("[{}] Confirmed camera AWB is Off before starting mode", wbMode);
-            } catch (Exception e) {
-                logger.warn("[{}] Could not confirm AWB Off (non-fatal): {}", wbMode, e.getMessage());
-            }
+            logger.info("[{}] Camera AWB Off cannot be set programmatically; "
+                    + "ensure AWB is Off in MicroManager before running non-AWB modes", wbMode);
         }
 
         String wbFolderName = "wb_" + wbMode;
@@ -295,8 +321,8 @@ public class WBComparisonWorkflow {
         // Build output paths for this mode
         // Server constructs tile path as: {projects}/{sample}/{scan_type}/{region}/
         // So tiles end up at: {modeDir}/{modeWithIndex}/bounds/{angle}/
-        String modeDir = Paths.get(params.outputFolder(), params.sampleName(),
-                modeWithIndex, wbFolderName).toString();
+        String modeDir = Paths.get(params.outputFolder(), params.sampleName(), modeWithIndex, wbFolderName)
+                .toString();
         String bgDir = Paths.get(modeDir, "backgrounds").toString();
         String boundsDir = Paths.get(modeDir, modeWithIndex, "bounds").toString();
 
@@ -305,14 +331,26 @@ public class WBComparisonWorkflow {
         Files.createDirectories(Paths.get(boundsDir));
 
         // --- 3a. CALIBRATE at blank position ---
-        logger.info("[{}] Moving to blank position ({}, {}, z={})", wbMode,
-                params.blankX(), params.blankY(), params.blankZ());
+        logger.info(
+                "[{}] Moving to blank position ({}, {}, z={})",
+                wbMode,
+                params.blankX(),
+                params.blankY(),
+                params.blankZ());
         socketClient.moveStageXY(params.blankX(), params.blankY());
         socketClient.moveStageZ(params.blankZ());
         Thread.sleep(1000); // settle
 
-        calibrateWhiteBalance(wbMode, socketClient, configPath, bgDir,
-                params.targetIntensity(), objective, detector, modality, angleExposures);
+        calibrateWhiteBalance(
+                wbMode,
+                socketClient,
+                configPath,
+                bgDir,
+                params.targetIntensity(),
+                objective,
+                detector,
+                modality,
+                angleExposures);
 
         // --- 3b. COLLECT BACKGROUNDS at blank position ---
         logger.info("[{}] Collecting backgrounds at blank position", wbMode);
@@ -326,8 +364,7 @@ public class WBComparisonWorkflow {
 
         Map<Double, Double> finalExposures = socketClient.startBackgroundAcquisition(
                 configPath, bgDir, modality, angles, exposures, wbMode, objective, detector);
-        logger.info("[{}] Background acquisition complete, {} exposures returned",
-                wbMode, finalExposures.size());
+        logger.info("[{}] Background acquisition complete, {} exposures returned", wbMode, finalExposures.size());
 
         // Update angle-exposures with final values from server if available
         List<AngleExposure> modeAngleExposures;
@@ -347,8 +384,12 @@ public class WBComparisonWorkflow {
         // starts from tissueZ, and its autofocus finds the actual focus position.
         // Subsequent modes reuse that focus Z so their AF sweeps are centered
         // near optimal focus, avoiding "peak at edge" quality failures.
-        logger.info("[{}] Moving to tissue position ({}, {}, z={} [focusZ])", wbMode,
-                params.tissueX(), params.tissueY(), focusZ);
+        logger.info(
+                "[{}] Moving to tissue position ({}, {}, z={} [focusZ])",
+                wbMode,
+                params.tissueX(),
+                params.tissueY(),
+                focusZ);
         socketClient.moveStageXY(params.tissueX(), params.tissueY());
         socketClient.moveStageZ(focusZ);
         Thread.sleep(1000); // settle after move
@@ -363,7 +404,8 @@ public class WBComparisonWorkflow {
         //   {output}/{sample}/{modeWithIndex}/{wbFolderName}/{modeWithIndex}/bounds/
         AcquisitionCommandBuilder builder = AcquisitionCommandBuilder.builder()
                 .yamlPath(configPath)
-                .projectsFolder(Paths.get(params.outputFolder(), params.sampleName(), modeWithIndex).toString())
+                .projectsFolder(Paths.get(params.outputFolder(), params.sampleName(), modeWithIndex)
+                        .toString())
                 .sampleLabel(wbFolderName)
                 .scanType(modeWithIndex)
                 .regionName("bounds")
@@ -389,12 +431,11 @@ public class WBComparisonWorkflow {
         // Poll for completion using monitorAcquisition() which has retry logic
         // for initial connection failures (server closes connection after STARTED ack)
         MicroscopeSocketClient.AcquisitionState finalState = socketClient.monitorAcquisition(
-                progress -> logger.debug("[{}] Acquisition progress: {}/{}", wbMode,
-                        progress.current, progress.total),
+                progress -> logger.debug("[{}] Acquisition progress: {}/{}", wbMode, progress.current, progress.total),
                 retriesRemaining -> {
                     // Auto-skip manual focus for WB comparison (automated workflow)
-                    logger.warn("[{}] Autofocus failed, auto-skipping (retries remaining: {})",
-                            wbMode, retriesRemaining);
+                    logger.warn(
+                            "[{}] Autofocus failed, auto-skipping (retries remaining: {})", wbMode, retriesRemaining);
                     try {
                         socketClient.skipAutofocusRetry();
                     } catch (IOException e) {
@@ -402,18 +443,17 @@ public class WBComparisonWorkflow {
                     }
                 },
                 ACQUISITION_POLL_INTERVAL_MS,
-                ACQUISITION_TIMEOUT_MS
-        );
+                ACQUISITION_TIMEOUT_MS);
 
         if (finalState == MicroscopeSocketClient.AcquisitionState.FAILED) {
             String failMsg = socketClient.getLastFailureMessage();
-            throw new RuntimeException("Acquisition failed for WB mode '" + wbMode + "': " +
-                    (failMsg != null ? failMsg : "unknown error"));
+            throw new RuntimeException("Acquisition failed for WB mode '" + wbMode + "': "
+                    + (failMsg != null ? failMsg : "unknown error"));
         } else if (finalState == MicroscopeSocketClient.AcquisitionState.CANCELLED) {
             throw new RuntimeException("Acquisition cancelled for WB mode '" + wbMode + "'");
         } else if (finalState != MicroscopeSocketClient.AcquisitionState.COMPLETED) {
-            throw new RuntimeException("Acquisition ended in unexpected state '" + finalState +
-                    "' for WB mode '" + wbMode + "'");
+            throw new RuntimeException(
+                    "Acquisition ended in unexpected state '" + finalState + "' for WB mode '" + wbMode + "'");
         }
         logger.info("[{}] Acquisition completed", wbMode);
 
@@ -431,8 +471,7 @@ public class WBComparisonWorkflow {
 
         // --- 3d. STITCH ---
         logger.info("[{}] Starting stitching", wbMode);
-        stitchMode(wbMode, params, modeWithIndex, wbFolderName,
-                modeAngleExposures, pixelSize, handler, project);
+        stitchMode(wbMode, params, modeWithIndex, wbFolderName, modeAngleExposures, pixelSize, handler, project);
         logger.info("[{}] Stitching completed", wbMode);
 
         return newFocusZ;
@@ -442,11 +481,16 @@ public class WBComparisonWorkflow {
      * Calibrates white balance for the specified mode at the current (blank) position.
      */
     private static void calibrateWhiteBalance(
-            String wbMode, MicroscopeSocketClient socketClient,
-            String configPath, String outputPath,
-            double targetIntensity, String objective, String detector,
-            String modality, List<AngleExposure> angleExposures
-    ) throws Exception {
+            String wbMode,
+            MicroscopeSocketClient socketClient,
+            String configPath,
+            String outputPath,
+            double targetIntensity,
+            String objective,
+            String detector,
+            String modality,
+            List<AngleExposure> angleExposures)
+            throws Exception {
         logger.info("[{}] Starting white balance calibration", wbMode);
 
         switch (wbMode) {
@@ -459,19 +503,24 @@ public class WBComparisonWorkflow {
             }
             case "simple" -> {
                 // Use a reasonable base exposure for simple WB
-                double baseExposure = angleExposures.isEmpty() ? 10.0 : angleExposures.get(0).exposureMs();
+                double baseExposure =
+                        angleExposures.isEmpty() ? 10.0 : angleExposures.get(0).exposureMs();
                 socketClient.runSimpleWhiteBalance(
-                        outputPath, baseExposure, targetIntensity,
+                        outputPath,
+                        baseExposure,
+                        targetIntensity,
                         5.0, // tolerance
                         6.0, // maxGainDb
                         0.75, // gainThresholdRatio
-                        15,   // maxIterations
+                        15, // maxIterations
                         false, // calibrateBlackLevel
-                        1.0,  // baseGain
+                        1.0, // baseGain
                         100.0, // exposureSoftCapMs
                         12.0, // boostedMaxGainDb
-                        configPath, objective, detector, modality
-                );
+                        configPath,
+                        objective,
+                        detector,
+                        modality);
                 logger.info("[simple] Simple white balance calibration complete");
             }
             case "per_angle" -> {
@@ -482,35 +531,52 @@ public class WBComparisonWorkflow {
 
                 for (AngleExposure ae : angleExposures) {
                     double a = ae.ticks();
-                    if (a > 0 && a < 45) { posAngle = a; posExp = ae.exposureMs(); }
-                    else if (a < 0 && a > -45) { negAngle = a; negExp = ae.exposureMs(); }
-                    else if (Math.abs(a) < 0.1) { crossAngle = a; crossExp = ae.exposureMs(); }
-                    else if (Math.abs(a - 90) < 1.0) { uncrossAngle = a; uncrossExp = ae.exposureMs(); }
+                    if (a > 0 && a < 45) {
+                        posAngle = a;
+                        posExp = ae.exposureMs();
+                    } else if (a < 0 && a > -45) {
+                        negAngle = a;
+                        negExp = ae.exposureMs();
+                    } else if (Math.abs(a) < 0.1) {
+                        crossAngle = a;
+                        crossExp = ae.exposureMs();
+                    } else if (Math.abs(a - 90) < 1.0) {
+                        uncrossAngle = a;
+                        uncrossExp = ae.exposureMs();
+                    }
                 }
 
                 socketClient.runPPMWhiteBalance(
                         outputPath,
-                        posAngle, posExp, targetIntensity,
-                        negAngle, negExp, targetIntensity,
-                        crossAngle, crossExp, targetIntensity,
-                        uncrossAngle, uncrossExp, targetIntensity,
+                        posAngle,
+                        posExp,
+                        targetIntensity,
+                        negAngle,
+                        negExp,
+                        targetIntensity,
+                        crossAngle,
+                        crossExp,
+                        targetIntensity,
+                        uncrossAngle,
+                        uncrossExp,
+                        targetIntensity,
                         targetIntensity,
                         5.0, // tolerance
                         6.0, // maxGainDb
                         0.75, // gainThresholdRatio
-                        15,   // maxIterations
+                        15, // maxIterations
                         false, // calibrateBlackLevel
-                        1.0,  // baseGain
+                        1.0, // baseGain
                         100.0, // exposureSoftCapMs
                         12.0, // boostedMaxGainDb
-                        configPath, objective, detector
-                );
+                        configPath,
+                        objective,
+                        detector);
                 logger.info("[per_angle] PPM white balance calibration complete");
             }
             default -> logger.warn("Unknown WB mode for calibration: {}", wbMode);
         }
     }
-
 
     /**
      * Stitches the acquired tiles for one WB mode.
@@ -529,15 +595,16 @@ public class WBComparisonWorkflow {
             List<AngleExposure> angleExposures,
             double pixelSize,
             ModalityHandler handler,
-            Project<BufferedImage> project
-    ) throws Exception {
+            Project<BufferedImage> project)
+            throws Exception {
         QuPathGUI gui = QuPathGUI.getInstance();
         var stitchConfig = StitchingConfiguration.getStandardConfiguration();
 
         // The tile folder structure (server creates scan_type level):
         // {outputFolder}/{sampleName}/{modeWithIndex}/{wbFolderName}/{modeWithIndex}/bounds/{angle}/
         // TileProcessingUtilities constructs: {projectsBase}/{sampleLabel}/{imagingMode}/{regionName}/
-        String projectsBase = Paths.get(params.outputFolder(), params.sampleName(), modeWithIndex).toString();
+        String projectsBase = Paths.get(params.outputFolder(), params.sampleName(), modeWithIndex)
+                .toString();
         Path tileBaseDir = Paths.get(projectsBase, wbFolderName, modeWithIndex, "bounds");
 
         // Stitch each angle using directory isolation to prevent cross-matching
@@ -546,8 +613,17 @@ public class WBComparisonWorkflow {
             logger.info("[{}] Stitching angle: {} (with isolation)", wbMode, angleStr);
 
             try {
-                stitchAngleWithIsolation(tileBaseDir, angleStr, projectsBase, wbFolderName,
-                        modeWithIndex, pixelSize, stitchConfig.compressionType(), gui, project, handler);
+                stitchAngleWithIsolation(
+                        tileBaseDir,
+                        angleStr,
+                        projectsBase,
+                        wbFolderName,
+                        modeWithIndex,
+                        pixelSize,
+                        stitchConfig.compressionType(),
+                        gui,
+                        project,
+                        handler);
             } catch (Exception e) {
                 logger.error("[{}] Failed to stitch angle {}: {}", wbMode, angleStr, e.getMessage());
                 // Continue with other angles
@@ -563,8 +639,17 @@ public class WBComparisonWorkflow {
                         String birefDirName = birefPath.getFileName().toString();
                         logger.info("[{}] Stitching birefringence: {} (with isolation)", wbMode, birefDirName);
                         try {
-                            stitchAngleWithIsolation(tileBaseDir, birefDirName, projectsBase, wbFolderName,
-                                    modeWithIndex, pixelSize, stitchConfig.compressionType(), gui, project, handler);
+                            stitchAngleWithIsolation(
+                                    tileBaseDir,
+                                    birefDirName,
+                                    projectsBase,
+                                    wbFolderName,
+                                    modeWithIndex,
+                                    pixelSize,
+                                    stitchConfig.compressionType(),
+                                    gui,
+                                    project,
+                                    handler);
                         } catch (Exception e) {
                             logger.error("[{}] Failed to stitch birefringence: {}", wbMode, e.getMessage());
                         }
@@ -582,12 +667,17 @@ public class WBComparisonWorkflow {
      * (e.g., "0.0" matching "90.0"). Restores the directory after stitching.</p>
      */
     private static void stitchAngleWithIsolation(
-            Path tileBaseDir, String angleStr,
-            String projectsBase, String wbFolderName,
-            String modeWithIndex, double pixelSize,
-            String compression, QuPathGUI gui,
-            Project<BufferedImage> project, ModalityHandler handler
-    ) throws IOException {
+            Path tileBaseDir,
+            String angleStr,
+            String projectsBase,
+            String wbFolderName,
+            String modeWithIndex,
+            double pixelSize,
+            String compression,
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            ModalityHandler handler)
+            throws IOException {
         Path angleDir = tileBaseDir.resolve(angleStr);
         if (!Files.exists(angleDir)) {
             logger.warn("Angle directory does not exist: {}", angleDir);
@@ -618,8 +708,7 @@ public class WBComparisonWorkflow {
                     pixelSize,
                     1, // downsample
                     handler,
-                    null
-            );
+                    null);
         } finally {
             // Always restore the directory structure
             try {
@@ -657,7 +746,11 @@ public class WBComparisonWorkflow {
             }
         }
 
-        sb.append("\n").append(successCount).append("/").append(results.size()).append(" modes completed successfully.");
+        sb.append("\n")
+                .append(successCount)
+                .append("/")
+                .append(results.size())
+                .append(" modes completed successfully.");
 
         String message = sb.toString();
         logger.info("WB Comparison summary:\n{}", message);

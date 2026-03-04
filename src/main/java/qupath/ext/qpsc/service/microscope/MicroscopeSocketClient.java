@@ -1,21 +1,20 @@
 package qupath.ext.qpsc.service.microscope;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
-
-import java.nio.charset.StandardCharsets;
-import java.util.function.Consumer;
-import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
 import java.io.*;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 
 /**
  * Socket-based client for communicating with the Python microscope control server.
@@ -80,22 +79,18 @@ public class MicroscopeSocketClient implements AutoCloseable {
     private volatile Double lastAcquisitionFinalZ = null;
 
     // Reconnection handling
-    private final ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor(
-            r -> {
-                Thread t = new Thread(r, "MicroscopeReconnect");
-                t.setDaemon(true);
-                return t;
-            }
-    );
+    private final ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "MicroscopeReconnect");
+        t.setDaemon(true);
+        return t;
+    });
 
     // Health monitoring
-    private final ScheduledExecutorService healthCheckExecutor = Executors.newSingleThreadScheduledExecutor(
-            r -> {
-                Thread t = new Thread(r, "MicroscopeHealthCheck");
-                t.setDaemon(true);
-                return t;
-            }
-    );
+    private final ScheduledExecutorService healthCheckExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "MicroscopeHealthCheck");
+        t.setDaemon(true);
+        return t;
+    });
 
     // Configuration
     private final int maxReconnectAttempts;
@@ -173,9 +168,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         /** Set gain values */
         SETGAIN("setgain_"),
 
-        // White Balance Mode Control
-        /** Set camera white balance mode (0=Off, 1=Continuous, 2=Once) */
-        SETWBMD("setwbmd_"),
+        // NOTE: SETWBMD was removed -- JAI hardware AWB cannot be reliably
+        // controlled through Pycromanager. Set AWB manually in MicroManager.
 
         // Live Mode Control Commands
         /** Check if live mode is currently running */
@@ -205,7 +199,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             if (value.length() != 8) {
                 throw new IllegalArgumentException("Command must be exactly 8 bytes");
             }
-            this.value = value.getBytes();
+            this.value = value.getBytes(StandardCharsets.UTF_8);
         }
 
         public byte[] getValue() {
@@ -282,8 +276,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param reconnectDelayMs Delay between reconnection attempts in milliseconds
      * @param healthCheckIntervalMs Interval between health checks in milliseconds
      */
-    public MicroscopeSocketClient(String host, int port, int connectTimeout, int readTimeout,
-                                  int maxReconnectAttempts, long reconnectDelayMs, long healthCheckIntervalMs) {
+    public MicroscopeSocketClient(
+            String host,
+            int port,
+            int connectTimeout,
+            int readTimeout,
+            int maxReconnectAttempts,
+            long reconnectDelayMs,
+            long healthCheckIntervalMs) {
         this.host = host;
         this.port = port;
         this.connectTimeout = connectTimeout;
@@ -555,10 +555,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         // SAFETY CHECK: Config path MUST be set
         if (configPath == null || configPath.trim().isEmpty()) {
-            throw new IllegalStateException(
-                "Microscope config file path not set in preferences! " +
-                "Go to Edit > Preferences > QPSC to set the microscope configuration file."
-            );
+            throw new IllegalStateException("Microscope config file path not set in preferences! "
+                    + "Go to Edit > Preferences > QPSC to set the microscope configuration file.");
         }
 
         logger.info("Sending CONFIG command with path: {}", configPath);
@@ -645,7 +643,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         float fovY = buffer.getFloat();
 
         logger.info("Camera FOV: {} x {} microns", fovX, fovY);
-        return new double[] { fovX, fovY };
+        return new double[] {fovX, fovY};
     }
 
     /**
@@ -682,8 +680,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         String responseStr = new String(response, StandardCharsets.UTF_8);
         if (responseStr.startsWith("HW_ERROR")) {
             throw new MicroscopeHardwareException(
-                "Hardware error getting XY position. Check that MicroManager is running and the XY stage is loaded."
-            );
+                    "Hardware error getting XY position. Check that MicroManager is running and the XY stage is loaded.");
         }
 
         ByteBuffer buffer = ByteBuffer.wrap(response);
@@ -693,7 +690,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         float y = buffer.getFloat();
 
         logger.trace("Stage XY position: ({}, {})", x, y);
-        return new double[] { x, y };
+        return new double[] {x, y};
     }
 
     /**
@@ -711,8 +708,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         String responseStr = new String(response, StandardCharsets.UTF_8);
         if (responseStr.startsWith("HWERR")) {
             throw new MicroscopeHardwareException(
-                "Hardware error getting Z position. Check that MicroManager is running and the Z stage is loaded."
-            );
+                    "Hardware error getting Z position. Check that MicroManager is running and the Z stage is loaded.");
         }
 
         ByteBuffer buffer = ByteBuffer.wrap(response);
@@ -738,8 +734,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         String responseStr = new String(response, StandardCharsets.UTF_8);
         if (responseStr.startsWith("HWERR")) {
             throw new MicroscopeHardwareException(
-                "Hardware error getting rotation angle. Check that MicroManager is running and the rotation stage is loaded."
-            );
+                    "Hardware error getting rotation angle. Check that MicroManager is running and the rotation stage is loaded.");
         }
 
         ByteBuffer buffer = ByteBuffer.wrap(response);
@@ -884,9 +879,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @return Map of angle (degrees) to final exposure time (ms) used by Python server
      * @throws IOException if communication fails
      */
-    public Map<Double, Double> startBackgroundAcquisition(String yamlPath, String outputPath, String modality,
-                                           String angles, String exposures, String wbMode,
-                                           String objective, String detector) throws IOException {
+    public Map<Double, Double> startBackgroundAcquisition(
+            String yamlPath,
+            String outputPath,
+            String modality,
+            String angles,
+            String exposures,
+            String wbMode,
+            String objective,
+            String detector)
+            throws IOException {
 
         // Build BGACQUIRE-specific command message
         // Include new --wb-mode flag and legacy --use_per_angle_wb for backward compat
@@ -906,7 +908,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if (detector != null && !detector.isEmpty()) {
             hwFlags += " --detector " + detector;
         }
-        String message = String.format("--yaml %s --output %s --modality %s --angles %s --exposures %s%s%s %s",
+        String message = String.format(
+                "--yaml %s --output %s --modality %s --angles %s --exposures %s%s%s %s",
                 yamlPath, outputPath, modality, angles, exposures, wbFlags, hwFlags, END_MARKER);
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
 
@@ -993,7 +996,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                                         double angle = Double.parseDouble(angleExposure[0].trim());
                                         double exposure = Double.parseDouble(angleExposure[1].trim());
                                         finalExposures.put(angle, exposure);
-                                        logger.debug("  Angle {}° -> {}ms", angle, exposure);
+                                        logger.debug("  Angle {}deg -> {}ms", angle, exposure);
                                     } catch (NumberFormatException e) {
                                         logger.warn("Failed to parse angle:exposure pair: {}", pair);
                                     }
@@ -1048,12 +1051,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @return Map with keys: "plot_path", "initial_z", "final_z", "z_shift"
      * @throws IOException if communication fails or autofocus test fails
      */
-    public Map<String, String> testAutofocus(String yamlPath, String outputPath, String objective)
-            throws IOException {
+    public Map<String, String> testAutofocus(String yamlPath, String outputPath, String objective) throws IOException {
 
         // Build TESTAF-specific command message
-        String message = String.format("--yaml %s --output %s --objective %s %s",
-                yamlPath, outputPath, objective, END_MARKER);
+        String message =
+                String.format("--yaml %s --output %s --objective %s %s", yamlPath, outputPath, objective, END_MARKER);
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
 
         logger.info("Sending autofocus test command:");
@@ -1196,8 +1198,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throws IOException {
 
         // Build TESTADAF-specific command message
-        String message = String.format("--yaml %s --output %s --objective %s %s",
-                yamlPath, outputPath, objective, END_MARKER);
+        String message =
+                String.format("--yaml %s --output %s --objective %s %s", yamlPath, outputPath, objective, END_MARKER);
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
 
         logger.info("Sending adaptive autofocus test command:");
@@ -1433,12 +1435,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param nRepeats Number of repetitions for repeatability test
      */
     public record PPMSensitivityParams(
-            String configYaml,
-            String outputDir,
-            String testType,
-            double baseAngle,
-            int nRepeats
-    ) {}
+            String configYaml, String outputDir, String testType, double baseAngle, int nRepeats) {}
 
     /**
      * Functional interface for receiving benchmark progress updates.
@@ -1478,11 +1475,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if communication fails or benchmark encounters errors
      */
     public Map<String, Object> runAutofocusBenchmark(
-            double referenceZ,
-            String outputPath,
-            List<Double> testDistances,
-            boolean quickMode,
-            String objective) throws IOException {
+            double referenceZ, String outputPath, List<Double> testDistances, boolean quickMode, String objective)
+            throws IOException {
         // Delegate to overload with null progress listener
         return runAutofocusBenchmark(referenceZ, outputPath, testDistances, quickMode, objective, null);
     }
@@ -1509,7 +1503,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             List<Double> testDistances,
             boolean quickMode,
             String objective,
-            BenchmarkProgressListener progressListener) throws IOException {
+            BenchmarkProgressListener progressListener)
+            throws IOException {
 
         // Build AFBENCH command message
         StringBuilder message = new StringBuilder();
@@ -1618,7 +1613,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
                                 // Log progress periodically (every 50 trials or at key percentages)
                                 double percentComplete = (current * 100.0 / total);
                                 if (current % 50 == 0 || current == 1 || current == total) {
-                                    logger.info("Benchmark progress: {}/{} ({} %)",
+                                    logger.info(
+                                            "Benchmark progress: {}/{} ({} %)",
                                             current, total, String.format("%.1f", percentComplete));
                                 }
 
@@ -1750,12 +1746,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @return Path to the generated calibration report file
      * @throws IOException if communication fails
      */
-    public String startPolarizerCalibration(String yamlPath, String outputPath,
-                                           double startAngle, double endAngle,
-                                           double stepSize, double exposureMs) throws IOException {
+    public String startPolarizerCalibration(
+            String yamlPath, String outputPath, double startAngle, double endAngle, double stepSize, double exposureMs)
+            throws IOException {
 
         // Build POLCAL-specific command message
-        String message = String.format("--yaml %s --output %s --start %.1f --end %.1f --step %.1f --exposure %.1f %s",
+        String message = String.format(
+                "--yaml %s --output %s --start %.1f --end %.1f --step %.1f --exposure %.1f %s",
                 yamlPath, outputPath, startAngle, endAngle, stepSize, exposureMs, END_MARKER);
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
 
@@ -1859,12 +1856,26 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @return Path to the results directory
      * @throws IOException if communication fails
      */
-    public String runBirefringenceOptimization(String yamlPath, String outputPath,
-                                               double minAngle, double maxAngle, double angleStep,
-                                               String exposureMode, Double fixedExposureMs,
-                                               int targetIntensity) throws IOException {
-        return runBirefringenceOptimization(yamlPath, outputPath, minAngle, maxAngle, angleStep,
-                exposureMode, fixedExposureMs, targetIntensity, null);
+    public String runBirefringenceOptimization(
+            String yamlPath,
+            String outputPath,
+            double minAngle,
+            double maxAngle,
+            double angleStep,
+            String exposureMode,
+            Double fixedExposureMs,
+            int targetIntensity)
+            throws IOException {
+        return runBirefringenceOptimization(
+                yamlPath,
+                outputPath,
+                minAngle,
+                maxAngle,
+                angleStep,
+                exposureMode,
+                fixedExposureMs,
+                targetIntensity,
+                null);
     }
 
     /**
@@ -1883,13 +1894,29 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @return Path to the results directory
      * @throws IOException if communication fails
      */
-    public String runBirefringenceOptimization(String yamlPath, String outputPath,
-                                               double minAngle, double maxAngle, double angleStep,
-                                               String exposureMode, Double fixedExposureMs,
-                                               int targetIntensity,
-                                               java.util.function.BiConsumer<Integer, Integer> progressCallback) throws IOException {
-        return runBirefringenceOptimization(yamlPath, outputPath, minAngle, maxAngle, angleStep,
-                exposureMode, fixedExposureMs, targetIntensity, progressCallback, null, null);
+    public String runBirefringenceOptimization(
+            String yamlPath,
+            String outputPath,
+            double minAngle,
+            double maxAngle,
+            double angleStep,
+            String exposureMode,
+            Double fixedExposureMs,
+            int targetIntensity,
+            java.util.function.BiConsumer<Integer, Integer> progressCallback)
+            throws IOException {
+        return runBirefringenceOptimization(
+                yamlPath,
+                outputPath,
+                minAngle,
+                maxAngle,
+                angleStep,
+                exposureMode,
+                fixedExposureMs,
+                targetIntensity,
+                progressCallback,
+                null,
+                null);
     }
 
     /**
@@ -1910,29 +1937,45 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @return Path to the results directory
      * @throws IOException if communication fails
      */
-    public String runBirefringenceOptimization(String yamlPath, String outputPath,
-                                               double minAngle, double maxAngle, double angleStep,
-                                               String exposureMode, Double fixedExposureMs,
-                                               int targetIntensity,
-                                               java.util.function.BiConsumer<Integer, Integer> progressCallback,
-                                               java.util.function.Supplier<Boolean> stageMoveCallback,
-                                               java.util.function.Consumer<String> statusCallback) throws IOException {
+    public String runBirefringenceOptimization(
+            String yamlPath,
+            String outputPath,
+            double minAngle,
+            double maxAngle,
+            double angleStep,
+            String exposureMode,
+            Double fixedExposureMs,
+            int targetIntensity,
+            java.util.function.BiConsumer<Integer, Integer> progressCallback,
+            java.util.function.Supplier<Boolean> stageMoveCallback,
+            java.util.function.Consumer<String> statusCallback)
+            throws IOException {
 
         // Build PPMBIREF-specific command message
         StringBuilder messageBuilder = new StringBuilder();
-        messageBuilder.append("--yaml ").append(yamlPath)
-                     .append(" --output ").append(outputPath)
-                     .append(" --mode ").append(exposureMode)
-                     .append(" --min-angle ").append(minAngle)
-                     .append(" --max-angle ").append(maxAngle)
-                     .append(" --step ").append(angleStep);
+        messageBuilder
+                .append("--yaml ")
+                .append(yamlPath)
+                .append(" --output ")
+                .append(outputPath)
+                .append(" --mode ")
+                .append(exposureMode)
+                .append(" --min-angle ")
+                .append(minAngle)
+                .append(" --max-angle ")
+                .append(maxAngle)
+                .append(" --step ")
+                .append(angleStep);
 
         if ("fixed".equals(exposureMode) && fixedExposureMs != null) {
             messageBuilder.append(" --exposure ").append(fixedExposureMs);
         }
 
-        messageBuilder.append(" --target-intensity ").append(targetIntensity)
-                     .append(" ").append(END_MARKER);
+        messageBuilder
+                .append(" --target-intensity ")
+                .append(targetIntensity)
+                .append(" ")
+                .append(END_MARKER);
 
         String message = messageBuilder.toString();
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
@@ -2095,35 +2138,56 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @return JSON string with calibration results
      * @throws IOException if communication fails
      */
-    public String runSunburstCalibration(String yamlPath, String outputPath, String modality,
-                                          int expectedSpokes, double saturationThreshold,
-                                          double valueThreshold, String calibrationName,
-                                          int radiusInner, int radiusOuter,
-                                          String imagePath, Integer centerY,
-                                          Integer centerX) throws IOException {
+    public String runSunburstCalibration(
+            String yamlPath,
+            String outputPath,
+            String modality,
+            int expectedSpokes,
+            double saturationThreshold,
+            double valueThreshold,
+            String calibrationName,
+            int radiusInner,
+            int radiusOuter,
+            String imagePath,
+            Integer centerY,
+            Integer centerX)
+            throws IOException {
 
         // Build SBCALIB-specific command message
         StringBuilder messageBuilder = new StringBuilder();
-        messageBuilder.append("--yaml ").append(yamlPath)
-                     .append(" --output ").append(outputPath)
-                     .append(" --modality ").append(modality)
-                     .append(" --spokes ").append(expectedSpokes)
-                     .append(" --saturation ").append(saturationThreshold)
-                     .append(" --value ").append(valueThreshold);
+        messageBuilder
+                .append("--yaml ")
+                .append(yamlPath)
+                .append(" --output ")
+                .append(outputPath)
+                .append(" --modality ")
+                .append(modality)
+                .append(" --spokes ")
+                .append(expectedSpokes)
+                .append(" --saturation ")
+                .append(saturationThreshold)
+                .append(" --value ")
+                .append(valueThreshold);
 
         if (calibrationName != null && !calibrationName.isEmpty()) {
             messageBuilder.append(" --name ").append(calibrationName);
         }
 
-        messageBuilder.append(" --radius_inner ").append(radiusInner)
-                     .append(" --radius_outer ").append(radiusOuter);
+        messageBuilder
+                .append(" --radius_inner ")
+                .append(radiusInner)
+                .append(" --radius_outer ")
+                .append(radiusOuter);
 
         if (imagePath != null && !imagePath.isEmpty()) {
             messageBuilder.append(" --image_path ").append(imagePath);
         }
         if (centerY != null && centerX != null) {
-            messageBuilder.append(" --center_y ").append(centerY)
-                         .append(" --center_x ").append(centerX);
+            messageBuilder
+                    .append(" --center_y ")
+                    .append(centerY)
+                    .append(" --center_x ")
+                    .append(centerX);
         }
 
         messageBuilder.append(" ").append(END_MARKER);
@@ -2324,24 +2388,28 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * Starts health monitoring thread.
      */
     private void startHealthMonitoring() {
-        healthCheckExecutor.scheduleWithFixedDelay(() -> {
-            if (connected.get() && !shuttingDown.get()) {
-                long idleTime = System.currentTimeMillis() - lastActivityTime.get();
+        healthCheckExecutor.scheduleWithFixedDelay(
+                () -> {
+                    if (connected.get() && !shuttingDown.get()) {
+                        long idleTime = System.currentTimeMillis() - lastActivityTime.get();
 
-                // Perform health check if idle for too long
-                if (idleTime > healthCheckIntervalMs) {
-                    try {
-                        // Simple health check - get stage position
-                        getStageXY();
-                        logger.debug("Health check passed");
-                    } catch (Exception e) {
-                        logger.warn("Health check failed: {}", e.getMessage());
-                        connected.set(false);
-                        scheduleReconnection();
+                        // Perform health check if idle for too long
+                        if (idleTime > healthCheckIntervalMs) {
+                            try {
+                                // Simple health check - get stage position
+                                getStageXY();
+                                logger.debug("Health check passed");
+                            } catch (Exception e) {
+                                logger.warn("Health check failed: {}", e.getMessage());
+                                connected.set(false);
+                                scheduleReconnection();
+                            }
+                        }
                     }
-                }
-            }
-        }, healthCheckIntervalMs, healthCheckIntervalMs, TimeUnit.MILLISECONDS);
+                },
+                healthCheckIntervalMs,
+                healthCheckIntervalMs,
+                TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -2411,7 +2479,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             DataOutputStream out = new DataOutputStream(testSocket.getOutputStream());
             DataInputStream in = new DataInputStream(testSocket.getInputStream());
 
-            out.write("getxy___".getBytes());
+            out.write("getxy___".getBytes(StandardCharsets.UTF_8));
             out.flush();
 
             // Read response (8 bytes for two floats)
@@ -2424,24 +2492,24 @@ public class MicroscopeSocketClient implements AutoCloseable {
             float x = buffer.getFloat();
             float y = buffer.getFloat();
 
-            return new ServerProbeResult(true, true, host, port,
-                    String.format("Server responding. Stage position: (%.2f, %.2f)", x, y));
+            return new ServerProbeResult(
+                    true, true, host, port, String.format("Server responding. Stage position: (%.2f, %.2f)", x, y));
 
         } catch (ConnectException e) {
-            return new ServerProbeResult(false, false, host, port,
-                    "Connection refused - no server running on port " + port);
+            return new ServerProbeResult(
+                    false, false, host, port, "Connection refused - no server running on port " + port);
         } catch (SocketTimeoutException e) {
-            return new ServerProbeResult(false, false, host, port,
-                    "Connection timed out - server may not be running");
+            return new ServerProbeResult(false, false, host, port, "Connection timed out - server may not be running");
         } catch (IOException e) {
             // Connected but had issues
-            return new ServerProbeResult(true, false, host, port,
-                    "Connected but server not responding correctly: " + e.getMessage());
+            return new ServerProbeResult(
+                    true, false, host, port, "Connected but server not responding correctly: " + e.getMessage());
         } finally {
             if (testSocket != null) {
                 try {
                     testSocket.close();
-                } catch (IOException ignored) {}
+                } catch (IOException ignored) {
+                }
             }
         }
     }
@@ -2465,18 +2533,31 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
 
         /** Returns true if TCP connection could be established */
-        public boolean canConnect() { return canConnect; }
+        public boolean canConnect() {
+            return canConnect;
+        }
 
         /** Returns true if server is responding correctly to commands */
-        public boolean isResponding() { return isResponding; }
+        public boolean isResponding() {
+            return isResponding;
+        }
 
-        public String getHost() { return host; }
-        public int getPort() { return port; }
-        public String getMessage() { return message; }
+        public String getHost() {
+            return host;
+        }
+
+        public int getPort() {
+            return port;
+        }
+
+        public String getMessage() {
+            return message;
+        }
 
         @Override
         public String toString() {
-            return String.format("ServerProbeResult[%s:%d, connect=%s, responding=%s, msg='%s']",
+            return String.format(
+                    "ServerProbeResult[%s:%d, connect=%s, responding=%s, msg='%s']",
                     host, port, canConnect, isResponding, message);
         }
     }
@@ -2548,8 +2629,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
             String failureDetails = stateStr.substring("FAILED:".length()).trim();
             lastFailureMessage = failureDetails.isEmpty() ? "Unknown server error" : failureDetails;
-            logger.error("Received FAILED message during status check: {} - Details: {}",
-                    stateStr.trim(), lastFailureMessage);
+            logger.error(
+                    "Received FAILED message during status check: {} - Details: {}",
+                    stateStr.trim(),
+                    lastFailureMessage);
             return AcquisitionState.FAILED;
         } else if (stateStr.startsWith("SUCCESS:")) {
             logger.info("Received SUCCESS message during status check: {}", stateStr.trim());
@@ -2583,8 +2666,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     String zStr = stateStr.substring(startIdx).trim();
                     // Handle potential trailing characters
                     int endIdx = 0;
-                    while (endIdx < zStr.length() &&
-                           (Character.isDigit(zStr.charAt(endIdx)) || zStr.charAt(endIdx) == '.' || zStr.charAt(endIdx) == '-')) {
+                    while (endIdx < zStr.length()
+                            && (Character.isDigit(zStr.charAt(endIdx))
+                                    || zStr.charAt(endIdx) == '.'
+                                    || zStr.charAt(endIdx) == '-')) {
                         endIdx++;
                     }
                     if (endIdx > 0) {
@@ -2596,8 +2681,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 }
             }
 
-            logger.info("Received COMPLETED status{}",
-                lastAcquisitionFinalZ != null ? " with final_z: " + lastAcquisitionFinalZ + " um" : "");
+            logger.info(
+                    "Received COMPLETED status{}",
+                    lastAcquisitionFinalZ != null ? " with final_z: " + lastAcquisitionFinalZ + " um" : "");
             return AcquisitionState.COMPLETED;
         }
 
@@ -2609,7 +2695,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
     /**
      * Gets the last failure message received from the server.
      * This provides detailed information about why an acquisition failed.
-     * 
+     *
      * @return The last failure message, or null if no failure occurred or message is unavailable
      */
     public String getLastFailureMessage() {
@@ -2682,15 +2768,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
         String status = new String(response, StandardCharsets.UTF_8).trim();
 
         if (status.equals("IDLE____")) {
-            return -1;  // No manual focus needed
+            return -1; // No manual focus needed
         } else if (status.startsWith("NEEDED")) {
             // Format: "NEEDEDnn" where nn is 00-99
             try {
-                String retriesStr = status.substring(6);  // Get last 2 characters
+                String retriesStr = status.substring(6); // Get last 2 characters
                 return Integer.parseInt(retriesStr);
             } catch (NumberFormatException | IndexOutOfBoundsException e) {
                 logger.warn("Failed to parse retries from manual focus response: {}", status);
-                return 0;  // Default to 0 retries if parsing fails
+                return 0; // Default to 0 retries if parsing fails
             }
         } else {
             logger.warn("Unknown manual focus status: {}", status);
@@ -2758,9 +2844,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws InterruptedException if thread is interrupted
      */
     public AcquisitionState monitorAcquisition(
-            Consumer<AcquisitionProgress> progressCallback,
-            long pollIntervalMs,
-            long timeoutMs) throws IOException, InterruptedException {
+            Consumer<AcquisitionProgress> progressCallback, long pollIntervalMs, long timeoutMs)
+            throws IOException, InterruptedException {
         return monitorAcquisition(progressCallback, null, pollIntervalMs, timeoutMs);
     }
 
@@ -2781,12 +2866,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
             Consumer<AcquisitionProgress> progressCallback,
             Consumer<Integer> manualFocusCallback,
             long pollIntervalMs,
-            long timeoutMs) throws IOException, InterruptedException {
+            long timeoutMs)
+            throws IOException, InterruptedException {
 
         long startTime = System.currentTimeMillis();
         // Use instance field instead of local variable so it can be reset externally
         lastProgressUpdateTime.set(startTime);
-        int lastProgressCount = -1;  // Initialize to -1 to detect first progress
+        int lastProgressCount = -1; // Initialize to -1 to detect first progress
         AcquisitionState lastState = AcquisitionState.IDLE;
         int retryCount = 0;
         final int maxInitialRetries = 3;
@@ -2800,32 +2886,35 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 retryCount = 0;
 
                 // Check if terminal state reached
-                if (currentState == AcquisitionState.COMPLETED ||
-                        currentState == AcquisitionState.FAILED ||
-                        currentState == AcquisitionState.CANCELLED) {
+                if (currentState == AcquisitionState.COMPLETED
+                        || currentState == AcquisitionState.FAILED
+                        || currentState == AcquisitionState.CANCELLED) {
                     logger.info("Acquisition reached terminal state: {}", currentState);
                     return currentState;
                 }
 
                 // Check for manual focus request - skip if cancelling (server may still report NEEDED)
-                if (currentState != AcquisitionState.CANCELLING) try {
-                    int manualFocusRetries = isManualFocusRequested();
-                    if (manualFocusRetries >= 0) {
-                        // Manual focus is requested - reset timeout since we're waiting for user input
-                        lastProgressUpdateTime.set(System.currentTimeMillis());
-                        if (manualFocusCallback != null) {
-                            // Delegate handling to caller (may block for dialog)
-                            manualFocusCallback.accept(manualFocusRetries);
-                            // Reset timeout again after handling (dialog may have taken time)
+                if (currentState != AcquisitionState.CANCELLING)
+                    try {
+                        int manualFocusRetries = isManualFocusRequested();
+                        if (manualFocusRetries >= 0) {
+                            // Manual focus is requested - reset timeout since we're waiting for user input
                             lastProgressUpdateTime.set(System.currentTimeMillis());
-                        } else {
-                            logger.debug("Manual focus requested (retries: {}) - resetting progress timeout (no handler)", manualFocusRetries);
+                            if (manualFocusCallback != null) {
+                                // Delegate handling to caller (may block for dialog)
+                                manualFocusCallback.accept(manualFocusRetries);
+                                // Reset timeout again after handling (dialog may have taken time)
+                                lastProgressUpdateTime.set(System.currentTimeMillis());
+                            } else {
+                                logger.debug(
+                                        "Manual focus requested (retries: {}) - resetting progress timeout (no handler)",
+                                        manualFocusRetries);
+                            }
                         }
+                    } catch (IOException e) {
+                        logger.debug("Failed to check manual focus status: {}", e.getMessage());
+                        // Not critical - just continue monitoring
                     }
-                } catch (IOException e) {
-                    logger.debug("Failed to check manual focus status: {}", e.getMessage());
-                    // Not critical - just continue monitoring
-                }
 
                 // Get progress if running
                 if (currentState == AcquisitionState.RUNNING && progressCallback != null) {
@@ -2834,24 +2923,29 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
                         // For background acquisition, progress might start at -1/-1, which is normal
                         // Only report valid progress values
-                        if (progress != null && progress.current >= 0 && progress.total >= 0) {
+                        if (progress.current >= 0 && progress.total >= 0) {
                             progressCallback.accept(progress);
 
                             // Check if progress was actually made
                             if (progress.current > lastProgressCount) {
                                 lastProgressUpdateTime.set(System.currentTimeMillis());
                                 lastProgressCount = progress.current;
-                                logger.debug("Progress updated: {}/{} files, resetting timeout", progress.current, progress.total);
+                                logger.debug(
+                                        "Progress updated: {}/{} files, resetting timeout",
+                                        progress.current,
+                                        progress.total);
                             }
                         } else {
                             // Invalid progress (-1/-1), but still reset timeout if we got a response
                             lastProgressUpdateTime.set(System.currentTimeMillis());
-                            logger.debug("Received progress response (server still working): {}/{}",
-                                    progress != null ? progress.current : "null",
-                                    progress != null ? progress.total : "null");
+                            logger.debug(
+                                    "Received progress response (server still working): {}/{}",
+                                    progress.current,
+                                    progress.total);
                         }
                     } catch (IOException e) {
-                        logger.debug("Failed to get progress (expected during background acquisition): {}", e.getMessage());
+                        logger.debug(
+                                "Failed to get progress (expected during background acquisition): {}", e.getMessage());
                         // For background acquisition, progress queries might fail, so don't treat as error
                         // Just reset timeout to show server is still responsive
                         lastProgressUpdateTime.set(System.currentTimeMillis());
@@ -2862,8 +2956,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 if (timeoutMs > 0) {
                     long timeSinceProgress = System.currentTimeMillis() - lastProgressUpdateTime.get();
                     if (timeSinceProgress > timeoutMs) {
-                        logger.warn("No progress for {} ms (last progress: {} files), timing out",
-                                timeSinceProgress, lastProgressCount);
+                        logger.warn(
+                                "No progress for {} ms (last progress: {} files), timing out",
+                                timeSinceProgress,
+                                lastProgressCount);
                         break;
                     }
                 }
@@ -2883,11 +2979,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
             } catch (IOException e) {
                 // Handle initial connection issues gracefully
-                if (retryCount < maxInitialRetries &&
-                        System.currentTimeMillis() - startTime < 10000) {
+                if (retryCount < maxInitialRetries && System.currentTimeMillis() - startTime < 10000) {
                     retryCount++;
-                    logger.debug("Initial status check failed (attempt {}/{}), retrying: {}",
-                            retryCount, maxInitialRetries, e.getMessage());
+                    logger.debug(
+                            "Initial status check failed (attempt {}/{}), retrying: {}",
+                            retryCount,
+                            maxInitialRetries,
+                            e.getMessage());
                     Thread.sleep(1000); // Wait a bit longer before retry
                     continue;
                 }
@@ -2921,9 +3019,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
         public final double analogBlue;
         public final boolean converged;
 
-        public WhiteBalanceResult(double exposureRed, double exposureGreen, double exposureBlue,
-                                  double unifiedGain, double analogRed, double analogBlue,
-                                  boolean converged) {
+        public WhiteBalanceResult(
+                double exposureRed,
+                double exposureGreen,
+                double exposureBlue,
+                double unifiedGain,
+                double analogRed,
+                double analogBlue,
+                boolean converged) {
             this.exposureRed = exposureRed;
             this.exposureGreen = exposureGreen;
             this.exposureBlue = exposureBlue;
@@ -2935,7 +3038,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         @Override
         public String toString() {
-            return String.format("WhiteBalanceResult[R=%.2f, G=%.2f, B=%.2f, unified=%.1fx, aR=%.3f, aB=%.3f, conv=%s]",
+            return String.format(
+                    "WhiteBalanceResult[R=%.2f, G=%.2f, B=%.2f, unified=%.1fx, aR=%.3f, aB=%.3f, conv=%s]",
                     exposureRed, exposureGreen, exposureBlue, unifiedGain, analogRed, analogBlue, converged);
         }
 
@@ -2973,7 +3077,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String yamlPath,
             String objective,
             String detector,
-            String modality) throws IOException {
+            String modality)
+            throws IOException {
 
         // Build WBSIMPLE command message
         StringBuilder message = new StringBuilder();
@@ -3009,10 +3114,17 @@ public class MicroscopeSocketClient implements AutoCloseable {
         logger.info("  Initial exposure: {} ms", initialExposureMs);
         logger.info("  Target intensity: {}", targetIntensity);
         logger.info("  Tolerance: {}", tolerance);
-        logger.info("  Advanced: maxGain={}dB, gainThreshold={}, maxIter={}, calibrateBL={}",
-                maxGainDb, gainThresholdRatio, maxIterations, calibrateBlackLevel);
-        logger.info("  Gain algo: baseGain={}, exposureSoftCap={}ms, boostedMaxGain={}dB",
-                baseGain, exposureSoftCapMs, boostedMaxGainDb);
+        logger.info(
+                "  Advanced: maxGain={}dB, gainThreshold={}, maxIter={}, calibrateBL={}",
+                maxGainDb,
+                gainThresholdRatio,
+                maxIterations,
+                calibrateBlackLevel);
+        logger.info(
+                "  Gain algo: baseGain={}, exposureSoftCap={}ms, boostedMaxGain={}dB",
+                baseGain,
+                exposureSoftCapMs,
+                boostedMaxGainDb);
 
         synchronized (socketLock) {
             ensureConnected();
@@ -3114,10 +3226,18 @@ public class MicroscopeSocketClient implements AutoCloseable {
      */
     public Map<String, WhiteBalanceResult> runPPMWhiteBalance(
             String outputPath,
-            double positiveAngle, double positiveExposure, double positiveTarget,
-            double negativeAngle, double negativeExposure, double negativeTarget,
-            double crossedAngle, double crossedExposure, double crossedTarget,
-            double uncrossedAngle, double uncrossedExposure, double uncrossedTarget,
+            double positiveAngle,
+            double positiveExposure,
+            double positiveTarget,
+            double negativeAngle,
+            double negativeExposure,
+            double negativeTarget,
+            double crossedAngle,
+            double crossedExposure,
+            double crossedTarget,
+            double uncrossedAngle,
+            double uncrossedExposure,
+            double uncrossedTarget,
             double targetIntensity,
             double tolerance,
             double maxGainDb,
@@ -3129,7 +3249,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double boostedMaxGainDb,
             String yamlPath,
             String objective,
-            String detector) throws IOException {
+            String detector)
+            throws IOException {
 
         // Build WBPPM command message
         StringBuilder message = new StringBuilder();
@@ -3175,10 +3296,17 @@ public class MicroscopeSocketClient implements AutoCloseable {
         logger.info("  Crossed: {} deg, {} ms, target={}", crossedAngle, crossedExposure, crossedTarget);
         logger.info("  Uncrossed: {} deg, {} ms, target={}", uncrossedAngle, uncrossedExposure, uncrossedTarget);
         logger.info("  Default target: {}, Tolerance: {}", targetIntensity, tolerance);
-        logger.info("  Advanced: maxGain={}dB, gainThreshold={}, maxIter={}, calibrateBL={}",
-                maxGainDb, gainThresholdRatio, maxIterations, calibrateBlackLevel);
-        logger.info("  Gain algo: baseGain={}, exposureSoftCap={}ms, boostedMaxGain={}dB",
-                baseGain, exposureSoftCapMs, boostedMaxGainDb);
+        logger.info(
+                "  Advanced: maxGain={}dB, gainThreshold={}, maxIter={}, calibrateBL={}",
+                maxGainDb,
+                gainThresholdRatio,
+                maxIterations,
+                calibrateBlackLevel);
+        logger.info(
+                "  Gain algo: baseGain={}, exposureSoftCap={}ms, boostedMaxGain={}dB",
+                baseGain,
+                exposureSoftCapMs,
+                boostedMaxGainDb);
 
         synchronized (socketLock) {
             ensureConnected();
@@ -3342,7 +3470,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     double unifiedGain = Double.parseDouble(gains[0].trim());
                     double analogRed = Double.parseDouble(gains[1].trim());
                     double analogBlue = Double.parseDouble(gains[2].trim());
-                    results.put(name, new WhiteBalanceResult(expR, expG, expB, unifiedGain, analogRed, analogBlue, converged));
+                    results.put(
+                            name,
+                            new WhiteBalanceResult(expR, expG, expB, unifiedGain, analogRed, analogBlue, converged));
                 }
             } else if (segments.length >= 3) {
                 // Old format without gains (backward compatibility)
@@ -3374,8 +3504,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param outputPath Path to the results directory
      */
     public record NoiseCharacterizationResult(
-            int totalConfigs, boolean plotsGenerated,
-            double bestGain, double bestExposureMs, String outputPath) {}
+            int totalConfigs, boolean plotsGenerated, double bestGain, double bestExposureMs, String outputPath) {}
 
     /**
      * Runs JAI noise characterization across a grid of gain and exposure settings.
@@ -3401,7 +3530,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             List<Double> exposures,
             int numFrames,
             boolean generatePlots,
-            java.util.function.BiConsumer<Integer, Integer> progressCallback) throws IOException {
+            java.util.function.BiConsumer<Integer, Integer> progressCallback)
+            throws IOException {
 
         // Build NOISCHAR command message
         StringBuilder messageBuilder = new StringBuilder();
@@ -3525,8 +3655,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         double bestExp = 0;
 
                         if (parts.length > 1) {
-                            try { totalConfigs = Integer.parseInt(parts[1].trim()); }
-                            catch (NumberFormatException ignored) {}
+                            try {
+                                totalConfigs = Integer.parseInt(parts[1].trim());
+                            } catch (NumberFormatException ignored) {
+                            }
                         }
                         if (parts.length > 2) {
                             plots = "true".equals(parts[2].trim());
@@ -3537,12 +3669,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
                                 try {
                                     bestGain = Double.parseDouble(bestParts[0].trim());
                                     bestExp = Double.parseDouble(bestParts[1].trim());
-                                } catch (NumberFormatException ignored) {}
+                                } catch (NumberFormatException ignored) {
+                                }
                             }
                         }
 
-                        logger.info("Noise characterization complete: {} configs, best at gain={}, exp={}ms",
-                                totalConfigs, bestGain, bestExp);
+                        logger.info(
+                                "Noise characterization complete: {} configs, best at gain={}, exp={}ms",
+                                totalConfigs,
+                                bestGain,
+                                bestExp);
                         return new NoiseCharacterizationResult(totalConfigs, plots, bestGain, bestExp, resultPath);
                     }
 
@@ -3621,9 +3757,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param greenSNR Green channel signal-to-noise ratio
      * @param blueSNR Blue channel signal-to-noise ratio
      */
-    public record NoiseResult(double redMean, double greenMean, double blueMean,
-                              double redStdDev, double greenStdDev, double blueStdDev,
-                              double redSNR, double greenSNR, double blueSNR) {}
+    public record NoiseResult(
+            double redMean,
+            double greenMean,
+            double blueMean,
+            double redStdDev,
+            double greenStdDev,
+            double blueStdDev,
+            double redSNR,
+            double greenSNR,
+            double blueSNR) {}
 
     /**
      * Gets the current camera name from the microscope Core.
@@ -3691,7 +3834,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
     public void setCameraMode(boolean exposureIndividual) throws IOException {
         byte[] modeData = new byte[2];
         modeData[0] = (byte) (exposureIndividual ? 1 : 0);
-        modeData[1] = (byte) 0;  // Gain always unified
+        modeData[1] = (byte) 0; // Gain always unified
 
         byte[] response = executeCommand(Command.SETMODE, modeData, 8);
         String responseStr = new String(response, StandardCharsets.UTF_8).trim();
@@ -3858,7 +4001,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
      */
     public void setGains(float[] gains) throws IOException {
         if (gains == null || (gains.length != 1 && gains.length != 3)) {
-            throw new IllegalArgumentException("Gains must have length 1 (unified only) or 3 (unified, analog_red, analog_blue)");
+            throw new IllegalArgumentException(
+                    "Gains must have length 1 (unified only) or 3 (unified, analog_red, analog_blue)");
         }
 
         // Build payload: 1 byte count + N floats
@@ -3884,62 +4028,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
     // ==================== White Balance Mode Control ====================
 
-    /**
-     * Sets the camera's white balance mode.
-     *
-     * <p>Modes 0-2 are simple property sets (fast). Mode 3 runs a full
-     * calibration routine on the server (slow, ~5 seconds).
-     *
-     * @param mode 0=Off, 1=Continuous, 2=Once (native one-shot), 3=Full AWB calibration
-     * @throws IOException if communication fails
-     */
-    public void setWhiteBalanceMode(int mode) throws IOException {
-        if (mode < 0 || mode > 3) {
-            throw new IllegalArgumentException(
-                    "WB mode must be 0 (Off), 1 (Continuous), 2 (Once), or 3 (Full AWB calibration)");
-        }
-
-        // Mode 3 (full AWB calibration) runs streaming + equilibration on the server
-        // which takes ~5 seconds. Temporarily increase the read timeout so we
-        // don't time out and leave the server streaming in the background.
-        byte[] response;
-        if (mode == 3) {
-            synchronized (socketLock) {
-                ensureConnected();
-                int originalTimeout = socket.getSoTimeout();
-                try {
-                    socket.setSoTimeout(15000); // 15 seconds for AWB calibration
-                    output.write(Command.SETWBMD.getValue());
-                    output.write(new byte[]{(byte) mode});
-                    output.flush();
-                    lastActivityTime.set(System.currentTimeMillis());
-                    response = new byte[8];
-                    input.readFully(response);
-                    lastActivityTime.set(System.currentTimeMillis());
-                } catch (IOException e) {
-                    handleIOException(e);
-                    throw e;
-                } finally {
-                    try { socket.setSoTimeout(originalTimeout); } catch (Exception ignored) {}
-                }
-            }
-        } else {
-            byte[] payload = new byte[]{(byte) mode};
-            response = executeCommand(Command.SETWBMD, payload, 8);
-        }
-
-        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
-
-        if (!responseStr.startsWith("ACK")) {
-            if (responseStr.startsWith("ERR_NJAI")) {
-                throw new IOException("White balance mode requires JAI camera");
-            }
-            throw new IOException("Failed to set WB mode: " + responseStr);
-        }
-
-        String[] modeNames = {"Off", "Continuous", "Once", "Full AWB Calibration"};
-        logger.info("White balance mode set to: {}", modeNames[mode]);
-    }
+    // NOTE: setWhiteBalanceMode() was removed -- JAI hardware AWB cannot be
+    // reliably controlled through Pycromanager. Camera AWB must be set manually
+    // in MicroManager's Device Property Browser.
 
     // ==================== Noise Measurement Methods ====================
 
@@ -3957,7 +4048,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throw new IllegalArgumentException("numFrames must be between 1 and 255");
         }
 
-        byte[] payload = new byte[]{(byte) numFrames};
+        byte[] payload = new byte[] {(byte) numFrames};
         // Response: 9 big-endian floats (36 bytes)
         byte[] response = executeCommand(Command.GETNOISE, payload, 36);
 
@@ -3979,10 +4070,20 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throw new IOException("Failed to get noise statistics");
         }
 
-        logger.debug("Noise stats: R(mean={}, std={}, snr={}), G(mean={}, std={}, snr={}), B(mean={}, std={}, snr={})",
-                redMean, redStdDev, redSNR, greenMean, greenStdDev, greenSNR, blueMean, blueStdDev, blueSNR);
+        logger.debug(
+                "Noise stats: R(mean={}, std={}, snr={}), G(mean={}, std={}, snr={}), B(mean={}, std={}, snr={})",
+                redMean,
+                redStdDev,
+                redSNR,
+                greenMean,
+                greenStdDev,
+                greenSNR,
+                blueMean,
+                blueStdDev,
+                blueSNR);
 
-        return new NoiseResult(redMean, greenMean, blueMean, redStdDev, greenStdDev, blueStdDev, redSNR, greenSNR, blueSNR);
+        return new NoiseResult(
+                redMean, greenMean, blueMean, redStdDev, greenStdDev, blueStdDev, redSNR, greenSNR, blueSNR);
     }
 
     // ==================== Live Mode Control Methods ====================
@@ -4007,7 +4108,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if communication fails or studio is not available
      */
     public void setLiveMode(boolean enable) throws IOException {
-        byte[] payload = new byte[] { (byte) (enable ? 1 : 0) };
+        byte[] payload = new byte[] {(byte) (enable ? 1 : 0)};
         byte[] response = executeCommand(Command.SETLIVE, payload, 8);
         String responseStr = new String(response, StandardCharsets.UTF_8).trim();
 
@@ -4074,9 +4175,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 auxInput.readFully(pixelData);
 
                 return new qupath.ext.qpsc.ui.liveviewer.FrameData(
-                        width, height, channels, bytesPerPixel,
-                        pixelData, System.currentTimeMillis()
-                );
+                        width, height, channels, bytesPerPixel, pixelData, System.currentTimeMillis());
 
             } catch (IOException e) {
                 // If auxiliary fails, clean it up so it can reconnect
@@ -4155,5 +4254,4 @@ public class MicroscopeSocketClient implements AutoCloseable {
             }
         }
     }
-
 }

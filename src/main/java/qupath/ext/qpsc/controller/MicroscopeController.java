@@ -4,19 +4,16 @@ import java.awt.geom.AffineTransform;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
-import qupath.lib.gui.QuPathGUI;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.objects.PathObject;
 
 /**
@@ -77,14 +74,7 @@ public class MicroscopeController {
 
         // Initialize socket client with configuration from preferences
         this.socketClient = new MicroscopeSocketClient(
-                host,
-                port,
-                connectTimeout,
-                readTimeout,
-                maxReconnects,
-                reconnectDelay,
-                healthCheckInterval
-        );
+                host, port, connectTimeout, readTimeout, maxReconnects, reconnectDelay, healthCheckInterval);
 
         // Attempt initial connection if auto-connect is enabled
         if (autoConnect) {
@@ -93,8 +83,7 @@ public class MicroscopeController {
                 logger.info("Successfully connected to microscope server at {}:{}", host, port);
                 PersistentPreferences.setSocketLastConnectionStatus("Connected");
                 PersistentPreferences.setSocketLastConnectionTime(
-                        new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date())
-                );
+                        new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date()));
             } catch (IOException e) {
                 String errorMsg = e.getMessage();
 
@@ -156,8 +145,9 @@ public class MicroscopeController {
      */
     public void setAcquisitionActive(boolean active) {
         this.acquisitionActive = active;
-        logger.info("Acquisition lock {}", active ? "ENGAGED - user stage movements blocked"
-                : "RELEASED - user stage movements allowed");
+        logger.info(
+                "Acquisition lock {}",
+                active ? "ENGAGED - user stage movements blocked" : "RELEASED - user stage movements allowed");
     }
 
     /**
@@ -185,10 +175,7 @@ public class MicroscopeController {
         long now = System.currentTimeMillis();
         if (now - lastBlockedNotificationTime > BLOCKED_NOTIFICATION_COOLDOWN_MS) {
             lastBlockedNotificationTime = now;
-            UIFunctions.notifyUserOfError(
-                    "Stage movement is locked during acquisition.",
-                    "Movement Locked"
-            );
+            UIFunctions.notifyUserOfError("Stage movement is locked during acquisition.", "Movement Locked");
         }
         return true;
     }
@@ -244,8 +231,8 @@ public class MicroscopeController {
         }
     }
 
-// Remove the isWithinBoundsXY and isWithinBoundsZ methods entirely
-// Update the moveStageXY method:
+    // Remove the isWithinBoundsXY and isWithinBoundsZ methods entirely
+    // Update the moveStageXY method:
 
     /**
      * Moves the stage in X,Y only. Z position is not affected.
@@ -265,8 +252,7 @@ public class MicroscopeController {
         if (!mgr.isWithinStageBounds(x, y)) {
             UIFunctions.notifyUserOfError(
                     String.format("Target position (%.2f, %.2f) is outside stage limits", x, y),
-                    "Stage Limits Exceeded"
-            );
+                    "Stage Limits Exceeded");
             return;
         }
 
@@ -275,10 +261,7 @@ public class MicroscopeController {
             logger.info("Successfully moved stage to XY: ({}, {})", x, y);
         } catch (IOException e) {
             logger.error("Failed to move stage XY: {}", e.getMessage());
-            UIFunctions.notifyUserOfError(
-                    "Failed to move stage XY: " + e.getMessage(),
-                    "Stage Move Error"
-            );
+            UIFunctions.notifyUserOfError("Failed to move stage XY: " + e.getMessage(), "Stage Move Error");
         }
     }
 
@@ -298,9 +281,7 @@ public class MicroscopeController {
 
         if (!mgr.isWithinStageBounds(z)) {
             UIFunctions.notifyUserOfError(
-                    String.format("Target Z position %.2f is outside stage limits", z),
-                    "Stage Limits Exceeded"
-            );
+                    String.format("Target Z position %.2f is outside stage limits", z), "Stage Limits Exceeded");
             return;
         }
 
@@ -309,10 +290,7 @@ public class MicroscopeController {
             logger.info("Successfully moved stage to Z: {}", z);
         } catch (IOException e) {
             logger.error("Failed to move stage Z: {}", e.getMessage());
-            UIFunctions.notifyUserOfError(
-                    "Failed to move stage Z: " + e.getMessage(),
-                    "Stage Move Error"
-            );
+            UIFunctions.notifyUserOfError("Failed to move stage Z: " + e.getMessage(), "Stage Move Error");
         }
     }
 
@@ -331,10 +309,7 @@ public class MicroscopeController {
             logger.info("Successfully rotated stage to {} ticks", angle);
         } catch (IOException e) {
             logger.error("Failed to rotate stage: {}", e.getMessage());
-            UIFunctions.notifyUserOfError(
-                    "Failed to rotate stage: " + e.getMessage(),
-                    "Stage Move Error"
-            );
+            UIFunctions.notifyUserOfError("Failed to rotate stage: " + e.getMessage(), "Stage Move Error");
         }
     }
 
@@ -373,20 +348,20 @@ public class MicroscopeController {
     public void onMoveButtonClicked(PathObject tile) {
         if (currentTransform.get() == null) {
             UIFunctions.notifyUserOfError(
-                    "No transformation set. Please run alignment workflow first.",
-                    "No Transform"
-            );
+                    "No transformation set. Please run alignment workflow first.", "No Transform");
             return;
         }
 
         // Compute stage coordinates from QuPath coordinates
         double[] qpCoords = {tile.getROI().getCentroidX(), tile.getROI().getCentroidY()};
-        double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
-                qpCoords, currentTransform.get()
-        );
+        double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(qpCoords, currentTransform.get());
 
-        logger.info("Moving to tile center - QuPath: ({}, {}) -> Stage: ({}, {})",
-                qpCoords[0], qpCoords[1], stageCoords[0], stageCoords[1]);
+        logger.info(
+                "Moving to tile center - QuPath: ({}, {}) -> Stage: ({}, {})",
+                qpCoords[0],
+                qpCoords[1],
+                stageCoords[0],
+                stageCoords[1]);
 
         moveStageXY(stageCoords[0], stageCoords[1]);
     }
@@ -463,21 +438,19 @@ public class MicroscopeController {
         // Get detector dimensions
         int[] dimensions = mgr.getDetectorDimensions(detectorId);
         if (dimensions == null) {
-            throw new IOException(String.format(
-                    "No detector dimensions found for detector '%s'",
-                    detectorId));
+            throw new IOException(String.format("No detector dimensions found for detector '%s'", detectorId));
         }
 
         double fovWidth = dimensions[0] * pixelSize;
         double fovHeight = dimensions[1] * pixelSize;
 
         logger.info("CRITICAL FOV CALCULATION (explicit hardware):");
-        logger.info("  Pixel size from config: {} µm/pixel", pixelSize);
+        logger.info("  Pixel size from config: {} um/pixel", pixelSize);
         logger.info("  Detector dimensions: {}x{} pixels", dimensions[0], dimensions[1]);
-        logger.info("  Calculated FOV: {} x {} µm", fovWidth, fovHeight);
-        logger.info("  FOV calculation: {}px * {}µm/px = {}µm width", dimensions[0], pixelSize, fovWidth);
+        logger.info("  Calculated FOV: {} x {} um", fovWidth, fovHeight);
+        logger.info("  FOV calculation: {}px * {}um/px = {}um width", dimensions[0], pixelSize, fovWidth);
 
-        return new double[]{fovWidth, fovHeight};
+        return new double[] {fovWidth, fovHeight};
     }
 
     /**
@@ -628,7 +601,8 @@ public class MicroscopeController {
      * @param rotationDegrees The rotation angle in degrees to move to
      * @throws IOException if communication fails
      */
-    public void applyCameraSettingsForAngle(String angleName, float[] exposures, float[] gains, double rotationDegrees) throws IOException {
+    public void applyCameraSettingsForAngle(String angleName, float[] exposures, float[] gains, double rotationDegrees)
+            throws IOException {
         logger.info("Applying camera settings for angle '{}' at {} degrees", angleName, rotationDegrees);
 
         // Set camera exposure mode. Gain is always unified (R/B analog adjusted separately).
@@ -673,23 +647,9 @@ public class MicroscopeController {
 
     // ==================== White Balance Mode Control ====================
 
-    /**
-     * Sets the camera's white balance mode.
-     *
-     * @param mode 0=Off, 1=Continuous, 2=Once (native one-shot),
-     *             3=Full AWB calibration (streaming + equilibration, ~5s)
-     * @throws IOException if communication fails
-     */
-    public void setWhiteBalanceMode(int mode) throws IOException {
-        try {
-            socketClient.setWhiteBalanceMode(mode);
-            String[] modeNames = {"Off", "Continuous", "Once", "Full AWB Calibration"};
-            logger.info("Set white balance mode to: {}", modeNames[mode]);
-        } catch (IOException e) {
-            logger.error("Failed to set white balance mode: {}", e.getMessage());
-            throw new IOException("Failed to set white balance mode via socket", e);
-        }
-    }
+    // NOTE: setWhiteBalanceMode() was removed -- JAI hardware AWB cannot be
+    // reliably controlled through Pycromanager. Camera AWB must be set manually
+    // in MicroManager's Device Property Browser.
 
     // ==================== Noise Measurement Methods ====================
 
@@ -912,8 +872,10 @@ public class MicroscopeController {
             Thread.currentThread().interrupt();
         }
 
-        logger.info("All live viewing stopped - QPSC was streaming: {}, MM was running: {}",
-                qpscLiveViewerWasStreaming, mmLiveModeWasRunning);
+        logger.info(
+                "All live viewing stopped - QPSC was streaming: {}, MM was running: {}",
+                qpscLiveViewerWasStreaming,
+                mmLiveModeWasRunning);
 
         return new LiveViewState(qpscLiveViewerWasStreaming, mmLiveModeWasRunning);
     }

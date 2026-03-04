@@ -1,5 +1,7 @@
 package qupath.ext.qpsc.ui;
 
+import java.io.IOException;
+import java.util.*;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -14,9 +16,6 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-
-import java.io.IOException;
-import java.util.*;
 
 /**
  * CameraControlController - Camera settings control interface for JAI and other cameras.
@@ -51,6 +50,7 @@ public class CameraControlController {
 
     /** Default PPM angle names and their rotation values, used when config is unavailable */
     private static final Map<String, Double> DEFAULT_PPM_ANGLES = new LinkedHashMap<>();
+
     static {
         DEFAULT_PPM_ANGLES.put("uncrossed", 90.0);
         DEFAULT_PPM_ANGLES.put("crossed", 0.0);
@@ -60,16 +60,19 @@ public class CameraControlController {
 
     /** JAI R/B analog gain limits (green is reference channel, not adjusted) */
     private static final double GAIN_ANALOG_RED_MIN = 0.47;
+
     private static final double GAIN_ANALOG_RED_MAX = 4.0;
     private static final double GAIN_ANALOG_BLUE_MIN = 0.47;
     private static final double GAIN_ANALOG_BLUE_MAX = 4.0;
 
     /** JAI unified gain limits (applied equally to all channels) */
     private static final double GAIN_UNIFIED_MIN = 1.0;
+
     private static final double GAIN_UNIFIED_MAX = 8.0;
 
     /** Style for invalid input fields */
     private static final String STYLE_INVALID = "-fx-border-color: red; -fx-border-width: 2px;";
+
     private static final String STYLE_WARNING = "-fx-border-color: orange; -fx-border-width: 2px;";
     private static final String STYLE_NORMAL = "";
 
@@ -117,7 +120,7 @@ public class CameraControlController {
         ResourceBundle res = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings");
 
         Dialog<Void> dlg = new Dialog<>();
-        activeDialog = dlg;  // Track the active dialog
+        activeDialog = dlg; // Track the active dialog
         dlg.setTitle(res.getString("camera.dialog.title"));
         dlg.setHeaderText(res.getString("camera.dialog.header"));
 
@@ -177,8 +180,11 @@ public class CameraControlController {
                             objectiveCombo.setValue(obj);
                             detectorCombo.setValue(det);
                             autoDetected = true;
-                            logger.info("Auto-detected objective/detector from MM pixel size {}: {} / {}",
-                                    mmPixelSize, obj, det);
+                            logger.info(
+                                    "Auto-detected objective/detector from MM pixel size {}: {} / {}",
+                                    mmPixelSize,
+                                    obj,
+                                    det);
                             break;
                         }
                     }
@@ -234,8 +240,8 @@ public class CameraControlController {
         expIndividualRb.setToggleGroup(exposureModeGroup);
         expUnifiedRb.setToggleGroup(exposureModeGroup);
 
-        HBox expModeRow = new HBox(10, new Label(res.getString("camera.label.exposureMode")),
-                expIndividualRb, expUnifiedRb);
+        HBox expModeRow =
+                new HBox(10, new Label(res.getString("camera.label.exposureMode")), expIndividualRb, expUnifiedRb);
         expModeRow.setAlignment(Pos.CENTER_LEFT);
 
         modeBox.getChildren().add(expModeRow);
@@ -267,8 +273,7 @@ public class CameraControlController {
             expIndividualRb.setOnAction(e -> {
                 try {
                     boolean expInd = expIndividualRb.isSelected();
-                    controller.withLiveModeHandling(() ->
-                            controller.setCameraMode(expInd));
+                    controller.withLiveModeHandling(() -> controller.setCameraMode(expInd));
                     updateAllFieldStates(angleFieldsMap, expInd);
                 } catch (IOException ex) {
                     revertRadioButtonsToCamera(controller, expIndividualRb, expUnifiedRb, angleFieldsMap);
@@ -278,8 +283,7 @@ public class CameraControlController {
             expUnifiedRb.setOnAction(e -> {
                 try {
                     boolean expInd = expIndividualRb.isSelected();
-                    controller.withLiveModeHandling(() ->
-                            controller.setCameraMode(expInd));
+                    controller.withLiveModeHandling(() -> controller.setCameraMode(expInd));
                     updateAllFieldStates(angleFieldsMap, expInd);
                 } catch (IOException ex) {
                     revertRadioButtonsToCamera(controller, expIndividualRb, expUnifiedRb, angleFieldsMap);
@@ -291,51 +295,19 @@ public class CameraControlController {
         content.getChildren().add(modeBox);
 
         // --- White Balance Mode Section (JAI only) ---
-        VBox wbModeBox = new VBox(5);
-        wbModeBox.setPadding(new Insets(5, 0, 5, 0));
-
-        ComboBox<String> wbModeCombo = new ComboBox<>();
-        wbModeCombo.getItems().addAll("Off", "Continuous", "Once");
-        wbModeCombo.setValue("Off");
-
-        // Apply WB mode immediately on selection change, disabling the combo box
-        // while the command executes to prevent rapid repeated changes
-        wbModeCombo.setOnAction(e -> {
-            String selected = wbModeCombo.getValue();
-            if (selected == null) return;
-
-            int mode = switch (selected) {
-                case "Continuous" -> 1;
-                case "Once" -> 2;
-                default -> 0;
-            };
-
-            wbModeCombo.setDisable(true);
-            Thread thread = new Thread(() -> {
-                try {
-                    // Send WB mode directly without stopping live mode.
-                    // "Continuous" mode requires active frame acquisition to function --
-                    // withLiveModeHandling() would stop live mode first, causing the
-                    // camera to reject or ignore the "Continuous" setting.
-                    controller.setWhiteBalanceMode(mode);
-                    logger.info("Applied WB mode: {}", selected);
-                } catch (IOException ex) {
-                    Platform.runLater(() ->
-                            UIFunctions.notifyUserOfError("Failed to set WB mode: " + ex.getMessage(), "Error"));
-                    logger.error("Failed to set WB mode: {}", ex.getMessage());
-                } finally {
-                    Platform.runLater(() -> wbModeCombo.setDisable(false));
-                }
-            });
-            thread.setDaemon(true);
-            thread.start();
-        });
-
-        HBox wbModeRow = new HBox(10, new Label("White Balance Mode:"), wbModeCombo);
-        wbModeRow.setAlignment(Pos.CENTER_LEFT);
-        wbModeBox.getChildren().add(wbModeRow);
-
+        // Camera WB mode cannot be controlled programmatically; show static label.
         if (isJAI) {
+            Label wbModeLabel = new Label("Camera WB: Set in MicroManager's Device Property Browser");
+            wbModeLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+            wbModeLabel.setWrapText(true);
+            wbModeLabel.setTooltip(new Tooltip(
+                    "Camera AWB cannot be controlled programmatically.\n"
+                    + "Open MicroManager's Device Property Browser -> JAICamera -> WhiteBalance\n"
+                    + "to set Continuous/Once/Off.\n"
+                    + "To clear AWB: restart MicroManager and wait ~30 seconds."));
+            VBox wbModeBox = new VBox(5);
+            wbModeBox.setPadding(new Insets(5, 0, 5, 0));
+            wbModeBox.getChildren().add(wbModeLabel);
             content.getChildren().add(wbModeBox);
         }
 
@@ -347,7 +319,8 @@ public class CameraControlController {
         settingsNote.setWrapText(true);
 
         // Note about stage rotation
-        Label rotationNote = new Label("Note: Clicking 'Apply & Go' will rotate the polarization stage to the selected angle.");
+        Label rotationNote =
+                new Label("Note: Clicking 'Apply & Go' will rotate the polarization stage to the selected angle.");
         rotationNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #cc6600; -fx-font-weight: bold;");
         rotationNote.setWrapText(true);
 
@@ -363,8 +336,8 @@ public class CameraControlController {
         statusLabel.setStyle("-fx-font-size: 11px;");
 
         // Styles for row differentiation
-        final String EXPOSURE_ROW_STYLE = "-fx-background-color: #f0f7ff; -fx-padding: 4px;";  // Light blue
-        final String GAIN_ROW_STYLE = "-fx-background-color: #fff7f0; -fx-padding: 4px;";      // Light peach
+        final String EXPOSURE_ROW_STYLE = "-fx-background-color: #f0f7ff; -fx-padding: 4px;"; // Light blue
+        final String GAIN_ROW_STYLE = "-fx-background-color: #fff7f0; -fx-padding: 4px;"; // Light peach
         final String ANGLE_HEADER_STYLE = "-fx-background-color: #e8e8e8; -fx-padding: 6px;";
 
         // Load PPM angles from YAML config (falls back to defaults)
@@ -380,7 +353,8 @@ public class CameraControlController {
 
             // Create a bordered VBox for each angle "card"
             VBox angleCard = new VBox(0);
-            angleCard.setStyle("-fx-border-color: #cccccc; -fx-border-width: 1px; -fx-border-radius: 4px; -fx-background-radius: 4px;");
+            angleCard.setStyle(
+                    "-fx-border-color: #cccccc; -fx-border-width: 1px; -fx-border-radius: 4px; -fx-background-radius: 4px;");
 
             // --- Angle Header Row with Apply Button ---
             HBox headerRow = new HBox(10);
@@ -393,8 +367,8 @@ public class CameraControlController {
             HBox.setHgrow(angleLabel, Priority.ALWAYS);
 
             Button applyButton = new Button("Apply & Go");
-            applyButton.setTooltip(new Tooltip(String.format(
-                    "Apply camera settings and rotate polarizer to %.0f deg", angleDegrees)));
+            applyButton.setTooltip(
+                    new Tooltip(String.format("Apply camera settings and rotate polarizer to %.0f deg", angleDegrees)));
 
             headerRow.getChildren().addAll(angleLabel, applyButton);
             angleCard.getChildren().add(headerRow);
@@ -459,7 +433,9 @@ public class CameraControlController {
             Label gainLabel = new Label(res.getString("camera.label.gain"));
             gainLabel.setStyle("-fx-font-weight: bold;");
             gainLabel.setMinWidth(100);
-            gainLabel.setTooltip(new Tooltip("Unified gain: 1.0-8.0\nAnalog Red: 0.47-4.0\nAnalog Blue: 0.47-4.0\n(Green is reference channel)"));
+            gainLabel.setTooltip(
+                    new Tooltip(
+                            "Unified gain: 1.0-8.0\nAnalog Red: 0.47-4.0\nAnalog Blue: 0.47-4.0\n(Green is reference channel)"));
 
             TextField gainUnifiedField = createGainField("1.0", GAIN_UNIFIED_MIN, GAIN_UNIFIED_MAX, "Unified");
             gainUnifiedField.setTooltip(new Tooltip("Unified gain (1.0-8.0, applies to all channels)"));
@@ -492,8 +468,8 @@ public class CameraControlController {
             angleCard.getChildren().addAll(expRow, gainRow);
 
             // Store fields for this angle
-            AngleFields fields = new AngleFields(expAllField, expRField, expGField, expBField,
-                    gainUnifiedField, gainRField, gainBField);
+            AngleFields fields = new AngleFields(
+                    expAllField, expRField, expGField, expBField, gainUnifiedField, gainRField, gainBField);
             angleFieldsMap.put(angleName, fields);
 
             // Wire up Apply button
@@ -501,10 +477,15 @@ public class CameraControlController {
             final TextField finalExpGField = expGField;
             final TextField finalExpBField = expBField;
             applyButton.setOnAction(e -> applySettingsWithLiveModeHandling(
-                    controller, angleName, angleDegrees,
-                    finalExpRField, finalExpGField, finalExpBField,
+                    controller,
+                    angleName,
+                    angleDegrees,
+                    finalExpRField,
+                    finalExpGField,
+                    finalExpBField,
                     angleFieldsMap.get(angleName),
-                    statusLabel, res));
+                    statusLabel,
+                    res));
 
             anglesContainer.getChildren().add(angleCard);
         }
@@ -520,9 +501,16 @@ public class CameraControlController {
             String objective = objectiveCombo.getValue();
             String detector = detectorCombo.getValue();
             if (objective != null && detector != null) {
-                reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res,
+                reloadAllAnglesFromYAML(
+                        mgr,
+                        objective,
+                        detector,
+                        angleFieldsMap,
+                        statusLabel,
+                        res,
                         isJAIFinal ? controller : null,
-                        expIndividualRb, expUnifiedRb,
+                        expIndividualRb,
+                        expUnifiedRb,
                         wbMethodLabel);
             }
         });
@@ -532,9 +520,16 @@ public class CameraControlController {
             String objective = objectiveCombo.getValue();
             String detector = detectorCombo.getValue();
             if (objective != null && detector != null) {
-                reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res,
+                reloadAllAnglesFromYAML(
+                        mgr,
+                        objective,
+                        detector,
+                        angleFieldsMap,
+                        statusLabel,
+                        res,
                         isJAIFinal ? controller : null,
-                        expIndividualRb, expUnifiedRb,
+                        expIndividualRb,
+                        expUnifiedRb,
                         wbMethodLabel);
             }
         });
@@ -542,9 +537,16 @@ public class CameraControlController {
             String objective = objectiveCombo.getValue();
             String detector = detectorCombo.getValue();
             if (objective != null && detector != null) {
-                reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res,
+                reloadAllAnglesFromYAML(
+                        mgr,
+                        objective,
+                        detector,
+                        angleFieldsMap,
+                        statusLabel,
+                        res,
                         isJAIFinal ? controller : null,
-                        expIndividualRb, expUnifiedRb,
+                        expIndividualRb,
+                        expUnifiedRb,
                         wbMethodLabel);
             }
         });
@@ -553,9 +555,16 @@ public class CameraControlController {
         String objective = objectiveCombo.getValue();
         String detector = detectorCombo.getValue();
         if (objective != null && detector != null) {
-            reloadAllAnglesFromYAML(mgr, objective, detector, angleFieldsMap, statusLabel, res,
+            reloadAllAnglesFromYAML(
+                    mgr,
+                    objective,
+                    detector,
+                    angleFieldsMap,
+                    statusLabel,
+                    res,
                     isJAI ? controller : null,
-                    expIndividualRb, expUnifiedRb,
+                    expIndividualRb,
+                    expUnifiedRb,
                     wbMethodLabel);
         }
 
@@ -642,10 +651,14 @@ public class CameraControlController {
      */
     private static void applySettingsWithLiveModeHandling(
             MicroscopeController controller,
-            String angleName, double angleDegrees,
-            TextField expRField, TextField expGField, TextField expBField,
+            String angleName,
+            double angleDegrees,
+            TextField expRField,
+            TextField expGField,
+            TextField expBField,
             AngleFields fields,
-            Label statusLabel, ResourceBundle res) {
+            Label statusLabel,
+            ResourceBundle res) {
 
         try {
             // Parse exposure values - use unified field if individual fields are disabled
@@ -653,13 +666,13 @@ public class CameraControlController {
             if (fields.expR.isDisabled()) {
                 // Unified exposure mode - use the "All" field value for all channels
                 float expAll = Float.parseFloat(fields.expAll.getText());
-                exposures = new float[]{expAll, expAll, expAll};
+                exposures = new float[] {expAll, expAll, expAll};
             } else {
                 // Individual exposure mode - use per-channel fields
-                exposures = new float[]{
-                        Float.parseFloat(expRField.getText()),
-                        Float.parseFloat(expGField.getText()),
-                        Float.parseFloat(expBField.getText())
+                exposures = new float[] {
+                    Float.parseFloat(expRField.getText()),
+                    Float.parseFloat(expGField.getText()),
+                    Float.parseFloat(expBField.getText())
                 };
             }
 
@@ -667,32 +680,35 @@ public class CameraControlController {
             float gainUnified = Float.parseFloat(fields.gainUnified.getText());
             float analogRed = Float.parseFloat(fields.gainR.getText());
             float analogBlue = Float.parseFloat(fields.gainB.getText());
-            float[] gains = new float[]{gainUnified, analogRed, analogBlue};
+            float[] gains = new float[] {gainUnified, analogRed, analogBlue};
 
             // Check for out-of-range gains and build warning message
             StringBuilder gainWarnings = new StringBuilder();
             if (gainUnified < GAIN_UNIFIED_MIN || gainUnified > GAIN_UNIFIED_MAX) {
-                gainWarnings.append(String.format("Unified gain %.2f outside valid range %.1f-%.1f; ",
+                gainWarnings.append(String.format(
+                        "Unified gain %.2f outside valid range %.1f-%.1f; ",
                         gainUnified, GAIN_UNIFIED_MIN, GAIN_UNIFIED_MAX));
             }
             if (analogRed < GAIN_ANALOG_RED_MIN || analogRed > GAIN_ANALOG_RED_MAX) {
-                gainWarnings.append(String.format("Analog Red %.2f outside valid range %.2f-%.1f; ",
+                gainWarnings.append(String.format(
+                        "Analog Red %.2f outside valid range %.2f-%.1f; ",
                         analogRed, GAIN_ANALOG_RED_MIN, GAIN_ANALOG_RED_MAX));
             }
             if (analogBlue < GAIN_ANALOG_BLUE_MIN || analogBlue > GAIN_ANALOG_BLUE_MAX) {
-                gainWarnings.append(String.format("Analog Blue %.2f outside valid range %.2f-%.1f; ",
+                gainWarnings.append(String.format(
+                        "Analog Blue %.2f outside valid range %.2f-%.1f; ",
                         analogBlue, GAIN_ANALOG_BLUE_MIN, GAIN_ANALOG_BLUE_MAX));
             }
 
             // Apply settings with live mode handling - stops live mode if running,
             // applies settings, then restores live mode
-            controller.withLiveModeHandling(() ->
-                    controller.applyCameraSettingsForAngle(angleName, exposures, gains, angleDegrees));
+            controller.withLiveModeHandling(
+                    () -> controller.applyCameraSettingsForAngle(angleName, exposures, gains, angleDegrees));
 
             // Show status with any gain warnings
             if (gainWarnings.length() > 0) {
-                statusLabel.setText(String.format("Applied %s (%.0f deg) - WARNING: %s",
-                        angleName, angleDegrees, gainWarnings.toString()));
+                statusLabel.setText(String.format(
+                        "Applied %s (%.0f deg) - WARNING: %s", angleName, angleDegrees, gainWarnings.toString()));
                 statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: orange;");
                 logger.warn("Applied settings for {} with clamped gains: {}", angleName, gainWarnings);
             } else {
@@ -732,11 +748,17 @@ public class CameraControlController {
      * @param wbMethodLabel Label to display WB method provenance (null to skip)
      */
     @SuppressWarnings("unchecked")
-    private static void reloadAllAnglesFromYAML(MicroscopeConfigManager mgr, String objective, String detector,
-                                                Map<String, AngleFields> angleFieldsMap, Label statusLabel,
-                                                ResourceBundle res, MicroscopeController controller,
-                                                RadioButton expIndividualRb, RadioButton expUnifiedRb,
-                                                Label wbMethodLabel) {
+    private static void reloadAllAnglesFromYAML(
+            MicroscopeConfigManager mgr,
+            String objective,
+            String detector,
+            Map<String, AngleFields> angleFieldsMap,
+            Label statusLabel,
+            ResourceBundle res,
+            MicroscopeController controller,
+            RadioButton expIndividualRb,
+            RadioButton expUnifiedRb,
+            Label wbMethodLabel) {
         logger.info("Reloading all angles from YAML for objective={}, detector={}", objective, detector);
 
         // Re-read the YAML files from disk so we pick up any changes made by
@@ -761,9 +783,15 @@ public class CameraControlController {
             // Detect the correct exposure mode from the YAML profile structure and
             // set radio buttons + camera mode accordingly.
             if (controller != null) {
-                detectAndSetModeFromYAML(mgr, objective, detector, controller,
-                        expIndividualRb, expUnifiedRb,
-                        angleFieldsMap, statusLabel);
+                detectAndSetModeFromYAML(
+                        mgr,
+                        objective,
+                        detector,
+                        controller,
+                        expIndividualRb,
+                        expUnifiedRb,
+                        angleFieldsMap,
+                        statusLabel);
             }
 
             // Update WB method provenance label from YAML gains data
@@ -790,10 +818,15 @@ public class CameraControlController {
      * Gain mode is always unified.
      */
     @SuppressWarnings("unchecked")
-    private static void detectAndSetModeFromYAML(MicroscopeConfigManager mgr, String objective, String detector,
-                                                  MicroscopeController controller,
-                                                  RadioButton expIndividualRb, RadioButton expUnifiedRb,
-                                                  Map<String, AngleFields> angleFieldsMap, Label statusLabel) {
+    private static void detectAndSetModeFromYAML(
+            MicroscopeConfigManager mgr,
+            String objective,
+            String detector,
+            MicroscopeController controller,
+            RadioButton expIndividualRb,
+            RadioButton expUnifiedRb,
+            Map<String, AngleFields> angleFieldsMap,
+            Label statusLabel) {
         try {
             // Check exposure structure from first available angle
             boolean hasPerChannelExposures = false;
@@ -815,7 +848,8 @@ public class CameraControlController {
             boolean targetExpIndividual = hasPerChannelExposures;
 
             if (expIndividualRb.isSelected() != targetExpIndividual) {
-                logger.info("Setting camera mode from YAML profile: exposure_individual={}, gain=unified",
+                logger.info(
+                        "Setting camera mode from YAML profile: exposure_individual={}, gain=unified",
                         targetExpIndividual);
 
                 // Update radio buttons (setSelected does not fire onAction)
@@ -824,8 +858,7 @@ public class CameraControlController {
 
                 // Send mode change to camera, wrapping with live mode handling
                 // to avoid JAI error 11018 if live streaming is active
-                controller.withLiveModeHandling(() ->
-                        controller.setCameraMode(targetExpIndividual));
+                controller.withLiveModeHandling(() -> controller.setCameraMode(targetExpIndividual));
             }
 
             // Always update field states to match the detected mode, even if the camera
@@ -844,9 +877,14 @@ public class CameraControlController {
      * Loads calibration values for a single angle from YAML configuration.
      */
     @SuppressWarnings("unchecked")
-    private static boolean loadAngleFromYAML(MicroscopeConfigManager mgr, String objective, String detector,
-                                             String angleName, AngleFields fields, Label statusLabel,
-                                             ResourceBundle res) {
+    private static boolean loadAngleFromYAML(
+            MicroscopeConfigManager mgr,
+            String objective,
+            String detector,
+            String angleName,
+            AngleFields fields,
+            Label statusLabel,
+            ResourceBundle res) {
         try {
             // Get exposures for this modality/objective/detector/angle
             // Expected structure: imaging_profiles.ppm.{objective}.{detector}.exposures_ms.{angle}
@@ -876,9 +914,13 @@ public class CameraControlController {
                     fields.expB.setText(String.valueOf(expValues.get("b")));
                 }
 
-                logger.debug("Loaded exposures for {}: all={}, r={}, g={}, b={}",
-                        angleName, expValues.get("all"), expValues.get("r"),
-                        expValues.get("g"), expValues.get("b"));
+                logger.debug(
+                        "Loaded exposures for {}: all={}, r={}, g={}, b={}",
+                        angleName,
+                        expValues.get("all"),
+                        expValues.get("r"),
+                        expValues.get("g"),
+                        expValues.get("b"));
             }
 
             // Get gains for this specific angle
@@ -905,8 +947,10 @@ public class CameraControlController {
                     fields.gainB.setText(String.valueOf(gainValues.get("b")));
                 }
 
-                logger.debug("Loaded gains for {}: unified={}, analog_red={}, analog_blue={}",
-                        angleName, gainValues.get("unified_gain"),
+                logger.debug(
+                        "Loaded gains for {}: unified={}, analog_red={}, analog_blue={}",
+                        angleName,
+                        gainValues.get("unified_gain"),
                         gainValues.getOrDefault("analog_red", gainValues.get("r")),
                         gainValues.getOrDefault("analog_blue", gainValues.get("b")));
             }
@@ -933,8 +977,8 @@ public class CameraControlController {
      * available angle in the gains section of the imaging profile.
      */
     @SuppressWarnings("unchecked")
-    private static void updateWbMethodLabel(MicroscopeConfigManager mgr, String objective, String detector,
-                                             Label wbMethodLabel) {
+    private static void updateWbMethodLabel(
+            MicroscopeConfigManager mgr, String objective, String detector, Label wbMethodLabel) {
         String wbMethod = null;
         Map<String, Double> angles = loadPpmAngles(mgr);
         for (String angleName : angles.keySet()) {
@@ -1019,12 +1063,18 @@ public class CameraControlController {
         final TextField expR;
         final TextField expG;
         final TextField expB;
-        final TextField gainUnified;  // Unified digital gain (1.0-8.0)
-        final TextField gainR;        // Analog red gain (0.47-4.0)
-        final TextField gainB;        // Analog blue gain (0.47-4.0)
+        final TextField gainUnified; // Unified digital gain (1.0-8.0)
+        final TextField gainR; // Analog red gain (0.47-4.0)
+        final TextField gainB; // Analog blue gain (0.47-4.0)
 
-        AngleFields(TextField expAll, TextField expR, TextField expG, TextField expB,
-                    TextField gainUnified, TextField gainR, TextField gainB) {
+        AngleFields(
+                TextField expAll,
+                TextField expR,
+                TextField expG,
+                TextField expB,
+                TextField gainUnified,
+                TextField gainR,
+                TextField gainB) {
             this.expAll = expAll;
             this.expR = expR;
             this.expG = expG;
@@ -1067,15 +1117,18 @@ public class CameraControlController {
      * @param expUnifiedRb Exposure unified radio button
      * @param angleFieldsMap Map of angle name to UI fields
      */
-    private static void revertRadioButtonsToCamera(MicroscopeController controller,
-                                                    RadioButton expIndividualRb, RadioButton expUnifiedRb,
-                                                    Map<String, AngleFields> angleFieldsMap) {
+    private static void revertRadioButtonsToCamera(
+            MicroscopeController controller,
+            RadioButton expIndividualRb,
+            RadioButton expUnifiedRb,
+            Map<String, AngleFields> angleFieldsMap) {
         try {
             MicroscopeSocketClient.CameraModeResult mode = controller.getCameraMode();
             expIndividualRb.setSelected(mode.exposureIndividual());
             expUnifiedRb.setSelected(!mode.exposureIndividual());
             updateAllFieldStates(angleFieldsMap, mode.exposureIndividual());
-            logger.info("Reverted radio buttons to camera state: exp_individual={}, gain=unified",
+            logger.info(
+                    "Reverted radio buttons to camera state: exp_individual={}, gain=unified",
                     mode.exposureIndividual());
         } catch (IOException ex) {
             logger.warn("Could not query camera mode for revert: {}", ex.getMessage());
@@ -1086,8 +1139,7 @@ public class CameraControlController {
      * Updates all angle fields based on current exposure mode setting.
      * Gain fields are always enabled (gain mode is always unified).
      */
-    private static void updateAllFieldStates(Map<String, AngleFields> angleFieldsMap,
-                                              boolean expIndividual) {
+    private static void updateAllFieldStates(Map<String, AngleFields> angleFieldsMap, boolean expIndividual) {
         for (AngleFields fields : angleFieldsMap.values()) {
             fields.updateFieldStates(expIndividual);
         }
