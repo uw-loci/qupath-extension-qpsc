@@ -334,7 +334,7 @@ public class StageMapWindow {
             }
         });
 
-        topBar.getChildren().addAll(insertLabel, insertComboBox, movementWarningLabel, spacer, macroOverlayCheckbox, configButton, helpButton);
+        topBar.getChildren().addAll(insertLabel, insertComboBox, spacer, macroOverlayCheckbox, configButton, helpButton);
         return topBar;
     }
 
@@ -438,7 +438,7 @@ public class StageMapWindow {
         statusLabel = new Label("");
         statusLabel.setStyle("-fx-text-fill: #888;");
 
-        bottomBar.getChildren().addAll(positionLabel, targetLabel, spacer, statusLabel);
+        bottomBar.getChildren().addAll(positionLabel, targetLabel, spacer, movementWarningLabel, statusLabel);
         return bottomBar;
     }
 
