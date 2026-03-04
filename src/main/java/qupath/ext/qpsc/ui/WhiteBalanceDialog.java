@@ -20,7 +20,9 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -299,6 +301,11 @@ public class WhiteBalanceDialog {
                 // Simple WB
                 Spinner<?> targetSpinner = (Spinner<?>) simplePane.getContent().lookup("#targetIntensity");
                 Spinner<?> simpleExpSpinner = (Spinner<?>) simplePane.getContent().lookup("#simpleExposure");
+                // PPM WB - angles
+                Spinner<?> posAngleSpinner = (Spinner<?>) ppmPane.getContent().lookup("#positiveAngle");
+                Spinner<?> negAngleSpinner = (Spinner<?>) ppmPane.getContent().lookup("#negativeAngle");
+                Spinner<?> crossAngleSpinner = (Spinner<?>) ppmPane.getContent().lookup("#crossedAngle");
+                Spinner<?> uncrossAngleSpinner = (Spinner<?>) ppmPane.getContent().lookup("#uncrossedAngle");
                 // PPM WB - exposures
                 Spinner<?> posExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#positiveExposure");
                 Spinner<?> negExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#negativeExposure");
@@ -446,6 +453,12 @@ public class WhiteBalanceDialog {
                         ));
 
                     } else if (buttonType == runPPMButton) {
+                        // Get angle values from editable spinners
+                        double posAngle = (Double) posAngleSpinner.getValue();
+                        double negAngle = (Double) negAngleSpinner.getValue();
+                        double crossAngle = (Double) crossAngleSpinner.getValue();
+                        double uncrossAngle = (Double) uncrossAngleSpinner.getValue();
+
                         double posExp = (Double) posExpSpinner.getValue();
                         double negExp = (Double) negExpSpinner.getValue();
                         double crossExp = (Double) crossExpSpinner.getValue();
@@ -472,10 +485,10 @@ public class WhiteBalanceDialog {
                         logger.info("User selected PPM White Balance:");
                         logger.info("  Objective: {}, Detector: {}", selectedObjective, selectedDetector);
                         logger.info("  Output: {}", outPath);
-                        logger.info("  Positive ({}deg): {} ms, target={}", POSITIVE_ANGLE, posExp, posTarget);
-                        logger.info("  Negative ({}deg): {} ms, target={}", NEGATIVE_ANGLE, negExp, negTarget);
-                        logger.info("  Crossed ({}deg): {} ms, target={}", CROSSED_ANGLE, crossExp, crossTarget);
-                        logger.info("  Uncrossed ({}deg): {} ms, target={}", UNCROSSED_ANGLE, uncrossExp, uncrossTarget);
+                        logger.info("  Positive ({}deg): {} ms, target={}", posAngle, posExp, posTarget);
+                        logger.info("  Negative ({}deg): {} ms, target={}", negAngle, negExp, negTarget);
+                        logger.info("  Crossed ({}deg): {} ms, target={}", crossAngle, crossExp, crossTarget);
+                        logger.info("  Uncrossed ({}deg): {} ms, target={}", uncrossAngle, uncrossExp, uncrossTarget);
                         logger.info("  Tolerance: {}", tolerance);
                         logger.info("  Advanced: maxGain={}dB, gainThreshold={}, maxIter={}, calibrateBL={}",
                                 maxGain, gainThreshold, maxIter, calibrateBL);
@@ -487,24 +500,26 @@ public class WhiteBalanceDialog {
 
                         return WBDialogResult.ppm(new PPMWBParams(
                                 outPath, camera, selectedObjective, selectedDetector,
-                                POSITIVE_ANGLE, posExp, posTarget,
-                                NEGATIVE_ANGLE, negExp, negTarget,
-                                CROSSED_ANGLE, crossExp, crossTarget,
-                                UNCROSSED_ANGLE, uncrossExp, uncrossTarget,
+                                posAngle, posExp, posTarget,
+                                negAngle, negExp, negTarget,
+                                crossAngle, crossExp, crossTarget,
+                                uncrossAngle, uncrossExp, uncrossTarget,
                                 fallbackTarget, tolerance, advanced
                         ));
 
                     } else if (buttonType == runCameraAWBButton) {
+                        // Read uncrossed angle from spinner (if PPM pane was expanded) or from config
+                        double awbAngle = (Double) uncrossAngleSpinner.getValue();
                         logger.info("User selected Camera AWB:");
                         logger.info("  Objective: {}", selectedObjective);
-                        logger.info("  Rotation angle: {} deg (uncrossed)", UNCROSSED_ANGLE);
+                        logger.info("  Rotation angle: {} deg (uncrossed)", awbAngle);
 
                         if (selectedObjective != null) {
                             ppmObjectiveProperty.set(selectedObjective);
                         }
 
                         return WBDialogResult.cameraAWB(new CameraAWBParams(
-                                selectedObjective, UNCROSSED_ANGLE
+                                selectedObjective, awbAngle
                         ));
                     }
 
@@ -723,6 +738,58 @@ public class WhiteBalanceDialog {
     }
 
     /**
+     * Loads PPM angle values from YAML config, falling back to the static constants.
+     * Returns a map with keys: "positive", "negative", "crossed", "uncrossed".
+     */
+    private static Map<String, Double> loadConfiguredAngles() {
+        Map<String, Double> angles = new HashMap<>();
+        // Start with constant defaults
+        angles.put("positive", POSITIVE_ANGLE);
+        angles.put("negative", NEGATIVE_ANGLE);
+        angles.put("crossed", CROSSED_ANGLE);
+        angles.put("uncrossed", UNCROSSED_ANGLE);
+
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath != null && !configPath.isEmpty()) {
+                MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+                // Find the first PPM modality
+                Set<String> modalities = mgr.getAvailableModalities();
+                String ppmModality = null;
+                for (String m : modalities) {
+                    if (m.startsWith("ppm")) {
+                        ppmModality = m;
+                        break;
+                    }
+                }
+                if (ppmModality != null) {
+                    List<?> anglesList = mgr.getList("modalities", ppmModality, "rotation_angles");
+                    if (anglesList != null) {
+                        for (Object angleObj : anglesList) {
+                            if (angleObj instanceof Map<?, ?> angle) {
+                                Object name = angle.get("name");
+                                Object tickObj = angle.get("tick");
+                                if (name != null && tickObj instanceof Number) {
+                                    double tick = ((Number) tickObj).doubleValue();
+                                    String key = name.toString();
+                                    if (angles.containsKey(key)) {
+                                        angles.put(key, tick);
+                                    }
+                                }
+                            }
+                        }
+                        logger.info("Loaded PPM angles from config: {}", angles);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not load PPM angles from config, using defaults: {}", e.getMessage());
+        }
+
+        return angles;
+    }
+
+    /**
      * Creates the PPM White Balance pane with 4 angle/exposure/target triplets.
      */
     private static TitledPane createPPMWBPane() {
@@ -738,26 +805,36 @@ public class WhiteBalanceDialog {
         descLabel.setWrapText(true);
         descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
 
+        // Load configured angles from YAML (falls back to constants)
+        Map<String, Double> configAngles = loadConfiguredAngles();
+
         // Grid for angle/exposure/target triplets
         GridPane grid = new GridPane();
         grid.setHgap(15);
         grid.setVgap(8);
 
         // Header row
-        Label angleHeader = new Label("Angle");
+        Label nameHeader = new Label("Name");
+        nameHeader.setStyle("-fx-font-weight: bold;");
+        Label angleHeader = new Label("Angle (deg)");
         angleHeader.setStyle("-fx-font-weight: bold;");
         Label expHeader = new Label("Exposure (ms)");
         expHeader.setStyle("-fx-font-weight: bold;");
         Label targetHeader = new Label("Target Intensity");
         targetHeader.setStyle("-fx-font-weight: bold;");
 
-        grid.add(angleHeader, 0, 0);
-        grid.add(expHeader, 1, 0);
-        grid.add(targetHeader, 2, 0);
+        grid.add(nameHeader, 0, 0);
+        grid.add(angleHeader, 1, 0);
+        grid.add(expHeader, 2, 0);
+        grid.add(targetHeader, 3, 0);
 
-        // Positive (7.0 deg) - birefringence angle, moderate brightness
-        Label posLabel = new Label(String.format("Positive (%.1f deg):", POSITIVE_ANGLE));
-        posLabel.setPrefWidth(150);
+        // Positive - birefringence angle, moderate brightness
+        Label posLabel = new Label("Positive:");
+        posLabel.setPrefWidth(90);
+        Spinner<Double> posAngleSpinner = new Spinner<>(-180.0, 180.0, configAngles.get("positive"), 0.5);
+        posAngleSpinner.setId("positiveAngle");
+        posAngleSpinner.setEditable(true);
+        posAngleSpinner.setPrefWidth(80);
         double posDefault = Double.isNaN(ppmPositiveExpProperty.get()) ? 0.0 : ppmPositiveExpProperty.get();
         Spinner<Double> posSpinner = new Spinner<>(0.0, 500.0, posDefault, 1.0);
         posSpinner.setId("positiveExposure");
@@ -770,11 +847,16 @@ public class WhiteBalanceDialog {
         posTargetSpinner.setTooltip(new Tooltip("Target intensity for birefringence angle (moderate)"));
 
         grid.add(posLabel, 0, 1);
-        grid.add(posSpinner, 1, 1);
-        grid.add(posTargetSpinner, 2, 1);
+        grid.add(posAngleSpinner, 1, 1);
+        grid.add(posSpinner, 2, 1);
+        grid.add(posTargetSpinner, 3, 1);
 
-        // Negative (-7.0 deg) - birefringence angle, moderate brightness
-        Label negLabel = new Label(String.format("Negative (%.1f deg):", NEGATIVE_ANGLE));
+        // Negative - birefringence angle, moderate brightness
+        Label negLabel = new Label("Negative:");
+        Spinner<Double> negAngleSpinner = new Spinner<>(-180.0, 180.0, configAngles.get("negative"), 0.5);
+        negAngleSpinner.setId("negativeAngle");
+        negAngleSpinner.setEditable(true);
+        negAngleSpinner.setPrefWidth(80);
         double negDefault = Double.isNaN(ppmNegativeExpProperty.get()) ? 0.0 : ppmNegativeExpProperty.get();
         Spinner<Double> negSpinner = new Spinner<>(0.0, 500.0, negDefault, 1.0);
         negSpinner.setId("negativeExposure");
@@ -787,11 +869,16 @@ public class WhiteBalanceDialog {
         negTargetSpinner.setTooltip(new Tooltip("Target intensity for birefringence angle (moderate)"));
 
         grid.add(negLabel, 0, 2);
-        grid.add(negSpinner, 1, 2);
-        grid.add(negTargetSpinner, 2, 2);
+        grid.add(negAngleSpinner, 1, 2);
+        grid.add(negSpinner, 2, 2);
+        grid.add(negTargetSpinner, 3, 2);
 
-        // Crossed (0.0 deg) - very dim due to blocked light
-        Label crossLabel = new Label(String.format("Crossed (%.1f deg):", CROSSED_ANGLE));
+        // Crossed - very dim due to blocked light
+        Label crossLabel = new Label("Crossed:");
+        Spinner<Double> crossAngleSpinner = new Spinner<>(-180.0, 180.0, configAngles.get("crossed"), 0.5);
+        crossAngleSpinner.setId("crossedAngle");
+        crossAngleSpinner.setEditable(true);
+        crossAngleSpinner.setPrefWidth(80);
         double crossDefault = Double.isNaN(ppmCrossedExpProperty.get()) ? 0.0 : ppmCrossedExpProperty.get();
         Spinner<Double> crossSpinner = new Spinner<>(0.0, 5000.0, crossDefault, 10.0);  // Higher max for crossed
         crossSpinner.setId("crossedExposure");
@@ -804,11 +891,16 @@ public class WhiteBalanceDialog {
         crossTargetSpinner.setTooltip(new Tooltip("Target intensity for crossed polarizers (dim)"));
 
         grid.add(crossLabel, 0, 3);
-        grid.add(crossSpinner, 1, 3);
-        grid.add(crossTargetSpinner, 2, 3);
+        grid.add(crossAngleSpinner, 1, 3);
+        grid.add(crossSpinner, 2, 3);
+        grid.add(crossTargetSpinner, 3, 3);
 
-        // Uncrossed (90.0 deg) - very bright
-        Label uncrossLabel = new Label(String.format("Uncrossed (%.1f deg):", UNCROSSED_ANGLE));
+        // Uncrossed - very bright
+        Label uncrossLabel = new Label("Uncrossed:");
+        Spinner<Double> uncrossAngleSpinner = new Spinner<>(-180.0, 180.0, configAngles.get("uncrossed"), 0.5);
+        uncrossAngleSpinner.setId("uncrossedAngle");
+        uncrossAngleSpinner.setEditable(true);
+        uncrossAngleSpinner.setPrefWidth(80);
         double uncrossDefault = Double.isNaN(ppmUncrossedExpProperty.get()) ? 0.0 : ppmUncrossedExpProperty.get();
         Spinner<Double> uncrossSpinner = new Spinner<>(0.0, 500.0, uncrossDefault, 0.1);  // Fine control for short exposure
         uncrossSpinner.setId("uncrossedExposure");
@@ -821,12 +913,13 @@ public class WhiteBalanceDialog {
         uncrossTargetSpinner.setTooltip(new Tooltip("Target intensity for uncrossed polarizers (bright)"));
 
         grid.add(uncrossLabel, 0, 4);
-        grid.add(uncrossSpinner, 1, 4);
-        grid.add(uncrossTargetSpinner, 2, 4);
+        grid.add(uncrossAngleSpinner, 1, 4);
+        grid.add(uncrossSpinner, 2, 4);
+        grid.add(uncrossTargetSpinner, 3, 4);
 
-        // Note about fixed angles
+        // Note about editable angles
         Label noteLabel = new Label(
-                "(Angles are fixed at standard PPM values. Targets match optical properties.)"
+                "(Angle values loaded from config and are editable. Targets match optical properties.)"
         );
         noteLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
 

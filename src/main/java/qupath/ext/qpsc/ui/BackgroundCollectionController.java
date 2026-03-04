@@ -15,6 +15,7 @@ import qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.BackgroundCollect
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.modality.ppm.RotationManager;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
@@ -661,9 +662,9 @@ public class BackgroundCollectionController {
             handler.prepareForAcquisition(modality, objective, detector);
 
             if (handler.getDefaultAngleCount() > 1) {
-                // Multi-angle modality: get default angles and pair with config-prioritized exposures
-                // Use getDefaultAnglesWithExposure via the handler's normal flow but without dialog
-                handler.getRotationAngles(modality, objective, detector)
+                // Multi-angle modality: get all configured angles directly (no dialog popup)
+                RotationManager rotationManager = new RotationManager(modality, objective, detector);
+                rotationManager.getDefaultAnglesWithExposure(modality)
                     .thenApply(angles -> {
                         // Override exposures with background collection defaults from config
                         List<AngleExposure> defaults = new ArrayList<>();
