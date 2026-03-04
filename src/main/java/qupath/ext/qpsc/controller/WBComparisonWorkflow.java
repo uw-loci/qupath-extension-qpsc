@@ -312,7 +312,7 @@ public class WBComparisonWorkflow {
         Thread.sleep(1000); // settle
 
         calibrateWhiteBalance(wbMode, socketClient, configPath, bgDir,
-                params.targetIntensity(), objective, detector, angleExposures);
+                params.targetIntensity(), objective, detector, modality, angleExposures);
 
         // --- 3b. COLLECT BACKGROUNDS at blank position ---
         logger.info("[{}] Collecting backgrounds at blank position", wbMode);
@@ -445,7 +445,7 @@ public class WBComparisonWorkflow {
             String wbMode, MicroscopeSocketClient socketClient,
             String configPath, String outputPath,
             double targetIntensity, String objective, String detector,
-            List<AngleExposure> angleExposures
+            String modality, List<AngleExposure> angleExposures
     ) throws Exception {
         logger.info("[{}] Starting white balance calibration", wbMode);
 
@@ -470,7 +470,7 @@ public class WBComparisonWorkflow {
                         1.0,  // baseGain
                         100.0, // exposureSoftCapMs
                         12.0, // boostedMaxGainDb
-                        configPath, objective, detector
+                        configPath, objective, detector, modality
                 );
                 logger.info("[simple] Simple white balance calibration complete");
             }

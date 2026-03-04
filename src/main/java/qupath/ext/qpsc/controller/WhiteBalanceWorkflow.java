@@ -251,7 +251,17 @@ public class WhiteBalanceWorkflow {
                 var advanced = params.advanced();
                 String yamlPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
 
-                logger.info("Simple WB calibration: objective={}, detector={}", params.objective(), params.detector());
+                // Resolve modality from config so calibration results are saved to YAML
+                String modality = null;
+                try {
+                    var configManager = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(yamlPath);
+                    var modalities = configManager.getAvailableModalities();
+                    modality = modalities.contains("ppm") ? "ppm" : modalities.iterator().next();
+                } catch (Exception e2) {
+                    logger.warn("Could not resolve modality from config, calibration won't be saved to YAML: {}", e2.getMessage());
+                }
+
+                logger.info("Simple WB calibration: objective={}, detector={}, modality={}", params.objective(), params.detector(), modality);
 
                 MicroscopeSocketClient.WhiteBalanceResult result = client.runSimpleWhiteBalance(
                         params.outputPath(),
@@ -267,7 +277,8 @@ public class WhiteBalanceWorkflow {
                         advanced.boostedMaxGainDb(),
                         yamlPath,
                         params.objective(),
-                        params.detector()
+                        params.detector(),
+                        modality
                 );
 
                 Platform.runLater(() -> {

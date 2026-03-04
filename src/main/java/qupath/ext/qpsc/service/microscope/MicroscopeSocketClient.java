@@ -2972,7 +2972,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double boostedMaxGainDb,
             String yamlPath,
             String objective,
-            String detector) throws IOException {
+            String detector,
+            String modality) throws IOException {
 
         // Build WBSIMPLE command message
         StringBuilder message = new StringBuilder();
@@ -2984,6 +2985,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
         if (detector != null && !detector.isEmpty()) {
             message.append("--detector ").append(detector).append(" ");
+        }
+        if (modality != null && !modality.isEmpty()) {
+            message.append("--modality ").append(modality).append(" ");
         }
         message.append("--output ").append(outputPath);
         message.append(" --exposure ").append(initialExposureMs);
