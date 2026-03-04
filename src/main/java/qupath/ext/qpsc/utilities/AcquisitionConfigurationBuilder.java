@@ -178,9 +178,21 @@ public class AcquisitionConfigurationBuilder {
                     BackgroundValidationResult validation =
                             handler.validateBackgroundSettings(backgroundSettings, angleExposures, wbMode);
 
-                    // Combine angles without background and angles with exposure mismatches
+                    // Only disable angles that have no background image at all
                     disabledAngles.addAll(validation.anglesWithoutBackground);
-                    disabledAngles.addAll(validation.angleswithExposureMismatches);
+                    // Exposure mismatches are logged as warnings but do NOT disable correction.
+                    // Flat field correction (divide method) is exposure-independent: the spatial
+                    // illumination pattern (bg_pixel/bg_mean ratio) is constant regardless of
+                    // exposure time. Disabling correction for exposure mismatch prevents critical
+                    // vignetting correction from running.
+                    if (!validation.angleswithExposureMismatches.isEmpty()) {
+                        logger.warn(
+                                "Exposure mismatch detected for angles {} "
+                                        + "(background vs. acquisition exposures differ by >0.1ms). "
+                                        + "Flat field correction will still be applied - "
+                                        + "verify background image quality if artifacts appear.",
+                                validation.angleswithExposureMismatches);
+                    }
 
                     if (validation.wbModeMismatch) {
                         logger.warn(

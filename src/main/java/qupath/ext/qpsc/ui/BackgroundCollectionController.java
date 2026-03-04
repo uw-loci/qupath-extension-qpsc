@@ -384,30 +384,28 @@ public class BackgroundCollectionController {
                                 perAngleWbEnabled);
                         logger.debug("Creating exposure controls for {} angles", defaultExposures.size());
 
-                        // When per-angle white balance is enabled, always use calibrated values from config
-                        // (the defaultExposures now contain per-channel calibrated values from imageprocessing YAML)
-                        // When per-angle WB is disabled, prefer previous background collection values if available
-                        List<AngleExposure> exposuresToUse;
+                        // Always prefer calibrated/config exposures over stale background_settings.yml.
+                        // After WB calibration, the config YAML has the latest per-channel exposures;
+                        // old background_settings.yml values would be stale and cause exposure mismatches
+                        // during acquisition validation.
+                        List<AngleExposure> exposuresToUse = defaultExposures;
                         if (perAngleWbEnabled) {
-                            // Per-angle WB mode: use calibrated per-channel exposures from imageprocessing YAML
-                            exposuresToUse = defaultExposures;
                             logger.info(
                                     "Per-angle WB enabled - using calibrated exposures from imageprocessing config");
                             showBackgroundValidationMessage(
                                     "Per-angle white balance: Using calibrated exposure values from config.",
                                     "-fx-text-fill: blue; -fx-font-weight: bold;");
                         } else if (capturedSettings != null) {
-                            // Standard mode with existing backgrounds: use previous collection values
-                            exposuresToUse = capturedSettings.angleExposures;
+                            // Existing backgrounds found but we still use config/calibrated values
+                            // so that new collection uses latest WB calibration exposures
                             logger.info(
-                                    "Loading exposure values from previous background collection: {}",
+                                    "Existing backgrounds found at {} but using latest config/calibrated exposures",
                                     capturedSettings.settingsFilePath);
                             showBackgroundValidationMessage(
-                                    "Existing background images found. Values loaded from previous collection.",
-                                    "-fx-text-fill: orange; -fx-font-weight: bold;");
+                                    "Using calibrated exposure values from config. "
+                                            + "Previous background images exist and will be overwritten.",
+                                    "-fx-text-fill: blue; -fx-font-weight: bold;");
                         } else {
-                            // Standard mode, no previous backgrounds: use defaults from config/preferences
-                            exposuresToUse = defaultExposures;
                             logger.info("No existing background settings - using defaults from config/preferences");
                             showBackgroundValidationMessage(
                                     "No existing background images. Ready for new collection.",
