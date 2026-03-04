@@ -209,11 +209,22 @@ public class PPMPreferences {
             double ms = ((Number) exposureObj).doubleValue();
             setExposureValue(setterMethod, ms);
         } else if (exposureObj instanceof Map<?, ?> exposureMap) {
-            // Complex exposure with 'all' fallback (for JAI detector)
+            // Per-channel exposure map from WB calibration (JAI detector)
+            // Priority: "all" (unified) -> "g" (green channel as reference)
+            // Green is the median channel and matches what background collection uses,
+            // ensuring exposure consistency between acquisition and background correction.
             Object allObj = exposureMap.get("all");
             if (allObj instanceof Number) {
                 double ms = ((Number) allObj).doubleValue();
                 setExposureValue(setterMethod, ms);
+            } else {
+                Object greenObj = exposureMap.get("g");
+                if (greenObj instanceof Number) {
+                    double ms = ((Number) greenObj).doubleValue();
+                    logger.info(
+                            "Using green channel exposure for {} (per-channel WB calibration): {}ms", angleName, ms);
+                    setExposureValue(setterMethod, ms);
+                }
             }
         }
     }
