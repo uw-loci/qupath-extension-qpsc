@@ -574,8 +574,14 @@ public class StitchingHelper {
             String sampleName,
             String projectsFolder) {
 
-        // Calculate metadata for Bounded Acquisition case (no actual annotation) - use explicit sampleName
-        StitchingMetadata metadata = calculateMetadataForRegion(regionName, sampleName, gui, project);
+        // Use user-entered sample name for display/naming, not the project folder name.
+        // sampleName = project folder (for paths), sample.sampleName() = user-entered (for display).
+        String displayName = (sample != null
+                        && sample.sampleName() != null
+                        && !sample.sampleName().isEmpty())
+                ? sample.sampleName()
+                : sampleName;
+        StitchingMetadata metadata = calculateMetadataForRegion(regionName, displayName, gui, project);
 
         // Create blocking dialog on JavaFX thread before starting stitching
         final String operationId = sampleName + " - " + regionName;
