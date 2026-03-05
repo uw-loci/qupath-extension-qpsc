@@ -325,9 +325,23 @@ public interface ModalityHandler {
     }
 
     /**
+     * Returns a human-readable display name for this modality, used as the
+     * submenu label in the QPSC Extensions menu.
+     *
+     * <p>When a handler returns a non-null display name and has menu contributions,
+     * QPSC creates a dedicated submenu with this label under the "Modality Extensions"
+     * section of the QP Scope menu. If null, the registry prefix is used in uppercase.</p>
+     *
+     * @return the display name (e.g., "PPM"), or null to use the registry prefix
+     */
+    default String getDisplayName() {
+        return null;
+    }
+
+    /**
      * Returns modality-specific menu items for the QPSC menu.
      *
-     * <p>These items are added dynamically to the Utilities submenu during
+     * <p>These items are added dynamically to a modality submenu during
      * extension setup. Each item specifies an id, label, tooltip, and action.</p>
      *
      * @return list of menu item descriptors. Empty list if no menu contributions.

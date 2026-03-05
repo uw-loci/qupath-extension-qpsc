@@ -64,6 +64,11 @@ public class PPMModalityHandler implements ModalityHandler {
         return rotationManager.getRotationTicksWithExposure(modalityName);
     }
 
+    @Override
+    public String getDisplayName() {
+        return "PPM";
+    }
+
     /**
      * Returns BRIGHTFIELD_H_E as the preferred image type for PPM acquisitions.
      */

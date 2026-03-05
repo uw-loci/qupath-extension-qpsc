@@ -9,6 +9,8 @@ plugins {
     id("com.diffplug.spotless") version "7.0.2"
     // Static bug detection
     id("com.github.spotbugs") version "6.1.2"
+    // Publish to local Maven for dependent extensions (e.g., qupath-extension-ppm)
+    id("maven-publish")
 }
 
 // Configure your extension here
@@ -20,6 +22,17 @@ qupathExtension {
     automaticModule = "io.github.uw-loci.extension.qpsc"
 }
 
+// Publish to local Maven so dependent extensions (e.g., qupath-extension-ppm) can compile against QPSC
+publishing {
+    publications {
+        create<MavenPublication>("maven") {
+            groupId = "io.github.uw-loci"
+            artifactId = "qupath-extension-qpsc"
+            version = "0.3.1"
+            from(components["java"])
+        }
+    }
+}
 
 allprojects {
     repositories {

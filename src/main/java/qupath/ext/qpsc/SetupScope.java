@@ -325,9 +325,8 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         utilitiesMenu
                 .getItems()
                 .addAll(
-                        // Navigation tools
+                        // Alignment
                         alignmentOption,
-                        stageMapOption,
                         new SeparatorMenuItem(),
                         // Camera calibration
                         backgroundCollectionOption,
@@ -336,23 +335,6 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         // Autofocus tools
                         autofocusEditorOption,
                         autofocusBenchmarkOption);
-
-        // Add modality-specific menu items dynamically from registered handlers
-        for (var entry : ModalityRegistry.getAllHandlers().entrySet()) {
-            var contributions = entry.getValue().getMenuContributions();
-            if (!contributions.isEmpty()) {
-                utilitiesMenu.getItems().add(new SeparatorMenuItem());
-                for (var item : contributions) {
-                    MenuItem menuItem = new MenuItem(item.label());
-                    menuItem.setDisable(!configValid);
-                    if (item.tooltip() != null) {
-                        setMenuItemTooltip(menuItem, item.tooltip());
-                    }
-                    menuItem.setOnAction(e -> item.action().run());
-                    utilitiesMenu.getItems().add(menuItem);
-                }
-            }
-        }
 
         // Server settings (always last)
         utilitiesMenu.getItems().addAll(new SeparatorMenuItem(), serverConnectionOption);
@@ -403,16 +385,39 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         }
 
         // === BUILD FINAL MENU ===
-        extensionMenu
-                .getItems()
-                .addAll(
-                        boundedAcquisitionOption,
-                        existingImageOption,
-                        new SeparatorMenuItem(),
-                        liveViewerOption,
-                        cameraControlOption,
-                        new SeparatorMenuItem(),
-                        utilitiesMenu);
+
+        // 1. Acquisition
+        extensionMenu.getItems().addAll(boundedAcquisitionOption, existingImageOption, new SeparatorMenuItem());
+
+        // 2. Viewers & Controls
+        extensionMenu.getItems().addAll(liveViewerOption, cameraControlOption, stageMapOption);
+
+        // 3. Modality extensions (dynamic submenus from registered handlers)
+        for (var entry : ModalityRegistry.getAllHandlers().entrySet()) {
+            var handler = entry.getValue();
+            var contributions = handler.getMenuContributions();
+            if (!contributions.isEmpty()) {
+                String name = handler.getDisplayName();
+                if (name == null) {
+                    name = entry.getKey().toUpperCase();
+                }
+                Menu modalityMenu = new Menu(name);
+                for (var item : contributions) {
+                    MenuItem mi = new MenuItem(item.label());
+                    mi.setDisable(!configValid);
+                    if (item.tooltip() != null) {
+                        setMenuItemTooltip(mi, item.tooltip());
+                    }
+                    mi.setOnAction(e -> item.action().run());
+                    modalityMenu.getItems().add(mi);
+                }
+                extensionMenu.getItems().add(new SeparatorMenuItem());
+                extensionMenu.getItems().add(modalityMenu);
+            }
+        }
+
+        // 4. Utilities
+        extensionMenu.getItems().addAll(new SeparatorMenuItem(), utilitiesMenu);
 
         logger.info("Menu items added for extension: " + EXTENSION_NAME);
     }
