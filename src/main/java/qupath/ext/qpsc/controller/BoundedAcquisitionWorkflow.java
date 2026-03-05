@@ -260,8 +260,8 @@ public class BoundedAcquisitionWorkflow {
                                                 modeWithIndex,
                                                 boundsMode,
                                                 angleExposures,
-                                                projectsFolder,
-                                                result.sampleName(), // For new projects, dialog name is correct
+                                                actualProjectsFolder,
+                                                actualSampleName,
                                                 finalWSI_pixelSize_um,
                                                 result.wbMode());
 
@@ -282,7 +282,11 @@ public class BoundedAcquisitionWorkflow {
 
                                 String commandString = config.commandBuilder().buildSocketMessage();
                                 MinorFunctions.saveAcquisitionCommand(
-                                        commandString, projectsFolder, result.sampleName(), modeWithIndex, boundsMode);
+                                        commandString,
+                                        actualProjectsFolder,
+                                        actualSampleName,
+                                        modeWithIndex,
+                                        boundsMode);
 
                                 MicroscopeController.getInstance().startAcquisition(config.commandBuilder());
 
