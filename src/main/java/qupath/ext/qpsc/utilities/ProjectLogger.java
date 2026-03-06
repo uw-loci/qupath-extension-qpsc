@@ -1,63 +1,84 @@
 package qupath.ext.qpsc.utilities;
 
 import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.encoder.PatternLayoutEncoder;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.FileAppender;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.lib.projects.Project;
 
 /**
- * Utility for managing project-specific logging.
+ * Manages project-scoped logging for the QPSC extension.
  *
- * <p>This class enables workflow logs to be saved directly in QuPath project folders
- * alongside the acquired data. When activated, all QPSC extension logs are written to
- * both the centralized acquisition log and a project-specific log file.</p>
+ * <p>This class programmatically attaches a {@link FileAppender} to the
+ * {@code qupath.ext.qpsc} logger, directing all QPSC log output to a file.
+ * QuPath's own logback.xml shadows the extension's, so all file logging
+ * must be configured via the logback API rather than XML.</p>
  *
- * <p>Example usage in a workflow:</p>
- * <pre>{@code
- * // Start project-specific logging
- * ProjectLogger.enable(project);
+ * <h3>Lifecycle</h3>
+ * <ol>
+ *   <li>{@link #enableTempLogging()} -- called once at extension install.
+ *       Creates a temp file for pre-project log output.</li>
+ *   <li>{@link #enable(Project)} -- called when a project opens.
+ *       Prepends any temp log content into the project log file,
+ *       deletes the temp file, and starts logging to the project.</li>
+ *   <li>{@link #disable()} -- called when a project closes.
+ *       Stops the project appender and re-enables temp logging.</li>
+ * </ol>
  *
- * try {
- *     // Run acquisition workflow
- *     logger.info("Starting acquisition...");
- *     // ... workflow code ...
- * } finally {
- *     // Always disable in finally block to ensure cleanup
- *     ProjectLogger.disable();
- * }
- * }</pre>
- *
- * <p>Or using try-with-resources for automatic cleanup:</p>
- * <pre>{@code
- * try (ProjectLogger.Session session = ProjectLogger.start(project)) {
- *     logger.info("Starting acquisition...");
- *     // ... workflow code ...
- * } // Automatically cleaned up
- * }</pre>
- *
- * <p>The project-specific log is saved as: {@code <project-directory>/logs/acquisition.log}</p>
+ * <p>Project log files are created at:
+ * {@code <project-parent>/logs/qpsc-session-<timestamp>.log}</p>
  *
  * @author Mike Nelson
  * @since 0.2.1
  */
 public class ProjectLogger {
-    private static final Logger logger = LoggerFactory.getLogger(ProjectLogger.class);
-    private static final String PROPERTY_NAME = "qpsc.project.logdir";
 
-    // Thread-local to support multiple concurrent workflows (though unlikely)
-    private static final ThreadLocal<String> currentProjectPath = new ThreadLocal<>();
+    private static final Logger logger = LoggerFactory.getLogger(ProjectLogger.class);
+
+    private static final String APPENDER_NAME = "QPSC_PROJECT_LOG";
+    private static final String LOG_PATTERN =
+            "%d{yyyy-MM-dd HH:mm:ss.SSS} [%-20thread] %-5level %-40logger{40} - %msg%n";
+    private static final DateTimeFormatter TIMESTAMP_FMT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+
+    private static FileAppender<ILoggingEvent> activeAppender;
+    private static Path tempLogFile;
+    private static Path currentLogFile;
+
+    private ProjectLogger() {}
+
+    /**
+     * Starts temporary logging to a system temp file.
+     * Called once from {@code SetupScope.installExtension()} to capture
+     * pre-project log output. When a project later opens, the temp
+     * contents are prepended into the project log file.
+     */
+    public static synchronized void enableTempLogging() {
+        try {
+            tempLogFile = Files.createTempFile("qpsc-", ".log");
+            attachAppender(tempLogFile);
+            logger.info("QPSC temp logging started: {}", tempLogFile);
+        } catch (IOException e) {
+            logger.warn("Failed to create temp log file", e);
+        }
+    }
 
     /**
      * Enables project-specific logging for the given QuPath project.
-     * Logs will be written to: {@code <project-directory>/logs/acquisition.log}
+     * Any existing temp log content is prepended to the new project log file.
      *
-     * @param project The QuPath project to log for
+     * @param project the QuPath project to log for
      * @return true if successfully enabled, false otherwise
      */
-    public static boolean enable(Project<?> project) {
+    public static synchronized boolean enable(Project<?> project) {
         if (project == null) {
             logger.warn("Cannot enable project logging: project is null");
             return false;
@@ -69,223 +90,156 @@ public class ProjectLogger {
             return false;
         }
 
-        // project.getPath() returns the .qpproj file - use parent directory
+        // project.getPath() returns the .qpproj file -- use parent directory
         File projectDir = projectPath.toFile().getParentFile();
         return enable(projectDir);
     }
 
     /**
-     * Enables project-specific logging for the given directory.
-     * Logs will be written to: {@code <directory>/logs/acquisition.log}
+     * Enables project-specific logging for the given project directory.
      *
-     * @param projectDir The directory to save logs in
+     * @param projectDir the project directory (parent of .qpproj file)
      * @return true if successfully enabled, false otherwise
      */
-    public static boolean enable(File projectDir) {
+    public static synchronized boolean enable(File projectDir) {
         if (projectDir == null || !projectDir.exists() || !projectDir.isDirectory()) {
             logger.warn("Cannot enable project logging: invalid directory: {}", projectDir);
             return false;
         }
 
-        return enable(projectDir.getAbsolutePath());
-    }
-
-    /**
-     * Enables logging using the microscope config file location as a fallback.
-     *
-     * <p>When no QuPath project is open, this method reads the config file path from
-     * {@link QPPreferenceDialog#getMicroscopeConfigFileProperty()} and enables logging
-     * in the config file's parent directory. Logs will be written to:
-     * {@code <config_parent>/logs/acquisition.log}</p>
-     *
-     * @return true if successfully enabled, false otherwise
-     */
-    public static boolean enableFromConfig() {
-        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-        if (configPath == null || configPath.trim().isEmpty()) {
-            logger.warn("Cannot enable config-based logging: no microscope config file set in preferences");
+        // Create logs/ subdirectory
+        File logsDir = new File(projectDir, "logs");
+        if (!logsDir.exists() && !logsDir.mkdirs()) {
+            logger.warn("Cannot enable project logging: failed to create logs directory: {}", logsDir);
             return false;
         }
 
-        File configFile = new File(configPath);
-        if (!configFile.exists()) {
-            logger.warn("Cannot enable config-based logging: config file does not exist: {}", configPath);
-            return false;
-        }
+        // Build session log filename
+        String timestamp = LocalDateTime.now().format(TIMESTAMP_FMT);
+        Path logFile = logsDir.toPath().resolve("qpsc-session-" + timestamp + ".log");
 
-        File configDir = configFile.getParentFile();
-        if (configDir == null || !configDir.exists() || !configDir.isDirectory()) {
-            logger.warn("Cannot enable config-based logging: invalid config directory for: {}", configPath);
-            return false;
-        }
+        // Prepend temp log contents if present
+        prependTempLog(logFile);
 
-        logger.info("No project available - using config directory for logging: {}", configDir);
-        return enable(configDir.getAbsolutePath());
-    }
+        // Detach current appender (temp or previous project) and attach new one
+        attachAppender(logFile);
+        currentLogFile = logFile;
 
-    /**
-     * Enables project-specific logging for the given directory path.
-     * Logs will be written to: {@code <path>/logs/acquisition.log}
-     *
-     * @param projectPath The directory path to save logs in
-     * @return true if successfully enabled, false otherwise
-     */
-    public static boolean enable(String projectPath) {
-        if (projectPath == null || projectPath.trim().isEmpty()) {
-            logger.warn("Cannot enable project logging: path is null or empty");
-            return false;
-        }
-
-        // Verify directory exists
-        File dir = new File(projectPath);
-        if (!dir.exists() || !dir.isDirectory()) {
-            logger.warn("Cannot enable project logging: directory does not exist: {}", projectPath);
-            return false;
-        }
-
-        // Create logs/ subdirectory if it doesn't exist
-        File logsDir = new File(dir, "logs");
-        if (!logsDir.exists()) {
-            if (!logsDir.mkdirs()) {
-                logger.warn("Cannot enable project logging: failed to create logs directory: {}", logsDir);
-                return false;
-            }
-        }
-
-        // Set system property for logback (logback.xml appends /logs/acquisition.log)
-        System.setProperty(PROPERTY_NAME, projectPath);
-        currentProjectPath.set(projectPath);
-
-        // Reconfigure logback to pick up the new property
-        reconfigureLogback();
-
-        logger.info("Project-specific logging enabled: {}/logs/acquisition.log", projectPath);
+        logger.info("QPSC project logging enabled: {}", logFile);
         return true;
     }
 
     /**
-     * Disables project-specific logging.
-     * Should always be called when a workflow completes (use finally block or try-with-resources).
+     * Disables project-specific logging and re-enables temp logging.
      */
-    public static void disable() {
-        String path = currentProjectPath.get();
+    public static synchronized void disable() {
+        if (currentLogFile != null) {
+            logger.info("QPSC project logging disabled: {}", currentLogFile);
+        }
+        currentLogFile = null;
 
-        if (path != null) {
-            logger.info("Project-specific logging disabled: {}/logs/acquisition.log", path);
-            currentProjectPath.remove();
+        // Detach the project appender before starting temp logging
+        detachAppender();
+
+        // Resume temp logging for any pre-project activity
+        enableTempLogging();
+    }
+
+    /**
+     * Checks if project-specific logging is currently enabled
+     * (as opposed to temp logging or no logging).
+     *
+     * @return true if logging to a project log file
+     */
+    public static synchronized boolean isEnabled() {
+        return currentLogFile != null;
+    }
+
+    /**
+     * Returns the current temp log file path, or null if temp logging is not active.
+     *
+     * @return the temp log file path
+     */
+    public static synchronized Path getTempLogFile() {
+        return tempLogFile;
+    }
+
+    /**
+     * Returns the current project log file path, or null if project logging is not active.
+     *
+     * @return the project log file path
+     */
+    public static synchronized Path getCurrentLogFile() {
+        return currentLogFile;
+    }
+
+    // ---- internal ----
+
+    /**
+     * Prepends temp log file contents into the target log file, then deletes the temp file.
+     */
+    private static void prependTempLog(Path targetLogFile) {
+        if (tempLogFile == null) {
+            return;
         }
 
-        // Clear system property
-        System.clearProperty(PROPERTY_NAME);
-
-        // Reconfigure logback
-        reconfigureLogback();
-    }
-
-    /**
-     * Checks if project-specific logging is currently enabled.
-     *
-     * @return true if enabled, false otherwise
-     */
-    public static boolean isEnabled() {
-        return currentProjectPath.get() != null;
-    }
-
-    /**
-     * Gets the current project log directory, if enabled.
-     *
-     * @return The current project log directory, or null if not enabled
-     */
-    public static String getCurrentProjectPath() {
-        return currentProjectPath.get();
-    }
-
-    /**
-     * Starts a project-specific logging session with automatic cleanup.
-     * Use with try-with-resources for guaranteed cleanup.
-     *
-     * <pre>{@code
-     * try (ProjectLogger.Session session = ProjectLogger.start(project)) {
-     *     // Your workflow code here
-     * } // Automatically cleaned up
-     * }</pre>
-     *
-     * @param project The QuPath project to log for
-     * @return A Session object that will disable logging when closed
-     */
-    public static Session start(Project<?> project) {
-        return new Session(project);
-    }
-
-    /**
-     * Starts a project-specific logging session with automatic cleanup.
-     * Use with try-with-resources for guaranteed cleanup.
-     *
-     * @param projectDir The directory to save logs in
-     * @return A Session object that will disable logging when closed
-     */
-    public static Session start(File projectDir) {
-        return new Session(projectDir);
-    }
-
-    /**
-     * Starts a project-specific logging session with automatic cleanup.
-     * Use with try-with-resources for guaranteed cleanup.
-     *
-     * @param projectPath The directory path to save logs in
-     * @return A Session object that will disable logging when closed
-     */
-    public static Session start(String projectPath) {
-        return new Session(projectPath);
-    }
-
-    /**
-     * Reconfigures the Logback context to pick up property changes.
-     * This is necessary for the PROJECT_LOG appender to activate/deactivate.
-     */
-    private static void reconfigureLogback() {
         try {
-            LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
-            // Don't do a full reset - just update the context
-            context.getLogger(Logger.ROOT_LOGGER_NAME).info("Logback context updated");
-        } catch (Exception e) {
-            logger.debug("Could not reconfigure logback context", e);
+            // Stop appender so the temp file is flushed and released
+            detachAppender();
+
+            if (Files.exists(tempLogFile) && Files.size(tempLogFile) > 0) {
+                byte[] tempContents = Files.readAllBytes(tempLogFile);
+                Files.write(targetLogFile, tempContents, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                logger.info("Prepended {} bytes from temp log into project log", tempContents.length);
+            }
+
+            Files.deleteIfExists(tempLogFile);
+        } catch (IOException e) {
+            logger.warn("Failed to prepend temp log contents", e);
+        } finally {
+            tempLogFile = null;
         }
     }
 
     /**
-     * Auto-closeable session for project-specific logging.
-     * Ensures logging is disabled when the session closes.
+     * Programmatically creates and attaches a {@link FileAppender} to the
+     * {@code qupath.ext.qpsc} logger. Any existing QPSC appender is
+     * detached and stopped first.
      */
-    public static class Session implements AutoCloseable {
-        private final boolean wasEnabled;
+    private static void attachAppender(Path logFile) {
+        LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
+        ch.qos.logback.classic.Logger qpscLogger = context.getLogger("qupath.ext.qpsc");
 
-        private Session(Project<?> project) {
-            this.wasEnabled = enable(project);
-        }
+        // Detach any existing QPSC file appender
+        detachAppender();
 
-        private Session(File projectDir) {
-            this.wasEnabled = enable(projectDir);
-        }
+        PatternLayoutEncoder encoder = new PatternLayoutEncoder();
+        encoder.setContext(context);
+        encoder.setPattern(LOG_PATTERN);
+        encoder.start();
 
-        private Session(String projectPath) {
-            this.wasEnabled = enable(projectPath);
-        }
+        FileAppender<ILoggingEvent> appender = new FileAppender<>();
+        appender.setContext(context);
+        appender.setName(APPENDER_NAME);
+        appender.setFile(logFile.toString());
+        appender.setEncoder(encoder);
+        appender.setAppend(true);
+        appender.start();
 
-        /**
-         * Checks if the session was successfully started.
-         *
-         * @return true if project logging was enabled, false otherwise
-         */
-        public boolean isActive() {
-            return wasEnabled;
-        }
+        qpscLogger.addAppender(appender);
+        activeAppender = appender;
+    }
 
-        @Override
-        public void close() {
-            if (wasEnabled) {
-                disable();
-            }
+    /**
+     * Detaches and stops the current QPSC file appender, if any.
+     */
+    private static void detachAppender() {
+        if (activeAppender != null) {
+            LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
+            ch.qos.logback.classic.Logger qpscLogger = context.getLogger("qupath.ext.qpsc");
+            qpscLogger.detachAppender(activeAppender);
+            activeAppender.stop();
+            activeAppender = null;
         }
     }
 }
