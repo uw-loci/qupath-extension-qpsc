@@ -1,0 +1,889 @@
+package qupath.ext.qpsc.ui;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import javafx.application.Platform;
+import javafx.collections.FXCollections;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Cursor;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
+import javafx.scene.shape.Polygon;
+import javafx.scene.shape.Rectangle;
+import javafx.scene.shape.SVGPath;
+import javafx.stage.Stage;
+import javafx.stage.StageStyle;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.controller.QPScopeController;
+import qupath.ext.qpsc.ui.CalibrationChecker.Status;
+import qupath.ext.qpsc.ui.CalibrationChecker.StepStatus;
+import qupath.lib.gui.QuPathGUI;
+
+/**
+ * Acquisition Wizard - a checklist-style dashboard that guides users through
+ * the full setup-to-acquisition pipeline.
+ *
+ * <p>The wizard shows all prerequisite steps with live status indicators.
+ * Users can run calibration tools, check alignment, and launch the chosen
+ * acquisition workflow from a single persistent window.
+ *
+ * <p>The dialog is non-modal and always-on-top so users can interact with
+ * QuPath and other dialogs while the wizard remains accessible. A collapse
+ * button shrinks it to a small floating pill that can be dragged out of the
+ * way, then clicked to expand again.
+ */
+public class AcquisitionWizardDialog {
+
+    private static final Logger logger = LoggerFactory.getLogger(AcquisitionWizardDialog.class);
+
+    private static final String BLUE = "#2d5aa0";
+    private static final String BLUE_HOVER = "#3d6ab0";
+    private static final double EXPANDED_WIDTH = 520;
+
+    private static Stage wizardStage;
+
+    // Root container that holds both expanded and collapsed views
+    private StackPane rootPane;
+    private VBox expandedContent;
+    private HBox collapsedContent;
+    private boolean collapsed;
+
+    // Saved position/size for expand/collapse transitions
+    private double expandedX, expandedY;
+
+    // Drag support
+    private double dragOffsetX, dragOffsetY;
+
+    // Hardware selection controls
+    private ComboBox<String> modalityCombo;
+    private ComboBox<String> objectiveCombo;
+    private ComboBox<String> detectorCombo;
+
+    // Step rows (for status updates)
+    private final List<StepRow> stepRows = new ArrayList<>();
+
+    // Step indices for targeted refresh
+    private static final int STEP_CONNECTION = 0;
+    private static final int STEP_WHITE_BALANCE = 1;
+    private static final int STEP_BACKGROUND = 2;
+    private static final int STEP_ALIGNMENT = 3;
+
+    // Collapsed pill status dots (mirror the step row dots)
+    private final Circle[] pillDots = new Circle[4];
+
+    // Acquire buttons
+    private Button boundedButton;
+    private Button existingImageButton;
+
+    /**
+     * Shows the wizard dialog. If already open, brings it to front and expands.
+     */
+    public static void show() {
+        if (wizardStage != null && wizardStage.isShowing()) {
+            wizardStage.toFront();
+            wizardStage.requestFocus();
+            return;
+        }
+
+        new AcquisitionWizardDialog().createAndShow();
+    }
+
+    private void createAndShow() {
+        wizardStage = new Stage();
+        wizardStage.initStyle(StageStyle.TRANSPARENT);
+        wizardStage.setAlwaysOnTop(true);
+        wizardStage.setTitle("Acquisition Wizard");
+
+        // Build both views
+        expandedContent = buildExpandedContent();
+        collapsedContent = buildCollapsedContent();
+        collapsedContent.setVisible(false);
+        collapsedContent.setManaged(false);
+
+        rootPane = new StackPane(expandedContent, collapsedContent);
+        rootPane.setStyle("-fx-background-color: transparent;");
+
+        Scene scene = new Scene(rootPane);
+        scene.setFill(Color.TRANSPARENT);
+        wizardStage.setScene(scene);
+
+        // Position near top-right of QuPath window
+        QuPathGUI gui = QuPathGUI.getInstance();
+        if (gui != null && gui.getStage() != null) {
+            Stage parent = gui.getStage();
+            wizardStage.setX(parent.getX() + parent.getWidth() - EXPANDED_WIDTH - 20);
+            wizardStage.setY(parent.getY() + 60);
+        }
+
+        wizardStage.show();
+
+        // Auto-refresh statuses when the wizard regains focus (e.g. after
+        // returning from a calibration or alignment dialog).
+        wizardStage.focusedProperty().addListener((obs, wasFocused, isFocused) -> {
+            if (isFocused) {
+                refreshAllStatuses();
+            }
+        });
+
+        // Initial status refresh
+        refreshAllStatuses();
+    }
+
+    // ======================================================================
+    // Collapse / Expand
+    // ======================================================================
+
+    private void collapse() {
+        if (collapsed) return;
+        collapsed = true;
+
+        // Save expanded position
+        expandedX = wizardStage.getX();
+        expandedY = wizardStage.getY();
+
+        expandedContent.setVisible(false);
+        expandedContent.setManaged(false);
+        collapsedContent.setVisible(true);
+        collapsedContent.setManaged(true);
+
+        wizardStage.sizeToScene();
+    }
+
+    private void expand() {
+        if (!collapsed) return;
+        collapsed = false;
+
+        collapsedContent.setVisible(false);
+        collapsedContent.setManaged(false);
+        expandedContent.setVisible(true);
+        expandedContent.setManaged(true);
+
+        wizardStage.sizeToScene();
+
+        // Restore position
+        wizardStage.setX(expandedX);
+        wizardStage.setY(expandedY);
+    }
+
+    // ======================================================================
+    // Expanded content (full wizard)
+    // ======================================================================
+
+    private VBox buildExpandedContent() {
+        VBox root = new VBox(0);
+        root.setPrefWidth(EXPANDED_WIDTH);
+        root.setStyle("-fx-background-color: white; -fx-background-radius: 8; "
+                + "-fx-border-color: #bbb; -fx-border-radius: 8; -fx-border-width: 1; "
+                + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.2), 8, 0, 0, 2);");
+
+        // -- Draggable header with window controls --
+        root.getChildren().add(createHeader());
+
+        // -- Hardware selection --
+        root.getChildren().add(createHardwareSection());
+
+        // -- Separator --
+        root.getChildren().add(createSectionSeparator("Checklist"));
+
+        // -- Step rows --
+        VBox stepsBox = new VBox(2);
+        stepsBox.setPadding(new Insets(4, 16, 8, 16));
+
+        stepsBox.getChildren().add(createStepRow(
+                STEP_CONNECTION,
+                createConnectionIcon(),
+                "Server Connection",
+                "Connect to microscope control server",
+                "Connect",
+                this::onConnect));
+
+        stepsBox.getChildren().add(createStepRow(
+                STEP_WHITE_BALANCE,
+                createCalibrationIcon(),
+                "White Balance",
+                "Calibrate per-channel camera exposures",
+                "Calibrate...",
+                this::onWhiteBalance));
+
+        stepsBox.getChildren().add(createStepRow(
+                STEP_BACKGROUND,
+                createGridIcon(),
+                "Background Correction",
+                "Acquire flat-field correction images",
+                "Collect...",
+                this::onBackgroundCollection));
+
+        stepsBox.getChildren().add(createStepRow(
+                STEP_ALIGNMENT,
+                createAlignmentIcon(),
+                "Microscope Alignment",
+                "Align macro image to stage (for Existing Image workflow)",
+                "Align...",
+                this::onAlignment));
+
+        root.getChildren().add(stepsBox);
+
+        // -- Separator --
+        root.getChildren().add(createSectionSeparator("Start Acquisition"));
+
+        // -- Acquire section --
+        root.getChildren().add(createAcquireSection());
+
+        // -- Bottom bar --
+        root.getChildren().add(createBottomBar());
+
+        return root;
+    }
+
+    // ======================================================================
+    // Collapsed content (floating pill)
+    // ======================================================================
+
+    private HBox buildCollapsedContent() {
+        HBox pill = new HBox(6);
+        pill.setAlignment(Pos.CENTER);
+        pill.setPadding(new Insets(6, 12, 6, 12));
+        pill.setStyle("-fx-background-color: " + BLUE + "; -fx-background-radius: 18; "
+                + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.3), 6, 0, 0, 2);");
+        pill.setCursor(Cursor.HAND);
+
+        // Make pill draggable
+        pill.setOnMousePressed(e -> {
+            dragOffsetX = e.getScreenX() - wizardStage.getX();
+            dragOffsetY = e.getScreenY() - wizardStage.getY();
+        });
+        pill.setOnMouseDragged(e -> {
+            wizardStage.setX(e.getScreenX() - dragOffsetX);
+            wizardStage.setY(e.getScreenY() - dragOffsetY);
+        });
+
+        // Microscope-style icon for the pill
+        SVGPath icon = new SVGPath();
+        icon.setContent("M7,1 L9,1 L9,4 L11,4 L11,6 L5,6 L5,4 L7,4 Z "
+                + "M6,6 L10,6 L10,12 L6,12 Z M4,12 L12,12 L12,14 L4,14 Z");
+        icon.setFill(Color.WHITE);
+        icon.setScaleX(1.0);
+        icon.setScaleY(1.0);
+
+        Label titleLabel = new Label("Wizard");
+        titleLabel.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: white;");
+
+        // Mini status dots
+        HBox dotsBox = new HBox(3);
+        dotsBox.setAlignment(Pos.CENTER);
+        for (int i = 0; i < 4; i++) {
+            pillDots[i] = new Circle(4, Color.GRAY);
+            dotsBox.getChildren().add(pillDots[i]);
+        }
+
+        // Expand button (chevron up)
+        Label expandLabel = new Label("^");
+        expandLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: white; "
+                + "-fx-padding: 0 0 0 4;");
+
+        pill.getChildren().addAll(icon, titleLabel, dotsBox, expandLabel);
+
+        // Click to expand
+        pill.setOnMouseClicked(e -> {
+            if (!e.isStillSincePress()) return; // ignore drag-end clicks
+            expand();
+        });
+
+        // Hover effect
+        pill.setOnMouseEntered(e ->
+                pill.setStyle("-fx-background-color: " + BLUE_HOVER + "; -fx-background-radius: 18; "
+                        + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.3), 6, 0, 0, 2);"));
+        pill.setOnMouseExited(e ->
+                pill.setStyle("-fx-background-color: " + BLUE + "; -fx-background-radius: 18; "
+                        + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.3), 6, 0, 0, 2);"));
+
+        return pill;
+    }
+
+    // ======================================================================
+    // Header (draggable title bar with window controls)
+    // ======================================================================
+
+    private VBox createHeader() {
+        VBox header = new VBox(4);
+        header.setPadding(new Insets(10, 12, 8, 16));
+        header.setStyle("-fx-background-color: " + BLUE + "; "
+                + "-fx-background-radius: 8 8 0 0;");
+
+        // Top row: title + window control buttons
+        HBox titleRow = new HBox(8);
+        titleRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label title = new Label("Acquisition Wizard");
+        title.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: white;");
+        HBox.setHgrow(title, Priority.ALWAYS);
+
+        // Minimize (collapse) button
+        Button collapseBtn = createWindowButton("_", "Collapse to floating icon");
+        collapseBtn.setOnAction(e -> collapse());
+
+        // Close button
+        Button closeBtn = createWindowButton("X", "Close wizard");
+        closeBtn.setOnAction(e -> wizardStage.close());
+
+        titleRow.getChildren().addAll(title, collapseBtn, closeBtn);
+
+        Label subtitle = new Label("Follow the steps below to prepare and start an acquisition.");
+        subtitle.setStyle("-fx-font-size: 11px; -fx-text-fill: #ccd9ee;");
+        subtitle.setWrapText(true);
+
+        header.getChildren().addAll(titleRow, subtitle);
+
+        // Make header draggable
+        header.setOnMousePressed(e -> {
+            dragOffsetX = e.getScreenX() - wizardStage.getX();
+            dragOffsetY = e.getScreenY() - wizardStage.getY();
+        });
+        header.setOnMouseDragged(e -> {
+            wizardStage.setX(e.getScreenX() - dragOffsetX);
+            wizardStage.setY(e.getScreenY() - dragOffsetY);
+        });
+        header.setCursor(Cursor.MOVE);
+
+        return header;
+    }
+
+    private Button createWindowButton(String text, String tooltip) {
+        Button btn = new Button(text);
+        btn.setStyle("-fx-background-color: transparent; -fx-text-fill: white; "
+                + "-fx-font-size: 13px; -fx-font-weight: bold; "
+                + "-fx-min-width: 28; -fx-min-height: 22; -fx-max-height: 22; "
+                + "-fx-padding: 0 4 0 4; -fx-background-radius: 4;");
+        btn.setOnMouseEntered(e ->
+                btn.setStyle("-fx-background-color: rgba(255,255,255,0.2); -fx-text-fill: white; "
+                        + "-fx-font-size: 13px; -fx-font-weight: bold; "
+                        + "-fx-min-width: 28; -fx-min-height: 22; -fx-max-height: 22; "
+                        + "-fx-padding: 0 4 0 4; -fx-background-radius: 4;"));
+        btn.setOnMouseExited(e ->
+                btn.setStyle("-fx-background-color: transparent; -fx-text-fill: white; "
+                        + "-fx-font-size: 13px; -fx-font-weight: bold; "
+                        + "-fx-min-width: 28; -fx-min-height: 22; -fx-max-height: 22; "
+                        + "-fx-padding: 0 4 0 4; -fx-background-radius: 4;"));
+        btn.setTooltip(new Tooltip(tooltip));
+        return btn;
+    }
+
+    // ======================================================================
+    // Hardware selection
+    // ======================================================================
+
+    private VBox createHardwareSection() {
+        VBox section = new VBox(6);
+        section.setPadding(new Insets(12, 16, 8, 16));
+        section.setStyle("-fx-background-color: #f5f5f5; -fx-border-color: #ddd; -fx-border-width: 0 0 1 0;");
+
+        Label label = new Label("Hardware Configuration");
+        label.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(6);
+
+        // Modality
+        grid.add(new Label("Modality:"), 0, 0);
+        modalityCombo = new ComboBox<>();
+        modalityCombo.setPrefWidth(260);
+        modalityCombo.setOnAction(e -> onModalityChanged());
+        grid.add(modalityCombo, 1, 0);
+
+        // Objective
+        grid.add(new Label("Objective:"), 0, 1);
+        objectiveCombo = new ComboBox<>();
+        objectiveCombo.setPrefWidth(260);
+        objectiveCombo.setOnAction(e -> onObjectiveChanged());
+        grid.add(objectiveCombo, 1, 1);
+
+        // Detector
+        grid.add(new Label("Detector:"), 0, 2);
+        detectorCombo = new ComboBox<>();
+        detectorCombo.setPrefWidth(260);
+        detectorCombo.setOnAction(e -> onDetectorChanged());
+        grid.add(detectorCombo, 1, 2);
+
+        // Set column constraints
+        ColumnConstraints labelCol = new ColumnConstraints();
+        labelCol.setPrefWidth(80);
+        ColumnConstraints fieldCol = new ColumnConstraints();
+        fieldCol.setHgrow(Priority.ALWAYS);
+        grid.getColumnConstraints().addAll(labelCol, fieldCol);
+
+        section.getChildren().addAll(label, grid);
+
+        // Populate modalities
+        populateModalities();
+
+        return section;
+    }
+
+    private void populateModalities() {
+        Set<String> modalities = CalibrationChecker.getAvailableModalities();
+        modalityCombo.setItems(FXCollections.observableArrayList(modalities));
+        if (!modalities.isEmpty()) {
+            modalityCombo.getSelectionModel().selectFirst();
+            onModalityChanged();
+        }
+    }
+
+    private void onModalityChanged() {
+        String modality = modalityCombo.getValue();
+        if (modality == null) return;
+
+        Set<String> objectives = CalibrationChecker.getAvailableObjectives(modality);
+        objectiveCombo.setItems(FXCollections.observableArrayList(objectives));
+        if (!objectives.isEmpty()) {
+            objectiveCombo.getSelectionModel().selectFirst();
+            onObjectiveChanged();
+        } else {
+            objectiveCombo.getItems().clear();
+            detectorCombo.getItems().clear();
+            refreshCalibrationStatuses();
+        }
+    }
+
+    private void onObjectiveChanged() {
+        String modality = modalityCombo.getValue();
+        String objective = objectiveCombo.getValue();
+        if (modality == null || objective == null) return;
+
+        Set<String> detectors = CalibrationChecker.getAvailableDetectors(modality, objective);
+        detectorCombo.setItems(FXCollections.observableArrayList(detectors));
+        if (!detectors.isEmpty()) {
+            detectorCombo.getSelectionModel().selectFirst();
+        }
+        refreshCalibrationStatuses();
+    }
+
+    private void onDetectorChanged() {
+        refreshCalibrationStatuses();
+    }
+
+    private String getSelectedModality() {
+        return modalityCombo.getValue();
+    }
+
+    private String getSelectedObjective() {
+        return objectiveCombo.getValue();
+    }
+
+    private String getSelectedDetector() {
+        return detectorCombo.getValue();
+    }
+
+    // ======================================================================
+    // Step rows
+    // ======================================================================
+
+    private static class StepRow {
+        final int index;
+        final Circle statusDot;
+        final Label statusLabel;
+        final Button actionButton;
+
+        StepRow(int index, Circle statusDot, Label statusLabel, Button actionButton) {
+            this.index = index;
+            this.statusDot = statusDot;
+            this.statusLabel = statusLabel;
+            this.actionButton = actionButton;
+        }
+    }
+
+    private HBox createStepRow(int index, Region icon, String title,
+                               String description, String buttonText, Runnable action) {
+        HBox row = new HBox(10);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setPadding(new Insets(8, 12, 8, 12));
+        row.setStyle("-fx-background-color: white; -fx-background-radius: 6; "
+                + "-fx-border-color: #e0e0e0; -fx-border-radius: 6;");
+
+        // Icon circle
+        StackPane iconPane = new StackPane(icon);
+        iconPane.setPrefSize(36, 36);
+        iconPane.setMinSize(36, 36);
+        iconPane.setMaxSize(36, 36);
+        iconPane.setStyle("-fx-background-color: #e8eef7; -fx-background-radius: 18;");
+        iconPane.setAlignment(Pos.CENTER);
+
+        // Text
+        VBox textBox = new VBox(1);
+        HBox.setHgrow(textBox, Priority.ALWAYS);
+
+        Label titleLabel = new Label(title);
+        titleLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
+
+        Label descLabel = new Label(description);
+        descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        descLabel.setWrapText(true);
+
+        textBox.getChildren().addAll(titleLabel, descLabel);
+
+        // Status dot + label
+        Circle statusDot = new Circle(5, Color.GRAY);
+
+        Label statusLabel = new Label("Checking...");
+        statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #999;");
+        statusLabel.setMaxWidth(120);
+        statusLabel.setWrapText(true);
+
+        VBox statusBox = new VBox(2);
+        statusBox.setAlignment(Pos.CENTER);
+        statusBox.setPrefWidth(130);
+        statusBox.setMinWidth(130);
+        statusBox.getChildren().addAll(statusDot, statusLabel);
+
+        // Action button
+        Button btn = new Button(buttonText);
+        btn.setMinWidth(90);
+        btn.setOnAction(e -> action.run());
+
+        row.getChildren().addAll(iconPane, textBox, statusBox, btn);
+
+        StepRow stepRow = new StepRow(index, statusDot, statusLabel, btn);
+        stepRows.add(stepRow);
+
+        return row;
+    }
+
+    private void updateStepStatus(int stepIndex, StepStatus status) {
+        if (stepIndex < 0 || stepIndex >= stepRows.size()) return;
+
+        StepRow row = stepRows.get(stepIndex);
+
+        Platform.runLater(() -> {
+            Color dotColor;
+            String labelStyle;
+
+            switch (status.status()) {
+                case READY -> {
+                    dotColor = Color.web("#4CAF50");
+                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: #4CAF50;";
+                    row.actionButton.setDisable(false);
+                }
+                case WARNING -> {
+                    dotColor = Color.web("#FF9800");
+                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: #e68a00;";
+                    row.actionButton.setDisable(false);
+                }
+                case NOT_READY -> {
+                    dotColor = Color.web("#f44336");
+                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: #d32f2f;";
+                    row.actionButton.setDisable(false);
+                }
+                case NOT_APPLICABLE -> {
+                    dotColor = Color.web("#9E9E9E");
+                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: #999;";
+                    row.actionButton.setDisable(true);
+                }
+                default -> {
+                    dotColor = Color.GRAY;
+                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: #999;";
+                }
+            }
+
+            row.statusDot.setFill(dotColor);
+            row.statusLabel.setStyle(labelStyle);
+            row.statusLabel.setText(status.message());
+
+            // Mirror to collapsed pill dot
+            if (stepIndex < pillDots.length && pillDots[stepIndex] != null) {
+                pillDots[stepIndex].setFill(dotColor);
+            }
+
+            updateAcquireButtons();
+        });
+    }
+
+    // ======================================================================
+    // Acquire section
+    // ======================================================================
+
+    private HBox createAcquireSection() {
+        HBox section = new HBox(12);
+        section.setPadding(new Insets(12, 16, 12, 16));
+        section.setAlignment(Pos.CENTER);
+
+        boundedButton = createAcquireButton(
+                "Bounded\nAcquisition",
+                "Define a rectangular region\nusing stage coordinates",
+                this::onBoundedAcquisition);
+
+        existingImageButton = createAcquireButton(
+                "Existing Image\nAcquisition",
+                "Acquire annotated regions\nfrom an open image",
+                this::onExistingImageAcquisition);
+
+        section.getChildren().addAll(boundedButton, existingImageButton);
+        return section;
+    }
+
+    private Button createAcquireButton(String title, String description, Runnable action) {
+        VBox content = new VBox(4);
+        content.setAlignment(Pos.CENTER);
+        content.setPadding(new Insets(8));
+
+        Polygon triangle = new Polygon(0, 0, 0, 16, 14, 8);
+        triangle.setFill(Color.WHITE);
+
+        Label titleLabel = new Label(title);
+        titleLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: white; "
+                + "-fx-text-alignment: center;");
+        titleLabel.setAlignment(Pos.CENTER);
+        titleLabel.setWrapText(true);
+
+        Label descLabel = new Label(description);
+        descLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #ccd9ee; -fx-text-alignment: center;");
+        descLabel.setAlignment(Pos.CENTER);
+        descLabel.setWrapText(true);
+
+        content.getChildren().addAll(triangle, titleLabel, descLabel);
+
+        Button btn = new Button();
+        btn.setGraphic(content);
+        btn.setPrefWidth(230);
+        btn.setPrefHeight(100);
+        btn.setStyle("-fx-background-color: " + BLUE + "; -fx-background-radius: 8; -fx-cursor: hand;");
+
+        btn.setOnMouseEntered(e ->
+                btn.setStyle("-fx-background-color: " + BLUE_HOVER + "; -fx-background-radius: 8; "
+                        + "-fx-cursor: hand;"));
+        btn.setOnMouseExited(e ->
+                btn.setStyle("-fx-background-color: " + BLUE + "; -fx-background-radius: 8; "
+                        + "-fx-cursor: hand;"));
+
+        btn.setOnAction(e -> action.run());
+
+        return btn;
+    }
+
+    private void updateAcquireButtons() {
+        boolean connected = false;
+        for (StepRow row : stepRows) {
+            if (row.index == STEP_CONNECTION) {
+                connected = Color.web("#4CAF50").equals(row.statusDot.getFill());
+                break;
+            }
+        }
+
+        // Bounded Acquisition: only needs server connection
+        boundedButton.setDisable(!connected);
+
+        // Existing Image: needs server connection AND an open image
+        QuPathGUI gui = QuPathGUI.getInstance();
+        boolean hasImage = gui != null && gui.getImageData() != null;
+        existingImageButton.setDisable(!connected || !hasImage);
+
+        // Update the existing image button tooltip to explain why it's disabled
+        if (!hasImage && connected) {
+            existingImageButton.setTooltip(new Tooltip("Open an image in QuPath first"));
+        } else {
+            existingImageButton.setTooltip(null);
+        }
+    }
+
+    // ======================================================================
+    // Bottom bar
+    // ======================================================================
+
+    private HBox createBottomBar() {
+        HBox bar = new HBox(10);
+        bar.setPadding(new Insets(8, 16, 10, 16));
+        bar.setAlignment(Pos.CENTER_RIGHT);
+        bar.setStyle("-fx-background-color: #f5f5f5; -fx-border-color: #ddd; -fx-border-width: 1 0 0 0; "
+                + "-fx-background-radius: 0 0 8 8;");
+
+        Button refreshBtn = new Button("Refresh All");
+        refreshBtn.setOnAction(e -> refreshAllStatuses());
+
+        Button closeBtn = new Button("Close");
+        closeBtn.setOnAction(e -> wizardStage.close());
+
+        bar.getChildren().addAll(refreshBtn, closeBtn);
+        return bar;
+    }
+
+    // ======================================================================
+    // Section separator
+    // ======================================================================
+
+    private HBox createSectionSeparator(String text) {
+        HBox sep = new HBox(8);
+        sep.setAlignment(Pos.CENTER_LEFT);
+        sep.setPadding(new Insets(8, 16, 4, 16));
+
+        Label label = new Label(text);
+        label.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #888;");
+
+        Separator line = new Separator();
+        HBox.setHgrow(line, Priority.ALWAYS);
+
+        sep.getChildren().addAll(label, line);
+        return sep;
+    }
+
+    // ======================================================================
+    // Step icons (simple shapes)
+    // ======================================================================
+
+    private Region createConnectionIcon() {
+        SVGPath svg = new SVGPath();
+        svg.setContent("M8,2 L8,8 L6,8 L6,14 L10,14 L10,8 L12,8 L12,2 Z M4,8 L4,2 L6,2 L6,8 Z");
+        svg.setFill(Color.web(BLUE));
+        svg.setScaleX(1.2);
+        svg.setScaleY(1.2);
+        StackPane pane = new StackPane(svg);
+        pane.setPrefSize(20, 20);
+        return pane;
+    }
+
+    private Region createCalibrationIcon() {
+        SVGPath svg = new SVGPath();
+        svg.setContent("M8,0 L8,4 M8,12 L8,16 M0,8 L4,8 M12,8 L16,8 "
+                + "M8,5 A3,3 0 1,1 8,11 A3,3 0 1,1 8,5 Z");
+        svg.setFill(Color.TRANSPARENT);
+        svg.setStroke(Color.web(BLUE));
+        svg.setStrokeWidth(1.5);
+        svg.setScaleX(1.1);
+        svg.setScaleY(1.1);
+        StackPane pane = new StackPane(svg);
+        pane.setPrefSize(20, 20);
+        return pane;
+    }
+
+    private Region createGridIcon() {
+        VBox grid = new VBox(2);
+        grid.setAlignment(Pos.CENTER);
+        for (int r = 0; r < 2; r++) {
+            HBox row = new HBox(2);
+            row.setAlignment(Pos.CENTER);
+            for (int c = 0; c < 2; c++) {
+                Rectangle rect = new Rectangle(7, 7);
+                rect.setFill(Color.web(BLUE));
+                rect.setArcWidth(2);
+                rect.setArcHeight(2);
+                row.getChildren().add(rect);
+            }
+            grid.getChildren().add(row);
+        }
+        return grid;
+    }
+
+    private Region createAlignmentIcon() {
+        StackPane pane = new StackPane();
+        pane.setPrefSize(20, 20);
+
+        Rectangle r1 = new Rectangle(10, 10);
+        r1.setFill(Color.TRANSPARENT);
+        r1.setStroke(Color.web(BLUE));
+        r1.setStrokeWidth(1.5);
+        r1.setTranslateX(-2);
+        r1.setTranslateY(-2);
+
+        Rectangle r2 = new Rectangle(10, 10);
+        r2.setFill(Color.TRANSPARENT);
+        r2.setStroke(Color.web(BLUE));
+        r2.setStrokeWidth(1.5);
+        r2.getStrokeDashArray().addAll(3.0, 2.0);
+        r2.setTranslateX(2);
+        r2.setTranslateY(2);
+
+        pane.getChildren().addAll(r1, r2);
+        return pane;
+    }
+
+    // ======================================================================
+    // Status refresh
+    // ======================================================================
+
+    private void refreshAllStatuses() {
+        CompletableFuture.runAsync(() -> {
+            updateStepStatus(STEP_CONNECTION, CalibrationChecker.checkServerConnection());
+        });
+        refreshCalibrationStatuses();
+    }
+
+    private void refreshCalibrationStatuses() {
+        String modality = getSelectedModality();
+        String objective = getSelectedObjective();
+        String detector = getSelectedDetector();
+
+        CompletableFuture.runAsync(() -> {
+            updateStepStatus(STEP_WHITE_BALANCE,
+                    CalibrationChecker.checkWhiteBalance(modality, objective, detector));
+            updateStepStatus(STEP_BACKGROUND,
+                    CalibrationChecker.checkBackgroundCorrection(modality, objective, detector));
+            updateStepStatus(STEP_ALIGNMENT, CalibrationChecker.checkAlignment());
+        });
+    }
+
+    // ======================================================================
+    // Action handlers
+    // ======================================================================
+
+    private void onConnect() {
+        try {
+            if (MicroscopeController.getInstance().isConnected()) {
+                refreshAllStatuses();
+                return;
+            }
+            MicroscopeController.getInstance().connect();
+            refreshAllStatuses();
+        } catch (IOException e) {
+            logger.error("Failed to connect to microscope server", e);
+            updateStepStatus(STEP_CONNECTION,
+                    new StepStatus(Status.NOT_READY, "Connection failed: " + e.getMessage()));
+        }
+    }
+
+    private void onWhiteBalance() {
+        try {
+            QPScopeController.getInstance().startWorkflow("whiteBalance");
+        } catch (IOException e) {
+            logger.error("Failed to launch white balance workflow", e);
+        }
+    }
+
+    private void onBackgroundCollection() {
+        try {
+            QPScopeController.getInstance().startWorkflow("backgroundCollection");
+        } catch (IOException e) {
+            logger.error("Failed to launch background collection workflow", e);
+        }
+    }
+
+    private void onAlignment() {
+        try {
+            QPScopeController.getInstance().startWorkflow("microscopeAlignment");
+        } catch (IOException e) {
+            logger.error("Failed to launch microscope alignment workflow", e);
+        }
+    }
+
+    private void onBoundedAcquisition() {
+        try {
+            QPScopeController.getInstance().startWorkflow("boundedAcquisition");
+        } catch (IOException e) {
+            logger.error("Failed to launch bounded acquisition", e);
+        }
+    }
+
+    private void onExistingImageAcquisition() {
+        try {
+            QPScopeController.getInstance().startWorkflow("existingImage");
+        } catch (IOException e) {
+            logger.error("Failed to launch existing image acquisition", e);
+        }
+    }
+}

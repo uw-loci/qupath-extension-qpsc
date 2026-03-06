@@ -17,6 +17,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.ProjectLogger;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.common.Version;
 import qupath.lib.gui.QuPathGUI;
@@ -115,13 +116,40 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         }
 
-        // 4) Build our menu on the FX thread
+        // 4) Start project-scoped logging
+        ProjectLogger.enableTempLogging();
+
+        // Auto-switch log files when QuPath project changes
+        qupath.projectProperty().addListener((obs, oldProject, newProject) -> {
+            if (newProject != null) {
+                ProjectLogger.enable(newProject);
+            } else {
+                ProjectLogger.disable();
+            }
+        });
+
+        // 5) Build our menu on the FX thread
         Platform.runLater(() -> addMenuItem(qupath));
     }
 
     private void addMenuItem(QuPathGUI qupath) {
         // Create or get the top level Extensions > QP Scope menu
         var extensionMenu = qupath.getMenu("Extensions>" + EXTENSION_NAME, true);
+
+        // === ACQUISITION WIZARD (top of menu) ===
+        MenuItem wizardOption = new MenuItem(res.getString("menu.acquisitionWizard"));
+        wizardOption.setDisable(!configValid);
+        setMenuItemTooltip(
+                wizardOption,
+                "Open a guided checklist that walks you through server connection, "
+                        + "calibration, alignment, and acquisition in one window.");
+        wizardOption.setOnAction(e -> {
+            try {
+                QPScopeController.getInstance().startWorkflow("acquisitionWizard");
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        });
 
         // === MAIN WORKFLOW MENU ITEMS ===
 
@@ -385,6 +413,9 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         }
 
         // === BUILD FINAL MENU ===
+
+        // 0. Wizard (top of menu)
+        extensionMenu.getItems().addAll(wizardOption, new SeparatorMenuItem());
 
         // 1. Acquisition
         extensionMenu.getItems().addAll(boundedAcquisitionOption, existingImageOption, new SeparatorMenuItem());

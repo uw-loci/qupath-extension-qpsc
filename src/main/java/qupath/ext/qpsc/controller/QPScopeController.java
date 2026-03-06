@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.ui.AcquisitionWizardDialog;
 import qupath.ext.qpsc.ui.CameraControlController;
 import qupath.ext.qpsc.ui.ServerConnectionController;
 
@@ -139,6 +140,10 @@ public class QPScopeController {
         logger.info("Starting workflow mode: {}", mode);
 
         switch (mode) {
+            case "acquisitionWizard" -> {
+                logger.debug("Launching acquisition wizard");
+                javafx.application.Platform.runLater(AcquisitionWizardDialog::show);
+            }
             case "boundedAcquisition" -> {
                 logger.debug("Launching bounded acquisition workflow");
                 BoundedAcquisitionWorkflow.run();
