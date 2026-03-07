@@ -126,11 +126,14 @@ public class AcquisitionWizardDialog {
 
         wizardStage.show();
 
-        // Auto-refresh statuses when the wizard regains focus (e.g. after
-        // returning from a calibration or alignment dialog).
+        // Auto-collapse when the wizard loses focus (user clicks on QuPath
+        // or another window), and auto-refresh + expand when it regains focus.
         wizardStage.focusedProperty().addListener((obs, wasFocused, isFocused) -> {
             if (isFocused) {
+                expand();
                 refreshAllStatuses();
+            } else {
+                collapse();
             }
         });
 
@@ -325,6 +328,7 @@ public class AcquisitionWizardDialog {
 
         Label title = new Label("Acquisition Wizard");
         title.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: white;");
+        title.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(title, Priority.ALWAYS);
 
         // Minimize (collapse) button
