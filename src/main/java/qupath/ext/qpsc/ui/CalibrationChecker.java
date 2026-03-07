@@ -82,12 +82,30 @@ public class CalibrationChecker {
                         "Set white balance in MicroManager for this camera");
             }
 
-            // Check if WB calibration data (per-channel gains) exists
-            // for this hardware combination in the imaging profiles.
-            var wbGains = mgr.getWhiteBalanceGains(modality, objective, detector);
-            if (wbGains != null && !wbGains.isEmpty()) {
+            // WB calibration is stored in imaging_profiles under:
+            //   exposures_ms.<angle> - per-angle per-channel exposures (from per_angle WB)
+            //   gains.<angle> - per-angle gain settings (from per_angle WB)
+            //   simple_wb - simple WB mode data
+            // Check exposures_ms first (set by both per_angle and simple modes during acquisition),
+            // then simple_wb as a secondary indicator.
+            var exposures = mgr.getModalityExposures(modality, objective, detector);
+            var gains = mgr.getModalityGains(modality, objective, detector);
+
+            if (exposures instanceof java.util.Map<?,?> expMap && !expMap.isEmpty()) {
                 return new StepStatus(Status.READY,
-                        "White balance calibration found (" + wbGains.size() + " angles)");
+                        "White balance calibration found (" + expMap.size() + " angles)");
+            }
+
+            // Also check simple_wb section (written by simple WB calibration)
+            Object simpleWb = mgr.getProfileSetting(modality, objective, detector, "simple_wb");
+            if (simpleWb != null) {
+                return new StepStatus(Status.READY, "Simple white balance calibration found");
+            }
+
+            // Check gains as a fallback (may exist without exposures_ms in some edge cases)
+            if (gains instanceof java.util.Map<?,?> gainMap && !gainMap.isEmpty()) {
+                return new StepStatus(Status.READY,
+                        "White balance gain calibration found (" + gainMap.size() + " angles)");
             }
 
             return new StepStatus(Status.WARNING,
