@@ -314,7 +314,36 @@ public class PPMModalityHandler implements ModalityHandler {
                         "Create a hue-to-angle calibration from a PPM reference slide with sunburst pattern. "
                                 + "Acquires an image of radial spokes and creates a linear regression mapping "
                                 + "hue values to orientation angles for use in PPM analysis.",
-                        () -> qupath.ext.qpsc.modality.ppm.workflow.SunburstCalibrationWorkflow.run()));
+                        () -> qupath.ext.qpsc.modality.ppm.workflow.SunburstCalibrationWorkflow.run()),
+                new ModalityMenuItem(
+                        "ppmHueRangeFilter",
+                        "PPM Hue Range Filter...",
+                        "Highlight pixels on the current image whose fiber orientation angle "
+                                + "falls within a specified range. Shows a live overlay with "
+                                + "adjustable angle, threshold, and appearance controls.",
+                        () -> qupath.ext.qpsc.modality.ppm.analysis.PPMHueRangeWorkflow.run()),
+                new ModalityMenuItem(
+                        "ppmPolarityPlot",
+                        "PPM Polarity Plot...",
+                        "Show a polar histogram (rose diagram) of fiber orientation angles for the "
+                                + "selected annotation. Requires a PPM calibration and a sum image. "
+                                + "Optionally uses birefringence sibling for PPM-positive masking.",
+                        () -> qupath.ext.qpsc.modality.ppm.analysis.PPMPolarityPlotWorkflow.run()),
+                new ModalityMenuItem(
+                        "ppmPerpendicularity",
+                        "Surface Perpendicularity Analysis...",
+                        "Analyze fiber orientation relative to annotation boundaries. "
+                                + "Uses both simple perpendicularity and PS-TACS scoring "
+                                + "(Qian et al., Am J Pathol 2025). Select a boundary class "
+                                + "and configure dilation zone, TACS threshold, and angle convention.",
+                        () -> qupath.ext.qpsc.modality.ppm.analysis.PPMPerpendicularityWorkflow.run()),
+                new ModalityMenuItem(
+                        "ppmBatchAnalysis",
+                        "Batch PPM Analysis...",
+                        "Run polarity plot and/or surface perpendicularity analysis across "
+                                + "all PPM analysis sets in the project. Stores results as annotation "
+                                + "measurements and exports a summary CSV.",
+                        () -> qupath.ext.qpsc.modality.ppm.analysis.PPMBatchAnalysisWorkflow.run()));
     }
 
     // ========================================================================

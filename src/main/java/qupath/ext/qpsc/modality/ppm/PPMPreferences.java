@@ -59,6 +59,10 @@ public class PPMPreferences {
     private static final StringProperty overrideMinusAngle =
             PathPrefs.createPersistentPreference("PPMOverrideMinusAngle", "-7.0");
 
+    // Active calibration file path (set after successful sunburst calibration)
+    private static final StringProperty activeCalibrationPath =
+            PathPrefs.createPersistentPreference("PPMActiveCalibrationPath", "");
+
     static {
         // PPM exposure defaults are initialized with fallback values.
         // Use loadExposuresForProfile() to load profile-specific defaults.
@@ -240,6 +244,40 @@ public class PPMPreferences {
             case "setUncrossedExposureMs" -> setUncrossedExposureMs(ms);
             default -> logger.warn("Unknown setter method: {}", setterMethod);
         }
+    }
+
+    // =============== Calibration Preferences ===============
+
+    /**
+     * Gets the path to the currently active PPM sunburst calibration file (.npz).
+     * This is set after a successful sunburst calibration and stamped onto
+     * PPM images at acquisition time as per-image metadata.
+     *
+     * @return path to the active calibration file, or empty string if not set
+     */
+    public static String getActiveCalibrationPath() {
+        return activeCalibrationPath.get();
+    }
+
+    /**
+     * Sets the path to the currently active PPM sunburst calibration file (.npz).
+     *
+     * @param path absolute path to the calibration file
+     */
+    public static void setActiveCalibrationPath(String path) {
+        activeCalibrationPath.set(path != null ? path : "");
+        logger.info("Active PPM calibration set to: {}", path);
+    }
+
+    /**
+     * Returns true if an active calibration path is set and the file exists.
+     */
+    public static boolean hasActiveCalibration() {
+        String path = getActiveCalibrationPath();
+        if (path == null || path.isEmpty()) {
+            return false;
+        }
+        return new java.io.File(path).exists();
     }
 
     // =============== Angle Override Preferences ===============
