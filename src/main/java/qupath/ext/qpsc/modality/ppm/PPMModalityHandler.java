@@ -343,7 +343,15 @@ public class PPMModalityHandler implements ModalityHandler {
                         "Run polarity plot and/or surface perpendicularity analysis across "
                                 + "all PPM analysis sets in the project. Stores results as annotation "
                                 + "measurements and exports a summary CSV.",
-                        () -> qupath.ext.qpsc.modality.ppm.analysis.PPMBatchAnalysisWorkflow.run()));
+                        () -> qupath.ext.qpsc.modality.ppm.analysis.PPMBatchAnalysisWorkflow.run()),
+                new ModalityMenuItem(
+                        "ppmBackPropagate",
+                        "Back-Propagate Annotations to Parent...",
+                        "Transfer annotations from sub-images (angle, sum, biref) back to "
+                                + "the parent or original base image. Uses the alignment transform "
+                                + "and XY offset metadata to compute the coordinate mapping. "
+                                + "Select annotation classes and target image type.",
+                        () -> qupath.ext.qpsc.modality.ppm.analysis.PPMBackPropagationWorkflow.run()));
     }
 
     // ========================================================================
