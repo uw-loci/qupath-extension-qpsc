@@ -579,7 +579,7 @@ public class PPMBackPropagationWorkflow {
      * @param height image height in pixels
      * @return the flip AffineTransform, or identity if no flip
      */
-    private static AffineTransform createFlipTransform(
+    static AffineTransform createFlipTransform(
             boolean flipX, boolean flipY, double width, double height) {
         AffineTransform t = new AffineTransform();
         if (flipX && flipY) {
