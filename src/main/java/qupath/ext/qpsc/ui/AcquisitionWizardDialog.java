@@ -650,7 +650,7 @@ public class AcquisitionWizardDialog {
     private Button createAcquireButton(String title, String description, Runnable action) {
         VBox content = new VBox(4);
         content.setAlignment(Pos.CENTER);
-        content.setPadding(new Insets(8));
+        content.setPadding(new Insets(4));
 
         Polygon triangle = new Polygon(0, 0, 0, 16, 14, 8);
         triangle.setFill(Color.WHITE);
@@ -660,26 +660,32 @@ public class AcquisitionWizardDialog {
                 + "-fx-text-alignment: center;");
         titleLabel.setAlignment(Pos.CENTER);
         titleLabel.setWrapText(true);
+        titleLabel.setMaxWidth(Double.MAX_VALUE);
 
         Label descLabel = new Label(description);
         descLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #ccd9ee; -fx-text-alignment: center;");
         descLabel.setAlignment(Pos.CENTER);
         descLabel.setWrapText(true);
+        descLabel.setMaxWidth(Double.MAX_VALUE);
 
         content.getChildren().addAll(triangle, titleLabel, descLabel);
+        content.setMaxWidth(Double.MAX_VALUE);
 
         Button btn = new Button();
         btn.setGraphic(content);
-        btn.setPrefWidth(230);
-        btn.setPrefHeight(100);
-        btn.setStyle("-fx-background-color: " + BLUE + "; -fx-background-radius: 8; -fx-cursor: hand;");
+        btn.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        btn.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(btn, Priority.ALWAYS);
+        btn.setPrefHeight(110);
+        btn.setStyle("-fx-background-color: " + BLUE + "; -fx-background-radius: 8; "
+                + "-fx-cursor: hand; -fx-padding: 4;");
 
         btn.setOnMouseEntered(e ->
                 btn.setStyle("-fx-background-color: " + BLUE_HOVER + "; -fx-background-radius: 8; "
-                        + "-fx-cursor: hand;"));
+                        + "-fx-cursor: hand; -fx-padding: 4;"));
         btn.setOnMouseExited(e ->
                 btn.setStyle("-fx-background-color: " + BLUE + "; -fx-background-radius: 8; "
-                        + "-fx-cursor: hand;"));
+                        + "-fx-cursor: hand; -fx-padding: 4;"));
 
         btn.setOnAction(e -> action.run());
 
