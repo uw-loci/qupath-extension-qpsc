@@ -414,21 +414,21 @@ public class AcquisitionWizardDialog {
         // Modality
         grid.add(new Label("Modality:"), 0, 0);
         modalityCombo = new ComboBox<>();
-        modalityCombo.setPrefWidth(260);
+        modalityCombo.setMaxWidth(Double.MAX_VALUE);
         modalityCombo.setOnAction(e -> onModalityChanged());
         grid.add(modalityCombo, 1, 0);
 
         // Objective
         grid.add(new Label("Objective:"), 0, 1);
         objectiveCombo = new ComboBox<>();
-        objectiveCombo.setPrefWidth(260);
+        objectiveCombo.setMaxWidth(Double.MAX_VALUE);
         objectiveCombo.setOnAction(e -> onObjectiveChanged());
         grid.add(objectiveCombo, 1, 1);
 
         // Detector
         grid.add(new Label("Detector:"), 0, 2);
         detectorCombo = new ComboBox<>();
-        detectorCombo.setPrefWidth(260);
+        detectorCombo.setMaxWidth(Double.MAX_VALUE);
         detectorCombo.setOnAction(e -> onDetectorChanged());
         grid.add(detectorCombo, 1, 2);
 
