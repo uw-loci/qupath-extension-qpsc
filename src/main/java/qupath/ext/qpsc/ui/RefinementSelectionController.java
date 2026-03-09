@@ -10,6 +10,7 @@ import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.lib.gui.QuPathGUI;
 
 /**
@@ -119,6 +120,7 @@ public class RefinementSelectionController {
                 dialog.initModality(Modality.APPLICATION_MODAL);
                 dialog.setTitle("Alignment Refinement");
                 dialog.setHeaderText("Choose refinement level for alignment");
+                dialog.setGraphic(DocumentationHelper.createHelpButton("existingImage"));
                 dialog.setResizable(true);
 
                 VBox content = new VBox(15);
@@ -140,6 +142,10 @@ public class RefinementSelectionController {
 
                 // Option 1: No refinement
                 RadioButton noRefineRadio = new RadioButton();
+                noRefineRadio.setTooltip(new Tooltip(
+                        "Skip refinement and use the existing alignment directly.\n"
+                        + "Fastest option but least accurate (+/- 20 um).\n"
+                        + "Best for high-confidence alignments."));
                 VBox noRefineOption = createOptionCard(
                         noRefineRadio,
                         "Proceed without refinement",
@@ -149,6 +155,10 @@ public class RefinementSelectionController {
 
                 // Option 2: Single-tile refinement
                 RadioButton singleTileRadio = new RadioButton();
+                singleTileRadio.setTooltip(new Tooltip(
+                        "Acquire a single tile at the expected position to verify alignment.\n"
+                        + "Allows fine-tuning the offset before full acquisition (+/- 5 um).\n"
+                        + "Recommended for medium-confidence alignments."));
                 VBox singleTileOption = createOptionCard(
                         singleTileRadio,
                         "Single-tile refinement",
@@ -158,6 +168,10 @@ public class RefinementSelectionController {
 
                 // Option 3: Full manual alignment
                 RadioButton fullManualRadio = new RadioButton();
+                fullManualRadio.setTooltip(new Tooltip(
+                        "Discard the current alignment and start a fresh manual alignment\n"
+                        + "using multiple reference points. Most accurate (+/- 2 um) but\n"
+                        + "takes the longest. Recommended for low-confidence alignments."));
                 VBox fullManualOption = createOptionCard(
                         fullManualRadio,
                         "Start manual alignment over",

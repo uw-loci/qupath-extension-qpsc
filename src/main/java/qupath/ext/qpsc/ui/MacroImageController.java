@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.GreenBoxDetector;
 import qupath.ext.qpsc.utilities.MacroImageAnalyzer;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
@@ -62,6 +63,7 @@ public class MacroImageController {
             dialog.initModality(Modality.NONE);
             dialog.setTitle("Microscope Alignment Setup");
             dialog.setHeaderText("Create or verify microscope alignment between macro and main images");
+            dialog.setGraphic(DocumentationHelper.createHelpButton("microscopeAlignment"));
             dialog.setResizable(true);
 
             // Set dialog size

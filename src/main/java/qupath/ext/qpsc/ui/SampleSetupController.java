@@ -96,6 +96,9 @@ public class SampleSetupController {
             // --- Fields ---
             TextField sampleNameField = new TextField();
             sampleNameField.setPromptText(res.getString("sampleSetup.prompt.sampleName"));
+            sampleNameField.setTooltip(new Tooltip(
+                    "Enter a name for this sample/slide. Used as the project folder name.\n"
+                    + "Avoid special characters and spaces."));
 
             // Initialize sample name: use default if provided, otherwise use last used
             if (defaultSampleName != null && !defaultSampleName.trim().isEmpty()) {
@@ -125,12 +128,16 @@ public class SampleSetupController {
 
             TextField folderField = new TextField();
             folderField.setPrefColumnCount(20);
+            folderField.setTooltip(new Tooltip(
+                    "Root folder where new QuPath projects will be created.\n"
+                    + "A subfolder named after the sample will be created here."));
 
             String projectsFolder = QPPreferenceDialog.getProjectsFolderProperty();
             folderField.setText(projectsFolder);
             logger.debug("Loaded projects folder from QPPreferenceDialog: {}", projectsFolder);
 
             Button browseBtn = new Button(res.getString("sampleSetup.button.browse"));
+            browseBtn.setTooltip(new Tooltip("Browse for a folder to store QuPath projects"));
             browseBtn.setOnAction(e -> {
                 Window win = dlg.getDialogPane().getScene().getWindow();
                 DirectoryChooser chooser = new DirectoryChooser();
@@ -165,10 +172,19 @@ public class SampleSetupController {
             Set<String> modalities = configManager.getSection("modalities").keySet();
 
             ComboBox<String> modalityBox = new ComboBox<>(FXCollections.observableArrayList(modalities));
+            modalityBox.setTooltip(new Tooltip(
+                    "Imaging modality to use for acquisition (e.g., PPM, brightfield).\n"
+                    + "Determines available objectives, detectors, and acquisition parameters."));
 
             // Create objective and detector dropdowns (initially empty)
             ComboBox<String> objectiveBox = new ComboBox<>();
+            objectiveBox.setTooltip(new Tooltip(
+                    "Microscope objective lens for this acquisition.\n"
+                    + "Available objectives depend on the selected modality."));
             ComboBox<String> detectorBox = new ComboBox<>();
+            detectorBox.setTooltip(new Tooltip(
+                    "Camera or detector for image capture.\n"
+                    + "Available detectors depend on the selected modality and objective."));
 
             // Set last used modality if available
             String lastModality = PersistentPreferences.getLastModality();

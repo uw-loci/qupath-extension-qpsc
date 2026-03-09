@@ -165,6 +165,10 @@ public class ThresholdPreviewDialog {
             satSlider.setMinorTickCount(4);
             satSlider.setBlockIncrement(0.01);
             satSlider.setPrefWidth(300);
+            satSlider.setTooltip(new Tooltip(
+                    "Minimum HSV saturation for a pixel to be classified as foreground.\n"
+                    + "Higher values require more colorful pixels, filtering out gray/white areas.\n"
+                    + "Lower values include more of the reference slide in the foreground mask."));
             Label satValueLabel = new Label(String.format("%.3f", initialSaturation));
             satValueLabel.setStyle("-fx-font-family: monospace; -fx-min-width: 50px;");
 
@@ -182,6 +186,10 @@ public class ThresholdPreviewDialog {
             valSlider.setMinorTickCount(4);
             valSlider.setBlockIncrement(0.01);
             valSlider.setPrefWidth(300);
+            valSlider.setTooltip(new Tooltip(
+                    "Minimum HSV value (brightness) for a pixel to be classified as foreground.\n"
+                    + "Higher values exclude dark pixels and shadows from detection.\n"
+                    + "Lower values include dimmer regions of the reference slide."));
             Label valValueLabel = new Label(String.format("%.3f", initialValue));
             valValueLabel.setStyle("-fx-font-family: monospace; -fx-min-width: 50px;");
 
@@ -217,9 +225,15 @@ public class ThresholdPreviewDialog {
             Button runButton = new Button("Run Calibration with These Thresholds");
             runButton.setDefaultButton(true);
             runButton.setStyle("-fx-font-weight: bold;");
+            runButton.setTooltip(new Tooltip(
+                    "Re-run calibration on the server using the adjusted threshold values.\n"
+                    + "This will recompute white balance coefficients based on the new foreground mask."));
 
             Button cancelButton = new Button("Cancel");
             cancelButton.setCancelButton(true);
+            cancelButton.setTooltip(new Tooltip(
+                    "Close this dialog without re-running calibration.\n"
+                    + "The original threshold values will be kept."));
 
             Region spacer = new Region();
             HBox.setHgrow(spacer, Priority.ALWAYS);

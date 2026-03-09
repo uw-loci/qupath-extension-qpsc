@@ -7,6 +7,7 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.ppm.PPMPreferences;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
 import qupath.lib.gui.QuPathGUI;
@@ -156,7 +157,17 @@ public class PPMHueRangeWorkflow {
             controlWindow.setAlwaysOnTop(false);
             controlWindow.setOnCloseRequest(e -> cleanup());
         }
-        controlWindow.setScene(new Scene(panel, 380, 420));
+        javafx.scene.control.Button docButton = DocumentationHelper.createHelpButton("ppmHueRangeFilter");
+        javafx.scene.layout.VBox wrapper = new javafx.scene.layout.VBox();
+        if (docButton != null) {
+            javafx.scene.layout.HBox helpBar = new javafx.scene.layout.HBox(docButton);
+            helpBar.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+            helpBar.setPadding(new javafx.geometry.Insets(4, 8, 0, 0));
+            wrapper.getChildren().add(helpBar);
+        }
+        javafx.scene.layout.VBox.setVgrow(panel, javafx.scene.layout.Priority.ALWAYS);
+        wrapper.getChildren().add(panel);
+        controlWindow.setScene(new Scene(wrapper, 380, 440));
         controlWindow.show();
         controlWindow.toFront();
 

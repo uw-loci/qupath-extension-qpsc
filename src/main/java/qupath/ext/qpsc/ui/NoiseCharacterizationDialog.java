@@ -16,6 +16,7 @@ import javafx.scene.layout.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.lib.gui.prefs.PathPrefs;
 
 /**
@@ -79,6 +80,7 @@ public class NoiseCharacterizationDialog {
                 Dialog<NoiseCharParams> dialog = new Dialog<>();
                 dialog.setTitle("JAI Noise Characterization");
                 dialog.setHeaderText("Characterize camera noise across gain/exposure settings");
+                dialog.setGraphic(DocumentationHelper.createHelpButton("noiseCharacterization"));
                 dialog.setResizable(true);
 
                 // Main content

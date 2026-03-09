@@ -23,6 +23,7 @@ import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.SampleNameValidator;
 import qupath.lib.gui.QuPathGUI;
 
@@ -197,6 +198,7 @@ public class UnifiedAcquisitionController {
             dialog.setTitle("Bounded Acquisition");
             dialog.setHeaderText("Configure and start a new bounded acquisition.\n"
                     + "All settings are visible below - expand sections as needed.");
+            dialog.setGraphic(DocumentationHelper.createHelpButton("boundedAcquisition"));
             dialog.setResizable(true);
 
             // Add buttons

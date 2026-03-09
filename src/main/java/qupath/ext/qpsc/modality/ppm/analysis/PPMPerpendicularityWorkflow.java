@@ -48,6 +48,7 @@ import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.regions.RegionRequest;
 import qupath.lib.roi.interfaces.ROI;
 import qupath.lib.io.GsonTools;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.fx.dialogs.Dialogs;
 
 /**
@@ -197,6 +198,7 @@ public class PPMPerpendicularityWorkflow {
         dialog.setTitle("Surface Perpendicularity Analysis");
         dialog.initOwner(gui.getStage());
 
+        Button helpButton = DocumentationHelper.createHelpButton("ppmPerpendicularity");
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(8);
@@ -403,7 +405,14 @@ public class PPMPerpendicularityWorkflow {
             });
         });
 
-        dialog.setScene(new Scene(grid));
+        VBox dialogRoot = new VBox(grid);
+        if (helpButton != null) {
+            HBox helpBar = new HBox(helpButton);
+            helpBar.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+            helpBar.setPadding(new Insets(5, 10, 0, 10));
+            dialogRoot.getChildren().add(0, helpBar);
+        }
+        dialog.setScene(new Scene(dialogRoot));
         dialog.sizeToScene();
         dialog.show();
     }

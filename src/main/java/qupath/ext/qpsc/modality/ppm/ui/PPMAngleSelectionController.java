@@ -164,18 +164,34 @@ public class PPMAngleSelectionController {
 
             CheckBox minusCheck = new CheckBox(String.format("%.1f 'degrees'", minusAngle));
             minusCheck.setSelected(PPMPreferences.getMinusSelected());
+            minusCheck.setTooltip(new Tooltip(
+                    "Negative polarizer rotation angle.\n"
+                    + "Captures birefringent structures with opposite contrast to the plus angle.\n"
+                    + "Used together with the plus angle for birefringence quantification."));
             grid.add(minusCheck, 0, 1);
 
             CheckBox zeroCheck = new CheckBox("0 'degrees'");
             zeroCheck.setSelected(PPMPreferences.getZeroSelected());
+            zeroCheck.setTooltip(new Tooltip(
+                    "Crossed polarizers (0 deg rotation).\n"
+                    + "Standard crossed-polar position providing maximum extinction.\n"
+                    + "Birefringent structures appear bright against a dark background."));
             grid.add(zeroCheck, 0, 2);
 
             CheckBox plusCheck = new CheckBox(String.format("%.1f 'degrees'", plusAngle));
             plusCheck.setSelected(PPMPreferences.getPlusSelected());
+            plusCheck.setTooltip(new Tooltip(
+                    "Positive polarizer rotation angle.\n"
+                    + "Captures birefringent structures with opposite contrast to the minus angle.\n"
+                    + "Used together with the minus angle for birefringence quantification."));
             grid.add(plusCheck, 0, 3);
 
             CheckBox uncrossedCheck = new CheckBox(String.format("%.1f 'degrees' (uncrossed)", uncrossedAngle));
             uncrossedCheck.setSelected(PPMPreferences.getUncrossedSelected());
+            uncrossedCheck.setTooltip(new Tooltip(
+                    "Uncrossed (parallel) polarizers position.\n"
+                    + "Provides a brightfield-like reference image with full light transmission.\n"
+                    + "Useful for tissue morphology context alongside polarization images."));
             grid.add(uncrossedCheck, 0, 4);
 
             // Persist checkbox selections to preferences
@@ -198,7 +214,9 @@ public class PPMAngleSelectionController {
 
             Label info = new Label("Exposure times are determined automatically from background/config settings.");
             Button selectAll = new Button("Select All");
+            selectAll.setTooltip(new Tooltip("Select all four polarization angles for acquisition"));
             Button selectNone = new Button("Select None");
+            selectNone.setTooltip(new Tooltip("Deselect all polarization angles"));
             selectAll.setOnAction(e -> {
                 minusCheck.setSelected(true);
                 zeroCheck.setSelected(true);

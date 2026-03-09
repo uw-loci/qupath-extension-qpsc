@@ -18,6 +18,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 
 /**
  * UI controller for managing microscope server connections.
@@ -100,6 +101,7 @@ public class ServerConnectionController {
         }
         dialog.setTitle(res.getString("server.dialog.title"));
         dialog.setHeaderText(res.getString("server.dialog.header"));
+        dialog.setGraphic(DocumentationHelper.createHelpButton("serverConnection"));
         dialog.setResizable(true);
 
         // Create main layout

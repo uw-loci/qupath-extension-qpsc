@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 
@@ -295,6 +296,7 @@ public class AutofocusEditorWorkflow {
         dialog.setTitle("Autofocus Configuration Editor");
         dialog.setHeaderText("Edit autofocus parameters for " + microscopeName + " microscope\n"
                 + "Settings will be saved to: " + autofocusFile.getName());
+        dialog.setGraphic(DocumentationHelper.createHelpButton("autofocusEditor"));
 
         // Create UI
         VBox mainLayout = new VBox(10);

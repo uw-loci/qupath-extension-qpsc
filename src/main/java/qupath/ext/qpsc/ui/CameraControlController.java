@@ -15,6 +15,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
@@ -123,6 +124,7 @@ public class CameraControlController {
         activeDialog = dlg; // Track the active dialog
         dlg.setTitle(res.getString("camera.dialog.title"));
         dlg.setHeaderText(res.getString("camera.dialog.header"));
+        dlg.setGraphic(DocumentationHelper.createHelpButton("cameraControl"));
 
         // Clear singleton reference when dialog closes
         dlg.setOnHidden(event -> {

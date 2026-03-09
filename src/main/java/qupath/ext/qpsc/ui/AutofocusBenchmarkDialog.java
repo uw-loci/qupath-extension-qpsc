@@ -18,6 +18,7 @@ import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.gui.prefs.PathPrefs;
 
@@ -85,6 +86,7 @@ public class AutofocusBenchmarkDialog {
                 }
                 dialog.setTitle("Autofocus Parameter Benchmark");
                 dialog.setHeaderText("Configure autofocus parameter testing");
+                dialog.setGraphic(DocumentationHelper.createHelpButton("autofocusBenchmark"));
                 dialog.setResizable(true);
 
                 // Main content container
@@ -105,6 +107,10 @@ public class AutofocusBenchmarkDialog {
                 TextField referenceZField = new TextField();
                 referenceZField.setPrefWidth(150);
                 referenceZField.setPromptText("Enter in-focus Z position");
+                referenceZField.setTooltip(new Tooltip(
+                        "The known in-focus Z stage position in um.\n"
+                        + "The benchmark will test autofocus accuracy by starting\n"
+                        + "at various distances above and below this reference point."));
 
                 // Initialize with current Z or last used value
                 if (currentZ != null && currentZ != 0.0) {
@@ -114,6 +120,9 @@ public class AutofocusBenchmarkDialog {
                 }
 
                 Button useCurrentZButton = new Button("Use Current Z");
+                useCurrentZButton.setTooltip(new Tooltip(
+                        "Fill in the current Z stage position as the reference.\n"
+                        + "Make sure the sample is in focus before clicking."));
                 useCurrentZButton.setOnAction(e -> {
                     if (currentZ != null) {
                         referenceZField.setText(String.format("%.2f", currentZ));
@@ -134,8 +143,12 @@ public class AutofocusBenchmarkDialog {
                 TextField outputField = new TextField();
                 outputField.setPrefWidth(350);
                 outputField.setText(outputPathProperty.get());
+                outputField.setTooltip(new Tooltip(
+                        "Directory where benchmark results (CSV and JSON) will be saved.\n"
+                        + "Results include accuracy and timing data for each parameter combination."));
 
                 Button browseButton = new Button("Browse...");
+                browseButton.setTooltip(new Tooltip("Browse for an output directory to save benchmark results"));
                 browseButton.setOnAction(e -> {
                     DirectoryChooser chooser = new DirectoryChooser();
                     chooser.setTitle("Select Output Directory for Benchmark Results");
@@ -170,6 +183,11 @@ public class AutofocusBenchmarkDialog {
                 distancesField.setPrefWidth(350);
                 distancesField.setText(testDistancesProperty.get());
                 distancesField.setPromptText("Comma-separated values (e.g., 5,10,20,30,50)");
+                distancesField.setTooltip(new Tooltip(
+                        "Comma-separated distances (in um) from the in-focus position to test.\n"
+                        + "Each distance is tested both above and below focus.\n"
+                        + "More distances = more thorough but longer benchmark.\n"
+                        + "Recommended range: 1-200 um."));
 
                 Label distancesHelp = new Label("Distances from focus to test (above and below)");
                 distancesHelp.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
@@ -189,6 +207,10 @@ public class AutofocusBenchmarkDialog {
                 // Quick mode checkbox
                 CheckBox quickModeCheck = new CheckBox("Quick Mode (reduced parameter space for faster testing)");
                 quickModeCheck.setSelected(quickModeProperty.get());
+                quickModeCheck.setTooltip(new Tooltip(
+                        "Quick mode tests a reduced set of parameter combinations.\n"
+                        + "~100 trials in 5-15 minutes vs ~2000 trials in 30+ hours for full mode.\n"
+                        + "Recommended for initial testing; use full mode for comprehensive optimization."));
 
                 // Estimated test count and duration label
                 Label estimateLabel = new Label();
@@ -203,6 +225,9 @@ public class AutofocusBenchmarkDialog {
                 ComboBox<String> objectiveComboBox = new ComboBox<>();
                 objectiveComboBox.setPrefWidth(350);
                 objectiveComboBox.setPromptText("Select objective...");
+                objectiveComboBox.setTooltip(new Tooltip(
+                        "Objective currently in use for the benchmark.\n"
+                        + "Used to determine Z safety limits during testing."));
 
                 // Load available objectives from microscope configuration
                 try {

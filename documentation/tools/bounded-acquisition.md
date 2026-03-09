@@ -1,0 +1,144 @@
+# Bounded Acquisition
+
+> Menu: Extensions > QP Scope > Bounded Acquisition
+> [Back to README](../../README.md) | [All Tools](../UTILITIES.md) | [All Workflows](../WORKFLOWS.md)
+
+## Purpose
+
+Acquire high-resolution images by defining stage coordinates directly. This workflow creates a new QuPath project and acquires a rectangular region of the slide. Use this when starting fresh without an existing overview image, when you know the stage coordinates of the region you want, or when setting up a new sample for imaging.
+
+## Prerequisites
+
+- Python microscope server running
+- Microscope hardware initialized in Micro-Manager
+- Valid microscope configuration file loaded
+- Background images collected (recommended)
+
+## Options
+
+### Project & Sample
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| Sample Name | TextField | Yes | Name for this acquisition (e.g., "MySample01"). Validated for cross-platform compatibility; invalid characters and Windows reserved names (CON, NUL, etc.) are blocked. |
+| Projects Folder | Directory Picker | Yes* | Root folder for projects. Only required if no project is currently open. |
+
+### Hardware Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| Modality | ComboBox | From config | Imaging modality (e.g., ppm_20x, bf_10x) |
+| Objective | ComboBox | From config | Objective lens. List updates based on selected modality. |
+| Detector | ComboBox | From config | Camera/detector. List updates based on selected objective. |
+
+Only valid hardware combinations are shown via cascading selection.
+
+### Acquisition Region
+
+Two input modes are available:
+
+**Start Point + Size Mode:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| Start X (um) | Spinner | Starting X coordinate in micrometers |
+| Start Y (um) | Spinner | Starting Y coordinate in micrometers |
+| Width (um) | Spinner | Region width in micrometers |
+| Height (um) | Spinner | Region height in micrometers |
+| Get Stage Position | Button | Populate start coordinates from current stage position |
+
+**Two Corners Mode:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| Corner 1 X/Y | Spinner | First corner coordinates |
+| Corner 2 X/Y | Spinner | Opposite corner coordinates |
+| Get Stage Position | Button | Populate each corner from current stage position |
+
+### Advanced Options (Collapsed by Default)
+
+| Option | Type | Description |
+|--------|------|-------------|
+| WB Mode | ComboBox | White balance mode (JAI cameras only): Off, Camera AWB, Simple, or Per-angle calibrated exposures. Applies immediately on selection. |
+| Angle Overrides | Various | Modality-specific options (e.g., PPM angle overrides) |
+
+### Acquisition Preview
+
+Real-time preview showing calculated acquisition details:
+
+| Field | Description |
+|-------|-------------|
+| Region | Calculated size in millimeters |
+| Field of View | FOV dimensions for selected hardware |
+| Tile Grid | Number of tiles (X x Y) and overlap percentage |
+| Angles | Number of angles for the modality |
+| Total Images | Total images to be acquired |
+| Est. Time | Rough time estimate |
+| Est. Storage | Rough storage estimate |
+
+## Workflow
+
+### Step 1: Unified Acquisition Dialog
+
+All configuration is presented in a single screen with collapsible sections. Fill in sample name, select hardware configuration, define the acquisition region, and review the acquisition preview.
+
+### Step 2: Acquisition Progress
+
+After clicking **Start Acquisition**, the progress monitor appears showing:
+
+- Current tile number / total tiles
+- Progress bar
+- Current stage position
+- Elapsed time
+
+During acquisition:
+
+- Stage moves to each tile position
+- Camera captures image(s) at each position
+- For PPM: rotates through all angles at each position
+- Autofocus runs periodically based on settings
+- Cancel is available (partial tiles will be saved)
+
+### Step 3: Stitching
+
+After all tiles are captured, automatic stitching begins:
+
+- Tiles are aligned using overlap regions
+- Pyramidal image is created for efficient viewing
+- Output format determined by preferences (OME-TIFF or OME-ZARR)
+- Do not interact with QuPath during stitching
+- Stitching time depends on tile count (typically 2-10 minutes)
+- Temporary tiles may be kept, zipped, or deleted per preferences
+
+### Step 4: Completion
+
+- Stitched image is automatically added to the project
+- Image opens in QuPath viewer
+- Metadata is populated with acquisition details
+- Temporary tiles are handled per preferences
+
+## Output
+
+- A new QuPath project (if none was open)
+- Stitched pyramidal image (OME-TIFF or OME-ZARR) added to the project
+- Acquisition metadata stored in project
+- Temporary tile images (handled per preference settings)
+
+## Tips & Troubleshooting
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| "Connection refused" | Server not running | Start Python microscope server |
+| Stage does not move | Hardware not initialized | Check Micro-Manager |
+| Black images | Exposure too short or lamp off | Check illumination and camera settings |
+| Stitching fails | Insufficient disk space | Free disk space and retry |
+| Invalid sample name | Special characters or reserved names | Use only letters, numbers, underscores, and hyphens |
+
+## See Also
+
+- [Existing Image Acquisition](existing-image-acquisition.md) - Acquire from annotated regions on an existing image
+- [Microscope Alignment](microscope-alignment.md) - Create coordinate transforms for image-to-stage mapping
+- [Camera Control](camera-control.md) - Verify camera settings before acquisition
+- [Background Collection](background-collection.md) - Collect flat-field correction images
+- [Live Viewer](live-viewer.md) - Verify microscope communication and positioning
+- [Server Connection Settings](server-connection.md) - Configure server connection

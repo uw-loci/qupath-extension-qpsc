@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.prefs.PathPrefs;
 
@@ -132,6 +133,7 @@ public class WBComparisonDialog {
         Dialog<WBComparisonParams> dialog = new Dialog<>();
         dialog.setTitle("WB Comparison Test");
         dialog.setHeaderText("Compare white balance modes under identical conditions");
+        dialog.setGraphic(DocumentationHelper.createHelpButton("wbComparison"));
         dialog.setResizable(true);
 
         QuPathGUI gui = QuPathGUI.getInstance();

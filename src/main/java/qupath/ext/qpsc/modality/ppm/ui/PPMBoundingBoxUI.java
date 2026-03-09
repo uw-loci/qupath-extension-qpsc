@@ -8,6 +8,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
 import qupath.ext.qpsc.modality.ModalityHandler;
@@ -54,6 +55,10 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
         label.setStyle("-fx-font-weight: bold;");
 
         overrideAngles = new CheckBox("Override default angles for this acquisition");
+        overrideAngles.setTooltip(new Tooltip(
+                "When checked, the plus and minus angles below will be used\n"
+                + "instead of the default values from the microscope configuration.\n"
+                + "Useful for testing different polarizer offsets without changing the config."));
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
@@ -69,12 +74,18 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
         plusSpinner.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(-180, 180, savedPlusAngle, 0.5));
         plusSpinner.setEditable(true);
         plusSpinner.setPrefWidth(100);
+        plusSpinner.setTooltip(new Tooltip(
+                "Positive polarizer rotation in tick marks.\n"
+                + "Overrides the default plus angle from the microscope configuration."));
 
         minusSpinner = new Spinner<>();
         minusSpinner.setValueFactory(
                 new SpinnerValueFactory.DoubleSpinnerValueFactory(-180, 180, savedMinusAngle, 0.5));
         minusSpinner.setEditable(true);
         minusSpinner.setPrefWidth(100);
+        minusSpinner.setTooltip(new Tooltip(
+                "Negative polarizer rotation in tick marks.\n"
+                + "Overrides the default minus angle from the microscope configuration."));
 
         grid.add(new Label("Plus angle (ticks):"), 0, 0);
         grid.add(plusSpinner, 1, 0);

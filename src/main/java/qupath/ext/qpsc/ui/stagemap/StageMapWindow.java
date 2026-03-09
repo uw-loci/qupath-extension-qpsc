@@ -27,6 +27,7 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
@@ -287,21 +288,18 @@ public class StageMapWindow {
                 + "Edit the YAML file to set aperture and slide reference points."));
         configButton.setOnAction(e -> openConfigFolder());
 
-        // Tooltip explaining the interface
-        Button helpButton = new Button("?");
-        helpButton.setStyle("-fx-font-size: 10; -fx-padding: 2 6;");
-        helpButton.setTooltip(new Tooltip(
-                "Stage Map shows the microscope stage position.\n\n" + "- Green crosshair: Current objective position\n"
-                        + "- Orange rectangle: Camera field of view\n"
-                        + "- Blue rectangles: Slide positions\n"
-                        + "- Green zones: Safe movement areas\n"
-                        + "- Red zones: Off-slide areas\n\n"
-                        + "Double-click to move the stage to that position.\n"
-                        + "Select insert type to change slide layout.\n\n"
-                        + "CALIBRATION: Use Stage Control to find:\n"
-                        + "- Left/right aperture edges (X coords)\n"
-                        + "- Top/bottom slide edges (Y coords)\n"
-                        + "Then edit the config YAML file."));
+        // Help button - opens online documentation
+        Button helpButton = DocumentationHelper.createHelpButton("stageMap");
+        if (helpButton != null) {
+            helpButton.setStyle("-fx-font-size: 10; -fx-padding: 2 6;");
+            helpButton.setTooltip(new Tooltip(
+                    "Open online documentation for the Stage Map.\n\n"
+                            + "Quick reference:\n"
+                            + "- Green crosshair: Current objective position\n"
+                            + "- Orange rectangle: Camera field of view\n"
+                            + "- Blue rectangles: Slide positions\n"
+                            + "- Double-click to move the stage"));
+        }
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);

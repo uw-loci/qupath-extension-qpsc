@@ -47,6 +47,7 @@ import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.regions.RegionRequest;
 import qupath.lib.roi.interfaces.ROI;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.fx.dialogs.Dialogs;
 
 /**
@@ -269,6 +270,7 @@ public class PPMBatchAnalysisWorkflow {
         dialog.setTitle("Batch PPM Analysis");
         dialog.initOwner(gui.getStage());
 
+        javafx.scene.control.Button helpButton = DocumentationHelper.createHelpButton("ppmBatchAnalysis");
         PPMBatchAnalysisPanel panel = new PPMBatchAnalysisPanel(discoveredSets, allClasses);
 
         panel.setOnCancel(dialog::close);
@@ -305,7 +307,15 @@ public class PPMBatchAnalysisWorkflow {
                     panel.getFillHoles());
         });
 
-        dialog.setScene(new Scene(panel, 600, 700));
+        VBox dialogRoot = new VBox(panel);
+        if (helpButton != null) {
+            javafx.scene.layout.HBox helpBar = new javafx.scene.layout.HBox(helpButton);
+            helpBar.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+            helpBar.setPadding(new Insets(5, 10, 0, 10));
+            dialogRoot.getChildren().add(0, helpBar);
+        }
+        javafx.scene.layout.VBox.setVgrow(panel, javafx.scene.layout.Priority.ALWAYS);
+        dialog.setScene(new Scene(dialogRoot, 600, 700));
         dialog.show();
     }
 

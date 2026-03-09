@@ -11,6 +11,7 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -129,7 +130,14 @@ public class PPMBatchAnalysisPanel extends VBox {
         analysisLabel.setFont(Font.font("System", FontWeight.BOLD, 11));
 
         polarityCheck.setSelected(true);
+        polarityCheck.setTooltip(new Tooltip(
+                "Generate polarity plots with fiber orientation histograms and circular statistics.\n"
+                + "Produces mean angle, circular variance, and directional distribution for each annotation."));
         perpCheck.setSelected(false);
+        perpCheck.setTooltip(new Tooltip(
+                "Compute fiber perpendicularity relative to an annotation boundary.\n"
+                + "Calculates both simple perpendicularity and PS-TACS (Tumor-Associated\n"
+                + "Collagen Signatures) classification based on fiber-boundary angles."));
 
         getChildren().addAll(analysisLabel, polarityCheck, perpCheck, new Separator());
 
@@ -149,6 +157,9 @@ public class PPMBatchAnalysisPanel extends VBox {
         if (!availableClasses.isEmpty()) {
             boundaryClassChoice.setValue(availableClasses.get(0));
         }
+        boundaryClassChoice.setTooltip(new Tooltip(
+                "Select the annotation class that defines the boundary for perpendicularity analysis.\n"
+                + "Fiber angles will be measured relative to the nearest edge of annotations with this class."));
         perpGrid.add(boundaryClassChoice, 1, row);
         row++;
 
@@ -156,12 +167,21 @@ public class PPMBatchAnalysisPanel extends VBox {
         dilationSpinner = new Spinner<>(
                 new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 500, 50, 5));
         dilationSpinner.setEditable(true);
+        dilationSpinner.setTooltip(new Tooltip(
+                "Distance (in um) to dilate from the boundary for the perpendicularity analysis zone.\n"
+                + "Only fibers within this distance from the boundary are analyzed.\n"
+                + "Larger values include fibers further from the boundary."));
         perpGrid.add(dilationSpinner, 1, row);
         row++;
 
         perpGrid.add(new Label("Zone mode:"), 0, row);
         zoneModeChoice.getItems().addAll("outside", "inside", "both");
         zoneModeChoice.setValue("outside");
+        zoneModeChoice.setTooltip(new Tooltip(
+                "Which side of the boundary to analyze:\n"
+                + "  'outside' - analyze fibers outside the boundary annotation\n"
+                + "  'inside' - analyze fibers inside the boundary annotation\n"
+                + "  'both' - analyze fibers on both sides of the boundary"));
         perpGrid.add(zoneModeChoice, 1, row);
         row++;
 
@@ -169,10 +189,18 @@ public class PPMBatchAnalysisPanel extends VBox {
         tacsThresholdSpinner = new Spinner<>(
                 new SpinnerValueFactory.DoubleSpinnerValueFactory(5, 85, 30, 5));
         tacsThresholdSpinner.setEditable(true);
+        tacsThresholdSpinner.setTooltip(new Tooltip(
+                "Angle threshold (in deg) for PS-TACS classification.\n"
+                + "Fibers within this angle of being perpendicular to the boundary are\n"
+                + "classified as TACS-3 (aligned perpendicular). Fibers within this angle\n"
+                + "of being parallel are classified as TACS-2 (aligned parallel)."));
         perpGrid.add(tacsThresholdSpinner, 1, row);
         row++;
 
         fillHolesCheck.setSelected(true);
+        fillHolesCheck.setTooltip(new Tooltip(
+                "Fill holes in the boundary annotation before computing perpendicularity.\n"
+                + "Enable this to treat the boundary as a solid region, ignoring internal gaps."));
         perpGrid.add(fillHolesCheck, 0, row, 2, 1);
 
         // Enable/disable perp params based on checkbox

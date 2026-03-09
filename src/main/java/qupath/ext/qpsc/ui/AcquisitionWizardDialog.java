@@ -26,6 +26,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.QPScopeController;
 import qupath.ext.qpsc.ui.CalibrationChecker.Status;
 import qupath.ext.qpsc.ui.CalibrationChecker.StepStatus;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.lib.gui.QuPathGUI;
 
 /**
@@ -331,6 +332,17 @@ public class AcquisitionWizardDialog {
         title.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(title, Priority.ALWAYS);
 
+        // Help button (opens documentation)
+        Button helpBtn = DocumentationHelper.createHelpButton("acquisitionWizard");
+        if (helpBtn != null) {
+            helpBtn.setStyle(
+                    "-fx-background-color: rgba(255,255,255,0.2); -fx-background-radius: 50%; "
+                            + "-fx-text-fill: white; -fx-font-weight: bold; "
+                            + "-fx-min-width: 22; -fx-min-height: 22; "
+                            + "-fx-max-width: 22; -fx-max-height: 22; "
+                            + "-fx-padding: 0; -fx-font-size: 11;");
+        }
+
         // Minimize (collapse) button
         Button collapseBtn = createWindowButton("_", "Collapse to floating icon");
         collapseBtn.setOnAction(e -> collapse());
@@ -339,7 +351,9 @@ public class AcquisitionWizardDialog {
         Button closeBtn = createWindowButton("X", "Close wizard");
         closeBtn.setOnAction(e -> wizardStage.close());
 
-        titleRow.getChildren().addAll(title, collapseBtn, closeBtn);
+        titleRow.getChildren().add(title);
+        if (helpBtn != null) titleRow.getChildren().add(helpBtn);
+        titleRow.getChildren().addAll(collapseBtn, closeBtn);
 
         Label subtitle = new Label("Follow the steps below to prepare and start an acquisition.");
         subtitle.setStyle("-fx-font-size: 11px; -fx-text-fill: #ccd9ee;");

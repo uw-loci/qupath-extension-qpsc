@@ -19,6 +19,7 @@ import javafx.scene.layout.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.gui.prefs.PathPrefs;
 
@@ -212,6 +213,7 @@ public class WhiteBalanceDialog {
                 // Non-modal so user can interact with QuPath while dialog is open
                 dialog.setTitle("White Balance Calibration");
                 dialog.setHeaderText("Configure JAI camera white balance calibration");
+                dialog.setGraphic(DocumentationHelper.createHelpButton("whiteBalance"));
                 dialog.setResizable(true);
 
                 // Main content container

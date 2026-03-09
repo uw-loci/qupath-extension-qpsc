@@ -20,6 +20,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.fx.dialogs.Dialogs;
 
 /**
@@ -103,6 +104,7 @@ public class PPMSensitivityTestWorkflow {
                 dialog.initOwner(gui.getStage());
             }
             dialog.setTitle("PPM Rotation Sensitivity Test");
+            dialog.setGraphic(DocumentationHelper.createHelpButton("ppmSensitivityTest"));
 
             // Header with instructions
             VBox headerBox = new VBox(10);

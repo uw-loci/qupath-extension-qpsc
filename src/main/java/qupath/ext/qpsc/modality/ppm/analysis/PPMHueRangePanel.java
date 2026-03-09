@@ -7,6 +7,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.Slider;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -60,7 +61,13 @@ public class PPMHueRangePanel extends VBox {
         angleLabel.setFont(Font.font("System", FontWeight.SEMI_BOLD, 12));
 
         angleLowSlider = createSlider(0, 180, 0);
+        angleLowSlider.setTooltip(new Tooltip(
+                "Lower bound of the angle range filter (0-180 deg).\n"
+                + "Pixels with fiber orientation angles below this value are excluded from the overlay."));
         angleHighSlider = createSlider(0, 180, 180);
+        angleHighSlider.setTooltip(new Tooltip(
+                "Upper bound of the angle range filter (0-180 deg).\n"
+                + "Pixels with fiber orientation angles above this value are excluded from the overlay."));
         angleLowValueLabel = new Label("0");
         angleHighValueLabel = new Label("180");
 
@@ -82,7 +89,15 @@ public class PPMHueRangePanel extends VBox {
         threshLabel.setFont(Font.font("System", FontWeight.SEMI_BOLD, 12));
 
         saturationSlider = createSlider(0, 1, 0.2);
+        saturationSlider.setTooltip(new Tooltip(
+                "Minimum saturation threshold for valid pixels.\n"
+                + "Pixels with saturation below this value are considered invalid\n"
+                + "(e.g., background or low-signal areas) and excluded from the overlay."));
         valueSlider = createSlider(0, 1, 0.2);
+        valueSlider.setTooltip(new Tooltip(
+                "Minimum brightness (value) threshold for valid pixels.\n"
+                + "Pixels with brightness below this value are considered invalid\n"
+                + "(e.g., very dark areas) and excluded from the overlay."));
         satValueLabel = new Label("0.20");
         valValueLabel = new Label("0.20");
 
@@ -105,8 +120,14 @@ public class PPMHueRangePanel extends VBox {
 
         colorPicker = new ColorPicker(Color.LIME);
         colorPicker.setMaxWidth(80);
+        colorPicker.setTooltip(new Tooltip(
+                "Choose the color used to highlight pixels that match the angle range filter.\n"
+                + "This color is overlaid on the image at the specified opacity."));
 
         opacitySlider = createSlider(0, 1, 0.5);
+        opacitySlider.setTooltip(new Tooltip(
+                "Opacity of the highlight overlay (0 = fully transparent, 1 = fully opaque).\n"
+                + "Lower values allow the underlying image to show through more clearly."));
         opacityValueLabel = new Label("0.50");
 
         GridPane appearGrid = new GridPane();
@@ -127,6 +148,8 @@ public class PPMHueRangePanel extends VBox {
 
         // Clear button
         Button clearButton = new Button("Clear Overlay");
+        clearButton.setTooltip(new Tooltip(
+                "Remove the hue range filter overlay from the image viewer."));
         clearButton.setOnAction(e -> {
             if (onClear != null) onClear.run();
         });

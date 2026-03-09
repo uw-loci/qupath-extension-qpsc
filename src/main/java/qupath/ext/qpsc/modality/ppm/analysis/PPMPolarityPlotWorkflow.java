@@ -18,6 +18,7 @@ import javafx.scene.Scene;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
 import qupath.lib.gui.QuPathGUI;
@@ -364,7 +365,17 @@ public class PPMPolarityPlotWorkflow {
     private static void ensurePlotWindow(QuPathGUI gui) {
         if (plotWindow == null || !plotWindow.isShowing()) {
             plotPanel = new PolarHistogramPanel();
-            Scene scene = new Scene(plotPanel, 400, 380);
+            javafx.scene.layout.VBox wrapper = new javafx.scene.layout.VBox();
+            javafx.scene.control.Button docButton = DocumentationHelper.createHelpButton("ppmPolarityPlot");
+            if (docButton != null) {
+                javafx.scene.layout.HBox helpBar = new javafx.scene.layout.HBox(docButton);
+                helpBar.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+                helpBar.setPadding(new javafx.geometry.Insets(4, 8, 0, 0));
+                wrapper.getChildren().add(helpBar);
+            }
+            javafx.scene.layout.VBox.setVgrow(plotPanel, javafx.scene.layout.Priority.ALWAYS);
+            wrapper.getChildren().add(plotPanel);
+            Scene scene = new Scene(wrapper, 400, 400);
             plotWindow = new Stage();
             plotWindow.setTitle("PPM Polarity Plot");
             plotWindow.setScene(scene);

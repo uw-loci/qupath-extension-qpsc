@@ -20,6 +20,10 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 ## Contents
 
 - [Features](#features)
+  - [Core Capabilities](#core-capabilities)
+  - [Live Imaging & Stage Control](#live-imaging--stage-control)
+  - [Calibration & Camera Tools](#calibration--camera-tools)
+  - [PPM Analysis Tools](#ppm-analysis-tools)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
@@ -50,6 +54,7 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 |---------|-------------|
 | **Bounding Box Acquisition** | Draw a region in QuPath, automatically tile and acquire at high resolution |
 | **Existing Image Acquisition** | Target specific annotations on a previously scanned slide |
+| **Acquisition Wizard** | Guided setup wizard that checks prerequisites and walks new users through first-time configuration |
 | **Automated Stage Control** | Move XY, Z, and rotation stages with safety bounds checking |
 | **Multi-angle Imaging (PPM)** | Polarized light microscopy with automatic rotation sequences |
 
@@ -64,12 +69,22 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 ### Calibration & Camera Tools
 
 - **White Balance Calibration**: Per-channel R/G/B exposure calibration for JAI 3-CCD prism cameras with 4 WB modes (Off, Camera AWB, Simple, Per-angle)
+- **WB Comparison Test**: Side-by-side comparison of white balance modes to select the best option for your sample
 - **Camera Control**: Card-based dialog for viewing and testing camera exposure/gain settings per angle
 - **Background Collection**: Acquire flat-field correction images (removes uneven illumination)
 - **Polarizer Calibration**: Find optimal rotation angles for crossed polarizers
 - **Sunburst Calibration (PPM Reference Slide)**: Hue-to-angle mapping from a reference slide with radial spoke detection
 - **JAI Noise Characterization**: Measure camera noise statistics with Quick/Full/Custom presets
 - **Autofocus Editor**: Configure focus parameters per objective
+- **Autofocus Benchmark**: Systematically find optimal autofocus settings by testing parameter combinations
+
+### PPM Analysis Tools
+
+- **PPM Hue Range Filter**: Interactive HSV-based filtering for isolating specific fiber orientations by color
+- **PPM Polarity Plot**: Polar histogram visualization of fiber orientation distributions
+- **Surface Perpendicularity**: Verify sample surface is perpendicular to the optical axis for accurate PPM
+- **Batch PPM Analysis**: Automated batch processing of PPM image sets (hue analysis, TACS scoring, boundary analysis)
+- **Back-Propagate Annotations**: Copy annotations from child images back to parent macro for overview visualization
 
 ### Technical Features
 
@@ -131,24 +146,41 @@ Open the **QP Scope** menu in QuPath to access all features:
 **Main Workflows:**
 | Menu Item | When to Use |
 |-----------|-------------|
-| Bounding Box Acquisition | New acquisition - draw region, acquire tiles |
-| Existing Image Acquisition | Re-acquire regions from a previously scanned slide |
-| Microscope Alignment | Initial setup - align QuPath coordinates to stage |
+| [Acquisition Wizard](documentation/tools/acquisition-wizard.md) | First-time setup - guided prerequisite checks and configuration |
+| [Bounding Box Acquisition](documentation/tools/bounded-acquisition.md) | New acquisition - draw region, acquire tiles |
+| [Existing Image Acquisition](documentation/tools/existing-image-acquisition.md) | Re-acquire regions from a previously scanned slide |
+| [Microscope Alignment](documentation/tools/microscope-alignment.md) | Initial setup - align QuPath coordinates to stage |
 
 **Calibration (run as needed):**
 | Menu Item | When to Use |
 |-----------|-------------|
-| Collect Background Images | After lamp changes, for flat-field correction |
-| Polarizer Calibration | After hardware changes (PPM only) |
-| Autofocus Settings | To tune focus quality per objective |
+| [White Balance Calibration](documentation/tools/white-balance-calibration.md) | Per-channel exposure calibration for JAI cameras |
+| [WB Comparison Test](documentation/tools/wb-comparison-test.md) | Compare WB modes to select the best option |
+| [Collect Background Images](documentation/tools/background-collection.md) | After lamp changes, for flat-field correction |
+| [Polarizer Calibration](documentation/tools/polarizer-calibration.md) | After hardware changes (PPM only) |
+| [PPM Reference Slide](documentation/tools/ppm-reference-slide.md) | Hue-to-angle calibration from sunburst slide |
+| [Autofocus Settings Editor](documentation/tools/autofocus-editor.md) | Tune focus quality per objective |
+| [Autofocus Benchmark](documentation/tools/autofocus-benchmark.md) | Systematically find optimal autofocus settings |
+| [PPM Sensitivity Test](documentation/tools/ppm-sensitivity-test.md) | Test rotation stage precision |
+| [PPM Birefringence Optimization](documentation/tools/ppm-birefringence-optimization.md) | Find optimal polarizer angle for contrast |
 
 **Utilities:**
 | Menu Item | Purpose |
 |-----------|---------|
-| Live Viewer | Real-time camera feed with integrated stage control |
-| Camera Control | View/test camera exposure and gain settings |
-| Stage Map | Visual stage insert map with macro image overlay |
-| Server Connection Settings | Configure Python server connection |
+| [Live Viewer](documentation/tools/live-viewer.md) | Real-time camera feed with integrated stage control |
+| [Camera Control](documentation/tools/camera-control.md) | View/test camera exposure and gain settings |
+| [Stage Map](documentation/tools/stage-map.md) | Visual stage insert map with macro image overlay |
+| [Server Connection Settings](documentation/tools/server-connection.md) | Configure Python server connection |
+| [Noise Characterization](documentation/tools/noise-characterization.md) | Measure camera noise statistics |
+
+**PPM Analysis:**
+| Menu Item | Purpose |
+|-----------|---------|
+| [PPM Hue Range Filter](documentation/tools/ppm-hue-range-filter.md) | Interactive HSV filtering for PPM images |
+| [PPM Polarity Plot](documentation/tools/ppm-polarity-plot.md) | Polar histogram of fiber orientations |
+| [Surface Perpendicularity](documentation/tools/surface-perpendicularity.md) | Verify surface alignment to optical axis |
+| [Batch PPM Analysis](documentation/tools/batch-ppm-analysis.md) | Batch processing of PPM image sets |
+| [Back-Propagate Annotations](documentation/tools/back-propagate-annotations.md) | Copy annotations from child to parent images |
 
 ---
 
@@ -687,6 +719,12 @@ qupath-extension-qpsc/
 ├── .gradle/
 ├── .idea/
 ├── build/
+├── documentation/
+│   ├── tools/              # Individual tool documentation (23 pages)
+│   ├── UTILITIES.md         # Utilities overview with links to tool pages
+│   ├── WORKFLOWS.md         # Workflows overview with links to tool pages
+│   ├── PREFERENCES.md       # All preferences explained
+│   └── TROUBLESHOOTING.md   # FAQ and error reference
 ├── gradle/
 ├── src/
 │   ├── main/
@@ -843,14 +881,42 @@ The following features and improvements are planned for upcoming releases:
 
 ## Detailed Documentation
 
-For comprehensive guides with all options explained:
+**Overview pages:**
 
 | Document | Description |
 |----------|-------------|
-| **[Utilities Reference](documentation/UTILITIES.md)** | Stage Control, Calibration tools, Background Collection, and all utilities with checkboxes and options explained |
-| **[Workflows Guide](documentation/WORKFLOWS.md)** | Step-by-step documentation for Bounding Box, Existing Image, and Microscope Alignment workflows |
+| **[Utilities Reference](documentation/UTILITIES.md)** | Overview of all utilities with links to individual tool pages |
+| **[Workflows Guide](documentation/WORKFLOWS.md)** | Overview of all acquisition workflows with links to individual pages |
 | **[Preferences Reference](documentation/PREFERENCES.md)** | All QPSC preferences explained with recommendations |
 | **[Troubleshooting Guide](documentation/TROUBLESHOOTING.md)** | Comprehensive FAQ, error messages, and diagnostic procedures |
+
+**Individual tool documentation** (in `documentation/tools/`):
+
+| Tool | Page |
+|------|------|
+| Acquisition Wizard | [acquisition-wizard.md](documentation/tools/acquisition-wizard.md) |
+| Bounding Box Acquisition | [bounded-acquisition.md](documentation/tools/bounded-acquisition.md) |
+| Existing Image Acquisition | [existing-image-acquisition.md](documentation/tools/existing-image-acquisition.md) |
+| Microscope Alignment | [microscope-alignment.md](documentation/tools/microscope-alignment.md) |
+| Live Viewer | [live-viewer.md](documentation/tools/live-viewer.md) |
+| Camera Control | [camera-control.md](documentation/tools/camera-control.md) |
+| Stage Map | [stage-map.md](documentation/tools/stage-map.md) |
+| Server Connection | [server-connection.md](documentation/tools/server-connection.md) |
+| Background Collection | [background-collection.md](documentation/tools/background-collection.md) |
+| White Balance Calibration | [white-balance-calibration.md](documentation/tools/white-balance-calibration.md) |
+| WB Comparison Test | [wb-comparison-test.md](documentation/tools/wb-comparison-test.md) |
+| Noise Characterization | [noise-characterization.md](documentation/tools/noise-characterization.md) |
+| Polarizer Calibration | [polarizer-calibration.md](documentation/tools/polarizer-calibration.md) |
+| PPM Reference Slide | [ppm-reference-slide.md](documentation/tools/ppm-reference-slide.md) |
+| Autofocus Editor | [autofocus-editor.md](documentation/tools/autofocus-editor.md) |
+| Autofocus Benchmark | [autofocus-benchmark.md](documentation/tools/autofocus-benchmark.md) |
+| PPM Sensitivity Test | [ppm-sensitivity-test.md](documentation/tools/ppm-sensitivity-test.md) |
+| PPM Birefringence Optimization | [ppm-birefringence-optimization.md](documentation/tools/ppm-birefringence-optimization.md) |
+| PPM Hue Range Filter | [ppm-hue-range-filter.md](documentation/tools/ppm-hue-range-filter.md) |
+| PPM Polarity Plot | [ppm-polarity-plot.md](documentation/tools/ppm-polarity-plot.md) |
+| Surface Perpendicularity | [surface-perpendicularity.md](documentation/tools/surface-perpendicularity.md) |
+| Batch PPM Analysis | [batch-ppm-analysis.md](documentation/tools/batch-ppm-analysis.md) |
+| Back-Propagate Annotations | [back-propagate-annotations.md](documentation/tools/back-propagate-annotations.md) |
 
 ---
 

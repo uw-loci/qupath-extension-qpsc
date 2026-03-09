@@ -81,6 +81,16 @@ public class InterfaceController extends VBox {
         // sampleNameField.setPromptText(resources.getString("sampleName.prompt"));
         // pixelSizeSpinner.getEditor().setPromptText(resources.getString("pixelSize.prompt"));
 
+        // Add tooltips to user-facing controls
+        sampleNameField.setTooltip(new Tooltip(
+                "Enter a name for this sample.\n"
+                + "This name is used for file organization and project metadata.\n"
+                + "Avoid special characters that are invalid in file names."));
+        pixelSizeSpinner.setTooltip(new Tooltip(
+                "Pixel size in um/pixel for the acquisition.\n"
+                + "This value determines the resolution of the acquired image\n"
+                + "and is used for coordinate transformations between QuPath and the microscope."));
+
         // Set the warning label text.
         warningLabel.setText(resources.getString("warning.check_preferences"));
     }

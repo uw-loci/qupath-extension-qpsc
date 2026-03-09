@@ -1,6 +1,6 @@
 # QPSC Utilities Reference
 
-This document provides comprehensive documentation for all utilities available in the QPSC extension.
+This document provides an overview of all utilities available in the QPSC extension. Click any tool name for full documentation including all options, workflow details, and troubleshooting.
 
 ---
 
@@ -8,717 +8,122 @@ This document provides comprehensive documentation for all utilities available i
 
 | Utility | Purpose | Menu Location |
 |---------|---------|---------------|
-| [Live Camera Viewer](#live-camera-viewer) | Real-time camera feed with integrated stage control | Extensions > QP Scope > Live Viewer |
-| [Camera Control](#camera-control) | View/test camera exposure and gain settings | Extensions > QP Scope > Camera Control... |
-| [Stage Map](#stage-map) | Visual map showing stage insert with slide positions | Extensions > QP Scope > Stage Map |
-| [Server Connection Settings](#server-connection-settings) | Configure microscope server connection | Extensions > QP Scope > Server Connection Settings... |
-| [Background Collection](#background-collection) | Capture flat-field correction images | Extensions > QP Scope > Collect Background Images |
-| [White Balance Calibration](#white-balance-calibration) | Calibrate JAI 3-CCD camera white balance | Extensions > QP Scope > White Balance Calibration... |
-| [JAI Noise Characterization](#jai-noise-characterization) | Measure camera noise statistics | Extensions > QP Scope > JAI Camera > Noise Characterization... |
-| [Polarizer Calibration](#polarizer-calibration-ppm) | Calibrate polarizer rotation stage for PPM | Extensions > QP Scope > Polarizer Calibration (PPM)... |
-| [PPM Reference Slide](#ppm-reference-slide-sunburst-calibration) | Hue-to-angle calibration from sunburst slide | Extensions > QP Scope > Utilities > PPM Reference Slide... |
-| [Autofocus Editor](#autofocus-settings-editor) | Configure per-objective autofocus parameters | Extensions > QP Scope > Autofocus Settings Editor... |
-| [Autofocus Benchmark](#autofocus-parameter-benchmark) | Find optimal autofocus settings systematically | Extensions > QP Scope > Autofocus Parameter Benchmark... |
-| [PPM Sensitivity Test](#ppm-rotation-sensitivity-test) | Test rotation stage precision | Extensions > QP Scope > PPM Rotation Sensitivity Test... |
-| [PPM Birefringence Optimization](#ppm-birefringence-optimization) | Find optimal polarizer angle for maximum contrast | Extensions > QP Scope > PPM Birefringence Optimization... |
+| [Acquisition Wizard](tools/acquisition-wizard.md) | Guided setup wizard for new users | Extensions > QP Scope > Acquisition Wizard |
+| [Live Camera Viewer](tools/live-viewer.md) | Real-time camera feed with integrated stage control | Extensions > QP Scope > Live Viewer |
+| [Camera Control](tools/camera-control.md) | View/test camera exposure and gain settings | Extensions > QP Scope > Camera Control... |
+| [Stage Map](tools/stage-map.md) | Visual map showing stage insert with slide positions | Extensions > QP Scope > Stage Map |
+| [Server Connection Settings](tools/server-connection.md) | Configure microscope server connection | Extensions > QP Scope > Server Connection Settings... |
+| [Background Collection](tools/background-collection.md) | Capture flat-field correction images | Extensions > QP Scope > Collect Background Images |
+| [White Balance Calibration](tools/white-balance-calibration.md) | Calibrate JAI 3-CCD camera white balance | Extensions > QP Scope > White Balance Calibration... |
+| [WB Comparison Test](tools/wb-comparison-test.md) | Compare white balance modes side-by-side | Extensions > QP Scope > WB Comparison Test... |
+| [JAI Noise Characterization](tools/noise-characterization.md) | Measure camera noise statistics | Extensions > QP Scope > JAI Camera > Noise Characterization... |
+| [Polarizer Calibration](tools/polarizer-calibration.md) | Calibrate polarizer rotation stage for PPM | Extensions > QP Scope > Polarizer Calibration (PPM)... |
+| [PPM Reference Slide](tools/ppm-reference-slide.md) | Hue-to-angle calibration from sunburst slide | Extensions > QP Scope > Utilities > PPM Reference Slide... |
+| [Autofocus Editor](tools/autofocus-editor.md) | Configure per-objective autofocus parameters | Extensions > QP Scope > Autofocus Settings Editor... |
+| [Autofocus Benchmark](tools/autofocus-benchmark.md) | Find optimal autofocus settings systematically | Extensions > QP Scope > Autofocus Parameter Benchmark... |
+| [PPM Sensitivity Test](tools/ppm-sensitivity-test.md) | Test rotation stage precision | Extensions > QP Scope > PPM Rotation Sensitivity Test... |
+| [PPM Birefringence Optimization](tools/ppm-birefringence-optimization.md) | Find optimal polarizer angle for maximum contrast | Extensions > QP Scope > PPM Birefringence Optimization... |
+| [PPM Hue Range Filter](tools/ppm-hue-range-filter.md) | Interactive HSV filtering for PPM images | Extensions > QP Scope > PPM Hue Range Filter |
+| [PPM Polarity Plot](tools/ppm-polarity-plot.md) | Polar histogram visualization of fiber orientations | Extensions > QP Scope > PPM Polarity Plot |
+| [Surface Perpendicularity](tools/surface-perpendicularity.md) | Verify surface is perpendicular to optical axis | Extensions > QP Scope > Surface Perpendicularity |
+| [Batch PPM Analysis](tools/batch-ppm-analysis.md) | Batch processing of PPM image sets | Extensions > QP Scope > Batch PPM Analysis |
+| [Back-Propagate Annotations](tools/back-propagate-annotations.md) | Copy annotations from child images back to parent | Extensions > QP Scope > Back-Propagate Annotations |
 
 ---
 
-## Live Camera Viewer
+## Imaging & Stage Control
 
-### Purpose
-Real-time camera feed with integrated stage control, histogram, and noise statistics. This is the primary tool for verifying microscope communication, positioning the stage, and checking camera settings before acquisition.
+### [Live Camera Viewer](tools/live-viewer.md)
 
-### Location
-**Extensions > QP Scope > Live Viewer**
+Real-time camera feed with integrated stage control, histogram, and noise statistics. The primary tool for verifying microscope communication, positioning the stage, and checking camera settings before acquisition. Includes a virtual joystick, saved stage positions, and per-channel saturation monitoring.
 
-### Camera Feed
+### [Camera Control](tools/camera-control.md)
 
-The main area displays a real-time camera feed streamed from MicroManager's circular buffer.
+View and test camera exposure and gain settings loaded from calibration profiles. Particularly useful for JAI 3-CCD camera white balance troubleshooting. Displays per-angle cards with exposure, gain, and an Apply button that sets camera settings and rotates the polarizer.
 
-| Feature | Description |
-|---------|-------------|
-| **Camera Image** | Live feed with auto-resize to fit window |
-| **Fit Mode** | Toggle to scale image to fit the dialog |
-| **Display Scale** | Dropdown to select display magnification |
-| **Double-click** | Click on the image to center the stage at that position |
+### [Stage Map](tools/stage-map.md)
 
-### Histogram Panel
-
-A 256-bin luminance histogram displayed below the camera feed:
-
-| Feature | Description |
-|---------|-------------|
-| **Histogram** | Real-time luminance distribution |
-| **Min/Max Sliders** | Contrast adjustment sliders |
-| **Auto Scale** | Button to auto-set contrast range |
-| **Per-Channel Saturation %** | Shows R/G/B saturation percentage; turns red when any channel exceeds 1% |
-
-### RGB Readouts
-
-Displays current R, G, B mean intensity values from the live feed. Useful for calibration diagnostics and verifying white balance.
-
-### Stage Control Panel (Left Side)
-
-Integrated stage control with two tabs:
-
-#### Movement Tab
-
-| Feature | Description |
-|---------|-------------|
-| **Virtual Joystick** | Click-and-drag joystick with quadratic response curve for fine/coarse movement |
-| **FOV Step Size** | Dropdown to select step size as fraction of field of view (1/4 FOV, 1/2 FOV, 1 FOV, etc.) |
-| **Arrow Buttons** | Up/Down/Left/Right buttons around the joystick for precise single-step movement |
-| **Double-Step Arrows** | Outer arrow buttons for 2x step size movement |
-| **Sample Movement** | Checkbox to enable "sample perspective" movement (direction inversion for intuitive control) |
-| **Z Controls** | Z position display with up/down buttons |
-| **Polarizer Controls** | Rotation angle control (PPM only) |
-
-#### Saved Points Tab
-
-| Feature | Description |
-|---------|-------------|
-| **Save Current Position** | Button to save current XYZ position with a custom name |
-| **Saved Points List** | Table of named positions with Go To / Delete actions |
-| **Persistence** | Saved points are stored in JSON preferences and persist across sessions |
-
-### Noise Stats Panel
-
-| Feature | Description |
-|---------|-------------|
-| **Measure Button** | Captures multiple frames for temporal noise analysis |
-| **R/G/B Grid** | Displays Mean, StdDev, and SNR per channel |
-
-### Live Mode Handling
-- Live streaming pauses automatically during acquisition
-- Live mode is preserved (not destroyed) when acquisition starts
-- Camera mode changes are handled cleanly during streaming
-
-### Usage Notes
-- Use this as a first test after setting up microscope connection
-- The dialog is singleton -- opening it again brings it to front
-- Stage control settings (step size, sample movement) are persisted between sessions
-
-### Screenshot
-`[Screenshot: documentation/images/live-viewer.png]`
+Visual representation of the microscope stage insert showing slide positions and current stage location. Supports configurable macro image overlay for navigation context.
 
 ---
 
-## Camera Control
+## Connection & Configuration
 
-### Purpose
-View and test camera exposure and gain settings loaded from calibration profiles. This utility is particularly useful for JAI 3-CCD camera white balance troubleshooting and verifying calibration values before acquisition.
+### [Server Connection Settings](tools/server-connection.md)
 
-### Location
-**Extensions > QP Scope > Camera Control...**
+Configure and test the connection between QuPath and the microscope control server. Includes connection, advanced timeout, and status tabs with a live connection log.
 
-### Prerequisites
-- Connected to microscope server (will prompt if not connected)
+### [Acquisition Wizard](tools/acquisition-wizard.md)
 
-### Interface Sections
-
-#### Camera Info
-Displays the current camera name detected from the hardware.
-
-#### Objective/Detector Selection
-
-| Field | Type | Description |
-|-------|------|-------------|
-| Objective | ComboBox | Select objective to load calibration profile |
-| Detector | ComboBox | Select camera/detector for calibration values |
-| Reload from YAML | Button | Restore all values from YAML calibration file |
-
-Changing the objective or detector automatically loads the corresponding calibration values.
-
-#### Exposure Mode Toggle (JAI cameras only)
-
-Visible when a JAI 3-CCD camera is detected:
-
-| Toggle | Options | Description |
-|--------|---------|-------------|
-| Exposure Mode | Individual / Unified | Individual: per-channel R/G/B exposures; Unified: single exposure for all channels |
-
-**Note:** Gain is always unified. The gain row shows Unified gain plus analog Red and Blue gain values.
-
-#### Per-Angle Cards
-
-For PPM modality, each polarizer angle is displayed as a color-coded card:
-- **Uncrossed (90 deg)**: Brightest angle
-- **Crossed (0 deg)**: Darkest angle (extinction)
-- **Positive (7 deg)**: Intermediate birefringence angle
-- **Negative (-7 deg)**: Opposite intermediate angle
-
-Each card shows:
-
-| Field | Description |
-|-------|-------------|
-| Exposure All (ms) | Unified exposure time |
-| Exposure R/G/B (ms) | Per-channel exposure times (when in Individual mode) |
-| Gain Unified | Unified gain value |
-| Gain R / B | Analog red and blue gain values |
-| Apply | Set camera settings AND move rotation stage to this angle |
-
-### Live Mode Handling
-
-When you click **Apply** for any angle, the system automatically:
-1. Checks if live mode is currently running
-2. Turns off live mode (if running)
-3. Applies the exposure and gain settings
-4. Moves the rotation stage to the target angle
-5. Restores live mode (if it was running)
-
-This ensures camera settings are applied cleanly without live mode interference.
-
-### Important Notes
-- Values can be edited for **testing purposes only**
-- Changes are **NOT saved** to the YAML calibration file
-- Use the [Background Collection](#background-collection) workflow for permanent calibration
-- The dialog stays on top of other windows for convenience during testing
-
-### Screenshot
-`[Screenshot: documentation/images/camera-control.png]`
+Guided setup wizard that walks new users through the complete first-time configuration process. Checks prerequisites (server connection, configuration files, calibrations) and launches the appropriate setup tools.
 
 ---
 
-## Stage Map
+## Calibration Tools
 
-### Purpose
-Visual representation of the microscope stage insert showing slide positions. Helps users understand where slides are located on the stage and optionally overlay macro images.
+### [White Balance Calibration](tools/white-balance-calibration.md)
 
-### Location
-**Extensions > QP Scope > Stage Map**
+Calibrate per-channel (R, G, B) exposure times for JAI 3-CCD prism cameras. Supports Simple (single angle) and PPM (4 angles) modes. Results are saved to YAML and used automatically by background collection and acquisition.
 
-### Options
+### [WB Comparison Test](tools/wb-comparison-test.md)
 
-| Option | Type | Description |
-|--------|------|-------------|
-| Insert Configuration | ComboBox | Select the stage insert layout matching your hardware |
-| Overlay Macro | CheckBox | Overlay the current macro image on the map display |
+Acquire and display side-by-side images using different white balance modes. Helps users visually compare Off, Camera AWB, Simple, and Per-angle WB modes to select the best option for their sample.
 
-### Features
-- Shows slide boundaries within the stage insert
-- Displays current stage position
-- Visual preview of accessible areas
-- Helps prevent moving to positions outside the insert
+### [Background Collection](tools/background-collection.md)
 
-### Screenshot
-`[Screenshot: documentation/images/stage-map.png]`
+Acquire flat-field correction images with adaptive exposure control. Automatically adjusts exposure to reach target intensity at each angle. Supports per-channel white balance for JAI cameras.
 
----
+### [Polarizer Calibration](tools/polarizer-calibration.md)
 
-## Server Connection Settings
+Two-stage calibration (coarse sweep + fine sweep) to find the exact hardware offset for the PPM rotation stage. Determines the encoder position corresponding to crossed polarizers. Only needed after hardware installation or repositioning.
 
-### Purpose
-Configure and test the connection between QuPath and the microscope control server. The server handles communication with Micro-Manager and the physical microscope hardware.
+### [PPM Reference Slide (Sunburst Calibration)](tools/ppm-reference-slide.md)
 
-### Location
-**Extensions > QP Scope > Server Connection Settings...**
+Create a hue-to-angle calibration from a reference slide with a sunburst pattern. Samples hue values along radial spokes and creates a linear regression for PPM image processing. Includes manual center selection and debug mask visualization.
 
-### Connection Tab
+### [Autofocus Settings Editor](tools/autofocus-editor.md)
 
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| Host | TextField | 127.0.0.1 | IP address or hostname of the microscope server |
-| Port | Spinner | 5000 | Server port number |
-| Auto-connect | CheckBox | ON | Automatically connect when QuPath starts |
-| Auto-fallback | CheckBox | ON | Fall back to CLI mode if socket connection fails |
+Configure per-objective autofocus parameters (n_steps, search_range_um, n_tiles) in an intuitive GUI. Supports editing multiple objectives before saving to YAML.
 
-### Buttons
+### [Autofocus Parameter Benchmark](tools/autofocus-benchmark.md)
 
-| Button | Action |
-|--------|--------|
-| **Test Connection** | Verify communication with server (returns stage position if successful) |
-| **Connect Now** | Establish connection immediately |
+Systematically find optimal autofocus settings by testing multiple parameter combinations at various defocus distances. Generates CSV results and performance recommendations.
 
-### Advanced Tab
+### [JAI Noise Characterization](tools/noise-characterization.md)
 
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| Connection timeout (ms) | Spinner | 5000 | Time to wait for initial connection |
-| Read timeout (ms) | Spinner | 30000 | Time to wait for server responses |
-| Max reconnect attempts | Spinner | 3 | Number of reconnection attempts on failure |
-| Reconnect delay (ms) | Spinner | 1000 | Delay between reconnection attempts |
-| Health check interval (ms) | Spinner | 30000 | How often to verify server is alive |
-
-### Status Tab
-- Displays current connection status
-- Shows connection log with timestamps
-- **Clear Log** button to reset the log display
-
-### Usage Notes
-- Run **Test Connection** first to verify setup
-- If connection fails, check that Python server is running
-- Check firewall settings if connecting to remote host
-- Health checks keep the connection alive during long operations
-
-### Screenshot
-`[Screenshot: documentation/images/server-settings.png]`
+Measure camera noise statistics (mean, standard deviation, SNR) with Quick, Full, or Custom presets. Useful for characterizing camera performance and detecting hardware issues.
 
 ---
 
-## Background Collection
+## PPM Analysis Tools
 
-### Purpose
-Acquire flat-field correction images for improved image quality. Background images correct for uneven illumination, dust on optics, and sensor artifacts.
+### [PPM Sensitivity Test](tools/ppm-sensitivity-test.md)
 
-### Location
-**Extensions > QP Scope > Collect Background Images**
+Test the precision and repeatability of the rotation stage. Verifies positioning accuracy, repeatability over multiple movements, and backlash compensation effectiveness.
 
-### Prerequisites
-- Microscope positioned at clean, blank area (empty slide or uniform background)
-- For JAI cameras: Run [White Balance Calibration](#white-balance-calibration) first
+### [PPM Birefringence Optimization](tools/ppm-birefringence-optimization.md)
 
-### Options
+Find the optimal polarizer angle for maximum birefringence contrast. Sweeps through a configurable angle range, captures images, and identifies angles with peak contrast. Supports Interpolate, Calibrate, and Fixed exposure modes.
 
-| Option | Type | Description |
-|--------|------|-------------|
-| Modality | ComboBox | Select imaging modality (e.g., ppm_20x) |
-| Objective | ComboBox | Select objective lens |
-| Detector | ComboBox | Select camera/detector |
-| Output Folder | Directory Picker | Where to save background images |
-| Use Per-Channel WB | CheckBox | Use per-channel white balance calibration (JAI cameras) |
+### [PPM Hue Range Filter](tools/ppm-hue-range-filter.md)
 
-### Angle Configuration
-For multi-angle modalities like PPM, configure each angle:
+Interactive HSV-based filtering for PPM images. Provides real-time preview with adjustable hue, saturation, value, and opacity sliders. Useful for isolating specific fiber orientations based on color.
 
-| Column | Description |
-|--------|-------------|
-| Angle | Polarizer angle in degrees |
-| Target Intensity | Target grayscale value (e.g., 245 for bright, 125 for medium) |
-| Initial Exposure | Starting exposure time in milliseconds |
+### [PPM Polarity Plot](tools/ppm-polarity-plot.md)
 
-### What Happens
-1. For each angle, the system captures a test image
-2. Exposure is automatically adjusted to reach target intensity
-3. Final background image is saved with metadata
-4. Process repeats for all configured angles
+Generate polar histogram visualizations of fiber orientation distributions from PPM images. Displays angular distribution data in a circular plot format for quantitative analysis.
 
-### Important Notes
-- Background exposures MUST match acquisition exposures for proper correction
-- Backgrounds are specific to objective/detector/modality combination
-- Recollect after changing illumination settings or lamp replacement
-- JAI cameras automatically load per-channel calibration when available
+### [Surface Perpendicularity](tools/surface-perpendicularity.md)
 
-### Screenshot
-`[Screenshot: documentation/images/background-collection.png]`
+Verify that the sample surface is perpendicular to the optical axis. Acquires images at multiple angles and analyzes intensity variations to detect tilt, helping ensure accurate PPM measurements.
 
----
+### [Batch PPM Analysis](tools/batch-ppm-analysis.md)
 
-## White Balance Calibration
+Batch processing of multiple PPM image sets. Automates hue analysis, TACS scoring, boundary analysis, and other PPM-specific measurements across multiple regions or samples.
 
-### Purpose
-Calibrate per-channel (R, G, B) exposure times for JAI 3-CCD prism cameras. This ensures neutral white balance at each polarization angle without digital gain artifacts.
+### [Back-Propagate Annotations](tools/back-propagate-annotations.md)
 
-### Location
-**Extensions > QP Scope > White Balance Calibration...**
-
-### Prerequisites
-- Microscope positioned at clean, white reference area
-- JAI or other prism-based camera selected
-
-### Options
-
-| Option | Type | Description |
-|--------|------|-------------|
-| Mode | ComboBox | **Simple** (single angle) or **PPM** (4 angles) |
-| Target Intensity | Spinner | Target grayscale value to achieve (default: 200) |
-| Tolerance | Spinner | Acceptable deviation from target (default: 5) |
-| Max Analog Gain | Spinner | Maximum allowed analog gain setting |
-| Gain Threshold Ratio | Spinner | Ratio at which to start using analog gain |
-| Calibrate Black Level | CheckBox | Also calibrate black level offsets |
-
-### PPM Mode Per-Angle Targets
-When PPM mode is selected, configure individual targets for each angle:
-- **Crossed (0 deg)**: Typically higher target (~245) as this is the darkest angle
-- **Uncrossed (90 deg)**: Lower target (~125) as this is the brightest angle
-- **Positive/Negative (±7 deg)**: Intermediate targets
-
-### What Happens
-1. System iteratively adjusts R, G, B exposure times
-2. Each channel is adjusted independently to achieve neutral gray
-3. Calibration is saved to `imageprocessing_{microscope}.yml`
-4. Subsequent background collection and acquisitions use these settings
-
-### Output
-Calibration is stored in YAML format:
-```yaml
-imaging_profiles:
-  ppm:
-    LOCI_OBJECTIVE_20X:
-      LOCI_DETECTOR_JAI:
-        angles:
-          crossed:
-            exposures_ms: {r: 45.2, g: 38.1, b: 52.3}
-```
-
-### Important Notes
-- Run this BEFORE background collection for JAI cameras
-- Each objective/detector combination needs separate calibration
-- Recalibrate after hardware changes affecting light path
-
-### Screenshot
-`[Screenshot: documentation/images/white-balance.png]`
-
----
-
-## Polarizer Calibration (PPM)
-
-### Purpose
-Determine the exact hardware offset (`ppm_pizstage_offset`) for the PPM rotation stage. This calibration finds the encoder position corresponding to crossed polarizers (0 degrees optical).
-
-### Location
-**Extensions > QP Scope > Polarizer Calibration (PPM)...**
-
-### Prerequisites
-- Microscope positioned at uniform, bright background
-- PPM rotation stage connected and working
-
-### Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| Coarse Step Size | Spinner | 5 deg | Step size for initial 360-degree sweep |
-| Exposure Time | Spinner | 10 ms | Exposure for calibration images (keep short) |
-
-### Two-Stage Calibration Process
-
-**Stage 1 - Coarse Sweep (~90 seconds):**
-- Full 360-degree rotation in hardware encoder counts
-- Identifies approximate locations of crossed polarizer minima (180 degrees apart)
-
-**Stage 2 - Fine Sweep (~40 seconds):**
-- Narrow sweep around each detected minimum
-- Very small steps (0.1 degrees) for precise positioning
-- Determines exact hardware position of each intensity minimum
-
-### Output Report Includes
-- Exact hardware positions (encoder counts) for crossed polarizers
-- Recommended `ppm_pizstage_offset` value
-- Optical angles relative to recommended offset
-- Validation data and statistics
-
-### After Calibration
-Update `config_PPM.yml` with the recommended offset:
-```yaml
-ppm_pizstage_offset: 50228.7
-```
-
-### Important Notes
-- This calibration is only needed after hardware installation/repositioning
-- NOT needed between routine imaging sessions
-- The offset value is specific to your rotation stage
-
-### Screenshot
-`[Screenshot: documentation/images/polarizer-calibration.png]`
-
----
-
-## Autofocus Settings Editor
-
-### Purpose
-Configure per-objective autofocus parameters in an easy-to-use GUI. Allows customization of focus search behavior for different objectives.
-
-### Location
-**Extensions > QP Scope > Autofocus Settings Editor...**
-
-### Options
-
-| Parameter | Type | Typical Range | Description |
-|-----------|------|---------------|-------------|
-| Objective | ComboBox | - | Select objective to configure |
-| n_steps | Spinner | 5-20 | Number of Z positions to sample during autofocus |
-| search_range_um | Spinner | 10-50 | Total Z range to search in micrometers |
-| n_tiles | Spinner | 3-10 | Autofocus runs every N tiles during acquisition |
-
-### Buttons
-
-| Button | Action |
-|--------|--------|
-| **Write to File** | Save all settings to YAML file |
-| **OK** | Save and close dialog |
-| **Cancel** | Discard unsaved changes |
-
-### Parameter Guidelines
-
-| Objective | n_steps | search_range_um | n_tiles |
-|-----------|---------|-----------------|---------|
-| 10X | 9 | 15 | 5 |
-| 20X | 11 | 15 | 5 |
-| 40X | 15 | 10 | 7 |
-
-### Usage Notes
-- Higher magnification objectives need more steps and smaller search range
-- Lower n_tiles = more frequent autofocus = slower but more reliable
-- Thick samples may need larger search_range_um
-- Settings are stored in `autofocus_{microscope}.yml`
-
-### Screenshot
-`[Screenshot: documentation/images/autofocus-editor.png]`
-
----
-
-## Autofocus Parameter Benchmark
-
-### Purpose
-Systematically find optimal autofocus settings by testing multiple parameter combinations. Useful for optimizing performance on new sample types or after hardware changes.
-
-### Location
-**Extensions > QP Scope > Autofocus Parameter Benchmark...**
-
-### Options
-
-| Option | Type | Description |
-|--------|------|-------------|
-| Reference Z Position | Spinner | Known good focus position to use as reference |
-| Output Directory | Directory Picker | Where to save benchmark results |
-| Test Distances | Text Field | Comma-separated list of defocus distances to test |
-| Quick Mode | CheckBox | Faster but less comprehensive testing |
-
-### What Happens
-1. System defocuses by specified amounts from reference position
-2. Runs autofocus with various parameter combinations
-3. Measures how accurately focus is recovered
-4. Generates report with optimal parameter recommendations
-
-### Output
-- CSV file with all test results
-- Summary report with best parameter combinations
-- Graphs showing performance vs. parameters (if quick mode disabled)
-
-### Usage Notes
-- Position microscope on representative sample area first
-- Ensure reference Z position is correctly focused
-- Full benchmark may take 10-30 minutes depending on parameter ranges
-- Quick mode tests fewer combinations but finishes faster
-
-### Screenshot
-`[Screenshot: documentation/images/autofocus-benchmark.png]`
-
----
-
-## PPM Rotation Sensitivity Test
-
-### Purpose
-Test the precision and repeatability of the rotation stage. Verifies that the stage can reliably reach and maintain specified angles.
-
-### Location
-**Extensions > QP Scope > PPM Rotation Sensitivity Test...**
-
-### What It Tests
-- Stage positioning accuracy at target angles
-- Repeatability over multiple movements
-- Backlash compensation effectiveness
-- Position stability over time
-
-### Output
-- Position accuracy statistics
-- Repeatability measurements
-- Recommendations for hardware adjustment if needed
-
-### Usage Notes
-- Run after rotation stage installation or service
-- Can help diagnose mechanical issues
-- Not needed for routine operation
-
-### Screenshot
-`[Screenshot: documentation/images/ppm-sensitivity.png]`
-
----
-
-## PPM Birefringence Optimization
-
-### Purpose
-Find the optimal polarizer angle that maximizes birefringence contrast for your sample. Different samples may have optimal imaging at slightly different angles from the standard positions.
-
-### Location
-**Extensions > QP Scope > PPM Birefringence Optimization...**
-
-### Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| Output Folder | Directory Picker | - | Where to save optimization results |
-| Min Angle | Spinner | -15 | Starting angle for sweep |
-| Max Angle | Spinner | 15 | Ending angle for sweep |
-| Angle Step | Spinner | 0.5 | Degrees between test positions |
-| Exposure Mode | ComboBox | Interpolate | How to handle exposure at each angle |
-
-### Exposure Modes
-
-| Mode | Description |
-|------|-------------|
-| **Interpolate** | Calculate exposure based on neighboring calibrated angles |
-| **Calibrate** | Run auto-exposure at each angle (slower but more accurate) |
-| **Fixed** | Use single fixed exposure for all angles |
-
-### What Happens
-1. Rotates through specified angle range
-2. Captures image at each position
-3. Calculates birefringence contrast metrics
-4. Identifies angle(s) with maximum contrast
-
-### Output
-- Images at each test angle
-- Contrast metrics plot
-- Recommended optimal angles for imaging
-
-### Usage Notes
-- Position on representative sample region first
-- Wider angle range = more comprehensive but slower
-- Smaller step size = more precision but slower
-- Results may vary between sample types
-
-### Screenshot
-`[Screenshot: documentation/images/ppm-birefringence.png]`
-
----
-
-## JAI Noise Characterization
-
-### Purpose
-Measure camera noise statistics (mean, standard deviation, SNR) with configurable presets. Useful for characterizing camera performance and detecting hardware issues.
-
-### Location
-**Extensions > QP Scope > JAI Camera > Noise Characterization...**
-
-This menu item only appears when a JAI camera is detected in the configuration.
-
-### Presets
-
-| Preset | Frames | Description |
-|--------|--------|-------------|
-| **Quick** | 10 | Fast measurement for spot checks |
-| **Full** | 100 | Comprehensive measurement for characterization |
-| **Custom** | User-defined | Specify exact frame count |
-
-### Output
-- Per-channel (R, G, B) statistics: Mean, StdDev, SNR
-- Results displayed in a non-modal dialog
-- NoiseStatsPanel in Live Viewer also shows real-time noise stats via the "Measure" button
-
-### Usage Notes
-- Position microscope at uniform area (blank slide or cap) for clean noise measurement
-- Preferences for frame count are persisted between sessions
-- Dialog is non-modal, allowing continued microscope interaction
-
-### Screenshot
-`[Screenshot: documentation/images/noise-characterization.png]`
-
----
-
-## PPM Reference Slide (Sunburst Calibration)
-
-### Purpose
-Create a hue-to-angle calibration from a PPM reference slide with a sunburst pattern. This calibration is used by PPM image processing to accurately map observed colors to fiber orientation angles.
-
-### Location
-**Extensions > QP Scope > Utilities > PPM Reference Slide...**
-
-### Prerequisites
-- PPM reference slide (sunburst pattern with colored spokes at known orientations)
-- Microscope positioned and focused on the calibration slide
-- Camera settings configured for PPM imaging
-
-### Workflow Overview
-
-1. Acquire an image using current camera settings
-2. Sample hue values along radial spokes from the pattern center
-3. Create a linear regression mapping hue to orientation angle (0-180 degrees)
-4. Save calibration data for use in PPM analysis
-
-### Dialog Options
-
-#### Calibration Folder
-
-| Field | Description |
-|-------|-------------|
-| Calibration Folder | Root folder for calibration files |
-| Browse... | Select output folder |
-
-Files are saved directly into this folder.
-
-#### Camera Setup
-
-**Important:** Use low-angle PPM settings (7, 0, or -7 degrees) for best color saturation during calibration.
-
-| Button | Action |
-|--------|--------|
-| Open Camera Control... | Opens [Camera Control](#camera-control) dialog to set polarizer angle and verify camera settings |
-
-This integration allows you to set the rotation stage to the optimal angle before capturing the calibration image.
-
-#### Detection Settings
-
-| Parameter | Default | Range | Description |
-|-----------|---------|-------|-------------|
-| Expected Spokes | 16 | 4-32 | Number of spokes on your calibration slide |
-| Saturation Threshold | 0.1 | 0.01-0.5 | Minimum HSV saturation for foreground detection. In the debug mask: WHITE = detected, BLACK = background |
-| Value Threshold | 0.1 | 0.01-0.5 | Minimum HSV brightness for foreground detection. In the debug mask: WHITE = detected, BLACK = background |
-
-**Common slide configurations:**
-- 16 spokes: Standard sunburst slides (11.25 degree spacing)
-- 12 spokes: Some older slides (15 degree spacing)
-- 8 spokes: Simplified slides (22.5 degree spacing)
-
-#### Advanced Radial Detection Settings
-
-Expand the "Advanced Radial Detection Settings" section for fine-tuning:
-
-| Parameter | Default | Range | Description |
-|-----------|---------|-------|-------------|
-| Inner Radius (px) | 30 | 10-200 | Inner radius for radial sampling from pattern center. Increase to skip noisy pixels near center |
-| Outer Radius (px) | 150 | 50-500 | Outer radius for radial sampling. Should reach into the colored spokes but not extend past them |
-
-#### Calibration Name
-Optional custom name for calibration files. If empty, an auto-generated timestamp name is used.
-
-**Allowed characters:** letters, numbers, underscores, hyphens
-
-### Output Files
-
-| File | Description |
-|------|-------------|
-| `{name}_image.tif` | Acquired calibration image |
-| `{name}.npz` | Calibration data (used by PPM analysis) |
-| `{name}_plot.png` | Visual verification of calibration fit |
-
-### Result Dialogs
-
-**Success dialog** shows R-squared value, spokes detected, calibration file path, and the calibration plot image. An "Open Folder" button navigates to the output directory.
-
-**Failure dialog** shows the error message, debug images (segmentation mask if available), and troubleshooting tips. An "Open Folder" button navigates to the debug/output directory for inspecting saved images and masks.
-
-**Debug mask interpretation:**
-- **WHITE pixels** = detected foreground (pixels above both saturation and value thresholds)
-- **BLACK pixels** = background (pixels below threshold)
-- All black mask: thresholds too high -- lower saturation/value thresholds
-- All white mask: thresholds too low -- raise saturation/value thresholds
-
-**Manual center selection:** Both success and failure dialogs include a "Manual Center Selection" section showing the captured calibration image. Click on the center of the sunburst pattern to manually specify the center point, then press "Retry with Selected Center" to re-run calibration without re-acquiring the image.
-
-**"Go Back and Redo" button:** Re-opens the parameter dialog so you can adjust settings and re-acquire a new image.
-
-### Troubleshooting
-
-**Spokes not detected:**
-- Check the debug mask in the failure dialog to understand what the detector sees
-- If mask is all BLACK: lower saturation and/or value thresholds (try 0.05)
-- If mask is all WHITE: raise saturation and/or value thresholds (try 0.2-0.3)
-- Ensure slide is properly illuminated
-- Check that polarizer is at a low angle (7 deg) for best color contrast
-
-**Wrong spoke count:**
-- Verify the expected spokes setting matches your slide
-- Adjust thresholds to exclude noise or include faint spokes
-- Use the "Open Folder" button in the result dialog to inspect debug images
-
-**Poor calibration fit:**
-- Ensure slide is flat and in focus
-- Re-acquire at a different polarizer angle
-- Check for dust or damage on the calibration slide
-
-### Screenshot
-`[Screenshot: documentation/images/ppm-reference-slide.png]`
+Copy annotations from high-resolution child images back to their parent macro image. Uses coordinate transforms and metadata to accurately map annotations between image scales, enabling overview visualization of results.
 
 ---
 

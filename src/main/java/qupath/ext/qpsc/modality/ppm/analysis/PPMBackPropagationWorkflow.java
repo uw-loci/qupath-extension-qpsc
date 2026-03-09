@@ -26,6 +26,7 @@ import javafx.scene.text.FontWeight;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.dialogs.Dialogs;
@@ -173,6 +174,12 @@ public class PPMBackPropagationWorkflow {
 
         VBox dialogContent = new VBox(8);
         dialogContent.setPadding(new Insets(10));
+        javafx.scene.control.Button docButton = DocumentationHelper.createHelpButton("ppmBackPropagate");
+        if (docButton != null) {
+            HBox helpBar = new HBox(docButton);
+            helpBar.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+            dialogContent.getChildren().add(helpBar);
+        }
         dialogContent.getChildren().addAll(
                 summaryLabel, new Separator(),
                 targetLabel, toOriginalRadio, toFlippedRadio, new Separator(),

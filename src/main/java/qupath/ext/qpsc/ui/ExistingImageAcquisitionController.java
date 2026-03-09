@@ -26,6 +26,7 @@ import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.SampleNameValidator;
@@ -267,6 +268,7 @@ public class ExistingImageAcquisitionController {
             dialog.initModality(Modality.APPLICATION_MODAL);
             dialog.setTitle("Acquire from Existing Image");
             dialog.setHeaderText("Configure acquisition from the current image");
+            dialog.setGraphic(DocumentationHelper.createHelpButton("existingImage"));
             dialog.setResizable(true);
 
             // Add buttons

@@ -26,6 +26,7 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.fx.dialogs.Dialogs;
 
 /**
@@ -73,6 +74,7 @@ public class BackgroundCollectionController {
                 Dialog<BackgroundCollectionResult> dialog = new Dialog<>();
                 dialog.setTitle("Background Collection");
                 dialog.setHeaderText("Configure background image acquisition for flat field correction");
+                dialog.setGraphic(DocumentationHelper.createHelpButton("backgroundCollection"));
 
                 // Create UI - wrap content in ScrollPane to handle variable height
                 VBox content = createDialogContent();

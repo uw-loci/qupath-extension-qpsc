@@ -15,6 +15,7 @@ import qupath.ext.qpsc.controller.workflow.AlignmentHelper;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.gui.QuPathGUI;
 
@@ -139,6 +140,7 @@ public class AlignmentSelectionController {
                 dialog.initModality(Modality.APPLICATION_MODAL);
                 dialog.setTitle("Alignment Selection");
                 dialog.setHeaderText("Choose alignment method for " + modality);
+                dialog.setGraphic(DocumentationHelper.createHelpButton("microscopeAlignment"));
                 dialog.setResizable(true);
                 logger.debug("Created dialog with title: {}", dialog.getTitle());
 
@@ -156,9 +158,17 @@ public class AlignmentSelectionController {
 
                 RadioButton useExistingRadio = new RadioButton("Use existing alignment");
                 useExistingRadio.setToggleGroup(toggleGroup);
+                useExistingRadio.setTooltip(new Tooltip(
+                        "Use a previously saved coordinate transform for this microscope.\n"
+                        + "Quick setup (2-5 min) with good accuracy (+/- 20 um).\n"
+                        + "Best for repeated acquisitions with the same scanner setup."));
 
                 RadioButton createNewRadio = new RadioButton("Perform manual sample alignment");
                 createNewRadio.setToggleGroup(toggleGroup);
+                createNewRadio.setTooltip(new Tooltip(
+                        "Manually align the microscope stage to selected tiles to create a new transform.\n"
+                        + "Detailed setup (10-20 min) with excellent accuracy (+/- 5 um).\n"
+                        + "Best for first-time setup, new slides, or when maximum precision is needed."));
 
                 // Transform selection area
                 VBox transformSelectionBox = new VBox(10);
@@ -166,6 +176,10 @@ public class AlignmentSelectionController {
 
                 ComboBox<AffineTransformManager.TransformPreset> transformCombo = new ComboBox<>();
                 transformCombo.setPrefWidth(400);
+                transformCombo.setTooltip(new Tooltip(
+                        "Select a previously saved coordinate transform.\n"
+                        + "Transforms map QuPath pixel coordinates to microscope stage positions.\n"
+                        + "Choose one matching your current slide mounting method."));
 
                 // Load transforms for the current MICROSCOPE (not modality)
                 List<AffineTransformManager.TransformPreset> availableTransforms =
