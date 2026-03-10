@@ -30,27 +30,27 @@ public class AffineTransformationController {
      *  - Returns the final AffineTransform (or null if cancelled)
      *
      * @param macroPixelSizeMicrons Pixel size of macro image in microns
-     * @param invertedX             Whether to invert the X-axis
-     * @param invertedY             Whether to invert the Y-axis
+     * @param stageInvertedX        Whether the stage X axis is inverted
+     * @param stageInvertedY        Whether the stage Y axis is inverted
      * @return CompletableFuture with the user's validated affine transform, or null if cancelled.
      */
     public static CompletableFuture<AffineTransform> setupAffineTransformationAndValidationGUI(
-            double macroPixelSizeMicrons, boolean invertedX, boolean invertedY) {
+            double macroPixelSizeMicrons, boolean stageInvertedX, boolean stageInvertedY) {
         CompletableFuture<AffineTransform> future = new CompletableFuture<>();
 
         Platform.runLater(() -> {
             try {
                 logger.info(
-                        "Starting affine transformation setup (pixelSize: {}, flipX: {}, flipY: {})",
+                        "Starting affine transformation setup (pixelSize: {}, stageInvertedX: {}, stageInvertedY: {})",
                         macroPixelSizeMicrons,
-                        invertedX,
-                        invertedY);
+                        stageInvertedX,
+                        stageInvertedY);
 
                 QuPathGUI gui = QuPathGUI.getInstance();
 
                 // 1. Create initial scaling transform
-                AffineTransform scalingTransform =
-                        TransformationFunctions.setupAffineTransformation(macroPixelSizeMicrons, invertedX, invertedY);
+                AffineTransform scalingTransform = TransformationFunctions.setupAffineTransformation(
+                        macroPixelSizeMicrons, stageInvertedX, stageInvertedY);
                 logger.info("Initial scaling transform: {}", scalingTransform);
 
                 // 2. Prompt user to select a reference tile for initial alignment

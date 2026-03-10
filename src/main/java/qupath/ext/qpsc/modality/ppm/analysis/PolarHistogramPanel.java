@@ -5,7 +5,6 @@ import javafx.geometry.Pos;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Label;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -68,8 +67,13 @@ public class PolarHistogramPanel extends VBox {
      * @param validPixels number of valid pixels analyzed
      * @param annotationName name of the annotation (for display)
      */
-    public void update(int[] counts, double circularMean, double circularStd,
-            double resultantLength, int validPixels, String annotationName) {
+    public void update(
+            int[] counts,
+            double circularMean,
+            double circularStd,
+            double resultantLength,
+            int validPixels,
+            String annotationName) {
         this.histogramCounts = counts;
         this.bins = counts.length;
         this.circularMean = circularMean;
@@ -128,14 +132,20 @@ public class PolarHistogramPanel extends VBox {
 
             // Draw wedge as an arc
             gc.fillArc(
-                    centerX - wedgeRadius, centerY - wedgeRadius,
-                    wedgeRadius * 2, wedgeRadius * 2,
-                    canvasStartDeg, canvasExtentDeg,
+                    centerX - wedgeRadius,
+                    centerY - wedgeRadius,
+                    wedgeRadius * 2,
+                    wedgeRadius * 2,
+                    canvasStartDeg,
+                    canvasExtentDeg,
                     javafx.scene.shape.ArcType.ROUND);
             gc.strokeArc(
-                    centerX - wedgeRadius, centerY - wedgeRadius,
-                    wedgeRadius * 2, wedgeRadius * 2,
-                    canvasStartDeg, canvasExtentDeg,
+                    centerX - wedgeRadius,
+                    centerY - wedgeRadius,
+                    wedgeRadius * 2,
+                    wedgeRadius * 2,
+                    canvasStartDeg,
+                    canvasExtentDeg,
                     javafx.scene.shape.ArcType.ROUND);
         }
 
@@ -148,10 +158,7 @@ public class PolarHistogramPanel extends VBox {
         gc.setStroke(Color.DARKGRAY);
         gc.setLineWidth(0.5);
         gc.strokeArc(
-                centerX - radius, centerY - radius,
-                radius * 2, radius * 2,
-                0, 180,
-                javafx.scene.shape.ArcType.OPEN);
+                centerX - radius, centerY - radius, radius * 2, radius * 2, 0, 180, javafx.scene.shape.ArcType.OPEN);
 
         // Draw angle labels
         gc.setFill(Color.BLACK);
@@ -178,7 +185,8 @@ public class PolarHistogramPanel extends VBox {
             gc.setStroke(Color.RED);
             gc.setLineWidth(2);
             gc.strokeLine(
-                    centerX, centerY,
+                    centerX,
+                    centerY,
                     centerX + radius * 0.9 * Math.cos(meanRad),
                     centerY - radius * 0.9 * Math.sin(meanRad));
 
@@ -231,13 +239,10 @@ public class PolarHistogramPanel extends VBox {
             double binWidth = 180.0 / bins;
             double dominantLow = maxBin * binWidth;
             double dominantHigh = (maxBin + 1) * binWidth;
-            sb.append(String.format("Dominant bin:     %.0f-%.0f deg (%,d px)%n",
-                    dominantLow, dominantHigh, maxCount));
+            sb.append(String.format("Dominant bin:     %.0f-%.0f deg (%,d px)%n", dominantLow, dominantHigh, maxCount));
         }
 
         statsLabel.setText(sb.toString());
-        titleLabel.setText(annotationName != null
-                ? "PPM Polarity Plot - " + annotationName
-                : "PPM Polarity Plot");
+        titleLabel.setText(annotationName != null ? "PPM Polarity Plot - " + annotationName : "PPM Polarity Plot");
     }
 }

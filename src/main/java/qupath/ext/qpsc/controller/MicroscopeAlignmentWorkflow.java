@@ -455,9 +455,9 @@ public class MicroscopeAlignmentWorkflow {
                 // Create annotations from detection
                 runTissueDetectionScript(gui);
 
-                // Get inverted axes settings
-                boolean invertedX = QPPreferenceDialog.getInvertedXProperty();
-                boolean invertedY = QPPreferenceDialog.getInvertedYProperty();
+                // Get stage axis inversion settings (not optical flip -- see CLAUDE.md)
+                boolean stageInvertedX = QPPreferenceDialog.getStageInvertedXProperty();
+                boolean stageInvertedY = QPPreferenceDialog.getStageInvertedYProperty();
 
                 // Get macro pixel size using the SELECTED SCANNER config
                 double macroPixelSize;
@@ -503,13 +503,13 @@ public class MicroscopeAlignmentWorkflow {
                         sampleSetup,
                         tempTileDirectory,
                         modeWithIndex,
-                        invertedX,
-                        invertedY,
+                        stageInvertedX,
+                        stageInvertedY,
                         null); // Pass null for bounds
 
                 // Setup manual transform - this returns a full-res->stage transform
                 AffineTransformationController.setupAffineTransformationAndValidationGUI(
-                                mainPixelSize, invertedX, invertedY)
+                                mainPixelSize, stageInvertedX, stageInvertedY)
                         .thenAccept(fullResToStageTransform -> {
                             if (fullResToStageTransform == null) {
                                 logger.info("Transform setup cancelled");
@@ -528,8 +528,8 @@ public class MicroscopeAlignmentWorkflow {
                                     fullResToStageTransform,
                                     detectionResultsHolder[0],
                                     macroPixelSize,
-                                    invertedX,
-                                    invertedY,
+                                    stageInvertedX,
+                                    stageInvertedY,
                                     transformManager,
                                     selectedScanner);
                         })
@@ -556,8 +556,8 @@ public class MicroscopeAlignmentWorkflow {
             SampleSetupController.SampleSetupResult sampleSetup,
             String tempTileDirectory,
             String modeWithIndex,
-            boolean invertedX,
-            boolean invertedY,
+            boolean stageInvertedX,
+            boolean stageInvertedY,
             Rectangle dataBounds) {
 
         // First, try to get tissue annotations specifically
@@ -565,10 +565,15 @@ public class MicroscopeAlignmentWorkflow {
                 .filter(a -> a.getClassification() != null && "Tissue".equals(a.getClassification()))
                 .toList();
 
-        // Get flip settings to log them
+        // Log both optical flip (for image orientation) and stage inversion (for tile traversal)
         boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
         boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
-        logger.info("Creating alignment tiles with flips - X: {}, Y: {}", flipX, flipY);
+        logger.info(
+                "Creating alignment tiles: opticalFlip=({}, {}), stageInverted=({}, {})",
+                flipX,
+                flipY,
+                stageInvertedX,
+                stageInvertedY);
 
         // ENHANCED: Use data bounds for tile creation if available
         Rectangle boundsForTiling = dataBounds;
@@ -591,7 +596,13 @@ public class MicroscopeAlignmentWorkflow {
         if (!tissueAnnotations.isEmpty()) {
             logger.info("Found {} tissue annotations for tiling", tissueAnnotations.size());
             createTilesForAnnotations(
-                    gui, tissueAnnotations, sampleSetup, tempTileDirectory, modeWithIndex, invertedX, invertedY);
+                    gui,
+                    tissueAnnotations,
+                    sampleSetup,
+                    tempTileDirectory,
+                    modeWithIndex,
+                    stageInvertedX,
+                    stageInvertedY);
             return;
         }
 
@@ -608,7 +619,7 @@ public class MicroscopeAlignmentWorkflow {
 
         logger.info("Found {} annotations for tiling (non-tissue)", annotations.size());
         createTilesForAnnotations(
-                gui, annotations, sampleSetup, tempTileDirectory, modeWithIndex, invertedX, invertedY);
+                gui, annotations, sampleSetup, tempTileDirectory, modeWithIndex, stageInvertedX, stageInvertedY);
     }
 
     private static void createTilesForAnnotations(
@@ -617,16 +628,19 @@ public class MicroscopeAlignmentWorkflow {
             SampleSetupController.SampleSetupResult sampleSetup,
             String tempTileDirectory,
             String modeWithIndex,
-            boolean invertedX,
-            boolean invertedY) {
+            boolean stageInvertedX,
+            boolean stageInvertedY) {
 
         try {
-            // Delegate to TilingUtilities with explicit inversion parameters
+            // Delegate to TilingUtilities with explicit stage inversion parameters
             // These control tile positioning in the grid to match stage coordinate system
             TilingUtilities.createTilesForAnnotations(
-                    annotations, sampleSetup, tempTileDirectory, modeWithIndex, invertedX, invertedY);
+                    annotations, sampleSetup, tempTileDirectory, modeWithIndex, stageInvertedX, stageInvertedY);
 
-            logger.info("Created detection tiles for alignment (invertX={}, invertY={})", invertedX, invertedY);
+            logger.info(
+                    "Created detection tiles for alignment (stageInvertedX={}, stageInvertedY={})",
+                    stageInvertedX,
+                    stageInvertedY);
 
         } catch (IOException e) {
             logger.error("Failed to create tiles", e);
@@ -654,8 +668,8 @@ public class MicroscopeAlignmentWorkflow {
      * @param fullResToStageTransform The manually-aligned transform from full-res to stage coordinates
      * @param macroImageResults Detection results from the macro image analysis
      * @param macroPixelSize Physical size of macro pixels in micrometers (typically 81.0)
-     * @param invertedX Whether X axis is inverted (unused in current implementation)
-     * @param invertedY Whether Y axis is inverted (unused in current implementation)
+     * @param stageInvertedX Whether stage X axis is inverted (unused in current implementation)
+     * @param stageInvertedY Whether stage Y axis is inverted (unused in current implementation)
      * @param transformManager Manager for saving transform presets
      * @param selectedScanner Name of the source scanner that created the macro image
      */
@@ -665,8 +679,8 @@ public class MicroscopeAlignmentWorkflow {
             AffineTransform fullResToStageTransform,
             MacroImageResults macroImageResults,
             double macroPixelSize,
-            boolean invertedX,
-            boolean invertedY,
+            boolean stageInvertedX,
+            boolean stageInvertedY,
             AffineTransformManager transformManager,
             String selectedScanner) {
 

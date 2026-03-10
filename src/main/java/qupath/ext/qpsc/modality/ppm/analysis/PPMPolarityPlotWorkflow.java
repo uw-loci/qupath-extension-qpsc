@@ -9,18 +9,18 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import javax.imageio.ImageIO;
 import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
+import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
+import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.QPEx;
 import qupath.lib.images.ImageData;
@@ -30,7 +30,6 @@ import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.regions.RegionRequest;
 import qupath.lib.roi.interfaces.ROI;
-import qupath.fx.dialogs.Dialogs;
 
 /**
  * Workflow for computing and displaying a PPM polarity plot (rose diagram)
@@ -85,8 +84,7 @@ public class PPMPolarityPlotWorkflow {
         // Get selected annotation
         PathObject selected = imageData.getHierarchy().getSelectionModel().getSelectedObject();
         if (selected == null || !selected.isAnnotation()) {
-            Dialogs.showErrorMessage("PPM Polarity Plot",
-                    "Please select an annotation first.");
+            Dialogs.showErrorMessage("PPM Polarity Plot", "Please select an annotation first.");
             return;
         }
 
@@ -119,8 +117,7 @@ public class PPMPolarityPlotWorkflow {
             }
         }
         if (calibrationPath == null) {
-            Dialogs.showErrorMessage("PPM Polarity Plot",
-                    "No PPM calibration found. Run sunburst calibration first.");
+            Dialogs.showErrorMessage("PPM Polarity Plot", "No PPM calibration found. Run sunburst calibration first.");
             return;
         }
 
@@ -137,13 +134,11 @@ public class PPMPolarityPlotWorkflow {
 
         CompletableFuture.runAsync(() -> {
             try {
-                computeAndDisplay(sumServer, roi, finalCalibrationPath,
-                        finalAnalysisSet, annotationName);
+                computeAndDisplay(sumServer, roi, finalCalibrationPath, finalAnalysisSet, annotationName);
             } catch (Exception e) {
                 logger.error("Polarity plot computation failed", e);
-                Platform.runLater(() ->
-                        Dialogs.showErrorMessage("PPM Polarity Plot",
-                                "Computation failed: " + e.getMessage()));
+                Platform.runLater(
+                        () -> Dialogs.showErrorMessage("PPM Polarity Plot", "Computation failed: " + e.getMessage()));
             }
         });
     }
@@ -153,7 +148,8 @@ public class PPMPolarityPlotWorkflow {
             ROI roi,
             String calibrationPath,
             PPMAnalysisSet analysisSet,
-            String annotationName) throws Exception {
+            String annotationName)
+            throws Exception {
 
         // Create region request from annotation bounds
         int x = (int) roi.getBoundsX();
@@ -161,11 +157,9 @@ public class PPMPolarityPlotWorkflow {
         int w = (int) Math.ceil(roi.getBoundsWidth());
         int h = (int) Math.ceil(roi.getBoundsHeight());
 
-        logger.info("Computing polarity plot for '{}': region {}x{} at ({},{})",
-                annotationName, w, h, x, y);
+        logger.info("Computing polarity plot for '{}': region {}x{} at ({},{})", annotationName, w, h, x, y);
 
-        RegionRequest request = RegionRequest.createInstance(
-                sumServer.getPath(), 1.0, x, y, w, h);
+        RegionRequest request = RegionRequest.createInstance(sumServer.getPath(), 1.0, x, y, w, h);
 
         // Create temp directory for image exchange
         Path tempDir = Files.createTempDirectory("ppm_analysis_");
@@ -181,10 +175,10 @@ public class PPMPolarityPlotWorkflow {
             if (analysisSet != null && analysisSet.hasBirefImage()) {
                 try {
                     @SuppressWarnings("unchecked")
-                    ImageData<BufferedImage> birefData = (ImageData<BufferedImage>) analysisSet.birefImage.readImageData();
+                    ImageData<BufferedImage> birefData =
+                            (ImageData<BufferedImage>) analysisSet.birefImage.readImageData();
                     ImageServer<BufferedImage> birefServer = birefData.getServer();
-                    RegionRequest birefRequest = RegionRequest.createInstance(
-                            birefServer.getPath(), 1.0, x, y, w, h);
+                    RegionRequest birefRequest = RegionRequest.createInstance(birefServer.getPath(), 1.0, x, y, w, h);
                     BufferedImage birefRegion = birefServer.readRegion(birefRequest);
                     birefPath = tempDir.resolve("biref_region.tif");
                     ImageIO.write(birefRegion, "TIFF", birefPath.toFile());
@@ -200,8 +194,7 @@ public class PPMPolarityPlotWorkflow {
             writeROIMask(roi, x, y, w, h, roiMaskPath);
 
             // Call Python analysis via ppm_library CLI
-            JsonObject result = callPythonAnalysis(
-                    sumPath, calibrationPath, birefPath, roiMaskPath);
+            JsonObject result = callPythonAnalysis(sumPath, calibrationPath, birefPath, roiMaskPath);
 
             // Parse and display results
             displayResults(result, annotationName);
@@ -222,9 +215,8 @@ public class PPMPolarityPlotWorkflow {
     /**
      * Calls ppm_library's CLI for region analysis.
      */
-    private static JsonObject callPythonAnalysis(
-            Path sumPath, String calibrationPath,
-            Path birefPath, Path roiMaskPath) throws Exception {
+    private static JsonObject callPythonAnalysis(Path sumPath, String calibrationPath, Path birefPath, Path roiMaskPath)
+            throws Exception {
 
         List<String> command = new ArrayList<>();
         command.add("python");
@@ -258,8 +250,7 @@ public class PPMPolarityPlotWorkflow {
 
         // Read stdout (JSON result)
         StringBuilder stdout = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream()))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 stdout.append(line);
@@ -268,8 +259,7 @@ public class PPMPolarityPlotWorkflow {
 
         // Read stderr (errors/warnings)
         StringBuilder stderr = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getErrorStream()))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 stderr.append(line).append("\n");
@@ -297,7 +287,8 @@ public class PPMPolarityPlotWorkflow {
 
         // Check for error in JSON
         if (result.has("error") && !result.get("error").isJsonNull()) {
-            throw new RuntimeException("Python analysis error: " + result.get("error").getAsString());
+            throw new RuntimeException(
+                    "Python analysis error: " + result.get("error").getAsString());
         }
 
         return result;
@@ -320,14 +311,15 @@ public class PPMPolarityPlotWorkflow {
         double resultantLength = getDoubleOrNaN(result, "resultant_length");
         int nPixels = result.has("n_pixels") ? result.get("n_pixels").getAsInt() : 0;
 
-        logger.info("Polarity plot for '{}': {} valid pixels, mean=%.1f deg, std=%.1f deg, R=%.3f"
+        logger.info(
+                "Polarity plot for '{}': {} valid pixels, mean=%.1f deg, std=%.1f deg, R=%.3f"
                         .formatted(circularMean, circularStd, resultantLength),
-                annotationName, nPixels);
+                annotationName,
+                nPixels);
 
         Platform.runLater(() -> {
             if (plotPanel != null) {
-                plotPanel.update(counts, circularMean, circularStd,
-                        resultantLength, nPixels, annotationName);
+                plotPanel.update(counts, circularMean, circularStd, resultantLength, nPixels, annotationName);
             }
             if (plotWindow != null) {
                 plotWindow.show();
@@ -346,8 +338,8 @@ public class PPMPolarityPlotWorkflow {
     /**
      * Writes a binary mask image for the ROI shape.
      */
-    private static void writeROIMask(ROI roi, int offsetX, int offsetY,
-            int width, int height, Path outputPath) throws Exception {
+    private static void writeROIMask(ROI roi, int offsetX, int offsetY, int width, int height, Path outputPath)
+            throws Exception {
         BufferedImage mask = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY);
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {

@@ -75,19 +75,16 @@ class BackPropagationTransformTest {
 
     /** Alignment transform: maps flipped parent pixels -> stage microns. */
     static AffineTransform createAlignmentTransform() {
-        return new AffineTransform(
-                PARENT_PIXEL_SIZE, 0, 0, PARENT_PIXEL_SIZE, ALIGN_TX, ALIGN_TY);
+        return new AffineTransform(PARENT_PIXEL_SIZE, 0, 0, PARENT_PIXEL_SIZE, ALIGN_TX, ALIGN_TY);
     }
 
     /** Sub-image pixel -> stage microns. */
     static AffineTransform createSubToStageTransform() {
-        return new AffineTransform(
-                SUB_PIXEL_SIZE, 0, 0, SUB_PIXEL_SIZE, XY_OFFSET_X, XY_OFFSET_Y);
+        return new AffineTransform(SUB_PIXEL_SIZE, 0, 0, SUB_PIXEL_SIZE, XY_OFFSET_X, XY_OFFSET_Y);
     }
 
     /** Combined: sub-image pixel -> flipped parent pixel. */
-    static AffineTransform createSubToFlippedParent()
-            throws NoninvertibleTransformException {
+    static AffineTransform createSubToFlippedParent() throws NoninvertibleTransformException {
         AffineTransform stageToParent = createAlignmentTransform().createInverse();
         AffineTransform subToStage = createSubToStageTransform();
         AffineTransform combined = new AffineTransform(stageToParent);
@@ -96,11 +93,9 @@ class BackPropagationTransformTest {
     }
 
     /** Combined: sub-image pixel -> original base pixel. */
-    static AffineTransform createSubToOriginal()
-            throws NoninvertibleTransformException {
+    static AffineTransform createSubToOriginal() throws NoninvertibleTransformException {
         AffineTransform subToFlipped = createSubToFlippedParent();
-        AffineTransform flip = PPMBackPropagationWorkflow.createFlipTransform(
-                true, true, PARENT_WIDTH, PARENT_HEIGHT);
+        AffineTransform flip = PPMBackPropagationWorkflow.createFlipTransform(true, true, PARENT_WIDTH, PARENT_HEIGHT);
         AffineTransform combined = new AffineTransform(flip);
         combined.concatenate(subToFlipped);
         return combined;
@@ -125,8 +120,7 @@ class BackPropagationTransformTest {
         @Test
         @DisplayName("XY flip: scale(-1,-1) + translate(W,H)")
         void testFlipXY() {
-            AffineTransform t = PPMBackPropagationWorkflow.createFlipTransform(
-                    true, true, 1000, 800);
+            AffineTransform t = PPMBackPropagationWorkflow.createFlipTransform(true, true, 1000, 800);
 
             Point2D.Double result = transformPoint(t, 0, 0);
             assertEquals(1000, result.x, PIXEL_TOLERANCE, "origin X -> width");
@@ -144,8 +138,7 @@ class BackPropagationTransformTest {
         @Test
         @DisplayName("X-only flip: scale(-1,1) + translate(W,0)")
         void testFlipXOnly() {
-            AffineTransform t = PPMBackPropagationWorkflow.createFlipTransform(
-                    true, false, 1000, 800);
+            AffineTransform t = PPMBackPropagationWorkflow.createFlipTransform(true, false, 1000, 800);
 
             Point2D.Double result = transformPoint(t, 0, 0);
             assertEquals(1000, result.x, PIXEL_TOLERANCE);
@@ -159,8 +152,7 @@ class BackPropagationTransformTest {
         @Test
         @DisplayName("Y-only flip: scale(1,-1) + translate(0,H)")
         void testFlipYOnly() {
-            AffineTransform t = PPMBackPropagationWorkflow.createFlipTransform(
-                    false, true, 1000, 800);
+            AffineTransform t = PPMBackPropagationWorkflow.createFlipTransform(false, true, 1000, 800);
 
             Point2D.Double result = transformPoint(t, 0, 0);
             assertEquals(0, result.x, PIXEL_TOLERANCE, "X unchanged");
@@ -174,8 +166,7 @@ class BackPropagationTransformTest {
         @Test
         @DisplayName("No flip: identity transform")
         void testNoFlip() {
-            AffineTransform t = PPMBackPropagationWorkflow.createFlipTransform(
-                    false, false, 1000, 800);
+            AffineTransform t = PPMBackPropagationWorkflow.createFlipTransform(false, false, 1000, 800);
 
             assertTrue(t.isIdentity(), "No-flip should be identity");
 
@@ -187,8 +178,7 @@ class BackPropagationTransformTest {
         @Test
         @DisplayName("Flip transform is self-inverse (applying twice returns original)")
         void testFlipIsSelfInverse() {
-            AffineTransform t = PPMBackPropagationWorkflow.createFlipTransform(
-                    true, true, PARENT_WIDTH, PARENT_HEIGHT);
+            AffineTransform t = PPMBackPropagationWorkflow.createFlipTransform(true, true, PARENT_WIDTH, PARENT_HEIGHT);
 
             double testX = 12345.67;
             double testY = 45678.90;
@@ -198,17 +188,14 @@ class BackPropagationTransformTest {
             // Apply again
             Point2D.Double restored = transformPoint(t, flipped.x, flipped.y);
 
-            assertEquals(testX, restored.x, PIXEL_TOLERANCE,
-                    "Double flip should restore X");
-            assertEquals(testY, restored.y, PIXEL_TOLERANCE,
-                    "Double flip should restore Y");
+            assertEquals(testX, restored.x, PIXEL_TOLERANCE, "Double flip should restore X");
+            assertEquals(testY, restored.y, PIXEL_TOLERANCE, "Double flip should restore Y");
         }
 
         @Test
         @DisplayName("XY flip with real parent dimensions")
         void testFlipWithParentDimensions() {
-            AffineTransform t = PPMBackPropagationWorkflow.createFlipTransform(
-                    true, true, PARENT_WIDTH, PARENT_HEIGHT);
+            AffineTransform t = PPMBackPropagationWorkflow.createFlipTransform(true, true, PARENT_WIDTH, PARENT_HEIGHT);
 
             // A point near center-left of the flipped image
             Point2D.Double result = transformPoint(t, 21389, 27224);
@@ -231,10 +218,8 @@ class BackPropagationTransformTest {
             AffineTransform t = createSubToStageTransform();
             Point2D.Double result = transformPoint(t, 0, 0);
 
-            assertEquals(XY_OFFSET_X, result.x, 0.001,
-                    "Sub origin X should equal xy_offset_x");
-            assertEquals(XY_OFFSET_Y, result.y, 0.001,
-                    "Sub origin Y should equal xy_offset_y");
+            assertEquals(XY_OFFSET_X, result.x, 0.001, "Sub origin X should equal xy_offset_x");
+            assertEquals(XY_OFFSET_Y, result.y, 0.001, "Sub origin Y should equal xy_offset_y");
         }
 
         @Test
@@ -279,10 +264,8 @@ class BackPropagationTransformTest {
             AffineTransform t = createAlignmentTransform();
             Point2D.Double result = transformPoint(t, 0, 0);
 
-            assertEquals(ALIGN_TX, result.x, 0.001,
-                    "Parent origin should map to alignment translateX");
-            assertEquals(ALIGN_TY, result.y, 0.001,
-                    "Parent origin should map to alignment translateY");
+            assertEquals(ALIGN_TX, result.x, 0.001, "Parent origin should map to alignment translateX");
+            assertEquals(ALIGN_TY, result.y, 0.001, "Parent origin should map to alignment translateY");
         }
 
         @Test
@@ -294,8 +277,8 @@ class BackPropagationTransformTest {
             Point2D.Double p1 = transformPoint(t, 1, 0);
 
             double deltaX = p1.x - p0.x;
-            assertEquals(PARENT_PIXEL_SIZE, deltaX, 0.0001,
-                    "1 pixel step in X should equal parent pixel size in microns");
+            assertEquals(
+                    PARENT_PIXEL_SIZE, deltaX, 0.0001, "1 pixel step in X should equal parent pixel size in microns");
         }
 
         @Test
@@ -310,10 +293,8 @@ class BackPropagationTransformTest {
             Point2D.Double stage = transformPoint(forward, testPixelX, testPixelY);
             Point2D.Double restored = transformPoint(inverse, stage.x, stage.y);
 
-            assertEquals(testPixelX, restored.x, PIXEL_TOLERANCE,
-                    "Roundtrip should restore X");
-            assertEquals(testPixelY, restored.y, PIXEL_TOLERANCE,
-                    "Roundtrip should restore Y");
+            assertEquals(testPixelX, restored.x, PIXEL_TOLERANCE, "Roundtrip should restore X");
+            assertEquals(testPixelY, restored.y, PIXEL_TOLERANCE, "Roundtrip should restore Y");
         }
 
         @Test
@@ -323,8 +304,7 @@ class BackPropagationTransformTest {
 
             // XY offset is the stage coord of the sub-image origin
             // which should map to the sub-image's top-left in parent space
-            Point2D.Double result = transformPoint(inverse,
-                    XY_OFFSET_X, XY_OFFSET_Y);
+            Point2D.Double result = transformPoint(inverse, XY_OFFSET_X, XY_OFFSET_Y);
 
             // Expected: approximately (21389, 27224) based on
             // TileConfiguration_QP.txt minimum values ~(21387, 27221)
@@ -335,10 +315,8 @@ class BackPropagationTransformTest {
             assertEquals(expectedY, result.y, PIXEL_TOLERANCE);
 
             // Sanity check: should be in the range of the parent image
-            assertTrue(result.x > 0 && result.x < PARENT_WIDTH,
-                    "Mapped X should be within parent image bounds");
-            assertTrue(result.y > 0 && result.y < PARENT_HEIGHT,
-                    "Mapped Y should be within parent image bounds");
+            assertTrue(result.x > 0 && result.x < PARENT_WIDTH, "Mapped X should be within parent image bounds");
+            assertTrue(result.y > 0 && result.y < PARENT_HEIGHT, "Mapped Y should be within parent image bounds");
         }
     }
 
@@ -352,8 +330,7 @@ class BackPropagationTransformTest {
 
         @Test
         @DisplayName("Sub-image origin maps near TileConfig_QP minimum values")
-        void testOriginMapsToExpectedParentPixel()
-                throws NoninvertibleTransformException {
+        void testOriginMapsToExpectedParentPixel() throws NoninvertibleTransformException {
             AffineTransform t = createSubToFlippedParent();
             Point2D.Double result = transformPoint(t, 0, 0);
 
@@ -368,10 +345,8 @@ class BackPropagationTransformTest {
 
             // Close to TileConfiguration_QP.txt minimum tile positions
             // (~21387, ~27221). Generous tolerance for alignment error.
-            assertEquals(21387, result.x, 5.0,
-                    "Origin X should be near TileConfig_QP min ~21387");
-            assertEquals(27221, result.y, 5.0,
-                    "Origin Y should be near TileConfig_QP min ~27221");
+            assertEquals(21387, result.x, 5.0, "Origin X should be near TileConfig_QP min ~21387");
+            assertEquals(27221, result.y, 5.0, "Origin Y should be near TileConfig_QP min ~27221");
         }
 
         @Test
@@ -385,30 +360,30 @@ class BackPropagationTransformTest {
             Point2D.Double p1 = transformPoint(t, 1000, 0);
 
             double parentDelta = p1.x - p0.x;
-            assertEquals(expectedScale * 1000, parentDelta, PIXEL_TOLERANCE,
-                    "1000 sub-image pixels should span "
-                            + (expectedScale * 1000) + " parent pixels");
+            assertEquals(
+                    expectedScale * 1000,
+                    parentDelta,
+                    PIXEL_TOLERANCE,
+                    "1000 sub-image pixels should span " + (expectedScale * 1000) + " parent pixels");
         }
 
         @Test
         @DisplayName("Bottom-right corner maps within parent image bounds")
-        void testBottomRightWithinBounds()
-                throws NoninvertibleTransformException {
+        void testBottomRightWithinBounds() throws NoninvertibleTransformException {
             AffineTransform t = createSubToFlippedParent();
             Point2D.Double result = transformPoint(t, SUB_WIDTH, SUB_HEIGHT);
 
-            assertTrue(result.x > 0 && result.x < PARENT_WIDTH,
-                    "Bottom-right X (" + result.x
-                            + ") should be within parent width (" + PARENT_WIDTH + ")");
-            assertTrue(result.y > 0 && result.y < PARENT_HEIGHT,
-                    "Bottom-right Y (" + result.y
-                            + ") should be within parent height (" + PARENT_HEIGHT + ")");
+            assertTrue(
+                    result.x > 0 && result.x < PARENT_WIDTH,
+                    "Bottom-right X (" + result.x + ") should be within parent width (" + PARENT_WIDTH + ")");
+            assertTrue(
+                    result.y > 0 && result.y < PARENT_HEIGHT,
+                    "Bottom-right Y (" + result.y + ") should be within parent height (" + PARENT_HEIGHT + ")");
         }
 
         @Test
         @DisplayName("Transform is equivalent to manual scale+translate formula")
-        void testMatchesManualFormula()
-                throws NoninvertibleTransformException {
+        void testMatchesManualFormula() throws NoninvertibleTransformException {
             AffineTransform t = createSubToFlippedParent();
 
             double scale = SUB_PIXEL_SIZE / PARENT_PIXEL_SIZE;
@@ -417,9 +392,7 @@ class BackPropagationTransformTest {
 
             // Test several points
             double[][] testPoints = {
-                {0, 0}, {100, 200}, {1000, 500},
-                {SUB_WIDTH / 2, SUB_HEIGHT / 2},
-                {SUB_WIDTH, SUB_HEIGHT}
+                {0, 0}, {100, 200}, {1000, 500}, {SUB_WIDTH / 2, SUB_HEIGHT / 2}, {SUB_WIDTH, SUB_HEIGHT}
             };
 
             for (double[] pt : testPoints) {
@@ -427,12 +400,16 @@ class BackPropagationTransformTest {
                 double expectedX = pt[0] * scale + translateX;
                 double expectedY = pt[1] * scale + translateY;
 
-                assertEquals(expectedX, actual.x, PIXEL_TOLERANCE,
-                        String.format("X mismatch at sub-pixel (%.0f, %.0f)",
-                                pt[0], pt[1]));
-                assertEquals(expectedY, actual.y, PIXEL_TOLERANCE,
-                        String.format("Y mismatch at sub-pixel (%.0f, %.0f)",
-                                pt[0], pt[1]));
+                assertEquals(
+                        expectedX,
+                        actual.x,
+                        PIXEL_TOLERANCE,
+                        String.format("X mismatch at sub-pixel (%.0f, %.0f)", pt[0], pt[1]));
+                assertEquals(
+                        expectedY,
+                        actual.y,
+                        PIXEL_TOLERANCE,
+                        String.format("Y mismatch at sub-pixel (%.0f, %.0f)", pt[0], pt[1]));
             }
         }
     }
@@ -463,10 +440,8 @@ class BackPropagationTransformTest {
             assertEquals(expectedOrigY, result.y, PIXEL_TOLERANCE);
 
             // Should be in the "opposite" region of the image
-            assertTrue(result.x > PARENT_WIDTH / 2,
-                    "Flipped X should be in right half of original");
-            assertTrue(result.y > PARENT_HEIGHT / 2,
-                    "Flipped Y should be in bottom half of original");
+            assertTrue(result.x > PARENT_WIDTH / 2, "Flipped X should be in right half of original");
+            assertTrue(result.y > PARENT_HEIGHT / 2, "Flipped Y should be in bottom half of original");
         }
 
         @Test
@@ -482,12 +457,12 @@ class BackPropagationTransformTest {
 
             for (double[] corner : corners) {
                 Point2D.Double result = transformPoint(t, corner[0], corner[1]);
-                assertTrue(result.x >= 0 && result.x <= PARENT_WIDTH,
-                        String.format("Corner (%.0f, %.0f) -> X=%.1f out of bounds",
-                                corner[0], corner[1], result.x));
-                assertTrue(result.y >= 0 && result.y <= PARENT_HEIGHT,
-                        String.format("Corner (%.0f, %.0f) -> Y=%.1f out of bounds",
-                                corner[0], corner[1], result.y));
+                assertTrue(
+                        result.x >= 0 && result.x <= PARENT_WIDTH,
+                        String.format("Corner (%.0f, %.0f) -> X=%.1f out of bounds", corner[0], corner[1], result.x));
+                assertTrue(
+                        result.y >= 0 && result.y <= PARENT_HEIGHT,
+                        String.format("Corner (%.0f, %.0f) -> Y=%.1f out of bounds", corner[0], corner[1], result.y));
             }
         }
 
@@ -495,15 +470,12 @@ class BackPropagationTransformTest {
         @DisplayName("Chaining subToFlipped + flip equals subToOriginal")
         void testChainConsistency() throws NoninvertibleTransformException {
             AffineTransform subToFlipped = createSubToFlippedParent();
-            AffineTransform flip = PPMBackPropagationWorkflow.createFlipTransform(
-                    true, true, PARENT_WIDTH, PARENT_HEIGHT);
+            AffineTransform flip =
+                    PPMBackPropagationWorkflow.createFlipTransform(true, true, PARENT_WIDTH, PARENT_HEIGHT);
             AffineTransform subToOriginal = createSubToOriginal();
 
             // Test several points
-            double[][] testPoints = {
-                {0, 0}, {500, 300}, {SUB_WIDTH, SUB_HEIGHT},
-                {SUB_WIDTH / 3, SUB_HEIGHT / 4}
-            };
+            double[][] testPoints = {{0, 0}, {500, 300}, {SUB_WIDTH, SUB_HEIGHT}, {SUB_WIDTH / 3, SUB_HEIGHT / 4}};
 
             for (double[] pt : testPoints) {
                 // Manual two-step
@@ -513,9 +485,15 @@ class BackPropagationTransformTest {
                 // Single combined
                 Point2D.Double combinedOrig = transformPoint(subToOriginal, pt[0], pt[1]);
 
-                assertEquals(manualOrig.x, combinedOrig.x, PIXEL_TOLERANCE,
+                assertEquals(
+                        manualOrig.x,
+                        combinedOrig.x,
+                        PIXEL_TOLERANCE,
                         String.format("X mismatch at (%.0f, %.0f)", pt[0], pt[1]));
-                assertEquals(manualOrig.y, combinedOrig.y, PIXEL_TOLERANCE,
+                assertEquals(
+                        manualOrig.y,
+                        combinedOrig.y,
+                        PIXEL_TOLERANCE,
                         String.format("Y mismatch at (%.0f, %.0f)", pt[0], pt[1]));
             }
         }
@@ -533,9 +511,8 @@ class BackPropagationTransformTest {
         @DisplayName("Same pixel size: scale factor is 1.0")
         void testSamePixelSize() throws NoninvertibleTransformException {
             // If sub and parent have same pixel size, scale = 1
-            AffineTransform subToStage = new AffineTransform(
-                    PARENT_PIXEL_SIZE, 0, 0, PARENT_PIXEL_SIZE,
-                    XY_OFFSET_X, XY_OFFSET_Y);
+            AffineTransform subToStage =
+                    new AffineTransform(PARENT_PIXEL_SIZE, 0, 0, PARENT_PIXEL_SIZE, XY_OFFSET_X, XY_OFFSET_Y);
             AffineTransform stageToParent = createAlignmentTransform().createInverse();
 
             AffineTransform combined = new AffineTransform(stageToParent);
@@ -545,15 +522,13 @@ class BackPropagationTransformTest {
             Point2D.Double p0 = transformPoint(combined, 0, 0);
             Point2D.Double p1 = transformPoint(combined, 100, 0);
 
-            assertEquals(100, p1.x - p0.x, PIXEL_TOLERANCE,
-                    "Same pixel size should preserve distances");
+            assertEquals(100, p1.x - p0.x, PIXEL_TOLERANCE, "Same pixel size should preserve distances");
         }
 
         @Test
         @DisplayName("Zero XY offset: sub-image origin at stage origin of alignment")
         void testZeroOffset() throws NoninvertibleTransformException {
-            AffineTransform subToStage = new AffineTransform(
-                    SUB_PIXEL_SIZE, 0, 0, SUB_PIXEL_SIZE, 0, 0);
+            AffineTransform subToStage = new AffineTransform(SUB_PIXEL_SIZE, 0, 0, SUB_PIXEL_SIZE, 0, 0);
             AffineTransform stageToParent = createAlignmentTransform().createInverse();
 
             AffineTransform combined = new AffineTransform(stageToParent);
@@ -605,8 +580,7 @@ class BackPropagationTransformTest {
             boolean xDiffers = Math.abs(correctResult.x - wrongResult.x) > 1.0;
             boolean yDiffers = Math.abs(correctResult.y - wrongResult.y) > 1.0;
 
-            assertTrue(xDiffers || yDiffers,
-                    "Reversed composition order should produce different results");
+            assertTrue(xDiffers || yDiffers, "Reversed composition order should produce different results");
         }
 
         @Test
@@ -615,15 +589,12 @@ class BackPropagationTransformTest {
             // Tile 96 from TileConfiguration.txt: stage (-6922.360, -2011.020)
             // Tile 96 from TileConfiguration_QP.txt: parent pixel (21387.000, 37851.129)
             AffineTransform stageToParent = createAlignmentTransform().createInverse();
-            Point2D.Double result = transformPoint(stageToParent,
-                    -6922.360, -2011.020);
+            Point2D.Double result = transformPoint(stageToParent, -6922.360, -2011.020);
 
             // Should be close to (21387, 37851) but with alignment error
             // Using generous tolerance since alignment is empirical
-            assertEquals(21387, result.x, 5.0,
-                    "Tile 96 X should match TileConfiguration_QP.txt");
-            assertEquals(37851, result.y, 5.0,
-                    "Tile 96 Y should match TileConfiguration_QP.txt");
+            assertEquals(21387, result.x, 5.0, "Tile 96 X should match TileConfiguration_QP.txt");
+            assertEquals(37851, result.y, 5.0, "Tile 96 Y should match TileConfiguration_QP.txt");
         }
 
         @Test
@@ -632,13 +603,10 @@ class BackPropagationTransformTest {
             // Tile 0: stage (-3005.920, -4674.420)
             // TileConfig_QP: parent pixel (37018.246, 27221.000)
             AffineTransform stageToParent = createAlignmentTransform().createInverse();
-            Point2D.Double result = transformPoint(stageToParent,
-                    -3005.920, -4674.420);
+            Point2D.Double result = transformPoint(stageToParent, -3005.920, -4674.420);
 
-            assertEquals(37018, result.x, 5.0,
-                    "Tile 0 X should match TileConfiguration_QP.txt");
-            assertEquals(27221, result.y, 5.0,
-                    "Tile 0 Y should match TileConfiguration_QP.txt");
+            assertEquals(37018, result.x, 5.0, "Tile 0 X should match TileConfiguration_QP.txt");
+            assertEquals(27221, result.y, 5.0, "Tile 0 Y should match TileConfiguration_QP.txt");
         }
     }
 }

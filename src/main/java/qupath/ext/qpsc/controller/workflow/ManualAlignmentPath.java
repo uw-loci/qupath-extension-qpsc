@@ -176,7 +176,7 @@ public class ManualAlignmentPath {
         }
 
         // Use the same tile creation as acquisition - delegates to TilingUtilities
-        // which reads invertedX/Y from global preferences for consistent tile positioning
+        // which reads stageInvertedX/Y from global preferences for consistent tile positioning
         logger.info("Creating tiles for manual alignment using global inversion preferences");
 
         // Use the 5-parameter version which reads inversion from preferences
@@ -187,13 +187,13 @@ public class ManualAlignmentPath {
                 state.projectInfo.getImagingModeWithIndex(),
                 state.pixelSize);
 
-        // Get inversion settings from preferences for the alignment UI
-        boolean invertedX = QPPreferenceDialog.getInvertedXProperty();
-        boolean invertedY = QPPreferenceDialog.getInvertedYProperty();
+        // Get stage inversion settings from preferences for the alignment UI
+        boolean stageInvertedX = QPPreferenceDialog.getStageInvertedXProperty();
+        boolean stageInvertedY = QPPreferenceDialog.getStageInvertedYProperty();
 
         // Show manual alignment UI
         return AffineTransformationController.setupAffineTransformationAndValidationGUI(
-                        state.pixelSize, invertedX, invertedY)
+                        state.pixelSize, stageInvertedX, stageInvertedY)
                 .thenApply(transform -> {
                     if (transform == null) {
                         throw new CancellationException("Manual alignment cancelled by user");

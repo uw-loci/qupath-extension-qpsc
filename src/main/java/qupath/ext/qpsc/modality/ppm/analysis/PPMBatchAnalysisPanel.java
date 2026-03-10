@@ -14,7 +14,6 @@ import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
@@ -45,9 +44,15 @@ public class PPMBatchAnalysisPanel extends VBox {
         public final int annotationCount;
         public boolean selected;
 
-        public AnalysisSetItem(String displayName, String imageName,
-                int imageCollection, String sampleName, String annotationName,
-                String calibrationPath, boolean hasBiref, int annotationCount) {
+        public AnalysisSetItem(
+                String displayName,
+                String imageName,
+                int imageCollection,
+                String sampleName,
+                String annotationName,
+                String calibrationPath,
+                boolean hasBiref,
+                int annotationCount) {
             this.displayName = displayName;
             this.imageName = imageName;
             this.imageCollection = imageCollection;
@@ -93,8 +98,7 @@ public class PPMBatchAnalysisPanel extends VBox {
         Label title = new Label("Batch PPM Analysis");
         title.setFont(Font.font("System", FontWeight.BOLD, 14));
 
-        Label subtitle = new Label(String.format(
-                "Found %d PPM analysis sets in this project.", items.size()));
+        Label subtitle = new Label(String.format("Found %d PPM analysis sets in this project.", items.size()));
         subtitle.setFont(Font.font("System", 11));
 
         getChildren().addAll(title, subtitle, new Separator());
@@ -130,12 +134,11 @@ public class PPMBatchAnalysisPanel extends VBox {
         analysisLabel.setFont(Font.font("System", FontWeight.BOLD, 11));
 
         polarityCheck.setSelected(true);
-        polarityCheck.setTooltip(new Tooltip(
-                "Generate polarity plots with fiber orientation histograms and circular statistics.\n"
-                + "Produces mean angle, circular variance, and directional distribution for each annotation."));
+        polarityCheck.setTooltip(
+                new Tooltip("Generate polarity plots with fiber orientation histograms and circular statistics.\n"
+                        + "Produces mean angle, circular variance, and directional distribution for each annotation."));
         perpCheck.setSelected(false);
-        perpCheck.setTooltip(new Tooltip(
-                "Compute fiber perpendicularity relative to an annotation boundary.\n"
+        perpCheck.setTooltip(new Tooltip("Compute fiber perpendicularity relative to an annotation boundary.\n"
                 + "Calculates both simple perpendicularity and PS-TACS (Tumor-Associated\n"
                 + "Collagen Signatures) classification based on fiber-boundary angles."));
 
@@ -157,28 +160,27 @@ public class PPMBatchAnalysisPanel extends VBox {
         if (!availableClasses.isEmpty()) {
             boundaryClassChoice.setValue(availableClasses.get(0));
         }
-        boundaryClassChoice.setTooltip(new Tooltip(
-                "Select the annotation class that defines the boundary for perpendicularity analysis.\n"
-                + "Fiber angles will be measured relative to the nearest edge of annotations with this class."));
+        boundaryClassChoice.setTooltip(
+                new Tooltip(
+                        "Select the annotation class that defines the boundary for perpendicularity analysis.\n"
+                                + "Fiber angles will be measured relative to the nearest edge of annotations with this class."));
         perpGrid.add(boundaryClassChoice, 1, row);
         row++;
 
         perpGrid.add(new Label("Dilation (um):"), 0, row);
-        dilationSpinner = new Spinner<>(
-                new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 500, 50, 5));
+        dilationSpinner = new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 500, 50, 5));
         dilationSpinner.setEditable(true);
-        dilationSpinner.setTooltip(new Tooltip(
-                "Distance (in um) to dilate from the boundary for the perpendicularity analysis zone.\n"
-                + "Only fibers within this distance from the boundary are analyzed.\n"
-                + "Larger values include fibers further from the boundary."));
+        dilationSpinner.setTooltip(
+                new Tooltip("Distance (in um) to dilate from the boundary for the perpendicularity analysis zone.\n"
+                        + "Only fibers within this distance from the boundary are analyzed.\n"
+                        + "Larger values include fibers further from the boundary."));
         perpGrid.add(dilationSpinner, 1, row);
         row++;
 
         perpGrid.add(new Label("Zone mode:"), 0, row);
         zoneModeChoice.getItems().addAll("outside", "inside", "both");
         zoneModeChoice.setValue("outside");
-        zoneModeChoice.setTooltip(new Tooltip(
-                "Which side of the boundary to analyze:\n"
+        zoneModeChoice.setTooltip(new Tooltip("Which side of the boundary to analyze:\n"
                 + "  'outside' - analyze fibers outside the boundary annotation\n"
                 + "  'inside' - analyze fibers inside the boundary annotation\n"
                 + "  'both' - analyze fibers on both sides of the boundary"));
@@ -186,11 +188,9 @@ public class PPMBatchAnalysisPanel extends VBox {
         row++;
 
         perpGrid.add(new Label("TACS threshold (deg):"), 0, row);
-        tacsThresholdSpinner = new Spinner<>(
-                new SpinnerValueFactory.DoubleSpinnerValueFactory(5, 85, 30, 5));
+        tacsThresholdSpinner = new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(5, 85, 30, 5));
         tacsThresholdSpinner.setEditable(true);
-        tacsThresholdSpinner.setTooltip(new Tooltip(
-                "Angle threshold (in deg) for PS-TACS classification.\n"
+        tacsThresholdSpinner.setTooltip(new Tooltip("Angle threshold (in deg) for PS-TACS classification.\n"
                 + "Fibers within this angle of being perpendicular to the boundary are\n"
                 + "classified as TACS-3 (aligned perpendicular). Fibers within this angle\n"
                 + "of being parallel are classified as TACS-2 (aligned parallel)."));
@@ -198,9 +198,9 @@ public class PPMBatchAnalysisPanel extends VBox {
         row++;
 
         fillHolesCheck.setSelected(true);
-        fillHolesCheck.setTooltip(new Tooltip(
-                "Fill holes in the boundary annotation before computing perpendicularity.\n"
-                + "Enable this to treat the boundary as a solid region, ignoring internal gaps."));
+        fillHolesCheck.setTooltip(
+                new Tooltip("Fill holes in the boundary annotation before computing perpendicularity.\n"
+                        + "Enable this to treat the boundary as a solid region, ignoring internal gaps."));
         perpGrid.add(fillHolesCheck, 0, row, 2, 1);
 
         // Enable/disable perp params based on checkbox

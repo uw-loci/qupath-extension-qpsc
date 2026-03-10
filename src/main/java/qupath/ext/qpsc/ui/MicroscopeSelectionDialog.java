@@ -127,10 +127,10 @@ public class MicroscopeSelectionDialog {
                 ComboBox<String> microscopeCombo = new ComboBox<>();
                 microscopeCombo.getItems().addAll(microscopeConfigs.keySet());
                 microscopeCombo.setPrefWidth(400);
-                microscopeCombo.setTooltip(new Tooltip(
-                        "Select the microscope or scanner that originally created the macro image.\n"
-                        + "This determines the coordinate system and pixel size used for alignment.\n"
-                        + "The current microscope is excluded (cannot align to itself)."));
+                microscopeCombo.setTooltip(
+                        new Tooltip("Select the microscope or scanner that originally created the macro image.\n"
+                                + "This determines the coordinate system and pixel size used for alignment.\n"
+                                + "The current microscope is excluded (cannot align to itself)."));
 
                 // Try to restore last selection
                 String lastSelected = PersistentPreferences.getSelectedScanner();

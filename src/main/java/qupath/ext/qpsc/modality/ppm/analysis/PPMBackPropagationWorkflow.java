@@ -101,16 +101,15 @@ public class PPMBackPropagationWorkflow {
         // Step 1: Discover collections with sub-images and parent images
         List<CollectionGroup> collections = discoverCollections(project);
         if (collections.isEmpty()) {
-            Dialogs.showInfoNotification("Back-Propagation",
-                    "No image collections with sub-images and parent images found.");
+            Dialogs.showInfoNotification(
+                    "Back-Propagation", "No image collections with sub-images and parent images found.");
             return;
         }
 
         // Step 2: Collect annotation classes from all sub-images
         List<String> allClasses = collectAnnotationClasses(collections);
         if (allClasses.isEmpty()) {
-            Dialogs.showInfoNotification("Back-Propagation",
-                    "No classified annotations found on sub-images.");
+            Dialogs.showInfoNotification("Back-Propagation", "No classified annotations found on sub-images.");
             return;
         }
 
@@ -124,8 +123,7 @@ public class PPMBackPropagationWorkflow {
         toOriginalRadio.setSelected(true);
 
         // Check if any collection is missing the original base
-        boolean anyMissingOriginal = collections.stream()
-                .anyMatch(g -> g.originalBase == null);
+        boolean anyMissingOriginal = collections.stream().anyMatch(g -> g.originalBase == null);
         if (anyMissingOriginal) {
             toOriginalRadio.setText("Original base image (some collections missing original)");
         }
@@ -157,10 +155,10 @@ public class PPMBackPropagationWorkflow {
         lockCheck.setSelected(true);
 
         // -- Build dialog content --
-        int totalSubImages = collections.stream().mapToInt(g -> g.subImages.size()).sum();
-        Label summaryLabel = new Label(String.format(
-                "Found %d collection(s) with %d sub-images total.",
-                collections.size(), totalSubImages));
+        int totalSubImages =
+                collections.stream().mapToInt(g -> g.subImages.size()).sum();
+        Label summaryLabel = new Label(
+                String.format("Found %d collection(s) with %d sub-images total.", collections.size(), totalSubImages));
         summaryLabel.setFont(Font.font("System", 11));
 
         Label targetLabel = new Label("Target image:");
@@ -180,11 +178,22 @@ public class PPMBackPropagationWorkflow {
             helpBar.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
             dialogContent.getChildren().add(helpBar);
         }
-        dialogContent.getChildren().addAll(
-                summaryLabel, new Separator(),
-                targetLabel, toOriginalRadio, toFlippedRadio, new Separator(),
-                classLabel, classButtons, classScroll, new Separator(),
-                optionsLabel, includeMeasurementsCheck, lockCheck);
+        dialogContent
+                .getChildren()
+                .addAll(
+                        summaryLabel,
+                        new Separator(),
+                        targetLabel,
+                        toOriginalRadio,
+                        toFlippedRadio,
+                        new Separator(),
+                        classLabel,
+                        classButtons,
+                        classScroll,
+                        new Separator(),
+                        optionsLabel,
+                        includeMeasurementsCheck,
+                        lockCheck);
 
         boolean confirmed = Dialogs.showConfirmDialog("Back-Propagate Annotations", dialogContent);
         if (!confirmed) {
@@ -208,16 +217,15 @@ public class PPMBackPropagationWorkflow {
 
         // Step 4: Execute back-propagation
         int propagated = executePropagation(
-                project, collections, toOriginal, selectedClasses,
-                includeMeasurements, lockAnnotations);
+                project, collections, toOriginal, selectedClasses, includeMeasurements, lockAnnotations);
 
         if (propagated > 0) {
-            Dialogs.showInfoNotification("Back-Propagation",
-                    String.format("Successfully propagated %d annotation(s) to parent images.",
-                            propagated));
+            Dialogs.showInfoNotification(
+                    "Back-Propagation",
+                    String.format("Successfully propagated %d annotation(s) to parent images.", propagated));
         } else {
-            Dialogs.showInfoNotification("Back-Propagation",
-                    "No annotations were propagated. Check the log for details.");
+            Dialogs.showInfoNotification(
+                    "Back-Propagation", "No annotations were propagated. Check the log for details.");
         }
     }
 
@@ -240,8 +248,7 @@ public class PPMBackPropagationWorkflow {
         Map<Integer, CollectionGroup> groups = new LinkedHashMap<>();
 
         for (ProjectImageEntry<?> rawEntry : project.getImageList()) {
-            ProjectImageEntry<BufferedImage> entry =
-                    (ProjectImageEntry<BufferedImage>) rawEntry;
+            ProjectImageEntry<BufferedImage> entry = (ProjectImageEntry<BufferedImage>) rawEntry;
             int collection = ImageMetadataManager.getImageCollection(entry);
             if (collection < 0) continue;
 
@@ -261,8 +268,7 @@ public class PPMBackPropagationWorkflow {
                 if (origId != null) {
                     for (ProjectImageEntry<?> candidate : project.getImageList()) {
                         if (candidate.getID().equals(origId)) {
-                            group.originalBase =
-                                    (ProjectImageEntry<BufferedImage>) candidate;
+                            group.originalBase = (ProjectImageEntry<BufferedImage>) candidate;
                             break;
                         }
                     }
@@ -271,8 +277,7 @@ public class PPMBackPropagationWorkflow {
             }
 
             // Check if this is a sub-image (has annotation_name metadata)
-            String annotationName = entry.getMetadata()
-                    .get(ImageMetadataManager.ANNOTATION_NAME);
+            String annotationName = entry.getMetadata().get(ImageMetadataManager.ANNOTATION_NAME);
             if (annotationName != null && !annotationName.isEmpty()) {
                 group.subImages.add(entry);
             }
@@ -284,8 +289,10 @@ public class PPMBackPropagationWorkflow {
                 .collect(Collectors.toList());
 
         for (CollectionGroup g : result) {
-            logger.info("Collection {}: {} sub-images, parent='{}', original='{}'",
-                    g.collection, g.subImages.size(),
+            logger.info(
+                    "Collection {}: {} sub-images, parent='{}', original='{}'",
+                    g.collection,
+                    g.subImages.size(),
                     g.flippedParent.getImageName(),
                     g.originalBase != null ? g.originalBase.getImageName() : "none");
         }
@@ -315,8 +322,7 @@ public class PPMBackPropagationWorkflow {
                         }
                     }
                 } catch (Exception e) {
-                    logger.debug("Could not read annotations from {}: {}",
-                            subImage.getImageName(), e.getMessage());
+                    logger.debug("Could not read annotations from {}: {}", subImage.getImageName(), e.getMessage());
                 }
             }
         }
@@ -365,19 +371,21 @@ public class PPMBackPropagationWorkflow {
                 applyFlip = true;
             } else {
                 if (toOriginal && group.originalBase == null) {
-                    logger.warn("No original base for collection {}. "
-                            + "Using flipped parent instead.", group.collection);
+                    logger.warn(
+                            "No original base for collection {}. " + "Using flipped parent instead.", group.collection);
                 }
                 targetEntry = group.flippedParent;
                 applyFlip = false;
             }
 
             // Load alignment transform
-            AffineTransform alignment = AffineTransformManager.loadSlideAlignment(
-                    (Project<BufferedImage>) project, group.sampleName);
+            AffineTransform alignment =
+                    AffineTransformManager.loadSlideAlignment((Project<BufferedImage>) project, group.sampleName);
             if (alignment == null) {
-                logger.warn("No alignment transform for sample '{}'. "
-                        + "Skipping collection {}.", group.sampleName, group.collection);
+                logger.warn(
+                        "No alignment transform for sample '{}'. " + "Skipping collection {}.",
+                        group.sampleName,
+                        group.collection);
                 continue;
             }
 
@@ -386,8 +394,10 @@ public class PPMBackPropagationWorkflow {
             try {
                 stageToFlippedParent = alignment.createInverse();
             } catch (NoninvertibleTransformException e) {
-                logger.error("Cannot invert alignment for '{}'. "
-                        + "Skipping collection {}.", group.sampleName, group.collection);
+                logger.error(
+                        "Cannot invert alignment for '{}'. " + "Skipping collection {}.",
+                        group.sampleName,
+                        group.collection);
                 continue;
             }
 
@@ -396,8 +406,7 @@ public class PPMBackPropagationWorkflow {
             try {
                 targetData = targetEntry.readImageData();
             } catch (Exception e) {
-                logger.error("Cannot load target image '{}': {}",
-                        targetEntry.getImageName(), e.getMessage());
+                logger.error("Cannot load target image '{}': {}", targetEntry.getImageName(), e.getMessage());
                 continue;
             }
 
@@ -422,15 +431,12 @@ public class PPMBackPropagationWorkflow {
             for (ProjectImageEntry<BufferedImage> subEntry : group.subImages) {
                 try {
                     int count = propagateFromSubImage(
-                            subEntry, stageToTarget, selectedClasses,
-                            includeMeasurements, lockAnnotations, propagated);
+                            subEntry, stageToTarget, selectedClasses, includeMeasurements, lockAnnotations, propagated);
                     if (count > 0) {
-                        logger.info("Propagated {} annotations from '{}'",
-                                count, subEntry.getImageName());
+                        logger.info("Propagated {} annotations from '{}'", count, subEntry.getImageName());
                     }
                 } catch (Exception e) {
-                    logger.warn("Error processing sub-image '{}': {}",
-                            subEntry.getImageName(), e.getMessage());
+                    logger.warn("Error processing sub-image '{}': {}", subEntry.getImageName(), e.getMessage());
                 }
             }
 
@@ -440,13 +446,13 @@ public class PPMBackPropagationWorkflow {
                 try {
                     targetEntry.saveImageData(targetData);
                     totalPropagated += propagated.size();
-                    logger.info("Saved {} propagated annotations to '{}' "
-                            + "for collection {}",
-                            propagated.size(), targetEntry.getImageName(),
+                    logger.info(
+                            "Saved {} propagated annotations to '{}' " + "for collection {}",
+                            propagated.size(),
+                            targetEntry.getImageName(),
                             group.collection);
                 } catch (Exception e) {
-                    logger.error("Failed to save target image '{}': {}",
-                            targetEntry.getImageName(), e.getMessage());
+                    logger.error("Failed to save target image '{}': {}", targetEntry.getImageName(), e.getMessage());
                 }
             }
         }
@@ -471,21 +477,19 @@ public class PPMBackPropagationWorkflow {
             Set<String> selectedClasses,
             boolean includeMeasurements,
             boolean lockAnnotations,
-            List<PathObject> outAnnotations) throws Exception {
+            List<PathObject> outAnnotations)
+            throws Exception {
 
         ImageData<BufferedImage> subData = subEntry.readImageData();
-        double subPixelSize = subData.getServer()
-                .getPixelCalibration().getPixelWidthMicrons();
+        double subPixelSize = subData.getServer().getPixelCalibration().getPixelWidthMicrons();
 
         if (Double.isNaN(subPixelSize) || subPixelSize <= 0) {
-            logger.warn("Invalid pixel size ({}) for '{}'. Skipping.",
-                    subPixelSize, subEntry.getImageName());
+            logger.warn("Invalid pixel size ({}) for '{}'. Skipping.", subPixelSize, subEntry.getImageName());
             return 0;
         }
 
         double[] xyOffset = ImageMetadataManager.getXYOffset(subEntry);
-        String annotationName = subEntry.getMetadata()
-                .get(ImageMetadataManager.ANNOTATION_NAME);
+        String annotationName = subEntry.getMetadata().get(ImageMetadataManager.ANNOTATION_NAME);
         if (annotationName == null) {
             annotationName = "unknown";
         }
@@ -493,8 +497,7 @@ public class PPMBackPropagationWorkflow {
         // Build sub pixel -> stage transform:
         //   stageX = subPixelX * subPixelSize + xyOffsetX
         //   stageY = subPixelY * subPixelSize + xyOffsetY
-        AffineTransform subToStage = new AffineTransform(
-                subPixelSize, 0, 0, subPixelSize, xyOffset[0], xyOffset[1]);
+        AffineTransform subToStage = new AffineTransform(subPixelSize, 0, 0, subPixelSize, xyOffset[0], xyOffset[1]);
 
         // Combined: sub pixel -> target pixel
         AffineTransform subToTarget = new AffineTransform(stageToTarget);
@@ -507,8 +510,7 @@ public class PPMBackPropagationWorkflow {
                 continue;
             }
 
-            PathObject transformed = PathObjectTools.transformObject(
-                    ann, subToTarget, false, includeMeasurements);
+            PathObject transformed = PathObjectTools.transformObject(ann, subToTarget, false, includeMeasurements);
             if (transformed == null) {
                 continue;
             }
@@ -521,8 +523,7 @@ public class PPMBackPropagationWorkflow {
                 // Name by centroid in the target image pixel space
                 double cx = transformed.getROI().getCentroidX();
                 double cy = transformed.getROI().getCentroidY();
-                transformed.setName(String.format("%s: (%.0f, %.0f)",
-                        annotationName, cx, cy));
+                transformed.setName(String.format("%s: (%.0f, %.0f)", annotationName, cx, cy));
             }
 
             if (lockAnnotations) {
@@ -568,8 +569,7 @@ public class PPMBackPropagationWorkflow {
             return 0;
         }
 
-        return executePropagation(project, matching, toOriginal,
-                annotationClasses, includeMeasurements, true);
+        return executePropagation(project, matching, toOriginal, annotationClasses, includeMeasurements, true);
     }
 
     // ========================================================================
@@ -586,8 +586,7 @@ public class PPMBackPropagationWorkflow {
      * @param height image height in pixels
      * @return the flip AffineTransform, or identity if no flip
      */
-    static AffineTransform createFlipTransform(
-            boolean flipX, boolean flipY, double width, double height) {
+    static AffineTransform createFlipTransform(boolean flipX, boolean flipY, double width, double height) {
         AffineTransform t = new AffineTransform();
         if (flipX && flipY) {
             t.scale(-1, -1);

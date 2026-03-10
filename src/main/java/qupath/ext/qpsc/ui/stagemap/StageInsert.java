@@ -295,12 +295,21 @@ public class StageInsert {
         return Collections.unmodifiableList(slides);
     }
 
-    /** Returns true if X axis is inverted (larger X = visual left) */
+    /**
+     * Returns true if the stage X axis is inverted (larger X = visual left).
+     * This is a STAGE HARDWARE property auto-detected from insert calibration data
+     * (e.g., apertureLeftX > apertureRightX means X is inverted).
+     * Not the same as optical flip -- see CLAUDE.md "COORDINATE SYSTEM TERMINOLOGY".
+     */
     public boolean isXAxisInverted() {
         return xAxisInverted;
     }
 
-    /** Returns true if Y axis is inverted (larger Y = visual top) */
+    /**
+     * Returns true if the stage Y axis is inverted (larger Y = visual top).
+     * This is a STAGE HARDWARE property auto-detected from insert calibration data.
+     * Not the same as optical flip -- see CLAUDE.md "COORDINATE SYSTEM TERMINOLOGY".
+     */
     public boolean isYAxisInverted() {
         return yAxisInverted;
     }

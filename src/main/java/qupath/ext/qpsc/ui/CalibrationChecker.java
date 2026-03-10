@@ -78,8 +78,7 @@ public class CalibrationChecker {
 
             // For non-JAI cameras, WB must be configured through MicroManager
             if (!mgr.isJAICamera(detector)) {
-                return new StepStatus(Status.NOT_APPLICABLE,
-                        "Set white balance in MicroManager for this camera");
+                return new StepStatus(Status.NOT_APPLICABLE, "Set white balance in MicroManager for this camera");
             }
 
             // WB calibration is stored in imaging_profiles under:
@@ -91,9 +90,8 @@ public class CalibrationChecker {
             var exposures = mgr.getModalityExposures(modality, objective, detector);
             var gains = mgr.getModalityGains(modality, objective, detector);
 
-            if (exposures instanceof java.util.Map<?,?> expMap && !expMap.isEmpty()) {
-                return new StepStatus(Status.READY,
-                        "White balance calibration found (" + expMap.size() + " angles)");
+            if (exposures instanceof java.util.Map<?, ?> expMap && !expMap.isEmpty()) {
+                return new StepStatus(Status.READY, "White balance calibration found (" + expMap.size() + " angles)");
             }
 
             // Also check simple_wb section (written by simple WB calibration)
@@ -103,12 +101,13 @@ public class CalibrationChecker {
             }
 
             // Check gains as a fallback (may exist without exposures_ms in some edge cases)
-            if (gains instanceof java.util.Map<?,?> gainMap && !gainMap.isEmpty()) {
-                return new StepStatus(Status.READY,
-                        "White balance gain calibration found (" + gainMap.size() + " angles)");
+            if (gains instanceof java.util.Map<?, ?> gainMap && !gainMap.isEmpty()) {
+                return new StepStatus(
+                        Status.READY, "White balance gain calibration found (" + gainMap.size() + " angles)");
             }
 
-            return new StepStatus(Status.WARNING,
+            return new StepStatus(
+                    Status.WARNING,
                     "No white balance calibration found for JAI camera - recommended before acquisition");
 
         } catch (Exception e) {
@@ -129,8 +128,7 @@ public class CalibrationChecker {
      * @param detector  the selected detector ID
      * @return step status
      */
-    public static StepStatus checkBackgroundCorrection(
-            String modality, String objective, String detector) {
+    public static StepStatus checkBackgroundCorrection(String modality, String objective, String detector) {
         if (modality == null || objective == null || detector == null) {
             return new StepStatus(Status.NOT_READY, "Select hardware first");
         }
@@ -141,8 +139,7 @@ public class CalibrationChecker {
 
             String bgFolder = mgr.getBackgroundCorrectionFolder(modality);
             if (bgFolder == null) {
-                return new StepStatus(Status.WARNING,
-                        "No background correction folder configured for " + modality);
+                return new StepStatus(Status.WARNING, "No background correction folder configured for " + modality);
             }
 
             // Try to find background settings for this hardware combination
@@ -150,12 +147,12 @@ public class CalibrationChecker {
                     BackgroundSettingsReader.findBackgroundSettings(bgFolder, modality, objective, detector);
 
             if (settings != null) {
-                return new StepStatus(Status.READY,
+                return new StepStatus(
+                        Status.READY,
                         String.format("Background images found (%d angles)", settings.angleExposures.size()));
             }
 
-            return new StepStatus(Status.WARNING,
-                    "No background images found - recommended for flat field correction");
+            return new StepStatus(Status.WARNING, "No background images found - recommended for flat field correction");
 
         } catch (Exception e) {
             logger.debug("Error checking background correction", e);
@@ -187,12 +184,11 @@ public class CalibrationChecker {
             }
 
             AffineTransformManager transformMgr = new AffineTransformManager(configDir);
-            Collection<AffineTransformManager.TransformPreset> allTransforms =
-                    transformMgr.getAllTransforms();
+            Collection<AffineTransformManager.TransformPreset> allTransforms = transformMgr.getAllTransforms();
 
             if (allTransforms.isEmpty()) {
-                return new StepStatus(Status.NOT_READY,
-                        "No alignment transforms found - run Microscope Alignment first");
+                return new StepStatus(
+                        Status.NOT_READY, "No alignment transforms found - run Microscope Alignment first");
             }
 
             // Find the best (most recent / highest confidence) transform
@@ -214,16 +210,17 @@ public class CalibrationChecker {
             String name = best.getName();
 
             if (bestConfidence >= 0.7) {
-                return new StepStatus(Status.READY,
-                        String.format("Alignment '%s' available (%d%% confidence)", name, pct));
+                return new StepStatus(
+                        Status.READY, String.format("Alignment '%s' available (%d%% confidence)", name, pct));
             } else if (bestConfidence >= 0.4) {
-                return new StepStatus(Status.WARNING,
-                        String.format("Alignment '%s' is aging (%d%% confidence) - consider recalibrating",
-                                name, pct));
+                return new StepStatus(
+                        Status.WARNING,
+                        String.format("Alignment '%s' is aging (%d%% confidence) - consider recalibrating", name, pct));
             } else {
-                return new StepStatus(Status.WARNING,
-                        String.format("Alignment '%s' is stale (%d%% confidence) - recalibration recommended",
-                                name, pct));
+                return new StepStatus(
+                        Status.WARNING,
+                        String.format(
+                                "Alignment '%s' is stale (%d%% confidence) - recalibration recommended", name, pct));
             }
 
         } catch (Exception e) {

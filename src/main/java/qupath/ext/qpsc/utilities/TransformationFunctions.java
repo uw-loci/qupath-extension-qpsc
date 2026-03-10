@@ -935,13 +935,19 @@ public class TransformationFunctions {
     }
 
     /**
-     * Initializes a scaling transform from pixel size and flip prefs.
+     * Initializes a scaling transform from pixel size and stage inversion preferences.
+     * When an axis is inverted, the scale factor is negated so that the transform
+     * maps QuPath pixel coordinates to the correct stage direction.
+     *
+     * @param pixelSizeSourceImage pixel size of the source image in microns
+     * @param stageInvertedX whether the stage X axis is inverted
+     * @param stageInvertedY whether the stage Y axis is inverted
      */
     public static AffineTransform setupAffineTransformation(
-            double pixelSizeSourceImage, boolean invertedX, boolean invertedY) {
+            double pixelSizeSourceImage, boolean stageInvertedX, boolean stageInvertedY) {
 
-        double sx = invertedX ? -pixelSizeSourceImage : pixelSizeSourceImage;
-        double sy = invertedY ? -pixelSizeSourceImage : pixelSizeSourceImage;
+        double sx = stageInvertedX ? -pixelSizeSourceImage : pixelSizeSourceImage;
+        double sy = stageInvertedY ? -pixelSizeSourceImage : pixelSizeSourceImage;
         AffineTransform at = new AffineTransform();
         at.scale(sx, sy);
         return at;

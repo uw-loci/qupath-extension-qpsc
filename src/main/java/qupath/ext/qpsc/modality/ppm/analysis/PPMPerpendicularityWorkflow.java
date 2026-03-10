@@ -17,7 +17,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
-import javax.imageio.ImageIO;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
@@ -27,29 +26,29 @@ import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
-import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
+import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.QPEx;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
 import qupath.lib.images.servers.PixelCalibration;
+import qupath.lib.io.GsonTools;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.classes.PathClass;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.regions.RegionRequest;
 import qupath.lib.roi.interfaces.ROI;
-import qupath.lib.io.GsonTools;
-import qupath.ext.qpsc.utilities.DocumentationHelper;
-import qupath.fx.dialogs.Dialogs;
 
 /**
  * Workflow for surface perpendicularity analysis of fiber orientation relative
@@ -97,8 +96,7 @@ public class PPMPerpendicularityWorkflow {
                 runOnFXThread();
             } catch (Exception e) {
                 logger.error("Failed to run perpendicularity workflow", e);
-                Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
-                        "Error: " + e.getMessage());
+                Dialogs.showErrorMessage("Surface Perpendicularity Analysis", "Error: " + e.getMessage());
             }
         });
     }
@@ -106,23 +104,21 @@ public class PPMPerpendicularityWorkflow {
     private static void runOnFXThread() {
         QuPathGUI gui = QPEx.getQuPath();
         if (gui == null) {
-            Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
-                    "QuPath is not available.");
+            Dialogs.showErrorMessage("Surface Perpendicularity Analysis", "QuPath is not available.");
             return;
         }
 
         ImageData<BufferedImage> imageData = gui.getImageData();
         if (imageData == null) {
-            Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
-                    "No image is open.");
+            Dialogs.showErrorMessage("Surface Perpendicularity Analysis", "No image is open.");
             return;
         }
 
         Project<BufferedImage> project = gui.getProject();
         if (project == null) {
-            Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
-                    "A QuPath project is required for this analysis.\n"
-                            + "Create or open a project first.");
+            Dialogs.showErrorMessage(
+                    "Surface Perpendicularity Analysis",
+                    "A QuPath project is required for this analysis.\n" + "Create or open a project first.");
             return;
         }
 
@@ -130,8 +126,8 @@ public class PPMPerpendicularityWorkflow {
         ProjectImageEntry<BufferedImage> currentEntry = project.getEntry(imageData);
         String calibrationPath = findCalibrationPath(currentEntry, project);
         if (calibrationPath == null) {
-            Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
-                    "No PPM calibration found. Run sunburst calibration first.");
+            Dialogs.showErrorMessage(
+                    "Surface Perpendicularity Analysis", "No PPM calibration found. Run sunburst calibration first.");
             return;
         }
 
@@ -144,20 +140,17 @@ public class PPMPerpendicularityWorkflow {
             // Ask user
             String input = Dialogs.showInputDialog(
                     "Pixel Size Required",
-                    "Image has no pixel size metadata.\n"
-                            + "Enter pixel size in microns:",
+                    "Image has no pixel size metadata.\n" + "Enter pixel size in microns:",
                     "1.0");
             if (input == null || input.isEmpty()) return;
             try {
                 pixelSizeUm = Double.parseDouble(input.trim());
             } catch (NumberFormatException e) {
-                Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
-                        "Invalid pixel size: " + input);
+                Dialogs.showErrorMessage("Surface Perpendicularity Analysis", "Invalid pixel size: " + input);
                 return;
             }
             if (pixelSizeUm <= 0) {
-                Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
-                        "Pixel size must be positive.");
+                Dialogs.showErrorMessage("Surface Perpendicularity Analysis", "Pixel size must be positive.");
                 return;
             }
         }
@@ -173,15 +166,15 @@ public class PPMPerpendicularityWorkflow {
                 .collect(Collectors.toList());
 
         if (classNames.isEmpty()) {
-            Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
-                    "No classified annotations found.\n"
-                            + "Assign a class to boundary annotations first.");
+            Dialogs.showErrorMessage(
+                    "Surface Perpendicularity Analysis",
+                    "No classified annotations found.\n" + "Assign a class to boundary annotations first.");
             return;
         }
 
         // Show configuration dialog
-        showConfigDialog(gui, imageData, project, currentEntry,
-                calibrationPath, pixelSizeUm, classNames, allAnnotations);
+        showConfigDialog(
+                gui, imageData, project, currentEntry, calibrationPath, pixelSizeUm, classNames, allAnnotations);
     }
 
     private static void showConfigDialog(
@@ -233,8 +226,8 @@ public class PPMPerpendicularityWorkflow {
 
         // Dilation
         grid.add(new Label("Border zone width (um):"), 0, row);
-        Spinner<Double> dilationSpinner = new Spinner<>(
-                new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 500, DEFAULT_DILATION_UM, 5));
+        Spinner<Double> dilationSpinner =
+                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 500, DEFAULT_DILATION_UM, 5));
         dilationSpinner.setEditable(true);
         grid.add(dilationSpinner, 1, row);
         row++;
@@ -249,8 +242,8 @@ public class PPMPerpendicularityWorkflow {
 
         // TACS threshold
         grid.add(new Label("TACS threshold (deg from normal):"), 0, row);
-        Spinner<Double> tacsSpinner = new Spinner<>(
-                new SpinnerValueFactory.DoubleSpinnerValueFactory(5, 85, DEFAULT_TACS_THRESHOLD, 5));
+        Spinner<Double> tacsSpinner =
+                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(5, 85, DEFAULT_TACS_THRESHOLD, 5));
         tacsSpinner.setEditable(true);
         grid.add(tacsSpinner, 1, row);
         row++;
@@ -277,8 +270,7 @@ public class PPMPerpendicularityWorkflow {
         doiLabel.setStyle("-fx-text-fill: #4444aa; -fx-font-size: 10px; -fx-cursor: hand; -fx-underline: true;");
         doiLabel.setOnMouseClicked(e -> {
             try {
-                java.awt.Desktop.getDesktop().browse(
-                        new java.net.URI("https://doi.org/10.1016/j.ajpath.2025.04.017"));
+                java.awt.Desktop.getDesktop().browse(new java.net.URI("https://doi.org/10.1016/j.ajpath.2025.04.017"));
             } catch (Exception ex) {
                 logger.debug("Could not open DOI link: {}", ex.getMessage());
             }
@@ -310,7 +302,8 @@ public class PPMPerpendicularityWorkflow {
                     .collect(Collectors.toList());
 
             if (matchingAnnotations.isEmpty()) {
-                Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
+                Dialogs.showErrorMessage(
+                        "Surface Perpendicularity Analysis",
                         "No annotations found with class '" + selectedClass + "'.");
                 return;
             }
@@ -331,7 +324,8 @@ public class PPMPerpendicularityWorkflow {
             // Build output dir
             Path projectDir = project.getPath().getParent();
             String imageName = currentEntry != null ? currentEntry.getImageName() : "unknown";
-            Path outputDir = projectDir.resolve("analysis")
+            Path outputDir = projectDir
+                    .resolve("analysis")
                     .resolve("perpendicularity")
                     .resolve(imageName.replaceAll("[^a-zA-Z0-9._-]", "_"));
 
@@ -343,25 +337,28 @@ public class PPMPerpendicularityWorkflow {
                         int annotationIndex = i + 1;
                         int totalAnnotations = matchingAnnotations.size();
 
-                        logger.info("Analyzing annotation {}/{}: '{}'",
-                                annotationIndex, totalAnnotations, annotationName);
+                        logger.info(
+                                "Analyzing annotation {}/{}: '{}'", annotationIndex, totalAnnotations, annotationName);
 
                         Platform.runLater(() -> {
                             if (resultPanel != null) {
                                 resultPanel.setStatus(String.format(
-                                        "Analyzing %d/%d: %s...",
-                                        annotationIndex, totalAnnotations, annotationName));
+                                        "Analyzing %d/%d: %s...", annotationIndex, totalAnnotations, annotationName));
                             }
                         });
 
-                        Path annotationOutputDir = outputDir.resolve(
-                                "annotation_" + annotationIndex);
+                        Path annotationOutputDir = outputDir.resolve("annotation_" + annotationIndex);
 
                         JsonObject result = computeForAnnotation(
-                                sumServer, annotation.getROI(),
-                                calibrationPath, finalAnalysisSet,
-                                pixelSizeUm, dilationUm, zoneMode,
-                                tacsThreshold, fillHoles,
+                                sumServer,
+                                annotation.getROI(),
+                                calibrationPath,
+                                finalAnalysisSet,
+                                pixelSizeUm,
+                                dilationUm,
+                                zoneMode,
+                                tacsThreshold,
+                                fillHoles,
                                 annotationOutputDir);
 
                         // Save JSON result
@@ -385,8 +382,7 @@ public class PPMPerpendicularityWorkflow {
 
                     Platform.runLater(() -> {
                         if (resultPanel != null) {
-                            resultPanel.setStatus("Analysis complete. Results saved to: "
-                                    + outputDir);
+                            resultPanel.setStatus("Analysis complete. Results saved to: " + outputDir);
                         }
                         if (resultWindow != null) {
                             resultWindow.show();
@@ -398,9 +394,8 @@ public class PPMPerpendicularityWorkflow {
 
                 } catch (Exception ex) {
                     logger.error("Perpendicularity analysis failed", ex);
-                    Platform.runLater(() ->
-                            Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
-                                    "Analysis failed: " + ex.getMessage()));
+                    Platform.runLater(() -> Dialogs.showErrorMessage(
+                            "Surface Perpendicularity Analysis", "Analysis failed: " + ex.getMessage()));
                 }
             });
         });
@@ -427,7 +422,8 @@ public class PPMPerpendicularityWorkflow {
             String zoneMode,
             double tacsThreshold,
             boolean fillHoles,
-            Path outputDir) throws Exception {
+            Path outputDir)
+            throws Exception {
 
         int x = (int) roi.getBoundsX();
         int y = (int) roi.getBoundsY();
@@ -442,11 +438,19 @@ public class PPMPerpendicularityWorkflow {
         int expandedW = Math.min(sumServer.getWidth() - expandedX, w + 2 * pad);
         int expandedH = Math.min(sumServer.getHeight() - expandedY, h + 2 * pad);
 
-        logger.info("Region: {}x{} at ({},{}) padded to {}x{} at ({},{})",
-                w, h, x, y, expandedW, expandedH, expandedX, expandedY);
+        logger.info(
+                "Region: {}x{} at ({},{}) padded to {}x{} at ({},{})",
+                w,
+                h,
+                x,
+                y,
+                expandedW,
+                expandedH,
+                expandedX,
+                expandedY);
 
-        RegionRequest request = RegionRequest.createInstance(
-                sumServer.getPath(), 1.0, expandedX, expandedY, expandedW, expandedH);
+        RegionRequest request =
+                RegionRequest.createInstance(sumServer.getPath(), 1.0, expandedX, expandedY, expandedW, expandedH);
 
         Path tempDir = Files.createTempDirectory("ppm_perp_");
 
@@ -465,8 +469,7 @@ public class PPMPerpendicularityWorkflow {
                             (ImageData<BufferedImage>) analysisSet.birefImage.readImageData();
                     ImageServer<BufferedImage> birefServer = birefData.getServer();
                     RegionRequest birefRequest = RegionRequest.createInstance(
-                            birefServer.getPath(), 1.0,
-                            expandedX, expandedY, expandedW, expandedH);
+                            birefServer.getPath(), 1.0, expandedX, expandedY, expandedW, expandedH);
                     BufferedImage birefRegion = birefServer.readRegion(birefRequest);
                     birefPath = tempDir.resolve("biref_region.tif");
                     ImageIO.write(birefRegion, "TIFF", birefPath.toFile());
@@ -482,9 +485,16 @@ public class PPMPerpendicularityWorkflow {
 
             // Call Python
             JsonObject result = callPythonPerpendicularity(
-                    sumPath, calibrationPath, geojsonPath, birefPath,
-                    pixelSizeUm, dilationUm, zoneMode, tacsThreshold,
-                    fillHoles, outputDir);
+                    sumPath,
+                    calibrationPath,
+                    geojsonPath,
+                    birefPath,
+                    pixelSizeUm,
+                    dilationUm,
+                    zoneMode,
+                    tacsThreshold,
+                    fillHoles,
+                    outputDir);
 
             return result;
 
@@ -505,8 +515,7 @@ public class PPMPerpendicularityWorkflow {
      * Exports an ROI as a GeoJSON Feature with coordinates adjusted to be
      * relative to an offset (expanded region origin).
      */
-    static void exportRoiAsGeoJSON(ROI roi, int offsetX, int offsetY,
-            Path outputPath) throws Exception {
+    static void exportRoiAsGeoJSON(ROI roi, int offsetX, int offsetY, Path outputPath) throws Exception {
         // Use QuPath's built-in GeoJSON serialization for the ROI geometry
         Gson gson = GsonTools.getInstance();
 
@@ -529,11 +538,11 @@ public class PPMPerpendicularityWorkflow {
     /**
      * Recursively adjusts all coordinate values in a GeoJSON geometry object.
      */
-    private static void adjustGeoJSONCoordinates(JsonElement element,
-            double dx, double dy) {
+    private static void adjustGeoJSONCoordinates(JsonElement element, double dx, double dy) {
         if (element.isJsonArray()) {
             JsonArray arr = element.getAsJsonArray();
-            if (arr.size() >= 2 && arr.get(0).isJsonPrimitive()
+            if (arr.size() >= 2
+                    && arr.get(0).isJsonPrimitive()
                     && arr.get(0).getAsJsonPrimitive().isNumber()) {
                 // This is a coordinate pair [x, y]
                 double x = arr.get(0).getAsDouble() + dx;
@@ -558,10 +567,17 @@ public class PPMPerpendicularityWorkflow {
     }
 
     private static JsonObject callPythonPerpendicularity(
-            Path sumPath, String calibrationPath, Path geojsonPath,
-            Path birefPath, double pixelSizeUm, double dilationUm,
-            String zoneMode, double tacsThreshold, boolean fillHoles,
-            Path outputDir) throws Exception {
+            Path sumPath,
+            String calibrationPath,
+            Path geojsonPath,
+            Path birefPath,
+            double pixelSizeUm,
+            double dilationUm,
+            String zoneMode,
+            double tacsThreshold,
+            boolean fillHoles,
+            Path outputDir)
+            throws Exception {
 
         List<String> command = new ArrayList<>();
         command.add("python");
@@ -608,8 +624,7 @@ public class PPMPerpendicularityWorkflow {
         Process process = pb.start();
 
         StringBuilder stdout = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream()))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 stdout.append(line);
@@ -617,8 +632,7 @@ public class PPMPerpendicularityWorkflow {
         }
 
         StringBuilder stderr = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getErrorStream()))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 stderr.append(line).append("\n");
@@ -651,9 +665,7 @@ public class PPMPerpendicularityWorkflow {
         return result;
     }
 
-    private static String findCalibrationPath(
-            ProjectImageEntry<BufferedImage> entry,
-            Project<BufferedImage> project) {
+    private static String findCalibrationPath(ProjectImageEntry<BufferedImage> entry, Project<BufferedImage> project) {
         PPMAnalysisSet analysisSet = null;
         if (entry != null && project != null) {
             analysisSet = ImageMetadataManager.findPPMAnalysisSet(entry, project);
@@ -667,8 +679,7 @@ public class PPMPerpendicularityWorkflow {
             calibrationPath = ImageMetadataManager.getPPMCalibration(entry);
         }
         if (calibrationPath == null) {
-            String activePath = qupath.ext.qpsc.modality.ppm.PPMPreferences
-                    .getActiveCalibrationPath();
+            String activePath = qupath.ext.qpsc.modality.ppm.PPMPreferences.getActiveCalibrationPath();
             if (activePath != null && !activePath.isEmpty()) {
                 calibrationPath = activePath;
             }

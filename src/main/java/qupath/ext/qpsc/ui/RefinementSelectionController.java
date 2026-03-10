@@ -142,8 +142,7 @@ public class RefinementSelectionController {
 
                 // Option 1: No refinement
                 RadioButton noRefineRadio = new RadioButton();
-                noRefineRadio.setTooltip(new Tooltip(
-                        "Skip refinement and use the existing alignment directly.\n"
+                noRefineRadio.setTooltip(new Tooltip("Skip refinement and use the existing alignment directly.\n"
                         + "Fastest option but least accurate (+/- 20 um).\n"
                         + "Best for high-confidence alignments."));
                 VBox noRefineOption = createOptionCard(
@@ -155,10 +154,10 @@ public class RefinementSelectionController {
 
                 // Option 2: Single-tile refinement
                 RadioButton singleTileRadio = new RadioButton();
-                singleTileRadio.setTooltip(new Tooltip(
-                        "Acquire a single tile at the expected position to verify alignment.\n"
-                        + "Allows fine-tuning the offset before full acquisition (+/- 5 um).\n"
-                        + "Recommended for medium-confidence alignments."));
+                singleTileRadio.setTooltip(
+                        new Tooltip("Acquire a single tile at the expected position to verify alignment.\n"
+                                + "Allows fine-tuning the offset before full acquisition (+/- 5 um).\n"
+                                + "Recommended for medium-confidence alignments."));
                 VBox singleTileOption = createOptionCard(
                         singleTileRadio,
                         "Single-tile refinement",
@@ -168,10 +167,10 @@ public class RefinementSelectionController {
 
                 // Option 3: Full manual alignment
                 RadioButton fullManualRadio = new RadioButton();
-                fullManualRadio.setTooltip(new Tooltip(
-                        "Discard the current alignment and start a fresh manual alignment\n"
-                        + "using multiple reference points. Most accurate (+/- 2 um) but\n"
-                        + "takes the longest. Recommended for low-confidence alignments."));
+                fullManualRadio.setTooltip(
+                        new Tooltip("Discard the current alignment and start a fresh manual alignment\n"
+                                + "using multiple reference points. Most accurate (+/- 2 um) but\n"
+                                + "takes the longest. Recommended for low-confidence alignments."));
                 VBox fullManualOption = createOptionCard(
                         fullManualRadio,
                         "Start manual alignment over",

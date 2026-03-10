@@ -158,17 +158,17 @@ public class AlignmentSelectionController {
 
                 RadioButton useExistingRadio = new RadioButton("Use existing alignment");
                 useExistingRadio.setToggleGroup(toggleGroup);
-                useExistingRadio.setTooltip(new Tooltip(
-                        "Use a previously saved coordinate transform for this microscope.\n"
-                        + "Quick setup (2-5 min) with good accuracy (+/- 20 um).\n"
-                        + "Best for repeated acquisitions with the same scanner setup."));
+                useExistingRadio.setTooltip(
+                        new Tooltip("Use a previously saved coordinate transform for this microscope.\n"
+                                + "Quick setup (2-5 min) with good accuracy (+/- 20 um).\n"
+                                + "Best for repeated acquisitions with the same scanner setup."));
 
                 RadioButton createNewRadio = new RadioButton("Perform manual sample alignment");
                 createNewRadio.setToggleGroup(toggleGroup);
-                createNewRadio.setTooltip(new Tooltip(
-                        "Manually align the microscope stage to selected tiles to create a new transform.\n"
-                        + "Detailed setup (10-20 min) with excellent accuracy (+/- 5 um).\n"
-                        + "Best for first-time setup, new slides, or when maximum precision is needed."));
+                createNewRadio.setTooltip(
+                        new Tooltip("Manually align the microscope stage to selected tiles to create a new transform.\n"
+                                + "Detailed setup (10-20 min) with excellent accuracy (+/- 5 um).\n"
+                                + "Best for first-time setup, new slides, or when maximum precision is needed."));
 
                 // Transform selection area
                 VBox transformSelectionBox = new VBox(10);
@@ -176,8 +176,7 @@ public class AlignmentSelectionController {
 
                 ComboBox<AffineTransformManager.TransformPreset> transformCombo = new ComboBox<>();
                 transformCombo.setPrefWidth(400);
-                transformCombo.setTooltip(new Tooltip(
-                        "Select a previously saved coordinate transform.\n"
+                transformCombo.setTooltip(new Tooltip("Select a previously saved coordinate transform.\n"
                         + "Transforms map QuPath pixel coordinates to microscope stage positions.\n"
                         + "Choose one matching your current slide mounting method."));
 

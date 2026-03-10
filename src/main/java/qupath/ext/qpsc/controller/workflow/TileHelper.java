@@ -70,18 +70,18 @@ public class TileHelper {
     }
 
     /**
-     * Creates tiles for the given annotations with explicit flip parameters.
+     * Creates tiles for the given annotations with explicit stage inversion parameters.
      *
-     * <p>This overload is used when the flip status should come from image metadata
-     * rather than global preferences, such as when working with existing flipped images.</p>
+     * <p>This overload is used when the stage inversion status should come from explicit
+     * parameters rather than global preferences.</p>
      *
      * @param annotations List of annotations to tile
      * @param sample Sample setup information
      * @param tempTileDirectory Directory for tile configuration files
      * @param modeWithIndex Imaging mode identifier
      * @param macroPixelSize Macro image pixel size (no longer used)
-     * @param invertedX Whether to invert X axis (from image metadata)
-     * @param invertedY Whether to invert Y axis (from image metadata)
+     * @param stageInvertedX Whether the stage X axis is inverted
+     * @param stageInvertedY Whether the stage Y axis is inverted
      */
     public static void createTilesForAnnotations(
             List<PathObject> annotations,
@@ -89,20 +89,20 @@ public class TileHelper {
             String tempTileDirectory,
             String modeWithIndex,
             double macroPixelSize,
-            boolean invertedX,
-            boolean invertedY) {
+            boolean stageInvertedX,
+            boolean stageInvertedY) {
 
         logger.info(
-                "Creating tiles for {} annotations in modality {} (invertX={}, invertY={})",
+                "Creating tiles for {} annotations in modality {} (stageInvertedX={}, stageInvertedY={})",
                 annotations.size(),
                 modeWithIndex,
-                invertedX,
-                invertedY);
+                stageInvertedX,
+                stageInvertedY);
 
         try {
-            // Delegate to the unified method in TilingUtilities with explicit flip params
+            // Delegate to the unified method in TilingUtilities with explicit stage inversion params
             TilingUtilities.createTilesForAnnotations(
-                    annotations, sample, tempTileDirectory, modeWithIndex, invertedX, invertedY);
+                    annotations, sample, tempTileDirectory, modeWithIndex, stageInvertedX, stageInvertedY);
 
         } catch (IOException e) {
             logger.error("Failed to get camera FOV from server", e);

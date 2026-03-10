@@ -32,6 +32,12 @@ public class ImageMetadataManager {
     public static final String IMAGE_COLLECTION = "image_collection";
     public static final String XY_OFFSET_X = "xy_offset_x_microns";
     public static final String XY_OFFSET_Y = "xy_offset_y_microns";
+
+    // FLIP_X / FLIP_Y record the OPTICAL FLIP status of this image.
+    // These indicate whether the microscope's light path mirrors the camera image
+    // relative to the physical slide. This is NOT stage axis inversion (which is a
+    // separate hardware property stored in preferences as stageInvertedX/Y).
+    // See CLAUDE.md "COORDINATE SYSTEM TERMINOLOGY" for full details.
     public static final String FLIP_X = "flip_x";
     public static final String FLIP_Y = "flip_y";
     public static final String SAMPLE_NAME = "sample_name";

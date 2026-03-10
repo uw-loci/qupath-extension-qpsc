@@ -85,12 +85,12 @@ public class TilingUtilities {
         double maxY = bb.getMaxY();
 
         //        // Apply axis inversions if needed
-        //        if (request.isInvertX()) {
+        //        if (request.isStageInvertedX()) {
         //            double temp = minX;
         //            minX = maxX;
         //            maxX = temp;
         //        }
-        //        if (request.isInvertY()) {
+        //        if (request.isStageInvertedY()) {
         //            double temp = minY;
         //            minY = maxY;
         //            maxY = temp;
@@ -231,7 +231,8 @@ public class TilingUtilities {
         logger.info("  Step size: {} x {} ({}% overlap)", xStep, yStep, request.getOverlapPercent());
         logger.info("  Grid: {} columns x {} rows", nCols, nRows);
         logger.info("  Pixel size for coordinate conversion: {} um/px", request.getPixelSizeMicrons());
-        logger.info("  X-axis inverted: {}, Y-axis inverted: {}", request.isInvertX(), request.isInvertY());
+        logger.info(
+                "  X-axis inverted: {}, Y-axis inverted: {}", request.isStageInvertedX(), request.isStageInvertedY());
 
         // Prepare output structures
         // NOTE: Both files start with pixel coordinates. TileConfiguration.txt will be transformed
@@ -247,7 +248,7 @@ public class TilingUtilities {
         // Generate tiles
         for (int row = 0; row < nRows; row++) {
             // When Y is inverted, we need to process rows in reverse order
-            int gridRow = request.isInvertY() ? (nRows - 1 - row) : row;
+            int gridRow = request.isStageInvertedY() ? (nRows - 1 - row) : row;
             double y = startY + gridRow * yStep;
 
             // Serpentine pattern based on the logical row (not grid row)
@@ -258,7 +259,7 @@ public class TilingUtilities {
                 int serpentineCol = reverseDirection ? (nCols - 1 - col) : col;
 
                 // When X is inverted, we need to process columns in reverse order
-                int gridCol = request.isInvertX() ? (nCols - 1 - serpentineCol) : serpentineCol;
+                int gridCol = request.isStageInvertedX() ? (nCols - 1 - serpentineCol) : serpentineCol;
                 double x = startX + gridCol * xStep;
 
                 // Create tile ROI
@@ -414,8 +415,8 @@ public class TilingUtilities {
 
         // Get tiling parameters from preferences
         double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
-        boolean invertedX = QPPreferenceDialog.getInvertedXProperty();
-        boolean invertedY = QPPreferenceDialog.getInvertedYProperty();
+        boolean stageInvertedX = QPPreferenceDialog.getStageInvertedXProperty();
+        boolean stageInvertedY = QPPreferenceDialog.getStageInvertedYProperty();
 
         logger.info(
                 "Frame size in QuPath pixels: {} x {} ({}% overlap)",
@@ -433,7 +434,7 @@ public class TilingUtilities {
                 .frameSize(frameWidthPixels, frameHeightPixels) // In pixels for tile ROI creation
                 .overlapPercent(overlapPercent)
                 .annotations(annotations)
-                .invertAxes(invertedX, invertedY)
+                .stageInvertedAxes(stageInvertedX, stageInvertedY)
                 .createDetections(true)
                 .addBuffer(true)
                 .pixelSizeMicrons(imagePixelSize) // For converting tile coordinates to microns
@@ -444,17 +445,17 @@ public class TilingUtilities {
     }
 
     /**
-     * Creates tiles for the given annotations with explicit flip parameters.
+     * Creates tiles for the given annotations with explicit stage inversion parameters.
      *
-     * <p>This overload is used when the flip status should come from image metadata
-     * rather than global preferences, such as when working with existing flipped images.</p>
+     * <p>This overload is used when the stage inversion status should come from explicit
+     * parameters rather than global preferences.</p>
      *
      * @param annotations List of annotations to tile
      * @param sampleSetup Sample setup information containing modality
      * @param tempTileDirectory Directory for tile configuration files
      * @param modeWithIndex Imaging mode identifier with index (e.g., "bf_10x_1")
-     * @param invertedX Whether to invert X axis (from image metadata)
-     * @param invertedY Whether to invert Y axis (from image metadata)
+     * @param stageInvertedX Whether the stage X axis is inverted
+     * @param stageInvertedY Whether the stage Y axis is inverted
      * @throws IOException if communication with server fails or tile creation fails
      * @throws IllegalArgumentException if annotations are empty or invalid
      * @since 0.3.0
@@ -464,8 +465,8 @@ public class TilingUtilities {
             SampleSetupController.SampleSetupResult sampleSetup,
             String tempTileDirectory,
             String modeWithIndex,
-            boolean invertedX,
-            boolean invertedY)
+            boolean stageInvertedX,
+            boolean stageInvertedY)
             throws IOException {
 
         if (annotations == null || annotations.isEmpty()) {
@@ -473,11 +474,11 @@ public class TilingUtilities {
         }
 
         logger.info(
-                "Creating tiles for {} annotations in modality {} (invertX={}, invertY={})",
+                "Creating tiles for {} annotations in modality {} (stageInvertedX={}, stageInvertedY={})",
                 annotations.size(),
                 modeWithIndex,
-                invertedX,
-                invertedY);
+                stageInvertedX,
+                stageInvertedY);
 
         QuPathGUI gui = QuPathGUI.getInstance();
         if (gui.getImageData() == null) {
@@ -525,21 +526,21 @@ public class TilingUtilities {
         // Validate tile counts before creation
         validateAnnotationTileCounts(annotations, frameWidthPixels, frameHeightPixels, overlapPercent);
 
-        // Create new tiles using explicit flip parameters
+        // Create new tiles using explicit stage inversion parameters
         TilingRequest request = new TilingRequest.Builder()
                 .outputFolder(tempTileDirectory)
                 .modalityName(modeWithIndex)
                 .frameSize(frameWidthPixels, frameHeightPixels)
                 .overlapPercent(overlapPercent)
                 .annotations(annotations)
-                .invertAxes(invertedX, invertedY) // Use explicit parameters
+                .stageInvertedAxes(stageInvertedX, stageInvertedY)
                 .createDetections(true)
                 .addBuffer(true)
                 .pixelSizeMicrons(imagePixelSize)
                 .build();
 
         createTiles(request);
-        logger.info("Created tiles for {} annotations with explicit flip settings", annotations.size());
+        logger.info("Created tiles for {} annotations with explicit stage inversion settings", annotations.size());
     }
 
     /**

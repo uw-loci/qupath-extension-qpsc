@@ -23,8 +23,16 @@ import qupath.lib.images.writers.ome.OMEPyramidWriter;
  *
  * <p>Registers and exposes the subset of extension preferences you
  * want in QuPath's Preferences Pane:
- *   - Flip, invert, script paths, directories, compression, overlap, etc.
- *   - Provides typed getters so other code can simply call invertedXProperty(), etc.
+ *   - Optical flip, stage axis inversion, script paths, directories, compression, overlap, etc.
+ *   - Provides typed getters so other code can simply call getStageInvertedXProperty(), etc.
+ *
+ * <p><b>Terminology (see CLAUDE.md "COORDINATE SYSTEM TERMINOLOGY"):</b>
+ * <ul>
+ *   <li><b>flipMacroX/Y</b> - Optical flip: the microscope's light path mirrors the camera
+ *       image relative to the physical slide.  Used to create flipped duplicate images in QuPath.</li>
+ *   <li><b>stageInvertedX/Y</b> - Stage axis inversion: positive stage commands move opposite
+ *       to the visual convention.  Controls tile traversal order and affine transform sign.</li>
+ * </ul>
  */
 public class QPPreferenceDialog {
 
@@ -41,9 +49,12 @@ public class QPPreferenceDialog {
             PathPrefs.createPersistentPreference("isFlippedXProperty", false);
     private static final BooleanProperty flipMacroYProperty =
             PathPrefs.createPersistentPreference("isFlippedYProperty", false);
-    private static final BooleanProperty invertedXProperty =
+    // Stage axis inversion: whether positive stage commands move opposite to the visual convention.
+    // CRITICAL: The persisted key strings ("isInvertedXProperty" etc.) must NOT change --
+    // they are stored in user config files and changing them would reset user preferences.
+    private static final BooleanProperty stageInvertedXProperty =
             PathPrefs.createPersistentPreference("isInvertedXProperty", false);
-    private static final BooleanProperty invertedYProperty =
+    private static final BooleanProperty stageInvertedYProperty =
             PathPrefs.createPersistentPreference("isInvertedYProperty", true);
     private static final StringProperty microscopeServerHostProperty =
             PathPrefs.createPersistentPreference("microscope.server.host", "127.0.0.1");
@@ -151,15 +162,19 @@ public class QPPreferenceDialog {
                 .category(CATEGORY)
                 .description("Allows the slide to be flipped vertically for coordinate alignment.")
                 .build());
-        items.add(new PropertyItemBuilder<>(invertedXProperty, Boolean.class)
+        items.add(new PropertyItemBuilder<>(stageInvertedXProperty, Boolean.class)
                 .name("Inverted X stage")
                 .category(CATEGORY)
-                .description("Stage X axis is inverted relative to QuPath.")
+                .description("Stage X axis is inverted: positive X commands move left instead of right.\n"
+                        + "This controls tile traversal order and coordinate transform sign.\n"
+                        + "NOT the same as optical flip (Flip macro image X).")
                 .build());
-        items.add(new PropertyItemBuilder<>(invertedYProperty, Boolean.class)
+        items.add(new PropertyItemBuilder<>(stageInvertedYProperty, Boolean.class)
                 .name("Inverted Y stage")
                 .category(CATEGORY)
-                .description("Stage Y axis is inverted relative to QuPath.")
+                .description("Stage Y axis is inverted: positive Y commands move down instead of up.\n"
+                        + "This controls tile traversal order and coordinate transform sign.\n"
+                        + "NOT the same as optical flip (Flip macro image Y).")
                 .build());
 
         items.add(new PropertyItemBuilder<>(microscopeConfigFileProperty, String.class)
@@ -312,12 +327,14 @@ public class QPPreferenceDialog {
         return flipMacroYProperty.get();
     }
 
-    public static boolean getInvertedXProperty() {
-        return invertedXProperty.get();
+    /** Returns true if the stage X axis is inverted (stage inversion, not optical flip). */
+    public static boolean getStageInvertedXProperty() {
+        return stageInvertedXProperty.get();
     }
 
-    public static boolean getInvertedYProperty() {
-        return invertedYProperty.get();
+    /** Returns true if the stage Y axis is inverted (stage inversion, not optical flip). */
+    public static boolean getStageInvertedYProperty() {
+        return stageInvertedYProperty.get();
     }
 
     public static String getMicroscopeServerHost() {

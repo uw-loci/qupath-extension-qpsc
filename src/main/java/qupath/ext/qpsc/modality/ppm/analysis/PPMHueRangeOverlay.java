@@ -11,7 +11,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.lib.gui.viewer.OverlayOptions;
 import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.gui.viewer.overlays.AbstractOverlay;
 import qupath.lib.images.ImageData;
@@ -152,11 +151,9 @@ public class PPMHueRangeOverlay extends AbstractOverlay {
             ds *= 2;
         }
 
-        logger.info("Computing hue range overlay: {}x{} at downsample {}",
-                imgW, imgH, ds);
+        logger.info("Computing hue range overlay: {}x{} at downsample {}", imgW, imgH, ds);
 
-        RegionRequest request = RegionRequest.createInstance(
-                server.getPath(), ds, 0, 0, imgW, imgH);
+        RegionRequest request = RegionRequest.createInstance(server.getPath(), ds, 0, 0, imgW, imgH);
 
         BufferedImage img = server.readRegion(request);
         int w = img.getWidth();
@@ -208,8 +205,7 @@ public class PPMHueRangeOverlay extends AbstractOverlay {
             if (py % 100 == 0 && id != computationId.get()) return;
         }
 
-        logger.info("Hue range overlay: {}/{} pixels in range [{}, {}] deg",
-                matching, valid, lo, hi);
+        logger.info("Hue range overlay: {}/{} pixels in range [{}, {}] deg", matching, valid, lo, hi);
 
         // Store results
         this.overlayImage = overlay;
@@ -231,15 +227,18 @@ public class PPMHueRangeOverlay extends AbstractOverlay {
     }
 
     @Override
-    public void paintOverlay(Graphics2D g2d, ImageRegion region, double downsample,
-            ImageData<BufferedImage> imageData, boolean isSelected) {
+    public void paintOverlay(
+            Graphics2D g2d,
+            ImageRegion region,
+            double downsample,
+            ImageData<BufferedImage> imageData,
+            boolean isSelected) {
         BufferedImage img = this.overlayImage;
         if (!active || img == null) return;
 
         // Apply opacity
         Composite oldComposite = g2d.getComposite();
-        g2d.setComposite(AlphaComposite.getInstance(
-                AlphaComposite.SRC_OVER, (float) getOpacity()));
+        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, (float) getOpacity()));
 
         // Draw overlay at full image coordinates (Graphics2D is in image space)
         g2d.drawImage(img, 0, 0, overlayW, overlayH, null);

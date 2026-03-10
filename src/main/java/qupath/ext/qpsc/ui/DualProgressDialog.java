@@ -182,8 +182,7 @@ public class DualProgressDialog {
         if (showCancelButton) {
             cancelButton = new Button("Cancel Workflow");
             cancelButton.setPrefWidth(150);
-            cancelButton.setTooltip(new Tooltip(
-                    "Cancel the entire acquisition workflow.\n"
+            cancelButton.setTooltip(new Tooltip("Cancel the entire acquisition workflow.\n"
                     + "The current tile will finish acquiring, but no further\n"
                     + "tiles or annotations will be processed. Already-acquired\n"
                     + "data is preserved."));

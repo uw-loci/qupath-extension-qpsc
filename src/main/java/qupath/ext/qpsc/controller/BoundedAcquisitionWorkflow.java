@@ -96,8 +96,8 @@ public class BoundedAcquisitionWorkflow {
             // Read persistent prefs
             String prefProjectsFolder = QPPreferenceDialog.getProjectsFolderProperty();
             double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
-            boolean invertX = QPPreferenceDialog.getInvertedXProperty();
-            boolean invertY = QPPreferenceDialog.getInvertedYProperty();
+            boolean stageInvertedX = QPPreferenceDialog.getStageInvertedXProperty();
+            boolean stageInvertedY = QPPreferenceDialog.getStageInvertedYProperty();
 
             // Create/open the QuPath project
             QuPathGUI qupathGUI = QPEx.getQuPath();
@@ -143,8 +143,11 @@ public class BoundedAcquisitionWorkflow {
                 } else {
                     projectsFolder = prefProjectsFolder;
                     logger.info("Creating new project with sample name: {}", result.sampleName());
+                    // Bounded acquisition works directly with stage coordinates -- no optical
+                    // flipping is needed. (Flip prefs control macro image orientation for the
+                    // ExistingImage workflow, which is not used here.)
                     pd = QPProjectFunctions.createAndOpenQuPathProject(
-                            qupathGUI, projectsFolder, result.sampleName(), enhancedModality, invertX, invertY);
+                            qupathGUI, projectsFolder, result.sampleName(), enhancedModality, false, false);
                 }
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -207,7 +210,7 @@ public class BoundedAcquisitionWorkflow {
                     .frameSize(frameWidthMicrons, frameHeightMicrons)
                     .overlapPercent(overlapPercent)
                     .boundingBox(result.x1(), result.y1(), result.x2(), result.y2())
-                    .invertAxes(invertX, invertY)
+                    .stageInvertedAxes(stageInvertedX, stageInvertedY)
                     .createDetections(false)
                     .build();
 

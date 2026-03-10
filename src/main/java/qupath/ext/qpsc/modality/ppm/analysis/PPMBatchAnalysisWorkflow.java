@@ -6,7 +6,6 @@ import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
-import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -21,34 +20,30 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
-import javax.imageio.ImageIO;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
-import javafx.scene.control.Alert;
-import javafx.scene.control.ButtonType;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.ppm.PPMPreferences;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
+import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.QPEx;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
 import qupath.lib.images.servers.PixelCalibration;
-import qupath.lib.io.GsonTools;
 import qupath.lib.objects.PathObject;
-import qupath.lib.objects.PathObjects;
 import qupath.lib.objects.classes.PathClass;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.regions.RegionRequest;
 import qupath.lib.roi.interfaces.ROI;
-import qupath.ext.qpsc.utilities.DocumentationHelper;
-import qupath.fx.dialogs.Dialogs;
 
 /**
  * Batch PPM analysis workflow: discovers PPM analysis sets across a project,
@@ -96,8 +91,8 @@ public class PPMBatchAnalysisWorkflow {
 
         Project<BufferedImage> project = gui.getProject();
         if (project == null) {
-            Dialogs.showErrorMessage("Batch PPM Analysis",
-                    "A QuPath project is required. Create or open a project first.");
+            Dialogs.showErrorMessage(
+                    "Batch PPM Analysis", "A QuPath project is required. Create or open a project first.");
             return;
         }
 
@@ -105,7 +100,8 @@ public class PPMBatchAnalysisWorkflow {
         List<PPMBatchAnalysisPanel.AnalysisSetItem> discoveredSets = discoverAnalysisSets(project);
 
         if (discoveredSets.isEmpty()) {
-            Dialogs.showErrorMessage("Batch PPM Analysis",
+            Dialogs.showErrorMessage(
+                    "Batch PPM Analysis",
                     "No qualified PPM analysis sets found in this project.\n\n"
                             + "Requirements: PPM modality images with a sum image and calibration.");
             return;
@@ -126,8 +122,7 @@ public class PPMBatchAnalysisWorkflow {
      * calibration availability.</p>
      */
     @SuppressWarnings("unchecked")
-    private static List<PPMBatchAnalysisPanel.AnalysisSetItem> discoverAnalysisSets(
-            Project<BufferedImage> project) {
+    private static List<PPMBatchAnalysisPanel.AnalysisSetItem> discoverAnalysisSets(Project<BufferedImage> project) {
 
         // Group PPM images by (collection, annotation_name, sample_name)
         Map<String, List<ProjectImageEntry<BufferedImage>>> groups = new LinkedHashMap<>();
@@ -142,8 +137,7 @@ public class PPMBatchAnalysisWorkflow {
             String sample = ImageMetadataManager.getSampleName(entry);
             String annotation = entry.getMetadata().get(ImageMetadataManager.ANNOTATION_NAME);
 
-            String key = collection + "|" + Objects.toString(sample, "") + "|"
-                    + Objects.toString(annotation, "");
+            String key = collection + "|" + Objects.toString(sample, "") + "|" + Objects.toString(annotation, "");
             groups.computeIfAbsent(key, k -> new ArrayList<>()).add(entry);
         }
 
@@ -183,7 +177,8 @@ public class PPMBatchAnalysisWorkflow {
 
             // Must have sum + calibration to qualify
             if (sumImage == null || calibrationPath == null) {
-                logger.debug("Skipping group {} - sum={}, cal={}",
+                logger.debug(
+                        "Skipping group {} - sum={}, cal={}",
                         groupEntry.getKey(),
                         sumImage != null ? "yes" : "no",
                         calibrationPath != null ? "yes" : "no");
@@ -193,19 +188,18 @@ public class PPMBatchAnalysisWorkflow {
             // Count annotations on the sum image
             int annotationCount = 0;
             try {
-                ImageData<BufferedImage> imgData =
-                        (ImageData<BufferedImage>) sumImage.readImageData();
+                ImageData<BufferedImage> imgData = (ImageData<BufferedImage>) sumImage.readImageData();
                 annotationCount = imgData.getHierarchy().getAnnotationObjects().size();
             } catch (Exception e) {
-                logger.debug("Could not read annotations for {}: {}",
-                        sumImage.getImageName(), e.getMessage());
+                logger.debug("Could not read annotations for {}: {}", sumImage.getImageName(), e.getMessage());
             }
 
             int collection = ImageMetadataManager.getImageCollection(sumImage);
             String sample = ImageMetadataManager.getSampleName(sumImage);
             String annotation = sumImage.getMetadata().get(ImageMetadataManager.ANNOTATION_NAME);
 
-            String display = String.format("[%d] %s%s%s (%d annotations%s)",
+            String display = String.format(
+                    "[%d] %s%s%s (%d annotations%s)",
                     collection,
                     sumImage.getImageName(),
                     sample != null ? " | " + sample : "",
@@ -214,8 +208,14 @@ public class PPMBatchAnalysisWorkflow {
                     hasBiref ? ", +biref" : "");
 
             items.add(new PPMBatchAnalysisPanel.AnalysisSetItem(
-                    display, sumImage.getImageName(), collection,
-                    sample, annotation, calibrationPath, hasBiref, annotationCount));
+                    display,
+                    sumImage.getImageName(),
+                    collection,
+                    sample,
+                    annotation,
+                    calibrationPath,
+                    hasBiref,
+                    annotationCount));
         }
 
         logger.info("Discovered {} qualified PPM analysis sets", items.size());
@@ -227,8 +227,7 @@ public class PPMBatchAnalysisWorkflow {
      */
     @SuppressWarnings("unchecked")
     private static List<String> collectAnnotationClasses(
-            Project<BufferedImage> project,
-            List<PPMBatchAnalysisPanel.AnalysisSetItem> sets) {
+            Project<BufferedImage> project, List<PPMBatchAnalysisPanel.AnalysisSetItem> sets) {
 
         Set<String> classes = new LinkedHashSet<>();
 
@@ -237,8 +236,7 @@ public class PPMBatchAnalysisWorkflow {
             for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
                 if (entry.getImageName().equals(item.imageName)) {
                     try {
-                        ImageData<BufferedImage> imgData =
-                                (ImageData<BufferedImage>) entry.readImageData();
+                        ImageData<BufferedImage> imgData = (ImageData<BufferedImage>) entry.readImageData();
                         for (PathObject ann : imgData.getHierarchy().getAnnotationObjects()) {
                             PathClass pc = ann.getPathClass();
                             if (pc != null) {
@@ -277,19 +275,18 @@ public class PPMBatchAnalysisWorkflow {
         panel.setOnRun(() -> {
             List<PPMBatchAnalysisPanel.AnalysisSetItem> selected = panel.getSelectedItems();
             if (selected.isEmpty()) {
-                Dialogs.showErrorMessage("Batch PPM Analysis",
-                        "No analysis sets selected.");
+                Dialogs.showErrorMessage("Batch PPM Analysis", "No analysis sets selected.");
                 return;
             }
             if (!panel.isPolaritySelected() && !panel.isPerpendicularitySelected()) {
-                Dialogs.showErrorMessage("Batch PPM Analysis",
-                        "Select at least one analysis type.");
+                Dialogs.showErrorMessage("Batch PPM Analysis", "Select at least one analysis type.");
                 return;
             }
             if (panel.isPerpendicularitySelected()
-                    && (panel.getBoundaryClass() == null || panel.getBoundaryClass().isEmpty())) {
-                Dialogs.showErrorMessage("Batch PPM Analysis",
-                        "Select a boundary annotation class for perpendicularity analysis.");
+                    && (panel.getBoundaryClass() == null
+                            || panel.getBoundaryClass().isEmpty())) {
+                Dialogs.showErrorMessage(
+                        "Batch PPM Analysis", "Select a boundary annotation class for perpendicularity analysis.");
                 return;
             }
 
@@ -297,7 +294,10 @@ public class PPMBatchAnalysisWorkflow {
 
             // Run in background
             cancelled.set(false);
-            runBatchAnalysis(gui, project, selected,
+            runBatchAnalysis(
+                    gui,
+                    project,
+                    selected,
                     panel.isPolaritySelected(),
                     panel.isPerpendicularitySelected(),
                     panel.getBoundaryClass(),
@@ -372,7 +372,9 @@ public class PPMBatchAnalysisWorkflow {
                 PPMBatchAnalysisPanel.AnalysisSetItem item = selectedSets.get(setIdx);
                 final int setNum = setIdx + 1;
 
-                updateProgress(progressLabel, progressBar,
+                updateProgress(
+                        progressLabel,
+                        progressBar,
                         String.format("Set %d/%d: %s", setNum, totalSets, item.imageName),
                         (double) setIdx / totalSets);
 
@@ -391,18 +393,15 @@ public class PPMBatchAnalysisWorkflow {
                 }
 
                 try {
-                    ImageData<BufferedImage> imageData =
-                            (ImageData<BufferedImage>) sumEntry.readImageData();
+                    ImageData<BufferedImage> imageData = (ImageData<BufferedImage>) sumEntry.readImageData();
                     ImageServer<BufferedImage> sumServer = imageData.getServer();
 
                     // Get pixel size
                     PixelCalibration pixelCal = sumServer.getPixelCalibration();
-                    double pixelSizeUm = pixelCal.hasPixelSizeMicrons()
-                            ? pixelCal.getAveragedPixelSizeMicrons() : 1.0;
+                    double pixelSizeUm = pixelCal.hasPixelSizeMicrons() ? pixelCal.getAveragedPixelSizeMicrons() : 1.0;
 
                     // Find biref server if available
-                    PPMAnalysisSet analysisSet = ImageMetadataManager.findPPMAnalysisSet(
-                            sumEntry, project);
+                    PPMAnalysisSet analysisSet = ImageMetadataManager.findPPMAnalysisSet(sumEntry, project);
 
                     // Get annotations to process
                     Collection<PathObject> annotations =
@@ -425,30 +424,36 @@ public class PPMBatchAnalysisWorkflow {
                             annIdx++;
                             String annName = annotation.getDisplayedName();
                             String annClass = annotation.getPathClass() != null
-                                    ? annotation.getPathClass().toString() : "";
+                                    ? annotation.getPathClass().toString()
+                                    : "";
 
-                            updateProgress(progressLabel, progressBar,
-                                    String.format("Set %d/%d: %s - polarity %d/%d: %s",
-                                            setNum, totalSets, item.imageName,
-                                            annIdx, totalAnn, annName),
-                                    ((double) setIdx + (double) annIdx / totalAnn * 0.5)
-                                            / totalSets);
+                            updateProgress(
+                                    progressLabel,
+                                    progressBar,
+                                    String.format(
+                                            "Set %d/%d: %s - polarity %d/%d: %s",
+                                            setNum, totalSets, item.imageName, annIdx, totalAnn, annName),
+                                    ((double) setIdx + (double) annIdx / totalAnn * 0.5) / totalSets);
 
                             ROI roi = annotation.getROI();
                             if (roi == null) continue;
 
                             try {
-                                JsonObject polarityResult = runPolarityForAnnotation(
-                                        sumServer, roi, item.calibrationPath, analysisSet);
+                                JsonObject polarityResult =
+                                        runPolarityForAnnotation(sumServer, roi, item.calibrationPath, analysisSet);
 
                                 writer.storePolarityMeasurements(annotation, polarityResult);
-                                writer.addPolarityRow(item.imageName, collectionStr,
-                                        item.sampleName, annName, annClass, polarityResult);
+                                writer.addPolarityRow(
+                                        item.imageName,
+                                        collectionStr,
+                                        item.sampleName,
+                                        annName,
+                                        annClass,
+                                        polarityResult);
 
                                 processedAnnotations++;
                             } catch (Exception e) {
-                                logger.warn("Polarity failed for {} / {}: {}",
-                                        item.imageName, annName, e.getMessage());
+                                logger.warn("Polarity failed for {} / {}: {}", item.imageName, annName, e.getMessage());
                                 errors++;
                             }
                         }
@@ -467,31 +472,44 @@ public class PPMBatchAnalysisWorkflow {
                             if (cancelled.get()) break;
 
                             bIdx++;
-                            updateProgress(progressLabel, progressBar,
-                                    String.format("Set %d/%d: %s - perpendicularity %d/%d: %s",
-                                            setNum, totalSets, item.imageName,
-                                            bIdx, totalB, boundary.getDisplayedName()),
-                                    ((double) setIdx + 0.5 + (double) bIdx / totalB * 0.5)
-                                            / totalSets);
+                            updateProgress(
+                                    progressLabel,
+                                    progressBar,
+                                    String.format(
+                                            "Set %d/%d: %s - perpendicularity %d/%d: %s",
+                                            setNum,
+                                            totalSets,
+                                            item.imageName,
+                                            bIdx,
+                                            totalB,
+                                            boundary.getDisplayedName()),
+                                    ((double) setIdx + 0.5 + (double) bIdx / totalB * 0.5) / totalSets);
 
                             try {
                                 JsonObject perpResult = runPerpendicularityForAnnotation(
-                                        sumServer, boundary.getROI(),
-                                        item.calibrationPath, analysisSet,
-                                        pixelSizeUm, dilationUm, zoneMode,
-                                        tacsThreshold, fillHoles);
+                                        sumServer,
+                                        boundary.getROI(),
+                                        item.calibrationPath,
+                                        analysisSet,
+                                        pixelSizeUm,
+                                        dilationUm,
+                                        zoneMode,
+                                        tacsThreshold,
+                                        fillHoles);
 
-                                writer.storePerpendicularityMeasurements(
-                                        boundary, perpResult);
+                                writer.storePerpendicularityMeasurements(boundary, perpResult);
                                 writer.addPerpendicularityRow(
-                                        item.imageName, collectionStr,
+                                        item.imageName,
+                                        collectionStr,
                                         item.sampleName,
                                         boundary.getDisplayedName(),
-                                        boundaryClass, perpResult);
+                                        boundaryClass,
+                                        perpResult);
 
                                 processedAnnotations++;
                             } catch (Exception e) {
-                                logger.warn("Perpendicularity failed for {} / {}: {}",
+                                logger.warn(
+                                        "Perpendicularity failed for {} / {}: {}",
                                         item.imageName,
                                         boundary.getDisplayedName(),
                                         e.getMessage());
@@ -504,8 +522,7 @@ public class PPMBatchAnalysisWorkflow {
                     sumEntry.saveImageData(imageData);
 
                 } catch (Exception e) {
-                    logger.error("Failed to process set {}: {}",
-                            item.imageName, e.getMessage(), e);
+                    logger.error("Failed to process set {}: {}", item.imageName, e.getMessage(), e);
                     errors++;
                 }
             }
@@ -527,8 +544,7 @@ public class PPMBatchAnalysisWorkflow {
                                     + "Results saved to:\n%s\n\n"
                                     + "Measurements also stored on annotations\n"
                                     + "(visible in QuPath measurement table).",
-                            finalProcessed, rows, finalErrors,
-                            csvPath.toString());
+                            finalProcessed, rows, finalErrors, csvPath.toString());
 
                     if (cancelled.get()) {
                         msg = "Analysis cancelled.\n\n" + msg;
@@ -541,14 +557,14 @@ public class PPMBatchAnalysisWorkflow {
                 logger.error("Failed to write CSV: {}", e.getMessage(), e);
                 Platform.runLater(() -> {
                     progressStage.close();
-                    Dialogs.showErrorMessage("Batch PPM Analysis",
+                    Dialogs.showErrorMessage(
+                            "Batch PPM Analysis",
                             "Analysis completed but CSV write failed: " + e.getMessage()
                                     + "\n\nMeasurements were still stored on annotations.");
                 });
             }
 
-            logger.info("Batch PPM analysis complete: {} processed, {} errors",
-                    finalProcessed, finalErrors);
+            logger.info("Batch PPM analysis complete: {} processed, {} errors", finalProcessed, finalErrors);
         });
     }
 
@@ -557,18 +573,15 @@ public class PPMBatchAnalysisWorkflow {
     // ========================================================================
 
     private static JsonObject runPolarityForAnnotation(
-            ImageServer<BufferedImage> sumServer,
-            ROI roi,
-            String calibrationPath,
-            PPMAnalysisSet analysisSet) throws Exception {
+            ImageServer<BufferedImage> sumServer, ROI roi, String calibrationPath, PPMAnalysisSet analysisSet)
+            throws Exception {
 
         int x = (int) roi.getBoundsX();
         int y = (int) roi.getBoundsY();
         int w = (int) Math.ceil(roi.getBoundsWidth());
         int h = (int) Math.ceil(roi.getBoundsHeight());
 
-        RegionRequest request = RegionRequest.createInstance(
-                sumServer.getPath(), 1.0, x, y, w, h);
+        RegionRequest request = RegionRequest.createInstance(sumServer.getPath(), 1.0, x, y, w, h);
 
         Path tempDir = Files.createTempDirectory("ppm_batch_pol_");
         try {
@@ -619,7 +632,8 @@ public class PPMBatchAnalysisWorkflow {
             double dilationUm,
             String zoneMode,
             double tacsThreshold,
-            boolean fillHoles) throws Exception {
+            boolean fillHoles)
+            throws Exception {
 
         int x = (int) roi.getBoundsX();
         int y = (int) roi.getBoundsY();
@@ -634,8 +648,8 @@ public class PPMBatchAnalysisWorkflow {
         int expandedW = Math.min(sumServer.getWidth() - expandedX, w + 2 * pad);
         int expandedH = Math.min(sumServer.getHeight() - expandedY, h + 2 * pad);
 
-        RegionRequest request = RegionRequest.createInstance(
-                sumServer.getPath(), 1.0, expandedX, expandedY, expandedW, expandedH);
+        RegionRequest request =
+                RegionRequest.createInstance(sumServer.getPath(), 1.0, expandedX, expandedY, expandedW, expandedH);
 
         Path tempDir = Files.createTempDirectory("ppm_batch_perp_");
         try {
@@ -643,13 +657,11 @@ public class PPMBatchAnalysisWorkflow {
             Path sumPath = tempDir.resolve("sum_region.tif");
             ImageIO.write(sumRegion, "TIFF", sumPath.toFile());
 
-            Path birefPath = writeBirefRegion(analysisSet,
-                    expandedX, expandedY, expandedW, expandedH, tempDir);
+            Path birefPath = writeBirefRegion(analysisSet, expandedX, expandedY, expandedW, expandedH, tempDir);
 
             // Export ROI as GeoJSON with offset
             Path geojsonPath = tempDir.resolve("boundary.geojson");
-            PPMPerpendicularityWorkflow.exportRoiAsGeoJSON(
-                    roi, expandedX, expandedY, geojsonPath);
+            PPMPerpendicularityWorkflow.exportRoiAsGeoJSON(roi, expandedX, expandedY, geojsonPath);
 
             List<String> command = new ArrayList<>();
             command.add("python");
@@ -694,16 +706,13 @@ public class PPMBatchAnalysisWorkflow {
     // ========================================================================
 
     @SuppressWarnings("unchecked")
-    private static Path writeBirefRegion(PPMAnalysisSet analysisSet,
-            int x, int y, int w, int h, Path tempDir) {
+    private static Path writeBirefRegion(PPMAnalysisSet analysisSet, int x, int y, int w, int h, Path tempDir) {
         if (analysisSet == null || !analysisSet.hasBirefImage()) return null;
 
         try {
-            ImageData<BufferedImage> birefData =
-                    (ImageData<BufferedImage>) analysisSet.birefImage.readImageData();
+            ImageData<BufferedImage> birefData = (ImageData<BufferedImage>) analysisSet.birefImage.readImageData();
             ImageServer<BufferedImage> birefServer = birefData.getServer();
-            RegionRequest birefRequest = RegionRequest.createInstance(
-                    birefServer.getPath(), 1.0, x, y, w, h);
+            RegionRequest birefRequest = RegionRequest.createInstance(birefServer.getPath(), 1.0, x, y, w, h);
             BufferedImage birefRegion = birefServer.readRegion(birefRequest);
             Path birefPath = tempDir.resolve("biref_region.tif");
             ImageIO.write(birefRegion, "TIFF", birefPath.toFile());
@@ -715,8 +724,8 @@ public class PPMBatchAnalysisWorkflow {
         }
     }
 
-    private static void writeROIMask(ROI roi, int offsetX, int offsetY,
-            int width, int height, Path outputPath) throws Exception {
+    private static void writeROIMask(ROI roi, int offsetX, int offsetY, int width, int height, Path outputPath)
+            throws Exception {
         BufferedImage mask = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY);
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
@@ -736,8 +745,7 @@ public class PPMBatchAnalysisWorkflow {
         Process process = pb.start();
 
         StringBuilder stdout = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream()))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 stdout.append(line);
@@ -745,8 +753,7 @@ public class PPMBatchAnalysisWorkflow {
         }
 
         StringBuilder stderr = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getErrorStream()))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 stderr.append(line).append("\n");
@@ -790,8 +797,8 @@ public class PPMBatchAnalysisWorkflow {
         }
     }
 
-    private static void updateProgress(javafx.scene.control.Label label,
-            javafx.scene.control.ProgressBar bar, String text, double progress) {
+    private static void updateProgress(
+            javafx.scene.control.Label label, javafx.scene.control.ProgressBar bar, String text, double progress) {
         Platform.runLater(() -> {
             label.setText(text);
             bar.setProgress(progress);

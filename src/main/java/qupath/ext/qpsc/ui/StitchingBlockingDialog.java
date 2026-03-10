@@ -102,8 +102,7 @@ public class StitchingBlockingDialog {
 
         // Configure close button warning
         Button closeButton = (Button) dialog.getDialogPane().lookupButton(dismissButton);
-        closeButton.setTooltip(new Tooltip(
-                "Dismiss this blocking dialog while stitching is still in progress.\n"
+        closeButton.setTooltip(new Tooltip("Dismiss this blocking dialog while stitching is still in progress.\n"
                 + "WARNING: Interacting with QuPath during stitching may cause\n"
                 + "crashes, corrupted results, or data loss. Only dismiss if\n"
                 + "you understand the risks."));

@@ -3,13 +3,11 @@ package qupath.ext.qpsc.modality.ppm.analysis;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import javafx.geometry.Insets;
-import javafx.geometry.Pos;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -55,13 +53,11 @@ public class PPMPerpendicularityPanel extends VBox {
         VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
         // Paper reference
-        Label refLabel = new Label(
-                "PS-TACS: Qian et al., Am J Pathol 2025; DOI: 10.1016/j.ajpath.2025.04.017");
+        Label refLabel = new Label("PS-TACS: Qian et al., Am J Pathol 2025; DOI: 10.1016/j.ajpath.2025.04.017");
         refLabel.setStyle("-fx-text-fill: #666666; -fx-font-size: 9px;");
         refLabel.setWrapText(true);
 
-        getChildren().addAll(titleLabel, statusLabel, new Separator(),
-                scrollPane, new Separator(), refLabel);
+        getChildren().addAll(titleLabel, statusLabel, new Separator(), scrollPane, new Separator(), refLabel);
     }
 
     /**
@@ -82,16 +78,14 @@ public class PPMPerpendicularityPanel extends VBox {
     /**
      * Adds analysis results for one annotation.
      */
-    public void addResult(JsonObject result, String annotationName,
-            int index, int totalAnnotations) {
+    public void addResult(JsonObject result, String annotationName, int index, int totalAnnotations) {
 
         VBox annotationBox = new VBox(6);
         annotationBox.setPadding(new Insets(8));
         annotationBox.setStyle("-fx-border-color: #cccccc; -fx-border-radius: 4;");
 
         // Header
-        Label header = new Label(String.format("Annotation %d/%d: %s",
-                index, totalAnnotations, annotationName));
+        Label header = new Label(String.format("Annotation %d/%d: %s", index, totalAnnotations, annotationName));
         header.setFont(Font.font("System", FontWeight.BOLD, 12));
         annotationBox.getChildren().add(header);
 
@@ -109,8 +103,8 @@ public class PPMPerpendicularityPanel extends VBox {
         annotationBox.getChildren().add(metaLabel);
 
         // Simple results
-        JsonObject simple = result.has("simple") && !result.get("simple").isJsonNull()
-                ? result.getAsJsonObject("simple") : null;
+        JsonObject simple =
+                result.has("simple") && !result.get("simple").isJsonNull() ? result.getAsJsonObject("simple") : null;
 
         if (simple != null) {
             annotationBox.getChildren().add(new Separator());
@@ -118,8 +112,8 @@ public class PPMPerpendicularityPanel extends VBox {
         }
 
         // PS-TACS results
-        JsonObject pstacs = result.has("pstacs") && !result.get("pstacs").isJsonNull()
-                ? result.getAsJsonObject("pstacs") : null;
+        JsonObject pstacs =
+                result.has("pstacs") && !result.get("pstacs").isJsonNull() ? result.getAsJsonObject("pstacs") : null;
 
         if (pstacs != null) {
             annotationBox.getChildren().add(new Separator());
@@ -142,21 +136,18 @@ public class PPMPerpendicularityPanel extends VBox {
         int nPixels = getInt(simple, "n_valid_pixels", 0);
 
         Label statsLabel = new Label(String.format(
-                "Mean deviation: %.1f deg | Std: %.1f deg | Valid pixels: %,d",
-                meanDev, stdDev, nPixels));
+                "Mean deviation: %.1f deg | Std: %.1f deg | Valid pixels: %,d", meanDev, stdDev, nPixels));
         statsLabel.setFont(Font.font("Monospaced", 11));
         box.getChildren().add(statsLabel);
 
         // 3-way split bar
-        JsonObject split3 = simple.has("histogram_3way")
-                ? simple.getAsJsonObject("histogram_3way") : null;
+        JsonObject split3 = simple.has("histogram_3way") ? simple.getAsJsonObject("histogram_3way") : null;
         if (split3 != null) {
             box.getChildren().add(create3WayBar(split3));
         }
 
         // 10-degree histogram
-        JsonObject hist10 = simple.has("histogram_10deg")
-                ? simple.getAsJsonObject("histogram_10deg") : null;
+        JsonObject hist10 = simple.has("histogram_10deg") ? simple.getAsJsonObject("histogram_10deg") : null;
         if (hist10 != null) {
             box.getChildren().add(createDeviationHistogram(hist10));
         }

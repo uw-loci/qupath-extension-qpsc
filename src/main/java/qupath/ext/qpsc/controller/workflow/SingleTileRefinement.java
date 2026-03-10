@@ -171,9 +171,13 @@ public class SingleTileRefinement {
                 flipX,
                 flipY);
 
-        // Apply flip-based correction to pixel coordinates before transform
-        // In flipped image space, the prediction is 1 frame higher (Y) and 1 frame right (X)
-        // To correct: shift coordinates in the opposite direction of the flip
+        // OPTICAL FLIP correction (not stage inversion -- see CLAUDE.md terminology).
+        // When the image was optically flipped during import, the affine transform was
+        // calibrated at a point that differs from tile centroids by one frame offset:
+        //   - The calibration point (user-aligned) sits at the stage center of the tile,
+        //     but the tile centroid in flipped pixel space is shifted by one frame width/height.
+        //   - This correction compensates for that offset so the transform predicts the
+        //     correct stage position for each tile centroid.
         double[] correctedCoords = {tileCoords[0], tileCoords[1]};
         if (flipX) {
             // In flipped X: prediction is 1 frame to the right, so subtract frame width

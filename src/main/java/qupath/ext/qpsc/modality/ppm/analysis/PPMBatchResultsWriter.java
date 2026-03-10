@@ -57,8 +57,7 @@ public class PPMBatchResultsWriter {
 
     // Fixed metadata columns always present in CSV
     private static final List<String> META_COLUMNS = List.of(
-            "image_name", "image_collection", "sample_name",
-            "annotation_name", "annotation_class", "analysis_type");
+            "image_name", "image_collection", "sample_name", "annotation_name", "annotation_class", "analysis_type");
 
     /**
      * Stores polarity plot results as measurements on the annotation.
@@ -111,15 +110,14 @@ public class PPMBatchResultsWriter {
         putIfPresent(ml, CONTOUR_LENGTH_UM, result, "contour_length_um");
 
         // Simple results
-        JsonObject simple = result.has("simple") && !result.get("simple").isJsonNull()
-                ? result.getAsJsonObject("simple") : null;
+        JsonObject simple =
+                result.has("simple") && !result.get("simple").isJsonNull() ? result.getAsJsonObject("simple") : null;
         if (simple != null) {
             putIfPresent(ml, MEAN_DEVIATION_DEG, simple, "mean_deviation_deg");
             putIfPresent(ml, STD_DEVIATION_DEG, simple, "std_deviation_deg");
             putIfPresent(ml, N_VALID_PIXELS, simple, "n_valid_pixels");
 
-            JsonObject split3 = simple.has("histogram_3way")
-                    ? simple.getAsJsonObject("histogram_3way") : null;
+            JsonObject split3 = simple.has("histogram_3way") ? simple.getAsJsonObject("histogram_3way") : null;
             if (split3 != null) {
                 putIfPresent(ml, PCT_PARALLEL, split3, "pct_parallel");
                 putIfPresent(ml, PCT_OBLIQUE, split3, "pct_oblique");
@@ -128,8 +126,8 @@ public class PPMBatchResultsWriter {
         }
 
         // PS-TACS results
-        JsonObject pstacs = result.has("pstacs") && !result.get("pstacs").isJsonNull()
-                ? result.getAsJsonObject("pstacs") : null;
+        JsonObject pstacs =
+                result.has("pstacs") && !result.get("pstacs").isJsonNull() ? result.getAsJsonObject("pstacs") : null;
         if (pstacs != null) {
             putIfPresent(ml, PCT_TACS2, pstacs, "pct_tacs2");
             putIfPresent(ml, PCT_TACS3, pstacs, "pct_tacs3");
@@ -147,11 +145,15 @@ public class PPMBatchResultsWriter {
     /**
      * Adds a CSV row for a polarity analysis result.
      */
-    public void addPolarityRow(String imageName, String collection,
-            String sampleName, String annotationName, String annotationClass,
+    public void addPolarityRow(
+            String imageName,
+            String collection,
+            String sampleName,
+            String annotationName,
+            String annotationClass,
             JsonObject result) {
-        Map<String, String> row = buildMetaRow(imageName, collection,
-                sampleName, annotationName, annotationClass, "polarity");
+        Map<String, String> row =
+                buildMetaRow(imageName, collection, sampleName, annotationName, annotationClass, "polarity");
 
         row.put(CIRCULAR_MEAN, getJsonStr(result, "circular_mean"));
         row.put(CIRCULAR_STD, getJsonStr(result, "circular_std"));
@@ -166,22 +168,25 @@ public class PPMBatchResultsWriter {
     /**
      * Adds a CSV row for a perpendicularity analysis result.
      */
-    public void addPerpendicularityRow(String imageName, String collection,
-            String sampleName, String annotationName, String annotationClass,
+    public void addPerpendicularityRow(
+            String imageName,
+            String collection,
+            String sampleName,
+            String annotationName,
+            String annotationClass,
             JsonObject result) {
-        Map<String, String> row = buildMetaRow(imageName, collection,
-                sampleName, annotationName, annotationClass, "perpendicularity");
+        Map<String, String> row =
+                buildMetaRow(imageName, collection, sampleName, annotationName, annotationClass, "perpendicularity");
 
         row.put(CONTOUR_LENGTH_UM, getJsonStr(result, "contour_length_um"));
 
-        JsonObject simple = result.has("simple") && !result.get("simple").isJsonNull()
-                ? result.getAsJsonObject("simple") : null;
+        JsonObject simple =
+                result.has("simple") && !result.get("simple").isJsonNull() ? result.getAsJsonObject("simple") : null;
         if (simple != null) {
             row.put(MEAN_DEVIATION_DEG, getJsonStr(simple, "mean_deviation_deg"));
             row.put(STD_DEVIATION_DEG, getJsonStr(simple, "std_deviation_deg"));
 
-            JsonObject split3 = simple.has("histogram_3way")
-                    ? simple.getAsJsonObject("histogram_3way") : null;
+            JsonObject split3 = simple.has("histogram_3way") ? simple.getAsJsonObject("histogram_3way") : null;
             if (split3 != null) {
                 row.put(PCT_PARALLEL, getJsonStr(split3, "pct_parallel"));
                 row.put(PCT_OBLIQUE, getJsonStr(split3, "pct_oblique"));
@@ -189,8 +194,8 @@ public class PPMBatchResultsWriter {
             }
         }
 
-        JsonObject pstacs = result.has("pstacs") && !result.get("pstacs").isJsonNull()
-                ? result.getAsJsonObject("pstacs") : null;
+        JsonObject pstacs =
+                result.has("pstacs") && !result.get("pstacs").isJsonNull() ? result.getAsJsonObject("pstacs") : null;
         if (pstacs != null) {
             row.put(PCT_TACS2, getJsonStr(pstacs, "pct_tacs2"));
             row.put(PCT_TACS3, getJsonStr(pstacs, "pct_tacs3"));
@@ -259,8 +264,12 @@ public class PPMBatchResultsWriter {
 
     // --- Private helpers ---
 
-    private Map<String, String> buildMetaRow(String imageName, String collection,
-            String sampleName, String annotationName, String annotationClass,
+    private Map<String, String> buildMetaRow(
+            String imageName,
+            String collection,
+            String sampleName,
+            String annotationName,
+            String annotationClass,
             String analysisType) {
         Map<String, String> row = new LinkedHashMap<>();
         row.put("image_name", imageName != null ? imageName : "");
@@ -276,8 +285,8 @@ public class PPMBatchResultsWriter {
         csvRows.add(row);
     }
 
-    private static void putIfPresent(qupath.lib.measurements.MeasurementList ml,
-            String measurementKey, JsonObject json, String jsonKey) {
+    private static void putIfPresent(
+            qupath.lib.measurements.MeasurementList ml, String measurementKey, JsonObject json, String jsonKey) {
         if (json == null || !json.has(jsonKey) || json.get(jsonKey).isJsonNull()) {
             return;
         }

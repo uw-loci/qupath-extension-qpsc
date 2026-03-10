@@ -46,7 +46,7 @@ import qupath.lib.objects.PathObject;
  *     .overlapPercent(15.0)
  *     .annotations(selectedAnnotations)
  *     .addBuffer(true)
- *     .invertAxes(false, true)  // coordinate system alignment
+ *     .stageInvertedAxes(false, true)  // stage axis inversion for tile traversal order
  *     .build();
  * }</pre>
  *
@@ -79,11 +79,11 @@ public class TilingRequest {
     /** Overlap between adjacent tiles as a percentage (0-100) */
     private double overlapPercent;
 
-    /** Whether to invert the X-axis during tiling */
-    private boolean invertX;
+    /** Whether the stage X-axis is inverted (reverses column traversal order) */
+    private boolean stageInvertedX;
 
-    /** Whether to invert the Y-axis during tiling */
-    private boolean invertY;
+    /** Whether the stage Y-axis is inverted (reverses row traversal order) */
+    private boolean stageInvertedY;
 
     /** Whether to create QuPath detection objects for visualization */
     private boolean createDetections;
@@ -180,17 +180,21 @@ public class TilingRequest {
         }
 
         /**
-         * Sets axis inversion flags for coordinate system alignment.
-         * Used to handle differences between QuPath and microscope coordinate systems.
+         * Sets stage axis inversion flags, which control tile traversal order.
+         * When an axis is inverted, tiles are generated in reverse order along that axis
+         * to match the stage's movement direction.
          *
-         * @param x whether to invert the X-axis
-         * @param y whether to invert the Y-axis
+         * <p>This is a <b>stage hardware property</b>, not an optical flip.
+         * See CLAUDE.md "COORDINATE SYSTEM TERMINOLOGY" for details.
+         *
+         * @param x whether the stage X-axis is inverted
+         * @param y whether the stage Y-axis is inverted
          * @return this builder instance for method chaining
          */
-        public Builder invertAxes(boolean x, boolean y) {
-            logger.debug("Setting axis inversion: X={}, Y={}", x, y);
-            request.invertX = x;
-            request.invertY = y;
+        public Builder stageInvertedAxes(boolean x, boolean y) {
+            logger.debug("Setting stage axis inversion: X={}, Y={}", x, y);
+            request.stageInvertedX = x;
+            request.stageInvertedY = y;
             return this;
         }
 
@@ -401,21 +405,23 @@ public class TilingRequest {
     }
 
     /**
-     * Gets whether the X-axis should be inverted during tiling.
+     * Gets whether the stage X-axis is inverted (reverses column traversal order).
+     * This is a stage hardware property, not an optical flip.
      *
-     * @return true if X-axis should be inverted, false otherwise
+     * @return true if stage X-axis is inverted, false otherwise
      */
-    public boolean isInvertX() {
-        return invertX;
+    public boolean isStageInvertedX() {
+        return stageInvertedX;
     }
 
     /**
-     * Gets whether the Y-axis should be inverted during tiling.
+     * Gets whether the stage Y-axis is inverted (reverses row traversal order).
+     * This is a stage hardware property, not an optical flip.
      *
-     * @return true if Y-axis should be inverted, false otherwise
+     * @return true if stage Y-axis is inverted, false otherwise
      */
-    public boolean isInvertY() {
-        return invertY;
+    public boolean isStageInvertedY() {
+        return stageInvertedY;
     }
 
     /**

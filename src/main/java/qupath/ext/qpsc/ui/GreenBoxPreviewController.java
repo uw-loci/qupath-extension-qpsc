@@ -152,23 +152,22 @@ public class GreenBoxPreviewController {
                 // Skip auto-detection button
                 Button skipButton = new Button("Skip Auto-Detection");
                 skipButton.setStyle("-fx-font-size: 11px;");
-                skipButton.setTooltip(new Tooltip(
-                        "Skip the automatic green box detection and adjust parameters manually.\n"
-                        + "Use this if auto-detection is taking too long or producing poor results."));
+                skipButton.setTooltip(
+                        new Tooltip("Skip the automatic green box detection and adjust parameters manually.\n"
+                                + "Use this if auto-detection is taking too long or producing poor results."));
 
                 // === BASIC PARAMETERS (always visible) ===
                 Spinner<Double> greenThreshold = new Spinner<>(0.0, 1.0, params.greenThreshold, 0.05);
                 greenThreshold.setEditable(true);
                 greenThreshold.setPrefWidth(80);
-                greenThreshold.setTooltip(new Tooltip(
-                        "Minimum green channel dominance required for a pixel to be classified as green.\n"
-                        + "Lower values detect fainter green markings; higher values require stronger green."));
+                greenThreshold.setTooltip(
+                        new Tooltip("Minimum green channel dominance required for a pixel to be classified as green.\n"
+                                + "Lower values detect fainter green markings; higher values require stronger green."));
 
                 Spinner<Double> saturationMin = new Spinner<>(0.0, 1.0, params.saturationMin, 0.05);
                 saturationMin.setEditable(true);
                 saturationMin.setPrefWidth(80);
-                saturationMin.setTooltip(new Tooltip(
-                        "Minimum saturation for green pixel detection.\n"
+                saturationMin.setTooltip(new Tooltip("Minimum saturation for green pixel detection.\n"
                         + "Filters out gray/white pixels that might have a slight green tint."));
 
                 VBox basicParamsBox = new VBox(5);
@@ -182,22 +181,20 @@ public class GreenBoxPreviewController {
                 Spinner<Integer> edgeThickness = new Spinner<>(1, 20, params.edgeThickness, 1);
                 edgeThickness.setEditable(true);
                 edgeThickness.setPrefWidth(80);
-                edgeThickness.setTooltip(new Tooltip(
-                        "Thickness of the edge used when scanning for the green box boundary (in pixels).\n"
-                        + "Increase if the green border on your slide scanner is thicker."));
+                edgeThickness.setTooltip(
+                        new Tooltip("Thickness of the edge used when scanning for the green box boundary (in pixels).\n"
+                                + "Increase if the green border on your slide scanner is thicker."));
 
                 Spinner<Double> hueMin = new Spinner<>(0.0, 1.0, params.hueMin, 0.01);
                 hueMin.setEditable(true);
                 hueMin.setPrefWidth(80);
-                hueMin.setTooltip(new Tooltip(
-                        "Minimum hue value (0.0-1.0) for the green color range.\n"
+                hueMin.setTooltip(new Tooltip("Minimum hue value (0.0-1.0) for the green color range.\n"
                         + "Adjusts the lower bound of what is considered 'green'."));
 
                 Spinner<Double> hueMax = new Spinner<>(0.0, 1.0, params.hueMax, 0.01);
                 hueMax.setEditable(true);
                 hueMax.setPrefWidth(80);
-                hueMax.setTooltip(new Tooltip(
-                        "Maximum hue value (0.0-1.0) for the green color range.\n"
+                hueMax.setTooltip(new Tooltip("Maximum hue value (0.0-1.0) for the green color range.\n"
                         + "Adjusts the upper bound of what is considered 'green'."));
 
                 Spinner<Integer> minBoxWidth = new Spinner<>(10, 500, params.minBoxWidth, 10);
@@ -205,27 +202,25 @@ public class GreenBoxPreviewController {
                 minBoxWidth.setPrefWidth(80);
                 minBoxWidth.setTooltip(new Tooltip(
                         "Minimum width (in pixels) for a detected green region to be considered a valid box.\n"
-                        + "Filters out small green artifacts that are not the slide boundary."));
+                                + "Filters out small green artifacts that are not the slide boundary."));
 
                 Spinner<Integer> minBoxHeight = new Spinner<>(10, 500, params.minBoxHeight, 10);
                 minBoxHeight.setEditable(true);
                 minBoxHeight.setPrefWidth(80);
                 minBoxHeight.setTooltip(new Tooltip(
                         "Minimum height (in pixels) for a detected green region to be considered a valid box.\n"
-                        + "Filters out small green artifacts that are not the slide boundary."));
+                                + "Filters out small green artifacts that are not the slide boundary."));
 
                 Spinner<Double> brightnessMin = new Spinner<>(0.0, 1.0, params.brightnessMin, 0.05);
                 brightnessMin.setEditable(true);
                 brightnessMin.setPrefWidth(80);
-                brightnessMin.setTooltip(new Tooltip(
-                        "Minimum brightness for green pixel detection.\n"
+                brightnessMin.setTooltip(new Tooltip("Minimum brightness for green pixel detection.\n"
                         + "Excludes very dark pixels from the green color detection."));
 
                 Spinner<Double> brightnessMax = new Spinner<>(0.0, 1.0, params.brightnessMax, 0.05);
                 brightnessMax.setEditable(true);
                 brightnessMax.setPrefWidth(80);
-                brightnessMax.setTooltip(new Tooltip(
-                        "Maximum brightness for green pixel detection.\n"
+                brightnessMax.setTooltip(new Tooltip("Maximum brightness for green pixel detection.\n"
                         + "Excludes overly bright or washed-out pixels from detection."));
 
                 VBox advancedParamsContent = new VBox(5);
@@ -247,8 +242,8 @@ public class GreenBoxPreviewController {
                 // === PRESET BUTTONS ===
                 Button presetHighSensitivity = new Button("High Sensitivity");
                 presetHighSensitivity.setStyle("-fx-font-size: 10px;");
-                presetHighSensitivity.setTooltip(new Tooltip(
-                        "Use relaxed thresholds to detect faint or low-contrast green boxes."));
+                presetHighSensitivity.setTooltip(
+                        new Tooltip("Use relaxed thresholds to detect faint or low-contrast green boxes."));
                 presetHighSensitivity.setOnAction(e -> {
                     greenThreshold.getValueFactory().setValue(0.15);
                     saturationMin.getValueFactory().setValue(0.2);
@@ -259,8 +254,8 @@ public class GreenBoxPreviewController {
 
                 Button presetBalanced = new Button("Balanced");
                 presetBalanced.setStyle("-fx-font-size: 10px;");
-                presetBalanced.setTooltip(new Tooltip(
-                        "Use moderate thresholds that balance sensitivity and precision."));
+                presetBalanced.setTooltip(
+                        new Tooltip("Use moderate thresholds that balance sensitivity and precision."));
                 presetBalanced.setOnAction(e -> {
                     greenThreshold.getValueFactory().setValue(0.25);
                     saturationMin.getValueFactory().setValue(0.3);
@@ -271,8 +266,8 @@ public class GreenBoxPreviewController {
 
                 Button presetHighPrecision = new Button("High Precision");
                 presetHighPrecision.setStyle("-fx-font-size: 10px;");
-                presetHighPrecision.setTooltip(new Tooltip(
-                        "Use strict thresholds to detect only strong, well-defined green boxes."));
+                presetHighPrecision.setTooltip(
+                        new Tooltip("Use strict thresholds to detect only strong, well-defined green boxes."));
                 presetHighPrecision.setOnAction(e -> {
                     greenThreshold.getValueFactory().setValue(0.35);
                     saturationMin.getValueFactory().setValue(0.4);
@@ -283,8 +278,7 @@ public class GreenBoxPreviewController {
 
                 Button resetDefaults = new Button("Reset to Defaults");
                 resetDefaults.setStyle("-fx-font-size: 10px;");
-                resetDefaults.setTooltip(new Tooltip(
-                        "Reset all detection parameters to their default values."));
+                resetDefaults.setTooltip(new Tooltip("Reset all detection parameters to their default values."));
                 resetDefaults.setOnAction(e -> {
                     // Reset all parameters to their defaults
                     greenThreshold.getValueFactory().setValue(0.4);
@@ -322,8 +316,7 @@ public class GreenBoxPreviewController {
 
                 // === ACTION BUTTONS ===
                 Button detectButton = new Button("Detect Again");
-                detectButton.setTooltip(new Tooltip(
-                        "Run green box detection again with the current parameter values.\n"
+                detectButton.setTooltip(new Tooltip("Run green box detection again with the current parameter values.\n"
                         + "The preview will update to show the detected box location."));
                 detectButton.setOnAction(e -> runDetection(
                         macroImage,
@@ -346,8 +339,8 @@ public class GreenBoxPreviewController {
                         currentResult));
 
                 Button resetButton = new Button("Reset View");
-                resetButton.setTooltip(new Tooltip(
-                        "Reset the preview to show the original macro image without detection overlay."));
+                resetButton.setTooltip(
+                        new Tooltip("Reset the preview to show the original macro image without detection overlay."));
                 resetButton.setOnAction(e -> {
                     logger.debug("Resetting view to original image");
                     previewView.setImage(SwingFXUtils.toFXImage(macroImage, null));

@@ -10,6 +10,7 @@ import qupath.ext.qpsc.modality.ppm.PPMPreferences;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
+import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.QPEx;
 import qupath.lib.gui.viewer.QuPathViewer;
@@ -17,7 +18,6 @@ import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
-import qupath.fx.dialogs.Dialogs;
 
 /**
  * Workflow for the PPM hue range filter overlay.
@@ -73,8 +73,7 @@ public class PPMHueRangeWorkflow {
 
         // Find calibration
         Project<BufferedImage> project = gui.getProject();
-        ProjectImageEntry<BufferedImage> currentEntry =
-                project != null ? project.getEntry(imageData) : null;
+        ProjectImageEntry<BufferedImage> currentEntry = project != null ? project.getEntry(imageData) : null;
 
         PPMAnalysisSet analysisSet = null;
         if (currentEntry != null && project != null) {
@@ -95,8 +94,8 @@ public class PPMHueRangeWorkflow {
             }
         }
         if (calibrationPath == null) {
-            Dialogs.showErrorMessage("PPM Hue Range Filter",
-                    "No PPM calibration found. Run sunburst calibration first.");
+            Dialogs.showErrorMessage(
+                    "PPM Hue Range Filter", "No PPM calibration found. Run sunburst calibration first.");
             return;
         }
 
@@ -105,8 +104,7 @@ public class PPMHueRangeWorkflow {
         try {
             calibration = PPMCalibration.load(calibrationPath);
         } catch (Exception e) {
-            Dialogs.showErrorMessage("PPM Hue Range Filter",
-                    "Failed to load calibration: " + e.getMessage());
+            Dialogs.showErrorMessage("PPM Hue Range Filter", "Failed to load calibration: " + e.getMessage());
             return;
         }
 
@@ -130,8 +128,7 @@ public class PPMHueRangeWorkflow {
         PPMHueRangePanel panel = new PPMHueRangePanel();
 
         // Wire stats updates
-        overlay.setStatsListener((matching, total) ->
-                Platform.runLater(() -> panel.updateStats(matching, total)));
+        overlay.setStatsListener((matching, total) -> Platform.runLater(() -> panel.updateStats(matching, total)));
 
         // Wire parameter changes
         panel.setOnParametersChanged(() -> {
@@ -179,7 +176,9 @@ public class PPMHueRangeWorkflow {
         overlay.setOpacity(panel.getOverlayOpacity());
         overlay.recompute();
 
-        logger.info("PPM hue range filter overlay active on {}", server.getMetadata().getName());
+        logger.info(
+                "PPM hue range filter overlay active on {}",
+                server.getMetadata().getName());
     }
 
     /**

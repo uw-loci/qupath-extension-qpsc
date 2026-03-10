@@ -111,12 +111,11 @@ public final class DocumentationHelper {
         }
 
         Button helpButton = new Button("?");
-        helpButton.setStyle(
-                "-fx-background-radius: 50%; "
-                        + "-fx-min-width: 22; -fx-min-height: 22; "
-                        + "-fx-max-width: 22; -fx-max-height: 22; "
-                        + "-fx-padding: 0; "
-                        + "-fx-font-size: 12; -fx-font-weight: bold;");
+        helpButton.setStyle("-fx-background-radius: 50%; "
+                + "-fx-min-width: 22; -fx-min-height: 22; "
+                + "-fx-max-width: 22; -fx-max-height: 22; "
+                + "-fx-padding: 0; "
+                + "-fx-font-size: 12; -fx-font-weight: bold;");
 
         Tooltip tooltip = new Tooltip("Open online documentation for this tool");
         tooltip.setShowDelay(Duration.millis(400));

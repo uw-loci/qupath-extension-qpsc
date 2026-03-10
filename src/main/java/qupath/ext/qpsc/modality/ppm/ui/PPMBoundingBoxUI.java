@@ -55,8 +55,7 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
         label.setStyle("-fx-font-weight: bold;");
 
         overrideAngles = new CheckBox("Override default angles for this acquisition");
-        overrideAngles.setTooltip(new Tooltip(
-                "When checked, the plus and minus angles below will be used\n"
+        overrideAngles.setTooltip(new Tooltip("When checked, the plus and minus angles below will be used\n"
                 + "instead of the default values from the microscope configuration.\n"
                 + "Useful for testing different polarizer offsets without changing the config."));
 
@@ -74,8 +73,7 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
         plusSpinner.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(-180, 180, savedPlusAngle, 0.5));
         plusSpinner.setEditable(true);
         plusSpinner.setPrefWidth(100);
-        plusSpinner.setTooltip(new Tooltip(
-                "Positive polarizer rotation in tick marks.\n"
+        plusSpinner.setTooltip(new Tooltip("Positive polarizer rotation in tick marks.\n"
                 + "Overrides the default plus angle from the microscope configuration."));
 
         minusSpinner = new Spinner<>();
@@ -83,8 +81,7 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
                 new SpinnerValueFactory.DoubleSpinnerValueFactory(-180, 180, savedMinusAngle, 0.5));
         minusSpinner.setEditable(true);
         minusSpinner.setPrefWidth(100);
-        minusSpinner.setTooltip(new Tooltip(
-                "Negative polarizer rotation in tick marks.\n"
+        minusSpinner.setTooltip(new Tooltip("Negative polarizer rotation in tick marks.\n"
                 + "Overrides the default minus angle from the microscope configuration."));
 
         grid.add(new Label("Plus angle (ticks):"), 0, 0);

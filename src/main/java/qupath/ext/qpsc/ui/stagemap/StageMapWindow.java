@@ -26,8 +26,8 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
-import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
+import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
@@ -292,13 +292,12 @@ public class StageMapWindow {
         Button helpButton = DocumentationHelper.createHelpButton("stageMap");
         if (helpButton != null) {
             helpButton.setStyle("-fx-font-size: 10; -fx-padding: 2 6;");
-            helpButton.setTooltip(new Tooltip(
-                    "Open online documentation for the Stage Map.\n\n"
-                            + "Quick reference:\n"
-                            + "- Green crosshair: Current objective position\n"
-                            + "- Orange rectangle: Camera field of view\n"
-                            + "- Blue rectangles: Slide positions\n"
-                            + "- Double-click to move the stage"));
+            helpButton.setTooltip(new Tooltip("Open online documentation for the Stage Map.\n\n"
+                    + "Quick reference:\n"
+                    + "- Green crosshair: Current objective position\n"
+                    + "- Orange rectangle: Camera field of view\n"
+                    + "- Blue rectangles: Slide positions\n"
+                    + "- Double-click to move the stage"));
         }
 
         Region spacer = new Region();
@@ -973,9 +972,17 @@ public class StageMapWindow {
 
         // Apply flip for Stage Map display.
         // The macro is always raw (from associated images, either current or original entry).
-        // XOR the preference with axis inversion for each axis. On the PPM/single_h
-        // insert both axes are inverted, and both flips are needed for correct visual
-        // orientation (equivalent to 180-degree rotation).
+        //
+        // Two independent concepts combine here via XOR:
+        //   1. prefFlipX/Y  = OPTICAL FLIP preference (microscope light path mirrors the image)
+        //   2. axisInvertedX/Y = STAGE AXIS INVERSION (auto-detected from StageInsert calibration)
+        //
+        // XOR is correct because each flip reverses the image once:
+        //   - If only optical flip is set, the image needs one flip.
+        //   - If only axis inversion is set, the image needs one flip.
+        //   - If BOTH are set, they cancel out (double-flip = no flip).
+        // On the PPM/single_h insert both axes are inverted AND both optical flips are set,
+        // so XOR gives false for both -- equivalent to 180-degree rotation already handled.
         boolean prefFlipX = QPPreferenceDialog.getFlipMacroXProperty();
         boolean prefFlipY = QPPreferenceDialog.getFlipMacroYProperty();
         StageInsert insert = insertComboBox.getValue();

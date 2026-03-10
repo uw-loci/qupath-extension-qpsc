@@ -539,8 +539,7 @@ public class QPProjectFunctions {
 
             // Stamp active PPM calibration on PPM images
             if (modality != null && modality.toLowerCase().startsWith("ppm")) {
-                String activeCalibration =
-                        qupath.ext.qpsc.modality.ppm.PPMPreferences.getActiveCalibrationPath();
+                String activeCalibration = qupath.ext.qpsc.modality.ppm.PPMPreferences.getActiveCalibrationPath();
                 if (activeCalibration != null && !activeCalibration.isEmpty()) {
                     ImageMetadataManager.setPPMCalibration(newEntry, activeCalibration, false);
                     logger.info("Stamped PPM calibration on {}: {}", imageName, activeCalibration);
