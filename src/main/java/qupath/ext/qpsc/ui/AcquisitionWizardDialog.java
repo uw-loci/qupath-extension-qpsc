@@ -24,9 +24,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.QPScopeController;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.CalibrationChecker.Status;
 import qupath.ext.qpsc.ui.CalibrationChecker.StepStatus;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.gui.QuPathGUI;
 
 /**
@@ -202,37 +205,41 @@ public class AcquisitionWizardDialog {
         VBox stepsBox = new VBox(2);
         stepsBox.setPadding(new Insets(4, 16, 8, 16));
 
-        stepsBox.getChildren().add(createStepRow(
-                STEP_CONNECTION,
-                createConnectionIcon(),
-                "Server Connection",
-                "Connect to microscope control server",
-                "Connect",
-                this::onConnect));
+        stepsBox.getChildren()
+                .add(createStepRow(
+                        STEP_CONNECTION,
+                        createConnectionIcon(),
+                        "Server Connection",
+                        "Connect to microscope control server",
+                        "Connect",
+                        this::onConnect));
 
-        stepsBox.getChildren().add(createStepRow(
-                STEP_WHITE_BALANCE,
-                createCalibrationIcon(),
-                "White Balance",
-                "Calibrate per-channel camera exposures",
-                "Calibrate...",
-                this::onWhiteBalance));
+        stepsBox.getChildren()
+                .add(createStepRow(
+                        STEP_WHITE_BALANCE,
+                        createCalibrationIcon(),
+                        "White Balance",
+                        "Calibrate per-channel camera exposures",
+                        "Calibrate...",
+                        this::onWhiteBalance));
 
-        stepsBox.getChildren().add(createStepRow(
-                STEP_BACKGROUND,
-                createGridIcon(),
-                "Background Correction",
-                "Acquire flat-field correction images",
-                "Collect...",
-                this::onBackgroundCollection));
+        stepsBox.getChildren()
+                .add(createStepRow(
+                        STEP_BACKGROUND,
+                        createGridIcon(),
+                        "Background Correction",
+                        "Acquire flat-field correction images",
+                        "Collect...",
+                        this::onBackgroundCollection));
 
-        stepsBox.getChildren().add(createStepRow(
-                STEP_ALIGNMENT,
-                createAlignmentIcon(),
-                "Microscope Alignment",
-                "Align macro image to stage (for Existing Image workflow)",
-                "Align...",
-                this::onAlignment));
+        stepsBox.getChildren()
+                .add(createStepRow(
+                        STEP_ALIGNMENT,
+                        createAlignmentIcon(),
+                        "Microscope Alignment",
+                        "Align macro image to stage (for Existing Image workflow)",
+                        "Align...",
+                        this::onAlignment));
 
         root.getChildren().add(stepsBox);
 
@@ -291,8 +298,8 @@ public class AcquisitionWizardDialog {
 
         // Expand button (chevron up)
         Label expandLabel = new Label("^");
-        expandLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: white; "
-                + "-fx-padding: 0 0 0 4;");
+        expandLabel.setStyle(
+                "-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: white; " + "-fx-padding: 0 0 0 4;");
 
         pill.getChildren().addAll(icon, titleLabel, dotsBox, expandLabel);
 
@@ -303,12 +310,11 @@ public class AcquisitionWizardDialog {
         });
 
         // Hover effect
-        pill.setOnMouseEntered(e ->
-                pill.setStyle("-fx-background-color: " + BLUE_HOVER + "; -fx-background-radius: 18; "
+        pill.setOnMouseEntered(
+                e -> pill.setStyle("-fx-background-color: " + BLUE_HOVER + "; -fx-background-radius: 18; "
                         + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.3), 6, 0, 0, 2);"));
-        pill.setOnMouseExited(e ->
-                pill.setStyle("-fx-background-color: " + BLUE + "; -fx-background-radius: 18; "
-                        + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.3), 6, 0, 0, 2);"));
+        pill.setOnMouseExited(e -> pill.setStyle("-fx-background-color: " + BLUE + "; -fx-background-radius: 18; "
+                + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.3), 6, 0, 0, 2);"));
 
         return pill;
     }
@@ -320,8 +326,7 @@ public class AcquisitionWizardDialog {
     private VBox createHeader() {
         VBox header = new VBox(4);
         header.setPadding(new Insets(10, 12, 8, 16));
-        header.setStyle("-fx-background-color: " + BLUE + "; "
-                + "-fx-background-radius: 8 8 0 0;");
+        header.setStyle("-fx-background-color: " + BLUE + "; " + "-fx-background-radius: 8 8 0 0;");
 
         // Top row: title + window control buttons
         HBox titleRow = new HBox(8);
@@ -335,12 +340,11 @@ public class AcquisitionWizardDialog {
         // Help button (opens documentation)
         Button helpBtn = DocumentationHelper.createHelpButton("acquisitionWizard");
         if (helpBtn != null) {
-            helpBtn.setStyle(
-                    "-fx-background-color: rgba(255,255,255,0.2); -fx-background-radius: 50%; "
-                            + "-fx-text-fill: white; -fx-font-weight: bold; "
-                            + "-fx-min-width: 22; -fx-min-height: 22; "
-                            + "-fx-max-width: 22; -fx-max-height: 22; "
-                            + "-fx-padding: 0; -fx-font-size: 11;");
+            helpBtn.setStyle("-fx-background-color: rgba(255,255,255,0.2); -fx-background-radius: 50%; "
+                    + "-fx-text-fill: white; -fx-font-weight: bold; "
+                    + "-fx-min-width: 22; -fx-min-height: 22; "
+                    + "-fx-max-width: 22; -fx-max-height: 22; "
+                    + "-fx-padding: 0; -fx-font-size: 11;");
         }
 
         // Minimize (collapse) button
@@ -381,16 +385,14 @@ public class AcquisitionWizardDialog {
                 + "-fx-font-size: 13px; -fx-font-weight: bold; "
                 + "-fx-min-width: 28; -fx-min-height: 22; -fx-max-height: 22; "
                 + "-fx-padding: 0 4 0 4; -fx-background-radius: 4;");
-        btn.setOnMouseEntered(e ->
-                btn.setStyle("-fx-background-color: rgba(255,255,255,0.2); -fx-text-fill: white; "
-                        + "-fx-font-size: 13px; -fx-font-weight: bold; "
-                        + "-fx-min-width: 28; -fx-min-height: 22; -fx-max-height: 22; "
-                        + "-fx-padding: 0 4 0 4; -fx-background-radius: 4;"));
-        btn.setOnMouseExited(e ->
-                btn.setStyle("-fx-background-color: transparent; -fx-text-fill: white; "
-                        + "-fx-font-size: 13px; -fx-font-weight: bold; "
-                        + "-fx-min-width: 28; -fx-min-height: 22; -fx-max-height: 22; "
-                        + "-fx-padding: 0 4 0 4; -fx-background-radius: 4;"));
+        btn.setOnMouseEntered(e -> btn.setStyle("-fx-background-color: rgba(255,255,255,0.2); -fx-text-fill: white; "
+                + "-fx-font-size: 13px; -fx-font-weight: bold; "
+                + "-fx-min-width: 28; -fx-min-height: 22; -fx-max-height: 22; "
+                + "-fx-padding: 0 4 0 4; -fx-background-radius: 4;"));
+        btn.setOnMouseExited(e -> btn.setStyle("-fx-background-color: transparent; -fx-text-fill: white; "
+                + "-fx-font-size: 13px; -fx-font-weight: bold; "
+                + "-fx-min-width: 28; -fx-min-height: 22; -fx-max-height: 22; "
+                + "-fx-padding: 0 4 0 4; -fx-background-radius: 4;"));
         btn.setTooltip(new Tooltip(tooltip));
         return btn;
     }
@@ -451,7 +453,13 @@ public class AcquisitionWizardDialog {
         Set<String> modalities = CalibrationChecker.getAvailableModalities();
         modalityCombo.setItems(FXCollections.observableArrayList(modalities));
         if (!modalities.isEmpty()) {
-            modalityCombo.getSelectionModel().selectFirst();
+            // Try to restore last-used modality
+            String lastModality = PersistentPreferences.getLastModality();
+            if (!lastModality.isEmpty() && modalities.contains(lastModality)) {
+                modalityCombo.setValue(lastModality);
+            } else {
+                modalityCombo.getSelectionModel().selectFirst();
+            }
             onModalityChanged();
         }
     }
@@ -460,10 +468,34 @@ public class AcquisitionWizardDialog {
         String modality = modalityCombo.getValue();
         if (modality == null) return;
 
+        // Save current selection
+        PersistentPreferences.setLastModality(modality);
+
         Set<String> objectives = CalibrationChecker.getAvailableObjectives(modality);
         objectiveCombo.setItems(FXCollections.observableArrayList(objectives));
         if (!objectives.isEmpty()) {
-            objectiveCombo.getSelectionModel().selectFirst();
+            boolean restored = false;
+
+            // Priority 1: match objective_in_use from microscope config
+            String configObjective = getConfigObjectiveInUse();
+            if (configObjective != null && objectives.contains(configObjective)) {
+                objectiveCombo.setValue(configObjective);
+                restored = true;
+            }
+
+            // Priority 2: restore last-used objective from preferences
+            if (!restored) {
+                String lastObjective = PersistentPreferences.getLastObjective();
+                if (!lastObjective.isEmpty() && objectives.contains(lastObjective)) {
+                    objectiveCombo.setValue(lastObjective);
+                    restored = true;
+                }
+            }
+
+            // Fallback: select first
+            if (!restored) {
+                objectiveCombo.getSelectionModel().selectFirst();
+            }
             onObjectiveChanged();
         } else {
             objectiveCombo.getItems().clear();
@@ -477,15 +509,28 @@ public class AcquisitionWizardDialog {
         String objective = objectiveCombo.getValue();
         if (modality == null || objective == null) return;
 
+        // Save current selection
+        PersistentPreferences.setLastObjective(objective);
+
         Set<String> detectors = CalibrationChecker.getAvailableDetectors(modality, objective);
         detectorCombo.setItems(FXCollections.observableArrayList(detectors));
         if (!detectors.isEmpty()) {
-            detectorCombo.getSelectionModel().selectFirst();
+            // Try to restore last-used detector
+            String lastDetector = PersistentPreferences.getLastDetector();
+            if (!lastDetector.isEmpty() && detectors.contains(lastDetector)) {
+                detectorCombo.setValue(lastDetector);
+            } else {
+                detectorCombo.getSelectionModel().selectFirst();
+            }
         }
         refreshCalibrationStatuses();
     }
 
     private void onDetectorChanged() {
+        String detector = detectorCombo.getValue();
+        if (detector != null) {
+            PersistentPreferences.setLastDetector(detector);
+        }
         refreshCalibrationStatuses();
     }
 
@@ -499,6 +544,22 @@ public class AcquisitionWizardDialog {
 
     private String getSelectedDetector() {
         return detectorCombo.getValue();
+    }
+
+    /**
+     * Read the current objective from microscope config (microscope.objective_in_use).
+     * Returns null if not configured or unavailable.
+     */
+    private String getConfigObjectiveInUse() {
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+            String objective = mgr.getString("microscope", "objective_in_use");
+            return (objective != null && !objective.isEmpty()) ? objective : null;
+        } catch (Exception e) {
+            logger.debug("Could not read objective_in_use from config", e);
+            return null;
+        }
     }
 
     // ======================================================================
@@ -519,8 +580,8 @@ public class AcquisitionWizardDialog {
         }
     }
 
-    private HBox createStepRow(int index, Region icon, String title,
-                               String description, String buttonText, Runnable action) {
+    private HBox createStepRow(
+            int index, Region icon, String title, String description, String buttonText, Runnable action) {
         HBox row = new HBox(10);
         row.setAlignment(Pos.CENTER_LEFT);
         row.setPadding(new Insets(8, 12, 8, 12));
@@ -656,8 +717,8 @@ public class AcquisitionWizardDialog {
         triangle.setFill(Color.WHITE);
 
         Label titleLabel = new Label(title);
-        titleLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: white; "
-                + "-fx-text-alignment: center;");
+        titleLabel.setStyle(
+                "-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: white; " + "-fx-text-alignment: center;");
         titleLabel.setAlignment(Pos.CENTER);
         titleLabel.setWrapText(true);
         titleLabel.setMaxWidth(Double.MAX_VALUE);
@@ -677,15 +738,13 @@ public class AcquisitionWizardDialog {
         btn.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(btn, Priority.ALWAYS);
         btn.setPrefHeight(110);
-        btn.setStyle("-fx-background-color: " + BLUE + "; -fx-background-radius: 8; "
-                + "-fx-cursor: hand; -fx-padding: 4;");
+        btn.setStyle(
+                "-fx-background-color: " + BLUE + "; -fx-background-radius: 8; " + "-fx-cursor: hand; -fx-padding: 4;");
 
-        btn.setOnMouseEntered(e ->
-                btn.setStyle("-fx-background-color: " + BLUE_HOVER + "; -fx-background-radius: 8; "
-                        + "-fx-cursor: hand; -fx-padding: 4;"));
-        btn.setOnMouseExited(e ->
-                btn.setStyle("-fx-background-color: " + BLUE + "; -fx-background-radius: 8; "
-                        + "-fx-cursor: hand; -fx-padding: 4;"));
+        btn.setOnMouseEntered(e -> btn.setStyle("-fx-background-color: " + BLUE_HOVER + "; -fx-background-radius: 8; "
+                + "-fx-cursor: hand; -fx-padding: 4;"));
+        btn.setOnMouseExited(e -> btn.setStyle("-fx-background-color: " + BLUE + "; -fx-background-radius: 8; "
+                + "-fx-cursor: hand; -fx-padding: 4;"));
 
         btn.setOnAction(e -> action.run());
 
@@ -774,8 +833,7 @@ public class AcquisitionWizardDialog {
 
     private Region createCalibrationIcon() {
         SVGPath svg = new SVGPath();
-        svg.setContent("M8,0 L8,4 M8,12 L8,16 M0,8 L4,8 M12,8 L16,8 "
-                + "M8,5 A3,3 0 1,1 8,11 A3,3 0 1,1 8,5 Z");
+        svg.setContent("M8,0 L8,4 M8,12 L8,16 M0,8 L4,8 M12,8 L16,8 " + "M8,5 A3,3 0 1,1 8,11 A3,3 0 1,1 8,5 Z");
         svg.setFill(Color.TRANSPARENT);
         svg.setStroke(Color.web(BLUE));
         svg.setStrokeWidth(1.5);
@@ -844,10 +902,9 @@ public class AcquisitionWizardDialog {
         String detector = getSelectedDetector();
 
         CompletableFuture.runAsync(() -> {
-            updateStepStatus(STEP_WHITE_BALANCE,
-                    CalibrationChecker.checkWhiteBalance(modality, objective, detector));
-            updateStepStatus(STEP_BACKGROUND,
-                    CalibrationChecker.checkBackgroundCorrection(modality, objective, detector));
+            updateStepStatus(STEP_WHITE_BALANCE, CalibrationChecker.checkWhiteBalance(modality, objective, detector));
+            updateStepStatus(
+                    STEP_BACKGROUND, CalibrationChecker.checkBackgroundCorrection(modality, objective, detector));
             updateStepStatus(STEP_ALIGNMENT, CalibrationChecker.checkAlignment());
         });
     }
@@ -866,8 +923,7 @@ public class AcquisitionWizardDialog {
             refreshAllStatuses();
         } catch (IOException e) {
             logger.error("Failed to connect to microscope server", e);
-            updateStepStatus(STEP_CONNECTION,
-                    new StepStatus(Status.NOT_READY, "Connection failed: " + e.getMessage()));
+            updateStepStatus(STEP_CONNECTION, new StepStatus(Status.NOT_READY, "Connection failed: " + e.getMessage()));
         }
     }
 
