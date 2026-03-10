@@ -17,7 +17,7 @@ plugins {
 qupathExtension {
     name = "qupath-extension-qpsc"
     group = "io.github.uw-loci"
-    version = "0.3.1"
+    version = "0.3.2"
     description = "A QuPath extension to allow interaction with a microscope through PycroManager and MicroManager."
     automaticModule = "io.github.uw-loci.extension.qpsc"
 }
@@ -28,7 +28,7 @@ publishing {
         create<MavenPublication>("maven") {
             groupId = "io.github.uw-loci"
             artifactId = "qupath-extension-qpsc"
-            version = "0.3.1"
+            version = "0.3.2"
             from(components["java"])
         }
     }
