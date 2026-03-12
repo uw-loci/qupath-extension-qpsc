@@ -825,21 +825,15 @@ public class UIFunctions {
                 });
             });
 
-            // Show the progress stage
-            progressStage.show();
+            // showAndWait() enters a nested event loop so the FX thread stays
+            // responsive (repaints, user interaction with modal dialog) while
+            // the background task runs. The stage closes when the task completes.
+            progressStage.showAndWait();
 
-            // Process events while waiting (this is the key part)
             try {
-                while (!future.isDone()) {
-                    Thread.sleep(50);
-                    // This allows the UI to remain responsive
-                    Platform.runLater(() -> {});
-                }
-
                 return future.get();
             } catch (Exception e) {
                 logger.error("Error waiting for task completion", e);
-                progressStage.close();
                 throw new RuntimeException("Task execution failed", e);
             }
 
