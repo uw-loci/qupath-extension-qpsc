@@ -90,11 +90,18 @@ public class MicroscopeAlignmentWorkflow {
                     String selectedScanner = microscopeSelection.microscopeName();
                     logger.info("Selected source microscope: {}", selectedScanner);
 
-                    // Check for macro image in the current image
+                    // Check for macro image - first from current image, then trace through project
                     BufferedImage macroImage = MacroImageUtility.retrieveMacroImage(gui);
+                    if (macroImage == null && gui.getProject() != null) {
+                        logger.info("No macro in current image (may be a flipped/derived entry), "
+                                + "tracing through project metadata...");
+                        @SuppressWarnings("unchecked")
+                        Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+                        macroImage = MacroImageUtility.retrieveMacroImageFromProject(gui, project);
+                    }
                     if (macroImage == null) {
                         Platform.runLater(() -> UIFunctions.notifyUserOfError(
-                                "No macro image found in the current image. "
+                                "No macro image found in the current image or its source images. "
                                         + "A macro image is required for alignment workflow.",
                                 "No Macro Image"));
                         return;
@@ -209,8 +216,14 @@ public class MicroscopeAlignmentWorkflow {
 
         logger.info("Performing detection while macro image is available");
 
-        // Get the original macro image
+        // Get the original macro image - with project fallback for flipped/derived entries
         BufferedImage originalMacroImage = MacroImageUtility.retrieveMacroImage(gui);
+        if (originalMacroImage == null && gui.getProject() != null) {
+            logger.info("No macro in current image, tracing through project metadata...");
+            @SuppressWarnings("unchecked")
+            Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+            originalMacroImage = MacroImageUtility.retrieveMacroImageFromProject(gui, project);
+        }
         if (originalMacroImage == null) {
             logger.error("No macro image available");
             return null;
@@ -282,9 +295,20 @@ public class MicroscopeAlignmentWorkflow {
                 croppedResult.getCropOffsetX(),
                 croppedResult.getCropOffsetY());
 
-        // Get flip settings
+        // Get flip settings - use entry metadata if available (handles flipped/derived images),
+        // fall back to preferences for new images not yet in a project
         boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
         boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+        if (gui.getProject() != null && gui.getImageData() != null) {
+            @SuppressWarnings("unchecked")
+            Project<BufferedImage> proj = (Project<BufferedImage>) gui.getProject();
+            var currentEntry = proj.getEntry(gui.getImageData());
+            if (currentEntry != null && ImageMetadataManager.isFlipped(currentEntry)) {
+                flipX = ImageMetadataManager.isFlippedX(currentEntry);
+                flipY = ImageMetadataManager.isFlippedY(currentEntry);
+                logger.info("Using flip state from entry metadata: flipX={}, flipY={}", flipX, flipY);
+            }
+        }
 
         // save a copy of the cropped macro image for future use/realignment
         BufferedImage processedMacroImage = null;
@@ -393,9 +417,20 @@ public class MicroscopeAlignmentWorkflow {
                 // Create a mutable holder for detection results that may be updated
                 final MacroImageResults[] detectionResultsHolder = {detectionResults};
 
-                // Import to project
+                // Get flip settings - use entry metadata if available (handles flipped/derived images),
+                // fall back to preferences for new images not yet in a project
                 boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
                 boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+                if (gui.getProject() != null && gui.getImageData() != null) {
+                    @SuppressWarnings("unchecked")
+                    Project<BufferedImage> proj = (Project<BufferedImage>) gui.getProject();
+                    var currentEntry = proj.getEntry(gui.getImageData());
+                    if (currentEntry != null && ImageMetadataManager.isFlipped(currentEntry)) {
+                        flipX = ImageMetadataManager.isFlippedX(currentEntry);
+                        flipY = ImageMetadataManager.isFlippedY(currentEntry);
+                        logger.info("Using flip state from entry metadata: flipX={}, flipY={}", flipX, flipY);
+                    }
+                }
 
                 Map<String, Object> projectDetails;
 
@@ -453,8 +488,15 @@ public class MicroscopeAlignmentWorkflow {
                             sampleSetup.modality());
                 }
 
-                // Create annotations from detection
-                runTissueDetectionScript(gui);
+                // Only run tissue detection if there are no existing annotations
+                boolean hasExistingAnnotations = !gui.getViewer()
+                        .getHierarchy().getAnnotationObjects().isEmpty();
+                if (hasExistingAnnotations) {
+                    logger.info("Existing annotations found ({} total), skipping tissue detection",
+                            gui.getViewer().getHierarchy().getAnnotationObjects().size());
+                } else {
+                    runTissueDetectionScript(gui);
+                }
 
                 // Get stage axis inversion settings (not optical flip -- see CLAUDE.md)
                 boolean stageInvertedX = QPPreferenceDialog.getStageInvertedXProperty();
@@ -508,12 +550,29 @@ public class MicroscopeAlignmentWorkflow {
                         stageInvertedY,
                         null); // Pass null for bounds
 
+                // Build an existing transform estimate for auto-move (if refining an existing transform)
+                AffineTransform existingTransformEstimate = null;
+                if (alignConfig.useExistingTransform()
+                        && alignConfig.selectedTransform() != null
+                        && detectionResultsHolder[0].greenBoxTransform() != null) {
+                    AffineTransform macroToStage = alignConfig.selectedTransform().getTransform();
+                    AffineTransform macroFlippedToFullRes = detectionResultsHolder[0].greenBoxTransform();
+                    existingTransformEstimate = TransformationFunctions.buildFullResToStageEstimate(
+                            macroToStage, macroFlippedToFullRes, mainPixelSize);
+                    if (existingTransformEstimate != null) {
+                        logger.info("Built fullRes->stage estimate for auto-move during alignment");
+                    } else {
+                        logger.info("Could not build transform estimate, falling back to manual navigation");
+                    }
+                }
+
                 // Setup manual transform - this returns a full-res->stage transform
                 AffineTransformationController.setupAffineTransformationAndValidationGUI(
-                                mainPixelSize, stageInvertedX, stageInvertedY)
+                                mainPixelSize, stageInvertedX, stageInvertedY, existingTransformEstimate)
                         .thenAccept(fullResToStageTransform -> {
                             if (fullResToStageTransform == null) {
                                 logger.info("Transform setup cancelled");
+                                removeAlignmentTiles(gui);
                                 return;
                             }
 
@@ -533,9 +592,12 @@ public class MicroscopeAlignmentWorkflow {
                                     stageInvertedY,
                                     transformManager,
                                     selectedScanner);
+
+                            removeAlignmentTiles(gui);
                         })
                         .exceptionally(ex -> {
                             logger.error("Error in transform setup", ex);
+                            removeAlignmentTiles(gui);
                             Platform.runLater(() -> UIFunctions.notifyUserOfError(
                                     "Transform setup failed: " + ex.getMessage(), "Transform Error"));
                             return null;
@@ -649,6 +711,23 @@ public class MicroscopeAlignmentWorkflow {
         } catch (IllegalArgumentException e) {
             logger.error("Invalid tile configuration", e);
             UIFunctions.notifyUserOfError("Invalid tile configuration: " + e.getMessage(), "Configuration Error");
+        }
+    }
+
+    /**
+     * Removes all detection objects (alignment tiles) from the image hierarchy.
+     * Called at the end of the alignment workflow to clean up temporary tiles.
+     */
+    private static void removeAlignmentTiles(QuPathGUI gui) {
+        try {
+            var hierarchy = gui.getViewer().getHierarchy();
+            var detections = hierarchy.getDetectionObjects();
+            if (!detections.isEmpty()) {
+                logger.info("Removing {} alignment tiles from hierarchy", detections.size());
+                hierarchy.removeObjects(detections, true);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to remove alignment tiles: {}", e.getMessage());
         }
     }
 

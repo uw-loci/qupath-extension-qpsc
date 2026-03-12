@@ -528,6 +528,54 @@ public class TransformationFunctions {
 
         return macroToStage;
     }
+    /**
+     * Builds a fullRes-to-stage estimate from a saved macro-to-stage transform
+     * and a green box detection result (macroFlipped-to-fullRes transform).
+     *
+     * <p>Logic: fullResToStage = macroToStage * inverse(macroFlippedToFullRes)
+     *
+     * <p>If the saved transform is already a fullRes-to-stage transform
+     * (scale close to the given fullResPixelSize), it is returned directly.
+     *
+     * @param macroToStageTransform    saved macro-to-stage transform
+     * @param macroFlippedToFullRes    green box detection transform (macroFlipped -> fullRes)
+     * @param fullResPixelSize         pixel size of the full-res image in microns (for detection)
+     * @return estimated fullRes-to-stage transform, or null if inversion fails
+     */
+    public static AffineTransform buildFullResToStageEstimate(
+            AffineTransform macroToStageTransform,
+            AffineTransform macroFlippedToFullRes,
+            double fullResPixelSize) {
+
+        if (macroToStageTransform == null || macroFlippedToFullRes == null) {
+            logger.warn("Cannot build fullRes-to-stage estimate: null transform provided");
+            return null;
+        }
+
+        // Check if the saved transform is already fullRes-to-stage
+        // (scale close to fullResPixelSize, e.g. ~0.25 um/px vs ~81 um/px for macro)
+        double transformScale = Math.abs(macroToStageTransform.getScaleX());
+        if (Math.abs(transformScale - fullResPixelSize) < 1.0) {
+            logger.info("Saved transform is already fullRes->stage (scale={} ~= pixelSize={})",
+                    transformScale, fullResPixelSize);
+            return new AffineTransform(macroToStageTransform);
+        }
+
+        // Build fullRes->stage = macroToStage * inverse(macroFlippedToFullRes)
+        try {
+            AffineTransform fullResToMacro = macroFlippedToFullRes.createInverse();
+            AffineTransform fullResToStage = new AffineTransform(macroToStageTransform);
+            fullResToStage.concatenate(fullResToMacro);
+
+            logger.info("Built fullRes->stage estimate from macro->stage + inverse(macroFlipped->fullRes)");
+            logTransformDetails("fullResToStage estimate", fullResToStage);
+            return fullResToStage;
+        } catch (Exception e) {
+            logger.warn("Cannot invert macroFlippedToFullRes transform: {}", e.getMessage());
+            return null;
+        }
+    }
+
     // ==================== VALIDATION FUNCTIONS ====================
 
     /**

@@ -23,11 +23,7 @@ public class AffineTransformationController {
     private static final Logger logger = LoggerFactory.getLogger(AffineTransformationController.class);
 
     /**
-     * Launches the full affine alignment GUI flow:
-     *  - Computes an initial scaling transform based on pixel size and flip
-     *  - Guides the user to align the microscope stage to selected tiles
-     *  - Refines the affine transform using measured stage coordinates
-     *  - Returns the final AffineTransform (or null if cancelled)
+     * Launches the full affine alignment GUI flow with manual stage navigation.
      *
      * @param macroPixelSizeMicrons Pixel size of macro image in microns
      * @param stageInvertedX        Whether the stage X axis is inverted
@@ -36,15 +32,42 @@ public class AffineTransformationController {
      */
     public static CompletableFuture<AffineTransform> setupAffineTransformationAndValidationGUI(
             double macroPixelSizeMicrons, boolean stageInvertedX, boolean stageInvertedY) {
+        return setupAffineTransformationAndValidationGUI(
+                macroPixelSizeMicrons, stageInvertedX, stageInvertedY, null);
+    }
+
+    /**
+     * Launches the full affine alignment GUI flow:
+     *  - Computes an initial scaling transform based on pixel size and flip
+     *  - Guides the user to align the microscope stage to selected tiles
+     *  - Refines the affine transform using measured stage coordinates
+     *  - Returns the final AffineTransform (or null if cancelled)
+     *
+     * <p>When {@code existingTransformEstimate} is provided, the stage will automatically
+     * move to the estimated position after the user selects a reference tile. Otherwise,
+     * the user must manually navigate the stage.
+     *
+     * @param macroPixelSizeMicrons    Pixel size of macro image in microns
+     * @param stageInvertedX           Whether the stage X axis is inverted
+     * @param stageInvertedY           Whether the stage Y axis is inverted
+     * @param existingTransformEstimate Optional existing fullRes-to-stage transform for auto-move (may be null)
+     * @return CompletableFuture with the user's validated affine transform, or null if cancelled.
+     */
+    public static CompletableFuture<AffineTransform> setupAffineTransformationAndValidationGUI(
+            double macroPixelSizeMicrons, boolean stageInvertedX, boolean stageInvertedY,
+            AffineTransform existingTransformEstimate) {
+
+        boolean hasEstimate = existingTransformEstimate != null;
         CompletableFuture<AffineTransform> future = new CompletableFuture<>();
 
         Platform.runLater(() -> {
             try {
                 logger.info(
-                        "Starting affine transformation setup (pixelSize: {}, stageInvertedX: {}, stageInvertedY: {})",
+                        "Starting affine transformation setup (pixelSize: {}, stageInvertedX: {}, stageInvertedY: {}, hasEstimate: {})",
                         macroPixelSizeMicrons,
                         stageInvertedX,
-                        stageInvertedY);
+                        stageInvertedY,
+                        hasEstimate);
 
                 QuPathGUI gui = QuPathGUI.getInstance();
 
@@ -53,12 +76,24 @@ public class AffineTransformationController {
                         macroPixelSizeMicrons, stageInvertedX, stageInvertedY);
                 logger.info("Initial scaling transform: {}", scalingTransform);
 
-                // 2. Prompt user to select a reference tile for initial alignment
-                UIFunctions.promptTileSelectionDialogAsync(
-                                "Select a REFERENCE tile (preferably near the center or edge of your region).\n"
-                                        + "After selection:\n"
-                                        + "1. Manually move the microscope stage to center this tile in the live view\n"
-                                        + "2. Click 'Confirm Selection' when the stage is properly positioned")
+                // 2. Prompt user to select a reference tile
+                String tileSelectionPrompt;
+                if (hasEstimate) {
+                    tileSelectionPrompt =
+                            "Select a REFERENCE tile (preferably near the center or edge of your region).\n"
+                                    + "After selection:\n"
+                                    + "1. The stage will automatically move to the estimated position\n"
+                                    + "2. Verify alignment and fine-tune if needed\n"
+                                    + "3. Click 'Confirm Selection' when the stage is properly positioned";
+                } else {
+                    tileSelectionPrompt =
+                            "Select a REFERENCE tile (preferably near the center or edge of your region).\n"
+                                    + "After selection:\n"
+                                    + "1. Manually move the microscope stage to center this tile in the live view\n"
+                                    + "2. Click 'Confirm Selection' when the stage is properly positioned";
+                }
+
+                UIFunctions.promptTileSelectionDialogAsync(tileSelectionPrompt)
                         .thenAccept(refTile -> {
                             if (refTile == null) {
                                 logger.info("User cancelled reference tile selection.");
@@ -76,10 +111,29 @@ public class AffineTransformationController {
                                         refTile.getName(),
                                         Arrays.toString(qpRefCoords));
 
-                                // 3. Ask user to confirm they've manually aligned the stage
-                                String message = "Please ensure the microscope is centered on the selected tile.\n"
-                                        + "The live camera view should show the same region as the selected tile in QuPath.\n\n"
-                                        + "Is the stage properly aligned?";
+                                // If we have an existing transform estimate, auto-move the stage
+                                if (hasEstimate) {
+                                    double[] estimatedStageCoords =
+                                            TransformationFunctions.transformQuPathFullResToStage(
+                                                    qpRefCoords, existingTransformEstimate);
+                                    logger.info("Auto-moving stage to estimated position: {}",
+                                            Arrays.toString(estimatedStageCoords));
+                                    MicroscopeController.getInstance()
+                                            .moveStageXY(estimatedStageCoords[0], estimatedStageCoords[1]);
+                                }
+
+                                // 3. Ask user to confirm alignment
+                                String message;
+                                if (hasEstimate) {
+                                    message = "The stage has been moved to the estimated position.\n"
+                                            + "Verify the live camera view matches the selected tile in QuPath.\n"
+                                            + "Fine-tune the stage position if needed.\n\n"
+                                            + "Is the stage properly aligned?";
+                                } else {
+                                    message = "Please ensure the microscope is centered on the selected tile.\n"
+                                            + "The live camera view should show the same region as the selected tile in QuPath.\n\n"
+                                            + "Is the stage properly aligned?";
+                                }
 
                                 boolean aligned = UIFunctions.promptYesNoDialog("Confirm Stage Alignment", message);
                                 if (!aligned) {
@@ -88,17 +142,17 @@ public class AffineTransformationController {
                                     return;
                                 }
 
-                                // 4. NOW get the current stage position after user has manually aligned
+                                // 4. NOW get the current stage position after user has aligned
                                 double[] measuredStageCoords =
                                         MicroscopeController.getInstance().getStagePositionXY();
                                 logger.info(
-                                        "Current stage coordinates after manual alignment: {}",
+                                        "Current stage coordinates after alignment: {}",
                                         Arrays.toString(measuredStageCoords));
 
-                                // 5. Calculate transform based on the manually aligned position
+                                // 5. Calculate transform based on the aligned position
                                 AffineTransform transform = TransformationFunctions.addTranslationToScaledAffine(
                                         scalingTransform, qpRefCoords, measuredStageCoords);
-                                logger.info("Calculated affine transform from manual alignment: {}", transform);
+                                logger.info("Calculated affine transform from alignment: {}", transform);
 
                                 // 6. Secondary refinement: use two geometric extremes for more robust alignment
                                 //    (top center and left center tiles, automatically determined)

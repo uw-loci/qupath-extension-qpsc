@@ -8,8 +8,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.images.ImageData;
 import qupath.lib.projects.Project;
+import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.roi.ROIs;
 import qupath.lib.roi.interfaces.ROI;
 import qupath.lib.scripting.QP;
@@ -441,6 +444,115 @@ public class MacroImageUtility {
 
         return retrieveMacroImageWithFallback(gui, sampleName);
     }
+    /**
+     * Retrieves a macro image by tracing through project metadata to find the source entry.
+     *
+     * <p>When the current image is a flipped duplicate or derived image (e.g. TransformedServer),
+     * its associated images may not be exposed. This method traces the metadata chain
+     * (base_image, original_image_id) to find the original entry that contains the macro.
+     *
+     * @param gui     QuPath GUI instance
+     * @param project The current project
+     * @return The macro image from the source entry, or null if not found
+     */
+    @SuppressWarnings("unchecked")
+    public static BufferedImage retrieveMacroImageFromProject(
+            QuPathGUI gui, Project<BufferedImage> project) {
+
+        if (gui.getImageData() == null || project == null) {
+            return null;
+        }
+
+        ProjectImageEntry<BufferedImage> currentEntry = project.getEntry(gui.getImageData());
+        if (currentEntry == null) {
+            return null;
+        }
+
+        // Strategy 1: Use base_image metadata (covers flipped entries AND sub-acquisitions)
+        String baseImageName = ImageMetadataManager.getBaseImage(currentEntry);
+        if (baseImageName != null && !baseImageName.isEmpty()) {
+            logger.info("Tracing base_image='{}' to find macro for entry '{}'",
+                    baseImageName, currentEntry.getImageName());
+            BufferedImage macro = findMacroByImageName(project, baseImageName);
+            if (macro != null) {
+                return macro;
+            }
+        }
+
+        // Strategy 2: Use original_image_id (direct parent for flipped entries)
+        String originalId = ImageMetadataManager.getOriginalImageId(currentEntry);
+        if (originalId != null) {
+            logger.info("Tracing original_image_id='{}' to find macro for entry '{}'",
+                    originalId, currentEntry.getImageName());
+            for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
+                if (originalId.equals(entry.getID())) {
+                    BufferedImage macro = readMacroFromEntry(entry);
+                    if (macro != null) {
+                        return macro;
+                    }
+                    // The original might itself be derived; check its base_image
+                    String origBase = ImageMetadataManager.getBaseImage(entry);
+                    if (origBase != null && !origBase.isEmpty()) {
+                        macro = findMacroByImageName(project, origBase);
+                        if (macro != null) {
+                            return macro;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        logger.debug("No source entry with macro found for image '{}'", currentEntry.getImageName());
+        return null;
+    }
+
+    /**
+     * Finds an entry by image name (with or without extension) and reads its macro.
+     */
+    private static BufferedImage findMacroByImageName(
+            Project<BufferedImage> project, String targetName) {
+        for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
+            String entryName = entry.getImageName();
+            String strippedName = GeneralTools.stripExtension(entryName);
+            if (targetName.equals(entryName) || targetName.equals(strippedName)) {
+                BufferedImage macro = readMacroFromEntry(entry);
+                if (macro != null) {
+                    logger.info("Found macro ({}x{}) from entry '{}'",
+                            macro.getWidth(), macro.getHeight(), entryName);
+                    return macro;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Reads the macro associated image directly from a project entry.
+     */
+    private static BufferedImage readMacroFromEntry(ProjectImageEntry<BufferedImage> entry) {
+        try {
+            ImageData<BufferedImage> data = entry.readImageData();
+            var server = data.getServer();
+            var associatedList = server.getAssociatedImageList();
+            if (associatedList == null) {
+                return null;
+            }
+            for (String name : associatedList) {
+                if (name.toLowerCase().contains("macro")) {
+                    Object image = server.getAssociatedImage(name);
+                    if (image instanceof BufferedImage macro) {
+                        return macro;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to read macro from entry '{}': {}",
+                    entry.getImageName(), e.getMessage());
+        }
+        return null;
+    }
+
     /**
      * Checks if a macro image is available without actually retrieving it.
      * Useful for enabling/disabling UI elements based on macro availability.

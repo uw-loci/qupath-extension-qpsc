@@ -3817,7 +3817,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             // X = '0' (unified), '1' (individual), or 'U' (individual mode not supported)
             // Gain mode is always unified now (GAIN:0), ignore the gain flag
             if (modeStr.contains("EXP:U")) {
-                logger.info("JAI camera does not support individual exposure mode (ExposureIsIndividual property not available)");
+                logger.info(
+                        "JAI camera does not support individual exposure mode (ExposureIsIndividual property not available)");
                 return new CameraModeResult(true, false, false);
             }
             boolean expIndividual = modeStr.contains("EXP:1");
@@ -3851,8 +3852,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             }
 
             if (responseStr.startsWith("ERR_NSUP")) {
-                throw new IOException(
-                        "Individual exposure mode not supported by this camera. "
+                throw new IOException("Individual exposure mode not supported by this camera. "
                         + "Check that MicroManager has the correct device adapter (requires PR #781).");
             }
 
