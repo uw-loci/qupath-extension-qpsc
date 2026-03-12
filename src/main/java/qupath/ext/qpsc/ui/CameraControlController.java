@@ -250,16 +250,23 @@ public class CameraControlController {
 
         // Check camera type and set initial mode
         boolean isJAI = false;
+        boolean individualModeSupported = false;
         try {
             MicroscopeSocketClient.CameraModeResult modeResult = controller.getCameraMode();
             isJAI = modeResult.isJAI();
-            if (isJAI) {
+            individualModeSupported = modeResult.individualModeSupported();
+            if (isJAI && individualModeSupported) {
                 expIndividualRb.setSelected(modeResult.exposureIndividual());
                 expUnifiedRb.setSelected(!modeResult.exposureIndividual());
             } else {
-                // Non-JAI camera - hide mode toggles
+                // Non-JAI camera or individual mode not supported - hide mode toggles
                 modeBox.setVisible(false);
                 modeBox.setManaged(false);
+                if (isJAI && !individualModeSupported) {
+                    logger.info("JAI camera detected but individual exposure mode not supported "
+                            + "(ExposureIsIndividual property not available). "
+                            + "Check MicroManager device adapter version.");
+                }
             }
         } catch (IOException e) {
             logger.warn("Could not get camera mode: {}", e.getMessage());
@@ -270,8 +277,8 @@ public class CameraControlController {
         // Store field references for reload functionality (need to declare early for closures)
         final Map<String, AngleFields> angleFieldsMap = new HashMap<>();
 
-        // Exposure mode change listeners (JAI only)
-        if (isJAI) {
+        // Exposure mode change listeners (JAI with individual mode support only)
+        if (isJAI && individualModeSupported) {
             expIndividualRb.setOnAction(e -> {
                 try {
                     boolean expInd = expIndividualRb.isSelected();
@@ -665,9 +672,10 @@ public class CameraControlController {
             // Parse exposure values - use unified field if individual fields are disabled
             float[] exposures;
             if (fields.expR.isDisabled()) {
-                // Unified exposure mode - use the "All" field value for all channels
+                // Unified exposure mode - send single value so applyCameraSettingsForAngle
+                // correctly identifies this as unified (length 1) vs individual (length 3)
                 float expAll = Float.parseFloat(fields.expAll.getText());
-                exposures = new float[] {expAll, expAll, expAll};
+                exposures = new float[] {expAll};
             } else {
                 // Individual exposure mode - use per-channel fields
                 exposures = new float[] {
@@ -853,13 +861,15 @@ public class CameraControlController {
                         "Setting camera mode from YAML profile: exposure_individual={}, gain=unified",
                         targetExpIndividual);
 
-                // Update radio buttons (setSelected does not fire onAction)
+                // Send mode change to camera first, wrapping with live mode handling
+                // to avoid JAI error 11018 if live streaming is active.
+                // Only update radio buttons AFTER successful camera mode change
+                // to prevent UI/camera state mismatch on failure.
+                controller.withLiveModeHandling(() -> controller.setCameraMode(targetExpIndividual));
+
+                // Camera mode set successfully - now update radio buttons
                 expIndividualRb.setSelected(targetExpIndividual);
                 expUnifiedRb.setSelected(!targetExpIndividual);
-
-                // Send mode change to camera, wrapping with live mode handling
-                // to avoid JAI error 11018 if live streaming is active
-                controller.withLiveModeHandling(() -> controller.setCameraMode(targetExpIndividual));
             }
 
             // Always update field states to match the detected mode, even if the camera

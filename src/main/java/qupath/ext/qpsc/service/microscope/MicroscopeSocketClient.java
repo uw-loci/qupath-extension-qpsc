@@ -3711,8 +3711,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
      *
      * @param isJAI True if this is a JAI 3-CCD camera with per-channel control
      * @param exposureIndividual True if per-channel exposure control is enabled
+     * @param individualModeSupported True if the camera supports switching to individual exposure mode
      */
-    public record CameraModeResult(boolean isJAI, boolean exposureIndividual) {}
+    public record CameraModeResult(boolean isJAI, boolean exposureIndividual, boolean individualModeSupported) {}
 
     /**
      * Result of getExposures() containing exposure values.
@@ -3808,19 +3809,24 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         if (modeStr.startsWith("UNIFIED")) {
             // Not a JAI camera - unified mode only
-            return new CameraModeResult(false, false);
+            return new CameraModeResult(false, false, false);
         }
 
         if (modeStr.startsWith("JAI_EXP:")) {
             // Parse JAI mode: "JAI_EXP:X_GAIN:Y"
+            // X = '0' (unified), '1' (individual), or 'U' (individual mode not supported)
             // Gain mode is always unified now (GAIN:0), ignore the gain flag
+            if (modeStr.contains("EXP:U")) {
+                logger.info("JAI camera does not support individual exposure mode (ExposureIsIndividual property not available)");
+                return new CameraModeResult(true, false, false);
+            }
             boolean expIndividual = modeStr.contains("EXP:1");
-            return new CameraModeResult(true, expIndividual);
+            return new CameraModeResult(true, expIndividual, true);
         }
 
         // Default to unified mode
         logger.warn("Unknown camera mode format: {}", modeStr);
-        return new CameraModeResult(false, false);
+        return new CameraModeResult(false, false, false);
     }
 
     /**
@@ -3842,6 +3848,12 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if (!responseStr.startsWith("ACK")) {
             if (responseStr.startsWith("ERR_NJAI")) {
                 throw new IOException("Camera does not support individual mode (not a JAI camera)");
+            }
+
+            if (responseStr.startsWith("ERR_NSUP")) {
+                throw new IOException(
+                        "Individual exposure mode not supported by this camera. "
+                        + "Check that MicroManager has the correct device adapter (requires PR #781).");
             }
 
             // ERR_MODE may indicate live streaming interference -- retry once after delay
