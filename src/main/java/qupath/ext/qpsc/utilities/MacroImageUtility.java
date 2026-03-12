@@ -341,10 +341,34 @@ public class MacroImageUtility {
      * Searches through associated images for entries containing "macro" and handles
      * various naming formats used by different scanner vendors.
      *
+     * <p>When the current image is a flipped derivative (TransformedServer), the macro
+     * from the current server may already have the flip applied, which breaks downstream
+     * crop+flip processing. In this case, the method traces through project metadata to
+     * retrieve the macro from the original (unflipped) source entry instead.
+     *
      * @param gui The QuPath GUI instance
      * @return The macro image as BufferedImage, or null if not available or retrieval fails
      */
+    @SuppressWarnings("unchecked")
     public static BufferedImage retrieveMacroImage(QuPathGUI gui) {
+        // If current entry is a flipped derivative, get the macro from the source entry
+        // to avoid a pre-flipped macro from TransformedServer
+        if (gui.getProject() != null && gui.getImageData() != null) {
+            Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+            ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+            if (entry != null) {
+                String originalId = ImageMetadataManager.getOriginalImageId(entry);
+                if (originalId != null) {
+                    logger.info("Current image is a derived entry - retrieving macro from source");
+                    BufferedImage macro = retrieveMacroImageFromProject(gui, project);
+                    if (macro != null) {
+                        return macro;
+                    }
+                    // Fall through to direct retrieval if project chain fails
+                }
+            }
+        }
+
         try {
             var imageData = gui.getImageData();
             if (imageData == null) return null;
