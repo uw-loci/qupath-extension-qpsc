@@ -580,7 +580,7 @@ public class SampleSetupController {
             iconLabel.setStyle(iconLabel.getStyle() + " -fx-text-fill: #2E7D32;");
             primaryText.setText("Adding to existing project: " + existingProjectName);
             primaryText.setStyle(primaryText.getStyle() + " -fx-text-fill: #1B5E20;");
-            secondaryText.setText("Acquisition will be added to this project");
+            secondaryText.setText("Using existing project");
             secondaryText.setStyle(secondaryText.getStyle() + " -fx-text-fill: #388E3C;");
         } else {
             // Creating new project - blue banner
