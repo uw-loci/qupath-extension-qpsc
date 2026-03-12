@@ -187,7 +187,8 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
-        // 3) Microscope alignment workflow (only enabled if image has macro)
+        // 3) Microscope alignment workflow (only enabled if macro is available -
+        //    either directly from the current image or via project metadata chain)
         MenuItem alignmentOption = new MenuItem(res.getString("menu.microscopeAlignment"));
         alignmentOption
                 .disableProperty()
@@ -196,24 +197,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                             if (!configValid) {
                                 return true;
                             }
-                            var imageData = qupath.getImageData();
-                            if (imageData == null) {
-                                return true;
-                            }
-                            try {
-                                var server = imageData.getServer();
-                                if (server == null) {
-                                    return true;
-                                }
-                                var associatedImages = server.getAssociatedImageList();
-                                if (associatedImages == null) {
-                                    return true;
-                                }
-                                return !MacroImageUtility.isMacroImageAvailable(qupath);
-                            } catch (Exception e) {
-                                logger.error("Error in macro menu binding", e);
-                                return true;
-                            }
+                            return !MacroImageUtility.isMacroImageAvailable(qupath);
                         },
                         qupath.imageDataProperty()));
         setMenuItemTooltip(

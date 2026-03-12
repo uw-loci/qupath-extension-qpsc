@@ -389,7 +389,9 @@ public class UIFunctions {
      * Uses a custom Stage with alwaysOnTop to ensure visibility while remaining non-modal.
      * Must be called from the JavaFX Application Thread.
      *
-     * Location: UIFunctions.java - stageToQuPathAlignmentGUI2() method
+     * <p>Blocking variant -- only safe to call from a background thread that is NOT the
+     * JavaFX Application Thread. For calls originating on the FX thread (e.g. inside
+     * CompletableFuture chains), use {@link #stageAlignmentConfirmAsync()} instead.
      *
      * @return true if user confirms position is accurate, false otherwise
      * @throws IllegalStateException if not called from JavaFX thread
@@ -458,6 +460,71 @@ public class UIFunctions {
         }
 
         return result.get();
+    }
+
+    /**
+     * Non-blocking async version of stage alignment confirmation.
+     * Shows a non-modal, always-on-top dialog and completes the returned future
+     * when the user confirms or cancels. Safe to call from the FX thread.
+     *
+     * @return CompletableFuture that completes with true if confirmed, false if cancelled
+     */
+    public static CompletableFuture<Boolean> stageAlignmentConfirmAsync() {
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+
+        Runnable showDialog = () -> {
+            Stage stage = new Stage();
+            stage.initModality(Modality.NONE);
+            stage.setTitle("Position Confirmation");
+            stage.setAlwaysOnTop(true);
+
+            VBox layout = new VBox(10);
+            layout.setPadding(new Insets(20));
+            layout.setAlignment(Pos.CENTER);
+
+            Label headerLabel = new Label("Is the current position accurate?");
+            headerLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+
+            Label instructionLabel = new Label("Compare with the uManager live view.");
+
+            HBox buttonBox = new HBox(10);
+            buttonBox.setAlignment(Pos.CENTER);
+
+            Button confirmButton = new Button("Current Position is Accurate");
+            confirmButton.setDefaultButton(true);
+            confirmButton.setOnAction(e -> {
+                stage.close();
+                future.complete(true);
+            });
+
+            Button cancelButton = new Button("Cancel acquisition");
+            cancelButton.setCancelButton(true);
+            cancelButton.setOnAction(e -> {
+                stage.close();
+                future.complete(false);
+            });
+
+            buttonBox.getChildren().addAll(confirmButton, cancelButton);
+            layout.getChildren().addAll(headerLabel, instructionLabel, new Separator(), buttonBox);
+
+            Scene scene = new Scene(layout, 350, 150);
+            stage.setScene(scene);
+
+            stage.setOnCloseRequest(e -> {
+                future.complete(false);
+            });
+
+            stage.centerOnScreen();
+            stage.show();
+        };
+
+        if (Platform.isFxApplicationThread()) {
+            showDialog.run();
+        } else {
+            Platform.runLater(showDialog);
+        }
+
+        return future;
     }
 
     /** Pops up a modal warning dialog. */

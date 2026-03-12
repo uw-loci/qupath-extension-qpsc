@@ -554,26 +554,42 @@ public class MacroImageUtility {
     }
 
     /**
-     * Checks if a macro image is available without actually retrieving it.
-     * Useful for enabling/disabling UI elements based on macro availability.
+     * Checks if a macro image is available, either from the current image's
+     * associated images or by tracing through project metadata to a source entry.
      *
      * @param gui The QuPath GUI instance
-     * @return true if a macro image exists in the associated images list, false otherwise
+     * @return true if a macro image can be obtained, false otherwise
      */
+    @SuppressWarnings("unchecked")
     public static boolean isMacroImageAvailable(QuPathGUI gui) {
         if (gui.getImageData() == null) {
             return false;
         }
 
+        // Check current image's associated images directly
         try {
             var associatedImages = gui.getImageData().getServer().getAssociatedImageList();
-            if (associatedImages != null) {
-                return associatedImages.stream()
-                        .anyMatch(name -> name.toLowerCase().contains("macro"));
+            if (associatedImages != null
+                    && associatedImages.stream().anyMatch(name -> name.toLowerCase().contains("macro"))) {
+                return true;
             }
         } catch (Exception e) {
-            logger.error("Error checking for macro image", e);
+            logger.debug("No associated images on current server: {}", e.getMessage());
         }
+
+        // Fall back to project metadata tracing (for flipped/derived entries)
+        if (gui.getProject() != null) {
+            Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+            ProjectImageEntry<BufferedImage> currentEntry = project.getEntry(gui.getImageData());
+            if (currentEntry != null) {
+                String baseImage = ImageMetadataManager.getBaseImage(currentEntry);
+                String originalId = ImageMetadataManager.getOriginalImageId(currentEntry);
+                if (baseImage != null || originalId != null) {
+                    return true;
+                }
+            }
+        }
+
         return false;
     }
 }

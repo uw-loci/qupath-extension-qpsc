@@ -94,158 +94,105 @@ public class AffineTransformationController {
                 }
 
                 UIFunctions.promptTileSelectionDialogAsync(tileSelectionPrompt)
-                        .thenAccept(refTile -> {
+                        .thenCompose(refTile -> {
                             if (refTile == null) {
                                 logger.info("User cancelled reference tile selection.");
                                 future.complete(null);
-                                return;
+                                return CompletableFuture.completedFuture(null);
                             }
 
-                            try {
-                                double[] qpRefCoords = {
-                                    refTile.getROI().getCentroidX(),
-                                    refTile.getROI().getCentroidY()
-                                };
-                                logger.info(
-                                        "User selected tile '{}' at QuPath coords: {}",
-                                        refTile.getName(),
-                                        Arrays.toString(qpRefCoords));
+                            double[] qpRefCoords = {
+                                refTile.getROI().getCentroidX(),
+                                refTile.getROI().getCentroidY()
+                            };
+                            logger.info(
+                                    "User selected tile '{}' at QuPath coords: {}",
+                                    refTile.getName(),
+                                    Arrays.toString(qpRefCoords));
 
-                                // If we have an existing transform estimate, auto-move the stage
-                                if (hasEstimate) {
-                                    double[] estimatedStageCoords =
-                                            TransformationFunctions.transformQuPathFullResToStage(
-                                                    qpRefCoords, existingTransformEstimate);
-                                    logger.info("Auto-moving stage to estimated position: {}",
-                                            Arrays.toString(estimatedStageCoords));
-                                    MicroscopeController.getInstance()
-                                            .moveStageXY(estimatedStageCoords[0], estimatedStageCoords[1]);
-                                }
+                            // If we have an existing transform estimate, auto-move the stage
+                            if (hasEstimate) {
+                                double[] estimatedStageCoords =
+                                        TransformationFunctions.transformQuPathFullResToStage(
+                                                qpRefCoords, existingTransformEstimate);
+                                logger.info("Auto-moving stage to estimated position: {}",
+                                        Arrays.toString(estimatedStageCoords));
+                                MicroscopeController.getInstance()
+                                        .moveStageXY(estimatedStageCoords[0], estimatedStageCoords[1]);
+                            }
 
-                                // 3. Ask user to confirm alignment
-                                String message;
-                                if (hasEstimate) {
-                                    message = "The stage has been moved to the estimated position.\n"
-                                            + "Verify the live camera view matches the selected tile in QuPath.\n"
-                                            + "Fine-tune the stage position if needed.\n\n"
-                                            + "Is the stage properly aligned?";
-                                } else {
-                                    message = "Please ensure the microscope is centered on the selected tile.\n"
-                                            + "The live camera view should show the same region as the selected tile in QuPath.\n\n"
-                                            + "Is the stage properly aligned?";
-                                }
+                            // 3. Non-modal confirmation -- user can interact with QuPath
+                            //    and the Live Viewer while this is open
+                            return UIFunctions.stageAlignmentConfirmAsync()
+                                    .thenCompose(aligned -> {
+                                        if (!aligned) {
+                                            logger.info("User cancelled at manual alignment step.");
+                                            future.complete(null);
+                                            return CompletableFuture.completedFuture(null);
+                                        }
 
-                                boolean aligned = UIFunctions.promptYesNoDialog("Confirm Stage Alignment", message);
-                                if (!aligned) {
-                                    logger.info("User cancelled at manual alignment step.");
-                                    future.complete(null);
-                                    return;
-                                }
+                                        try {
+                                            // 4. Get current stage position after user aligned
+                                            double[] measuredStageCoords =
+                                                    MicroscopeController.getInstance().getStagePositionXY();
+                                            logger.info(
+                                                    "Current stage coordinates after alignment: {}",
+                                                    Arrays.toString(measuredStageCoords));
 
-                                // 4. NOW get the current stage position after user has aligned
-                                double[] measuredStageCoords =
-                                        MicroscopeController.getInstance().getStagePositionXY();
-                                logger.info(
-                                        "Current stage coordinates after alignment: {}",
-                                        Arrays.toString(measuredStageCoords));
+                                            // 5. Calculate transform based on aligned position
+                                            AffineTransform transform =
+                                                    TransformationFunctions.addTranslationToScaledAffine(
+                                                            scalingTransform, qpRefCoords, measuredStageCoords);
+                                            logger.info(
+                                                    "Calculated affine transform from alignment: {}", transform);
 
-                                // 5. Calculate transform based on the aligned position
-                                AffineTransform transform = TransformationFunctions.addTranslationToScaledAffine(
-                                        scalingTransform, qpRefCoords, measuredStageCoords);
-                                logger.info("Calculated affine transform from alignment: {}", transform);
+                                            // 6. Secondary refinement with geometric extremes
+                                            Collection<PathObject> allTiles =
+                                                    gui.getViewer().getHierarchy().getDetectionObjects();
+                                            PathObject topCenterTile =
+                                                    TransformationFunctions.getTopCenterTile(allTiles);
+                                            PathObject leftCenterTile =
+                                                    TransformationFunctions.getLeftCenterTile(allTiles);
 
-                                // 6. Secondary refinement: use two geometric extremes for more robust alignment
-                                //    (top center and left center tiles, automatically determined)
-                                Collection<PathObject> allTiles =
-                                        gui.getViewer().getHierarchy().getDetectionObjects();
-                                PathObject topCenterTile = TransformationFunctions.getTopCenterTile(allTiles);
-                                PathObject leftCenterTile = TransformationFunctions.getLeftCenterTile(allTiles);
+                                            CompletableFuture<AffineTransform> refinementFuture =
+                                                    CompletableFuture.completedFuture(transform);
 
-                                // Process refinement tiles sequentially
-                                CompletableFuture<AffineTransform> refinementFuture =
-                                        CompletableFuture.completedFuture(transform);
+                                            for (PathObject tile :
+                                                    Arrays.asList(topCenterTile, leftCenterTile)) {
+                                                if (tile == null) continue;
 
-                                for (PathObject tile : Arrays.asList(topCenterTile, leftCenterTile)) {
-                                    if (tile == null) continue;
-
-                                    refinementFuture = refinementFuture.thenCompose(currentTransform -> {
-                                        CompletableFuture<AffineTransform> tileFuture = new CompletableFuture<>();
-
-                                        Platform.runLater(() -> {
-                                            try {
-                                                // Select the tile BEFORE showing the dialog
-                                                QP.resetSelection();
-                                                QP.selectObjects(List.of(tile)); // Wrap in a List
-
-                                                // Also center the viewer on this tile
-                                                gui.getViewer()
-                                                        .setCenterPixelLocation(
-                                                                tile.getROI().getCentroidX(),
-                                                                tile.getROI().getCentroidY());
-
-                                                logger.info(
-                                                        "Secondary alignment: moving to refinement tile '{}'",
-                                                        tile.getName());
-
-                                                double[] tileCoords = {
-                                                    tile.getROI().getCentroidX(),
-                                                    tile.getROI().getCentroidY()
-                                                };
-                                                double[] stageCoords =
-                                                        TransformationFunctions.transformQuPathFullResToStage(
-                                                                tileCoords, currentTransform);
-
-                                                MicroscopeController.getInstance()
-                                                        .moveStageXY(stageCoords[0], stageCoords[1]);
-
-                                                boolean ok = UIFunctions.stageToQuPathAlignmentGUI2();
-                                                if (!ok) {
-                                                    logger.info(
-                                                            "User cancelled during secondary alignment at tile '{}'.",
-                                                            tile.getName());
-                                                    tileFuture.complete(null);
-                                                    return;
-                                                }
-
-                                                double[] measuredCoords = MicroscopeController.getInstance()
-                                                        .getStagePositionXY();
-                                                AffineTransform newTransform =
-                                                        TransformationFunctions.addTranslationToScaledAffine(
-                                                                currentTransform, tileCoords, measuredCoords);
-                                                logger.info(
-                                                        "Refined transform after tile '{}': {}",
-                                                        tile.getName(),
-                                                        newTransform);
-                                                tileFuture.complete(newTransform);
-
-                                            } catch (Exception e) {
-                                                logger.error("Error during tile refinement", e);
-                                                tileFuture.completeExceptionally(e);
+                                                refinementFuture =
+                                                        refinementFuture.thenCompose(currentTransform -> {
+                                                            if (currentTransform == null) {
+                                                                return CompletableFuture.completedFuture(
+                                                                        null);
+                                                            }
+                                                            return refineWithTileAsync(
+                                                                    gui, tile, currentTransform);
+                                                        });
                                             }
-                                        });
 
-                                        return tileFuture;
+                                            refinementFuture
+                                                    .thenAccept(finalTransform -> {
+                                                        if (finalTransform != null) {
+                                                            future.complete(finalTransform);
+                                                        } else {
+                                                            future.complete(null);
+                                                        }
+                                                    })
+                                                    .exceptionally(ex -> {
+                                                        logger.error("Refinement failed", ex);
+                                                        future.completeExceptionally(ex);
+                                                        return null;
+                                                    });
+
+                                        } catch (Exception e) {
+                                            logger.error("Affine transformation setup failed", e);
+                                            future.complete(null);
+                                        }
+
+                                        return CompletableFuture.completedFuture(null);
                                     });
-                                }
-                                refinementFuture
-                                        .thenAccept(finalTransform -> {
-                                            if (finalTransform != null) {
-                                                future.complete(finalTransform);
-                                            } else {
-                                                future.complete(null);
-                                            }
-                                        })
-                                        .exceptionally(ex -> {
-                                            logger.error("Refinement failed", ex);
-                                            future.completeExceptionally(ex);
-                                            return null;
-                                        });
-
-                            } catch (Exception e) {
-                                logger.error("Affine transformation setup failed", e);
-                                Dialogs.showErrorNotification("Affine Transform Error", e.getMessage());
-                                future.complete(null);
-                            }
                         })
                         .exceptionally(ex -> {
                             logger.error("Tile selection failed", ex);
@@ -261,5 +208,70 @@ public class AffineTransformationController {
         });
 
         return future;
+    }
+
+    /**
+     * Performs a single refinement step for one tile: selects it, moves the stage,
+     * shows a non-modal confirmation, and recalculates the transform.
+     */
+    private static CompletableFuture<AffineTransform> refineWithTileAsync(
+            QuPathGUI gui, PathObject tile, AffineTransform currentTransform) {
+
+        CompletableFuture<AffineTransform> tileFuture = new CompletableFuture<>();
+
+        Platform.runLater(() -> {
+            try {
+                QP.resetSelection();
+                QP.selectObjects(List.of(tile));
+                gui.getViewer()
+                        .setCenterPixelLocation(
+                                tile.getROI().getCentroidX(),
+                                tile.getROI().getCentroidY());
+
+                logger.info("Secondary alignment: moving to refinement tile '{}'", tile.getName());
+
+                double[] tileCoords = {
+                    tile.getROI().getCentroidX(),
+                    tile.getROI().getCentroidY()
+                };
+                double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
+                        tileCoords, currentTransform);
+
+                MicroscopeController.getInstance().moveStageXY(stageCoords[0], stageCoords[1]);
+
+                // Non-modal async confirmation
+                UIFunctions.stageAlignmentConfirmAsync().thenAccept(ok -> {
+                    if (!ok) {
+                        logger.info(
+                                "User cancelled during secondary alignment at tile '{}'.",
+                                tile.getName());
+                        tileFuture.complete(null);
+                        return;
+                    }
+
+                    try {
+                        double[] measuredCoords =
+                                MicroscopeController.getInstance().getStagePositionXY();
+                        AffineTransform newTransform =
+                                TransformationFunctions.addTranslationToScaledAffine(
+                                        currentTransform, tileCoords, measuredCoords);
+                        logger.info(
+                                "Refined transform after tile '{}': {}",
+                                tile.getName(),
+                                newTransform);
+                        tileFuture.complete(newTransform);
+                    } catch (Exception e) {
+                        logger.error("Error getting stage position during refinement", e);
+                        tileFuture.completeExceptionally(e);
+                    }
+                });
+
+            } catch (Exception e) {
+                logger.error("Error during tile refinement", e);
+                tileFuture.completeExceptionally(e);
+            }
+        });
+
+        return tileFuture;
     }
 }
