@@ -116,8 +116,17 @@ public class MicroscopeAlignmentWorkflow {
                     MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
                     String currentMicroscope = mgr.getMicroscopeName();
 
+                    // Pre-fill sample name from current project if one is open
+                    String defaultSampleName = null;
+                    if (gui.getProject() != null) {
+                        File projectDir = gui.getProject().getPath().toFile().getParentFile();
+                        if (projectDir != null) {
+                            defaultSampleName = projectDir.getName();
+                        }
+                    }
+
                     // Continue with sample setup dialog...
-                    SampleSetupController.showDialog()
+                    SampleSetupController.showDialog(defaultSampleName)
                             .thenCompose(sampleSetup -> {
                                 if (sampleSetup == null) {
                                     logger.info("User cancelled at sample setup");
@@ -481,10 +490,17 @@ public class MicroscopeAlignmentWorkflow {
                             sampleSetup.sampleName(),
                             sampleSetup.modality());
                 } else {
-                    // Use existing project
+                    // Use existing project - derive folder and name from the project path
+                    // instead of relying on the sample setup dialog values
+                    File projectDir = gui.getProject().getPath().toFile().getParentFile();
+                    String projectsFolderPath = projectDir.getParent();
+                    String sampleName = projectDir.getName();
+                    logger.info("Using existing project: name='{}', folder='{}'",
+                            sampleName, projectsFolderPath);
+
                     projectDetails = QPProjectFunctions.getCurrentProjectInformation(
-                            sampleSetup.projectsFolder().getAbsolutePath(),
-                            sampleSetup.sampleName(),
+                            projectsFolderPath,
+                            sampleName,
                             sampleSetup.modality());
                 }
 
@@ -675,8 +691,18 @@ public class MicroscopeAlignmentWorkflow {
                 .filter(a -> a.getClassification() != null && VALID_ANNOTATION_CLASSES.contains(a.getClassification()))
                 .toList();
 
+        // Final fallback: use ALL annotations regardless of classification
         if (annotations.isEmpty()) {
-            logger.warn("No annotations found for tiling. Looking for classes: {}", VALID_ANNOTATION_CLASSES);
+            var allAnnotations = new java.util.ArrayList<>(
+                    gui.getViewer().getHierarchy().getAnnotationObjects());
+            if (!allAnnotations.isEmpty()) {
+                logger.info("No classified annotations found, using all {} annotations for tiling", allAnnotations.size());
+                createTilesForAnnotations(
+                        gui, allAnnotations, sampleSetup, tempTileDirectory, modeWithIndex,
+                        stageInvertedX, stageInvertedY);
+                return;
+            }
+            logger.warn("No annotations found for tiling");
             return;
         }
 

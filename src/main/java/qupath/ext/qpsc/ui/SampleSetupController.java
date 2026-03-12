@@ -84,7 +84,7 @@ public class SampleSetupController {
             // Adapt header based on whether project exists
             if (hasOpenProject) {
                 dlg.setHeaderText(
-                        "Adding to existing project: " + existingProjectName + "\nPlease select the imaging modality:");
+                        "Existing project: " + existingProjectName + "\nSelect the imaging modality for alignment:");
             } else {
                 dlg.setHeaderText(res.getString("sampleSetup.header"));
             }
@@ -101,8 +101,14 @@ public class SampleSetupController {
                     new Tooltip("Enter a name for this sample/slide. Used as the project folder name.\n"
                             + "Avoid special characters and spaces."));
 
-            // Initialize sample name: use default if provided, otherwise use last used
-            if (defaultSampleName != null && !defaultSampleName.trim().isEmpty()) {
+            // Initialize sample name
+            if (hasOpenProject && existingProjectName != null) {
+                // Project already open - use its name and make read-only
+                sampleNameField.setText(existingProjectName);
+                sampleNameField.setEditable(false);
+                sampleNameField.setStyle("-fx-opacity: 0.7;");
+                logger.debug("Using project name (read-only): {}", existingProjectName);
+            } else if (defaultSampleName != null && !defaultSampleName.trim().isEmpty()) {
                 sampleNameField.setText(defaultSampleName.trim());
                 logger.debug("Using provided default sample name: {}", defaultSampleName);
             } else {
