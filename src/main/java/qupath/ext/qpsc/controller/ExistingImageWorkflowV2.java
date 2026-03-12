@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.controller.workflow.*;
+import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.*;
@@ -331,7 +332,7 @@ public class ExistingImageWorkflowV2 {
             logger.info("Initializing workflow from consolidated config");
 
             // Create sample setup result
-            state.sample = new SampleSetupController.SampleSetupResult(
+            state.sample = new SampleSetupResult(
                     config.sampleName(),
                     config.projectsFolder(),
                     config.modality(),
@@ -749,7 +750,7 @@ public class ExistingImageWorkflowV2 {
      * Workflow state container for V2.
      */
     public static class WorkflowState {
-        public SampleSetupController.SampleSetupResult sample;
+        public SampleSetupResult sample;
         public AlignmentSelectionController.AlignmentChoice alignmentChoice;
         public AffineTransform transform;
         public ProjectHelper.ProjectInfo projectInfo;

@@ -14,6 +14,7 @@ import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.*;
@@ -174,7 +175,7 @@ public class MicroscopeAlignmentWorkflow {
      * Container for sample setup, alignment config, detection results, and selected scanner.
      */
     private record CombinedConfig(
-            SampleSetupController.SampleSetupResult sampleSetup,
+            SampleSetupResult sampleSetup,
             MacroImageController.AlignmentConfig alignmentConfig,
             MacroImageResults macroImageResults,
             String selectedScanner,
@@ -553,7 +554,7 @@ public class MicroscopeAlignmentWorkflow {
      */
     private static void createAlignmentTiles(
             QuPathGUI gui,
-            SampleSetupController.SampleSetupResult sampleSetup,
+            SampleSetupResult sampleSetup,
             String tempTileDirectory,
             String modeWithIndex,
             boolean stageInvertedX,
@@ -625,7 +626,7 @@ public class MicroscopeAlignmentWorkflow {
     private static void createTilesForAnnotations(
             QuPathGUI gui,
             List<PathObject> annotations,
-            SampleSetupController.SampleSetupResult sampleSetup,
+            SampleSetupResult sampleSetup,
             String tempTileDirectory,
             String modeWithIndex,
             boolean stageInvertedX,

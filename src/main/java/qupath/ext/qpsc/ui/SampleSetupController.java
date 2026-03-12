@@ -15,6 +15,7 @@ import javafx.stage.Modality;
 import javafx.stage.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -523,10 +524,6 @@ public class SampleSetupController {
 
         return displayString; // fallback to original string
     }
-
-    /** Holds the user's choices from the "sample setup" dialog. */
-    public record SampleSetupResult(
-            String sampleName, File projectsFolder, String modality, String objective, String detector) {}
 
     // ==================== Variant Detection Banner ====================
 

@@ -9,7 +9,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
-import qupath.ext.qpsc.ui.UIFunctions;
 
 /**
  * Shared handler for the manual focus dialog pattern used during acquisition monitoring.
@@ -34,6 +33,24 @@ public final class ManualFocusHandler {
     private ManualFocusHandler() {}
 
     /**
+     * Result of manual focus dialog indicating user's choice.
+     */
+    public enum ManualFocusResult {
+        RETRY_AUTOFOCUS, // Run autofocus again after manual adjustment
+        USE_CURRENT_FOCUS, // Accept current focus and continue
+        CANCEL_ACQUISITION // Cancel the entire acquisition
+    }
+
+    /**
+     * Provider for the manual focus dialog UI.
+     * Implementations show a blocking dialog and return the user's choice.
+     */
+    @FunctionalInterface
+    public interface FocusDialogProvider {
+        ManualFocusResult showFocusDialog(int retriesRemaining);
+    }
+
+    /**
      * Optional callback interface for pausing/resuming progress timing during
      * manual focus dialogs. This prevents user wait time from inflating ETA estimates.
      */
@@ -55,12 +72,14 @@ public final class ManualFocusHandler {
      * @param retriesRemaining number of autofocus retries remaining (shown in dialog)
      * @param guard            optional guard to prevent duplicate dialogs (may be null)
      * @param timingCallback   optional callback for pausing/resuming progress timing (may be null)
+     * @param dialogProvider   provides the UI dialog for manual focus (e.g., UIFunctions::showManualFocusDialog)
      */
     public static void handle(
             MicroscopeSocketClient socketClient,
             int retriesRemaining,
             AtomicBoolean guard,
-            TimingCallback timingCallback) {
+            TimingCallback timingCallback,
+            FocusDialogProvider dialogProvider) {
 
         // Guard against duplicate dialogs for the same retry event
         if (guard != null && guard.getAndSet(true)) {
@@ -90,7 +109,7 @@ public final class ManualFocusHandler {
 
                 Platform.runLater(() -> {
                     try {
-                        UIFunctions.ManualFocusResult result = UIFunctions.showManualFocusDialog(retriesRemaining);
+                        ManualFocusResult result = dialogProvider.showFocusDialog(retriesRemaining);
                         try {
                             switch (result) {
                                 case RETRY_AUTOFOCUS:

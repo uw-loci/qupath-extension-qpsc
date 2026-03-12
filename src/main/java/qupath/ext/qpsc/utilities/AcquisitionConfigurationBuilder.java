@@ -9,8 +9,8 @@ import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.BackgroundValidationResult;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
-import qupath.ext.qpsc.ui.SampleSetupController;
 
 /**
  * Centralized builder for acquisition configuration that consolidates duplicated logic
@@ -41,7 +41,7 @@ public class AcquisitionConfigurationBuilder {
      * Overload without wbMode for backward compatibility (skips WB mode mismatch validation).
      */
     public static AcquisitionConfiguration buildConfiguration(
-            SampleSetupController.SampleSetupResult sample,
+            SampleSetupResult sample,
             String configFileLocation,
             String modalityWithIndex,
             String regionName,
@@ -76,7 +76,7 @@ public class AcquisitionConfigurationBuilder {
      * @return Complete acquisition configuration
      */
     public static AcquisitionConfiguration buildConfiguration(
-            SampleSetupController.SampleSetupResult sample,
+            SampleSetupResult sample,
             String configFileLocation,
             String modalityWithIndex,
             String regionName,

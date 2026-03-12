@@ -9,9 +9,8 @@ import java.util.concurrent.TimeoutException;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.ui.SampleSetupController;
-import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
@@ -290,14 +289,14 @@ public class ImageFlipHelper {
                 } else {
                     logger.error("Failed to create flipped duplicate");
                     Platform.runLater(() ->
-                            UIFunctions.notifyUserOfError("Failed to create flipped image duplicate", "Image Error"));
+                            Dialogs.showErrorNotification("Image Error", "Failed to create flipped image duplicate"));
                     return false;
                 }
 
             } catch (Exception e) {
                 logger.error("Error creating flipped duplicate", e);
-                Platform.runLater(() -> UIFunctions.notifyUserOfError(
-                        "Error creating flipped image: " + e.getMessage(), "Image Error"));
+                Platform.runLater(() -> Dialogs.showErrorNotification(
+                        "Image Error", "Error creating flipped image: " + e.getMessage()));
                 return false;
             }
         });
@@ -312,7 +311,7 @@ public class ImageFlipHelper {
      * @return CompletableFuture that completes with true if successful, false if failed
      */
     public static CompletableFuture<Boolean> validateAndFlipIfNeeded(
-            QuPathGUI gui, Project<BufferedImage> project, SampleSetupController.SampleSetupResult sample) {
+            QuPathGUI gui, Project<BufferedImage> project, SampleSetupResult sample) {
 
         String sampleName = sample != null ? sample.sampleName() : null;
         return validateAndFlipIfNeeded(gui, project, sampleName);

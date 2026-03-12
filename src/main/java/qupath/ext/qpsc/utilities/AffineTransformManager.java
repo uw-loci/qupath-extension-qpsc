@@ -18,7 +18,6 @@ import java.util.*;
 import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.lib.projects.Project;
@@ -342,9 +341,10 @@ public class AffineTransformManager {
     }
 
     /**
-     * Loads and applies a saved transform from preferences if available.
-     * Retrieves the transform name from preferences, loads it from the transform manager,
-     * and applies it to the microscope controller for immediate use.
+     * Loads a saved transform from preferences if available.
+     * Retrieves the transform name from preferences and loads it from the transform manager.
+     * The caller is responsible for applying the transform (e.g., via
+     * MicroscopeController.setCurrentTransform).
      *
      * @return The loaded AffineTransform if successful, or null if no saved transform exists
      *         or cannot be loaded
@@ -364,12 +364,7 @@ public class AffineTransformManager {
 
             if (savedPreset != null) {
                 logger.info("Loaded saved microscope alignment: {}", savedTransformName);
-                AffineTransform transform = savedPreset.getTransform();
-
-                // Apply it to the microscope controller
-                MicroscopeController.getInstance().setCurrentTransform(transform);
-
-                return transform;
+                return savedPreset.getTransform();
             } else {
                 logger.warn("Saved transform '{}' not found in transform manager", savedTransformName);
                 return null;

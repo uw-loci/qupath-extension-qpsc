@@ -28,6 +28,7 @@ import javafx.stage.Stage;
 import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.service.ManualFocusHandler;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.viewer.tools.PathTools;
 import qupath.lib.objects.PathObject;
@@ -470,15 +471,6 @@ public class UIFunctions {
     }
 
     /**
-     * Result of manual focus dialog indicating user's choice.
-     */
-    public enum ManualFocusResult {
-        RETRY_AUTOFOCUS, // Run autofocus again after manual adjustment
-        USE_CURRENT_FOCUS, // Accept current focus and continue
-        CANCEL_ACQUISITION // Cancel the entire acquisition
-    }
-
-    /**
      * Shows a blocking dialog requesting manual focus from the user.
      * Used when autofocus fails and manual intervention is required.
      * Provides three options: retry autofocus, use current focus, or cancel.
@@ -486,7 +478,7 @@ public class UIFunctions {
      * @param retriesRemaining Number of autofocus retries remaining (0 means no retries left)
      * @return ManualFocusResult indicating user's choice
      */
-    public static ManualFocusResult showManualFocusDialog(int retriesRemaining) {
+    public static ManualFocusHandler.ManualFocusResult showManualFocusDialog(int retriesRemaining) {
         // Play system beep to alert user that attention is needed
         try {
             Toolkit.getDefaultToolkit().beep();
@@ -543,16 +535,16 @@ public class UIFunctions {
 
         if (result.isPresent()) {
             if (result.get() == retryButton) {
-                return ManualFocusResult.RETRY_AUTOFOCUS;
+                return ManualFocusHandler.ManualFocusResult.RETRY_AUTOFOCUS;
             } else if (result.get() == useCurrentButton) {
-                return ManualFocusResult.USE_CURRENT_FOCUS;
+                return ManualFocusHandler.ManualFocusResult.USE_CURRENT_FOCUS;
             } else {
-                return ManualFocusResult.CANCEL_ACQUISITION;
+                return ManualFocusHandler.ManualFocusResult.CANCEL_ACQUISITION;
             }
         }
 
         // Default to cancel if dialog closed without selection
-        return ManualFocusResult.CANCEL_ACQUISITION;
+        return ManualFocusHandler.ManualFocusResult.CANCEL_ACQUISITION;
     }
 
     /**

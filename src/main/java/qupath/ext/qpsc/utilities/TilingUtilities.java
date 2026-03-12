@@ -9,9 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.ui.SampleSetupController;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.PathObjects;
@@ -365,10 +364,7 @@ public class TilingUtilities {
      * @since 0.3.0
      */
     public static void createTilesForAnnotations(
-            List<PathObject> annotations,
-            SampleSetupController.SampleSetupResult sampleSetup,
-            String tempTileDirectory,
-            String modeWithIndex)
+            List<PathObject> annotations, SampleSetupResult sampleSetup, String tempTileDirectory, String modeWithIndex)
             throws IOException {
 
         if (annotations == null || annotations.isEmpty()) {
@@ -388,12 +384,13 @@ public class TilingUtilities {
 
         // Get FOV using the explicit hardware configuration from sample setup
         // This ensures we use the correct detector (e.g., JAI vs TELEDYNE) that was selected by the user
-        double[] fovMicrons = MicroscopeController.getInstance()
-                .getCameraFOVFromConfig(sampleSetup.modality(), sampleSetup.objective(), sampleSetup.detector());
+        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+        double[] fovMicrons = mgr.getCameraFOV(sampleSetup.modality(), sampleSetup.objective(), sampleSetup.detector());
         double frameWidthMicrons = fovMicrons[0];
         double frameHeightMicrons = fovMicrons[1];
 
-        logger.info("Camera FOV from server: {} x {} microns", frameWidthMicrons, frameHeightMicrons);
+        logger.info("Camera FOV from config: {} x {} microns", frameWidthMicrons, frameHeightMicrons);
 
         // Validate FOV is reasonable (between 0.1mm and 50mm)
         if (frameWidthMicrons < 100
@@ -462,7 +459,7 @@ public class TilingUtilities {
      */
     public static void createTilesForAnnotations(
             List<PathObject> annotations,
-            SampleSetupController.SampleSetupResult sampleSetup,
+            SampleSetupResult sampleSetup,
             String tempTileDirectory,
             String modeWithIndex,
             boolean stageInvertedX,
@@ -490,12 +487,13 @@ public class TilingUtilities {
         removeExistingModalityTiles(gui, modalityBase);
 
         // Get FOV using the explicit hardware configuration from sample setup
-        double[] fovMicrons = MicroscopeController.getInstance()
-                .getCameraFOVFromConfig(sampleSetup.modality(), sampleSetup.objective(), sampleSetup.detector());
+        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+        double[] fovMicrons = mgr.getCameraFOV(sampleSetup.modality(), sampleSetup.objective(), sampleSetup.detector());
         double frameWidthMicrons = fovMicrons[0];
         double frameHeightMicrons = fovMicrons[1];
 
-        logger.info("Camera FOV from server: {} x {} microns", frameWidthMicrons, frameHeightMicrons);
+        logger.info("Camera FOV from config: {} x {} microns", frameWidthMicrons, frameHeightMicrons);
 
         // Validate FOV is reasonable (between 0.1mm and 50mm)
         if (frameWidthMicrons < 100

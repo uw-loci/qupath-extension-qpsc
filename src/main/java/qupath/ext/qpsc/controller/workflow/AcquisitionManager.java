@@ -733,7 +733,12 @@ public class AcquisitionManager {
                                     }
                                 }
                                 : null;
-                        ManualFocusHandler.handle(socketClient, retriesRemaining, handlingManualFocus, timing);
+                        ManualFocusHandler.handle(
+                                socketClient,
+                                retriesRemaining,
+                                handlingManualFocus,
+                                timing,
+                                UIFunctions::showManualFocusDialog);
                     },
                     500, // Poll every 500ms for responsive UI
                     ACQUISITION_TIMEOUT_MS);

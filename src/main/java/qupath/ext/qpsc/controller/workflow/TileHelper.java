@@ -7,7 +7,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.ui.SampleSetupController;
+import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.utilities.TilingUtilities;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
@@ -48,7 +48,7 @@ public class TileHelper {
      */
     public static void createTilesForAnnotations(
             List<PathObject> annotations,
-            SampleSetupController.SampleSetupResult sample,
+            SampleSetupResult sample,
             String tempTileDirectory,
             String modeWithIndex,
             double macroPixelSize) {
@@ -85,7 +85,7 @@ public class TileHelper {
      */
     public static void createTilesForAnnotations(
             List<PathObject> annotations,
-            SampleSetupController.SampleSetupResult sample,
+            SampleSetupResult sample,
             String tempTileDirectory,
             String modeWithIndex,
             double macroPixelSize,

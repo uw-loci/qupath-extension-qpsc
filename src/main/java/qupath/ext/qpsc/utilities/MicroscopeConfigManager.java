@@ -894,6 +894,35 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * Calculate field of view, handling indexed modality names and throwing on failure.
+     *
+     * <p>This is a convenience wrapper around {@link #getModalityFOV} that strips
+     * modality index suffixes (e.g., "bf_10x_1" -> "bf_10x") and converts null
+     * returns to IOExceptions with descriptive messages.
+     *
+     * @param modality The modality name (may include index suffix)
+     * @param objective The objective ID
+     * @param detector The detector ID
+     * @return Array of [width, height] in microns
+     * @throws IOException if FOV cannot be calculated
+     */
+    public double[] getCameraFOV(String modality, String objective, String detector) throws IOException {
+        // Handle indexed modality names (e.g., "bf_10x_1" -> "bf_10x")
+        String baseModality = modality;
+        if (baseModality.matches(".*_\\d+$")) {
+            baseModality = baseModality.substring(0, baseModality.lastIndexOf('_'));
+        }
+
+        double[] fov = getModalityFOV(baseModality, objective, detector);
+        if (fov == null) {
+            throw new IOException(String.format(
+                    "Cannot calculate FOV for modality '%s', objective '%s', detector '%s'",
+                    modality, objective, detector));
+        }
+        return fov;
+    }
+
+    /**
      * Get rotation angles configuration for PPM modalities.
      * Returns empty list if none found.
      */

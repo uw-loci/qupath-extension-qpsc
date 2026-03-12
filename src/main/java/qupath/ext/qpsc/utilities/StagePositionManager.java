@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.model.StagePositionProvider;
 
 /**
  * Centralized manager for stage position polling and event notification.
@@ -95,11 +95,25 @@ public class StagePositionManager {
     /** Flag to track if polling is currently active */
     private volatile boolean pollingActive = false;
 
+    /** Provider for stage position queries (must be set before polling starts) */
+    private volatile StagePositionProvider positionProvider;
+
     /**
      * Private constructor for singleton pattern.
      */
     private StagePositionManager() {
         logger.debug("StagePositionManager created");
+    }
+
+    /**
+     * Sets the position provider used for hardware queries.
+     * Must be called before listeners are added. Typically called during
+     * controller initialization with the MicroscopeController instance.
+     *
+     * @param provider The stage position provider
+     */
+    public void setPositionProvider(StagePositionProvider provider) {
+        this.positionProvider = provider;
     }
 
     /**
@@ -209,15 +223,15 @@ public class StagePositionManager {
      */
     private void pollPositions() {
         try {
-            MicroscopeController controller = MicroscopeController.getInstance();
-            if (controller == null || !controller.isConnected()) {
-                logger.trace("Controller not connected, skipping position poll");
+            StagePositionProvider provider = this.positionProvider;
+            if (provider == null || !provider.isConnected()) {
+                logger.trace("Position provider not available, skipping position poll");
                 return;
             }
 
             // Poll XY position
             try {
-                double[] xy = controller.getStagePositionXY();
+                double[] xy = provider.getStagePositionXY();
                 updatePosition(PROP_POS_X, posX, xy[0], v -> posX = v);
                 updatePosition(PROP_POS_Y, posY, xy[1], v -> posY = v);
             } catch (Exception e) {
@@ -226,7 +240,7 @@ public class StagePositionManager {
 
             // Poll Z position
             try {
-                double z = controller.getStagePositionZ();
+                double z = provider.getStagePositionZ();
                 updatePosition(PROP_POS_Z, posZ, z, v -> posZ = v);
             } catch (Exception e) {
                 logger.trace("Failed to poll Z position: {}", e.getMessage());
@@ -234,7 +248,7 @@ public class StagePositionManager {
 
             // Poll R position
             try {
-                double r = controller.getStagePositionR();
+                double r = provider.getStagePositionR();
                 updatePosition(PROP_POS_R, posR, r, v -> posR = v);
             } catch (Exception e) {
                 logger.trace("Failed to poll R position: {}", e.getMessage());

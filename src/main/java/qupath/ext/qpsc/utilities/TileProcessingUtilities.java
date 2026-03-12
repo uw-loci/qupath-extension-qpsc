@@ -12,10 +12,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.basicstitching.workflow.StitchingWorkflow;
-import qupath.ext.qpsc.controller.workflow.StitchingHelper;
 import qupath.ext.qpsc.modality.ModalityHandler;
+import qupath.ext.qpsc.model.StitchingMetadata;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
@@ -180,9 +180,9 @@ public class TileProcessingUtilities {
                 );
 
         // Set outputFilename so stitched files include the sample name instead of just the angle
-        StitchingHelper.StitchingMetadata earlyMetadata = null;
+        StitchingMetadata earlyMetadata = null;
         if (stitchParams != null && stitchParams.containsKey("metadata")) {
-            earlyMetadata = (StitchingHelper.StitchingMetadata) stitchParams.get("metadata");
+            earlyMetadata = (StitchingMetadata) stitchParams.get("metadata");
         }
         String outputName =
                 (earlyMetadata != null && earlyMetadata.sampleName != null && !earlyMetadata.sampleName.isEmpty())
@@ -210,9 +210,9 @@ public class TileProcessingUtilities {
             // Extract metadata early so we can use it for filename generation
             // metadata.sampleName contains the source image name (for file naming)
             // sampleLabel is the project folder name (for path construction)
-            StitchingHelper.StitchingMetadata batchMetadata = null;
+            StitchingMetadata batchMetadata = null;
             if (stitchParams != null && stitchParams.containsKey("metadata")) {
-                batchMetadata = (StitchingHelper.StitchingMetadata) stitchParams.get("metadata");
+                batchMetadata = (StitchingMetadata) stitchParams.get("metadata");
             }
 
             // Use metadata.sampleName for file naming if available (source image name)
@@ -285,7 +285,7 @@ public class TileProcessingUtilities {
 
                     // Import this file to the project
                     final String pathToImport = lastPath;
-                    final StitchingHelper.StitchingMetadata finalMetadata = batchMetadata;
+                    final StitchingMetadata finalMetadata = batchMetadata;
 
                     Platform.runLater(() -> {
                         try {
@@ -376,9 +376,9 @@ public class TileProcessingUtilities {
             // Extract metadata early so we can use it for filename generation
             // metadata.sampleName contains the source image name (for file naming)
             // sampleLabel is the project folder name (for path construction)
-            StitchingHelper.StitchingMetadata metadata = null;
+            StitchingMetadata metadata = null;
             if (stitchParams != null && stitchParams.containsKey("metadata")) {
-                metadata = (StitchingHelper.StitchingMetadata) stitchParams.get("metadata");
+                metadata = (StitchingMetadata) stitchParams.get("metadata");
             }
 
             // Use metadata.sampleName for file naming if available (source image name)
@@ -496,7 +496,7 @@ public class TileProcessingUtilities {
                     (metadata != null && metadata.imageIndex != null) ? metadata.imageIndex : imageIndex;
 
             lastProcessedPath = outPath;
-            final StitchingHelper.StitchingMetadata finalMetadata = metadata;
+            final StitchingMetadata finalMetadata = metadata;
 
             // Import & open on the FX thread
             Platform.runLater(() -> {
@@ -576,9 +576,9 @@ public class TileProcessingUtilities {
 
                 } catch (IOException e) {
                     logger.error("Failed to import stitched image", e);
-                    UIFunctions.notifyUserOfError(
-                            "Failed to import stitched image:\n" + e.getMessage(),
-                            res.getString("stitching.error.title"));
+                    Dialogs.showErrorNotification(
+                            res.getString("stitching.error.title"),
+                            "Failed to import stitched image:\n" + e.getMessage());
                 }
             });
         }

@@ -15,6 +15,7 @@ import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.controller.workflow.StitchingHelper;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AngleResolutionService;
 import qupath.ext.qpsc.service.ManualFocusHandler;
@@ -248,7 +249,7 @@ public class BoundedAcquisitionWorkflow {
                             try {
                                 // Build acquisition configuration
                                 // Create a SampleSetupResult-like object for the builder
-                                var sampleResult = new qupath.ext.qpsc.ui.SampleSetupController.SampleSetupResult(
+                                var sampleResult = new SampleSetupResult(
                                         result.sampleName(),
                                         result.projectsFolder(),
                                         result.modality(),
@@ -325,8 +326,12 @@ public class BoundedAcquisitionWorkflow {
 
                                 MicroscopeSocketClient.AcquisitionState finalState = socketClient.monitorAcquisition(
                                         progress -> progressCounter.set(progress.current),
-                                        retriesRemaining ->
-                                                ManualFocusHandler.handle(socketClient, retriesRemaining, null, null),
+                                        retriesRemaining -> ManualFocusHandler.handle(
+                                                socketClient,
+                                                retriesRemaining,
+                                                null,
+                                                null,
+                                                UIFunctions::showManualFocusDialog),
                                         500,
                                         300000);
 
@@ -368,7 +373,7 @@ public class BoundedAcquisitionWorkflow {
                                 .thenCompose(ignored -> {
                                     CompletableFuture<Void> stitchFuture = StitchingHelper.performRegionStitching(
                                                     boundsMode,
-                                                    new qupath.ext.qpsc.ui.SampleSetupController.SampleSetupResult(
+                                                    new SampleSetupResult(
                                                             result.sampleName(),
                                                             result.projectsFolder(),
                                                             result.modality(),

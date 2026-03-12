@@ -6,7 +6,7 @@ import java.io.File;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.ui.SampleSetupController;
+import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.gui.QuPathGUI;
@@ -175,7 +175,7 @@ public class AlignmentHelper {
      * @return CompletableFuture containing the SlideAlignmentResult or null if none found
      */
     public static CompletableFuture<SlideAlignmentResult> checkForSlideAlignment(
-            QuPathGUI gui, SampleSetupController.SampleSetupResult sample) {
+            QuPathGUI gui, SampleSetupResult sample) {
 
         CompletableFuture<SlideAlignmentResult> future = new CompletableFuture<>();
 

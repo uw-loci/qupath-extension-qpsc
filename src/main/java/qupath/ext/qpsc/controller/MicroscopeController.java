@@ -6,6 +6,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.model.StagePositionProvider;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
@@ -13,6 +14,7 @@ import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.StagePositionManager;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.objects.PathObject;
 
@@ -34,7 +36,7 @@ import qupath.lib.objects.PathObject;
  * @author Mike Nelson
  * @since 2.0
  */
-public class MicroscopeController {
+public class MicroscopeController implements StagePositionProvider {
     private static final Logger logger = LoggerFactory.getLogger(MicroscopeController.class);
 
     /** Singleton instance */
@@ -126,6 +128,8 @@ public class MicroscopeController {
     public static synchronized MicroscopeController getInstance() {
         if (instance == null) {
             instance = new MicroscopeController();
+            // Wire up StagePositionManager so it can poll without a controller dependency
+            StagePositionManager.getInstance().setPositionProvider(instance);
         }
         return instance;
     }
@@ -186,6 +190,7 @@ public class MicroscopeController {
      * @return A two-element array [x, y] in microns
      * @throws IOException if communication fails
      */
+    @Override
     public double[] getStagePositionXY() throws IOException {
         try {
             double[] position = socketClient.getStageXY();
@@ -203,6 +208,7 @@ public class MicroscopeController {
      * @return The Z coordinate in microns
      * @throws IOException if communication fails
      */
+    @Override
     public double getStagePositionZ() throws IOException {
         try {
             double z = socketClient.getStageZ();
@@ -220,6 +226,7 @@ public class MicroscopeController {
      * @return The rotation angle in degrees
      * @throws IOException if communication fails
      */
+    @Override
     public double getStagePositionR() throws IOException {
         try {
             double angle = socketClient.getStageR();
@@ -458,6 +465,7 @@ public class MicroscopeController {
      *
      * @return true if connected, false otherwise
      */
+    @Override
     public boolean isConnected() {
         return socketClient.isConnected();
     }
