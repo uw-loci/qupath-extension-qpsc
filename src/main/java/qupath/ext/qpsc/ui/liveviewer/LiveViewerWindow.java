@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
-import qupath.lib.gui.QuPathGUI;
+
 
 /**
  * Singleton floating window that displays a live camera feed from the microscope.
@@ -235,11 +235,8 @@ public class LiveViewerWindow {
         stage.setTitle("Live Viewer");
         stage.initModality(Modality.NONE);
 
-        // Set owner to QuPath main window so it stays above
-        QuPathGUI gui = QuPathGUI.getInstance();
-        if (gui != null && gui.getStage() != null) {
-            stage.initOwner(gui.getStage());
-        }
+        // No initOwner -- owned windows cannot be minimized on Windows.
+        // As an independent window, it gets its own taskbar entry and minimize button.
 
         // Toolbar with Live toggle button and display scale selector
         liveToggleButton = new Button("Live: OFF");
