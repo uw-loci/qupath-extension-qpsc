@@ -125,6 +125,9 @@ public class ProjectLogger {
         attachAppender(logFile);
         currentLogFile = logFile;
 
+        // Write version header as first log entries for provenance tracking
+        logger.info(VersionInfo.formatLogHeader());
+
         logger.info("QPSC project logging enabled: {}", logFile);
         return true;
     }
