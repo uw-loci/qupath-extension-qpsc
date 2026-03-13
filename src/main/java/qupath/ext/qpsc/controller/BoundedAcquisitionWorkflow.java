@@ -174,6 +174,15 @@ public class BoundedAcquisitionWorkflow {
             String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configFileLocation);
 
+            // Copy microscope configs to project for provenance tracking
+            if (project != null && project.getPath() != null) {
+                try {
+                    configManager.copyConfigsToProject(project.getPath().getParent());
+                } catch (Exception e) {
+                    logger.debug("Could not copy configs to project: {}", e.getMessage());
+                }
+            }
+
             double frameWidthMicrons, frameHeightMicrons;
             try {
                 double[] fov = configManager.getModalityFOV(result.modality(), result.objective(), result.detector());

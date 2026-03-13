@@ -15,6 +15,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AnnotationPreservationService;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.ObjectiveUtils;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
@@ -227,6 +228,18 @@ public class ProjectHelper {
                 }
 
                 logger.info("Project setup complete with sample name: {}", actualSampleName);
+
+                // Copy microscope configuration files into the project for provenance
+                try {
+                    MicroscopeConfigManager configMgr = MicroscopeConfigManager.getInstanceIfAvailable();
+                    Path projDir = gui.getProject() != null && gui.getProject().getPath() != null
+                            ? gui.getProject().getPath().getParent() : null;
+                    if (configMgr != null && projDir != null) {
+                        configMgr.copyConfigsToProject(projDir);
+                    }
+                } catch (Exception e) {
+                    logger.debug("Could not copy configs to project: {}", e.getMessage());
+                }
 
                 // Give GUI time to update before proceeding
                 // Pass actualSampleName so acquisition uses the correct path

@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -83,6 +84,17 @@ public class MicroscopeConfigManager {
         if (instance == null) {
             instance = new MicroscopeConfigManager(configPath);
         }
+        return instance;
+    }
+
+    /**
+     * Returns the existing singleton instance, or null if not yet initialized.
+     * Use this when you need the config manager but don't have a config path
+     * (e.g., for copying configs to a project after setup is complete).
+     *
+     * @return the existing instance, or null
+     */
+    public static synchronized MicroscopeConfigManager getInstanceIfAvailable() {
         return instance;
     }
 
@@ -1905,5 +1917,81 @@ public class MicroscopeConfigManager {
     public boolean isValidModalityObjectiveDetectorCombination(
             String modalityName, String objectiveId, String detectorId) {
         return isValidHardwareCombination(modalityName, objectiveId, detectorId);
+    }
+
+    /**
+     * Returns the filesystem path to the currently loaded microscope YAML config.
+     *
+     * @return the config path string
+     */
+    public String getConfigPath() {
+        return configPath;
+    }
+
+    /**
+     * Copies all loaded microscope configuration files into a
+     * {@code microscope_configurations/} subdirectory of the given project directory.
+     * <p>
+     * Files copied (if they exist):
+     * <ul>
+     *   <li>Main microscope config (e.g. config_PPM.yml)</li>
+     *   <li>Shared LOCI resources (resources_LOCI.yml)</li>
+     *   <li>External autofocus config (autofocus_{microscope}.yml)</li>
+     *   <li>External imageprocessing config (imageprocessing_{microscope}.yml)</li>
+     * </ul>
+     *
+     * @param projectDir the QuPath project directory (parent of .qpproj file)
+     */
+    public void copyConfigsToProject(Path projectDir) {
+        Path destDir = projectDir.resolve("microscope_configurations");
+        try {
+            Files.createDirectories(destDir);
+        } catch (IOException e) {
+            logger.warn("Failed to create microscope_configurations directory: {}", e.getMessage());
+            return;
+        }
+
+        File configFile = new File(configPath);
+        if (!configFile.exists()) {
+            logger.warn("Config file does not exist, cannot copy: {}", configPath);
+            return;
+        }
+
+        // Collect all config files that should be copied
+        List<File> filesToCopy = new ArrayList<>();
+        filesToCopy.add(configFile);
+
+        // Shared LOCI resources
+        String resPath = computeResourcePath(configPath);
+        File resFile = new File(resPath);
+        if (resFile.exists()) {
+            filesToCopy.add(resFile);
+        }
+
+        // External autofocus and imageprocessing configs
+        String microscopeName = extractMicroscopeName(configFile.getName());
+        File configDir = configFile.getParentFile();
+        File autofocusFile = new File(configDir, "autofocus_" + microscopeName + ".yml");
+        if (autofocusFile.exists()) {
+            filesToCopy.add(autofocusFile);
+        }
+        File imgprocFile = new File(configDir, "imageprocessing_" + microscopeName + ".yml");
+        if (imgprocFile.exists()) {
+            filesToCopy.add(imgprocFile);
+        }
+
+        // Copy each file
+        int copied = 0;
+        for (File src : filesToCopy) {
+            try {
+                Path dest = destDir.resolve(src.getName());
+                Files.copy(src.toPath(), dest, StandardCopyOption.REPLACE_EXISTING);
+                copied++;
+            } catch (IOException e) {
+                logger.warn("Failed to copy config file {}: {}", src.getName(), e.getMessage());
+            }
+        }
+
+        logger.info("Copied {} microscope config files to {}", copied, destDir);
     }
 }
