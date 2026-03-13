@@ -459,8 +459,17 @@ public class TileProcessingUtilities {
 
             // Generate filename using preferences-based system
             // Use displayName (source image name from metadata) instead of sampleLabel (project folder name)
+            // Find the next available index if the generated name already exists
+            int candidateIndex = imageIndex;
             baseName = ImageNameGenerator.generateImageName(
-                    displayName, imageIndex, modality, objective, sanitizedAnnotationName, angleSuffix, extension);
+                    displayName, candidateIndex, modality, objective, sanitizedAnnotationName, angleSuffix, extension);
+            File renamed = new File(orig.getParent(), baseName);
+            while (renamed.exists()) {
+                candidateIndex++;
+                baseName = ImageNameGenerator.generateImageName(
+                        displayName, candidateIndex, modality, objective, sanitizedAnnotationName, angleSuffix, extension);
+                renamed = new File(orig.getParent(), baseName);
+            }
 
             logger.info(
                     "Generated filename: {} (displayName={}, modality={}, objective={}, annotation={}, angle={}, index={})",
@@ -470,9 +479,8 @@ public class TileProcessingUtilities {
                     objective,
                     sanitizedAnnotationName,
                     angleSuffix,
-                    imageIndex);
+                    candidateIndex);
 
-            File renamed = new File(orig.getParent(), baseName);
             logger.info("Renaming {} -> {}", orig.getName(), baseName);
 
             if (orig.renameTo(renamed)) {
