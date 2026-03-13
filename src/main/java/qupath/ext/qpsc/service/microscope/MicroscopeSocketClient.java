@@ -586,7 +586,21 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 String responseStr = new String(response, StandardCharsets.UTF_8);
 
                 if ("CFG___OK".equals(responseStr)) {
+                    // Read version info JSON payload (4-byte length + JSON)
+                    byte[] verLenBytes = new byte[4];
+                    input.readFully(verLenBytes);
+                    ByteBuffer verLenBuf = ByteBuffer.wrap(verLenBytes);
+                    verLenBuf.order(ByteOrder.BIG_ENDIAN);
+                    int verJsonLength = verLenBuf.getInt();
+
+                    byte[] verJsonBytes = new byte[verJsonLength];
+                    input.readFully(verJsonBytes);
+                    String verJson = new String(verJsonBytes, StandardCharsets.UTF_8);
+
                     logger.info("Server config loaded successfully");
+                    logger.info("=== Python Server Versions ===");
+                    logger.info("  {}", verJson);
+                    logger.info("==============================");
                 } else if ("CFG_FAIL".equals(responseStr)) {
                     // Read error message: 4-byte length + message
                     byte[] lengthBytes = new byte[4];
