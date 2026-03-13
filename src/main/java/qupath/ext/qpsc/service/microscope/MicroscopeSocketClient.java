@@ -443,7 +443,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
         String responseStr = new String(response, StandardCharsets.UTF_8);
 
         if ("CFG___OK".equals(responseStr)) {
-            logger.debug("Auxiliary connection configured successfully");
+            // Consume the version JSON payload (4-byte length + JSON bytes)
+            // so it doesn't remain in the buffer and corrupt subsequent reads
+            byte[] verLenBytes = new byte[4];
+            auxInput.readFully(verLenBytes);
+            ByteBuffer verLenBuf = ByteBuffer.wrap(verLenBytes);
+            verLenBuf.order(ByteOrder.BIG_ENDIAN);
+            int verJsonLength = verLenBuf.getInt();
+            byte[] verJsonBytes = new byte[verJsonLength];
+            auxInput.readFully(verJsonBytes);
+            logger.debug("Auxiliary connection configured successfully (version payload: {} bytes)", verJsonLength);
         } else if ("CFG_FAIL".equals(responseStr)) {
             // Read error message: 4-byte length + message
             byte[] lengthBytes = new byte[4];
