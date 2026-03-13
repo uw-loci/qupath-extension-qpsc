@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -231,7 +232,7 @@ public class PPMCalibration {
 
         // Read header (Python dict as ASCII)
         byte[] headerBytes = is.readNBytes(headerLen);
-        String header = new String(headerBytes).trim();
+        String header = new String(headerBytes, StandardCharsets.UTF_8).trim();
 
         // Parse dtype
         boolean isFloat64 = header.contains("'<f8'") || header.contains("'float64'");

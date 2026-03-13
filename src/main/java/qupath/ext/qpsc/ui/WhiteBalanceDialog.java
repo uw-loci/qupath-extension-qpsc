@@ -18,6 +18,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -655,13 +656,22 @@ public class WhiteBalanceDialog {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             if (configPath != null && !configPath.isEmpty()) {
                 MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
-                Set<String> objectives = configManager.getAvailableObjectivesForModality("ppm");
+                // Use wizard's last-selected modality if available, default to "ppm"
+                String modality = PersistentPreferences.getLastModality();
+                if (modality == null || modality.isEmpty()) {
+                    modality = "ppm";
+                }
+                Set<String> objectives = configManager.getAvailableObjectivesForModality(modality);
                 if (!objectives.isEmpty()) {
                     objectiveCombo
                             .getItems()
                             .addAll(objectives.stream().sorted().toList());
-                    // Restore previous selection or select first
+                    // Restore previous selection: try WB-specific preference first,
+                    // then fall back to wizard's last-used objective
                     String savedObjective = ppmObjectiveProperty.get();
+                    if (savedObjective == null || savedObjective.isEmpty() || !objectives.contains(savedObjective)) {
+                        savedObjective = PersistentPreferences.getLastObjective();
+                    }
                     if (savedObjective != null && !savedObjective.isEmpty() && objectives.contains(savedObjective)) {
                         objectiveCombo.setValue(savedObjective);
                     } else {

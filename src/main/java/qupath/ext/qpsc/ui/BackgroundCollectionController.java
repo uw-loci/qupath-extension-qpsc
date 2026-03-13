@@ -138,6 +138,16 @@ public class BackgroundCollectionController {
                     okButton.setDisable(!isValid);
                 });
 
+                // If modality was pre-selected from preferences, trigger objective
+                // population now (listeners were not yet attached when setValue was called)
+                if (modalityComboBox.getValue() != null) {
+                    updateObjectiveSelection(modalityComboBox.getValue());
+                    if (objectiveComboBox.getValue() != null) {
+                        updateExposureControlsWithBackground(modalityComboBox.getValue(), objectiveComboBox.getValue());
+                        okButton.setDisable(outputPathField.getText().trim().isEmpty());
+                    }
+                }
+
                 // Set result converter
                 dialog.setResultConverter(dialogButton -> {
                     if (dialogButton == okButtonType) {
@@ -197,6 +207,14 @@ public class BackgroundCollectionController {
             modalityComboBox.getItems().addAll("ppm", "brightfield", "fluorescence");
         }
         modalityComboBox.setPromptText("Select modality...");
+
+        // Pre-select last-used modality (e.g. from wizard)
+        String lastModality = PersistentPreferences.getLastModality();
+        if (lastModality != null
+                && !lastModality.isEmpty()
+                && modalityComboBox.getItems().contains(lastModality)) {
+            modalityComboBox.setValue(lastModality);
+        }
 
         modalityPane.add(modalityLabel, 0, 0);
         modalityPane.add(modalityComboBox, 1, 0);
@@ -564,6 +582,11 @@ public class BackgroundCollectionController {
             if (!availableObjectives.isEmpty()) {
                 objectiveComboBox.getItems().addAll(availableObjectives);
                 objectiveComboBox.setDisable(false);
+                // Pre-select last-used objective (e.g. from wizard)
+                String lastObjective = PersistentPreferences.getLastObjective();
+                if (lastObjective != null && !lastObjective.isEmpty() && availableObjectives.contains(lastObjective)) {
+                    objectiveComboBox.setValue(lastObjective);
+                }
                 logger.info("Loaded {} objectives for modality {}", availableObjectives.size(), modality);
             } else {
                 logger.warn("No objectives found for modality: {}", modality);

@@ -495,21 +495,22 @@ public class MicroscopeAlignmentWorkflow {
                     File projectDir = gui.getProject().getPath().toFile().getParentFile();
                     String projectsFolderPath = projectDir.getParent();
                     String sampleName = projectDir.getName();
-                    logger.info("Using existing project: name='{}', folder='{}'",
-                            sampleName, projectsFolderPath);
+                    logger.info("Using existing project: name='{}', folder='{}'", sampleName, projectsFolderPath);
 
                     projectDetails = QPProjectFunctions.getCurrentProjectInformation(
-                            projectsFolderPath,
-                            sampleName,
-                            sampleSetup.modality());
+                            projectsFolderPath, sampleName, sampleSetup.modality());
                 }
 
                 // Only run tissue detection if there are no existing annotations
-                boolean hasExistingAnnotations = !gui.getViewer()
-                        .getHierarchy().getAnnotationObjects().isEmpty();
+                boolean hasExistingAnnotations =
+                        !gui.getViewer().getHierarchy().getAnnotationObjects().isEmpty();
                 if (hasExistingAnnotations) {
-                    logger.info("Existing annotations found ({} total), skipping tissue detection",
-                            gui.getViewer().getHierarchy().getAnnotationObjects().size());
+                    logger.info(
+                            "Existing annotations found ({} total), skipping tissue detection",
+                            gui.getViewer()
+                                    .getHierarchy()
+                                    .getAnnotationObjects()
+                                    .size());
                 } else {
                     runTissueDetectionScript(gui);
                 }
@@ -571,7 +572,8 @@ public class MicroscopeAlignmentWorkflow {
                 if (alignConfig.useExistingTransform()
                         && alignConfig.selectedTransform() != null
                         && detectionResultsHolder[0].greenBoxTransform() != null) {
-                    AffineTransform macroToStage = alignConfig.selectedTransform().getTransform();
+                    AffineTransform macroToStage =
+                            alignConfig.selectedTransform().getTransform();
                     AffineTransform macroFlippedToFullRes = detectionResultsHolder[0].greenBoxTransform();
                     existingTransformEstimate = TransformationFunctions.buildFullResToStageEstimate(
                             macroToStage, macroFlippedToFullRes, mainPixelSize);
@@ -592,10 +594,15 @@ public class MicroscopeAlignmentWorkflow {
                 //   flip=F, invert=F -> positive (normal)
                 boolean effectiveInvertX = flipX ^ stageInvertedX;
                 boolean effectiveInvertY = flipY ^ stageInvertedY;
-                logger.info("Effective scale direction: invertX={} (flip={} ^ stageInvert={}), "
-                        + "invertY={} (flip={} ^ stageInvert={})",
-                        effectiveInvertX, flipX, stageInvertedX,
-                        effectiveInvertY, flipY, stageInvertedY);
+                logger.info(
+                        "Effective scale direction: invertX={} (flip={} ^ stageInvert={}), "
+                                + "invertY={} (flip={} ^ stageInvert={})",
+                        effectiveInvertX,
+                        flipX,
+                        stageInvertedX,
+                        effectiveInvertY,
+                        flipY,
+                        stageInvertedY);
 
                 // Setup manual transform - this returns a full-res->stage transform
                 AffineTransformationController.setupAffineTransformationAndValidationGUI(
@@ -708,13 +715,19 @@ public class MicroscopeAlignmentWorkflow {
 
         // Final fallback: use ALL annotations regardless of classification
         if (annotations.isEmpty()) {
-            var allAnnotations = new java.util.ArrayList<>(
-                    gui.getViewer().getHierarchy().getAnnotationObjects());
+            var allAnnotations =
+                    new java.util.ArrayList<>(gui.getViewer().getHierarchy().getAnnotationObjects());
             if (!allAnnotations.isEmpty()) {
-                logger.info("No classified annotations found, using all {} annotations for tiling", allAnnotations.size());
+                logger.info(
+                        "No classified annotations found, using all {} annotations for tiling", allAnnotations.size());
                 createTilesForAnnotations(
-                        gui, allAnnotations, sampleSetup, tempTileDirectory, modeWithIndex,
-                        stageInvertedX, stageInvertedY);
+                        gui,
+                        allAnnotations,
+                        sampleSetup,
+                        tempTileDirectory,
+                        modeWithIndex,
+                        stageInvertedX,
+                        stageInvertedY);
                 return;
             }
             logger.warn("No annotations found for tiling");

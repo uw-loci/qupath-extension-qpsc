@@ -35,7 +35,6 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 
-
 /**
  * Singleton floating window that displays a live camera feed from the microscope.
  * <p>

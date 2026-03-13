@@ -31,7 +31,7 @@ import qupath.lib.roi.interfaces.ROI;
  *
  * <p>Transform Chain:
  * <pre>
- * QuPath Full-Res <--> Macro (Flipped) <--> Macro (Original) <--> Stage
+ * QuPath Full-Res &lt;--&gt; Macro (Flipped) &lt;--&gt; Macro (Original) &lt;--&gt; Stage
  * </pre>
  *
  * @author Mike Nelson
@@ -543,9 +543,7 @@ public class TransformationFunctions {
      * @return estimated fullRes-to-stage transform, or null if inversion fails
      */
     public static AffineTransform buildFullResToStageEstimate(
-            AffineTransform macroToStageTransform,
-            AffineTransform macroFlippedToFullRes,
-            double fullResPixelSize) {
+            AffineTransform macroToStageTransform, AffineTransform macroFlippedToFullRes, double fullResPixelSize) {
 
         if (macroToStageTransform == null || macroFlippedToFullRes == null) {
             logger.warn("Cannot build fullRes-to-stage estimate: null transform provided");
@@ -556,8 +554,10 @@ public class TransformationFunctions {
         // (scale close to fullResPixelSize, e.g. ~0.25 um/px vs ~81 um/px for macro)
         double transformScale = Math.abs(macroToStageTransform.getScaleX());
         if (Math.abs(transformScale - fullResPixelSize) < 1.0) {
-            logger.info("Saved transform is already fullRes->stage (scale={} ~= pixelSize={})",
-                    transformScale, fullResPixelSize);
+            logger.info(
+                    "Saved transform is already fullRes->stage (scale={} ~= pixelSize={})",
+                    transformScale,
+                    fullResPixelSize);
             return new AffineTransform(macroToStageTransform);
         }
 

@@ -54,9 +54,13 @@ public class VersionInfo {
         sb.append("  QuPath: ").append(getQuPathVersion()).append("\n");
         sb.append("  Tiles-to-Pyramid: ").append(getTilesToPyramidVersion()).append("\n");
         sb.append("  Java: ").append(System.getProperty("java.version")).append("\n");
-        sb.append("  OS: ").append(System.getProperty("os.name")).append(" ")
-                .append(System.getProperty("os.version")).append(" (")
-                .append(System.getProperty("os.arch")).append(")\n");
+        sb.append("  OS: ")
+                .append(System.getProperty("os.name"))
+                .append(" ")
+                .append(System.getProperty("os.version"))
+                .append(" (")
+                .append(System.getProperty("os.arch"))
+                .append(")\n");
         sb.append("=================================\n");
         return sb.toString();
     }

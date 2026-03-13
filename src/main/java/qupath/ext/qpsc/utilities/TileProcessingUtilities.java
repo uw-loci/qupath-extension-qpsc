@@ -467,7 +467,13 @@ public class TileProcessingUtilities {
             while (renamed.exists()) {
                 candidateIndex++;
                 baseName = ImageNameGenerator.generateImageName(
-                        displayName, candidateIndex, modality, objective, sanitizedAnnotationName, angleSuffix, extension);
+                        displayName,
+                        candidateIndex,
+                        modality,
+                        objective,
+                        sanitizedAnnotationName,
+                        angleSuffix,
+                        extension);
                 renamed = new File(orig.getParent(), baseName);
             }
 

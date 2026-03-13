@@ -233,7 +233,8 @@ public class ProjectHelper {
                 try {
                     MicroscopeConfigManager configMgr = MicroscopeConfigManager.getInstanceIfAvailable();
                     Path projDir = gui.getProject() != null && gui.getProject().getPath() != null
-                            ? gui.getProject().getPath().getParent() : null;
+                            ? gui.getProject().getPath().getParent()
+                            : null;
                     if (configMgr != null && projDir != null) {
                         configMgr.copyConfigsToProject(projDir);
                     }

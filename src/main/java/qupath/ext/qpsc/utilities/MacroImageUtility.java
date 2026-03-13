@@ -480,8 +480,7 @@ public class MacroImageUtility {
      * @return The macro image from the source entry, or null if not found
      */
     @SuppressWarnings("unchecked")
-    public static BufferedImage retrieveMacroImageFromProject(
-            QuPathGUI gui, Project<BufferedImage> project) {
+    public static BufferedImage retrieveMacroImageFromProject(QuPathGUI gui, Project<BufferedImage> project) {
 
         if (gui.getImageData() == null || project == null) {
             return null;
@@ -495,8 +494,8 @@ public class MacroImageUtility {
         // Strategy 1: Use base_image metadata (covers flipped entries AND sub-acquisitions)
         String baseImageName = ImageMetadataManager.getBaseImage(currentEntry);
         if (baseImageName != null && !baseImageName.isEmpty()) {
-            logger.info("Tracing base_image='{}' to find macro for entry '{}'",
-                    baseImageName, currentEntry.getImageName());
+            logger.info(
+                    "Tracing base_image='{}' to find macro for entry '{}'", baseImageName, currentEntry.getImageName());
             BufferedImage macro = findMacroByImageName(project, baseImageName);
             if (macro != null) {
                 return macro;
@@ -506,8 +505,10 @@ public class MacroImageUtility {
         // Strategy 2: Use original_image_id (direct parent for flipped entries)
         String originalId = ImageMetadataManager.getOriginalImageId(currentEntry);
         if (originalId != null) {
-            logger.info("Tracing original_image_id='{}' to find macro for entry '{}'",
-                    originalId, currentEntry.getImageName());
+            logger.info(
+                    "Tracing original_image_id='{}' to find macro for entry '{}'",
+                    originalId,
+                    currentEntry.getImageName());
             for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
                 if (originalId.equals(entry.getID())) {
                     BufferedImage macro = readMacroFromEntry(entry);
@@ -534,16 +535,14 @@ public class MacroImageUtility {
     /**
      * Finds an entry by image name (with or without extension) and reads its macro.
      */
-    private static BufferedImage findMacroByImageName(
-            Project<BufferedImage> project, String targetName) {
+    private static BufferedImage findMacroByImageName(Project<BufferedImage> project, String targetName) {
         for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
             String entryName = entry.getImageName();
             String strippedName = GeneralTools.stripExtension(entryName);
             if (targetName.equals(entryName) || targetName.equals(strippedName)) {
                 BufferedImage macro = readMacroFromEntry(entry);
                 if (macro != null) {
-                    logger.info("Found macro ({}x{}) from entry '{}'",
-                            macro.getWidth(), macro.getHeight(), entryName);
+                    logger.info("Found macro ({}x{}) from entry '{}'", macro.getWidth(), macro.getHeight(), entryName);
                     return macro;
                 }
             }
@@ -571,8 +570,7 @@ public class MacroImageUtility {
                 }
             }
         } catch (Exception e) {
-            logger.warn("Failed to read macro from entry '{}': {}",
-                    entry.getImageName(), e.getMessage());
+            logger.warn("Failed to read macro from entry '{}': {}", entry.getImageName(), e.getMessage());
         }
         return null;
     }
@@ -594,7 +592,8 @@ public class MacroImageUtility {
         try {
             var associatedImages = gui.getImageData().getServer().getAssociatedImageList();
             if (associatedImages != null
-                    && associatedImages.stream().anyMatch(name -> name.toLowerCase().contains("macro"))) {
+                    && associatedImages.stream()
+                            .anyMatch(name -> name.toLowerCase().contains("macro"))) {
                 return true;
             }
         } catch (Exception e) {
