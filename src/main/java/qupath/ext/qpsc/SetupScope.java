@@ -348,8 +348,28 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         autofocusEditorOption,
                         autofocusBenchmarkOption);
 
+        // Stitching recovery (doesn't need microscope connection)
+        MenuItem stitchingRecoveryOption = new MenuItem(res.getString("menu.stitchingRecovery"));
+        setMenuItemTooltip(
+                stitchingRecoveryOption,
+                "Re-stitch tiles from a failed acquisition. Select the tile folder containing "
+                        + "TileConfiguration.txt files, and the stitched images will be added to the current project.");
+        stitchingRecoveryOption.setOnAction(e -> {
+            try {
+                QPScopeController.getInstance().startWorkflow("stitchingRecovery");
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        });
+
         // Server settings (always last)
-        utilitiesMenu.getItems().addAll(new SeparatorMenuItem(), serverConnectionOption);
+        utilitiesMenu
+                .getItems()
+                .addAll(
+                        new SeparatorMenuItem(),
+                        stitchingRecoveryOption,
+                        new SeparatorMenuItem(),
+                        serverConnectionOption);
 
         // Conditionally add JAI Camera submenu when a JAI camera is configured
         if (hasJAICamera) {

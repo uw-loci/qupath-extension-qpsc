@@ -199,6 +199,10 @@ public class QPScopeController {
                     return null;
                 });
             }
+            case "stitchingRecovery" -> {
+                logger.debug("Launching stitching recovery workflow");
+                StitchingRecoveryWorkflow.run();
+            }
             default -> {
                 logger.warn("Unknown workflow mode: {}", mode);
             }

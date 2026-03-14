@@ -323,20 +323,26 @@ Most microscopes need **Invert Y = ON** because stage coordinates increase downw
 
 #### Q: Stitching failed but my tiles were acquired - how do I re-stitch?
 
-**A:** This is fully recoverable. Your tiles and TileConfiguration.txt files are preserved in the TempTiles folder after a stitching failure. Use the standalone stitching tool:
+**A:** This is fully recoverable. Your tiles and TileConfiguration.txt files are preserved in the TempTiles folder after a stitching failure.
 
-**Step-by-step:**
+**Recommended method - QPSC Re-stitch utility (adds images to project):**
 
+1. Open the QuPath project where you want the stitched images
+2. Go to **Extensions > QPSC > Utilities > Re-stitch Tiles**
+3. Browse to your tile directory (the folder containing angle subdirectories or TileConfiguration.txt)
+4. Verify the pixel size (auto-populated from your microscope config)
+5. Set compression and output format
+6. For **Matching String**: use `"."` to stitch all subdirectories, or a specific angle like `"0.0"`
+7. Click **Stitch & Import**
+
+The stitched images will be created in a SlideImages folder and automatically imported into your project.
+
+**Alternative method - standalone stitching (file only, no project import):**
+
+If you just need the stitched file without project integration:
 1. Go to **Extensions > Basic Stitching > Stitch Images**
-2. Click **Browse** and navigate to your tile directory:
-   - For bounded acquisition: `<Projects Folder>/<Sample Name>/TempTiles/<annotation>/`
-   - For existing image acquisition: `<Project>/TempTiles/<annotation>/`
-3. Set the **pixel size** (check your microscope config or QuPath preferences for the correct value)
-4. Set **compression** (LZW is recommended; JPEG for smaller files)
-5. For **Matching String**:
-   - **Single-angle (brightfield):** Use `"."` to match all subdirectories
-   - **Multi-angle (PPM):** Use a specific angle like `"0.0"` to stitch one angle at a time, or `"."` for all angles
-6. Click **Stitch**
+2. Browse to the tile directory and configure parameters
+3. After stitching, manually add the file to your project via **File > Open** or drag-and-drop
 
 **Tile directory structure for reference:**
 ```
@@ -352,11 +358,6 @@ TempTiles/
     90.0/
       ...
 ```
-
-**After successful re-stitching:**
-- The stitched OME-TIFF (or OME-ZARR) file will be created in the same parent directory
-- You can then add it to your QuPath project manually: **File > Open** or drag-and-drop
-- Once verified, you can safely delete the TempTiles folder
 
 **Tips:**
 - If the original stitching failed due to memory, try closing other images first or increasing QuPath memory (Edit > Preferences > General)

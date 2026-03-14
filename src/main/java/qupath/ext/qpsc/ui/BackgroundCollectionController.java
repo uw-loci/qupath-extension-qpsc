@@ -239,8 +239,7 @@ public class BackgroundCollectionController {
             modalityComboBox.setValue(lastModality);
             logger.info("Background dialog: pre-selected modality '{}'", lastModality);
         } else {
-            logger.warn(
-                    "Background dialog: could not pre-select modality '{}' (not in items list)", lastModality);
+            logger.warn("Background dialog: could not pre-select modality '{}' (not in items list)", lastModality);
         }
 
         modalityPane.add(modalityLabel, 0, 0);
