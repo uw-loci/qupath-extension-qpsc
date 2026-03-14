@@ -57,53 +57,45 @@ public class BackgroundCollectionWorkflow {
     public static void run() {
         logger.info("Starting background collection workflow");
 
-        Platform.runLater(() -> {
-            try {
-                // Show background collection dialog
-                BackgroundCollectionController.showDialog()
-                        .thenAccept(result -> {
-                            if (result != null) {
-                                logger.info(
-                                        "Background collection parameters received: modality={}, angles={}",
-                                        result.modality(),
-                                        result.angleExposures().size());
+        // showDialog() already handles Platform.runLater() internally --
+        // no outer runLater needed (avoids double-nesting delay)
+        BackgroundCollectionController.showDialog()
+                .thenAccept(result -> {
+                    if (result != null) {
+                        logger.info(
+                                "Background collection parameters received: modality={}, angles={}",
+                                result.modality(),
+                                result.angleExposures().size());
 
-                                // Execute background acquisition
-                                CompletableFuture.runAsync(() -> {
-                                            executeBackgroundAcquisition(
-                                                    result.modality(),
-                                                    result.objective(),
-                                                    result.angleExposures(),
-                                                    result.outputPath(),
-                                                    result.wbMode());
-                                        })
-                                        .exceptionally(ex -> {
-                                            logger.error("Background acquisition failed", ex);
-                                            Platform.runLater(() -> {
-                                                Dialogs.showErrorMessage(
-                                                        "Background Acquisition Error",
-                                                        "Failed to execute background acquisition: " + ex.getMessage());
-                                            });
-                                            return null;
-                                        });
-                            } else {
-                                logger.info("Background collection cancelled by user");
-                            }
-                        })
-                        .exceptionally(ex -> {
-                            logger.error("Error in background collection dialog", ex);
-                            Platform.runLater(() -> Dialogs.showErrorMessage(
-                                    "Background Collection Error",
-                                    "Failed to show background collection dialog: " + ex.getMessage()));
-                            return null;
-                        });
-
-            } catch (Exception e) {
-                logger.error("Failed to start background collection workflow", e);
-                Dialogs.showErrorMessage(
-                        "Background Collection Error", "Failed to start background collection: " + e.getMessage());
-            }
-        });
+                        // Execute background acquisition
+                        CompletableFuture.runAsync(() -> {
+                                    executeBackgroundAcquisition(
+                                            result.modality(),
+                                            result.objective(),
+                                            result.angleExposures(),
+                                            result.outputPath(),
+                                            result.wbMode());
+                                })
+                                .exceptionally(ex -> {
+                                    logger.error("Background acquisition failed", ex);
+                                    Platform.runLater(() -> {
+                                        Dialogs.showErrorMessage(
+                                                "Background Acquisition Error",
+                                                "Failed to execute background acquisition: " + ex.getMessage());
+                                    });
+                                    return null;
+                                });
+                    } else {
+                        logger.info("Background collection cancelled by user");
+                    }
+                })
+                .exceptionally(ex -> {
+                    logger.error("Error in background collection dialog", ex);
+                    Platform.runLater(() -> Dialogs.showErrorMessage(
+                            "Background Collection Error",
+                            "Failed to show background collection dialog: " + ex.getMessage()));
+                    return null;
+                });
     }
 
     /**

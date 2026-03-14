@@ -139,12 +139,29 @@ public class BackgroundCollectionController {
                 });
 
                 // If modality was pre-selected from preferences, trigger objective
-                // population now (listeners were not yet attached when setValue was called)
+                // population now (listeners were not yet attached when setValue was called
+                // inside createDialogContent, so we need to manually kick off the chain).
                 if (modalityComboBox.getValue() != null) {
+                    logger.info(
+                            "Background dialog: modality pre-selected='{}', triggering objective population",
+                            modalityComboBox.getValue());
                     updateObjectiveSelection(modalityComboBox.getValue());
+                    // updateObjectiveSelection sets the objective value if a match is found,
+                    // which triggers the objectiveComboBox listener (line ~121) that calls
+                    // updateExposureControlsWithBackground. Only call it explicitly if the
+                    // listener didn't fire (objective still null after population).
                     if (objectiveComboBox.getValue() != null) {
-                        updateExposureControlsWithBackground(modalityComboBox.getValue(), objectiveComboBox.getValue());
+                        logger.info(
+                                "Background dialog: objective pre-selected='{}' via preferences",
+                                objectiveComboBox.getValue());
+                        // Listener already called updateExposureControlsWithBackground;
+                        // just enable the OK button if output path is set.
                         okButton.setDisable(outputPathField.getText().trim().isEmpty());
+                    } else {
+                        logger.warn(
+                                "Background dialog: no objective was pre-selected "
+                                        + "(lastObjective='{}' not found in available objectives)",
+                                PersistentPreferences.getLastObjective());
                     }
                 }
 
@@ -198,8 +215,10 @@ public class BackgroundCollectionController {
         // Get available modalities from configuration
         try {
             String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            logger.info("Background dialog: configPath = '{}'", configPath);
             MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
             Set<String> availableModalities = configManager.getAvailableModalities();
+            logger.info("Background dialog: found {} modalities: {}", availableModalities.size(), availableModalities);
             modalityComboBox.getItems().addAll(availableModalities);
         } catch (Exception e) {
             logger.error("Failed to load available modalities", e);
@@ -210,10 +229,18 @@ public class BackgroundCollectionController {
 
         // Pre-select last-used modality (e.g. from wizard)
         String lastModality = PersistentPreferences.getLastModality();
+        logger.info(
+                "Background dialog: lastModality from preferences = '{}', comboBox items = {}",
+                lastModality,
+                modalityComboBox.getItems());
         if (lastModality != null
                 && !lastModality.isEmpty()
                 && modalityComboBox.getItems().contains(lastModality)) {
             modalityComboBox.setValue(lastModality);
+            logger.info("Background dialog: pre-selected modality '{}'", lastModality);
+        } else {
+            logger.warn(
+                    "Background dialog: could not pre-select modality '{}' (not in items list)", lastModality);
         }
 
         modalityPane.add(modalityLabel, 0, 0);
@@ -584,6 +611,11 @@ public class BackgroundCollectionController {
                 objectiveComboBox.setDisable(false);
                 // Pre-select last-used objective (e.g. from wizard)
                 String lastObjective = PersistentPreferences.getLastObjective();
+                logger.info(
+                        "Background dialog objectives: available={}, lastObjective='{}', match={}",
+                        availableObjectives,
+                        lastObjective,
+                        availableObjectives.contains(lastObjective));
                 if (lastObjective != null && !lastObjective.isEmpty() && availableObjectives.contains(lastObjective)) {
                     objectiveComboBox.setValue(lastObjective);
                 }
