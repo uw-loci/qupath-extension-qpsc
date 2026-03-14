@@ -321,6 +321,48 @@ Most microscopes need **Invert Y = ON** because stage coordinates increase downw
 2. Look for Python server errors during acquisition (acquisition might have failed silently)
 3. Verify Python server completed acquisition successfully before stitching started
 
+#### Q: Stitching failed but my tiles were acquired - how do I re-stitch?
+
+**A:** This is fully recoverable. Your tiles and TileConfiguration.txt files are preserved in the TempTiles folder after a stitching failure. Use the standalone stitching tool:
+
+**Step-by-step:**
+
+1. Go to **Extensions > Basic Stitching > Stitch Images**
+2. Click **Browse** and navigate to your tile directory:
+   - For bounded acquisition: `<Projects Folder>/<Sample Name>/TempTiles/<annotation>/`
+   - For existing image acquisition: `<Project>/TempTiles/<annotation>/`
+3. Set the **pixel size** (check your microscope config or QuPath preferences for the correct value)
+4. Set **compression** (LZW is recommended; JPEG for smaller files)
+5. For **Matching String**:
+   - **Single-angle (brightfield):** Use `"."` to match all subdirectories
+   - **Multi-angle (PPM):** Use a specific angle like `"0.0"` to stitch one angle at a time, or `"."` for all angles
+6. Click **Stitch**
+
+**Tile directory structure for reference:**
+```
+TempTiles/
+  annotationName/           (e.g., "Tissue_12345_67890" or "bounds")
+    0.0/                    (angle subdirectory - PPM only)
+      tile_001_001.tif
+      tile_001_002.tif
+      ...
+      TileConfiguration.txt
+    5.0/
+      ...
+    90.0/
+      ...
+```
+
+**After successful re-stitching:**
+- The stitched OME-TIFF (or OME-ZARR) file will be created in the same parent directory
+- You can then add it to your QuPath project manually: **File > Open** or drag-and-drop
+- Once verified, you can safely delete the TempTiles folder
+
+**Tips:**
+- If the original stitching failed due to memory, try closing other images first or increasing QuPath memory (Edit > Preferences > General)
+- For very large acquisitions (1000+ tiles), stitching may take 5-15 minutes -- do not interact with QuPath during stitching
+- The tiles-to-pyramid extension must be installed (it should be, as QPSC depends on it)
+
 #### Q: Stitched image is in wrong location in QuPath
 
 **A:** Pixel size calibration issue:
@@ -502,7 +544,7 @@ If `base_gain` is set higher than 4.0, the R/B channels are clamped to 4.0x whil
 
 **A:** **After stitching completes - YES**
 - QuPath automatically deletes temp tiles after successful stitching
-- If stitching failed, tiles remain for debugging
+- If stitching failed, tiles remain so you can re-stitch (see "Stitching failed but my tiles were acquired" above)
 - You can manually delete TempTiles folder after confirming stitched images are correct
 - Keep tiles if you need to re-run stitching with different parameters
 
