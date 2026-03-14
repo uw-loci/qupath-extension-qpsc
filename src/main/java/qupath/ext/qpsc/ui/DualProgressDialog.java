@@ -513,8 +513,10 @@ public class DualProgressDialog {
         int afPositionsPerAnnotation = afNTiles.get();
 
         // Remaining adaptive AF in current annotation (proportional to remaining tiles)
+        // Use currentAnnotationExpectedFiles for fraction (same units as currentProgress = file count)
+        // totalTilesPerAnnotation from metadata may count XY positions only (not * angles)
         int totalTilesCurrentAnnotation =
-                totalTilesPerAnnotation.get() > 0 ? totalTilesPerAnnotation.get() : currentAnnotationExpectedFiles;
+                currentAnnotationExpectedFiles > 0 ? currentAnnotationExpectedFiles : totalTilesPerAnnotation.get();
         int remainingAdaptiveAfCurrent = 0;
         if (totalTilesCurrentAnnotation > 0 && afPositionsPerAnnotation > 0) {
             // Calculate how many AF positions remain based on progress
