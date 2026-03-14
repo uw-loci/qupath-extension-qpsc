@@ -29,7 +29,8 @@ public final class DocumentationHelper {
     private static final String BASE_URL =
             "https://github.com/uw-loci/qupath-extension-qpsc/blob/main/documentation/tools/";
 
-    private static final String PPM_BASE_URL = "https://github.com/uw-loci/qupath-extension-ppm/blob/main/docs/";
+    private static final String PPM_BASE_URL =
+            "https://github.com/uw-loci/qupath-extension-ppm/blob/main/documentation/";
 
     /** Map from tool ID to documentation filename. */
     private static final Map<String, String> TOOL_DOCS = Map.ofEntries(

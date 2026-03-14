@@ -80,7 +80,7 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 
 ### PPM Analysis Tools
 
-> **PPM calibration and analysis workflows are provided by the [qupath-extension-ppm](https://github.com/uw-loci/qupath-extension-ppm) modality plugin.** See its [documentation](https://github.com/uw-loci/qupath-extension-ppm/tree/main/docs) for detailed workflow guides. PPM computations use the [ppm_library](https://github.com/uw-loci/ppm_library) Python package.
+> **PPM calibration and analysis workflows are provided by the [qupath-extension-ppm](https://github.com/uw-loci/qupath-extension-ppm) modality plugin.** See its [documentation](https://github.com/uw-loci/qupath-extension-ppm/tree/main/documentation) for detailed workflow guides. PPM computations use the [ppm_library](https://github.com/uw-loci/ppm_library) Python package.
 
 - **PPM Hue Range Filter**: Interactive HSV-based filtering for isolating specific fiber orientations by color
 - **PPM Polarity Plot**: Polar histogram visualization of fiber orientation distributions
