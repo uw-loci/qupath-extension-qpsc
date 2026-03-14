@@ -154,7 +154,9 @@ public class StitchingRecoveryWorkflow {
         // Info label
         Label infoLabel = new Label("Select the folder that contains tile subdirectories (e.g., angle folders)\n"
                 + "with TileConfiguration.txt files. Use \".\" as matching string to stitch\n"
-                + "all subdirectories, or enter a specific name to stitch one.");
+                + "all subdirectories, or enter a specific name to stitch one.\n\n"
+                + "If you see _temp_* folders from a crash, select the _temp_* folder\n"
+                + "and use the angle name (e.g., \"90.0\") as matching string.");
         infoLabel.setWrapText(true);
         infoLabel.setStyle("-fx-font-style: italic;");
 

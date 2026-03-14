@@ -359,6 +359,25 @@ TempTiles/
       ...
 ```
 
+**If you see `_temp_` folders (e.g., `_temp_90_0`):**
+
+During multi-angle stitching, each angle is temporarily isolated into a `_temp_<angle>` directory. If stitching crashes before cleanup completes, tiles for that angle get stuck there:
+```
+annotationName/
+  _temp_90_0/              <-- angle 90.0 stuck here after crash
+    90.0/
+      tile_001_001.tif
+      TileConfiguration.txt
+  0.0/                     <-- other angles may be fine
+    ...
+```
+
+To recover stuck angles:
+- **Option A (recommended):** Point the Re-stitch utility at the `_temp_90_0` folder and use matching string `90.0` (or `.`)
+- **Option B:** Manually move the angle folder (e.g., `90.0/`) back up to the annotation directory, then delete the empty `_temp_*` folder. This restores the normal layout for any stitching approach.
+
+Only the angle that was being processed when stitching failed will be stuck -- angles that completed before the crash were already restored to their normal location.
+
 **Tips:**
 - If the original stitching failed due to memory, try closing other images first or increasing QuPath memory (Edit > Preferences > General)
 - For very large acquisitions (1000+ tiles), stitching may take 5-15 minutes -- do not interact with QuPath during stitching
