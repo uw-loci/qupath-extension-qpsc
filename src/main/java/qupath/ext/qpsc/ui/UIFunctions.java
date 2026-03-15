@@ -166,13 +166,13 @@ public class UIFunctions {
                 // Update UI
                 double fraction = totalFiles > 0 ? current / (double) totalFiles : 0.0;
                 progressBar.setProgress(fraction);
-                progressLabel.setText("Tiles acquired: " + current + " of " + totalFiles);
+                progressLabel.setText("Positions acquired: " + current + " of " + totalFiles);
 
                 // Update status message based on progress
                 if (current == 0) {
                     statusLabel.setText("Waiting for acquisition to start...");
                 } else if (current < totalFiles) {
-                    statusLabel.setText("Acquiring tiles...");
+                    statusLabel.setText("Acquiring positions...");
                 } else {
                     statusLabel.setText("Acquisition complete!");
                 }

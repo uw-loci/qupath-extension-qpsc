@@ -60,6 +60,10 @@ public class DualProgressDialog {
     private final AtomicInteger currentAnnotationProgress = new AtomicInteger(0);
     private final AtomicLong currentAnnotationStartTime = new AtomicLong(0);
 
+    // Angle count for converting file counts to position counts in the display.
+    // For single-angle modalities this is 1; for PPM it may be 4, etc.
+    private final AtomicInteger angleCount = new AtomicInteger(1);
+
     // Tile timing tracking for better estimation (uses recent actual timing, no hardcoded values)
     // Dynamic timing window size based on autofocus settings (5x n_steps for that objective)
     private final AtomicInteger timingWindowSize =
@@ -366,6 +370,18 @@ public class DualProgressDialog {
     }
 
     /**
+     * Sets the number of rotation angles per position for the current modality.
+     * Used to convert between file counts (from server) and position counts (for display).
+     *
+     * @param angles Number of angles (1 for single-angle, 4 for typical PPM, etc.)
+     */
+    public void setAngleCount(int angles) {
+        if (angles > 0) {
+            angleCount.set(angles);
+        }
+    }
+
+    /**
      * Sets the expected tile counts for future annotations.
      * This enables accurate time estimation for the complete workflow.
      *
@@ -438,8 +454,12 @@ public class DualProgressDialog {
         if (currentAnnotationName.isEmpty()) {
             currentProgressLabel.setText("Current Annotation: Waiting to start...");
         } else {
-            currentProgressLabel.setText("Current Annotation: " + currentAnnotationName + " (" + currentFiles + "/"
-                    + currentAnnotationExpectedFiles + " tiles)");
+            // Display in positions (file count / angle count) for user clarity
+            int angles = angleCount.get();
+            int positionsDone = currentFiles / Math.max(1, angles);
+            int positionsTotal = currentAnnotationExpectedFiles / Math.max(1, angles);
+            currentProgressLabel.setText("Current Annotation: " + currentAnnotationName + " (" + positionsDone + "/"
+                    + positionsTotal + " positions)");
         }
 
         // Update status
@@ -481,7 +501,7 @@ public class DualProgressDialog {
         int minTilesForEstimate = Math.min(windowSize, 5);
         if (tilesCollected < minTilesForEstimate) {
             int tilesNeeded = minTilesForEstimate - tilesCollected;
-            timeLabel.setText(String.format("Collecting timing data... %d tiles remaining", tilesNeeded));
+            timeLabel.setText(String.format("Collecting timing data... %d positions remaining", tilesNeeded));
             return;
         }
 
@@ -565,9 +585,12 @@ public class DualProgressDialog {
                     remainingSeconds);
         }
 
+        // Display remaining count in positions (divide by angle count)
+        int angles = angleCount.get();
+        int positionsRemaining = totalTilesRemaining / Math.max(1, angles);
         timeLabel.setText(String.format(
-                "Time remaining: %s (%d tiles, %d AF ops)",
-                estimate, totalTilesRemaining, totalRemainingAdaptiveAf + remainingFullAf));
+                "Time remaining: %s (%d positions, %d AF ops)",
+                estimate, positionsRemaining, totalRemainingAdaptiveAf + remainingFullAf));
     }
 
     /**

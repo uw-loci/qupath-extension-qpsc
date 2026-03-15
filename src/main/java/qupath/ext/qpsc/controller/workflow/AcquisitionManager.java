@@ -3,6 +3,7 @@ package qupath.ext.qpsc.controller.workflow;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
@@ -392,6 +393,26 @@ public class AcquisitionManager {
             return CompletableFuture.completedFuture(false);
         }
 
+        // Set angle count for correct position display in the progress dialog
+        int numAngles = (angleExposures != null && !angleExposures.isEmpty()) ? angleExposures.size() : 1;
+        final int finalNumAngles = numAngles;
+        Platform.runLater(() -> progressDialog.setAngleCount(finalNumAngles));
+
+        // Pre-compute file counts per annotation so the dialog can estimate
+        // time for future annotations accurately (instead of assuming all are
+        // the same size as the current one).
+        List<Integer> perAnnotationFileCounts = new ArrayList<>();
+        for (PathObject ann : state.annotations) {
+            String tileDirPath = Paths.get(state.projectInfo.getTempTileDirectory(), ann.getName())
+                    .toString();
+            int tilesPerAngle = MinorFunctions.countExpectedTilesWithRetry(List.of(tileDirPath), 3, 200);
+            if (tilesPerAngle == 0) {
+                tilesPerAngle = estimateTileCount(ann);
+            }
+            perAnnotationFileCounts.add(tilesPerAngle * numAngles);
+        }
+        logger.info("Per-annotation file counts: {}", perAnnotationFileCounts);
+
         // Process each annotation sequentially
         CompletableFuture<Boolean> acquisitionChain = CompletableFuture.completedFuture(true);
 
@@ -399,6 +420,12 @@ public class AcquisitionManager {
             final PathObject annotation = state.annotations.get(i);
             final int index = i + 1;
             final int total = state.annotations.size();
+            // Future tile counts = file counts for annotations after this one
+            final List<Integer> futureCountsForThisStep =
+                    perAnnotationFileCounts.subList(Math.min(i + 1, perAnnotationFileCounts.size()),
+                            perAnnotationFileCounts.size());
+            // Copy to avoid subList reference issues across async boundaries
+            final List<Integer> futureCounts = new ArrayList<>(futureCountsForThisStep);
 
             acquisitionChain = acquisitionChain.thenCompose(previousSuccess -> {
                 if (!previousSuccess) {
@@ -407,6 +434,11 @@ public class AcquisitionManager {
                 }
 
                 logger.info("Processing annotation {} of {}: {}", index, total, annotation.getName());
+
+                // Tell the dialog about remaining annotations' sizes for accurate time estimates
+                if (progressDialog != null) {
+                    Platform.runLater(() -> progressDialog.setFutureTileCounts(futureCounts));
+                }
 
                 showProgressNotification(index, total, annotation.getName());
 
