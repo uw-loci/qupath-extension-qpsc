@@ -415,15 +415,25 @@ public class ExistingImageWorkflowV2 {
         /**
          * Routes to the appropriate sub-workflow based on selections.
          * All paths delegate to the existing working implementations.
+         *
+         * <p>When a slide-specific alignment exists (including previously refined
+         * alignments), we always use it as the starting point -- unless the user
+         * explicitly requested a full manual re-alignment. This ensures that
+         * single-tile refinement builds on top of the saved refined transform
+         * instead of discarding it and recomputing from green-box detection.</p>
          */
         private CompletableFuture<WorkflowState> routeSubWorkflow(WorkflowState state) {
             if (state == null) return CompletableFuture.completedFuture(null);
 
-            // If we have slide-specific alignment with no refinement, use the fast path
-            // This still delegates to the working implementation
+            // If we have a slide-specific alignment (including previously refined ones),
+            // use it directly -- unless the user wants a full manual re-alignment.
+            // SINGLE_TILE refinement is handled later in handleRefinement() and needs
+            // the saved transform as its starting point.
             if (state.useExistingSlideAlignment
-                    && state.refinementChoice == RefinementSelectionController.RefinementChoice.NONE) {
-                logger.info("Using slide-specific alignment - delegating to existing workflow logic");
+                    && state.refinementChoice != RefinementSelectionController.RefinementChoice.FULL_MANUAL) {
+                logger.info(
+                        "Using slide-specific alignment (refinement={}) - delegating to existing workflow logic",
+                        state.refinementChoice);
                 return processSlideSpecificAlignment(state);
             }
 

@@ -110,16 +110,14 @@ public class AcquisitionManager {
     public CompletableFuture<WorkflowState> execute() {
         logger.info("Starting acquisition phase");
 
-        // Validate stitching settings before any acquisition work begins
-        var stitchingValidation = StitchingConfiguration.validateCurrentSettings();
-        if (!stitchingValidation.valid()) {
-            logger.error("Stitching settings invalid: {}", stitchingValidation.message());
-            Platform.runLater(
-                    () -> Dialogs.showErrorMessage("Invalid Stitching Settings", stitchingValidation.message()));
-            return CompletableFuture.failedFuture(new RuntimeException("Invalid stitching settings"));
-        }
-
-        return validateAnnotations()
+        // Validate stitching settings -- loop to let user fix preferences if needed
+        return StitchingConfiguration.validateWithRetryAsync()
+                .thenCompose(valid -> {
+                    if (!valid) {
+                        throw new CancellationException("Cancelled due to invalid stitching settings");
+                    }
+                    return validateAnnotations();
+                })
                 .thenCompose(valid -> {
                     if (!valid) {
                         logger.info("Annotation validation failed or cancelled");

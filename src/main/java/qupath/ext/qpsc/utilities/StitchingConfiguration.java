@@ -1,6 +1,15 @@
 package qupath.ext.qpsc.utilities;
 
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
+import javafx.application.Platform;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.lib.images.writers.ome.OMEPyramidWriter;
@@ -10,6 +19,8 @@ import qupath.lib.images.writers.ome.OMEPyramidWriter;
  * Provides consistent stitching parameters, settings, and validation.
  */
 public class StitchingConfiguration {
+
+    private static final Logger logger = LoggerFactory.getLogger(StitchingConfiguration.class);
 
     /** Compression types that are only valid for OME-TIFF, not OME-ZARR. */
     private static final Set<String> TIFF_ONLY_COMPRESSION = Set.of("J2K", "J2K_LOSSY");
@@ -126,5 +137,80 @@ public class StitchingConfiguration {
         // In the future, this could be extended to check modality-specific requirements
         // from the microscope configuration
         return String.valueOf(QPPreferenceDialog.getCompressionTypeProperty());
+    }
+
+    /**
+     * Validates stitching settings in a retry loop, giving the user a chance to
+     * fix incompatible preferences (e.g. J2K + OME-ZARR) instead of aborting
+     * with an error.
+     *
+     * <p>If settings are already valid, returns immediately. Otherwise shows a
+     * warning dialog explaining the issue and offering "Open Preferences" / "Retry"
+     * / "Cancel" buttons. The loop continues until settings are valid or the user
+     * cancels.</p>
+     *
+     * <p>This method blocks the calling thread (it is intended to be called from
+     * a background/workflow thread). UI dialogs are dispatched on the FX thread
+     * and the caller waits via {@link CountDownLatch}.</p>
+     *
+     * @return {@code true} if settings are now valid, {@code false} if the user cancelled
+     */
+    public static boolean validateWithRetry() {
+        while (true) {
+            var result = validateCurrentSettings();
+            if (result.valid()) {
+                return true;
+            }
+
+            logger.warn("Stitching settings invalid: {}", result.message());
+
+            // Show warning dialog on FX thread and wait for user response
+            CountDownLatch latch = new CountDownLatch(1);
+            AtomicBoolean userWantsRetry = new AtomicBoolean(false);
+
+            Platform.runLater(() -> {
+                ButtonType retryButton = new ButtonType("Retry", ButtonBar.ButtonData.OK_DONE);
+                ButtonType cancelButton = new ButtonType("Cancel Acquisition", ButtonBar.ButtonData.CANCEL_CLOSE);
+
+                Alert alert = new Alert(Alert.AlertType.WARNING);
+                alert.setTitle("Incompatible Stitching Settings");
+                alert.setHeaderText("Please fix the stitching settings before continuing");
+                alert.setContentText(result.message()
+                        + "\n\nAdjust the settings in Edit -> Preferences -> QPSC, then click Retry.");
+                alert.getDialogPane().setMinWidth(500);
+                alert.getButtonTypes().setAll(retryButton, cancelButton);
+
+                var response = alert.showAndWait();
+                userWantsRetry.set(response.isPresent() && response.get() == retryButton);
+                latch.countDown();
+            });
+
+            try {
+                latch.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+
+            if (!userWantsRetry.get()) {
+                logger.info("User cancelled due to invalid stitching settings");
+                return false;
+            }
+
+            logger.info("User requested retry after adjusting stitching settings");
+        }
+    }
+
+    /**
+     * Async version of {@link #validateWithRetry()} for use in
+     * CompletableFuture-based workflows.
+     *
+     * <p>Returns a future that completes with {@code true} when settings are
+     * valid, or {@code false} if the user cancels.</p>
+     *
+     * @return CompletableFuture with validation result
+     */
+    public static CompletableFuture<Boolean> validateWithRetryAsync() {
+        return CompletableFuture.supplyAsync(StitchingConfiguration::validateWithRetry);
     }
 }

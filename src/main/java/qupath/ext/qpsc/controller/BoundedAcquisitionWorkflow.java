@@ -214,11 +214,9 @@ public class BoundedAcquisitionWorkflow {
                 return; // user cancelled
             }
 
-            // Validate stitching settings before starting acquisition
-            var stitchingValidation = StitchingConfiguration.validateCurrentSettings();
-            if (!stitchingValidation.valid()) {
-                UIFunctions.notifyUserOfError(stitchingValidation.message(), "Invalid Stitching Settings");
-                return;
+            // Validate stitching settings -- loop to let user fix preferences if needed
+            if (!StitchingConfiguration.validateWithRetry()) {
+                return; // user cancelled
             }
 
             // Create tile configuration
