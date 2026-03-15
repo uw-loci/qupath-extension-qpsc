@@ -678,10 +678,12 @@ public class ExistingAlignmentPath {
             return true;
         }
 
-        // Strategy 2: Search for a flipped entry and verify the GUI is showing it
+        // Strategy 2: Search for a flipped entry matching the current base_image
         logger.info(
                 "Direct entry lookup returned {}, searching for flipped entry...",
                 currentEntry != null ? currentEntry.getImageName() : "null");
+
+        String currentBaseImage = getCurrentBaseImage(project);
 
         ProjectImageEntry<BufferedImage> flippedEntry = null;
         for (var entry : project.getImageList()) {
@@ -694,7 +696,8 @@ public class ExistingAlignmentPath {
 
                 logger.info("Found flipped entry: {} (flipX={}, flipY={})", entryName, entryFlipX, entryFlipY);
 
-                if (hasCorrectFlipStatus(entry, requiresFlipX, requiresFlipY)) {
+                if (hasCorrectFlipStatus(entry, requiresFlipX, requiresFlipY)
+                        && matchesBaseImage(entry, currentBaseImage)) {
                     flippedEntry = entry;
                     break;
                 }
@@ -774,6 +777,49 @@ public class ExistingAlignmentPath {
         boolean flipYMatches = !requiresFlipY || isFlippedY;
 
         return flipXMatches && flipYMatches;
+    }
+
+    /**
+     * Gets the base_image identifier for the currently open image.
+     * Falls back to extracting the name from the image entry if metadata is not set.
+     */
+    @SuppressWarnings("unchecked")
+    private String getCurrentBaseImage(Project<BufferedImage> project) {
+        ProjectImageEntry<BufferedImage> currentEntry = project.getEntry(gui.getImageData());
+        if (currentEntry != null) {
+            String baseImage = ImageMetadataManager.getBaseImage(currentEntry);
+            if (baseImage != null && !baseImage.isEmpty()) {
+                logger.info("Current image base_image: '{}'", baseImage);
+                return baseImage;
+            }
+            // Fall back to entry name stripped of flip suffix and extension
+            String name = currentEntry.getImageName();
+            if (name != null) {
+                name = name.replaceAll("\\s*\\(flipped.*\\)", "");
+                name = qupath.lib.common.GeneralTools.stripExtension(name);
+                logger.info("Derived base_image from entry name: '{}'", name);
+                return name;
+            }
+        }
+        logger.warn("Could not determine base_image for current entry");
+        return null;
+    }
+
+    /**
+     * Checks if a project entry belongs to the same base image.
+     * Returns true if currentBaseImage is null (cannot filter).
+     */
+    private boolean matchesBaseImage(ProjectImageEntry<?> entry, String currentBaseImage) {
+        if (currentBaseImage == null) {
+            return true; // Cannot filter, accept all
+        }
+        String entryBaseImage = ImageMetadataManager.getBaseImage(entry);
+        if (entryBaseImage != null) {
+            return currentBaseImage.equals(entryBaseImage);
+        }
+        // Fall back to checking entry name contains the base image name
+        String entryName = entry.getImageName();
+        return entryName != null && entryName.startsWith(currentBaseImage);
     }
 
     /**
@@ -875,12 +921,16 @@ public class ExistingAlignmentPath {
             return AnnotationHelper.getCurrentValidAnnotations(gui, null); // null = no class filter
         }
 
-        // Find the flipped entry
+        // Determine base_image of the current image so we find the correct flipped entry
+        String currentBaseImage = getCurrentBaseImage(project);
+
+        // Find the flipped entry matching the current image's base_image
         ProjectImageEntry<BufferedImage> flippedEntry = null;
         for (var entry : project.getImageList()) {
             String entryName = entry.getImageName();
             if (entryName != null && entryName.contains("(flipped")) {
-                if (hasCorrectFlipStatus(entry, requiresFlipX, requiresFlipY)) {
+                if (hasCorrectFlipStatus(entry, requiresFlipX, requiresFlipY)
+                        && matchesBaseImage(entry, currentBaseImage)) {
                     flippedEntry = entry;
                     break;
                 }

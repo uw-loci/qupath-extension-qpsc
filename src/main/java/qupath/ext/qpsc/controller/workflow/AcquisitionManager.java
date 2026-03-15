@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -125,7 +126,8 @@ public class AcquisitionManager {
                         saveTimingDataToPreferences();
                         return state;
                     }
-                    throw new RuntimeException("Acquisition failed or was cancelled");
+                    // User cancelled (e.g. dismissed annotation dialog) - not an error
+                    throw new CancellationException("Acquisition cancelled by user");
                 });
     }
 
