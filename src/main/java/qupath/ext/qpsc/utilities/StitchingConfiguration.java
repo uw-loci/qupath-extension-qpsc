@@ -70,13 +70,12 @@ public class StitchingConfiguration {
         }
 
         if (TIFF_ONLY_COMPRESSION.contains(compressionType)) {
-            return ValidationResult.error(
-                    String.format(
-                            "%s compression is not compatible with OME-ZARR output format.\n\n"
-                                    + "Please change either:\n"
-                                    + "  - Compression to LZW, ZLIB, or DEFAULT (Edit -> Preferences -> QPSC)\n"
-                                    + "  - Output format to OME-TIFF",
-                            compressionType));
+            return ValidationResult.error(String.format(
+                    "%s compression is not compatible with OME-ZARR output format.\n\n"
+                            + "Please change either:\n"
+                            + "  - Compression to LZW, ZLIB, or DEFAULT (Edit -> Preferences -> QPSC)\n"
+                            + "  - Output format to OME-TIFF",
+                    compressionType));
         }
 
         return ValidationResult.ok();

@@ -315,8 +315,8 @@ public class PPMModalityHandler implements ModalityHandler {
                                 + "Acquires an image of radial spokes and creates a linear regression mapping "
                                 + "hue values to orientation angles for use in PPM analysis.",
                         () -> qupath.ext.qpsc.modality.ppm.workflow.SunburstCalibrationWorkflow.run()));
-                // Analysis menu items (hue range, polarity plot, perpendicularity,
-                // batch analysis, back-propagate) are provided by qupath-extension-ppm
+        // Analysis menu items (hue range, polarity plot, perpendicularity,
+        // batch analysis, back-propagate) are provided by qupath-extension-ppm
     }
 
     // ========================================================================

@@ -114,10 +114,9 @@ public class AcquisitionManager {
         var stitchingValidation = StitchingConfiguration.validateCurrentSettings();
         if (!stitchingValidation.valid()) {
             logger.error("Stitching settings invalid: {}", stitchingValidation.message());
-            Platform.runLater(() -> Dialogs.showErrorMessage(
-                    "Invalid Stitching Settings", stitchingValidation.message()));
-            return CompletableFuture.failedFuture(
-                    new RuntimeException("Invalid stitching settings"));
+            Platform.runLater(
+                    () -> Dialogs.showErrorMessage("Invalid Stitching Settings", stitchingValidation.message()));
+            return CompletableFuture.failedFuture(new RuntimeException("Invalid stitching settings"));
         }
 
         return validateAnnotations()
