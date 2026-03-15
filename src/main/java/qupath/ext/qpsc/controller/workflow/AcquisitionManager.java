@@ -34,6 +34,7 @@ import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
+import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.ext.qpsc.utilities.ZFocusPredictionModel;
 import qupath.fx.dialogs.Dialogs;
@@ -108,6 +109,16 @@ public class AcquisitionManager {
      */
     public CompletableFuture<WorkflowState> execute() {
         logger.info("Starting acquisition phase");
+
+        // Validate stitching settings before any acquisition work begins
+        var stitchingValidation = StitchingConfiguration.validateCurrentSettings();
+        if (!stitchingValidation.valid()) {
+            logger.error("Stitching settings invalid: {}", stitchingValidation.message());
+            Platform.runLater(() -> Dialogs.showErrorMessage(
+                    "Invalid Stitching Settings", stitchingValidation.message()));
+            return CompletableFuture.failedFuture(
+                    new RuntimeException("Invalid stitching settings"));
+        }
 
         return validateAnnotations()
                 .thenCompose(valid -> {

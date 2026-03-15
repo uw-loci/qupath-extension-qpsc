@@ -20,6 +20,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AngleResolutionService;
 import qupath.ext.qpsc.service.ManualFocusHandler;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UnifiedAcquisitionController;
 import qupath.ext.qpsc.utilities.*;
@@ -211,6 +212,13 @@ public class BoundedAcquisitionWorkflow {
             if (!QPScopeChecks.validateObjectivePixelSize(
                     result.objective(), result.detector(), result.modality(), WSI_pixelSize_um)) {
                 return; // user cancelled
+            }
+
+            // Validate stitching settings before starting acquisition
+            var stitchingValidation = StitchingConfiguration.validateCurrentSettings();
+            if (!stitchingValidation.valid()) {
+                UIFunctions.notifyUserOfError(stitchingValidation.message(), "Invalid Stitching Settings");
+                return;
             }
 
             // Create tile configuration
