@@ -87,12 +87,15 @@ public class ImageFlipHelper {
                         currentEntry = entries.get(0);
                         logger.info("Using only project entry: {}", currentEntry.getImageName());
                     } else if (!entries.isEmpty()) {
-                        // Multiple entries - try to find one that's already flipped and matches requirements
+                        // Multiple entries - try to find one that's already flipped and matches
+                        // Derive base image name from server path for filtering
+                        String currentBaseName = deriveBaseImageFromServer(gui);
+
                         for (var entry : entries) {
                             if (ImageMetadataManager.isFlipped(entry)) {
                                 boolean flipXMatch = !requiresFlipX || ImageMetadataManager.isFlippedX(entry);
                                 boolean flipYMatch = !requiresFlipY || ImageMetadataManager.isFlippedY(entry);
-                                if (flipXMatch && flipYMatch) {
+                                if (flipXMatch && flipYMatch && matchesBaseImage(entry, currentBaseName)) {
                                     logger.info("Found matching flipped entry: {}", entry.getImageName());
                                     // Open this entry to ensure it's the current image
                                     return openAndVerifyEntry(gui, project, entry);
@@ -494,5 +497,44 @@ public class ImageFlipHelper {
             logger.error("Error waiting for entry to open", e);
             return false;
         }
+    }
+
+    /**
+     * Derives the base image name from the currently open image's server path.
+     * Used as fallback when project.getEntry() cannot find the current entry.
+     */
+    private static String deriveBaseImageFromServer(QuPathGUI gui) {
+        ImageData<BufferedImage> data = gui.getImageData();
+        if (data == null || data.getServer() == null) {
+            return null;
+        }
+        String path = data.getServer().getPath();
+        if (path == null) {
+            return null;
+        }
+        // Extract filename from path
+        int lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+        String filename = lastSlash >= 0 ? path.substring(lastSlash + 1) : path;
+        // Strip extension and flip suffix
+        filename = GeneralTools.stripExtension(filename);
+        filename = filename.replaceAll("\\s*\\(flipped.*\\)", "");
+        logger.info("Derived base image name from server path: '{}'", filename);
+        return filename;
+    }
+
+    /**
+     * Checks if a project entry belongs to the given base image.
+     * Returns true if baseName is null (cannot filter).
+     */
+    private static boolean matchesBaseImage(ProjectImageEntry<?> entry, String baseName) {
+        if (baseName == null) {
+            return true;
+        }
+        String entryBaseImage = ImageMetadataManager.getBaseImage(entry);
+        if (entryBaseImage != null) {
+            return baseName.equals(entryBaseImage);
+        }
+        String entryName = entry.getImageName();
+        return entryName != null && entryName.startsWith(baseName);
     }
 }
