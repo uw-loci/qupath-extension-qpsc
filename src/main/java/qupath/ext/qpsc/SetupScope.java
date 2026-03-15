@@ -438,6 +438,10 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 }
                 Menu modalityMenu = new Menu(name);
                 for (var item : contributions) {
+                    if (item.isSeparator()) {
+                        modalityMenu.getItems().add(new SeparatorMenuItem());
+                        continue;
+                    }
                     MenuItem mi = new MenuItem(item.label());
                     mi.setDisable(!configValid);
                     if (item.tooltip() != null) {
