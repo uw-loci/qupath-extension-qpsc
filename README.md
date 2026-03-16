@@ -1,7 +1,7 @@
 # QuPath Scope Control (QPSC) Extension
 
 [![QuPath Version](https://img.shields.io/badge/qupath-0.6.0+-blue)](https://qupath.github.io/)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](#license)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue)](#license)
 [![Status](https://img.shields.io/badge/status-active%20development-orange)](#)
 
 > **Part of the QPSC (QuPath Scope Control) system**
@@ -939,7 +939,7 @@ When reporting issues, please include:
 
 ## License
 
-Apache License 2.0 - see [LICENSE](LICENSE) for details.
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
 
 ## Citation
 
