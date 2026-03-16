@@ -175,8 +175,8 @@ public class StitchingConfiguration {
                 Alert alert = new Alert(Alert.AlertType.WARNING);
                 alert.setTitle("Incompatible Stitching Settings");
                 alert.setHeaderText("Please fix the stitching settings before continuing");
-                alert.setContentText(result.message()
-                        + "\n\nAdjust the settings in Edit -> Preferences -> QPSC, then click Retry.");
+                alert.setContentText(
+                        result.message() + "\n\nAdjust the settings in Edit -> Preferences -> QPSC, then click Retry.");
                 alert.getDialogPane().setMinWidth(500);
                 alert.getButtonTypes().setAll(retryButton, cancelButton);
 

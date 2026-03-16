@@ -421,9 +421,8 @@ public class AcquisitionManager {
             final int index = i + 1;
             final int total = state.annotations.size();
             // Future tile counts = file counts for annotations after this one
-            final List<Integer> futureCountsForThisStep =
-                    perAnnotationFileCounts.subList(Math.min(i + 1, perAnnotationFileCounts.size()),
-                            perAnnotationFileCounts.size());
+            final List<Integer> futureCountsForThisStep = perAnnotationFileCounts.subList(
+                    Math.min(i + 1, perAnnotationFileCounts.size()), perAnnotationFileCounts.size());
             // Copy to avoid subList reference issues across async boundaries
             final List<Integer> futureCounts = new ArrayList<>(futureCountsForThisStep);
 
@@ -459,9 +458,9 @@ public class AcquisitionManager {
                                                 state.transform);
                                         zFocusModel.addDataPoint(stageCoords[0], stageCoords[1], finalZ);
                                         logger.info(
-                                                "Updated Z-focus model: {} points, residual error: {:.2f} um",
+                                                "Updated Z-focus model: {} points, residual error: {} um",
                                                 zFocusModel.getPointCount(),
-                                                zFocusModel.calculateResidualError());
+                                                String.format("%.2f", zFocusModel.calculateResidualError()));
                                     }
                                     // Clear for next acquisition
                                     socketClient.clearLastAcquisitionFinalZ();
@@ -619,17 +618,17 @@ public class AcquisitionManager {
                         zFocusModel.predictZ(stageCoords[0], stageCoords[1]).ifPresent(predictedZ -> {
                             config.commandBuilder().hintZ(predictedZ);
                             logger.info(
-                                    "Z-focus prediction for {}: {:.2f} um (from {} points, dist={:.0f} um)",
+                                    "Z-focus prediction for {}: {} um (from {} points, dist={} um)",
                                     annotation.getName(),
-                                    predictedZ,
+                                    String.format("%.2f", predictedZ),
                                     zFocusModel.getPointCount(),
-                                    distFromLast);
+                                    String.format("%.0f", distFromLast));
                         });
                     } else {
                         logger.debug(
-                                "Z prediction not ready: {} points, dist={:.0f} um",
+                                "Z prediction not ready: {} points, dist={} um",
                                 zFocusModel.getPointCount(),
-                                distFromLast);
+                                String.format("%.0f", distFromLast));
                     }
                 }
 

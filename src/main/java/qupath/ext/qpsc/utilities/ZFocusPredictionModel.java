@@ -62,7 +62,11 @@ public class ZFocusPredictionModel {
         lastAcquiredPoint = new double[] {stageX, stageY};
 
         logger.info(
-                "Added Z focus point #{}: ({:.1f}, {:.1f}) -> Z={:.2f} um", dataPoints.size(), stageX, stageY, focusZ);
+                "Added Z focus point #{}: ({}, {}) -> Z={} um",
+                dataPoints.size(),
+                String.format("%.1f", stageX),
+                String.format("%.1f", stageY),
+                String.format("%.2f", focusZ));
 
         // Refit the plane model if we have enough points
         if (dataPoints.size() >= MIN_POINTS_EARLY) {
@@ -92,10 +96,10 @@ public class ZFocusPredictionModel {
 
         if (numPoints >= MIN_POINTS_EARLY && distanceToNextAnnotation > EARLY_PREDICTION_DISTANCE_UM) {
             logger.info(
-                    "Early prediction enabled: {} points, distance {:.1f}um > {:.1f}um threshold",
+                    "Early prediction enabled: {} points, distance {}um > {}um threshold",
                     numPoints,
-                    distanceToNextAnnotation,
-                    EARLY_PREDICTION_DISTANCE_UM);
+                    String.format("%.1f", distanceToNextAnnotation),
+                    String.format("%.1f", EARLY_PREDICTION_DISTANCE_UM));
             return modelFitted;
         }
 
@@ -117,13 +121,13 @@ public class ZFocusPredictionModel {
         double predictedZ = a * stageX + b * stageY + c;
 
         logger.debug(
-                "Predicted Z for ({:.1f}, {:.1f}): {:.2f} um (plane: z = {:.6f}x + {:.6f}y + {:.2f})",
-                stageX,
-                stageY,
-                predictedZ,
-                a,
-                b,
-                c);
+                "Predicted Z for ({}, {}): {} um (plane: z = {}x + {}y + {})",
+                String.format("%.1f", stageX),
+                String.format("%.1f", stageY),
+                String.format("%.2f", predictedZ),
+                String.format("%.6f", a),
+                String.format("%.6f", b),
+                String.format("%.2f", c));
 
         return OptionalDouble.of(predictedZ);
     }
@@ -216,12 +220,12 @@ public class ZFocusPredictionModel {
         // Calculate and log residual error
         double residualError = calculateResidualError();
         logger.info(
-                "Plane fitted with {} points: z = {:.6f}x + {:.6f}y + {:.2f}, residual error: {:.2f} um",
+                "Plane fitted with {} points: z = {}x + {}y + {}, residual error: {} um",
                 n,
-                a,
-                b,
-                c,
-                residualError);
+                String.format("%.6f", a),
+                String.format("%.6f", b),
+                String.format("%.2f", c),
+                String.format("%.2f", residualError));
     }
 
     /**
