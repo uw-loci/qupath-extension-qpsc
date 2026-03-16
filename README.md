@@ -1,7 +1,7 @@
 # QuPath Scope Control (QPSC) Extension
 
 [![QuPath Version](https://img.shields.io/badge/qupath-0.6.0+-blue)](https://qupath.github.io/)
-[![License](https://img.shields.io/badge/license-MIT-lightgrey)](#license)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](#license)
 [![Status](https://img.shields.io/badge/status-active%20development-orange)](#)
 
 > **Part of the QPSC (QuPath Scope Control) system**
@@ -939,7 +939,7 @@ When reporting issues, please include:
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+Apache License 2.0 - see [LICENSE](LICENSE) for details.
 
 ## Citation
 
@@ -952,3 +952,7 @@ If you use QPSC in published work, please cite:
 Developed by [LOCI](https://eliceirilab.org/), University of Wisconsin-Madison.
 
 With thanks to the QuPath community and everyone contributing to open-source microscopy software.
+
+## AI-Assisted Development
+
+This project was developed with assistance from [Claude](https://claude.ai) (Anthropic). Claude was used as a development tool for code generation, architecture design, debugging, and documentation throughout the project.
