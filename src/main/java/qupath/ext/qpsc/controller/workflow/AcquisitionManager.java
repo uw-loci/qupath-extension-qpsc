@@ -1,7 +1,11 @@
 package qupath.ext.qpsc.controller.workflow;
 
 import java.awt.image.BufferedImage;
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,6 +37,7 @@ import qupath.ext.qpsc.ui.AnnotationAcquisitionDialog;
 import qupath.ext.qpsc.ui.DualProgressDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
+import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
@@ -43,6 +48,7 @@ import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.classes.PathClass;
 import qupath.lib.projects.Project;
+import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.scripting.QP;
 
 /**
@@ -69,6 +75,9 @@ public class AcquisitionManager {
 
     /** Maximum time to wait for acquisition completion (5 minutes) */
     private static final int ACQUISITION_TIMEOUT_MS = 300000;
+
+    /** Filename for acquisition metadata written to the scan type directory */
+    private static final String ACQUISITION_INFO_FILENAME = "acquisition_info.txt";
 
     /** Single-threaded executor for stitching operations to prevent overwhelming system resources */
     private static final ExecutorService STITCH_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
@@ -604,6 +613,16 @@ public class AcquisitionManager {
                         modalityWithIndex,
                         annotation.getName());
 
+                // Write acquisition metadata for recovery workflow (idempotent per scan type)
+                writeAcquisitionInfo(
+                        state.projectInfo.getTempTileDirectory(),
+                        actualSampleName,
+                        getParentImageName(),
+                        baseModality,
+                        state.sample.objective(),
+                        getParentFlipX(),
+                        getParentFlipY());
+
                 // Apply Z-focus prediction if model is ready (tilt correction)
                 if (state.transform != null) {
                     double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
@@ -1079,5 +1098,120 @@ public class AcquisitionManager {
      */
     public DualProgressDialog getDualProgressDialog() {
         return dualProgressDialog;
+    }
+
+    // --- Acquisition metadata persistence for recovery workflow ---
+
+    /**
+     * Writes acquisition metadata to the scan type directory for use by the
+     * Re-stitch Tiles recovery workflow.
+     *
+     * <p>Idempotent -- does nothing if the file already exists, since all
+     * annotations within one scan type share the same metadata.
+     *
+     * @param scanTypeDir Path to the scan type directory (tempTileDirectory)
+     * @param sampleName  The sample name used for output filenames
+     * @param parentImageName Name of the parent (macro) image in the project
+     * @param modality    Imaging modality (e.g., "ppm")
+     * @param objective   Objective used (e.g., "20x")
+     * @param flipX       Whether the parent image is optically flipped on X
+     * @param flipY       Whether the parent image is optically flipped on Y
+     */
+    private void writeAcquisitionInfo(
+            String scanTypeDir,
+            String sampleName,
+            String parentImageName,
+            String modality,
+            String objective,
+            boolean flipX,
+            boolean flipY) {
+        Path infoFile = Paths.get(scanTypeDir, ACQUISITION_INFO_FILENAME);
+        if (Files.exists(infoFile)) {
+            return;
+        }
+        try {
+            Files.createDirectories(infoFile.getParent());
+            try (BufferedWriter w = Files.newBufferedWriter(infoFile, StandardCharsets.UTF_8)) {
+                w.write("# Acquisition info -- written by QuPath QPSC Extension");
+                w.newLine();
+                w.write("# Used by Re-stitch Tiles to recover naming and metadata");
+                w.newLine();
+                w.write("sample_name=" + sampleName);
+                w.newLine();
+                w.write("parent_image=" + (parentImageName != null ? parentImageName : ""));
+                w.newLine();
+                w.write("modality=" + (modality != null ? modality : ""));
+                w.newLine();
+                w.write("objective=" + (objective != null ? objective : ""));
+                w.newLine();
+                w.write("flip_x=" + flipX);
+                w.newLine();
+                w.write("flip_y=" + flipY);
+                w.newLine();
+            }
+            logger.info("Wrote acquisition info to: {}", infoFile);
+        } catch (IOException e) {
+            logger.warn("Could not write acquisition info: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Gets the name of the currently-open parent image in the QuPath viewer.
+     *
+     * @return parent image name, or null if unavailable
+     */
+    @SuppressWarnings("unchecked")
+    private String getParentImageName() {
+        if (gui.getViewer().hasServer() && gui.getImageData() != null) {
+            try {
+                Project<BufferedImage> project = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
+                ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+                return entry != null ? entry.getImageName() : null;
+            } catch (Exception e) {
+                logger.debug("Could not get parent image name: {}", e.getMessage());
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Gets the flip-X status of the currently-open parent image, falling back
+     * to the preference value if no parent entry is available.
+     */
+    @SuppressWarnings("unchecked")
+    private boolean getParentFlipX() {
+        if (gui.getViewer().hasServer() && gui.getImageData() != null) {
+            try {
+                Project<BufferedImage> project = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
+                ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+                if (entry != null) {
+                    return ImageMetadataManager.isFlippedX(entry);
+                }
+            } catch (Exception e) {
+                // fall through to preference
+            }
+        }
+        return QPPreferenceDialog.getFlipMacroXProperty();
+    }
+
+    /**
+     * Gets the flip-Y status of the currently-open parent image, falling back
+     * to the preference value if no parent entry is available.
+     */
+    @SuppressWarnings("unchecked")
+    private boolean getParentFlipY() {
+        if (gui.getViewer().hasServer() && gui.getImageData() != null) {
+            try {
+                Project<BufferedImage> project = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
+                ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+                if (entry != null) {
+                    return ImageMetadataManager.isFlippedY(entry);
+                }
+            } catch (Exception e) {
+                // fall through to preference
+            }
+        }
+        return QPPreferenceDialog.getFlipMacroYProperty();
     }
 }
