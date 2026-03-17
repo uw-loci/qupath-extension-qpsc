@@ -17,6 +17,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
+import javafx.scene.control.Tooltip;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.PixelFormat;
 import javafx.scene.image.WritableImage;
@@ -34,6 +35,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
+import qupath.lib.gui.QuPathGUI;
 
 /**
  * Singleton floating window that displays a live camera feed from the microscope.
@@ -97,6 +99,12 @@ public class LiveViewerWindow {
     private volatile boolean polling = false;
     private volatile String lastFrameInfo = "";
 
+    // Desync detection
+    private volatile long lastFrameArrivalTime = 0;
+    private volatile long liveOnTimestamp = 0;
+    private static final long NO_FRAME_TIMEOUT_MS = 3000;
+    private static final long GRACE_PERIOD_MS = 2000;
+
     // Display mode state
     // fitToContainer = true: image scales to fill container (no scrollbars)
     // fitToContainer = false: image renders at explicitScale, scrollbars appear as needed
@@ -105,10 +113,20 @@ public class LiveViewerWindow {
     private ScrollPane scrollPane; // Store reference for mode switching
     private StackPane imageContainer; // Inner container for centering
 
+    // Collapsed pill UI
+    private BorderPane expandedContent;
+    private HBox collapsedPill;
+    private Label pillFpsLabel;
+    private Label pillStatusDot;
+    private double savedX, savedY, savedW, savedH;
+
     // Configuration
     private static final long POLL_INTERVAL_MS = 100; // ~10 FPS max
     private static final double WINDOW_WIDTH = 900; // Wider to accommodate side panel
     private static final double WINDOW_HEIGHT = 720;
+    private static final String PILL_DOT_BASE_STYLE =
+            "-fx-min-width: 10; -fx-min-height: 10; -fx-max-width: 10; -fx-max-height: 10; "
+                    + "-fx-background-radius: 5; ";
 
     private LiveViewerWindow() {
         buildUI();
@@ -185,6 +203,7 @@ public class LiveViewerWindow {
             logger.warn("Failed to stop QPSC Live Viewer streaming: {}", e.getMessage());
         }
         instance.liveActive = false;
+        instance.lastFrameArrivalTime = 0;
         // Cosmetic UI update -- non-blocking
         Platform.runLater(() -> {
             if (instance != null) {
@@ -211,10 +230,12 @@ public class LiveViewerWindow {
             if (controller != null) {
                 controller.startContinuousAcquisition();
                 instance.liveActive = true;
-                // Reset FPS counter
+                // Reset FPS counter and desync tracking
                 instance.frameCount.set(0);
                 instance.fpsWindowStart.set(System.currentTimeMillis());
                 instance.currentFps = 0;
+                instance.liveOnTimestamp = System.currentTimeMillis();
+                instance.lastFrameArrivalTime = System.currentTimeMillis();
                 // Cosmetic UI update
                 Platform.runLater(() -> {
                     if (instance != null) {
@@ -233,9 +254,13 @@ public class LiveViewerWindow {
         stage = new Stage();
         stage.setTitle("Live Viewer");
         stage.initModality(Modality.NONE);
-
-        // No initOwner -- owned windows cannot be minimized on Windows.
-        // As an independent window, it gets its own taskbar entry and minimize button.
+        // Set owner to QuPath main window so Live Viewer stays on top of QuPath
+        // but not above other applications. Owned windows cannot be independently
+        // minimized, so we provide a collapse-to-pill alternative.
+        Stage quPathStage = getQuPathStage();
+        if (quPathStage != null) {
+            stage.initOwner(quPathStage);
+        }
 
         // Toolbar with Live toggle button and display scale selector
         liveToggleButton = new Button("Live: OFF");
@@ -284,9 +309,13 @@ public class LiveViewerWindow {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
+        Button collapseButton = new Button("_");
+        collapseButton.setTooltip(new Tooltip("Collapse to pill"));
+        collapseButton.setOnAction(e -> collapse());
+
         Button docHelpButton = DocumentationHelper.createHelpButton("liveViewer");
 
-        HBox toolbar = new HBox(8, liveToggleButton, spacer, scaleLabel, scaleCombo);
+        HBox toolbar = new HBox(8, liveToggleButton, spacer, scaleLabel, scaleCombo, collapseButton);
         if (docHelpButton != null) toolbar.getChildren().add(docHelpButton);
         toolbar.setPadding(new Insets(4, 8, 4, 8));
         toolbar.setAlignment(Pos.CENTER_LEFT);
@@ -368,7 +397,28 @@ public class LiveViewerWindow {
         root.setCenter(scrollPane); // Live image in center
         root.setBottom(bottomPane);
 
-        Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
+        expandedContent = root;
+
+        // Collapsed pill (hidden initially)
+        pillStatusDot = new Label();
+        pillStatusDot.setStyle(PILL_DOT_BASE_STYLE + "-fx-background-color: #9E9E9E;");
+        Label pillLabel = new Label("Live Viewer");
+        pillLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12;");
+        pillFpsLabel = new Label("");
+        pillFpsLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11;");
+        Button expandButton = new Button("Expand");
+        expandButton.setOnAction(e -> expand());
+
+        collapsedPill = new HBox(8, pillStatusDot, pillLabel, pillFpsLabel, expandButton);
+        collapsedPill.setAlignment(Pos.CENTER_LEFT);
+        collapsedPill.setPadding(new Insets(6, 12, 6, 12));
+        collapsedPill.setStyle("-fx-background-color: #2b2b2b; -fx-background-radius: 6;");
+        collapsedPill.setVisible(false);
+        collapsedPill.setManaged(false);
+
+        StackPane rootStack = new StackPane(expandedContent, collapsedPill);
+        StackPane.setAlignment(collapsedPill, Pos.TOP_LEFT);
+        Scene scene = new Scene(rootStack, WINDOW_WIDTH, WINDOW_HEIGHT);
         stage.setScene(scene);
         stage.setMinWidth(500);
         stage.setMinHeight(400);
@@ -428,12 +478,15 @@ public class LiveViewerWindow {
 
                             if (newState) {
                                 updateStatus("Live ON - streaming...");
-                                // Reset FPS counter on start
+                                // Reset FPS counter and desync tracking on start
                                 frameCount.set(0);
                                 fpsWindowStart.set(System.currentTimeMillis());
                                 currentFps = 0;
+                                liveOnTimestamp = System.currentTimeMillis();
+                                lastFrameArrivalTime = System.currentTimeMillis();
                             } else {
                                 updateStatus("Live OFF");
+                                lastFrameArrivalTime = 0;
                             }
                         });
                     } catch (IOException e) {
@@ -495,14 +548,44 @@ public class LiveViewerWindow {
                 return;
             }
 
-            FrameData frame = controller.getFrame();
-            if (frame == null) {
-                // No frame available yet - camera may still be starting
+            // Gate rendering on liveActive -- prevents desync Scenario A
+            // (button says OFF but histogram is moving)
+            if (!liveActive) {
+                FrameData frame = controller.getFrame();
+                if (frame != null) {
+                    lastFrame = frame; // Keep for cursor readout
+                    handleUnexpectedFrame();
+                }
                 return;
             }
 
-            // Store for cursor pixel readout
+            boolean collapsed = collapsedPill != null && collapsedPill.isVisible();
+
+            FrameData frame = controller.getFrame();
+            if (frame == null) {
+                // No-frame timeout -- fixes desync Scenario B
+                // (button says ON but no frames arrive)
+                long now = System.currentTimeMillis();
+                long elapsed = now - liveOnTimestamp;
+                long sinceLast = now - lastFrameArrivalTime;
+                if (elapsed > GRACE_PERIOD_MS && sinceLast > NO_FRAME_TIMEOUT_MS) {
+                    logger.warn("No frames for {}ms with liveActive=true -- auto-correcting to OFF", sinceLast);
+                    liveActive = false;
+                    Platform.runLater(() -> {
+                        updateLiveButtonStyle(false);
+                        updateStatus("Live OFF (no frames detected -- camera may need restart)");
+                        if (collapsed) {
+                            pillStatusDot.setStyle(PILL_DOT_BASE_STYLE + "-fx-background-color: #F44336;");
+                            pillFpsLabel.setText("No signal");
+                        }
+                    });
+                }
+                return;
+            }
+
+            // Frame arrived -- track arrival time
             lastFrame = frame;
+            lastFrameArrivalTime = System.currentTimeMillis();
 
             // Track FPS
             int count = frameCount.incrementAndGet();
@@ -519,6 +602,16 @@ public class LiveViewerWindow {
             String colorMode = frame.isRGB() ? "RGB" : "Grayscale";
             lastFrameInfo = String.format(
                     "FPS: %.1f | %dx%d | %s %s", currentFps, frame.width(), frame.height(), colorMode, bitDepth);
+
+            // Skip full rendering when collapsed -- just update pill labels
+            if (collapsed) {
+                final double fps = currentFps;
+                Platform.runLater(() -> {
+                    pillFpsLabel.setText(String.format("%.0f FPS", fps));
+                    pillStatusDot.setStyle(PILL_DOT_BASE_STYLE + "-fx-background-color: #4CAF50;");
+                });
+                return;
+            }
 
             // Submit histogram computation (throttled internally)
             // Capture local ref: stopAndDispose() may null the field concurrently
@@ -808,6 +901,68 @@ public class LiveViewerWindow {
 
     private void updateStatus(String text) {
         statusLabel.setText(text);
+    }
+
+    /**
+     * Called when frames arrive but liveActive is false.
+     * Camera is still streaming after user clicked OFF -- notify via status.
+     */
+    private void handleUnexpectedFrame() {
+        Platform.runLater(() -> {
+            updateStatus("Live OFF (camera still sending frames -- click Live to sync)");
+            updateLiveButtonStyle(false);
+        });
+    }
+
+    private static Stage getQuPathStage() {
+        try {
+            QuPathGUI gui = QuPathGUI.getInstance();
+            return gui != null ? gui.getStage() : null;
+        } catch (Exception e) {
+            logger.debug("Could not get QuPath stage: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private void collapse() {
+        // Save window geometry
+        savedX = stage.getX();
+        savedY = stage.getY();
+        savedW = stage.getWidth();
+        savedH = stage.getHeight();
+
+        // Switch to pill view
+        expandedContent.setVisible(false);
+        expandedContent.setManaged(false);
+        collapsedPill.setVisible(true);
+        collapsedPill.setManaged(true);
+
+        // Update pill status
+        if (liveActive) {
+            pillStatusDot.setStyle(PILL_DOT_BASE_STYLE + "-fx-background-color: #4CAF50;");
+            pillFpsLabel.setText(String.format("%.0f FPS", currentFps));
+        } else {
+            pillStatusDot.setStyle(PILL_DOT_BASE_STYLE + "-fx-background-color: #9E9E9E;");
+            pillFpsLabel.setText("OFF");
+        }
+
+        stage.sizeToScene();
+        logger.info("Live viewer collapsed to pill");
+    }
+
+    private void expand() {
+        collapsedPill.setVisible(false);
+        collapsedPill.setManaged(false);
+        expandedContent.setVisible(true);
+        expandedContent.setManaged(true);
+
+        // Restore geometry
+        stage.setX(savedX);
+        stage.setY(savedY);
+        stage.setWidth(savedW);
+        stage.setHeight(savedH);
+
+        logger.info("Live viewer expanded");
     }
 
     private void stopAndDispose() {
