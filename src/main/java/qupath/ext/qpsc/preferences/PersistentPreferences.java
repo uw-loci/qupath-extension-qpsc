@@ -306,6 +306,29 @@ public class PersistentPreferences {
         macroImagePixelSizeInMicrons.setValue(macroPixelSize);
     }
 
+    // ================== STITCHING RECOVERY ==================
+    private static final StringProperty restitchPixelSize =
+            PathPrefs.createPersistentPreference("restitchPixelSizeMicrons", "");
+
+    public static String getRestitchPixelSize() {
+        return restitchPixelSize.getValue();
+    }
+
+    public static void setRestitchPixelSize(final String pixelSize) {
+        restitchPixelSize.setValue(pixelSize);
+    }
+
+    private static final StringProperty restitchParallelAngles =
+            PathPrefs.createPersistentPreference("restitchParallelAngles", "true");
+
+    public static boolean getRestitchParallelAngles() {
+        return "true".equals(restitchParallelAngles.getValue());
+    }
+
+    public static void setRestitchParallelAngles(final boolean parallel) {
+        restitchParallelAngles.setValue(String.valueOf(parallel));
+    }
+
     // ================== METADATA PROPAGATION ==================
     private static final StringProperty metadataPropagationPrefixSaved =
             PathPrefs.createPersistentPreference("MetadataPropagationPrefix", "OCR");

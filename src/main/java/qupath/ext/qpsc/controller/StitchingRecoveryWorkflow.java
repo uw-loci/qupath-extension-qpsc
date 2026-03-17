@@ -11,6 +11,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
 import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
@@ -30,6 +34,9 @@ import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.basicstitching.workflow.StitchingWorkflow;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.notification.NotificationEvent;
+import qupath.ext.qpsc.service.notification.NotificationPriority;
+import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.fx.dialogs.Dialogs;
@@ -177,6 +184,12 @@ public class StitchingRecoveryWorkflow {
         matchField.setPromptText(". = all subdirs, or specific angle like 0.0");
         matchField.setPrefWidth(200);
 
+        // Parallel angles checkbox
+        CheckBox parallelCheck = new CheckBox("Stitch angles in parallel");
+        parallelCheck.setSelected(PersistentPreferences.getRestitchParallelAngles());
+        parallelCheck.setTooltip(new Tooltip("Stitch all angle directories simultaneously. Faster on SSDs.\n"
+                + "Disable for spinning disk HDDs to avoid I/O thrashing."));
+
         // Info label
         Label infoLabel = new Label("Select the folder that contains tile subdirectories (e.g., angle folders)\n"
                 + "with TileConfiguration.txt files. Use \".\" as matching string to stitch\n"
@@ -198,6 +211,7 @@ public class StitchingRecoveryWorkflow {
         grid.add(formatCombo, 1, 5);
         grid.add(matchLabel, 0, 6);
         grid.add(matchField, 1, 6);
+        grid.add(parallelCheck, 0, 7, 3, 1);
 
         dialog.getDialogPane().setContent(grid);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -224,6 +238,7 @@ public class StitchingRecoveryWorkflow {
                 }
                 // Remember for next time
                 PersistentPreferences.setRestitchPixelSize(pixelField.getText().trim());
+                PersistentPreferences.setRestitchParallelAngles(parallelCheck.isSelected());
                 String compression = compressionCombo.getValue();
                 String matchingString = matchField.getText().trim();
                 if (matchingString.isEmpty()) {
@@ -231,12 +246,13 @@ public class StitchingRecoveryWorkflow {
                 }
                 StitchingConfig.OutputFormat outputFormat =
                         StitchingConfig.OutputFormat.valueOf(formatCombo.getValue());
+                boolean parallel = parallelCheck.isSelected();
 
                 // Run stitching in background
                 final String finalMatch = matchingString;
                 Thread stitchThread = new Thread(() -> {
                     executeRecoveryStitching(
-                            tileFolder, pixelSize, compression, finalMatch, outputFormat, gui, project);
+                            tileFolder, pixelSize, compression, finalMatch, outputFormat, parallel, gui, project);
                 });
                 stitchThread.setDaemon(true);
                 stitchThread.setName("StitchingRecovery");
@@ -350,16 +366,18 @@ public class StitchingRecoveryWorkflow {
             String compression,
             String matchingString,
             StitchingConfig.OutputFormat outputFormat,
+            boolean parallel,
             QuPathGUI gui,
             Project<BufferedImage> project) {
 
         logger.info(
-                "Executing recovery stitching: folder={}, pixelSize={}, compression={}, match='{}', format={}",
+                "Executing recovery stitching: folder={}, pixelSize={}, compression={}, match='{}', format={}, parallel={}",
                 tileFolder,
                 pixelSize,
                 compression,
                 matchingString,
-                outputFormat);
+                outputFormat,
+                parallel);
 
         File tileFolderFile = new File(tileFolder);
         String annotationName = tileFolderFile.getName(); // tile folder = annotation name
@@ -454,8 +472,8 @@ public class StitchingRecoveryWorkflow {
                 "Stitching Started",
                 String.format("Re-stitching %d angle(s) from: %s", angleDirs.size(), displaySampleName)));
 
-        int successCount = 0;
-        int failureCount = 0;
+        AtomicInteger successCount = new AtomicInteger();
+        AtomicInteger failureCount = new AtomicInteger();
 
         // Capture fields for use inside lambda (must be effectively final)
         final String finalSampleName = sampleName;
@@ -464,101 +482,126 @@ public class StitchingRecoveryWorkflow {
         final String finalAnnotationName = annotationName;
         final ProjectImageEntry<BufferedImage> finalParentEntry = parentEntry;
         final int finalImageIndex = imageIndex;
+        final int totalAngles = angleDirs.size();
 
-        // Process each angle individually so we can import immediately after each completes
+        // Determine thread pool size: all angles in parallel, or 1 for sequential
+        int threadCount = parallel ? angleDirs.size() : 1;
+        logger.info("Processing {} angle(s) with {} thread(s)", angleDirs.size(), threadCount);
+        ExecutorService stitchPool = Executors.newFixedThreadPool(threadCount, r -> {
+            Thread t = new Thread(r);
+            t.setDaemon(true);
+            t.setName("recovery-stitch");
+            return t;
+        });
+
+        // Submit all angles to the pool
+        java.util.List<Future<?>> futures = new java.util.ArrayList<>();
         for (int i = 0; i < angleDirs.size(); i++) {
-            File angleDir = angleDirs.get(i);
-            String angleName = angleDir.getName();
-            boolean isRootDir = angleDir.equals(tileFolderFile);
+            final File angleDir = angleDirs.get(i);
+            final String angleName = angleDir.getName();
+            final boolean isRootDir = angleDir.equals(tileFolderFile);
+            final int angleNum = i + 1;
 
-            logger.info("=== Processing angle {}/{}: '{}' ===", i + 1, angleDirs.size(), angleName);
+            // Capture loop-scoped copies for filename generation
+            final String fnSampleName = sampleName;
+            final String fnModality = modality;
+            final String fnObjective = objective;
+            final String fnAnnotationName = annotationName;
+            final int fnImageIndex = imageIndex;
+            final String fnOutputFolder = outputFolder;
 
-            try {
-                // Each angle is stitched independently by pointing StitchingWorkflow
-                // at the angle directory directly. TileConfigurationTxtStrategy will
-                // fall back to root-directory processing when no matching subdirs exist.
-                StitchingConfig config = new StitchingConfig(
-                        "Coordinates in TileConfiguration.txt file",
-                        angleDir.getAbsolutePath(),
-                        outputFolder,
-                        compression,
-                        pixelSize,
-                        1, // downsample
-                        ".", // match everything in this single-angle directory
-                        1.0, // zSpacingMicrons
-                        outputFormat);
+            futures.add(stitchPool.submit(() -> {
+                logger.info("=== Processing angle {}/{}: '{}' ===", angleNum, totalAngles, angleName);
 
-                // Generate output filename using ImageNameGenerator (respects Preferences)
-                String extension = outputFormat == StitchingConfig.OutputFormat.OME_ZARR ? ".ome.zarr" : ".ome.tif";
-                String generatedName = ImageNameGenerator.generateImageName(
-                        sampleName,
-                        imageIndex,
-                        modality,
-                        objective,
-                        annotationName,
-                        isRootDir ? null : angleName,
-                        extension);
-                // Strip extension since StitchingWorkflow appends it
-                config.outputFilename = GeneralTools.stripExtension(generatedName);
+                try {
+                    StitchingConfig config = new StitchingConfig(
+                            "Coordinates in TileConfiguration.txt file",
+                            angleDir.getAbsolutePath(),
+                            fnOutputFolder,
+                            compression,
+                            pixelSize,
+                            1, // downsample
+                            ".", // match everything in this single-angle directory
+                            1.0, // zSpacingMicrons
+                            outputFormat);
 
-                String outPath = StitchingWorkflow.run(config);
+                    // Generate output filename using ImageNameGenerator (respects Preferences)
+                    String extension = outputFormat == StitchingConfig.OutputFormat.OME_ZARR ? ".ome.zarr" : ".ome.tif";
+                    String generatedName = ImageNameGenerator.generateImageName(
+                            fnSampleName,
+                            fnImageIndex,
+                            fnModality,
+                            fnObjective,
+                            fnAnnotationName,
+                            isRootDir ? null : angleName,
+                            extension);
+                    // Strip extension since StitchingWorkflow appends it
+                    config.outputFilename = GeneralTools.stripExtension(generatedName);
 
-                if (outPath == null) {
-                    logger.error("Stitching returned null for angle '{}'", angleName);
-                    failureCount++;
-                    continue;
-                }
+                    String outPath = StitchingWorkflow.run(config);
 
-                logger.info("Stitching completed for '{}': {}", angleName, outPath);
-                successCount++;
-
-                // Import immediately to the project with metadata
-                final String finalOutPath = outPath;
-                final String finalAngle = isRootDir ? null : angleName;
-                final int angleNum = i + 1;
-                final int totalAngles = angleDirs.size();
-
-                Platform.runLater(() -> {
-                    try {
-                        File outputFile = new File(finalOutPath);
-
-                        QPProjectFunctions.addImageToProjectWithMetadata(
-                                project,
-                                outputFile,
-                                finalParentEntry,
-                                0, // xOffset -- unknown in recovery
-                                0, // yOffset -- unknown in recovery
-                                false, // isFlippedX -- stitched images don't need flipping
-                                false, // isFlippedY -- stitched images don't need flipping
-                                finalSampleName,
-                                finalModality,
-                                finalObjective,
-                                finalAngle,
-                                finalAnnotationName,
-                                finalImageIndex,
-                                null); // modalityHandler
-
-                        gui.refreshProject();
-
-                        logger.info("Imported angle '{}' to project ({}/{})", finalAngle, angleNum, totalAngles);
-                        Dialogs.showInfoNotification(
-                                "Angle Imported",
-                                String.format("Imported %s (%d/%d)", outputFile.getName(), angleNum, totalAngles));
-                    } catch (IOException e) {
-                        logger.error("Failed to import {}: {}", finalOutPath, e.getMessage());
+                    if (outPath == null) {
+                        logger.error("Stitching returned null for angle '{}'", angleName);
+                        failureCount.incrementAndGet();
+                        return;
                     }
-                });
 
-            } catch (Exception e) {
-                logger.error("Exception processing angle '{}': {}", angleName, e.getMessage(), e);
-                failureCount++;
-            }
+                    logger.info("Stitching completed for '{}': {}", angleName, outPath);
+                    successCount.incrementAndGet();
+
+                    // Import to project with metadata
+                    final String finalAngle = isRootDir ? null : angleName;
+                    Platform.runLater(() -> {
+                        try {
+                            File outputFile = new File(outPath);
+
+                            QPProjectFunctions.addImageToProjectWithMetadata(
+                                    project,
+                                    outputFile,
+                                    finalParentEntry,
+                                    0, // xOffset -- unknown in recovery
+                                    0, // yOffset -- unknown in recovery
+                                    false, // isFlippedX -- stitched images don't need flipping
+                                    false, // isFlippedY -- stitched images don't need flipping
+                                    finalSampleName,
+                                    finalModality,
+                                    finalObjective,
+                                    finalAngle,
+                                    finalAnnotationName,
+                                    finalImageIndex,
+                                    null); // modalityHandler
+
+                            gui.refreshProject();
+
+                            logger.info("Imported angle '{}' to project ({}/{})", finalAngle, angleNum, totalAngles);
+                            Dialogs.showInfoNotification(
+                                    "Angle Imported",
+                                    String.format("Imported %s (%d/%d)", outputFile.getName(), angleNum, totalAngles));
+                        } catch (IOException e) {
+                            logger.error("Failed to import {}: {}", outPath, e.getMessage());
+                        }
+                    });
+                } catch (Exception e) {
+                    logger.error("Exception processing angle '{}': {}", angleName, e.getMessage(), e);
+                    failureCount.incrementAndGet();
+                }
+            }));
         }
 
+        // Wait for all angles to complete
+        for (Future<?> future : futures) {
+            try {
+                future.get();
+            } catch (Exception e) {
+                logger.error("Angle stitching future failed: {}", e.getMessage());
+            }
+        }
+        stitchPool.shutdown();
+
         // Final summary
-        final int finalSuccess = successCount;
-        final int finalFailure = failureCount;
-        logger.info("=== STITCHING RECOVERY COMPLETE: {} succeeded, {} failed ===", successCount, failureCount);
+        final int finalSuccess = successCount.get();
+        final int finalFailure = failureCount.get();
+        logger.info("=== STITCHING RECOVERY COMPLETE: {} succeeded, {} failed ===", finalSuccess, finalFailure);
 
         Platform.runLater(() -> {
             if (finalSuccess > 0 && finalFailure == 0) {
@@ -573,6 +616,24 @@ public class StitchingRecoveryWorkflow {
                 Dialogs.showErrorMessage("Stitching Recovery Failed", "No angles were successfully stitched.");
             }
         });
+
+        // Send push notification for recovery results
+        if (finalFailure == 0 && finalSuccess > 0) {
+            NotificationService.getInstance()
+                    .notify(
+                            "Stitching Recovery Complete",
+                            "Sample \"" + sampleName + "\" - " + finalSuccess + " angle(s) stitched successfully",
+                            NotificationPriority.DEFAULT,
+                            NotificationEvent.STITCHING_COMPLETE);
+        } else if (finalFailure > 0) {
+            NotificationService.getInstance()
+                    .notify(
+                            "Stitching Recovery " + (finalSuccess > 0 ? "Partial" : "Failed"),
+                            "Sample \"" + sampleName + "\"\n" + finalSuccess + " succeeded, " + finalFailure
+                                    + " failed",
+                            NotificationPriority.HIGH,
+                            NotificationEvent.STITCHING_ERROR);
+        }
     }
 
     /**
