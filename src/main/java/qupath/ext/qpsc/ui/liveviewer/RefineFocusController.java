@@ -34,6 +34,7 @@ public class RefineFocusController {
     private volatile boolean cancelled = false;
     private final MicroscopeSocketClient socketClient;
     private final Supplier<FrameData> frameSupplier;
+    private final double searchRangeUm; // 0 = auto from pixel size
 
     /**
      * Callback for status updates from the focus algorithm.
@@ -48,9 +49,16 @@ public class RefineFocusController {
         void onStatusUpdate(String message, boolean isComplete, boolean isError);
     }
 
-    public RefineFocusController(MicroscopeSocketClient socketClient, Supplier<FrameData> frameSupplier) {
+    /**
+     * @param socketClient  socket client for stage moves
+     * @param frameSupplier supplies the latest camera frame
+     * @param searchRangeUm user-selected search range in um, or 0 for auto (based on pixel size)
+     */
+    public RefineFocusController(MicroscopeSocketClient socketClient, Supplier<FrameData> frameSupplier,
+                                 double searchRangeUm) {
         this.socketClient = socketClient;
         this.frameSupplier = frameSupplier;
+        this.searchRangeUm = searchRangeUm;
     }
 
     public boolean isRunning() {
@@ -396,6 +404,10 @@ public class RefineFocusController {
     // --- Step size from pixel size ---
 
     private double getInitialStepUm() {
+        if (searchRangeUm > 0) {
+            // User-selected range: initial step is range/3 (probe +-step from start)
+            return Math.max(MIN_STEP_UM, searchRangeUm / 3.0);
+        }
         try {
             double pixelSize = socketClient.getMicroscopePixelSize();
             // Steps sized to ~2-3x depth of field per objective
@@ -411,6 +423,9 @@ public class RefineFocusController {
     }
 
     private double getMaxTravelUm() {
+        if (searchRangeUm > 0) {
+            return searchRangeUm;
+        }
         try {
             double pixelSize = socketClient.getMicroscopePixelSize();
             if (pixelSize > 1.0) return 100.0;  // 4x-5x

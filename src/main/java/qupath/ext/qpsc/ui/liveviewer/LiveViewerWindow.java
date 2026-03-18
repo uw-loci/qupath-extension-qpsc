@@ -65,6 +65,7 @@ public class LiveViewerWindow {
     private Label cursorLabel;
     private Button liveToggleButton;
     private Button refineFocusButton;
+    private ComboBox<String> focusRangeCombo;
     private HistogramView histogramView;
     private TitledPane histogramPane;
     private NoiseStatsPanel noiseStatsPanel;
@@ -278,13 +279,24 @@ public class LiveViewerWindow {
         updateLiveButtonStyle(false);
         liveToggleButton.setOnAction(e -> toggleLiveMode());
 
-        // Refine focus button
+        // Refine focus button and search range selector
         refineFocusButton = new Button("Refine Focus");
         refineFocusButton.setTooltip(new Tooltip(
                 "Automatically refine Z focus using histogram contrast. "
                         + "Best used when already close to focus."));
         refineFocusButton.setDisable(true); // disabled until live is ON
         refineFocusButton.setOnAction(e -> handleRefineFocus());
+
+        focusRangeCombo = new ComboBox<>();
+        focusRangeCombo.getItems().addAll("Auto", "1um", "2um", "5um", "10um", "20um");
+        focusRangeCombo.setValue("Auto");
+        focusRangeCombo.setPrefWidth(70);
+        focusRangeCombo.setTooltip(new Tooltip(
+                "Search range for Refine Focus.\n"
+                        + "Auto: determined from objective magnification.\n"
+                        + "Smaller = faster but must be closer to focus.\n"
+                        + "Larger = searches wider but takes longer."));
+        focusRangeCombo.setDisable(true);
 
         // Display scale selector
         Label scaleLabel = new Label("Display:");
@@ -333,7 +345,7 @@ public class LiveViewerWindow {
 
         Button docHelpButton = DocumentationHelper.createHelpButton("liveViewer");
 
-        HBox toolbar = new HBox(8, liveToggleButton, refineFocusButton, spacer, scaleLabel, scaleCombo, collapseButton);
+        HBox toolbar = new HBox(8, liveToggleButton, refineFocusButton, focusRangeCombo, spacer, scaleLabel, scaleCombo, collapseButton);
         if (docHelpButton != null) toolbar.getChildren().add(docHelpButton);
         toolbar.setPadding(new Insets(4, 8, 4, 8));
         toolbar.setAlignment(Pos.CENTER_LEFT);
@@ -543,8 +555,10 @@ public class LiveViewerWindow {
             return;
         }
         boolean collapsed = collapsedPill != null && collapsedPill.isVisible();
+        boolean enabled = liveActive && !collapsed;
         refineFocusButton.setText("Refine Focus");
-        refineFocusButton.setDisable(!liveActive || collapsed);
+        refineFocusButton.setDisable(!enabled);
+        focusRangeCombo.setDisable(!enabled);
     }
 
     private void handleRefineFocus() {
@@ -567,14 +581,25 @@ public class LiveViewerWindow {
             return;
         }
 
+        // Parse search range from combo
+        double searchRange = 0; // 0 = auto
+        String rangeSelection = focusRangeCombo.getValue();
+        if (rangeSelection != null && rangeSelection.endsWith("um")) {
+            try {
+                searchRange = Double.parseDouble(rangeSelection.replace("um", ""));
+            } catch (NumberFormatException ignored) { }
+        }
+
         // Create controller with frame supplier reading lastFrame
         refineFocusController = new RefineFocusController(
                 controller.getSocketClient(),
-                () -> lastFrame
+                () -> lastFrame,
+                searchRange
         );
 
         // Update button to cancel mode
         refineFocusButton.setText("Cancel Focus");
+        focusRangeCombo.setDisable(true);
 
         // Status callback -- hold completion messages so FPS ticker doesn't overwrite them
         RefineFocusController.StatusCallback callback = (msg, complete, error) -> {
@@ -587,6 +612,7 @@ public class LiveViewerWindow {
                 if (complete) {
                     refineFocusButton.setText("Refine Focus");
                     refineFocusButton.setDisable(!liveActive);
+                    focusRangeCombo.setDisable(!liveActive);
                     // Refresh stage position display after Z movement
                     if (stageControlPanel != null) {
                         stageControlPanel.refreshPositions();
