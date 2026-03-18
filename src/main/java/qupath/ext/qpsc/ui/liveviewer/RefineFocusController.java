@@ -152,16 +152,29 @@ public class RefineFocusController {
                 }
             }
 
-            double currentZ = startZ;
+            // Start hill climb from the best position found by the direction probe
+            // so we don't waste a move re-discovering what the probe already found
+            double currentZ;
+            if (Math.abs(bestZ - startZ) > 0.01) {
+                moveZ(bestZ);
+                settle();
+                currentZ = bestZ;
+            } else {
+                currentZ = startZ;
+            }
             double stepUm = initialStep;
 
             // Phase 2: HILL CLIMB
+            // On improvement: advance currentZ, keep direction and step
+            // On non-improvement: halve step, keep direction, stay at currentZ
+            //   (bisects interval between last good position and overshoot)
+            // On boundary hit: reverse direction + halve step (physical constraint)
             while (stepUm >= MIN_STEP_UM) {
                 if (cancelled) { moveAndFinish(bestZ, startZ, callback); return; }
 
                 double targetZ = currentZ + (direction * stepUm);
 
-                // Check max travel from start
+                // Check max travel from start -- reverse for physical constraint
                 if (Math.abs(targetZ - startZ) > maxTravel) {
                     logger.info("Refine Focus: max travel exceeded at target={}, reversing", fmt(targetZ));
                     direction = -direction;
@@ -169,7 +182,7 @@ public class RefineFocusController {
                     continue;
                 }
 
-                // Check stage bounds
+                // Check stage bounds -- reverse for physical constraint
                 MicroscopeConfigManager configMgr = MicroscopeConfigManager.getInstanceIfAvailable();
                 if (configMgr != null && !configMgr.isWithinStageBounds(targetZ)) {
                     logger.info("Refine Focus: stage bounds exceeded at target={}, reversing", fmt(targetZ));
@@ -185,8 +198,8 @@ public class RefineFocusController {
                 callback.onStatusUpdate(String.format(
                         "Refine Focus: step=%.1fum, metric=%.1f (best=%.1f)",
                         stepUm, metric, bestMetric), false, false);
-                logger.debug("Refine Focus: z={}, step={}, metric={}, best={}",
-                        fmt(targetZ), fmt(stepUm), fmt(metric), fmt(bestMetric));
+                logger.info("Refine Focus: z={}, step={}, dir={}, metric={}, best={}",
+                        fmt(targetZ), fmt(stepUm), direction, fmt(metric), fmt(bestMetric));
 
                 if (metric > bestMetric + IMPROVEMENT_THRESHOLD) {
                     bestMetric = metric;
@@ -194,9 +207,9 @@ public class RefineFocusController {
                     currentZ = targetZ;
                     // Continue same direction, same step
                 } else {
-                    direction = -direction;
                     stepUm /= 2.0;
-                    // Stay at currentZ, refine from here
+                    // Stay at currentZ (last improving position), try smaller step
+                    // same direction -- bisects the interval toward the peak
                 }
             }
 
