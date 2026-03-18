@@ -37,7 +37,7 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
  *   <li><strong>Minus angle:</strong> Negative polarizer rotation (e.g., -7.0 degrees)</li>
  *   <li><strong>Zero angle:</strong> Crossed polarizers at 0.0 degrees</li>
  *   <li><strong>Plus angle:</strong> Positive polarizer rotation (e.g., +7.0 degrees)</li>
- *   <li><strong>Uncrossed angle:</strong> Parallel polarizers (e.g., 45.0 degrees)</li>
+ *   <li><strong>Uncrossed angle:</strong> Parallel polarizers (e.g., 90.0 degrees)</li>
  * </ul>
  *
  * <p>Each angle has an associated exposure time input field that accepts decimal values.
@@ -133,7 +133,7 @@ public class PPMAngleSelectionController {
      *
      * @param plusAngle the positive polarizer angle value in degrees (typically +7.0)
      * @param minusAngle the negative polarizer angle value in degrees (typically -7.0)
-     * @param uncrossedAngle the uncrossed polarizer angle in degrees (typically 45.0)
+     * @param uncrossedAngle the uncrossed polarizer angle in degrees (typically 90.0)
      * @param modality the modality name (e.g., "ppm") for config lookup
      * @param objective the objective ID for config lookup
      * @param detector the detector ID for config lookup
@@ -760,8 +760,8 @@ public class PPMAngleSelectionController {
             return new String[] {"plus", "positive", String.valueOf(angle)};
         } else if (angle < 0 && angle > -20) {
             return new String[] {"minus", "negative", String.valueOf(angle)};
-        } else if (angle >= 40 && angle <= 50) {
-            return new String[] {"uncrossed", "45", "45.0", String.valueOf(angle)};
+        } else if (angle >= 45) {
+            return new String[] {"uncrossed", "parallel", String.valueOf(angle)};
         }
         return new String[] {String.valueOf(angle)};
     }
@@ -776,7 +776,7 @@ public class PPMAngleSelectionController {
             return PPMPreferences.getPlusExposureMs();
         } else if (angle < 0 && angle > -20) {
             return PPMPreferences.getMinusExposureMs();
-        } else if (angle >= 40 && angle <= 50) {
+        } else if (angle >= 45) {
             return PPMPreferences.getUncrossedExposureMs();
         }
 

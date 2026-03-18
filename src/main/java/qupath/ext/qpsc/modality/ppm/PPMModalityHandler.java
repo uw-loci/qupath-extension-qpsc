@@ -22,7 +22,7 @@ import qupath.lib.images.ImageData;
  *
  * <p>The handler supports decimal exposure times for precise control of illumination duration
  * at each polarizer angle. Typical PPM sequences include crossed polarizers (0 deg), positive
- * and negative angles (+/-5 deg), and uncrossed polarizers (45 deg) with different exposure requirements.</p>
+ * and negative angles (+/-5 deg), and uncrossed polarizers (~90 deg) with different exposure requirements.</p>
  *
  * <p><strong>Key Features:</strong></p>
  * <ul>
