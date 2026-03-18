@@ -804,8 +804,13 @@ public class StageControlPanel extends TitledPane {
         // Go to centroid button
         goToCentroidBtn.setOnAction(e -> handleGoToCentroid());
 
-        // Initialize centroid button state
+        // Initialize centroid button state and re-evaluate when image changes
         initializeCentroidButton();
+        QuPathGUI guiRef = QuPathGUI.getInstance();
+        if (guiRef != null && guiRef.getViewer() != null) {
+            guiRef.getViewer().imageDataProperty().addListener((obs, oldData, newData) ->
+                    Platform.runLater(this::initializeCentroidButton));
+        }
     }
 
     private void initializeFromHardware() {
@@ -1198,6 +1203,15 @@ public class StageControlPanel extends TitledPane {
     }
 
     private void initializeCentroidButton() {
+        // Reset state so this method is safe to re-call on image change
+        goToCentroidBtn.setDisable(false);
+        centroidStatus.setText("");
+        availableLabel.setVisible(false);
+        availableLabel.setManaged(false);
+        alignmentListView.setVisible(false);
+        alignmentListView.setManaged(false);
+        alignmentListView.getItems().clear();
+
         QuPathGUI gui = QuPathGUI.getInstance();
         AffineTransform currentTransform = MicroscopeController.getInstance().getCurrentTransform();
 
