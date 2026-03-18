@@ -47,10 +47,12 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.VirtualJoystick;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
+import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.StagePositionManager;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
+import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.Project;
@@ -1221,26 +1223,46 @@ public class StageControlPanel extends TitledPane {
         boolean hasAlignment = currentTransform != null;
 
         if (!hasAlignment) {
-            goToCentroidBtn.setDisable(true);
+            // Check if this is a sub-image with XY offset metadata
+            boolean hasXYOffset = false;
+            if (gui != null && gui.getProject() != null && gui.getImageData() != null) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+                    ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+                    if (entry != null) {
+                        double[] offset = ImageMetadataManager.getXYOffset(entry);
+                        hasXYOffset = offset[0] != 0 || offset[1] != 0;
+                    }
+                } catch (Exception e) {
+                    logger.debug("Could not check XY offset: {}", e.getMessage());
+                }
+            }
 
-            String currentImageName = gui != null && gui.getImageData() != null
-                    ? QPProjectFunctions.getActualImageFileName(gui.getImageData())
-                    : "unknown";
-
-            @SuppressWarnings("unchecked")
-            Project<BufferedImage> projectForList =
-                    gui != null && gui.getProject() != null ? (Project<BufferedImage>) gui.getProject() : null;
-            List<String> availableAlignments = getAvailableAlignments(projectForList);
-
-            if (availableAlignments.isEmpty()) {
-                centroidStatus.setText("No alignments available");
+            if (hasXYOffset) {
+                centroidStatus.setText("Sub-image: offset-based navigation");
             } else {
-                centroidStatus.setText("No alignment for: " + currentImageName);
-                availableLabel.setVisible(true);
-                availableLabel.setManaged(true);
-                alignmentListView.setVisible(true);
-                alignmentListView.setManaged(true);
-                alignmentListView.getItems().addAll(availableAlignments);
+                goToCentroidBtn.setDisable(true);
+
+                String currentImageName = gui != null && gui.getImageData() != null
+                        ? QPProjectFunctions.getActualImageFileName(gui.getImageData())
+                        : "unknown";
+
+                @SuppressWarnings("unchecked")
+                Project<BufferedImage> projectForList =
+                        gui != null && gui.getProject() != null ? (Project<BufferedImage>) gui.getProject() : null;
+                List<String> availableAlignments = getAvailableAlignments(projectForList);
+
+                if (availableAlignments.isEmpty()) {
+                    centroidStatus.setText("No alignments available");
+                } else {
+                    centroidStatus.setText("No alignment for: " + currentImageName);
+                    availableLabel.setVisible(true);
+                    availableLabel.setManaged(true);
+                    alignmentListView.setVisible(true);
+                    alignmentListView.setManaged(true);
+                    alignmentListView.getItems().addAll(availableAlignments);
+                }
             }
         } else {
             centroidStatus.setText("Alignment available");
@@ -1250,10 +1272,61 @@ public class StageControlPanel extends TitledPane {
     private void handleGoToCentroid() {
         if (isAcquisitionBlocked()) return;
         QuPathGUI gui = QuPathGUI.getInstance();
+
+        if (gui == null || gui.getImageData() == null) {
+            centroidStatus.setText("No image open");
+            return;
+        }
+
+        PathObject selectedObject =
+                gui.getImageData().getHierarchy().getSelectionModel().getSelectedObject();
+
+        if (selectedObject == null) {
+            centroidStatus.setText("No object selected");
+            UIFunctions.notifyUserOfError("Please select an object in QuPath first.", "Go to Centroid");
+            return;
+        }
+
+        if (selectedObject.getROI() == null) {
+            centroidStatus.setText("Selected object has no ROI");
+            return;
+        }
+
+        double centroidX = selectedObject.getROI().getCentroidX();
+        double centroidY = selectedObject.getROI().getCentroidY();
+
+        // Try sub-image XY offset path first
+        if (gui.getProject() != null) {
+            try {
+                @SuppressWarnings("unchecked")
+                Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+                ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+                if (entry != null) {
+                    double[] offset = ImageMetadataManager.getXYOffset(entry);
+                    if (offset[0] != 0 || offset[1] != 0) {
+                        double pixelSize = gui.getImageData().getServer()
+                                .getPixelCalibration().getAveragedPixelSizeMicrons();
+                        double targetX = offset[0] + centroidX * pixelSize;
+                        double targetY = offset[1] + centroidY * pixelSize;
+                        logger.info("Sub-image centroid: pixel ({}, {}) * {}um + offset ({}, {}) -> stage ({}, {})",
+                                String.format("%.1f", centroidX), String.format("%.1f", centroidY),
+                                String.format("%.4f", pixelSize),
+                                String.format("%.1f", offset[0]), String.format("%.1f", offset[1]),
+                                String.format("%.1f", targetX), String.format("%.1f", targetY));
+                        moveToStagePosition(targetX, targetY);
+                        return;
+                    }
+                }
+            } catch (Exception e) {
+                logger.debug("Could not use XY offset path: {}", e.getMessage());
+            }
+        }
+
+        // Fall through to alignment transform path
         AffineTransform transform = MicroscopeController.getInstance().getCurrentTransform();
 
-        // Try to load slide-specific alignment again
-        if (transform == null && gui != null && gui.getProject() != null && gui.getImageData() != null) {
+        // Try to load slide-specific alignment
+        if (transform == null && gui.getProject() != null) {
             try {
                 @SuppressWarnings("unchecked")
                 Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
@@ -1276,72 +1349,49 @@ public class StageControlPanel extends TitledPane {
             return;
         }
 
-        if (gui == null || gui.getImageData() == null) {
-            centroidStatus.setText("No image open");
-            return;
-        }
-
-        PathObject selectedObject =
-                gui.getImageData().getHierarchy().getSelectionModel().getSelectedObject();
-
-        if (selectedObject == null) {
-            centroidStatus.setText("No object selected");
-            UIFunctions.notifyUserOfError("Please select an object in QuPath first.", "Go to Centroid");
-            return;
-        }
-
-        if (selectedObject.getROI() == null) {
-            centroidStatus.setText("Selected object has no ROI");
-            return;
-        }
-
         try {
-            double centroidX = selectedObject.getROI().getCentroidX();
-            double centroidY = selectedObject.getROI().getCentroidY();
-
             double[] qpCoords = {centroidX, centroidY};
             double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(qpCoords, transform);
-
-            if (!mgr.isWithinStageBounds(stageCoords[0], stageCoords[1])) {
-                UIFunctions.notifyUserOfError(
-                        "The object centroid position is outside the stage bounds.", "Go to Centroid");
-                centroidStatus.setText("Position out of bounds");
-                return;
-            }
-
-            // Update UI immediately with expected position
-            double targetX = stageCoords[0];
-            double targetY = stageCoords[1];
-            xField.setText(String.format("%.2f", targetX));
-            yField.setText(String.format("%.2f", targetY));
-            joystickPosition.set(new double[] {targetX, targetY});
-            centroidStatus.setText("Moving...");
-            xyStatus.setText("Moving to centroid...");
-
-            // Run socket operation on background thread to avoid blocking FX thread
-            Thread moveThread = new Thread(
-                    () -> {
-                        try {
-                            MicroscopeController.getInstance().moveStageXY(targetX, targetY);
-                            Platform.runLater(() -> {
-                                centroidStatus.setText(String.format("Moved to (%.0f, %.0f)", targetX, targetY));
-                                xyStatus.setText(String.format("Moved to centroid (%.0f, %.0f)", targetX, targetY));
-                            });
-                        } catch (Exception ex) {
-                            logger.error("Failed to move to object centroid: {}", ex.getMessage(), ex);
-                            Platform.runLater(() -> {
-                                centroidStatus.setText("Move failed");
-                                xyStatus.setText("Centroid move failed");
-                            });
-                        }
-                    },
-                    "StageControl-GoToCentroid");
-            moveThread.setDaemon(true);
-            moveThread.start();
+            moveToStagePosition(stageCoords[0], stageCoords[1]);
         } catch (Exception ex) {
             logger.error("Failed to move to object centroid: {}", ex.getMessage(), ex);
             centroidStatus.setText("Error: " + ex.getMessage());
         }
+    }
+
+    private void moveToStagePosition(double targetX, double targetY) {
+        if (!mgr.isWithinStageBounds(targetX, targetY)) {
+            UIFunctions.notifyUserOfError(
+                    "The object centroid position is outside the stage bounds.", "Go to Centroid");
+            centroidStatus.setText("Position out of bounds");
+            return;
+        }
+
+        xField.setText(String.format("%.2f", targetX));
+        yField.setText(String.format("%.2f", targetY));
+        joystickPosition.set(new double[] {targetX, targetY});
+        centroidStatus.setText("Moving...");
+        xyStatus.setText("Moving to centroid...");
+
+        Thread moveThread = new Thread(
+                () -> {
+                    try {
+                        MicroscopeController.getInstance().moveStageXY(targetX, targetY);
+                        Platform.runLater(() -> {
+                            centroidStatus.setText(String.format("Moved to (%.0f, %.0f)", targetX, targetY));
+                            xyStatus.setText(String.format("Moved to centroid (%.0f, %.0f)", targetX, targetY));
+                        });
+                    } catch (Exception ex) {
+                        logger.error("Failed to move to object centroid: {}", ex.getMessage(), ex);
+                        Platform.runLater(() -> {
+                            centroidStatus.setText("Move failed");
+                            xyStatus.setText("Centroid move failed");
+                        });
+                    }
+                },
+                "StageControl-GoToCentroid");
+        moveThread.setDaemon(true);
+        moveThread.start();
     }
 
     // ============ SAVED POINTS TAB HANDLERS ============
