@@ -13,6 +13,9 @@ import qupath.ext.qpsc.controller.workflow.*;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.notification.NotificationEvent;
+import qupath.ext.qpsc.service.notification.NotificationPriority;
+import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.ui.*;
 import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.ExistingImageAcquisitionConfig;
 import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.RefinementChoice;
@@ -719,12 +722,19 @@ public class ExistingImageWorkflowV2 {
          * Shows success notification and plays completion beep.
          */
         private void showSuccessNotification() {
-            // Play beep to alert user that workflow is complete
             UIFunctions.playWorkflowCompletionBeep();
 
             Platform.runLater(() -> {
                 Dialogs.showInfoNotification("Acquisition Complete", "All acquisitions have completed successfully.");
             });
+
+            String sampleName = state.sample != null ? state.sample.sampleName() : "Unknown";
+            NotificationService.getInstance()
+                    .notify(
+                            "Acquisition Complete",
+                            "Sample \"" + sampleName + "\" - all acquisitions finished successfully",
+                            NotificationPriority.DEFAULT,
+                            NotificationEvent.ACQUISITION_COMPLETE);
         }
 
         /**
@@ -746,6 +756,14 @@ public class ExistingImageWorkflowV2 {
                 Platform.runLater(() -> {
                     Dialogs.showErrorMessage("Workflow Error", "An error occurred: " + displayCause.getMessage());
                 });
+
+                String sampleName = state.sample != null ? state.sample.sampleName() : "Unknown";
+                NotificationService.getInstance()
+                        .notify(
+                                "Acquisition Error",
+                                "Sample \"" + sampleName + "\" failed\n" + "Error: " + displayCause.getMessage(),
+                                NotificationPriority.HIGH,
+                                NotificationEvent.ACQUISITION_ERROR);
             }
 
             // Clear preserved annotations on error to prevent stale data

@@ -9,7 +9,7 @@ Real-time camera feed with integrated stage control, histogram, and noise statis
 
 ## Prerequisites
 
-- Connected to microscope server (see [Server Connection Settings](server-connection.md))
+- Connected to microscope server (see [Communication Settings](server-connection.md))
 - Microscope hardware initialized in Micro-Manager
 
 ## Options
@@ -98,7 +98,7 @@ The Live Viewer does not produce persistent output files. It provides real-time 
 ## See Also
 
 - [Camera Control](camera-control.md) - View and test camera exposure and gain settings
-- [Server Connection Settings](server-connection.md) - Configure the microscope server connection
+- [Communication Settings](server-connection.md) - Configure the microscope server connection
 - [Stage Map](stage-map.md) - Visual reference for stage insert layout
 - [Bounded Acquisition](bounded-acquisition.md) - Acquire after verifying position in Live Viewer
 - [Microscope Alignment](microscope-alignment.md) - Use Live Viewer to navigate during alignment

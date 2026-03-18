@@ -8,11 +8,12 @@ This document provides an overview of all utilities available in the QPSC extens
 
 | Utility | Purpose | Menu Location |
 |---------|---------|---------------|
+| [Setup Wizard](tools/setup-wizard.md) | Create microscope config files (first-time setup) | Extensions > QP Scope > Setup Wizard |
 | [Acquisition Wizard](tools/acquisition-wizard.md) | Guided setup wizard for new users | Extensions > QP Scope > Acquisition Wizard |
 | [Live Camera Viewer](tools/live-viewer.md) | Real-time camera feed with integrated stage control | Extensions > QP Scope > Live Viewer |
 | [Camera Control](tools/camera-control.md) | View/test camera exposure and gain settings | Extensions > QP Scope > Camera Control... |
 | [Stage Map](tools/stage-map.md) | Visual map showing stage insert with slide positions | Extensions > QP Scope > Stage Map |
-| [Server Connection Settings](tools/server-connection.md) | Configure microscope server connection | Extensions > QP Scope > Server Connection Settings... |
+| [Communication Settings](tools/server-connection.md) | Configure server connection and notification alerts | Extensions > QP Scope > Communication Settings... |
 | [Background Collection](tools/background-collection.md) | Capture flat-field correction images | Extensions > QP Scope > Collect Background Images |
 | [White Balance Calibration](tools/white-balance-calibration.md) | Calibrate JAI 3-CCD camera white balance | Extensions > QP Scope > White Balance Calibration... |
 | [WB Comparison Test](tools/wb-comparison-test.md) | Compare white balance modes side-by-side | Extensions > QP Scope > WB Comparison Test... |
@@ -49,9 +50,13 @@ Visual representation of the microscope stage insert showing slide positions and
 
 ## Connection & Configuration
 
-### [Server Connection Settings](tools/server-connection.md)
+### [Setup Wizard](tools/setup-wizard.md)
 
-Configure and test the connection between QuPath and the microscope control server. Includes connection, advanced timeout, and status tabs with a live connection log.
+Step-by-step wizard that creates all required microscope YAML configuration files. Appears automatically as the first menu item when no valid configuration is found. Guides users through hardware selection (objectives, detectors, stage), pixel size calibration, modality setup, and server connection. Uses a bundled catalog of known LOCI hardware for quick selection.
+
+### [Communication Settings](tools/server-connection.md)
+
+Configure and test the connection between QuPath and the microscope control server, and manage notification alerts. Includes connection, advanced timeout, status, and alerts tabs with push notification support via ntfy.sh.
 
 ### [Acquisition Wizard](tools/acquisition-wizard.md)
 

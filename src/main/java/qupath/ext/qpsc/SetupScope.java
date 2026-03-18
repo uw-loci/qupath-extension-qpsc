@@ -286,12 +286,12 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
-        // Server Connection Settings
+        // Communication Settings
         MenuItem serverConnectionOption = new MenuItem(res.getString("menu.serverConnection"));
         setMenuItemTooltip(
                 serverConnectionOption,
-                "Configure and test the connection to the microscope control server. "
-                        + "Set the server address, port, and verify communication with the microscope hardware.");
+                "Configure server connection, notification alerts, and communication settings. "
+                        + "Test connectivity, set up push notifications, and manage event alerts.");
         serverConnectionOption.setOnAction(e -> {
             try {
                 QPScopeController.getInstance().startWorkflow("serverConnection");
@@ -362,13 +362,28 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
-        // Server settings (always last)
+        // Setup Wizard (always available -- guides first-time configuration)
+        MenuItem setupWizardOption = new MenuItem(res.getString("menu.setupWizard"));
+        setMenuItemTooltip(
+                setupWizardOption,
+                "Guided wizard for first-time microscope configuration. "
+                        + "Creates the YAML configuration files needed by the extension.");
+        setupWizardOption.setOnAction(e -> {
+            try {
+                QPScopeController.getInstance().startWorkflow("setupWizard");
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        });
+
+        // Server settings and wizard (always last in utilities)
         utilitiesMenu
                 .getItems()
                 .addAll(
                         new SeparatorMenuItem(),
                         stitchingRecoveryOption,
                         new SeparatorMenuItem(),
+                        setupWizardOption,
                         serverConnectionOption);
 
         // Conditionally add JAI Camera submenu when a JAI camera is configured
@@ -417,6 +432,24 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         }
 
         // === BUILD FINAL MENU ===
+
+        if (!configValid) {
+            // When config is invalid, put Setup Wizard at the top as the primary action.
+            // A separate instance is created so it appears both at top-level and in Utilities.
+            MenuItem topLevelWizard = new MenuItem("Setup Wizard (Start Here)...");
+            setMenuItemTooltip(
+                    topLevelWizard,
+                    "No valid microscope configuration found. "
+                            + "Run this wizard to create the configuration files needed by the extension.");
+            topLevelWizard.setOnAction(e -> {
+                try {
+                    QPScopeController.getInstance().startWorkflow("setupWizard");
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
+            });
+            extensionMenu.getItems().addAll(topLevelWizard, new SeparatorMenuItem());
+        }
 
         // 0. Wizard (top of menu)
         extensionMenu.getItems().addAll(wizardOption, new SeparatorMenuItem());

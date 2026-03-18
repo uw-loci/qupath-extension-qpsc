@@ -54,6 +54,7 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 |---------|-------------|
 | **Bounding Box Acquisition** | Draw a region in QuPath, automatically tile and acquire at high resolution |
 | **Existing Image Acquisition** | Target specific annotations on a previously scanned slide |
+| **Setup Wizard** | Step-by-step wizard that creates microscope YAML configuration files for first-time setup |
 | **Acquisition Wizard** | Guided setup wizard that checks prerequisites and walks new users through first-time configuration |
 | **Automated Stage Control** | Move XY, Z, and rotation stages with safety bounds checking |
 | **Multi-angle Imaging (PPM)** | Polarized light microscopy with automatic rotation sequences |
@@ -93,6 +94,7 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 - **Automatic Stitching**: Tiles are automatically stitched into pyramidal OME-TIFF/OME-ZARR images
 - **Project Integration**: Acquired images automatically added to your QuPath project
 - **Real-time Progress**: Live feedback during acquisition via socket communication with CONFIG handshake validation
+- **Push Notifications**: Get alerts on your phone via [ntfy.sh](https://ntfy.sh) when acquisitions complete or fail (configurable in Preferences)
 - **Modality System**: Pluggable imaging modes (PPM, brightfield, future: SHG)
 
 > **Note:** Polarized (PPM) acquisitions use the `ppm_` prefix (e.g., `ppm_20x`). Modalities without this prefix perform single-pass acquisitions.
@@ -131,13 +133,15 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 
 ### First-Time Setup Checklist
 
-Before your first acquisition, verify each component:
+**New to QPSC?** Use the **[Setup Wizard](documentation/tools/setup-wizard.md)** -- it appears automatically when no valid microscope configuration is found and walks you through creating all required YAML config files step by step.
+
+If configuring manually, verify each component:
 
 - [ ] **QuPath**: "QP Scope" menu visible in menu bar
+- [ ] **Configuration**: YAML files created (use Setup Wizard or configure manually)
 - [ ] **Micro-Manager**: Can control stage manually (test XY movement)
 - [ ] **Python Server**: Server script starts without errors
 - [ ] **Connection**: Use the "Live Viewer" to test QuPath can move the stage
-- [ ] **Configuration**: YAML files point to correct hardware IDs
 
 **Recommended first test:** Use the "Live Viewer" from the QP Scope menu to verify camera feed and stage movement before attempting a full acquisition.
 
@@ -172,7 +176,8 @@ Open the **QP Scope** menu in QuPath to access all features:
 | [Live Viewer](documentation/tools/live-viewer.md) | Real-time camera feed with integrated stage control |
 | [Camera Control](documentation/tools/camera-control.md) | View/test camera exposure and gain settings |
 | [Stage Map](documentation/tools/stage-map.md) | Visual stage insert map with macro image overlay |
-| [Server Connection Settings](documentation/tools/server-connection.md) | Configure Python server connection |
+| [Setup Wizard](documentation/tools/setup-wizard.md) | Create microscope config files for first-time setup |
+| [Communication Settings](documentation/tools/server-connection.md) | Configure server connection and notification alerts |
 | [Noise Characterization](documentation/tools/noise-characterization.md) | Measure camera noise statistics |
 
 **PPM Analysis:**
@@ -739,6 +744,7 @@ qupath-extension-qpsc/
 │   │   │               ├── preferences/
 │   │   │               ├── service/
 │   │   │               ├── ui/
+│   │   │               │   └── setupwizard/     # First-time config wizard
 │   │   │               ├── utilities/
 │   │   │               ├── QPScopeChecks.java
 │   │   │               └── SetupScope.java
@@ -855,7 +861,6 @@ The following features and improvements are planned for upcoming releases:
 
 **Additional Improvements**:
 - Pre-built JAR releases via GitHub Actions
-- Configuration validation wizard
 - Expanded troubleshooting documentation
 
 ---
@@ -903,7 +908,7 @@ The following features and improvements are planned for upcoming releases:
 | Live Viewer | [live-viewer.md](documentation/tools/live-viewer.md) |
 | Camera Control | [camera-control.md](documentation/tools/camera-control.md) |
 | Stage Map | [stage-map.md](documentation/tools/stage-map.md) |
-| Server Connection | [server-connection.md](documentation/tools/server-connection.md) |
+| Communication Settings | [server-connection.md](documentation/tools/server-connection.md) |
 | Background Collection | [background-collection.md](documentation/tools/background-collection.md) |
 | White Balance Calibration | [white-balance-calibration.md](documentation/tools/white-balance-calibration.md) |
 | WB Comparison Test | [wb-comparison-test.md](documentation/tools/wb-comparison-test.md) |
@@ -912,6 +917,7 @@ The following features and improvements are planned for upcoming releases:
 | PPM Reference Slide | [ppm-reference-slide.md](documentation/tools/ppm-reference-slide.md) |
 | Autofocus Editor | [autofocus-editor.md](documentation/tools/autofocus-editor.md) |
 | Autofocus Benchmark | [autofocus-benchmark.md](documentation/tools/autofocus-benchmark.md) |
+| Setup Wizard | [setup-wizard.md](documentation/tools/setup-wizard.md) |
 | PPM Sensitivity Test | [ppm-sensitivity-test.md](documentation/tools/ppm-sensitivity-test.md) |
 | PPM Birefringence Optimization | [ppm-birefringence-optimization.md](documentation/tools/ppm-birefringence-optimization.md) |
 | PPM Hue Range Filter | [ppm-hue-range-filter.md](documentation/tools/ppm-hue-range-filter.md) |

@@ -1396,6 +1396,11 @@ public class MicroscopeConfigManager {
     /**
      * Validate that all required configuration sections exist.
      * Returns list of missing sections.
+     *
+     * <p>SYNC: The required keys checked here must match the structure defined in
+     * {@link qupath.ext.qpsc.ui.setupwizard.ConfigSchema}. When adding new required
+     * keys, also update ConfigSchema, the Setup Wizard steps, and the bundled
+     * YAML templates in resources/qupath/ext/qpsc/templates/.
      */
     public List<String> validateConfiguration() {
         List<String> errors = new ArrayList<>();

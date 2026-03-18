@@ -483,6 +483,33 @@ This dropdown appears in the Bounding Box acquisition dialog, Existing Image acq
 
 ---
 
+## Alerts (QuPath SCope Alerts)
+
+Notification settings are in a separate preference category: **QuPath SCope Alerts**.
+
+| Preference | Type | Default | Description |
+|------------|------|---------|-------------|
+| Play beep on completion | Boolean | ON | System beep when workflow finishes |
+| Enable ntfy.sh notifications | Boolean | OFF | Push notifications to phone via ntfy.sh |
+| ntfy.sh topic | String | (empty) | Topic name (must match phone app subscription) |
+| ntfy.sh server | String | https://ntfy.sh | Server URL (change for self-hosted) |
+| Notify on: Acquisition complete | Boolean | ON | Send notification on acquisition success |
+| Notify on: Stitching complete | Boolean | ON | Send notification on stitching success |
+| Notify on: Errors | Boolean | ON | Send notification on workflow errors |
+
+### Setting Up Phone Notifications
+
+1. Install the **ntfy** app on your phone ([Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy) / [iOS](https://apps.apple.com/us/app/ntfy/id1625396347))
+2. In the app, subscribe to a topic (e.g., `loci-ppm-a7f3x`)
+3. In QuPath Preferences > QuPath SCope Alerts:
+   - Enable ntfy.sh notifications
+   - Enter the same topic name
+4. Notifications arrive on your phone when workflows complete or fail
+
+**Privacy note:** Use a random/unique topic name -- ntfy.sh topics are public by default. Only sample name, tile count, and error type are sent (never file paths or patient data).
+
+---
+
 ## Configuration Files Reference
 
 QPSC uses several YAML configuration files:
@@ -498,7 +525,9 @@ QPSC uses several YAML configuration files:
 
 ## Recommended Initial Setup
 
-For first-time setup, configure these preferences in order:
+**Easiest path:** Use the **[Setup Wizard](tools/setup-wizard.md)** (Extensions > QP Scope > Setup Wizard). It creates all YAML configuration files and sets the Microscope Config File, Server Host, and Server Port preferences automatically.
+
+**Manual setup:** Configure these preferences in order:
 
 1. **Microscope Config File** - Point to your microscope's YAML config
 2. **Projects Folder** - Set your preferred data storage location
@@ -507,7 +536,7 @@ For first-time setup, configure these preferences in order:
 5. **Inverted Y stage** - Usually ON for most microscopes
 
 Then verify settings using:
-- Extensions > QP Scope > Server Connection Settings > Test Connection
+- Extensions > QP Scope > Communication Settings > Test Connection
 - Extensions > QP Scope > Live Viewer (test camera feed and stage movement)
 - Extensions > QP Scope > Microscope Alignment (verify coordinates)
 

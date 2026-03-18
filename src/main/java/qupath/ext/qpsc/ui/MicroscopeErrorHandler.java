@@ -123,7 +123,7 @@ public class MicroscopeErrorHandler {
         } else if (e instanceof IOException) {
             return "Please check:\n" + "1. Network connection to microscope server\n"
                     + "2. Server logs for errors\n"
-                    + "3. Try reconnecting via Settings > Server Connection";
+                    + "3. Try reconnecting via Communication Settings";
         } else {
             return "See technical details below for more information.";
         }

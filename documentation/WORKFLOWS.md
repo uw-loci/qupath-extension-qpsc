@@ -4,6 +4,12 @@ This document provides an overview of all QPSC acquisition workflows. Click any 
 
 ---
 
+## First-Time Setup
+
+**New to QPSC?** Before running any acquisition workflow, you need a valid microscope configuration. Use the **[Setup Wizard](tools/setup-wizard.md)** -- it appears automatically when no configuration is found and creates all required YAML files step by step. Once configured, proceed to the workflows below.
+
+---
+
 ## Table of Contents
 
 1. [Bounding Box Acquisition](#bounding-box-acquisition)

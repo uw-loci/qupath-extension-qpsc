@@ -1,6 +1,6 @@
 # QPSC Troubleshooting Guide & FAQ
 
-**Last Updated:** March 2, 2026
+**Last Updated:** March 16, 2026
 **Target Audience:** Pathologists, researchers, and microscopy users
 **Skill Level:** All levels (clear explanations provided)
 
@@ -29,7 +29,7 @@
 - [ ] **Configuration files exist** in the correct location (config_ppm.yml, resources_LOCI.yml)
 - [ ] **Project folder exists** or you have permission to create one
 
-**Quick Test:** Use Extensions > QPSC > Utilities > Server Connection Settings to verify communication between all components.
+**Quick Test:** Use Extensions > QPSC > Utilities > Communication Settings to verify communication between all components.
 
 ---
 
@@ -84,6 +84,24 @@ Then restart QuPath.
 2. `qupath-extension-qpsc-0.3.0-all.jar` (install after)
 
 Both must be in the extensions folder. The tiles-to-pyramid extension handles image stitching.
+
+### Setup Wizard
+
+#### Q: How do I run the Setup Wizard?
+
+**A:** The Setup Wizard appears automatically as the first menu item ("Setup Wizard (Start Here)...") when no valid microscope configuration is found. Once configured, it moves to Extensions > QP Scope > Utilities > Setup Wizard.
+
+#### Q: The Setup Wizard created config files but QPSC still says "no valid configuration"
+
+**A:** Restart QuPath after the wizard completes. The config file preference is set automatically, but some components require a restart to reload.
+
+#### Q: Can I re-run the Setup Wizard to modify my configuration?
+
+**A:** Yes. After initial setup, find it under Extensions > QP Scope > Utilities > Setup Wizard. It will create new config files -- back up your existing ones first if you want to preserve them.
+
+#### Q: The wizard doesn't show my hardware in the catalog
+
+**A:** The catalog contains known LOCI hardware. Use "Add Custom" to manually enter your hardware IDs, names, and specifications. The LOCI IDs you assign should match your Micro-Manager device names.
 
 ### Configuration Files
 
@@ -157,7 +175,7 @@ taskkill /PID <process_id> /F
 1. **Firewall:** Windows Firewall might be blocking Python - allow it
 2. **Port number:** Verify config file has same port as server (default: 5000)
 3. **Server running:** Make sure server console is still open and not showing errors
-4. **Test connection:** Use Extensions > QPSC > Utilities > Server Connection Settings
+4. **Test connection:** Use Extensions > QPSC > Utilities > Communication Settings
 
 #### Q: Server crashes during acquisition with "UnicodeEncodeError"
 
@@ -1238,7 +1256,7 @@ python -m microscope_command_server.server
 ```
 
 **Test Microscope Connection:**
-QuPath: Extensions > QPSC > Utilities > Server Connection Settings
+QuPath: Extensions > QPSC > Utilities > Communication Settings
 
 **Check Logs:**
 QuPath: Help > Show log file location
@@ -1281,5 +1299,5 @@ Do you have an overview image of your sample?
 ---
 
 **Document Version:** 1.2
-**Last Updated:** March 2, 2026
+**Last Updated:** March 16, 2026
 **GitHub:** https://github.com/uw-loci/qupath-extension-qpsc

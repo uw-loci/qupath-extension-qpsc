@@ -141,4 +141,4 @@ After all tiles are captured, automatic stitching begins:
 - [Camera Control](camera-control.md) - Verify camera settings before acquisition
 - [Background Collection](background-collection.md) - Collect flat-field correction images
 - [Live Viewer](live-viewer.md) - Verify microscope communication and positioning
-- [Server Connection Settings](server-connection.md) - Configure server connection
+- [Communication Settings](server-connection.md) - Configure server connection and alerts

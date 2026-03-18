@@ -125,6 +125,24 @@ public class QPPreferenceDialog {
     private static final BooleanProperty skipManualAutofocusProperty =
             PathPrefs.createPersistentPreference("skipManualAutofocus", false);
 
+    // --- Notification / Alert preferences ---
+    private static final String ALERTS_CATEGORY = "QuPath SCope Alerts";
+
+    private static final BooleanProperty notificationsEnabledProperty =
+            PathPrefs.createPersistentPreference("notifications.enabled", false);
+    private static final StringProperty notificationTopicProperty =
+            PathPrefs.createPersistentPreference("notifications.ntfy.topic", "");
+    private static final StringProperty notificationServerProperty =
+            PathPrefs.createPersistentPreference("notifications.ntfy.server", "https://ntfy.sh");
+    private static final BooleanProperty notifyOnAcquisitionProperty =
+            PathPrefs.createPersistentPreference("notifications.event.acquisition", true);
+    private static final BooleanProperty notifyOnStitchingProperty =
+            PathPrefs.createPersistentPreference("notifications.event.stitching", true);
+    private static final BooleanProperty notifyOnErrorsProperty =
+            PathPrefs.createPersistentPreference("notifications.event.errors", true);
+    private static final BooleanProperty completionBeepEnabledProperty =
+            PathPrefs.createPersistentPreference("notifications.completionBeep", true);
+
     // Last used calibration folder for sunburst/PPM reference calibration
     // Remembers the folder from the most recent calibration workflow
     private static final StringProperty lastCalibrationFolderProperty =
@@ -316,6 +334,50 @@ public class QPPreferenceDialog {
                         + "Default: 'OCR' (for OCR-extracted text fields)\n"
                         + "Examples: 'OCR_PatientID', 'OCR_SlideLabel' would be propagated with prefix 'OCR'")
                 .build());
+
+        // --- Alerts category ---
+        items.add(new PropertyItemBuilder<>(completionBeepEnabledProperty, Boolean.class)
+                .name("Play beep on completion")
+                .category(ALERTS_CATEGORY)
+                .description("Play a system beep when an acquisition or stitching workflow completes.")
+                .build());
+        items.add(new PropertyItemBuilder<>(notificationsEnabledProperty, Boolean.class)
+                .name("Enable ntfy.sh notifications")
+                .category(ALERTS_CATEGORY)
+                .description("Send push notifications to your phone via ntfy.sh when workflows complete or fail.\n\n"
+                        + "Setup: Install the ntfy app on your phone (free, Android/iOS),\n"
+                        + "subscribe to a topic name, then enter the same topic below.\n"
+                        + "No account or API key required.")
+                .build());
+        items.add(new PropertyItemBuilder<>(notificationTopicProperty, String.class)
+                .name("ntfy.sh topic")
+                .category(ALERTS_CATEGORY)
+                .description("Topic name for ntfy.sh notifications (e.g., 'my-lab-microscope').\n"
+                        + "Must match the topic you subscribed to in the ntfy phone app.\n\n"
+                        + "Tip: Use a random/unique name (e.g., 'loci-ppm-a7f3x') since\n"
+                        + "ntfy.sh topics are public by default.")
+                .build());
+        items.add(new PropertyItemBuilder<>(notificationServerProperty, String.class)
+                .name("ntfy.sh server")
+                .category(ALERTS_CATEGORY)
+                .description("ntfy.sh server URL. Default: https://ntfy.sh (free hosted service).\n"
+                        + "Change this to your self-hosted ntfy server URL for institutional use.")
+                .build());
+        items.add(new PropertyItemBuilder<>(notifyOnAcquisitionProperty, Boolean.class)
+                .name("Notify on: Acquisition complete")
+                .category(ALERTS_CATEGORY)
+                .description("Send a notification when an acquisition finishes successfully.")
+                .build());
+        items.add(new PropertyItemBuilder<>(notifyOnStitchingProperty, Boolean.class)
+                .name("Notify on: Stitching complete")
+                .category(ALERTS_CATEGORY)
+                .description("Send a notification when stitching finishes successfully.")
+                .build());
+        items.add(new PropertyItemBuilder<>(notifyOnErrorsProperty, Boolean.class)
+                .name("Notify on: Errors")
+                .category(ALERTS_CATEGORY)
+                .description("Send a notification when an acquisition or stitching workflow fails.")
+                .build());
     }
 
     // --- Typed getters for use throughout your code ---
@@ -375,6 +437,22 @@ public class QPPreferenceDialog {
 
     public static String getMicroscopeConfigFileProperty() {
         return microscopeConfigFileProperty.get();
+    }
+
+    public static void setMicroscopeConfigFileProperty(String path) {
+        microscopeConfigFileProperty.set(path);
+    }
+
+    public static void setServerHost(String host) {
+        microscopeServerHostProperty.set(host);
+    }
+
+    public static void setServerPort(String port) {
+        try {
+            microscopeServerPortProperty.set(Integer.parseInt(port));
+        } catch (NumberFormatException e) {
+            // ignore
+        }
     }
 
     public static String getProjectsFolderProperty() {
@@ -643,5 +721,70 @@ public class QPPreferenceDialog {
      */
     public static void setSunburstRadiusOuter(int radius) {
         sunburstRadiusOuterProperty.set(radius);
+    }
+
+    // ===== Notification / Alert Preferences =====
+
+    /** Returns true if ntfy.sh push notifications are enabled. */
+    public static boolean getNotificationsEnabled() {
+        return notificationsEnabledProperty.get();
+    }
+
+    /** Returns the ntfy.sh topic name. */
+    public static String getNotificationTopic() {
+        return notificationTopicProperty.get();
+    }
+
+    /** Returns the ntfy.sh server URL (default: https://ntfy.sh). */
+    public static String getNotificationServer() {
+        return notificationServerProperty.get();
+    }
+
+    /** Returns true if acquisition-complete notifications are enabled. */
+    public static boolean getNotifyOnAcquisition() {
+        return notifyOnAcquisitionProperty.get();
+    }
+
+    /** Returns true if stitching-complete notifications are enabled. */
+    public static boolean getNotifyOnStitching() {
+        return notifyOnStitchingProperty.get();
+    }
+
+    /** Returns true if error notifications are enabled. */
+    public static boolean getNotifyOnErrors() {
+        return notifyOnErrorsProperty.get();
+    }
+
+    /** Returns true if a system beep should play on workflow completion. */
+    public static boolean getCompletionBeepEnabled() {
+        return completionBeepEnabledProperty.get();
+    }
+
+    public static void setCompletionBeepEnabled(boolean enabled) {
+        completionBeepEnabledProperty.set(enabled);
+    }
+
+    public static void setNotificationsEnabled(boolean enabled) {
+        notificationsEnabledProperty.set(enabled);
+    }
+
+    public static void setNotificationTopic(String topic) {
+        notificationTopicProperty.set(topic);
+    }
+
+    public static void setNotificationServer(String server) {
+        notificationServerProperty.set(server);
+    }
+
+    public static void setNotifyOnAcquisition(boolean enabled) {
+        notifyOnAcquisitionProperty.set(enabled);
+    }
+
+    public static void setNotifyOnStitching(boolean enabled) {
+        notifyOnStitchingProperty.set(enabled);
+    }
+
+    public static void setNotifyOnErrors(boolean enabled) {
+        notifyOnErrorsProperty.set(enabled);
     }
 }

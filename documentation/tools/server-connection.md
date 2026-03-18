@@ -1,16 +1,17 @@
-# Server Connection Settings
+# Communication Settings
 
-> Menu: Extensions > QP Scope > Server Connection Settings...
+> Menu: Extensions > QP Scope > Communication Settings...
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
 
 ## Purpose
 
-Configure and test the connection between QuPath and the microscope control server. The Python microscope server handles communication with Micro-Manager and the physical microscope hardware. This tool lets you set the connection parameters, test connectivity, and monitor connection health.
+Configure and test the connection between QuPath and the microscope control server, and manage notification alerts for workflow events. The Python microscope server handles communication with Micro-Manager and the physical microscope hardware. This tool lets you set connection parameters, test connectivity, monitor connection health, and configure push notifications.
 
 ## Prerequisites
 
 - Python microscope server installed and running (or ready to start)
 - Network access between QuPath and the server (localhost for local, or appropriate firewall rules for remote)
+- For push notifications: [ntfy app](https://ntfy.sh) on your phone (optional)
 
 ## Options
 
@@ -40,6 +41,33 @@ Configure and test the connection between QuPath and the microscope control serv
 | Reconnect delay (ms) | Spinner | 1000 | Delay between reconnection attempts |
 | Health check interval (ms) | Spinner | 30000 | How often to verify the server is alive |
 
+### Alerts Tab
+
+Configure local and remote notification alerts for workflow events.
+
+**Local Alerts:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| Completion beep | CheckBox | ON | Play a system beep when workflows complete |
+
+**Push Notifications (ntfy.sh):**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| Enable push notifications | CheckBox | OFF | Send notifications via ntfy.sh |
+| Topic | TextField | (empty) | Your ntfy.sh topic name (must match your phone subscription) |
+| Server | TextField | https://ntfy.sh | ntfy.sh server URL (default public server) |
+| Test Notification | Button | - | Send a test notification to verify your setup |
+
+**Event Toggles:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| Acquisition complete | CheckBox | ON | Notify when acquisitions finish |
+| Stitching complete | CheckBox | ON | Notify when stitching finishes |
+| Errors | CheckBox | ON | Notify when errors occur |
+
 ### Status Tab
 
 | Feature | Description |
@@ -50,16 +78,29 @@ Configure and test the connection between QuPath and the microscope control serv
 
 ## Workflow
 
-1. Open Server Connection Settings from the menu
+### Server Connection
+
+1. Open Communication Settings from the menu
 2. Verify the Host and Port match your microscope server configuration
 3. Click **Test Connection** to verify communication
 4. If successful, the test returns the current stage position
 5. Click **Connect Now** to establish the connection (or enable Auto-connect for future sessions)
 6. Monitor connection health in the Status tab
 
+### Setting Up Push Notifications
+
+1. Install the [ntfy app](https://ntfy.sh) on your phone (Android or iOS)
+2. In the ntfy app, subscribe to a topic name (e.g., `my-lab-microscope-2024`)
+3. In the Alerts tab, check **Enable push notifications**
+4. Enter the same topic name in the **Topic** field
+5. Click **Test Notification** to verify -- you should receive a notification on your phone
+6. Choose which events trigger notifications using the event toggles
+
+> **Tip:** Use a unique, hard-to-guess topic name since ntfy.sh topics are public by default. No account or API key is required.
+
 ## Output
 
-No persistent output files. Connection settings are saved to QuPath preferences and persist across sessions. The Status tab provides a real-time connection log.
+No persistent output files. Connection and alert settings are saved to QuPath preferences and persist across sessions. The Status tab provides a real-time connection log.
 
 ## Tips & Troubleshooting
 
@@ -71,6 +112,8 @@ No persistent output files. Connection settings are saved to QuPath preferences 
 - Auto-fallback to CLI mode allows limited operation when the socket server is unavailable
 - For persistent connection issues, check the Advanced tab timeouts -- increase Read timeout for slow networks
 - Connection log in the Status tab can help diagnose intermittent failures
+- **Push notifications require internet access** on the QuPath machine; failures are silent and never block workflows
+- If test notifications don't arrive, verify your phone is subscribed to the exact same topic name
 
 ## See Also
 

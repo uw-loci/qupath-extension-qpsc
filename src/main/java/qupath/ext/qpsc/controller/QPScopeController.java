@@ -203,6 +203,10 @@ public class QPScopeController {
                 logger.debug("Launching stitching recovery workflow");
                 StitchingRecoveryWorkflow.run();
             }
+            case "setupWizard" -> {
+                logger.debug("Launching setup wizard");
+                qupath.ext.qpsc.ui.setupwizard.SetupWizardDialog.show();
+            }
             default -> {
                 logger.warn("Unknown workflow mode: {}", mode);
             }

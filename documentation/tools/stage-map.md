@@ -9,7 +9,7 @@ Visual representation of the microscope stage insert showing slide positions. He
 
 ## Prerequisites
 
-- Connected to microscope server (see [Server Connection Settings](server-connection.md))
+- Connected to microscope server (see [Communication Settings](server-connection.md))
 - Stage insert configuration defined in the microscope configuration file
 
 ## Options
@@ -41,11 +41,11 @@ No persistent output. The Stage Map provides a real-time visual display showing:
 - If slide positions do not match the physical layout, verify the correct insert configuration is selected
 - The macro overlay helps confirm that your overview image is correctly positioned relative to the stage
 - Use this tool alongside the Live Viewer to understand spatial context when navigating
-- If the current position indicator seems wrong, verify stage communication via [Server Connection Settings](server-connection.md)
+- If the current position indicator seems wrong, verify stage communication via [Communication Settings](server-connection.md)
 
 ## See Also
 
 - [Live Viewer](live-viewer.md) - Navigate the stage with real-time camera feed
 - [Microscope Alignment](microscope-alignment.md) - Create coordinate transforms between image and stage
-- [Server Connection Settings](server-connection.md) - Verify server connection if position display is incorrect
+- [Communication Settings](server-connection.md) - Verify server connection if position display is incorrect
 - [Bounded Acquisition](bounded-acquisition.md) - Define acquisition regions using stage coordinates

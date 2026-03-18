@@ -131,4 +131,4 @@ Each annotation's acquisition is added to the project as it completes. Metadata 
 - [Camera Control](camera-control.md) - Verify camera settings before acquisition
 - [Background Collection](background-collection.md) - Collect flat-field correction images
 - [Live Viewer](live-viewer.md) - Verify positioning and focus before acquisition
-- [Server Connection Settings](server-connection.md) - Configure server connection
+- [Communication Settings](server-connection.md) - Configure server connection and alerts

@@ -20,6 +20,9 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AngleResolutionService;
 import qupath.ext.qpsc.service.ManualFocusHandler;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.service.notification.NotificationEvent;
+import qupath.ext.qpsc.service.notification.NotificationPriority;
+import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UnifiedAcquisitionController;
 import qupath.ext.qpsc.utilities.*;
@@ -405,19 +408,35 @@ public class BoundedAcquisitionWorkflow {
                                                     actualProjectsFolder // Use derived projectsFolder for correct path
                                                     )
                                             .thenRun(() -> {
-                                                // Play beep to alert user that workflow is complete
                                                 UIFunctions.playWorkflowCompletionBeep();
 
+                                                String msg = angleExposures.size() > 1
+                                                        ? "All angles stitched successfully"
+                                                        : "Stitching complete";
                                                 Platform.runLater(() -> qupath.fx.dialogs.Dialogs.showInfoNotification(
-                                                        "Stitching complete",
-                                                        angleExposures.size() > 1
-                                                                ? "All angles stitched successfully"
-                                                                : "Stitching complete"));
+                                                        "Stitching complete", msg));
+
+                                                NotificationService.getInstance()
+                                                        .notify(
+                                                                "Stitching Complete",
+                                                                "Sample \"" + actualSampleName + "\" - "
+                                                                        + angleExposures.size() + " angle(s)\n"
+                                                                        + "Project: " + actualProjectsFolder,
+                                                                NotificationPriority.DEFAULT,
+                                                                NotificationEvent.STITCHING_COMPLETE);
                                             })
                                             .exceptionally(ex -> {
                                                 logger.error("Stitching failed", ex);
                                                 Platform.runLater(() -> UIFunctions.notifyUserOfError(
                                                         "Stitching failed:\n" + ex.getMessage(), "Stitching Error"));
+
+                                                NotificationService.getInstance()
+                                                        .notify(
+                                                                "Stitching Error",
+                                                                "Sample \"" + actualSampleName + "\" failed\n"
+                                                                        + "Error: " + ex.getMessage(),
+                                                                NotificationPriority.HIGH,
+                                                                NotificationEvent.STITCHING_ERROR);
                                                 return null;
                                             });
 
@@ -444,6 +463,14 @@ public class BoundedAcquisitionWorkflow {
                                                 cause.getMessage() != null ? cause.getMessage() : ex.getMessage();
                                         Platform.runLater(
                                                 () -> UIFunctions.notifyUserOfError(errorMessage, "Acquisition Error"));
+
+                                        NotificationService.getInstance()
+                                                .notify(
+                                                        "Acquisition Error",
+                                                        "Sample \"" + actualSampleName + "\" failed\n" + "Error: "
+                                                                + errorMessage,
+                                                        NotificationPriority.HIGH,
+                                                        NotificationEvent.ACQUISITION_ERROR);
                                     }
                                     return null;
                                 });

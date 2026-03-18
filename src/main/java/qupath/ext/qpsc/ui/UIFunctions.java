@@ -28,6 +28,7 @@ import javafx.stage.Stage;
 import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.ManualFocusHandler;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.viewer.tools.PathTools;
@@ -623,6 +624,9 @@ public class UIFunctions {
      * since audio notification is a non-critical feature.
      */
     public static void playWorkflowCompletionBeep() {
+        if (!QPPreferenceDialog.getCompletionBeepEnabled()) {
+            return;
+        }
         try {
             Toolkit.getDefaultToolkit().beep();
             logger.debug("Played workflow completion beep");

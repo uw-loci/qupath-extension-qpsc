@@ -18,6 +18,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 
 /**
@@ -59,6 +60,16 @@ public class ServerConnectionController {
     private Label statusLabel;
     private ProgressIndicator progressIndicator;
     private TextArea logArea;
+
+    // Alerts tab components
+    private CheckBox beepEnabledCheckBox;
+    private CheckBox ntfyEnabledCheckBox;
+    private TextField ntfyTopicField;
+    private TextField ntfyServerField;
+    private CheckBox notifyAcquisitionCheckBox;
+    private CheckBox notifyStitchingCheckBox;
+    private CheckBox notifyErrorsCheckBox;
+    private Label alertTestStatusLabel;
 
     // Connection test client
     private MicroscopeSocketClient testClient;
@@ -106,7 +117,7 @@ public class ServerConnectionController {
 
         // Create main layout
         TabPane tabPane = new TabPane();
-        tabPane.getTabs().addAll(createConnectionTab(), createAdvancedTab());
+        tabPane.getTabs().addAll(createConnectionTab(), createAdvancedTab(), createAlertsTab());
 
         // Add control buttons
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -309,6 +320,130 @@ public class ServerConnectionController {
     }
 
     /**
+     * Creates the alerts configuration tab for ntfy.sh push notifications.
+     */
+    private Tab createAlertsTab() {
+        Tab tab = new Tab("Alerts");
+        tab.setClosable(false);
+
+        VBox mainLayout = new VBox(12);
+        mainLayout.setPadding(new Insets(20));
+
+        // Local alerts section
+        Label localLabel = new Label("Local Alerts");
+        localLabel.setFont(Font.font(null, FontWeight.BOLD, 14));
+        mainLayout.getChildren().add(localLabel);
+
+        beepEnabledCheckBox = new CheckBox("Play system beep on workflow completion");
+        beepEnabledCheckBox.setTooltip(new Tooltip("Audible beep when acquisition or stitching finishes"));
+        mainLayout.getChildren().add(beepEnabledCheckBox);
+
+        mainLayout.getChildren().add(new Separator());
+
+        // ntfy.sh section
+        Label ntfyLabel = new Label("Push Notifications (ntfy.sh)");
+        ntfyLabel.setFont(Font.font(null, FontWeight.BOLD, 14));
+        mainLayout.getChildren().add(ntfyLabel);
+
+        Label ntfyDesc = new Label("Send push notifications to your phone when workflows complete or fail.\n"
+                + "Setup: Install the ntfy app (free, Android/iOS), subscribe to a topic,\n"
+                + "then enter the same topic name below.");
+        ntfyDesc.setStyle("-fx-text-fill: #666666;");
+        ntfyDesc.setWrapText(true);
+        mainLayout.getChildren().add(ntfyDesc);
+
+        ntfyEnabledCheckBox = new CheckBox("Enable ntfy.sh notifications");
+        mainLayout.getChildren().add(ntfyEnabledCheckBox);
+
+        GridPane ntfyGrid = new GridPane();
+        ntfyGrid.setHgap(10);
+        ntfyGrid.setVgap(8);
+
+        ntfyGrid.add(new Label("Topic:"), 0, 0);
+        ntfyTopicField = new TextField();
+        ntfyTopicField.setPromptText("e.g., loci-ppm-a7f3x");
+        ntfyTopicField.setPrefWidth(250);
+        ntfyTopicField.setTooltip(new Tooltip("Must match the topic subscribed to in the ntfy phone app.\n"
+                + "Use a unique/random name -- ntfy topics are public by default."));
+        ntfyGrid.add(ntfyTopicField, 1, 0);
+
+        ntfyGrid.add(new Label("Server:"), 0, 1);
+        ntfyServerField = new TextField();
+        ntfyServerField.setPromptText("https://ntfy.sh");
+        ntfyServerField.setPrefWidth(250);
+        ntfyServerField.setTooltip(
+                new Tooltip("Default: https://ntfy.sh (free hosted).\n" + "Change for self-hosted ntfy instances."));
+        ntfyGrid.add(ntfyServerField, 1, 1);
+
+        mainLayout.getChildren().add(ntfyGrid);
+
+        // Test button
+        HBox testBox = new HBox(10);
+        testBox.setAlignment(Pos.CENTER_LEFT);
+        Button testAlertButton = new Button("Send Test Notification");
+        testAlertButton.setOnAction(e -> testNotification(testAlertButton));
+        alertTestStatusLabel = new Label();
+        testBox.getChildren().addAll(testAlertButton, alertTestStatusLabel);
+        mainLayout.getChildren().add(testBox);
+
+        mainLayout.getChildren().add(new Separator());
+
+        // Event toggles
+        Label eventsLabel = new Label("Notify on:");
+        eventsLabel.setFont(Font.font(null, FontWeight.BOLD, 12));
+        mainLayout.getChildren().add(eventsLabel);
+
+        notifyAcquisitionCheckBox = new CheckBox("Acquisition complete");
+        notifyStitchingCheckBox = new CheckBox("Stitching complete");
+        notifyErrorsCheckBox = new CheckBox("Errors");
+        mainLayout.getChildren().addAll(notifyAcquisitionCheckBox, notifyStitchingCheckBox, notifyErrorsCheckBox);
+
+        // Bind enable/disable of ntfy fields to the enable checkbox
+        ntfyEnabledCheckBox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            ntfyTopicField.setDisable(!newVal);
+            ntfyServerField.setDisable(!newVal);
+            notifyAcquisitionCheckBox.setDisable(!newVal);
+            notifyStitchingCheckBox.setDisable(!newVal);
+            notifyErrorsCheckBox.setDisable(!newVal);
+        });
+
+        ScrollPane scrollPane = new ScrollPane(mainLayout);
+        scrollPane.setFitToWidth(true);
+        tab.setContent(scrollPane);
+        return tab;
+    }
+
+    /**
+     * Tests the notification configuration by sending a test message via ntfy.sh.
+     */
+    private void testNotification(Button testButton) {
+        // Save current field values to preferences before testing
+        QPPreferenceDialog.setNotificationTopic(ntfyTopicField.getText());
+        QPPreferenceDialog.setNotificationServer(ntfyServerField.getText());
+        QPPreferenceDialog.setNotificationsEnabled(true); // Temporarily enable for test
+
+        testButton.setDisable(true);
+        alertTestStatusLabel.setText("Sending...");
+        alertTestStatusLabel.setTextFill(Color.BLUE);
+
+        CompletableFuture.runAsync(() -> {
+            String result = NotificationService.getInstance().sendTestNotification();
+            Platform.runLater(() -> {
+                testButton.setDisable(false);
+                if (result == null) {
+                    alertTestStatusLabel.setText("Sent! Check your phone.");
+                    alertTestStatusLabel.setTextFill(Color.GREEN);
+                } else {
+                    alertTestStatusLabel.setText(result);
+                    alertTestStatusLabel.setTextFill(Color.RED);
+                }
+                // Restore actual preference state
+                QPPreferenceDialog.setNotificationsEnabled(ntfyEnabledCheckBox.isSelected());
+            });
+        });
+    }
+
+    /**
      * Loads current settings from preferences.
      */
     private void loadSettings() {
@@ -324,6 +459,15 @@ public class ServerConnectionController {
         reconnectDelaySpinner.getValueFactory().setValue((int) PersistentPreferences.getSocketReconnectDelayMs());
         healthCheckIntervalSpinner.getValueFactory().setValue((int)
                 PersistentPreferences.getSocketHealthCheckIntervalMs());
+
+        // Alerts settings
+        beepEnabledCheckBox.setSelected(QPPreferenceDialog.getCompletionBeepEnabled());
+        ntfyEnabledCheckBox.setSelected(QPPreferenceDialog.getNotificationsEnabled());
+        ntfyTopicField.setText(QPPreferenceDialog.getNotificationTopic());
+        ntfyServerField.setText(QPPreferenceDialog.getNotificationServer());
+        notifyAcquisitionCheckBox.setSelected(QPPreferenceDialog.getNotifyOnAcquisition());
+        notifyStitchingCheckBox.setSelected(QPPreferenceDialog.getNotifyOnStitching());
+        notifyErrorsCheckBox.setSelected(QPPreferenceDialog.getNotifyOnErrors());
 
         // Update connection status display
         updateConnectionStatus();
@@ -345,7 +489,16 @@ public class ServerConnectionController {
         PersistentPreferences.setSocketReconnectDelayMs(reconnectDelaySpinner.getValue());
         PersistentPreferences.setSocketHealthCheckIntervalMs(healthCheckIntervalSpinner.getValue());
 
-        logger.info("Server connection settings saved");
+        // Alerts settings
+        QPPreferenceDialog.setCompletionBeepEnabled(beepEnabledCheckBox.isSelected());
+        QPPreferenceDialog.setNotificationsEnabled(ntfyEnabledCheckBox.isSelected());
+        QPPreferenceDialog.setNotificationTopic(ntfyTopicField.getText());
+        QPPreferenceDialog.setNotificationServer(ntfyServerField.getText());
+        QPPreferenceDialog.setNotifyOnAcquisition(notifyAcquisitionCheckBox.isSelected());
+        QPPreferenceDialog.setNotifyOnStitching(notifyStitchingCheckBox.isSelected());
+        QPPreferenceDialog.setNotifyOnErrors(notifyErrorsCheckBox.isSelected());
+
+        logger.info("Communication settings saved");
         logMessage("Settings saved successfully");
     }
 
