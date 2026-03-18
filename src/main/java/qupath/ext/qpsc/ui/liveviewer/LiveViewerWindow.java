@@ -557,6 +557,7 @@ public class LiveViewerWindow {
         boolean collapsed = collapsedPill != null && collapsedPill.isVisible();
         boolean enabled = liveActive && !collapsed;
         refineFocusButton.setText("Refine Focus");
+        refineFocusButton.setStyle("");
         refineFocusButton.setDisable(!enabled);
         focusRangeCombo.setDisable(!enabled);
     }
@@ -597,25 +598,38 @@ public class LiveViewerWindow {
                 searchRange
         );
 
-        // Update button to cancel mode
+        // Update button to cancel mode, clear any previous failure style
         refineFocusButton.setText("Cancel Focus");
+        refineFocusButton.setStyle("");
         focusRangeCombo.setDisable(true);
 
         // Status callback -- hold completion messages so FPS ticker doesn't overwrite them
-        RefineFocusController.StatusCallback callback = (msg, complete, error) -> {
+        RefineFocusController.StatusCallback callback = (msg, outcome) -> {
             Platform.runLater(() -> {
-                if (complete) {
+                boolean done = outcome != RefineFocusController.Outcome.IN_PROGRESS;
+                if (done) {
                     updateStatusHeld(msg);
                 } else {
                     updateStatus(msg);
                 }
-                if (complete) {
-                    refineFocusButton.setText("Refine Focus");
-                    refineFocusButton.setDisable(!liveActive);
+                if (done) {
                     focusRangeCombo.setDisable(!liveActive);
-                    // Refresh stage position display after Z movement
                     if (stageControlPanel != null) {
                         stageControlPanel.refreshPositions();
+                    }
+
+                    if (outcome == RefineFocusController.Outcome.FAILED) {
+                        refineFocusButton.setText("FAILED");
+                        refineFocusButton.setStyle("-fx-font-size: 11; -fx-base: #F44336;");
+                        refineFocusButton.setTooltip(new Tooltip(
+                                "No focus improvement found within search range.\n"
+                                        + "- Get closer to focus manually (scroll Z), then retry\n"
+                                        + "- Or widen the search range dropdown"));
+                        refineFocusButton.setDisable(!liveActive);
+                    } else {
+                        refineFocusButton.setText("Refine Focus");
+                        refineFocusButton.setStyle("");
+                        refineFocusButton.setDisable(!liveActive);
                     }
                 }
             });

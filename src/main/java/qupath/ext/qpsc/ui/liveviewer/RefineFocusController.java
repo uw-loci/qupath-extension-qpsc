@@ -24,8 +24,8 @@ public class RefineFocusController {
 
     // Configuration
     static final double MIN_STEP_UM = 0.1;
-    static final long SETTLE_TIME_MS = 250;
-    static final int FRAMES_TO_AVERAGE = 3;
+    static final long SETTLE_TIME_MS = 150;
+    static final int FRAMES_TO_AVERAGE = 2;
     static final double SATURATION_ABORT_PCT = 5.0;
     static final double IMPROVEMENT_THRESHOLD = 0.5; // min metric improvement (in bins)
 
@@ -36,17 +36,19 @@ public class RefineFocusController {
     private final Supplier<FrameData> frameSupplier;
     private final double searchRangeUm; // 0 = auto from pixel size
 
+    /** Outcome of the refine focus operation. */
+    public enum Outcome { IN_PROGRESS, SUCCESS, FAILED, ERROR }
+
     /**
      * Callback for status updates from the focus algorithm.
      */
     @FunctionalInterface
     public interface StatusCallback {
         /**
-         * @param message    Human-readable status text
-         * @param isComplete true if the algorithm has finished (success or abort)
-         * @param isError    true if the algorithm ended due to an error
+         * @param message Human-readable status text
+         * @param outcome current outcome state
          */
-        void onStatusUpdate(String message, boolean isComplete, boolean isError);
+        void onStatusUpdate(String message, Outcome outcome);
     }
 
     /**
@@ -75,7 +77,7 @@ public class RefineFocusController {
      */
     public void execute(StatusCallback callback) {
         if (running) {
-            callback.onStatusUpdate("Refine Focus already running", true, true);
+            callback.onStatusUpdate("Refine Focus already running", Outcome.ERROR);
             return;
         }
         running = true;
@@ -86,11 +88,11 @@ public class RefineFocusController {
 
         try {
             // Phase 0: PREFLIGHT
-            if (cancelled) { finish(callback, "Cancelled", false); return; }
+            if (cancelled) { finish(callback, "Cancelled", Outcome.SUCCESS); return; }
 
             FrameData frame = frameSupplier.get();
             if (frame == null) {
-                finish(callback, "No frame available -- is live mode active?", true);
+                finish(callback, "No frame available -- is live mode active?", Outcome.ERROR);
                 return;
             }
 
@@ -98,7 +100,7 @@ public class RefineFocusController {
             if (satPct > SATURATION_ABORT_PCT) {
                 finish(callback, String.format(
                         "Aborted: %.1f%% saturated pixels (>%.0f%% threshold). Reduce exposure first.",
-                        satPct, SATURATION_ABORT_PCT), true);
+                        satPct, SATURATION_ABORT_PCT), Outcome.ERROR);
                 return;
             }
 
@@ -107,7 +109,7 @@ public class RefineFocusController {
             startZ = socketClient.getStageZ();
             bestZ = startZ;
 
-            callback.onStatusUpdate("Refine Focus: measuring baseline...", false, false);
+            callback.onStatusUpdate("Refine Focus: measuring baseline...", Outcome.IN_PROGRESS);
             double baseMetric = measureFocus();
             double bestMetric = baseMetric;
             logger.info("Refine Focus: startZ={}, baseMetric={}, step={}, maxTravel={}",
@@ -115,7 +117,7 @@ public class RefineFocusController {
 
             // Phase 1: DETERMINE DIRECTION
             if (cancelled) { moveAndFinish(bestZ, startZ, callback); return; }
-            callback.onStatusUpdate("Refine Focus: determining direction...", false, false);
+            callback.onStatusUpdate("Refine Focus: determining direction...", Outcome.IN_PROGRESS);
 
             // Try positive direction
             double testZPlus = startZ + initialStep;
@@ -140,7 +142,9 @@ public class RefineFocusController {
             // Check if already at focus (or featureless)
             if (metricPlus <= baseMetric + IMPROVEMENT_THRESHOLD
                     && metricMinus <= baseMetric + IMPROVEMENT_THRESHOLD) {
-                finish(callback, "Already in focus (no improvement found in either direction)", false);
+                finish(callback,
+                        "Failed to find focus! Get closer to focus manually, or widen the search range.",
+                        Outcome.FAILED);
                 return;
             }
 
@@ -205,7 +209,7 @@ public class RefineFocusController {
 
                 callback.onStatusUpdate(String.format(
                         "Refine Focus: step=%.1fum, metric=%.1f (best=%.1f)",
-                        stepUm, metric, bestMetric), false, false);
+                        stepUm, metric, bestMetric), Outcome.IN_PROGRESS);
                 logger.info("Refine Focus: z={}, step={}, dir={}, metric={}, best={}",
                         fmt(targetZ), fmt(stepUm), direction, fmt(metric), fmt(bestMetric));
 
@@ -227,7 +231,7 @@ public class RefineFocusController {
             String msg = String.format("Refine Focus complete: shifted %.1fum (metric %.1f -> %.1f)",
                     shift, baseMetric, bestMetric);
             logger.info(msg);
-            finish(callback, msg, false);
+            finish(callback, msg, Outcome.SUCCESS);
 
         } catch (IOException e) {
             logger.error("Refine Focus failed: {}", e.getMessage());
@@ -235,13 +239,13 @@ public class RefineFocusController {
             if (!Double.isNaN(bestZ)) {
                 try { socketClient.moveStageZ(bestZ); } catch (IOException ignored) { }
             }
-            finish(callback, "Refine Focus error: " + e.getMessage(), true);
+            finish(callback, "Refine Focus error: " + e.getMessage(), Outcome.ERROR);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             if (!Double.isNaN(bestZ)) {
                 try { socketClient.moveStageZ(bestZ); } catch (IOException ignored) { }
             }
-            finish(callback, "Refine Focus interrupted", true);
+            finish(callback, "Refine Focus interrupted", Outcome.ERROR);
         }
     }
 
@@ -455,12 +459,12 @@ public class RefineFocusController {
         String msg = cancelled
                 ? String.format("Refine Focus cancelled: shifted %.1fum to best position", shift)
                 : String.format("Refine Focus complete: shifted %.1fum", shift);
-        finish(callback, msg, false);
+        finish(callback, msg, Outcome.SUCCESS);
     }
 
-    private void finish(StatusCallback callback, String message, boolean isError) {
+    private void finish(StatusCallback callback, String message, Outcome outcome) {
         running = false;
-        callback.onStatusUpdate(message, true, isError);
+        callback.onStatusUpdate(message, outcome);
     }
 
     private static String fmt(double v) {
