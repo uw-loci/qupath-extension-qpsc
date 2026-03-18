@@ -249,6 +249,14 @@ public class PPMPreferences {
     // =============== Calibration Preferences ===============
 
     /**
+     * Returns the property for the active calibration path.
+     * Used by QPPreferenceDialog to register the preference in the UI.
+     */
+    public static StringProperty activeCalibrationPathProperty() {
+        return activeCalibrationPath;
+    }
+
+    /**
      * Gets the path to the currently active PPM sunburst calibration file (.npz).
      * This is set after a successful sunburst calibration and stamped onto
      * PPM images at acquisition time as per-image metadata.

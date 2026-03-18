@@ -11,6 +11,7 @@ import javafx.collections.ObservableList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
+import qupath.ext.qpsc.modality.ppm.PPMPreferences;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.prefs.controlsfx.PropertyItemBuilder;
@@ -127,6 +128,7 @@ public class QPPreferenceDialog {
 
     // --- Notification / Alert preferences ---
     private static final String ALERTS_CATEGORY = "QuPath SCope Alerts";
+    private static final String PPM_CATEGORY = "PPM (Polarized Light Microscopy)";
 
     private static final BooleanProperty notificationsEnabledProperty =
             PathPrefs.createPersistentPreference("notifications.enabled", false);
@@ -377,6 +379,27 @@ public class QPPreferenceDialog {
                 .name("Notify on: Errors")
                 .category(ALERTS_CATEGORY)
                 .description("Send a notification when an acquisition or stitching workflow fails.")
+                .build());
+
+        // --- PPM category ---
+        items.add(new PropertyItemBuilder<>(PPMPreferences.activeCalibrationPathProperty(), String.class)
+                .propertyType(PropertyItemBuilder.PropertyType.FILE)
+                .name("Active Calibration File (.npz)")
+                .category(PPM_CATEGORY)
+                .description("Path to the active PPM sunburst calibration file (.npz).\n"
+                        + "This is set automatically after a successful sunburst calibration,\n"
+                        + "but can also be selected manually here if the setting was lost.\n\n"
+                        + "All PPM analysis tools (Polarity Plot, Hue Range, Batch Analysis,\n"
+                        + "Surface Perpendicularity) require this calibration to convert\n"
+                        + "hue values to orientation angles.")
+                .build());
+        items.add(new PropertyItemBuilder<>(lastCalibrationFolderProperty, String.class)
+                .propertyType(PropertyItemBuilder.PropertyType.DIRECTORY)
+                .name("Calibration Output Folder")
+                .category(PPM_CATEGORY)
+                .description("Default folder for sunburst calibration output files.\n"
+                        + "Calibration images, .npz files, and plots are saved here.\n"
+                        + "Defaults to ppm_reference_slide/ next to the microscope config.")
                 .build());
     }
 
