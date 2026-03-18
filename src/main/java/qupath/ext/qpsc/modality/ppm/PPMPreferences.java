@@ -63,6 +63,32 @@ public class PPMPreferences {
     private static final StringProperty activeCalibrationPath =
             PathPrefs.createPersistentPreference("PPMActiveCalibrationPath", "");
 
+    // =============== Analysis Parameters ===============
+
+    // Birefringence threshold: pixels below this intensity are excluded from analysis
+    private static final StringProperty birefringenceThreshold =
+            PathPrefs.createPersistentPreference("PPMBirefringenceThreshold", "100.0");
+
+    // Number of bins for polarity plot rose diagrams (18 bins = 10 deg each)
+    private static final StringProperty histogramBins =
+            PathPrefs.createPersistentPreference("PPMHistogramBins", "18");
+
+    // HSV saturation threshold for valid pixel filtering
+    private static final StringProperty saturationThreshold =
+            PathPrefs.createPersistentPreference("PPMSaturationThreshold", "0.2");
+
+    // HSV value (brightness) threshold for valid pixel filtering
+    private static final StringProperty valueThreshold =
+            PathPrefs.createPersistentPreference("PPMValueThreshold", "0.2");
+
+    // Dilation distance in micrometers for surface perpendicularity analysis
+    private static final StringProperty dilationUm =
+            PathPrefs.createPersistentPreference("PPMDilationUm", "50.0");
+
+    // TACS angle threshold in degrees for PS-TACS classification
+    private static final StringProperty tacsThresholdDeg =
+            PathPrefs.createPersistentPreference("PPMTacsThresholdDeg", "30.0");
+
     static {
         // PPM exposure defaults are initialized with fallback values.
         // Use loadExposuresForProfile() to load profile-specific defaults.
@@ -244,6 +270,80 @@ public class PPMPreferences {
             case "setUncrossedExposureMs" -> setUncrossedExposureMs(ms);
             default -> logger.warn("Unknown setter method: {}", setterMethod);
         }
+    }
+
+    // =============== Analysis Parameter Accessors ===============
+
+    public static StringProperty birefringenceThresholdProperty() {
+        return birefringenceThreshold;
+    }
+
+    public static double getBirefringenceThreshold() {
+        return Double.parseDouble(birefringenceThreshold.get());
+    }
+
+    public static void setBirefringenceThreshold(double threshold) {
+        birefringenceThreshold.set(String.valueOf(threshold));
+    }
+
+    public static StringProperty histogramBinsProperty() {
+        return histogramBins;
+    }
+
+    public static int getHistogramBins() {
+        return Integer.parseInt(histogramBins.get());
+    }
+
+    public static void setHistogramBins(int bins) {
+        histogramBins.set(String.valueOf(bins));
+    }
+
+    public static StringProperty saturationThresholdProperty() {
+        return saturationThreshold;
+    }
+
+    public static double getSaturationThreshold() {
+        return Double.parseDouble(saturationThreshold.get());
+    }
+
+    public static void setSaturationThreshold(double threshold) {
+        saturationThreshold.set(String.valueOf(threshold));
+    }
+
+    public static StringProperty valueThresholdProperty() {
+        return valueThreshold;
+    }
+
+    public static double getValueThreshold() {
+        return Double.parseDouble(valueThreshold.get());
+    }
+
+    public static void setValueThreshold(double threshold) {
+        valueThreshold.set(String.valueOf(threshold));
+    }
+
+    public static StringProperty dilationUmProperty() {
+        return dilationUm;
+    }
+
+    public static double getDilationUm() {
+        return Double.parseDouble(dilationUm.get());
+    }
+
+    public static void setDilationUm(double um) {
+        dilationUm.set(String.valueOf(um));
+    }
+
+    public static StringProperty tacsThresholdDegProperty() {
+        return tacsThresholdDeg;
+    }
+
+    public static double getTacsThresholdDeg() {
+        return Double.parseDouble(tacsThresholdDeg.get());
+    }
+
+    public static void setTacsThresholdDeg(double deg) {
+        tacsThresholdDeg.set(String.valueOf(deg));
     }
 
     // =============== Calibration Preferences ===============

@@ -32,6 +32,10 @@ public final class DocumentationHelper {
     private static final String PPM_BASE_URL =
             "https://github.com/uw-loci/qupath-extension-ppm/blob/main/documentation/";
 
+    /** URL to the PPM extension README for linking from preferences. */
+    public static final String PPM_README_URL =
+            "https://github.com/uw-loci/qupath-extension-ppm/blob/main/README.md";
+
     /** Map from tool ID to documentation filename. */
     private static final Map<String, String> TOOL_DOCS = Map.ofEntries(
             Map.entry("acquisitionWizard", "acquisition-wizard.md"),
@@ -107,6 +111,43 @@ public final class DocumentationHelper {
             }
         } catch (Exception e) {
             logger.error("Failed to open documentation URL: {}", url, e);
+        }
+    }
+
+    /**
+     * Appends a documentation link to an error/warning message.
+     *
+     * <p>Use this when showing error dialogs to help users find relevant
+     * troubleshooting documentation. The link is appended on a new line.</p>
+     *
+     * @param message the original error message
+     * @param toolId the tool identifier for documentation lookup
+     * @return the message with a documentation link appended, or the
+     *         original message if the tool ID is unknown
+     */
+    public static String withDocLink(String message, String toolId) {
+        String url = getDocumentationUrl(toolId);
+        if (url != null) {
+            return message + "\n\nSee: " + url;
+        }
+        return message;
+    }
+
+    /**
+     * Opens the given URL in the default browser.
+     *
+     * @param url the URL to open
+     */
+    public static void openUrl(String url) {
+        if (url == null || url.isEmpty()) {
+            return;
+        }
+        try {
+            if (java.awt.Desktop.isDesktopSupported()) {
+                java.awt.Desktop.getDesktop().browse(new URI(url));
+            }
+        } catch (Exception e) {
+            logger.error("Failed to open URL: {}", url, e);
         }
     }
 

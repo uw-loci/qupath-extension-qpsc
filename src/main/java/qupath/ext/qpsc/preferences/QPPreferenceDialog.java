@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.modality.ppm.PPMPreferences;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.prefs.controlsfx.PropertyItemBuilder;
 import qupath.lib.gui.QuPathGUI;
@@ -382,6 +383,17 @@ public class QPPreferenceDialog {
                 .build());
 
         // --- PPM category ---
+        // README link (read-only, for reference)
+        StringProperty ppmReadmeProperty = new SimpleStringProperty(DocumentationHelper.PPM_README_URL);
+        items.add(new PropertyItemBuilder<>(ppmReadmeProperty, String.class)
+                .name("PPM Extension Documentation")
+                .category(PPM_CATEGORY)
+                .description("URL to the PPM extension documentation on GitHub.\n"
+                        + "Copy this URL to your browser, or open it from the\n"
+                        + "PPM menu's help buttons.\n\n"
+                        + "Contains workflow guides, calibration instructions,\n"
+                        + "and troubleshooting information.")
+                .build());
         items.add(new PropertyItemBuilder<>(PPMPreferences.activeCalibrationPathProperty(), String.class)
                 .propertyType(PropertyItemBuilder.PropertyType.FILE)
                 .name("Active Calibration File (.npz)")
@@ -400,6 +412,59 @@ public class QPPreferenceDialog {
                 .description("Default folder for sunburst calibration output files.\n"
                         + "Calibration images, .npz files, and plots are saved here.\n"
                         + "Defaults to ppm_reference_slide/ next to the microscope config.")
+                .build());
+
+        items.add(new PropertyItemBuilder<>(PPMPreferences.birefringenceThresholdProperty(), String.class)
+                .name("Birefringence Threshold")
+                .category(PPM_CATEGORY)
+                .description("Minimum birefringence intensity for a pixel to be included in analysis.\n"
+                        + "Pixels below this threshold are excluded from polarity plots,\n"
+                        + "batch analysis, and perpendicularity calculations.\n"
+                        + "Default: 100.0")
+                .build());
+
+        items.add(new PropertyItemBuilder<>(PPMPreferences.histogramBinsProperty(), String.class)
+                .name("Histogram Bins")
+                .category(PPM_CATEGORY)
+                .description("Number of bins for polarity plot rose diagrams.\n"
+                        + "18 bins = 10 deg per bin. Higher values give finer angular resolution\n"
+                        + "but require more pixels per bin for statistical significance.\n"
+                        + "Default: 18")
+                .build());
+
+        items.add(new PropertyItemBuilder<>(PPMPreferences.saturationThresholdProperty(), String.class)
+                .name("Saturation Threshold")
+                .category(PPM_CATEGORY)
+                .description("Minimum HSV saturation for a pixel to be considered valid.\n"
+                        + "Used by the Hue Range Filter to exclude low-saturation pixels.\n"
+                        + "Range: 0.0-1.0. Default: 0.2")
+                .build());
+
+        items.add(new PropertyItemBuilder<>(PPMPreferences.valueThresholdProperty(), String.class)
+                .name("Value (Brightness) Threshold")
+                .category(PPM_CATEGORY)
+                .description("Minimum HSV brightness for a pixel to be considered valid.\n"
+                        + "Used by the Hue Range Filter to exclude dark pixels.\n"
+                        + "Range: 0.0-1.0. Default: 0.2")
+                .build());
+
+        items.add(new PropertyItemBuilder<>(PPMPreferences.dilationUmProperty(), String.class)
+                .name("Dilation Distance (um)")
+                .category(PPM_CATEGORY)
+                .description("Distance in micrometers to dilate annotation boundaries\n"
+                        + "for surface perpendicularity analysis.\n"
+                        + "Fibers within this distance of the boundary are analyzed.\n"
+                        + "Default: 50.0 um")
+                .build());
+
+        items.add(new PropertyItemBuilder<>(PPMPreferences.tacsThresholdDegProperty(), String.class)
+                .name("TACS Threshold (deg)")
+                .category(PPM_CATEGORY)
+                .description("Angle threshold for PS-TACS classification.\n"
+                        + "Fibers within this angle of perpendicular to the boundary\n"
+                        + "are classified as TACS-3. Fibers within this angle of parallel\n"
+                        + "are classified as TACS-2.\n"
+                        + "Range: 5-85 deg. Default: 30 deg")
                 .build());
     }
 
