@@ -64,11 +64,15 @@ public class LiveViewerWindow {
     private Label statusLabel;
     private Label cursorLabel;
     private Button liveToggleButton;
+    private Button refineFocusButton;
     private HistogramView histogramView;
     private TitledPane histogramPane;
     private NoiseStatsPanel noiseStatsPanel;
     private StageControlPanel stageControlPanel;
     private final ContrastSettings contrastSettings = new ContrastSettings();
+
+    // Refine focus
+    private RefineFocusController refineFocusController;
 
     // Live mode state (camera streaming on/off, independent of window visibility)
     private volatile boolean liveActive = false;
@@ -208,6 +212,7 @@ public class LiveViewerWindow {
         Platform.runLater(() -> {
             if (instance != null) {
                 instance.updateLiveButtonStyle(false);
+                instance.updateRefineFocusButtonState();
                 instance.updateStatus("Live OFF (paused for camera operation)");
             }
         });
@@ -268,6 +273,14 @@ public class LiveViewerWindow {
         updateLiveButtonStyle(false);
         liveToggleButton.setOnAction(e -> toggleLiveMode());
 
+        // Refine focus button
+        refineFocusButton = new Button("Refine Focus");
+        refineFocusButton.setTooltip(new Tooltip(
+                "Automatically refine Z focus using histogram contrast. "
+                        + "Best used when already close to focus."));
+        refineFocusButton.setDisable(true); // disabled until live is ON
+        refineFocusButton.setOnAction(e -> handleRefineFocus());
+
         // Display scale selector
         Label scaleLabel = new Label("Display:");
         ComboBox<String> scaleCombo = new ComboBox<>();
@@ -315,7 +328,7 @@ public class LiveViewerWindow {
 
         Button docHelpButton = DocumentationHelper.createHelpButton("liveViewer");
 
-        HBox toolbar = new HBox(8, liveToggleButton, spacer, scaleLabel, scaleCombo, collapseButton);
+        HBox toolbar = new HBox(8, liveToggleButton, refineFocusButton, spacer, scaleLabel, scaleCombo, collapseButton);
         if (docHelpButton != null) toolbar.getChildren().add(docHelpButton);
         toolbar.setPadding(new Insets(4, 8, 4, 8));
         toolbar.setAlignment(Pos.CENTER_LEFT);
@@ -474,6 +487,7 @@ public class LiveViewerWindow {
                             liveActive = newState;
                             updateLiveButtonStyle(newState);
                             liveToggleButton.setDisable(false);
+                            updateRefineFocusButtonState();
                             logger.info("Continuous acquisition toggled to: {}", newState ? "ON" : "OFF");
 
                             if (newState) {
@@ -510,6 +524,73 @@ public class LiveViewerWindow {
             liveToggleButton.setText("Live: OFF");
             liveToggleButton.setStyle("-fx-font-weight: bold; -fx-base: #9E9E9E;");
         }
+    }
+
+    /**
+     * Updates the Refine Focus button enabled/disabled state and text
+     * based on current live mode and refine focus running state.
+     * Must be called on FX thread.
+     */
+    private void updateRefineFocusButtonState() {
+        boolean focusRunning = refineFocusController != null && refineFocusController.isRunning();
+        if (focusRunning) {
+            // Keep showing cancel while running
+            return;
+        }
+        boolean collapsed = collapsedPill != null && collapsedPill.isVisible();
+        refineFocusButton.setText("Refine Focus");
+        refineFocusButton.setDisable(!liveActive || collapsed);
+    }
+
+    private void handleRefineFocus() {
+        if (refineFocusController != null && refineFocusController.isRunning()) {
+            // Already running -- cancel
+            refineFocusController.cancel();
+            refineFocusButton.setText("Cancelling...");
+            refineFocusButton.setDisable(true);
+            return;
+        }
+
+        MicroscopeController controller = MicroscopeController.getInstance();
+        if (controller == null || !liveActive) {
+            updateStatus("Cannot refine focus: not connected or live not active");
+            return;
+        }
+
+        if (controller.isAcquisitionActive()) {
+            updateStatus("Cannot refine focus: acquisition in progress");
+            return;
+        }
+
+        // Create controller with frame supplier reading lastFrame
+        refineFocusController = new RefineFocusController(
+                controller.getSocketClient(),
+                () -> lastFrame
+        );
+
+        // Update button to cancel mode
+        refineFocusButton.setText("Cancel Focus");
+
+        // Status callback
+        RefineFocusController.StatusCallback callback = (msg, complete, error) -> {
+            Platform.runLater(() -> {
+                updateStatus(msg);
+                if (complete) {
+                    refineFocusButton.setText("Refine Focus");
+                    refineFocusButton.setDisable(!liveActive);
+                    // Refresh stage position display after Z movement
+                    if (stageControlPanel != null) {
+                        stageControlPanel.refreshPositions();
+                    }
+                }
+            });
+        };
+
+        // Run on background daemon thread
+        Thread focusThread = new Thread(() -> refineFocusController.execute(callback));
+        focusThread.setDaemon(true);
+        focusThread.setName("LiveViewer-RefineFocus");
+        focusThread.start();
     }
 
     /**
@@ -946,6 +1027,9 @@ public class LiveViewerWindow {
             pillFpsLabel.setText("OFF");
         }
 
+        // Disable refine focus when collapsed (no visual feedback)
+        refineFocusButton.setDisable(true);
+
         stage.sizeToScene();
         logger.info("Live viewer collapsed to pill");
     }
@@ -962,6 +1046,9 @@ public class LiveViewerWindow {
         stage.setWidth(savedW);
         stage.setHeight(savedH);
 
+        // Re-enable refine focus if live is active
+        updateRefineFocusButtonState();
+
         logger.info("Live viewer expanded");
     }
 
@@ -977,6 +1064,11 @@ public class LiveViewerWindow {
         if (histogramExecutor != null) {
             histogramExecutor.shutdownNow();
             histogramExecutor = null;
+        }
+
+        // Cancel any running refine focus
+        if (refineFocusController != null && refineFocusController.isRunning()) {
+            refineFocusController.cancel();
         }
 
         // Stop stage control panel (joystick executor)
