@@ -819,6 +819,9 @@ public class PersistentPreferences {
     private static final StringProperty stageControlStepSizeSaved =
             PathPrefs.createPersistentPreference("stageControlStepSize", "100");
 
+    private static final StringProperty stageControlZStepSizeSaved =
+            PathPrefs.createPersistentPreference("stageControlZStepSize", "10");
+
     private static final StringProperty stageControlFovSelectionSaved =
             PathPrefs.createPersistentPreference("stageControlFovSelection", "Value");
 
@@ -861,6 +864,22 @@ public class PersistentPreferences {
      */
     public static void setStageControlStepSize(String stepSize) {
         stageControlStepSizeSaved.setValue(stepSize);
+    }
+
+    /**
+     * Gets the saved Z step size value.
+     * @return Z step size in um as string
+     */
+    public static String getStageControlZStepSize() {
+        return stageControlZStepSizeSaved.getValue();
+    }
+
+    /**
+     * Sets the Z step size value.
+     * @param stepSize Z step size in um
+     */
+    public static void setStageControlZStepSize(String stepSize) {
+        stageControlZStepSizeSaved.setValue(stepSize);
     }
 
     /**

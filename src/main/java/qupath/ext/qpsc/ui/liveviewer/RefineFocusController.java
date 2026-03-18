@@ -385,28 +385,29 @@ public class RefineFocusController {
     private double getInitialStepUm() {
         try {
             double pixelSize = socketClient.getMicroscopePixelSize();
-            if (pixelSize > 1.0) return 10.0;
-            if (pixelSize > 0.5) return 5.0;
-            if (pixelSize > 0.2) return 2.0;
-            if (pixelSize > 0.1) return 1.0;
-            return 0.5;
+            // Steps sized to ~2-3x depth of field per objective
+            if (pixelSize > 1.0) return 20.0;   // 4x-5x
+            if (pixelSize > 0.5) return 10.0;   // 10x
+            if (pixelSize > 0.2) return 5.0;    // 20x
+            if (pixelSize > 0.1) return 3.0;    // 40x
+            return 1.0;                          // 60x-100x
         } catch (IOException e) {
-            logger.warn("Could not query pixel size for step sizing, using default 2.0um: {}", e.getMessage());
-            return 2.0;
+            logger.warn("Could not query pixel size for step sizing, using default 5.0um: {}", e.getMessage());
+            return 5.0;
         }
     }
 
     private double getMaxTravelUm() {
         try {
             double pixelSize = socketClient.getMicroscopePixelSize();
-            if (pixelSize > 1.0) return 50.0;
-            if (pixelSize > 0.5) return 40.0;
-            if (pixelSize > 0.2) return 20.0;
-            if (pixelSize > 0.1) return 15.0;
-            return 10.0;
+            if (pixelSize > 1.0) return 100.0;  // 4x-5x
+            if (pixelSize > 0.5) return 60.0;   // 10x
+            if (pixelSize > 0.2) return 40.0;   // 20x
+            if (pixelSize > 0.1) return 30.0;   // 40x
+            return 15.0;                         // 60x-100x
         } catch (IOException e) {
-            logger.warn("Could not query pixel size for max travel, using default 20um: {}", e.getMessage());
-            return 20.0;
+            logger.warn("Could not query pixel size for max travel, using default 40um: {}", e.getMessage());
+            return 40.0;
         }
     }
 

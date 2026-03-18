@@ -273,8 +273,8 @@ public class StageControlPanel extends TitledPane {
         Tooltip.install(sampleMovementCheckbox, sampleMvmtTooltip);
         sampleMovementMode.set(sampleMovementCheckbox.isSelected());
 
-        // Initialize shared Z step field
-        zStepField = new TextField("10");
+        // Initialize shared Z step field from preferences
+        zStepField = new TextField(PersistentPreferences.getStageControlZStepSize());
         zStepField.setPrefWidth(45);
         zStepField.setAlignment(Pos.CENTER);
         zStepField.setTextFormatter(new TextFormatter<>(change -> {
@@ -745,6 +745,13 @@ public class StageControlPanel extends TitledPane {
                 } catch (NumberFormatException ignored) {
                     // Incomplete input
                 }
+            }
+        });
+
+        // Save Z step size when changed
+        zStepField.textProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null && !newVal.isEmpty()) {
+                PersistentPreferences.setStageControlZStepSize(newVal);
             }
         });
 

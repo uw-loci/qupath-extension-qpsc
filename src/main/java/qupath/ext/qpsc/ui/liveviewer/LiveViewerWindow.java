@@ -103,6 +103,11 @@ public class LiveViewerWindow {
     private volatile boolean polling = false;
     private volatile String lastFrameInfo = "";
 
+    // Status message hold: important messages (e.g. refine focus result) are held
+    // for a few seconds before the frame-rate ticker overwrites them.
+    private volatile long statusHoldUntil = 0;
+    private static final long STATUS_HOLD_MS = 5000;
+
     // Desync detection
     private volatile long lastFrameArrivalTime = 0;
     private volatile long liveOnTimestamp = 0;
@@ -571,10 +576,14 @@ public class LiveViewerWindow {
         // Update button to cancel mode
         refineFocusButton.setText("Cancel Focus");
 
-        // Status callback
+        // Status callback -- hold completion messages so FPS ticker doesn't overwrite them
         RefineFocusController.StatusCallback callback = (msg, complete, error) -> {
             Platform.runLater(() -> {
-                updateStatus(msg);
+                if (complete) {
+                    updateStatusHeld(msg);
+                } else {
+                    updateStatus(msg);
+                }
                 if (complete) {
                     refineFocusButton.setText("Refine Focus");
                     refineFocusButton.setDisable(!liveActive);
@@ -821,7 +830,10 @@ public class LiveViewerWindow {
                 .getPixelWriter()
                 .setPixels(0, 0, dstW, dstH, PixelFormat.getIntArgbInstance(), argbBuffer, 0, dstW);
 
-        updateStatus(lastFrameInfo);
+        // Only overwrite status with FPS ticker if no held message is active
+        if (System.currentTimeMillis() >= statusHoldUntil) {
+            updateStatus(lastFrameInfo);
+        }
     }
 
     /**
@@ -982,6 +994,15 @@ public class LiveViewerWindow {
 
     private void updateStatus(String text) {
         statusLabel.setText(text);
+    }
+
+    /**
+     * Updates the status label and holds the message for a few seconds so the
+     * frame-rate ticker does not immediately overwrite it.
+     */
+    private void updateStatusHeld(String text) {
+        statusLabel.setText(text);
+        statusHoldUntil = System.currentTimeMillis() + STATUS_HOLD_MS;
     }
 
     /**
