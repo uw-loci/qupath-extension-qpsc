@@ -18,17 +18,17 @@ This document provides an overview of all utilities available in the QPSC extens
 | [White Balance Calibration](tools/white-balance-calibration.md) | Calibrate JAI 3-CCD camera white balance | Extensions > QP Scope > White Balance Calibration... |
 | [WB Comparison Test](tools/wb-comparison-test.md) | Compare white balance modes side-by-side | Extensions > QP Scope > WB Comparison Test... |
 | [JAI Noise Characterization](tools/noise-characterization.md) | Measure camera noise statistics | Extensions > QP Scope > JAI Camera > Noise Characterization... |
-| [Polarizer Calibration](tools/polarizer-calibration.md) | Calibrate polarizer rotation stage for PPM | Extensions > QP Scope > Polarizer Calibration (PPM)... |
-| [PPM Reference Slide](tools/ppm-reference-slide.md) | Hue-to-angle calibration from sunburst slide | Extensions > QP Scope > Utilities > PPM Reference Slide... |
+| [Polarizer Calibration](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/polarizer-calibration.md) | Calibrate polarizer rotation stage for PPM | Extensions > QP Scope > Polarizer Calibration (PPM)... |
+| [PPM Reference Slide](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-reference-slide.md) | Hue-to-angle calibration from sunburst slide | Extensions > QP Scope > Utilities > PPM Reference Slide... |
 | [Autofocus Editor](tools/autofocus-editor.md) | Configure per-objective autofocus parameters | Extensions > QP Scope > Autofocus Settings Editor... |
 | [Autofocus Benchmark](tools/autofocus-benchmark.md) | Find optimal autofocus settings systematically | Extensions > QP Scope > Autofocus Parameter Benchmark... |
-| [PPM Sensitivity Test](tools/ppm-sensitivity-test.md) | Test rotation stage precision | Extensions > QP Scope > PPM Rotation Sensitivity Test... |
-| [PPM Birefringence Optimization](tools/ppm-birefringence-optimization.md) | Find optimal polarizer angle for maximum contrast | Extensions > QP Scope > PPM Birefringence Optimization... |
-| [PPM Hue Range Filter](tools/ppm-hue-range-filter.md) | Interactive HSV filtering for PPM images | Extensions > QP Scope > PPM Hue Range Filter |
-| [PPM Polarity Plot](tools/ppm-polarity-plot.md) | Polar histogram visualization of fiber orientations | Extensions > QP Scope > PPM Polarity Plot |
-| [Surface Perpendicularity](tools/surface-perpendicularity.md) | Verify surface is perpendicular to optical axis | Extensions > QP Scope > Surface Perpendicularity |
-| [Batch PPM Analysis](tools/batch-ppm-analysis.md) | Batch processing of PPM image sets | Extensions > QP Scope > Batch PPM Analysis |
-| [Back-Propagate Annotations](tools/back-propagate-annotations.md) | Copy annotations from child images back to parent | Extensions > QP Scope > Back-Propagate Annotations |
+| [PPM Sensitivity Test](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-sensitivity-test.md) | Test rotation stage precision | Extensions > QP Scope > PPM Rotation Sensitivity Test... |
+| [PPM Birefringence Optimization](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-birefringence-optimization.md) | Find optimal polarizer angle for maximum contrast | Extensions > QP Scope > PPM Birefringence Optimization... |
+| [PPM Hue Range Filter](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-hue-range-filter.md) | Interactive HSV filtering for PPM images | Extensions > QP Scope > PPM Hue Range Filter |
+| [PPM Polarity Plot](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-polarity-plot.md) | Polar histogram visualization of fiber orientations | Extensions > QP Scope > PPM Polarity Plot |
+| [Surface Perpendicularity](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/surface-perpendicularity.md) | Verify surface is perpendicular to optical axis | Extensions > QP Scope > Surface Perpendicularity |
+| [Batch PPM Analysis](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/batch-ppm-analysis.md) | Batch processing of PPM image sets | Extensions > QP Scope > Batch PPM Analysis |
+| [Back-Propagate Annotations](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/back-propagate-annotations.md) | Copy annotations from child images back to parent | Extensions > QP Scope > Back-Propagate Annotations |
 
 ---
 
@@ -78,11 +78,11 @@ Acquire and display side-by-side images using different white balance modes. Hel
 
 Acquire flat-field correction images with adaptive exposure control. Automatically adjusts exposure to reach target intensity at each angle. Supports per-channel white balance for JAI cameras.
 
-### [Polarizer Calibration](tools/polarizer-calibration.md)
+### [Polarizer Calibration](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/polarizer-calibration.md)
 
 Two-stage calibration (coarse sweep + fine sweep) to find the exact hardware offset for the PPM rotation stage. Determines the encoder position corresponding to crossed polarizers. Only needed after hardware installation or repositioning.
 
-### [PPM Reference Slide (Sunburst Calibration)](tools/ppm-reference-slide.md)
+### [PPM Reference Slide (Sunburst Calibration)](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-reference-slide.md)
 
 Create a hue-to-angle calibration from a reference slide with a sunburst pattern. Samples hue values along radial spokes and creates a linear regression for PPM image processing. Includes manual center selection and debug mask visualization.
 
@@ -102,33 +102,36 @@ Measure camera noise statistics (mean, standard deviation, SNR) with Quick, Full
 
 ## PPM Analysis Tools
 
-### [PPM Sensitivity Test](tools/ppm-sensitivity-test.md)
+> **PPM calibration and analysis workflows are provided by the [qupath-extension-ppm](https://github.com/uw-loci/qupath-extension-ppm) modality plugin.** See the [PPM README](https://github.com/uw-loci/qupath-extension-ppm#readme) for a complete overview and recommended workflow order. PPM computations use the [ppm_library](https://github.com/uw-loci/ppm_library) Python package.
 
-Test the precision and repeatability of the rotation stage. Verifies positioning accuracy, repeatability over multiple movements, and backlash compensation effectiveness.
+**All analysis tools below require a completed [Sunburst Calibration](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-reference-slide.md)** (.npz file) and operate on PPM birefringence or sum images.
 
-### [PPM Birefringence Optimization](tools/ppm-birefringence-optimization.md)
+### Calibration & Hardware Validation
 
-Find the optimal polarizer angle for maximum birefringence contrast. Sweeps through a configurable angle range, captures images, and identifies angles with peak contrast. Supports Interpolate, Calibrate, and Fixed exposure modes.
+| Tool | Purpose | Requires | Full Docs |
+|------|---------|----------|-----------|
+| PPM Sensitivity Test | Test rotation stage precision and repeatability | Connected microscope | [Guide](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-sensitivity-test.md) |
+| PPM Birefringence Optimization | Find optimal polarizer angle for maximum contrast | Connected microscope, sample slide | [Guide](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-birefringence-optimization.md) |
 
-### [PPM Hue Range Filter](tools/ppm-hue-range-filter.md)
+### Interactive Analysis
 
-Interactive HSV-based filtering for PPM images. Provides real-time preview with adjustable hue, saturation, value, and opacity sliders. Useful for isolating specific fiber orientations based on color.
+| Tool | Purpose | Requires | Full Docs |
+|------|---------|----------|-----------|
+| PPM Hue Range Filter | Real-time overlay highlighting pixels whose fiber angle falls within a user-specified range | Sunburst calibration, open PPM image | [Guide](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-hue-range-filter.md) |
+| PPM Polarity Plot | Rose diagram of fiber orientation distribution with circular statistics (mean, std, resultant length) | Sunburst calibration, open PPM image, selected annotation | [Guide](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-polarity-plot.md) |
 
-### [PPM Polarity Plot](tools/ppm-polarity-plot.md)
+### Boundary & Perpendicularity Analysis
 
-Generate polar histogram visualizations of fiber orientation distributions from PPM images. Displays angular distribution data in a circular plot format for quantitative analysis.
+| Tool | Purpose | Requires | Full Docs |
+|------|---------|----------|-----------|
+| Surface Perpendicularity (PS-TACS) | Score fiber orientation relative to annotation boundaries using the PS-TACS method | Sunburst calibration, open PPM birefringence image, boundary annotation (tissue interface) + region annotation (analysis zone), pixel classifier or thresholder for foreground segmentation | [Guide](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/surface-perpendicularity.md) |
 
-### [Surface Perpendicularity](tools/surface-perpendicularity.md)
+### Batch & Project-Wide
 
-Verify that the sample surface is perpendicular to the optical axis. Acquires images at multiple angles and analyzes intensity variations to detect tilt, helping ensure accurate PPM measurements.
-
-### [Batch PPM Analysis](tools/batch-ppm-analysis.md)
-
-Batch processing of multiple PPM image sets. Automates hue analysis, TACS scoring, boundary analysis, and other PPM-specific measurements across multiple regions or samples.
-
-### [Back-Propagate Annotations](tools/back-propagate-annotations.md)
-
-Copy annotations from high-resolution child images back to their parent macro image. Uses coordinate transforms and metadata to accurately map annotations between image scales, enabling overview visualization of results.
+| Tool | Purpose | Requires | Full Docs |
+|------|---------|----------|-----------|
+| Batch PPM Analysis | Run polarity and/or perpendicularity analysis across all annotations in a project; exports CSV | Sunburst calibration, project with annotated PPM images | [Guide](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/batch-ppm-analysis.md) |
+| Back-Propagate Annotations | Transfer annotations from sub-images back to parent/base images using alignment transforms | Multi-sample project with sub-images from Existing Image workflow, classified annotations | [Guide](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/back-propagate-annotations.md) |
 
 ---
 

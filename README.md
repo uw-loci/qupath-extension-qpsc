@@ -81,7 +81,7 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 
 ### PPM Analysis Tools
 
-> **PPM calibration and analysis workflows are provided by the [qupath-extension-ppm](https://github.com/uw-loci/qupath-extension-ppm) modality plugin.** See its [documentation](https://github.com/uw-loci/qupath-extension-ppm/tree/main/documentation) for detailed workflow guides. PPM computations use the [ppm_library](https://github.com/uw-loci/ppm_library) Python package.
+> **PPM calibration and analysis workflows are provided by the [qupath-extension-ppm](https://github.com/uw-loci/qupath-extension-ppm) modality plugin.** See its [documentation](https://github.com/uw-loci/qupath-extension-ppm/tree/master/documentation) for detailed workflow guides. PPM computations use the [ppm_library](https://github.com/uw-loci/ppm_library) Python package.
 
 - **PPM Hue Range Filter**: Interactive HSV-based filtering for isolating specific fiber orientations by color
 - **PPM Polarity Plot**: Polar histogram visualization of fiber orientation distributions
@@ -163,12 +163,12 @@ Open the **QP Scope** menu in QuPath to access all features:
 | [White Balance Calibration](documentation/tools/white-balance-calibration.md) | Per-channel exposure calibration for JAI cameras |
 | [WB Comparison Test](documentation/tools/wb-comparison-test.md) | Compare WB modes to select the best option |
 | [Collect Background Images](documentation/tools/background-collection.md) | After lamp changes, for flat-field correction |
-| [Polarizer Calibration](documentation/tools/polarizer-calibration.md) | After hardware changes (PPM only) |
-| [PPM Reference Slide](documentation/tools/ppm-reference-slide.md) | Hue-to-angle calibration from sunburst slide |
+| [Polarizer Calibration](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/polarizer-calibration.md) | After hardware changes (PPM only) |
+| [PPM Reference Slide](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-reference-slide.md) | Hue-to-angle calibration from sunburst slide |
 | [Autofocus Settings Editor](documentation/tools/autofocus-editor.md) | Tune focus quality per objective |
 | [Autofocus Benchmark](documentation/tools/autofocus-benchmark.md) | Systematically find optimal autofocus settings |
-| [PPM Sensitivity Test](documentation/tools/ppm-sensitivity-test.md) | Test rotation stage precision |
-| [PPM Birefringence Optimization](documentation/tools/ppm-birefringence-optimization.md) | Find optimal polarizer angle for contrast |
+| [PPM Sensitivity Test](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-sensitivity-test.md) | Test rotation stage precision |
+| [PPM Birefringence Optimization](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-birefringence-optimization.md) | Find optimal polarizer angle for contrast |
 
 **Utilities:**
 | Menu Item | Purpose |
@@ -180,14 +180,14 @@ Open the **QP Scope** menu in QuPath to access all features:
 | [Communication Settings](documentation/tools/server-connection.md) | Configure server connection and notification alerts |
 | [Noise Characterization](documentation/tools/noise-characterization.md) | Measure camera noise statistics |
 
-**PPM Analysis:**
+**PPM Analysis** (provided by [qupath-extension-ppm](https://github.com/uw-loci/qupath-extension-ppm)):
 | Menu Item | Purpose |
 |-----------|---------|
-| [PPM Hue Range Filter](documentation/tools/ppm-hue-range-filter.md) | Interactive HSV filtering for PPM images |
-| [PPM Polarity Plot](documentation/tools/ppm-polarity-plot.md) | Polar histogram of fiber orientations |
-| [Surface Perpendicularity](documentation/tools/surface-perpendicularity.md) | Verify surface alignment to optical axis |
-| [Batch PPM Analysis](documentation/tools/batch-ppm-analysis.md) | Batch processing of PPM image sets |
-| [Back-Propagate Annotations](documentation/tools/back-propagate-annotations.md) | Copy annotations from child to parent images |
+| [PPM Hue Range Filter](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-hue-range-filter.md) | Interactive HSV filtering for PPM images |
+| [PPM Polarity Plot](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-polarity-plot.md) | Polar histogram of fiber orientations |
+| [Surface Perpendicularity](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/surface-perpendicularity.md) | Verify surface alignment to optical axis |
+| [Batch PPM Analysis](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/batch-ppm-analysis.md) | Batch processing of PPM image sets |
+| [Back-Propagate Annotations](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/back-propagate-annotations.md) | Copy annotations from child to parent images |
 
 ---
 
@@ -913,18 +913,10 @@ The following features and improvements are planned for upcoming releases:
 | White Balance Calibration | [white-balance-calibration.md](documentation/tools/white-balance-calibration.md) |
 | WB Comparison Test | [wb-comparison-test.md](documentation/tools/wb-comparison-test.md) |
 | Noise Characterization | [noise-characterization.md](documentation/tools/noise-characterization.md) |
-| Polarizer Calibration | [polarizer-calibration.md](documentation/tools/polarizer-calibration.md) |
-| PPM Reference Slide | [ppm-reference-slide.md](documentation/tools/ppm-reference-slide.md) |
 | Autofocus Editor | [autofocus-editor.md](documentation/tools/autofocus-editor.md) |
 | Autofocus Benchmark | [autofocus-benchmark.md](documentation/tools/autofocus-benchmark.md) |
 | Setup Wizard | [setup-wizard.md](documentation/tools/setup-wizard.md) |
-| PPM Sensitivity Test | [ppm-sensitivity-test.md](documentation/tools/ppm-sensitivity-test.md) |
-| PPM Birefringence Optimization | [ppm-birefringence-optimization.md](documentation/tools/ppm-birefringence-optimization.md) |
-| PPM Hue Range Filter | [ppm-hue-range-filter.md](documentation/tools/ppm-hue-range-filter.md) |
-| PPM Polarity Plot | [ppm-polarity-plot.md](documentation/tools/ppm-polarity-plot.md) |
-| Surface Perpendicularity | [surface-perpendicularity.md](documentation/tools/surface-perpendicularity.md) |
-| Batch PPM Analysis | [batch-ppm-analysis.md](documentation/tools/batch-ppm-analysis.md) |
-| Back-Propagate Annotations | [back-propagate-annotations.md](documentation/tools/back-propagate-annotations.md) |
+| **PPM Tools** | **See [qupath-extension-ppm documentation](https://github.com/uw-loci/qupath-extension-ppm/tree/master/documentation)** |
 
 ---
 

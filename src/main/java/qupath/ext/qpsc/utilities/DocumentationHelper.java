@@ -30,11 +30,11 @@ public final class DocumentationHelper {
             "https://github.com/uw-loci/qupath-extension-qpsc/blob/main/documentation/tools/";
 
     private static final String PPM_BASE_URL =
-            "https://github.com/uw-loci/qupath-extension-ppm/blob/main/documentation/";
+            "https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/";
 
     /** URL to the PPM extension README for linking from preferences. */
     public static final String PPM_README_URL =
-            "https://github.com/uw-loci/qupath-extension-ppm/blob/main/README.md";
+            "https://github.com/uw-loci/qupath-extension-ppm/blob/master/README.md";
 
     /** Map from tool ID to documentation filename. */
     private static final Map<String, String> TOOL_DOCS = Map.ofEntries(

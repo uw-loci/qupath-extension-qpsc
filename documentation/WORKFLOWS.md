@@ -128,6 +128,14 @@ Create or update the coordinate transformation between QuPath image coordinates 
 
 ---
 
+## PPM Calibration & Analysis Workflows
+
+PPM (Polarized light Microscopy) workflows -- including polarizer calibration, birefringence optimization, reference slide calibration, and all analysis tools -- are provided by the **[qupath-extension-ppm](https://github.com/uw-loci/qupath-extension-ppm)** modality plugin.
+
+See the [PPM README](https://github.com/uw-loci/qupath-extension-ppm#readme) for the recommended workflow order and links to all PPM documentation.
+
+---
+
 ## See Also
 
 - [Utilities Reference](UTILITIES.md) - All utilities with options explained

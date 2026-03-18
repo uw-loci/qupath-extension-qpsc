@@ -120,12 +120,16 @@ public class SunburstCalibrationDialog {
             instructionLabel.setWrapText(true);
             instructionLabel.setStyle("-fx-font-size: 11px;");
 
-            // Important note about angle settings
+            // Important note about angle settings and saturation
             Label angleNote = new Label(
-                    "IMPORTANT: Use low-angle PPM settings (crossed or near-crossed angles) for calibration.\n"
-                            + "These angles provide the best color saturation for detecting the spokes.\n"
-                            + "Use the Camera Control button below to set the camera to the correct angle.");
+                    "IMPORTANT: Check camera settings before calibrating!\n\n"
+                            + "- Use low-angle PPM settings (crossed or near-crossed) for best color contrast.\n"
+                            + "- Avoid pixel saturation (overexposure). Saturated pixels have corrupted hue\n"
+                            + "  values and will produce an incorrect calibration. Use Camera Control below\n"
+                            + "  to verify that no channels are clipping (check the histogram or RGB readout).\n"
+                            + "- If the image looks washed out or white, reduce exposure before proceeding.");
             angleNote.setWrapText(true);
+            angleNote.setMaxWidth(Double.MAX_VALUE);
             angleNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #cc6600; -fx-font-weight: bold;");
 
             root.getChildren().addAll(headerRow, new Separator(), instructionLabel, angleNote, new Separator());
