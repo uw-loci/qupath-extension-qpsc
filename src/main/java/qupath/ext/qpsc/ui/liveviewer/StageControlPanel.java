@@ -411,6 +411,12 @@ public class StageControlPanel extends TitledPane {
         moveZBtn.setOnAction(e -> handleMoveZ());
         moveRBtn.setOnAction(e -> handleMoveR());
 
+        // Enter key in text fields triggers the corresponding move
+        xField.setOnAction(e -> handleMoveXY());
+        yField.setOnAction(e -> handleMoveXY());
+        zField.setOnAction(e -> handleMoveZ());
+        rField.setOnAction(e -> handleMoveR());
+
         // Go to centroid section
         HBox centroidRow = new HBox(6, goToCentroidBtn, centroidStatus);
         centroidRow.setAlignment(Pos.CENTER_LEFT);
@@ -617,6 +623,9 @@ public class StageControlPanel extends TitledPane {
         javafx.event.EventHandler<ScrollEvent> navZScrollHandler = event -> handleZScroll(event, zStepField);
         navZField.setOnScroll(navZScrollHandler);
         navZStepFieldMirror.setOnScroll(navZScrollHandler);
+
+        // Enter key in navigate Z field triggers move
+        navZField.setOnAction(e -> handleMoveZ());
 
         // Z status for navigate tab (bound to main zStatus)
         Label navZStatus = new Label();
