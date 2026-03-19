@@ -142,12 +142,23 @@ public class RefineFocusController {
             logger.info("Refine Focus direction probe: base={}, plus={}, minus={}",
                     fmt(baseMetric), fmt(metricPlus), fmt(metricMinus));
 
-            // Check if already at focus (or featureless)
+            // Check if neither direction improves focus
             if (metricPlus <= baseMetric + IMPROVEMENT_THRESHOLD
                     && metricMinus <= baseMetric + IMPROVEMENT_THRESHOLD) {
-                finish(callback,
-                        "Failed to find focus! Get closer to focus manually, or widen the search range.",
-                        Outcome.FAILED);
+                // Both directions are worse -- either already at focus or featureless
+                if (baseMetric > 20) {
+                    // Decent baseline metric = likely already at best focus
+                    String msg = String.format(
+                            "Already at best focus (metric=%.0f, no improvement at +/-%.1fum)",
+                            baseMetric, initialStep);
+                    logger.info("Refine Focus: {}", msg);
+                    finish(callback, msg, Outcome.SUCCESS);
+                } else {
+                    // Low baseline metric = featureless or very far from focus
+                    finish(callback,
+                            "Failed to find focus! Get closer to focus manually, or widen the search range.",
+                            Outcome.FAILED);
+                }
                 return;
             }
 

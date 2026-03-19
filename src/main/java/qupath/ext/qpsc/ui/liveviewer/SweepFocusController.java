@@ -201,10 +201,38 @@ public class SweepFocusController {
 
             // Phase 4: MOVE TO BEST (blocking)
             socketClient.moveStageZ(bestZ);
-            double shift = bestZ - startZ;
+            double sweepShift = bestZ - startZ;
             double baseMetric = measurements.get(0)[1];
-            String msg = String.format("Sweep Focus complete: shifted %.1fum, %d pts (metric %.1f -> %.1f)",
-                    shift, measurements.size(), baseMetric, bestMetric);
+            logger.info("Sweep phase complete: shifted {}um, {} pts (metric {} -> {})",
+                    fmt(sweepShift), measurements.size(), fmt(baseMetric), fmt(bestMetric));
+
+            // Phase 5: AUTO-REFINE around the sweep peak with tight range
+            if (cancelled) { finish(callback, "Sweep Focus cancelled", Outcome.SUCCESS); return; }
+            callback.onStatusUpdate("Sweep Focus: refining...", Outcome.IN_PROGRESS);
+
+            double refineRange = 3.0; // tight range around the sweep peak
+            RefineFocusController refiner = new RefineFocusController(
+                    socketClient, frameSupplier, refineRange);
+
+            // Track refinement result via a simple holder
+            final double[] refineResult = {bestZ, bestMetric};
+            refiner.execute((refMsg, refOutcome) -> {
+                if (refOutcome == Outcome.SUCCESS) {
+                    // Extract the final Z from the refine message
+                    try {
+                        double finalZ = socketClient.getStageZ();
+                        refineResult[0] = finalZ;
+                        logger.info("Refinement succeeded: final Z={}", fmt(finalZ));
+                    } catch (IOException ignored) { }
+                } else {
+                    // Refinement didn't improve -- that's OK, sweep was accurate enough
+                    logger.info("Refinement found no improvement -- sweep result is best");
+                }
+            });
+
+            double finalShift = refineResult[0] - startZ;
+            String msg = String.format("Sweep+Refine complete: shifted %.1fum, %d sweep pts",
+                    finalShift, measurements.size());
             logger.info(msg);
             finish(callback, msg, Outcome.SUCCESS);
 
