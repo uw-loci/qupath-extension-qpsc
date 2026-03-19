@@ -575,10 +575,12 @@ public class LiveViewerWindow {
                 searchRange
         );
 
-        // Update button to cancel mode, clear any previous failure style
+        // Update button to cancel mode, lock live toggle during focus
         refineFocusButton.setText("Cancel Focus");
         refineFocusButton.setStyle("");
+        sweepFocusButton.setDisable(true);
         focusRangeCombo.setDisable(true);
+        liveToggleButton.setDisable(true);
 
         // Status callback -- hold completion messages so FPS ticker doesn't overwrite them
         RefineFocusController.StatusCallback callback = (msg, outcome) -> {
@@ -590,7 +592,9 @@ public class LiveViewerWindow {
                     updateStatus(msg);
                 }
                 if (done) {
+                    liveToggleButton.setDisable(false);
                     focusRangeCombo.setDisable(!liveActive);
+                    sweepFocusButton.setDisable(!liveActive);
                     if (stageControlPanel != null) {
                         stageControlPanel.refreshPositions();
                     }
@@ -652,6 +656,7 @@ public class LiveViewerWindow {
         sweepFocusButton.setStyle("");
         refineFocusButton.setDisable(true);
         focusRangeCombo.setDisable(true);
+        liveToggleButton.setDisable(true);
 
         RefineFocusController.StatusCallback callback = (msg, outcome) -> {
             Platform.runLater(() -> {
@@ -662,6 +667,7 @@ public class LiveViewerWindow {
                     updateStatus(msg);
                 }
                 if (done) {
+                    liveToggleButton.setDisable(false);
                     focusRangeCombo.setDisable(!liveActive);
                     refineFocusButton.setDisable(!liveActive);
                     if (stageControlPanel != null) {

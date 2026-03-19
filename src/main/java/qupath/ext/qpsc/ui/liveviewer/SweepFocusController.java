@@ -130,10 +130,17 @@ public class SweepFocusController {
                 if (cancelled) break;
 
                 double z = sweepStart + i * stepSize;
+                long preTs = captureTimestamp();
                 socketClient.moveStageZ(z);
 
-                // Grab latest cached frame immediately (no wait for fresh)
-                FrameData f = frameSupplier.get();
+                // Wait for a fresh frame that was captured AFTER the move.
+                // Without this, the same stale frame gets scored at every Z
+                // because moveStageZ monopolizes the aux socket, blocking
+                // the frame poller from fetching new frames.
+                FrameData f = waitForFreshFrame(preTs);
+                if (f == null) {
+                    f = frameSupplier.get();
+                }
                 if (f != null) {
                     double metric = metricHelper.computeFocusMetric(f);
                     measurements.add(new double[] {z, metric});
@@ -208,6 +215,26 @@ public class SweepFocusController {
             }
             finish(callback, "Sweep Focus error: " + e.getMessage(), Outcome.ERROR);
         }
+    }
+
+    private long captureTimestamp() {
+        FrameData f = frameSupplier.get();
+        return (f != null) ? f.timestampMs() : 0;
+    }
+
+    private FrameData waitForFreshFrame(long afterTimestamp) {
+        long deadline = System.currentTimeMillis() + 2000;
+        while (System.currentTimeMillis() < deadline) {
+            FrameData f = frameSupplier.get();
+            if (f != null && f.timestampMs() > afterTimestamp) {
+                return f;
+            }
+            try { Thread.sleep(30); } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            }
+        }
+        return null;
     }
 
     private double getSearchRange() {
