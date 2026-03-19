@@ -125,20 +125,13 @@ public class LiveViewerWindow {
     private ScrollPane scrollPane; // Store reference for mode switching
     private StackPane imageContainer; // Inner container for centering
 
-    // Collapsed pill UI
+    // Root content pane
     private BorderPane expandedContent;
-    private HBox collapsedPill;
-    private Label pillFpsLabel;
-    private Label pillStatusDot;
-    private double savedX, savedY, savedW, savedH;
 
     // Configuration
     private static final long POLL_INTERVAL_MS = 100; // ~10 FPS max
     private static final double WINDOW_WIDTH = 900; // Wider to accommodate side panel
     private static final double WINDOW_HEIGHT = 720;
-    private static final String PILL_DOT_BASE_STYLE =
-            "-fx-min-width: 10; -fx-min-height: 10; -fx-max-width: 10; -fx-max-height: 10; "
-                    + "-fx-background-radius: 5; ";
 
     private LiveViewerWindow() {
         buildUI();
@@ -267,13 +260,6 @@ public class LiveViewerWindow {
         stage = new Stage();
         stage.setTitle("Live Viewer");
         stage.initModality(Modality.NONE);
-        // Set owner to QuPath main window so Live Viewer stays on top of QuPath
-        // but not above other applications. Owned windows cannot be independently
-        // minimized, so we provide a collapse-to-pill alternative.
-        Stage quPathStage = getQuPathStage();
-        if (quPathStage != null) {
-            stage.initOwner(quPathStage);
-        }
 
         // Toolbar with Live toggle button and display scale selector
         liveToggleButton = new Button("Live: OFF");
@@ -348,13 +334,9 @@ public class LiveViewerWindow {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        Button collapseButton = new Button("_");
-        collapseButton.setTooltip(new Tooltip("Collapse to pill"));
-        collapseButton.setOnAction(e -> collapse());
-
         Button docHelpButton = DocumentationHelper.createHelpButton("liveViewer");
 
-        HBox toolbar = new HBox(8, liveToggleButton, refineFocusButton, sweepFocusButton, focusRangeCombo, spacer, scaleLabel, scaleCombo, collapseButton);
+        HBox toolbar = new HBox(8, liveToggleButton, refineFocusButton, sweepFocusButton, focusRangeCombo, spacer, scaleLabel, scaleCombo);
         if (docHelpButton != null) toolbar.getChildren().add(docHelpButton);
         toolbar.setPadding(new Insets(4, 8, 4, 8));
         toolbar.setAlignment(Pos.CENTER_LEFT);
@@ -440,26 +422,7 @@ public class LiveViewerWindow {
 
         expandedContent = root;
 
-        // Collapsed pill (hidden initially)
-        pillStatusDot = new Label();
-        pillStatusDot.setStyle(PILL_DOT_BASE_STYLE + "-fx-background-color: #9E9E9E;");
-        Label pillLabel = new Label("Live Viewer");
-        pillLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12;");
-        pillFpsLabel = new Label("");
-        pillFpsLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11;");
-        Button expandButton = new Button("Expand");
-        expandButton.setOnAction(e -> expand());
-
-        collapsedPill = new HBox(8, pillStatusDot, pillLabel, pillFpsLabel, expandButton);
-        collapsedPill.setAlignment(Pos.CENTER_LEFT);
-        collapsedPill.setPadding(new Insets(6, 12, 6, 12));
-        collapsedPill.setStyle("-fx-background-color: #2b2b2b; -fx-background-radius: 6;");
-        collapsedPill.setVisible(false);
-        collapsedPill.setManaged(false);
-
-        StackPane rootStack = new StackPane(expandedContent, collapsedPill);
-        StackPane.setAlignment(collapsedPill, Pos.TOP_LEFT);
-        Scene scene = new Scene(rootStack, WINDOW_WIDTH, WINDOW_HEIGHT);
+        Scene scene = new Scene(expandedContent, WINDOW_WIDTH, WINDOW_HEIGHT);
         stage.setScene(scene);
         stage.setMinWidth(500);
         stage.setMinHeight(400);
@@ -566,8 +529,7 @@ public class LiveViewerWindow {
             // Keep showing cancel while either is running
             return;
         }
-        boolean collapsed = collapsedPill != null && collapsedPill.isVisible();
-        boolean enabled = liveActive && !collapsed;
+        boolean enabled = liveActive;
         refineFocusButton.setText("Refine Focus");
         refineFocusButton.setStyle("");
         refineFocusButton.setDisable(!enabled);
@@ -771,8 +733,6 @@ public class LiveViewerWindow {
                 return;
             }
 
-            boolean collapsed = collapsedPill != null && collapsedPill.isVisible();
-
             FrameData frame = controller.getFrame();
             if (frame == null) {
                 // No-frame timeout -- fixes desync Scenario B
@@ -786,10 +746,6 @@ public class LiveViewerWindow {
                     Platform.runLater(() -> {
                         updateLiveButtonStyle(false);
                         updateStatus("Live OFF (no frames detected -- camera may need restart)");
-                        if (collapsed) {
-                            pillStatusDot.setStyle(PILL_DOT_BASE_STYLE + "-fx-background-color: #F44336;");
-                            pillFpsLabel.setText("No signal");
-                        }
                     });
                 }
                 return;
@@ -814,16 +770,6 @@ public class LiveViewerWindow {
             String colorMode = frame.isRGB() ? "RGB" : "Grayscale";
             lastFrameInfo = String.format(
                     "FPS: %.1f | %dx%d | %s %s", currentFps, frame.width(), frame.height(), colorMode, bitDepth);
-
-            // Skip full rendering when collapsed -- just update pill labels
-            if (collapsed) {
-                final double fps = currentFps;
-                Platform.runLater(() -> {
-                    pillFpsLabel.setText(String.format("%.0f FPS", fps));
-                    pillStatusDot.setStyle(PILL_DOT_BASE_STYLE + "-fx-background-color: #4CAF50;");
-                });
-                return;
-            }
 
             // Submit histogram computation (throttled internally)
             // Capture local ref: stopAndDispose() may null the field concurrently
@@ -1136,63 +1082,6 @@ public class LiveViewerWindow {
             updateStatus("Live OFF (camera still sending frames -- click Live to sync)");
             updateLiveButtonStyle(false);
         });
-    }
-
-    private static Stage getQuPathStage() {
-        try {
-            QuPathGUI gui = QuPathGUI.getInstance();
-            return gui != null ? gui.getStage() : null;
-        } catch (Exception e) {
-            logger.debug("Could not get QuPath stage: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    private void collapse() {
-        // Save window geometry
-        savedX = stage.getX();
-        savedY = stage.getY();
-        savedW = stage.getWidth();
-        savedH = stage.getHeight();
-
-        // Switch to pill view
-        expandedContent.setVisible(false);
-        expandedContent.setManaged(false);
-        collapsedPill.setVisible(true);
-        collapsedPill.setManaged(true);
-
-        // Update pill status
-        if (liveActive) {
-            pillStatusDot.setStyle(PILL_DOT_BASE_STYLE + "-fx-background-color: #4CAF50;");
-            pillFpsLabel.setText(String.format("%.0f FPS", currentFps));
-        } else {
-            pillStatusDot.setStyle(PILL_DOT_BASE_STYLE + "-fx-background-color: #9E9E9E;");
-            pillFpsLabel.setText("OFF");
-        }
-
-        // Disable refine focus when collapsed (no visual feedback)
-        refineFocusButton.setDisable(true);
-
-        stage.sizeToScene();
-        logger.info("Live viewer collapsed to pill");
-    }
-
-    private void expand() {
-        collapsedPill.setVisible(false);
-        collapsedPill.setManaged(false);
-        expandedContent.setVisible(true);
-        expandedContent.setManaged(true);
-
-        // Restore geometry
-        stage.setX(savedX);
-        stage.setY(savedY);
-        stage.setWidth(savedW);
-        stage.setHeight(savedH);
-
-        // Re-enable refine focus if live is active
-        updateRefineFocusButtonState();
-
-        logger.info("Live viewer expanded");
     }
 
     private void stopAndDispose() {
