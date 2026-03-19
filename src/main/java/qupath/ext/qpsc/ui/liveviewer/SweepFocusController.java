@@ -28,11 +28,7 @@ public class SweepFocusController {
 
     private static final Logger logger = LoggerFactory.getLogger(SweepFocusController.class);
 
-    static final long SETTLE_TIME_MS = 100;
-    static final int MIN_MEASUREMENTS = 5;
-    static final long SWEEP_TIMEOUT_MS = 15000;
-    static final long POLL_INTERVAL_MS = 15;
-    static final double ARRIVAL_TOLERANCE_UM = 0.5;
+    static final int NUM_STEPS = 30; // number of Z positions to sample during sweep
     static final double SATURATION_ABORT_PCT = 5.0;
 
     private volatile boolean running = false;
@@ -105,71 +101,60 @@ public class SweepFocusController {
                 }
             }
 
-            if (Math.abs(sweepEnd - sweepStart) < 1.0) {
+            double actualRange = Math.abs(sweepEnd - sweepStart);
+            if (actualRange < 1.0) {
                 finish(callback, "Search range too small after clamping to stage bounds", Outcome.FAILED);
                 return;
             }
 
-            logger.info("Sweep Focus: range [{} -> {}] um (current={})",
-                    fmt(sweepStart), fmt(sweepEnd), fmt(currentZ));
+            double stepSize = actualRange / NUM_STEPS;
+            logger.info("Sweep Focus: {} steps of {}um over [{} -> {}] (current={})",
+                    NUM_STEPS, fmt(stepSize), fmt(sweepStart), fmt(sweepEnd), fmt(currentZ));
 
             // Phase 1: MOVE TO START (blocking)
             if (cancelled) { returnToZ(startZ, callback); return; }
             callback.onStatusUpdate("Sweep Focus: moving to start...", Outcome.IN_PROGRESS);
             socketClient.moveStageZ(sweepStart);
-            Thread.sleep(SETTLE_TIME_MS);
 
-            // Phase 2: SWEEP
+            // Phase 2: SWEEP -- rapid blocking small-step moves
+            // Each moveStageZ blocks only for hardware transit time (~20-50ms for 1um).
+            // No settle delay needed: wait_for_device is the settle.
+            // Grab cached frame (from live stream) at each position -- no freshness check.
             if (cancelled) { returnToZ(startZ, callback); return; }
             callback.onStatusUpdate("Sweep Focus: sweeping...", Outcome.IN_PROGRESS);
 
-            // Issue non-blocking move to end -- stage starts ramping
-            socketClient.moveStageZNoWait(sweepEnd);
-
             List<double[]> measurements = new ArrayList<>();
-            long lastFrameTimestamp = 0;
             long sweepStartTime = System.currentTimeMillis();
 
-            while (!cancelled) {
-                // Timeout safety
-                if (System.currentTimeMillis() - sweepStartTime > SWEEP_TIMEOUT_MS) {
-                    logger.warn("Sweep Focus: timeout after {}ms", SWEEP_TIMEOUT_MS);
-                    break;
-                }
+            for (int i = 0; i <= NUM_STEPS; i++) {
+                if (cancelled) break;
 
-                // Read current Z
-                double z = socketClient.getStageZFast();
+                double z = sweepStart + i * stepSize;
+                socketClient.moveStageZ(z);
 
-                // Check if we've arrived at the end
-                if (Math.abs(z - sweepEnd) < ARRIVAL_TOLERANCE_UM) {
-                    logger.info("Sweep Focus: arrived at end Z={}", fmt(z));
-                    break;
-                }
-
-                // Get frame -- only process if fresh
+                // Grab latest cached frame immediately (no wait for fresh)
                 FrameData f = frameSupplier.get();
-                if (f != null && f.timestampMs() > lastFrameTimestamp) {
-                    lastFrameTimestamp = f.timestampMs();
+                if (f != null) {
                     double metric = metricHelper.computeFocusMetric(f);
                     measurements.add(new double[] {z, metric});
-
-                    callback.onStatusUpdate(String.format(
-                            "Sweep Focus: Z=%.1f, metric=%.1f (%d pts)",
-                            z, metric, measurements.size()), Outcome.IN_PROGRESS);
                 }
 
-                Thread.sleep(POLL_INTERVAL_MS);
+                if (i % 5 == 0) {
+                    callback.onStatusUpdate(String.format(
+                            "Sweep Focus: %d/%d (Z=%.1f)", i, NUM_STEPS, z), Outcome.IN_PROGRESS);
+                }
             }
+
+            long sweepMs = System.currentTimeMillis() - sweepStartTime;
+            logger.info("Sweep Focus: collected {} measurements in {}ms", measurements.size(), sweepMs);
 
             // Phase 3: FIND PEAK
             if (cancelled) { returnToZ(startZ, callback); return; }
 
-            if (measurements.size() < MIN_MEASUREMENTS) {
-                logger.warn("Sweep Focus: only {} measurements (need {})", measurements.size(), MIN_MEASUREMENTS);
+            if (measurements.size() < 3) {
+                logger.warn("Sweep Focus: only {} measurements", measurements.size());
                 socketClient.moveStageZ(startZ);
-                finish(callback, String.format(
-                        "Failed: only %d measurements collected (need %d). Try wider search range.",
-                        measurements.size(), MIN_MEASUREMENTS), Outcome.FAILED);
+                finish(callback, "Failed: insufficient measurements collected", Outcome.FAILED);
                 return;
             }
 
@@ -222,12 +207,6 @@ public class SweepFocusController {
                 try { socketClient.moveStageZ(startZ); } catch (IOException ignored) { }
             }
             finish(callback, "Sweep Focus error: " + e.getMessage(), Outcome.ERROR);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            if (!Double.isNaN(startZ)) {
-                try { socketClient.moveStageZ(startZ); } catch (IOException ignored) { }
-            }
-            finish(callback, "Sweep Focus interrupted", Outcome.ERROR);
         }
     }
 
