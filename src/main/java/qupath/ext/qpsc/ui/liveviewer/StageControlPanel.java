@@ -1322,27 +1322,25 @@ public class StageControlPanel extends TitledPane {
                                 .getPixelCalibration().getAveragedPixelSizeMicrons();
 
                         // The XY offset was computed through the alignment transform, which
-                        // may have negative scale factors (optical flip). pixelSize is always
-                        // positive, so we need the sign from the parent's alignment transform.
-                        double signX = 1.0;
-                        double signY = 1.0;
-                        String baseName = entry.getMetadataValue(ImageMetadataManager.BASE_IMAGE);
-                        if (baseName != null && !baseName.isEmpty()) {
-                            AffineTransform parentTransform =
-                                    AffineTransformManager.loadSlideAlignment(project, baseName);
-                            if (parentTransform != null) {
-                                signX = parentTransform.getScaleX() < 0 ? -1.0 : 1.0;
-                                signY = parentTransform.getScaleY() < 0 ? -1.0 : 1.0;
-                                logger.debug("Parent alignment scale signs: X={}, Y={}", signX, signY);
-                            }
-                        }
+                        // may have negative scale factors (optical flip XOR stage inversion).
+                        // pixelSize is always positive, so we derive the direction sign from
+                        // the same flip/inversion preferences used to build the alignment.
+                        boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
+                        boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+                        boolean stageInvX = QPPreferenceDialog.getStageInvertedXProperty();
+                        boolean stageInvY = QPPreferenceDialog.getStageInvertedYProperty();
+                        double signX = (flipX ^ stageInvX) ? -1.0 : 1.0;
+                        double signY = (flipY ^ stageInvY) ? -1.0 : 1.0;
 
                         double targetX = offset[0] + centroidX * pixelSize * signX;
                         double targetY = offset[1] + centroidY * pixelSize * signY;
-                        logger.info("Sub-image centroid: pixel ({}, {}) * {}um * sign({}, {}) + offset ({}, {}) -> stage ({}, {})",
+                        logger.info("Sub-image centroid: pixel ({}, {}) * {}um * sign({}, {}) "
+                                        + "[flipX={} stageInvX={}, flipY={} stageInvY={}] "
+                                        + "+ offset ({}, {}) -> stage ({}, {})",
                                 String.format("%.1f", centroidX), String.format("%.1f", centroidY),
                                 String.format("%.4f", pixelSize),
                                 String.format("%.0f", signX), String.format("%.0f", signY),
+                                flipX, stageInvX, flipY, stageInvY,
                                 String.format("%.1f", offset[0]), String.format("%.1f", offset[1]),
                                 String.format("%.1f", targetX), String.format("%.1f", targetY));
                         moveToStagePosition(targetX, targetY);
