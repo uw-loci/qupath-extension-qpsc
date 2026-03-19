@@ -1243,7 +1243,8 @@ public class StageControlPanel extends TitledPane {
                 try {
                     @SuppressWarnings("unchecked")
                     Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
-                    ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+                    ProjectImageEntry<BufferedImage> entry =
+                            QPProjectFunctions.findImageInProject(project, gui.getImageData());
                     if (entry != null) {
                         double[] offset = ImageMetadataManager.getXYOffset(entry);
                         hasXYOffset = offset[0] != 0 || offset[1] != 0;
@@ -1314,7 +1315,9 @@ public class StageControlPanel extends TitledPane {
             try {
                 @SuppressWarnings("unchecked")
                 Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
-                ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+                // Use robust entry lookup (project.getEntry() alone can return null)
+                ProjectImageEntry<BufferedImage> entry =
+                        QPProjectFunctions.findImageInProject(project, gui.getImageData());
                 if (entry != null) {
                     double[] offset = ImageMetadataManager.getXYOffset(entry);
                     if (offset[0] != 0 || offset[1] != 0) {
@@ -1341,10 +1344,16 @@ public class StageControlPanel extends TitledPane {
                                 String.format("%.1f", targetX), String.format("%.1f", targetY));
                         moveToStagePosition(targetX, targetY);
                         return;
+                    } else {
+                        logger.info("Sub-image entry found but XY offset is (0,0): {}",
+                                entry.getImageName());
                     }
+                } else {
+                    logger.warn("Could not find project entry for current image - "
+                            + "sub-image offset navigation unavailable");
                 }
             } catch (Exception e) {
-                logger.debug("Could not use XY offset path: {}", e.getMessage());
+                logger.warn("Could not use XY offset path: {}", e.getMessage());
             }
         }
 

@@ -173,7 +173,7 @@ public class QPProjectFunctions {
      * Find an image in the project that matches the current ImageData.
      * This checks multiple ways to match images.
      */
-    private static ProjectImageEntry<BufferedImage> findImageInProject(
+    public static ProjectImageEntry<BufferedImage> findImageInProject(
             Project<BufferedImage> project, ImageData<BufferedImage> imageData) {
 
         if (project == null || imageData == null) {
