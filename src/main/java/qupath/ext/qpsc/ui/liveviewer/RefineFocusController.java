@@ -110,7 +110,8 @@ public class RefineFocusController {
             bestZ = startZ;
 
             callback.onStatusUpdate("Refine Focus: measuring baseline...", Outcome.IN_PROGRESS);
-            double baseMetric = measureFocus();
+            long ts = captureTimestamp();
+            double baseMetric = measureFocus(ts);
             double bestMetric = baseMetric;
             logger.info("Refine Focus: startZ={}, baseMetric={}, step={}, maxTravel={}",
                     fmt(startZ), fmt(baseMetric), fmt(initialStep), fmt(maxTravel));
@@ -121,17 +122,19 @@ public class RefineFocusController {
 
             // Try positive direction
             double testZPlus = startZ + initialStep;
+            ts = captureTimestamp();
             moveZ(testZPlus);
             settle();
-            double metricPlus = measureFocus();
+            double metricPlus = measureFocus(ts);
 
             if (cancelled) { moveAndFinish(bestZ, startZ, callback); return; }
 
             // Try negative direction
             double testZMinus = startZ - initialStep;
+            ts = captureTimestamp();
             moveZ(testZMinus);
             settle();
-            double metricMinus = measureFocus();
+            double metricMinus = measureFocus(ts);
 
             // Return to start before deciding
             moveZ(startZ);
@@ -203,9 +206,10 @@ public class RefineFocusController {
                     continue;
                 }
 
+                ts = captureTimestamp();
                 moveZ(targetZ);
                 settle();
-                double metric = measureFocus();
+                double metric = measureFocus(ts);
 
                 callback.onStatusUpdate(String.format(
                         "Refine Focus: step=%.1fum, metric=%.1f (best=%.1f)",
@@ -324,22 +328,31 @@ public class RefineFocusController {
     }
 
     /**
-     * Averages the focus metric over multiple frames for noise reduction.
+     * Measures focus using a frame captured after the pre-move timestamp.
+     * This ensures the frame reflects the current Z position, not a stale
+     * cached frame from before the stage moved.
+     *
+     * @param preMoveTimestamp timestamp of the frame cached before the move
      */
-    double measureFocus() throws InterruptedException {
+    double measureFocus(long preMoveTimestamp) throws InterruptedException {
         double sum = 0;
-        long lastTimestamp = 0;
+        long lastTs = preMoveTimestamp;
         for (int i = 0; i < FRAMES_TO_AVERAGE; i++) {
-            FrameData frame = waitForFreshFrame(lastTimestamp);
+            FrameData frame = waitForFreshFrame(lastTs);
             if (frame == null) {
-                // Use whatever we have
                 frame = frameSupplier.get();
                 if (frame == null) return 0;
             }
-            lastTimestamp = frame.timestampMs();
+            lastTs = frame.timestampMs();
             sum += computeFocusMetric(frame);
         }
         return sum / FRAMES_TO_AVERAGE;
+    }
+
+    /** Captures the current frame timestamp (call before moveZ). */
+    long captureTimestamp() {
+        FrameData f = frameSupplier.get();
+        return (f != null) ? f.timestampMs() : 0;
     }
 
     /**
