@@ -355,8 +355,10 @@ public class LiveViewerWindow {
         imageView.setPreserveRatio(true);
         imageView.setSmooth(false); // Nearest-neighbor for microscopy
 
-        // Double-click-to-center: click on image to move stage so that point becomes center
-        imageView.setOnMouseClicked(event -> {
+        // Double-click-to-center: click on image to move stage so that point becomes center.
+        // Must use addEventFilter (capture phase) instead of setOnMouseClicked (bubble phase)
+        // because ScrollPane.setPannable(true) consumes mouse events during bubbling.
+        imageView.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, event -> {
             if (event.getClickCount() == 2) {
                 handleDoubleClickToCenter(event);
             }
