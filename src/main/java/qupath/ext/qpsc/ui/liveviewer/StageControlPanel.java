@@ -1324,22 +1324,37 @@ public class StageControlPanel extends TitledPane {
                         double pixelSize = gui.getImageData().getServer()
                                 .getPixelCalibration().getAveragedPixelSizeMicrons();
 
-                        // The sign accounts for optical flip XOR stage inversion (same logic
-                        // used to build the alignment transform's scale factors).
-                        boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
-                        boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
-                        boolean stageInvX = QPPreferenceDialog.getStageInvertedXProperty();
-                        boolean stageInvY = QPPreferenceDialog.getStageInvertedYProperty();
-                        double signX = (flipX ^ stageInvX) ? -1.0 : 1.0;
-                        double signY = (flipY ^ stageInvY) ? -1.0 : 1.0;
+                        // Derive the pixel-to-stage direction from the parent alignment
+                        // transform's scale signs. The alignment bakes in the combined
+                        // effect of optical flip and stage inversion; reading preferences
+                        // directly is unreliable (persisted stageInverted may differ from
+                        // auto-detected values).
+                        double signX = 1.0;
+                        double signY = 1.0;
+                        String baseName = entry.getMetadataValue(ImageMetadataManager.BASE_IMAGE);
+                        if (baseName != null && !baseName.isEmpty()) {
+                            AffineTransform parentTransform =
+                                    AffineTransformManager.loadSlideAlignment(project, baseName);
+                            if (parentTransform != null) {
+                                signX = parentTransform.getScaleX() < 0 ? -1.0 : 1.0;
+                                signY = parentTransform.getScaleY() < 0 ? -1.0 : 1.0;
+                            } else {
+                                logger.warn("Could not load parent alignment for '{}' "
+                                        + "- defaulting sign to +1", baseName);
+                            }
+                        } else {
+                            logger.warn("No base_image metadata on entry '{}' "
+                                    + "- defaulting sign to +1", entry.getImageName());
+                        }
 
                         double targetX = offset[0] + centroidX * pixelSize * signX;
                         double targetY = offset[1] + centroidY * pixelSize * signY;
                         logger.info("Sub-image centroid: pixel ({}, {}) * {}um * sign({}, {}) "
-                                        + "+ offset ({}, {}) -> stage ({}, {})",
+                                        + "[base={}] + offset ({}, {}) -> stage ({}, {})",
                                 String.format("%.1f", centroidX), String.format("%.1f", centroidY),
                                 String.format("%.4f", pixelSize),
                                 String.format("%.0f", signX), String.format("%.0f", signY),
+                                baseName,
                                 String.format("%.1f", offset[0]), String.format("%.1f", offset[1]),
                                 String.format("%.1f", targetX), String.format("%.1f", targetY));
                         moveToStagePosition(targetX, targetY);
