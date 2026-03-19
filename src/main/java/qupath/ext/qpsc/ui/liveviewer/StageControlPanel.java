@@ -1321,10 +1321,14 @@ public class StageControlPanel extends TitledPane {
                         double pixelSize = gui.getImageData().getServer()
                                 .getPixelCalibration().getAveragedPixelSizeMicrons();
 
-                        // The XY offset was computed through the alignment transform, which
-                        // may have negative scale factors (optical flip XOR stage inversion).
-                        // pixelSize is always positive, so we derive the direction sign from
-                        // the same flip/inversion preferences used to build the alignment.
+                        // The XY offset stores the stage position of the annotation's
+                        // top-left corner. But the stitched image's pixel (0,0) is offset
+                        // from that by half a camera FOV, because TileConfiguration writes
+                        // tile centroids while the stitcher treats them as corner positions.
+                        // Correct by subtracting half-FOV from the centroid's physical offset.
+                        //
+                        // The sign accounts for optical flip XOR stage inversion (same logic
+                        // used to build the alignment transform's scale factors).
                         boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
                         boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
                         boolean stageInvX = QPPreferenceDialog.getStageInvertedXProperty();
@@ -1332,15 +1336,24 @@ public class StageControlPanel extends TitledPane {
                         double signX = (flipX ^ stageInvX) ? -1.0 : 1.0;
                         double signY = (flipY ^ stageInvY) ? -1.0 : 1.0;
 
-                        double targetX = offset[0] + centroidX * pixelSize * signX;
-                        double targetY = offset[1] + centroidY * pixelSize * signY;
-                        logger.info("Sub-image centroid: pixel ({}, {}) * {}um * sign({}, {}) "
-                                        + "[flipX={} stageInvX={}, flipY={} stageInvY={}] "
-                                        + "+ offset ({}, {}) -> stage ({}, {})",
+                        // Half-FOV correction: stitched pixel (0,0) is half a FOV before
+                        // the annotation corner due to tile centroid-vs-corner convention
+                        double halfFovX = cachedFovUm[0] / 2.0;
+                        double halfFovY = cachedFovUm[1] / 2.0;
+                        if (halfFovX <= 0 || halfFovY <= 0) {
+                            queryFov();
+                            halfFovX = cachedFovUm[0] / 2.0;
+                            halfFovY = cachedFovUm[1] / 2.0;
+                        }
+
+                        double targetX = offset[0] + signX * (centroidX * pixelSize - halfFovX);
+                        double targetY = offset[1] + signY * (centroidY * pixelSize - halfFovY);
+                        logger.info("Sub-image centroid: pixel ({}, {}) * {}um - halfFOV({}, {}) "
+                                        + "* sign({}, {}) + offset ({}, {}) -> stage ({}, {})",
                                 String.format("%.1f", centroidX), String.format("%.1f", centroidY),
                                 String.format("%.4f", pixelSize),
+                                String.format("%.1f", halfFovX), String.format("%.1f", halfFovY),
                                 String.format("%.0f", signX), String.format("%.0f", signY),
-                                flipX, stageInvX, flipY, stageInvY,
                                 String.format("%.1f", offset[0]), String.format("%.1f", offset[1]),
                                 String.format("%.1f", targetX), String.format("%.1f", targetY));
                         moveToStagePosition(targetX, targetY);
