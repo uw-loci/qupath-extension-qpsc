@@ -1331,7 +1331,7 @@ public class StageControlPanel extends TitledPane {
                         // auto-detected values).
                         double signX = 1.0;
                         double signY = 1.0;
-                        String baseName = entry.getMetadataValue(ImageMetadataManager.BASE_IMAGE);
+                        String baseName = entry.getMetadata().get(ImageMetadataManager.BASE_IMAGE);
                         if (baseName != null && !baseName.isEmpty()) {
                             AffineTransform parentTransform =
                                     AffineTransformManager.loadSlideAlignment(project, baseName);
