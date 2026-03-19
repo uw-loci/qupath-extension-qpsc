@@ -65,6 +65,7 @@ public class LiveViewerWindow {
     private Label cursorLabel;
     private Button liveToggleButton;
     private Button refineFocusButton;
+    private Button sweepFocusButton;
     private ComboBox<String> focusRangeCombo;
     private HistogramView histogramView;
     private TitledPane histogramPane;
@@ -72,8 +73,9 @@ public class LiveViewerWindow {
     private StageControlPanel stageControlPanel;
     private final ContrastSettings contrastSettings = new ContrastSettings();
 
-    // Refine focus
+    // Focus controllers
     private RefineFocusController refineFocusController;
+    private SweepFocusController sweepFocusController;
 
     // Live mode state (camera streaming on/off, independent of window visibility)
     private volatile boolean liveActive = false;
@@ -287,6 +289,13 @@ public class LiveViewerWindow {
         refineFocusButton.setDisable(true); // disabled until live is ON
         refineFocusButton.setOnAction(e -> handleRefineFocus());
 
+        sweepFocusButton = new Button("Sweep Focus");
+        sweepFocusButton.setTooltip(new Tooltip(
+                "Continuous Z sweep autofocus. Ramps Z while streaming "
+                        + "frames to find the best focus in one pass."));
+        sweepFocusButton.setDisable(true);
+        sweepFocusButton.setOnAction(e -> handleSweepFocus());
+
         focusRangeCombo = new ComboBox<>();
         focusRangeCombo.getItems().addAll("Auto", "1um", "2um", "5um", "10um", "20um");
         focusRangeCombo.setValue("Auto");
@@ -345,7 +354,7 @@ public class LiveViewerWindow {
 
         Button docHelpButton = DocumentationHelper.createHelpButton("liveViewer");
 
-        HBox toolbar = new HBox(8, liveToggleButton, refineFocusButton, focusRangeCombo, spacer, scaleLabel, scaleCombo, collapseButton);
+        HBox toolbar = new HBox(8, liveToggleButton, refineFocusButton, sweepFocusButton, focusRangeCombo, spacer, scaleLabel, scaleCombo, collapseButton);
         if (docHelpButton != null) toolbar.getChildren().add(docHelpButton);
         toolbar.setPadding(new Insets(4, 8, 4, 8));
         toolbar.setAlignment(Pos.CENTER_LEFT);
@@ -551,9 +560,10 @@ public class LiveViewerWindow {
      * Must be called on FX thread.
      */
     private void updateRefineFocusButtonState() {
-        boolean focusRunning = refineFocusController != null && refineFocusController.isRunning();
-        if (focusRunning) {
-            // Keep showing cancel while running
+        boolean refineRunning = refineFocusController != null && refineFocusController.isRunning();
+        boolean sweepRunning = sweepFocusController != null && sweepFocusController.isRunning();
+        if (refineRunning || sweepRunning) {
+            // Keep showing cancel while either is running
             return;
         }
         boolean collapsed = collapsedPill != null && collapsedPill.isVisible();
@@ -561,6 +571,9 @@ public class LiveViewerWindow {
         refineFocusButton.setText("Refine Focus");
         refineFocusButton.setStyle("");
         refineFocusButton.setDisable(!enabled);
+        sweepFocusButton.setText("Sweep Focus");
+        sweepFocusButton.setStyle("");
+        sweepFocusButton.setDisable(!enabled);
         focusRangeCombo.setDisable(!enabled);
     }
 
@@ -642,6 +655,73 @@ public class LiveViewerWindow {
         focusThread.setDaemon(true);
         focusThread.setName("LiveViewer-RefineFocus");
         focusThread.start();
+    }
+
+    private void handleSweepFocus() {
+        if (sweepFocusController != null && sweepFocusController.isRunning()) {
+            sweepFocusController.cancel();
+            sweepFocusButton.setText("Cancelling...");
+            sweepFocusButton.setDisable(true);
+            return;
+        }
+
+        MicroscopeController controller = MicroscopeController.getInstance();
+        if (controller == null || !liveActive) {
+            updateStatus("Cannot sweep focus: not connected or live not active");
+            return;
+        }
+        if (controller.isAcquisitionActive()) {
+            updateStatus("Cannot sweep focus: acquisition in progress");
+            return;
+        }
+
+        double searchRange = 0;
+        String rangeSelection = focusRangeCombo.getValue();
+        if (rangeSelection != null && rangeSelection.endsWith("um")) {
+            try {
+                searchRange = Double.parseDouble(rangeSelection.replace("um", ""));
+            } catch (NumberFormatException ignored) { }
+        }
+
+        sweepFocusController = new SweepFocusController(
+                controller.getSocketClient(), () -> lastFrame, searchRange);
+
+        sweepFocusButton.setText("Cancel Sweep");
+        sweepFocusButton.setStyle("");
+        refineFocusButton.setDisable(true);
+        focusRangeCombo.setDisable(true);
+
+        RefineFocusController.StatusCallback callback = (msg, outcome) -> {
+            Platform.runLater(() -> {
+                boolean done = outcome != RefineFocusController.Outcome.IN_PROGRESS;
+                if (done) {
+                    updateStatusHeld(msg);
+                } else {
+                    updateStatus(msg);
+                }
+                if (done) {
+                    focusRangeCombo.setDisable(!liveActive);
+                    refineFocusButton.setDisable(!liveActive);
+                    if (stageControlPanel != null) {
+                        stageControlPanel.refreshPositions();
+                    }
+                    if (outcome == RefineFocusController.Outcome.FAILED) {
+                        sweepFocusButton.setText("FAILED");
+                        sweepFocusButton.setStyle("-fx-font-size: 11; -fx-base: #F44336;");
+                        sweepFocusButton.setDisable(!liveActive);
+                    } else {
+                        sweepFocusButton.setText("Sweep Focus");
+                        sweepFocusButton.setStyle("");
+                        sweepFocusButton.setDisable(!liveActive);
+                    }
+                }
+            });
+        };
+
+        Thread sweepThread = new Thread(() -> sweepFocusController.execute(callback));
+        sweepThread.setDaemon(true);
+        sweepThread.setName("LiveViewer-SweepFocus");
+        sweepThread.start();
     }
 
     /**

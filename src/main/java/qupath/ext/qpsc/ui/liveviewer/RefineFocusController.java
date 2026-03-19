@@ -24,8 +24,8 @@ public class RefineFocusController {
 
     // Configuration
     static final double MIN_STEP_UM = 0.1;
-    static final long SETTLE_TIME_MS = 150;
-    static final int FRAMES_TO_AVERAGE = 2;
+    static final long SETTLE_TIME_MS = 50; // reduced from 150: wait_for_device already blocks until settled
+    static final int FRAMES_TO_AVERAGE = 1; // reduced from 2: single frame is sufficient for P2-P98 metric
     static final double SATURATION_ABORT_PCT = 5.0;
     static final double IMPROVEMENT_THRESHOLD = 0.5; // min metric improvement (in bins)
 
@@ -338,9 +338,6 @@ public class RefineFocusController {
             }
             lastTimestamp = frame.timestampMs();
             sum += computeFocusMetric(frame);
-            if (i < FRAMES_TO_AVERAGE - 1) {
-                Thread.sleep(100); // wait for next distinct frame
-            }
         }
         return sum / FRAMES_TO_AVERAGE;
     }

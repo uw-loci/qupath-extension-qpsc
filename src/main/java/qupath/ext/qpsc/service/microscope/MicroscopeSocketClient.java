@@ -110,6 +110,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         GETZ("getz____"),
         /** Move Z stage */
         MOVEZ("move_z__"),
+        /** Move Z stage non-blocking (no wait for device) - for sweep focus */
+        MOVZNW("movznw__"),
+        /** Get Z position only (fast, no X/Y read) - for sweep focus */
+        GETZF("getzf___"),
         /** Move XY stage */
         MOVE("move____"),
         /** Get rotation angle in ticks */
@@ -802,6 +806,34 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         executeCommandOnAux(Command.MOVEZ, buffer.array(), 0);
         logger.info("Moved stage to Z position: {}", z);
+    }
+
+    /**
+     * Sets the Z stage target position without waiting for the device to arrive.
+     * The stage begins ramping toward the target immediately. Used by sweep focus.
+     *
+     * @param z Target Z coordinate in microns
+     * @throws IOException if communication fails
+     */
+    public void moveStageZNoWait(double z) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(4);
+        buffer.order(ByteOrder.BIG_ENDIAN);
+        buffer.putFloat((float) z);
+        executeCommandOnAux(Command.MOVZNW, buffer.array(), 0);
+        logger.debug("Non-blocking Z move to: {}", z);
+    }
+
+    /**
+     * Gets the current Z position only (fast, no X/Y read). Used by sweep focus.
+     *
+     * @return Z position in microns
+     * @throws IOException if communication fails
+     */
+    public double getStageZFast() throws IOException {
+        byte[] response = executeCommandOnAux(Command.GETZF, null, 4);
+        ByteBuffer buf = ByteBuffer.wrap(response);
+        buf.order(ByteOrder.BIG_ENDIAN);
+        return buf.getFloat();
     }
 
     /**
