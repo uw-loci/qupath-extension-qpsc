@@ -1347,15 +1347,26 @@ public class StageControlPanel extends TitledPane {
                                     + "- defaulting sign to +1", entry.getImageName());
                         }
 
-                        double targetX = offset[0] + centroidX * pixelSize * signX;
-                        double targetY = offset[1] + centroidY * pixelSize * signY;
-                        logger.info("Sub-image centroid: pixel ({}, {}) * {}um * sign({}, {}) "
-                                        + "[base={}] + offset ({}, {}) -> stage ({}, {})",
+                        int imgW = gui.getImageData().getServer().getWidth();
+                        int imgH = gui.getImageData().getServer().getHeight();
+                        logger.info("Sub-image diagnostics: image={}x{} px, centroid=({}, {}), "
+                                        + "pixelSize={} um, offset=({}, {}), base={}, sign=({}, {})",
+                                imgW, imgH,
                                 String.format("%.1f", centroidX), String.format("%.1f", centroidY),
                                 String.format("%.4f", pixelSize),
-                                String.format("%.0f", signX), String.format("%.0f", signY),
-                                baseName,
                                 String.format("%.1f", offset[0]), String.format("%.1f", offset[1]),
+                                baseName,
+                                String.format("%.0f", signX), String.format("%.0f", signY));
+                        logger.info("  centroid physical offset from origin: ({}, {}) um",
+                                String.format("%.1f", centroidX * pixelSize),
+                                String.format("%.1f", centroidY * pixelSize));
+                        logger.info("  image physical extent: ({}, {}) um",
+                                String.format("%.1f", imgW * pixelSize),
+                                String.format("%.1f", imgH * pixelSize));
+
+                        double targetX = offset[0] + centroidX * pixelSize * signX;
+                        double targetY = offset[1] + centroidY * pixelSize * signY;
+                        logger.info("  -> stage ({}, {})",
                                 String.format("%.1f", targetX), String.format("%.1f", targetY));
                         moveToStagePosition(targetX, targetY);
                         return;
