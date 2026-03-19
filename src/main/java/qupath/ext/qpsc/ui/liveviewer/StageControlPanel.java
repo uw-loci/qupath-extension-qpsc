@@ -1393,7 +1393,46 @@ public class StageControlPanel extends TitledPane {
         }
 
         try {
-            double[] qpCoords = {centroidX, centroidY};
+            double adjustedX = centroidX;
+            double adjustedY = centroidY;
+
+            // The alignment was calibrated on the flipped image. If we're viewing the
+            // original (unflipped) image, convert the centroid to the flipped coordinate
+            // space before applying the transform.
+            if (gui.getProject() != null) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Project<BufferedImage> proj = (Project<BufferedImage>) gui.getProject();
+                    ProjectImageEntry<BufferedImage> currentEntry = proj.getEntry(gui.getImageData());
+                    if (currentEntry != null) {
+                        boolean imageFlipX = ImageMetadataManager.isFlippedX(currentEntry);
+                        boolean imageFlipY = ImageMetadataManager.isFlippedY(currentEntry);
+                        boolean prefFlipX = QPPreferenceDialog.getFlipMacroXProperty();
+                        boolean prefFlipY = QPPreferenceDialog.getFlipMacroYProperty();
+
+                        int imgWidth = gui.getImageData().getServer().getWidth();
+                        int imgHeight = gui.getImageData().getServer().getHeight();
+
+                        // If the preference says flip but the image isn't flipped,
+                        // we're on the original -- flip the centroid to match the
+                        // coordinate space the alignment was calibrated in.
+                        if (prefFlipX && !imageFlipX) {
+                            adjustedX = imgWidth - centroidX;
+                            logger.debug("Flipping centroid X: {} -> {} (image width={})",
+                                    centroidX, adjustedX, imgWidth);
+                        }
+                        if (prefFlipY && !imageFlipY) {
+                            adjustedY = imgHeight - centroidY;
+                            logger.debug("Flipping centroid Y: {} -> {} (image height={})",
+                                    centroidY, adjustedY, imgHeight);
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.debug("Could not check image flip state: {}", e.getMessage());
+                }
+            }
+
+            double[] qpCoords = {adjustedX, adjustedY};
             double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(qpCoords, transform);
             moveToStagePosition(stageCoords[0], stageCoords[1]);
         } catch (Exception ex) {
