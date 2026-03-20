@@ -5,6 +5,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.ObjectiveUtils;
 
 /**
@@ -391,6 +392,11 @@ public class AcquisitionCommandBuilder {
                     "--af-tiles", String.valueOf(autofocusNTiles),
                     "--af-steps", String.valueOf(autofocusNSteps),
                     "--af-range", String.valueOf(autofocusSearchRange)));
+        }
+
+        // Add save-raw flag if enabled in preferences
+        if (QPPreferenceDialog.getSaveRawTilesProperty()) {
+            args.addAll(Arrays.asList("--save-raw", "true"));
         }
 
         // Add processing pipeline

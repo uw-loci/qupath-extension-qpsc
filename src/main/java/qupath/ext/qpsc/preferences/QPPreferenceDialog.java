@@ -78,6 +78,9 @@ public class QPPreferenceDialog {
             "tissueDetectionScriptProperty",
             extensionLocationProperty.getValue() + "/src/main/groovyScripts/DetectTissue.groovy");
 
+    private static final BooleanProperty saveRawTilesProperty =
+            PathPrefs.createPersistentPreference("saveRawTilesProperty", false);
+
     private static final StringProperty tileHandlingMethodProperty =
             PathPrefs.createPersistentPreference("tileHandlingProperty", "None");
     private static final DoubleProperty tileOverlapPercentProperty =
@@ -228,6 +231,13 @@ public class QPPreferenceDialog {
                 .choices(Arrays.asList("None", "Zip", "Delete"))
                 .category(CATEGORY)
                 .description("How to handle intermediate tiles: none, zip them, or delete them.")
+                .build());
+        items.add(new PropertyItemBuilder<>(saveRawTilesProperty, Boolean.class)
+                .name("Save Raw Tiles")
+                .category(CATEGORY)
+                .description("Save unprocessed (pre-background-correction) tile images.\n"
+                        + "Useful for troubleshooting background subtraction.\n"
+                        + "WARNING: Doubles file I/O time during acquisition.")
                 .build());
         items.add(new PropertyItemBuilder<>(tileOverlapPercentProperty, Double.class)
                 .name("Tile Overlap Percent")
@@ -552,6 +562,10 @@ public class QPPreferenceDialog {
 
     public static String getTileHandlingMethodProperty() {
         return tileHandlingMethodProperty.get();
+    }
+
+    public static boolean getSaveRawTilesProperty() {
+        return saveRawTilesProperty.get();
     }
 
     public static Double getTileOverlapPercentProperty() {
