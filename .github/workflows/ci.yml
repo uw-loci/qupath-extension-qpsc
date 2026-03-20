@@ -30,28 +30,16 @@ jobs:
           repository: uw-loci/qupath-extension-tiles-to-pyramid
           path: tiles-to-pyramid
 
-      - name: Build and publish tiles-to-pyramid to mavenLocal (Linux)
-        if: runner.os != 'Windows'
-        working-directory: tiles-to-pyramid
-        run: |
-          chmod +x gradlew
-          ./gradlew publishToMavenLocal
-
-      - name: Build and publish tiles-to-pyramid to mavenLocal (Windows)
-        if: runner.os == 'Windows'
-        working-directory: tiles-to-pyramid
-        run: ./gradlew publishToMavenLocal
-
       - name: Grant execute permission for gradlew
         if: runner.os != 'Windows'
         run: chmod +x gradlew
 
       - name: Build and test (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run ./gradlew build
+        run: xvfb-run ./gradlew build --include-build tiles-to-pyramid
         env:
           DISPLAY: ':99'
 
       - name: Build and test (Windows)
         if: runner.os == 'Windows'
-        run: ./gradlew build
+        run: ./gradlew build --include-build tiles-to-pyramid
