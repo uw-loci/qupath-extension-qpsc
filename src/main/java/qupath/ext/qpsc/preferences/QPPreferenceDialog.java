@@ -198,34 +198,29 @@ public class QPPreferenceDialog {
                         + "NOT the same as optical flip (Flip macro image Y).")
                 .build());
 
-        items.add(new PropertyItemBuilder<>(microscopeConfigFileProperty, String.class)
-                .propertyType(PropertyItemBuilder.PropertyType.FILE)
-                .name("Microscope Config File")
-                .category(CATEGORY)
-                .description("Path to YAML config describing your microscope setup.\n\n"
+        // File/directory preferences use custom FilePropertyItem to open the
+        // chooser at the current path's parent directory (ControlsFX's built-in
+        // file editor always defaults to the system root).
+        items.add(new FilePropertyItem(microscopeConfigFileProperty,
+                "Microscope Config File", CATEGORY,
+                "Path to YAML config describing your microscope setup.\n\n"
                         + "[!] REQUIRED: This must be set before connecting to the microscope server.\n"
-                        + "[!] CRITICAL: Using the wrong config could damage the microscope!")
-                .build());
+                        + "[!] CRITICAL: Using the wrong config could damage the microscope!",
+                false));
 
-        items.add(new PropertyItemBuilder<>(projectsFolderProperty, String.class)
-                .propertyType(PropertyItemBuilder.PropertyType.DIRECTORY)
-                .name("Projects Folder")
-                .category(CATEGORY)
-                .description("Root folder where slide projects and data are stored.")
-                .build());
-        items.add(new PropertyItemBuilder<>(extensionLocationProperty, String.class)
-                .propertyType(PropertyItemBuilder.PropertyType.DIRECTORY)
-                .name("Extension Location")
-                .category(CATEGORY)
-                .description("Directory of the extension, used to locate built-in scripts.")
-                .build());
+        items.add(new FilePropertyItem(projectsFolderProperty,
+                "Projects Folder", CATEGORY,
+                "Root folder where slide projects and data are stored.",
+                true));
+        items.add(new FilePropertyItem(extensionLocationProperty,
+                "Extension Location", CATEGORY,
+                "Directory of the extension, used to locate built-in scripts.",
+                true));
 
-        items.add(new PropertyItemBuilder<>(tissueDetectionScriptProperty, String.class)
-                .propertyType(PropertyItemBuilder.PropertyType.FILE)
-                .name("Tissue Detection Script")
-                .category(CATEGORY)
-                .description("Groovy script for tissue detection before imaging.")
-                .build());
+        items.add(new FilePropertyItem(tissueDetectionScriptProperty,
+                "Tissue Detection Script", CATEGORY,
+                "Groovy script for tissue detection before imaging.",
+                false));
 
         items.add(new PropertyItemBuilder<>(tileHandlingMethodProperty, String.class)
                 .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
