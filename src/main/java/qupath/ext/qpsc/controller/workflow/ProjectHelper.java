@@ -152,13 +152,18 @@ public class ProjectHelper {
                             ObjectiveUtils.createEnhancedFolderName(sample.modality(), sample.objective());
                     logger.info("Using enhanced modality for project: {} -> {}", sample.modality(), enhancedModality);
 
+                    // Add the image WITHOUT flip - ImageFlipHelper.validateAndFlipIfNeeded()
+                    // will create a separate flipped duplicate entry afterward.
+                    // Passing flip=true here would apply a virtual TransformedServer flip
+                    // AND set flip metadata, causing validateAndFlipIfNeeded to skip the
+                    // duplicate creation (it sees "already flipped" and returns early).
                     projectDetails = QPProjectFunctions.createAndOpenQuPathProject(
                             gui,
                             sample.projectsFolder().getAbsolutePath(),
                             actualSampleName,
                             enhancedModality,
-                            flippedX,
-                            flippedY);
+                            false,
+                            false);
 
                     // Restore preserved annotations if any (from standalone image workflow)
                     // This handles the case where user drew annotations before starting workflow
@@ -167,8 +172,10 @@ public class ProjectHelper {
                                 "Restoring {} preserved annotations after project creation",
                                 AnnotationPreservationService.getPreservedAnnotationCount());
 
-                        // Restore with flip transformation matching the image import
-                        boolean restored = AnnotationPreservationService.restoreAnnotations(gui, flippedX, flippedY);
+                        // Restore WITHOUT flip - the image was imported unflipped.
+                        // Annotations will be transformed when the flipped duplicate is created
+                        // by ImageFlipHelper.validateAndFlipIfNeeded() later in the workflow.
+                        boolean restored = AnnotationPreservationService.restoreAnnotations(gui, false, false);
 
                         if (restored) {
                             // Save the annotations to the project entry
