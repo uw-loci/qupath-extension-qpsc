@@ -35,6 +35,7 @@ import qupath.ext.qpsc.service.ManualFocusHandler;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.AnnotationAcquisitionDialog;
 import qupath.ext.qpsc.ui.DualProgressDialog;
+import qupath.ext.qpsc.ui.SaturationSummaryDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
@@ -808,14 +809,25 @@ public class AcquisitionManager {
                 case COMPLETED:
                     logger.info("Acquisition completed successfully for {}", annotation.getName());
 
-                    // Show saturation warning if any angles had saturation
+                    // Show saturation summary if any angles had saturation
                     String satSummary = socketClient.getFormattedSaturationSummary();
                     if (satSummary != null) {
                         logger.warn("Saturation detected during acquisition:\n{}", satSummary);
-                        Platform.runLater(() -> Dialogs.showWarningNotification(
-                                "Saturation Detected",
-                                "Some tiles had saturated pixels:\n" + satSummary
-                                        + "\nCheck the -7.0 deg angle -- recalibrate gain if needed."));
+                        // Check for detailed saturation report file
+                        String tileDir = java.nio.file.Paths.get(
+                                        state.projectInfo.getTempTileDirectory(), annotation.getName())
+                                .toString();
+                        String reportPath = tileDir + java.io.File.separator + "saturation_report.json";
+                        java.io.File reportFile = new java.io.File(reportPath);
+                        if (reportFile.exists()) {
+                            // Show detailed scrollable dialog with per-tile data
+                            SaturationSummaryDialog.show(reportPath, satSummary);
+                        } else {
+                            // Fallback: simple notification
+                            Platform.runLater(() -> Dialogs.showWarningNotification(
+                                    "Saturation Detected",
+                                    "Some tiles had saturated pixels:\n" + satSummary));
+                        }
                     }
                     return true;
 
