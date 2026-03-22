@@ -173,6 +173,9 @@ public class AffineTransform3D {
             // Fast path: invert XY and Z independently
             try {
                 AffineTransform inv2d = to2D().createInverse();
+                if (matrix[10] == 0.0) {
+                    throw new ArithmeticException("Cannot invert 3D transform: Z scale is zero");
+                }
                 double invZScale = 1.0 / matrix[10];
                 double invZOffset = -matrix[11] / matrix[10];
                 return from2D(inv2d, invZScale, invZOffset);

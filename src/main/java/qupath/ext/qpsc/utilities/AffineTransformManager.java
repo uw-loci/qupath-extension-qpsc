@@ -62,10 +62,10 @@ public class AffineTransformManager {
         private final Date createdDate;
         private final String notes;
         private final GreenBoxDetector.DetectionParams greenBoxParams;
-        /** Z scale factor for 3D transforms (default 1.0 = pass-through). */
-        private final double zScale;
-        /** Z offset for 3D transforms (default 0.0). */
-        private final double zOffset;
+        /** Z scale factor for 3D transforms (null = default 1.0 pass-through). Wrapper type for Gson backward compat. */
+        private final Double zScale;
+        /** Z offset for 3D transforms (null = default 0.0). Wrapper type for Gson backward compat. */
+        private final Double zOffset;
 
         public TransformPreset(
                 String name,
@@ -94,8 +94,8 @@ public class AffineTransformManager {
             this.createdDate = new Date();
             this.notes = notes;
             this.greenBoxParams = greenBoxParams;
-            this.zScale = zScale;
-            this.zOffset = zOffset;
+            this.zScale = (zScale == 1.0) ? null : zScale; // null = default 1.0 (omit from JSON)
+            this.zOffset = (zOffset == 0.0) ? null : zOffset; // null = default 0.0 (omit from JSON)
         }
         /**
          * Constructor without green box parameters.
@@ -135,24 +135,24 @@ public class AffineTransformManager {
             return greenBoxParams;
         }
 
-        /** Z scale factor (1.0 = no Z scaling, default for 2D presets). */
+        /** Z scale factor (1.0 = no Z scaling, default for 2D presets). Null-safe for old JSON. */
         public double getZScale() {
-            return zScale;
+            return zScale != null ? zScale : 1.0;
         }
 
-        /** Z offset in micrometers (0.0 = no offset, default for 2D presets). */
+        /** Z offset in micrometers (0.0 = no offset, default for 2D presets). Null-safe for old JSON. */
         public double getZOffset() {
-            return zOffset;
+            return zOffset != null ? zOffset : 0.0;
         }
 
         /** Whether this preset has non-default Z parameters. */
         public boolean has3DTransform() {
-            return zScale != 1.0 || zOffset != 0.0;
+            return getZScale() != 1.0 || getZOffset() != 0.0;
         }
 
         /** Creates an {@link AffineTransform3D} combining the 2D XY transform with Z scale/offset. */
         public AffineTransform3D getTransform3D() {
-            return AffineTransform3D.from2D(transform, zScale, zOffset);
+            return AffineTransform3D.from2D(transform, getZScale(), getZOffset());
         }
 
         @Override
