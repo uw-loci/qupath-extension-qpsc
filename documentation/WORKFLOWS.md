@@ -193,23 +193,22 @@ If annotations with classification labels exist, a dialog shows all available cl
 
 A consolidated dialog appears with several sections:
 
-The dialog is divided into collapsible sections (shown below). You can expand or collapse each section by clicking its header.
+The dialog is divided into six collapsible sections, numbered in the screenshot below. You can expand or collapse each section by clicking its header.
 
-![Acquire from Existing Image dialog -- Project, Hardware, and Alignment sections](images/Docs_ExistingImage_ConsolidatedDialog.png)
+![Acquire from Existing Image dialog with numbered sections](images/Docs_ExistingImage_ConsolidatedDialog.png)
 
-- **Project & Sample** -- The sample name defaults to the image filename. If no project is open, choose a projects folder. If a project is open, it will be reused automatically.
-- **Hardware Configuration** -- Select modality, objective, and detector (same as Bounded Acquisition).
-- **Alignment** -- Choose how to link image coordinates to stage positions:
+- **(1) Project & Sample** -- The sample name defaults to the image filename. If no project is open, choose a projects folder. If a project is open, it will be reused automatically.
+- **(2) Hardware Configuration** -- Select modality, objective, and detector (same as Bounded Acquisition).
+- **(3) Alignment Configuration** -- Choose how to link image coordinates to stage positions:
   - *Use existing transform* -- Select a previously saved alignment from the dropdown. A confidence indicator helps you decide if the transform is reliable.
   - *Create new alignment* -- Opens the alignment workflow to create a new transform.
-- **Refinement** -- Choose how much to verify the alignment before scanning:
+- **(4) Refinement Options** -- Choose how much to verify the alignment before scanning:
   - *No refinement* (fastest) -- Trust the saved transform and proceed immediately.
   - *Single-tile refinement* (recommended) -- Acquire one reference tile and visually verify its position. This catches small drift without a full re-alignment.
   - *Full manual alignment* -- Run the complete point-matching alignment process. Use this the first time or after hardware changes.
-- **White Balance** -- Select the white balance mode.
-- **Advanced Options** -- Override rotation angles, adjust green box detection parameters, or configure modality-specific settings.
+- **(5) Advanced Options** -- White balance mode, rotation angle overrides, green box detection parameters, and modality-specific settings.
 
-The dialog shows a preview with tile count, estimated time, and storage requirements for the selected annotations.
+**(6) Acquisition Preview** at the bottom shows tile count, estimated time, and storage requirements for the selected annotations.
 
 **5. Click OK to start.**
 
