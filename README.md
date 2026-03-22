@@ -35,7 +35,7 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
   - [White Balance Calibration (JAI/Prism Cameras)](#white-balance-calibration-jaiprism-cameras)
   - [Background Collection](#background-collection)
   - [Polarizer Calibration (PPM)](#polarizer-calibration-ppm)
-  - [Autofocus Settings Editor](#autofocus-settings-editor)
+  - [Autofocus Configuration Editor](#autofocus-settings-editor)
 - [Building from Source](#building-from-source)
 - [File Structure (For Developers)](#file-structure-for-developers)
 - [YAML Configuration](#yaml-configuration)
@@ -165,7 +165,7 @@ Open the **QP Scope** menu in QuPath to access all features:
 | [Collect Background Images](documentation/tools/background-collection.md) | After lamp changes, for flat-field correction |
 | [Polarizer Calibration](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/polarizer-calibration.md) | After hardware changes (PPM only) |
 | [PPM Reference Slide](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-reference-slide.md) | Hue-to-angle calibration from sunburst slide |
-| [Autofocus Settings Editor](documentation/tools/autofocus-editor.md) | Tune focus quality per objective |
+| [Autofocus Configuration Editor](documentation/tools/autofocus-editor.md) | Tune focus quality per objective |
 | [Autofocus Benchmark](documentation/tools/autofocus-benchmark.md) | Systematically find optimal autofocus settings |
 | [PPM Sensitivity Test](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-sensitivity-test.md) | Test rotation stage precision |
 | [PPM Birefringence Optimization](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-birefringence-optimization.md) | Find optimal polarizer angle for contrast |
@@ -573,7 +573,7 @@ rotation_angles:
 - After updating `ppm_pizstage_offset`, the optical angle convention (tick values) remains simple: 0°, 90°, 180°
 - Hardware automatically converts: `hardware_position = (tick * 1000) + ppm_pizstage_offset`
 
-### Autofocus Settings Editor
+### Autofocus Configuration Editor
 
 **Purpose**: Configure per-objective autofocus parameters in an easy-to-use GUI without manually editing YAML files.
 
@@ -594,7 +594,7 @@ rotation_angles:
 - To optimize autofocus frequency for different sample types
 
 **Workflow**:
-1. Select **"Autofocus Settings Editor..."** from menu
+1. Select **"Autofocus Configuration Editor..."** from menu
 2. Select objective from dropdown
 3. Edit parameters:
    - **n_steps**: Typical range 5-20 (default: 9-15 depending on objective)

@@ -61,7 +61,7 @@ public class MacroImageController {
 
             Dialog<AlignmentConfig> dialog = new Dialog<>();
             dialog.initModality(Modality.NONE);
-            dialog.setTitle("Microscope Alignment Setup");
+            dialog.setTitle("Microscope Alignment");
             dialog.setHeaderText("Create or verify microscope alignment between macro and main images");
             dialog.setGraphic(DocumentationHelper.createHelpButton("microscopeAlignment"));
             dialog.setResizable(true);

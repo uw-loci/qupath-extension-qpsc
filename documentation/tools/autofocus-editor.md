@@ -1,6 +1,6 @@
-# Autofocus Settings Editor
+# Autofocus Configuration Editor
 
-> Menu: Extensions > QP Scope > Utilities > Autofocus Settings Editor...
+> Menu: Extensions > QP Scope > Utilities > Autofocus Configuration Editor...
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
 
 ## Purpose
@@ -37,7 +37,7 @@ autofocus behavior for different sample types (e.g., thick vs. thin sections).
 
 ## Workflow
 
-1. Open the Autofocus Settings Editor from the menu.
+1. Open the Autofocus Configuration Editor from the menu.
 2. Select the objective you want to configure from the dropdown.
 3. Adjust **n_steps** -- the number of Z positions sampled during each autofocus run.
 4. Adjust **search_range_um** -- the total Z range (in um) over which focus is searched.

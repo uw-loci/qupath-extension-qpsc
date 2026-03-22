@@ -65,9 +65,9 @@ The system then:
 - **Quick mode** tests fewer combinations but finishes much faster. Use this for a
   rough estimate, then refine with full mode if needed.
 - After finding optimal parameters, apply them using the
-  [Autofocus Settings Editor](autofocus-editor.md).
+  [Autofocus Configuration Editor](autofocus-editor.md).
 
 ## See Also
 
-- [Autofocus Settings Editor](autofocus-editor.md) -- Apply the optimal parameters found by this benchmark
+- [Autofocus Configuration Editor](autofocus-editor.md) -- Apply the optimal parameters found by this benchmark
 - [All Tools](../UTILITIES.md) -- Complete utilities reference
