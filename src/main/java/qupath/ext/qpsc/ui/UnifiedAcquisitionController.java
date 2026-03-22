@@ -20,6 +20,8 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.modality.WbMode;
+import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
@@ -845,15 +847,12 @@ public class UnifiedAcquisitionController {
             whiteBalanceSection.setVisible(isJAI);
             whiteBalanceSection.setManaged(isJAI);
 
-            // Adjust ComboBox items based on modality
             String modality = modalityBox.getValue();
             boolean isPPM = modality != null && modality.toLowerCase().startsWith("ppm");
-            // All modes are available for PPM; for non-PPM, hide PPM-specific options
-            if (!isPPM && wbModeComboBox != null) {
-                if ("Per-angle (PPM)".equals(wbModeComboBox.getValue())
-                        || "Simple (90deg)".equals(wbModeComboBox.getValue())) {
-                    wbModeComboBox.setValue("Off");
-                }
+
+            // Filter WB modes based on background validity
+            if (wbModeComboBox != null && modality != null && detector != null) {
+                filterWbModesByBackgroundValidity(modality, detector, isPPM);
             }
 
             logger.debug(
@@ -861,6 +860,63 @@ public class UnifiedAcquisitionController {
                     isJAI,
                     isPPM,
                     whiteBalanceSection.isVisible());
+        }
+
+        /**
+         * Filter WB mode dropdown to only show modes with valid backgrounds.
+         * When background correction is disabled in config, all modes are shown.
+         */
+        private void filterWbModesByBackgroundValidity(String modality, String detector, boolean isPPM) {
+            String objectiveDisplay = objectiveBox.getValue();
+            String objective = objectiveDisplay != null ? extractIdFromDisplayString(objectiveDisplay) : null;
+            if (objective == null) {
+                return;
+            }
+
+            // Extract base modality for config lookup (e.g., "ppm_20x" -> "ppm")
+            String baseModality = modality.contains("_") ? modality.substring(0, modality.indexOf('_')) : modality;
+            boolean bgEnabled = configManager.isBackgroundCorrectionEnabled(baseModality);
+
+            String currentSelection = wbModeComboBox.getValue();
+            wbModeComboBox.getItems().clear();
+
+            if (bgEnabled) {
+                // Only show modes with valid backgrounds
+                String baseFolder = configManager.getBackgroundCorrectionFolder(baseModality);
+                if (baseFolder != null) {
+                    List<WbMode> validModes = BackgroundValidityChecker.getValidModes(
+                            baseFolder, baseModality, objective, detector, configManager);
+                    for (WbMode mode : validModes) {
+                        wbModeComboBox.getItems().add(mode.getDisplayName());
+                    }
+                    logger.debug("Filtered WB modes to {} valid options (BG correction enabled)", validModes.size());
+                } else {
+                    // No background folder configured -- show all modes
+                    for (WbMode mode : WbMode.values()) {
+                        if (isPPM || !isPpmOnlyMode(mode)) {
+                            wbModeComboBox.getItems().add(mode.getDisplayName());
+                        }
+                    }
+                }
+            } else {
+                // Background correction disabled -- show all modes
+                for (WbMode mode : WbMode.values()) {
+                    if (isPPM || !isPpmOnlyMode(mode)) {
+                        wbModeComboBox.getItems().add(mode.getDisplayName());
+                    }
+                }
+            }
+
+            // Restore previous selection or default
+            if (wbModeComboBox.getItems().contains(currentSelection)) {
+                wbModeComboBox.setValue(currentSelection);
+            } else if (!wbModeComboBox.getItems().isEmpty()) {
+                wbModeComboBox.setValue(wbModeComboBox.getItems().get(0));
+            }
+        }
+
+        private static boolean isPpmOnlyMode(WbMode mode) {
+            return mode == WbMode.SIMPLE || mode == WbMode.PER_ANGLE;
         }
 
         private void setupPreviewUpdateListeners() {
@@ -1204,13 +1260,7 @@ public class UnifiedAcquisitionController {
 
                 // Get white balance settings from ComboBox
                 String wbModeDisplay = wbModeComboBox != null ? wbModeComboBox.getValue() : "Per-angle (PPM)";
-                String wbMode =
-                        switch (wbModeDisplay) {
-                            case "Off" -> "off";
-                            case "Camera AWB" -> "camera_awb";
-                            case "Simple (90deg)" -> "simple";
-                            default -> "per_angle";
-                        };
+                String wbMode = WbMode.fromDisplayName(wbModeDisplay).getProtocolName();
                 boolean enableWhiteBalance = !"off".equals(wbMode);
                 boolean perAngleWhiteBalance = "per_angle".equals(wbMode);
 

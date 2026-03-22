@@ -24,7 +24,9 @@ import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.ppm.RotationManager;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.modality.WbMode;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
+import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
@@ -54,6 +56,7 @@ public class BackgroundCollectionController {
     private List<TextField> angleFields = new ArrayList<>(); // Track angle fields for PPM
     private BackgroundSettingsReader.BackgroundSettings existingBackgroundSettings;
     private Label backgroundValidationLabel;
+    private VBox wbValidityPanel;
 
     /**
      * Shows the background collection dialog and returns the result.
@@ -314,12 +317,17 @@ public class BackgroundCollectionController {
         backgroundValidationLabel.setWrapText(true);
         backgroundValidationLabel.setVisible(false); // Hidden until needed
 
+        // Per-WB-mode background validity panel
+        wbValidityPanel = new VBox(2);
+        wbValidityPanel.setPadding(new Insets(5, 0, 5, 0));
+
         content.getChildren()
                 .addAll(
                         instructionLabel,
                         new Separator(),
                         modalityPane,
                         wbModeRow,
+                        wbValidityPanel,
                         new Separator(),
                         exposureLabel,
                         backgroundValidationLabel,
@@ -374,7 +382,7 @@ public class BackgroundCollectionController {
                 if (!detectors.isEmpty()) {
                     String detector = detectors.iterator().next();
                     // Look up backgrounds for the currently selected WB mode
-                    String selectedWbMode = convertWbModeToProtocol(wbModeComboBox.getValue());
+                    String selectedWbMode = WbMode.fromDisplayName(wbModeComboBox.getValue()).getProtocolName();
                     existingBackgroundSettings = BackgroundSettingsReader.findBackgroundSettings(
                             baseBackgroundFolder, modality, objective, detector, selectedWbMode);
 
@@ -396,6 +404,9 @@ public class BackgroundCollectionController {
         } catch (Exception e) {
             logger.warn("Error searching for background settings", e);
         }
+
+        // Update per-WB-mode validity panel
+        updateWbValidityPanel(modality, objective);
 
         // Get default angles and exposures
         logger.debug("Requesting rotation angles for modality: {}", modality);
@@ -423,7 +434,7 @@ public class BackgroundCollectionController {
         getBackgroundCollectionDefaults(modality, objective, finalDetector)
                 .thenAccept(defaultExposures -> {
                     Platform.runLater(() -> {
-                        boolean perAngleWbEnabled = isPerAngleWbMode();
+                        boolean perAngleWbEnabled = WbMode.fromDisplayName(wbModeComboBox.getValue()) == WbMode.PER_ANGLE;
                         logger.info(
                                 "DEBUG: Inside callback - capturedSettings = {}, perAngleWB = {}",
                                 capturedSettings != null ? "FOUND" : "NULL",
@@ -595,6 +606,63 @@ public class BackgroundCollectionController {
         backgroundValidationLabel.setVisible(true);
     }
 
+    /**
+     * Update the per-WB-mode background validity panel.
+     * Shows which WB modes have valid backgrounds and which need attention.
+     */
+    private void updateWbValidityPanel(String modality, String objective) {
+        wbValidityPanel.getChildren().clear();
+
+        if (modality == null || objective == null) {
+            return;
+        }
+
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
+            String baseBackgroundFolder = configManager.getBackgroundCorrectionFolder(modality);
+
+            if (baseBackgroundFolder == null) {
+                return;
+            }
+
+            Set<String> detectors = configManager.getAvailableDetectorsForModalityObjective(modality, objective);
+            if (detectors.isEmpty()) {
+                return;
+            }
+            String detector = detectors.iterator().next();
+
+            List<BackgroundValidityChecker.WbModeValidity> validities =
+                    BackgroundValidityChecker.checkAllModes(
+                            baseBackgroundFolder, modality, objective, detector, configManager);
+
+            Label header = new Label("Background Status Per WB Mode:");
+            header.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
+            wbValidityPanel.getChildren().add(header);
+
+            for (var validity : validities) {
+                String prefix;
+                String color;
+                switch (validity.status()) {
+                    case NOT_NEEDED, VALID -> {
+                        prefix = "[OK]";
+                        color = "#2E7D32";
+                    }
+                    default -> {
+                        prefix = "[!!]";
+                        color = "#E65100";
+                    }
+                }
+                Label line = new Label(String.format(
+                        "  %s  %s -- %s", prefix, validity.mode().getDisplayName(), validity.message()));
+                line.setStyle("-fx-text-fill: " + color + "; -fx-font-size: 11px;");
+                wbValidityPanel.getChildren().add(line);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to check WB mode validity: {}", e.getMessage());
+        }
+    }
+
     private void updateObjectiveSelection(String modality) {
         logger.info("Updating objective selection for modality: {}", modality);
 
@@ -710,7 +778,7 @@ public class BackgroundCollectionController {
             }
 
             // Convert ComboBox selection to protocol string
-            String wbMode = convertWbModeToProtocol(wbModeComboBox.getValue());
+            String wbMode = WbMode.fromDisplayName(wbModeComboBox.getValue()).getProtocolName();
             boolean usePerAngleWB = "per_angle".equals(wbMode);
 
             logger.info("Background collection wbMode: {}", wbMode);
@@ -786,7 +854,7 @@ public class BackgroundCollectionController {
      * Priority order: 1. Config file (per-channel if WB enabled), 2. Preferences, 3. Fallback default
      */
     private double getBackgroundExposureDefault(double angle, String modality, String objective, String detector) {
-        boolean perAngleWbEnabled = isPerAngleWbMode();
+        boolean perAngleWbEnabled = WbMode.fromDisplayName(wbModeComboBox.getValue()) == WbMode.PER_ANGLE;
         logger.debug(
                 "Getting background collection exposure default for angle {} with modality={}, objective={}, detector={}, perAngleWB={}",
                 angle,
@@ -912,27 +980,6 @@ public class BackgroundCollectionController {
         } else {
             return "custom";
         }
-    }
-
-    /**
-     * Check if the current WB mode selection is per-angle (PPM).
-     */
-    private boolean isPerAngleWbMode() {
-        return wbModeComboBox != null && "Per-angle (PPM)".equals(wbModeComboBox.getValue());
-    }
-
-    /**
-     * Convert UI display string to protocol string for socket communication.
-     */
-    private static String convertWbModeToProtocol(String displayValue) {
-        if (displayValue == null) return "per_angle";
-        return switch (displayValue) {
-            case "Off" -> "off";
-            case "Camera AWB" -> "camera_awb";
-            case "Simple (90deg)" -> "simple";
-            case "Per-angle (PPM)" -> "per_angle";
-            default -> "per_angle";
-        };
     }
 
     /**

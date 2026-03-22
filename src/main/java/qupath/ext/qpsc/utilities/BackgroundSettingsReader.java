@@ -307,6 +307,78 @@ public class BackgroundSettingsReader {
     }
 
     /**
+     * Find all background settings across all WB-mode subdirectories for a given hardware combination.
+     *
+     * <p>Scans the base path for both legacy (flat) and WB-mode-specific background_settings.yml files.
+     * Returns a map keyed by WB mode protocol name (e.g., "per_angle", "simple").
+     * Legacy files with null wbMode are keyed by "unknown".
+     *
+     * @param baseBackgroundFolder The base background correction folder from config
+     * @param modality The modality name (e.g., "ppm")
+     * @param objective The objective ID
+     * @param detector The detector ID
+     * @return Map of WB mode protocol name to BackgroundSettings (never null, may be empty)
+     */
+    public static Map<String, BackgroundSettings> findAllBackgroundSettings(
+            String baseBackgroundFolder, String modality, String objective, String detector) {
+
+        Map<String, BackgroundSettings> result = new HashMap<>();
+
+        if (baseBackgroundFolder == null || modality == null || objective == null || detector == null) {
+            return result;
+        }
+
+        try {
+            String magnification = extractMagnificationFromObjective(objective);
+            String basePath = new File(
+                            baseBackgroundFolder, detector + File.separator + modality + File.separator + magnification)
+                    .getPath();
+
+            // Check legacy (flat) path
+            File legacySettings = new File(basePath, "background_settings.yml");
+            if (legacySettings.exists()) {
+                BackgroundSettings settings = readBackgroundSettings(legacySettings);
+                if (settings != null) {
+                    String key = settings.wbMode != null ? settings.wbMode : "unknown";
+                    result.put(key, settings);
+                    logger.debug("Found legacy background settings keyed as '{}'", key);
+                }
+            }
+
+            // Scan WB-mode subdirectories
+            File baseDir = new File(basePath);
+            if (baseDir.isDirectory()) {
+                File[] subdirs = baseDir.listFiles(File::isDirectory);
+                if (subdirs != null) {
+                    for (File subdir : subdirs) {
+                        File wbSettings = new File(subdir, "background_settings.yml");
+                        if (wbSettings.exists()) {
+                            BackgroundSettings settings = readBackgroundSettings(wbSettings);
+                            if (settings != null) {
+                                // Key by subdirectory name (which IS the WB mode protocol name)
+                                result.put(subdir.getName(), settings);
+                                logger.debug(
+                                        "Found WB-mode background settings in '{}' subdirectory", subdir.getName());
+                            }
+                        }
+                    }
+                }
+            }
+
+            logger.info(
+                    "Found background settings for {} WB modes under {}: {}",
+                    result.size(),
+                    basePath,
+                    result.keySet());
+
+        } catch (Exception e) {
+            logger.error("Error scanning for background settings", e);
+        }
+
+        return result;
+    }
+
+    /**
      * Check if the provided angle-exposure list matches the background settings.
      *
      * @param settings The background settings to compare against

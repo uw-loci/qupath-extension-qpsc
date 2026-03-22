@@ -1265,6 +1265,53 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * Get the calibration timestamp for a specific WB mode and hardware combination.
+     *
+     * <p>For "per_angle": reads calibration_targets.background_exposures.last_calibrated
+     * <p>For "simple": reads imaging_profiles.{modality}.{objective}.{detector}.simple_wb.last_calibrated
+     * <p>For "camera_awb" and "off": returns null (no calibration tracked).
+     *
+     * @param wbMode The WB mode protocol name (e.g., "per_angle", "simple")
+     * @param modality The modality name (e.g., "ppm")
+     * @param objective The objective ID
+     * @param detector The detector ID
+     * @return ISO timestamp string, or null if not found
+     */
+    @SuppressWarnings("unchecked")
+    public String getWbCalibrationTimestamp(String wbMode, String modality, String objective, String detector) {
+        if (wbMode == null || imageprocessingData == null) {
+            return null;
+        }
+
+        try {
+            if ("per_angle".equals(wbMode)) {
+                // calibration_targets.background_exposures.last_calibrated
+                Map<String, Object> calTargets = (Map<String, Object>) imageprocessingData.get("calibration_targets");
+                if (calTargets != null) {
+                    Map<String, Object> bgExposures = (Map<String, Object>) calTargets.get("background_exposures");
+                    if (bgExposures != null) {
+                        Object ts = bgExposures.get("last_calibrated");
+                        if (ts != null) {
+                            return ts.toString();
+                        }
+                    }
+                }
+            } else if ("simple".equals(wbMode)) {
+                // imaging_profiles.{modality}.{objective}.{detector}.simple_wb.last_calibrated
+                Object result = getProfileSetting(modality, objective, detector, "simple_wb", "last_calibrated");
+                if (result != null) {
+                    return result.toString();
+                }
+            }
+            // "camera_awb" and "off" have no tracked calibration timestamp
+        } catch (Exception e) {
+            logger.debug("Error reading WB calibration timestamp for mode '{}': {}", wbMode, e.getMessage());
+        }
+
+        return null;
+    }
+
+    /**
      * Get all available modality names.
      */
     public Set<String> getAvailableModalities() {
