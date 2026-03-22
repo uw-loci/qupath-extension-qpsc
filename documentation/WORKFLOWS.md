@@ -73,7 +73,7 @@ Go to *Extensions -> QP Scope -> Bounded Acquisition*.
 
 QPSC connects to the microscope server automatically. If the connection fails, you will see an error -- start the server and try again.
 
-<!-- TODO: Add screenshot Docs_BoundedAcquisition.png -->
+![Bounded Acquisition dialog](images/Docs_BoundedAcquisition.png)
 
 **2. Configure sample and project.**
 
@@ -187,14 +187,18 @@ The menu item is only enabled when an image is open.
 
 If annotations with classification labels exist, a dialog shows all available classes with counts. Check the classes you want to include and click OK.
 
+![Annotation class selection dialog](images/Docs_AnnotationAcquisition.png)
+
 **4. Configure the acquisition.**
 
 A consolidated dialog appears with several sections:
 
-<!-- TODO: Add screenshot Docs_ExistingImage_ConsolidatedDialog.png -->
+The dialog is divided into collapsible sections (shown below). You can expand or collapse each section by clicking its header.
 
-- **Sample & Project** -- The sample name defaults to the image filename. If no project is open, choose a projects folder. If a project is open, it will be reused automatically.
-- **Hardware** -- Select modality, objective, and detector (same as Bounded Acquisition).
+![Acquire from Existing Image dialog -- Project, Hardware, and Alignment sections](images/Docs_ExistingImage_ConsolidatedDialog.png)
+
+- **Project & Sample** -- The sample name defaults to the image filename. If no project is open, choose a projects folder. If a project is open, it will be reused automatically.
+- **Hardware Configuration** -- Select modality, objective, and detector (same as Bounded Acquisition).
 - **Alignment** -- Choose how to link image coordinates to stage positions:
   - *Use existing transform* -- Select a previously saved alignment from the dropdown. A confidence indicator helps you decide if the transform is reliable.
   - *Create new alignment* -- Opens the alignment workflow to create a new transform.
