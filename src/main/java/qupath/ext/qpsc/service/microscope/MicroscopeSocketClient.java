@@ -110,6 +110,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         GETZ("getz____"),
         /** Move Z stage */
         MOVEZ("move_z__"),
+        /** Get XYZ stage position as single command */
+        GETXYZ("getxyz__"),
+        /** Move to XYZ position as single command */
+        MOVEXYZ("movexyz_"),
         /** Move Z stage non-blocking (no wait for device) - for sweep focus */
         MOVZNW("movznw__"),
         /** Get Z position only (fast, no X/Y read) - for sweep focus */
@@ -806,6 +810,44 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         executeCommandOnAux(Command.MOVEZ, buffer.array(), 0);
         logger.info("Moved stage to Z position: {}", z);
+    }
+
+    /**
+     * Gets the current XYZ stage position in a single command.
+     *
+     * @return Array of [x, y, z] in microns
+     * @throws IOException if communication fails
+     */
+    public double[] getStageXYZ() throws IOException {
+        byte[] response = executeCommandOnAux(Command.GETXYZ, null, 12);
+        ByteBuffer buffer = ByteBuffer.wrap(response);
+        buffer.order(ByteOrder.BIG_ENDIAN);
+        double x = buffer.getFloat();
+        double y = buffer.getFloat();
+        double z = buffer.getFloat();
+        logger.trace("Stage XYZ position: ({}, {}, {})", x, y, z);
+        return new double[] {x, y, z};
+    }
+
+    /**
+     * Moves the stage to the specified XYZ position in a single command.
+     *
+     * @param x Target X coordinate in microns
+     * @param y Target Y coordinate in microns
+     * @param z Target Z coordinate in microns
+     * @throws IOException if communication fails
+     */
+    public void moveStageXYZ(double x, double y, double z) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(12);
+        buffer.order(ByteOrder.BIG_ENDIAN);
+        buffer.putFloat((float) x);
+        buffer.putFloat((float) y);
+        buffer.putFloat((float) z);
+
+        long t0 = System.nanoTime();
+        executeCommandOnAux(Command.MOVEXYZ, buffer.array(), 0);
+        long elapsedMs = (System.nanoTime() - t0) / 1_000_000;
+        logger.info("moveStageXYZ({}, {}, {}) aux round-trip: {}ms", x, y, z, elapsedMs);
     }
 
     /**

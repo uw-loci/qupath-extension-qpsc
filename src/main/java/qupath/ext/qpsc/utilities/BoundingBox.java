@@ -125,29 +125,51 @@ public class BoundingBox {
     private final double y1;
     private final double x2;
     private final double y2;
+    private final double z1;
+    private final double z2;
+    private final boolean hasZ;
 
     /**
-     * Creates a new bounding box from two corner points.
+     * Creates a new 2D bounding box from two corner points.
      *
      * <p>The corner points can be specified in any order (e.g., top-left and bottom-right,
      * or bottom-left and top-right). The class automatically normalizes coordinates using
      * the {@link #getMinX()}, {@link #getMaxX()}, {@link #getMinY()}, and {@link #getMaxY()}
      * methods to ensure consistent geometric operations.</p>
      *
-     * <p><strong>Coordinate System Note:</strong> This constructor does not validate coordinates
-     * or perform unit conversions. Ensure that all coordinates are in the same coordinate system
-     * and units appropriate for your workflow context.</p>
-     *
-     * @param x1 X-coordinate of first corner (any numeric value)
-     * @param y1 Y-coordinate of first corner (any numeric value)
-     * @param x2 X-coordinate of second corner (any numeric value)
-     * @param y2 Y-coordinate of second corner (any numeric value)
+     * @param x1 X-coordinate of first corner
+     * @param y1 Y-coordinate of first corner
+     * @param x2 X-coordinate of second corner
+     * @param y2 Y-coordinate of second corner
      */
     public BoundingBox(double x1, double y1, double x2, double y2) {
         this.x1 = x1;
         this.y1 = y1;
         this.x2 = x2;
         this.y2 = y2;
+        this.z1 = 0;
+        this.z2 = 0;
+        this.hasZ = false;
+    }
+
+    /**
+     * Creates a new 3D bounding box from two corner points with Z range.
+     *
+     * @param x1 X-coordinate of first corner
+     * @param y1 Y-coordinate of first corner
+     * @param x2 X-coordinate of second corner
+     * @param y2 Y-coordinate of second corner
+     * @param z1 Z-coordinate of first corner (e.g., top of Z-stack)
+     * @param z2 Z-coordinate of second corner (e.g., bottom of Z-stack)
+     */
+    public BoundingBox(double x1, double y1, double x2, double y2, double z1, double z2) {
+        this.x1 = x1;
+        this.y1 = y1;
+        this.x2 = x2;
+        this.y2 = y2;
+        this.z1 = z1;
+        this.z2 = z2;
+        this.hasZ = true;
     }
 
     /**
@@ -274,5 +296,25 @@ public class BoundingBox {
      */
     public double getHeight() {
         return Math.abs(y2 - y1);
+    }
+
+    /** Whether this bounding box has Z bounds (3D mode). */
+    public boolean hasZBounds() {
+        return hasZ;
+    }
+
+    /** Minimum Z coordinate, or 0 if 2D. */
+    public double getMinZ() {
+        return Math.min(z1, z2);
+    }
+
+    /** Maximum Z coordinate, or 0 if 2D. */
+    public double getMaxZ() {
+        return Math.max(z1, z2);
+    }
+
+    /** Z depth (absolute range), or 0 if 2D. */
+    public double getDepth() {
+        return hasZ ? Math.abs(z2 - z1) : 0;
     }
 }

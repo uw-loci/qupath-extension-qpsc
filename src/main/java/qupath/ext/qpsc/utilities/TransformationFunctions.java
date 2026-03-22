@@ -128,6 +128,55 @@ public class TransformationFunctions {
     }
 
     /**
+     * Transforms QuPath full-resolution coordinates to stage micrometers (3D version).
+     *
+     * @param qpFullResCoords QuPath full-resolution coordinates [x, y, z]
+     * @param transform3d 3D transform mapping full-res to stage
+     * @return Stage coordinates in micrometers [x, y, z]
+     */
+    public static double[] transformQuPathFullResToStage(double[] qpFullResCoords, AffineTransform3D transform3d) {
+        if (qpFullResCoords == null || qpFullResCoords.length < 3) {
+            throw new IllegalArgumentException("3D coordinates must be [x, y, z]");
+        }
+        double[] result = transform3d.transform(qpFullResCoords);
+        logger.debug(
+                "QuPath full-res ({}, {}, {}) -> Stage ({}, {}, {})",
+                qpFullResCoords[0],
+                qpFullResCoords[1],
+                qpFullResCoords[2],
+                result[0],
+                result[1],
+                result[2]);
+        return result;
+    }
+
+    /**
+     * Transforms stage coordinates back to QuPath full-resolution pixels (3D version).
+     *
+     * @param stageCoords Stage coordinates in micrometers [x, y, z]
+     * @param transform3d 3D transform mapping full-res to stage (will be inverted)
+     * @return QuPath full-resolution coordinates [x, y, z]
+     * @throws IllegalStateException if transform is not invertible
+     */
+    public static double[] transformStageToQuPathFullRes(double[] stageCoords, AffineTransform3D transform3d) {
+        try {
+            AffineTransform3D inverse = transform3d.createInverse();
+            double[] result = inverse.transform(stageCoords);
+            logger.debug(
+                    "Stage ({}, {}, {}) -> QuPath full-res ({}, {}, {})",
+                    stageCoords[0],
+                    stageCoords[1],
+                    stageCoords[2],
+                    result[0],
+                    result[1],
+                    result[2]);
+            return result;
+        } catch (Exception e) {
+            throw new IllegalStateException("Cannot invert 3D transform", e);
+        }
+    }
+
+    /**
      * Transforms all PathObjects from the source hierarchy to the destination hierarchy.
      * This applies the appropriate transform to handle coordinate flipping between images.
      *

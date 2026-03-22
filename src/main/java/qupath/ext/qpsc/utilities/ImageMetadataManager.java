@@ -32,6 +32,7 @@ public class ImageMetadataManager {
     public static final String IMAGE_COLLECTION = "image_collection";
     public static final String XY_OFFSET_X = "xy_offset_x_microns";
     public static final String XY_OFFSET_Y = "xy_offset_y_microns";
+    public static final String Z_OFFSET = "z_offset_microns";
 
     // FLIP_X / FLIP_Y record the OPTICAL FLIP status of this image.
     // These indicate whether the microscope's light path mirrors the camera image
@@ -163,6 +164,7 @@ public class ImageMetadataManager {
         metadata.put(IMAGE_COLLECTION, collectionNumber);
         metadata.put(XY_OFFSET_X, String.valueOf(xOffset));
         metadata.put(XY_OFFSET_Y, String.valueOf(yOffset));
+        metadata.put(Z_OFFSET, String.valueOf(0.0)); // Z offset stored for voxel support
         metadata.put(FLIP_X, flipX ? "1" : "0");
         metadata.put(FLIP_Y, flipY ? "1" : "0");
 
@@ -445,6 +447,47 @@ public class ImageMetadataManager {
         } catch (Exception e) {
             logger.debug("Could not parse XY offset for {}: {}", entry.getImageName(), e.getMessage());
             return new double[] {0, 0};
+        }
+    }
+
+    /**
+     * Gets the XYZ offset for an image entry.
+     *
+     * @param entry The image entry
+     * @return Array of [x, y, z] offsets in microns, or [0, 0, 0] if not set
+     */
+    public static double[] getXYZOffset(ProjectImageEntry<?> entry) {
+        if (entry == null) {
+            return new double[] {0, 0, 0};
+        }
+
+        Map<String, String> metadata = entry.getMetadata();
+        try {
+            double x = Double.parseDouble(metadata.getOrDefault(XY_OFFSET_X, "0"));
+            double y = Double.parseDouble(metadata.getOrDefault(XY_OFFSET_Y, "0"));
+            double z = Double.parseDouble(metadata.getOrDefault(Z_OFFSET, "0"));
+            return new double[] {x, y, z};
+        } catch (Exception e) {
+            logger.debug("Could not parse XYZ offset for {}: {}", entry.getImageName(), e.getMessage());
+            return new double[] {0, 0, 0};
+        }
+    }
+
+    /**
+     * Gets the Z offset for an image entry.
+     *
+     * @param entry The image entry
+     * @return Z offset in microns, or 0.0 if not set
+     */
+    public static double getZOffset(ProjectImageEntry<?> entry) {
+        if (entry == null) {
+            return 0.0;
+        }
+        try {
+            String val = entry.getMetadata().get(Z_OFFSET);
+            return val != null ? Double.parseDouble(val) : 0.0;
+        } catch (NumberFormatException e) {
+            return 0.0;
         }
     }
 

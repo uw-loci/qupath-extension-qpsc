@@ -1312,6 +1312,32 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * Get the Z pixel size for a given objective.
+     *
+     * <p>Reads {@code pixel_size_z_um} from the objective config in YAML.
+     * Returns empty if not configured (2D-only mode).
+     *
+     * @param objective The objective ID
+     * @return Z pixel size in micrometers, or empty if not configured
+     */
+    public java.util.OptionalDouble getPixelSizeZ(String objective) {
+        List<Map<String, Object>> objectives = getHardwareObjectives();
+        if (objectives == null || objectives.isEmpty()) {
+            return java.util.OptionalDouble.empty();
+        }
+        for (Map<String, Object> obj : objectives) {
+            if (objective.equals(obj.get("id"))) {
+                Object zPixelSize = obj.get("pixel_size_z_um");
+                if (zPixelSize instanceof Number && ((Number) zPixelSize).doubleValue() > 0) {
+                    return java.util.OptionalDouble.of(((Number) zPixelSize).doubleValue());
+                }
+                return java.util.OptionalDouble.empty();
+            }
+        }
+        return java.util.OptionalDouble.empty();
+    }
+
+    /**
      * Get all available modality names.
      */
     public Set<String> getAvailableModalities() {

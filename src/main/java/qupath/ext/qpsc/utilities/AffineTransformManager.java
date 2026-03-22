@@ -62,6 +62,10 @@ public class AffineTransformManager {
         private final Date createdDate;
         private final String notes;
         private final GreenBoxDetector.DetectionParams greenBoxParams;
+        /** Z scale factor for 3D transforms (default 1.0 = pass-through). */
+        private final double zScale;
+        /** Z offset for 3D transforms (default 0.0). */
+        private final double zOffset;
 
         public TransformPreset(
                 String name,
@@ -70,6 +74,19 @@ public class AffineTransformManager {
                 AffineTransform transform,
                 String notes,
                 GreenBoxDetector.DetectionParams greenBoxParams) {
+            this(name, microscope, mountingMethod, transform, notes, greenBoxParams, 1.0, 0.0);
+        }
+
+        /** Full constructor with Z scale and offset for 3D transform support. */
+        public TransformPreset(
+                String name,
+                String microscope,
+                String mountingMethod,
+                AffineTransform transform,
+                String notes,
+                GreenBoxDetector.DetectionParams greenBoxParams,
+                double zScale,
+                double zOffset) {
             this.name = name;
             this.microscope = microscope;
             this.mountingMethod = mountingMethod;
@@ -77,6 +94,8 @@ public class AffineTransformManager {
             this.createdDate = new Date();
             this.notes = notes;
             this.greenBoxParams = greenBoxParams;
+            this.zScale = zScale;
+            this.zOffset = zOffset;
         }
         /**
          * Constructor without green box parameters.
@@ -114,6 +133,26 @@ public class AffineTransformManager {
 
         public GreenBoxDetector.DetectionParams getGreenBoxParams() {
             return greenBoxParams;
+        }
+
+        /** Z scale factor (1.0 = no Z scaling, default for 2D presets). */
+        public double getZScale() {
+            return zScale;
+        }
+
+        /** Z offset in micrometers (0.0 = no offset, default for 2D presets). */
+        public double getZOffset() {
+            return zOffset;
+        }
+
+        /** Whether this preset has non-default Z parameters. */
+        public boolean has3DTransform() {
+            return zScale != 1.0 || zOffset != 0.0;
+        }
+
+        /** Creates an {@link AffineTransform3D} combining the 2D XY transform with Z scale/offset. */
+        public AffineTransform3D getTransform3D() {
+            return AffineTransform3D.from2D(transform, zScale, zOffset);
         }
 
         @Override

@@ -67,6 +67,7 @@ public class AcquisitionCommandBuilder {
     private Double zStart;
     private Double zEnd;
     private Double zStep;
+    private Double zPixelSize; // Z pixel size in um (for OME-TIFF metadata)
 
     // Z-focus hint from prediction model (tilt correction)
     private Double hintZ;
@@ -260,6 +261,12 @@ public class AcquisitionCommandBuilder {
         return this;
     }
 
+    /** Set Z pixel size in micrometers for OME-TIFF metadata. */
+    public AcquisitionCommandBuilder zPixelSize(double zPixelSizeUm) {
+        this.zPixelSize = zPixelSizeUm;
+        return this;
+    }
+
     /**
      * Sets a predicted Z-focus hint from the tilt correction model.
      *
@@ -428,6 +435,9 @@ public class AcquisitionCommandBuilder {
             args.addAll(Arrays.asList("--z-start", String.valueOf(zStart)));
             args.addAll(Arrays.asList("--z-end", String.valueOf(zEnd)));
             args.addAll(Arrays.asList("--z-step", String.valueOf(zStep)));
+        }
+        if (zPixelSize != null) {
+            args.addAll(Arrays.asList("--z-pixel-size", String.valueOf(zPixelSize)));
         }
 
         // Add Z-focus hint from tilt prediction model
