@@ -807,6 +807,16 @@ public class AcquisitionManager {
             switch (finalState) {
                 case COMPLETED:
                     logger.info("Acquisition completed successfully for {}", annotation.getName());
+
+                    // Show saturation warning if any angles had saturation
+                    String satSummary = socketClient.getFormattedSaturationSummary();
+                    if (satSummary != null) {
+                        logger.warn("Saturation detected during acquisition:\n{}", satSummary);
+                        Platform.runLater(() -> Dialogs.showWarningNotification(
+                                "Saturation Detected",
+                                "Some tiles had saturated pixels:\n" + satSummary
+                                        + "\nCheck the -7.0 deg angle -- recalibrate gain if needed."));
+                    }
                     return true;
 
                 case CANCELLED:

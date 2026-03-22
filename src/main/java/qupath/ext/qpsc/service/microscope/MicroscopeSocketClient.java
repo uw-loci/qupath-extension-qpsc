@@ -78,6 +78,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
     // Final Z position from completed acquisition (for tilt correction model)
     private volatile Double lastAcquisitionFinalZ = null;
 
+    // Saturation summary from completed acquisition (format: "angle:sat/total:worst;...")
+    private volatile String lastSaturationSummary = null;
+
     // Reconnection handling
     private final ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "MicroscopeReconnect");
@@ -2740,7 +2743,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             // Read additional bytes if needed
             synchronized (socketLock) {
                 try {
-                    byte[] additionalBytes = new byte[64]; // Enough for "COMPLETED|final_z:1234.56"
+                    byte[] additionalBytes = new byte[256]; // Enough for final_z + saturation summary
                     int bytesRead = input.read(additionalBytes);
 
                     if (bytesRead > 0) {
@@ -2753,15 +2756,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 }
             }
 
-            // Parse final_z if present: "COMPLETED|final_z:1234.56"
+            // Parse final_z and saturation from: "COMPLETED|final_z:1234.56|sat:7.0:3/2404:21.6;..."
             lastFailureMessage = null;
             lastAcquisitionFinalZ = null;
+            lastSaturationSummary = null;
 
             if (stateStr.contains("|final_z:")) {
                 try {
                     int startIdx = stateStr.indexOf("|final_z:") + "|final_z:".length();
                     String zStr = stateStr.substring(startIdx).trim();
-                    // Handle potential trailing characters
+                    // Handle potential trailing pipe or other characters
                     int endIdx = 0;
                     while (endIdx < zStr.length()
                             && (Character.isDigit(zStr.charAt(endIdx))
@@ -2778,9 +2782,23 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 }
             }
 
+            // Parse saturation summary: "|sat:7.0:3/2404:21.6;-7.0:108/2404:49.6;90.0:0/2404:0.0"
+            if (stateStr.contains("|sat:")) {
+                int satIdx = stateStr.indexOf("|sat:") + "|sat:".length();
+                // Take everything after |sat: up to the next pipe or end
+                String satStr = stateStr.substring(satIdx);
+                int pipeIdx = satStr.indexOf('|');
+                if (pipeIdx >= 0) {
+                    satStr = satStr.substring(0, pipeIdx);
+                }
+                lastSaturationSummary = satStr.trim();
+                logger.info("Parsed saturation summary from COMPLETED status: {}", lastSaturationSummary);
+            }
+
             logger.info(
-                    "Received COMPLETED status{}",
-                    lastAcquisitionFinalZ != null ? " with final_z: " + lastAcquisitionFinalZ + " um" : "");
+                    "Received COMPLETED status{}{}",
+                    lastAcquisitionFinalZ != null ? " with final_z: " + lastAcquisitionFinalZ + " um" : "",
+                    lastSaturationSummary != null ? " with saturation data" : "");
             return AcquisitionState.COMPLETED;
         }
 
@@ -2817,6 +2835,62 @@ public class MicroscopeSocketClient implements AutoCloseable {
      */
     public void clearLastAcquisitionFinalZ() {
         lastAcquisitionFinalZ = null;
+        lastSaturationSummary = null;
+    }
+
+    /**
+     * Gets the raw saturation summary string from the last completed acquisition.
+     *
+     * <p>Format: "angle:saturated/total:worst_pct;angle:saturated/total:worst_pct"
+     * Example: "7.0:3/2404:21.6;-7.0:108/2404:49.6;90.0:0/2404:0.0"
+     *
+     * @return The saturation summary, or null if not available or no saturation occurred
+     */
+    public String getLastSaturationSummary() {
+        return lastSaturationSummary;
+    }
+
+    /**
+     * Formats the saturation summary as a human-readable multi-line string.
+     *
+     * @return Formatted saturation summary, or null if no data available
+     */
+    public String getFormattedSaturationSummary() {
+        if (lastSaturationSummary == null || lastSaturationSummary.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        boolean anySaturation = false;
+
+        String[] entries = lastSaturationSummary.split(";");
+        for (String entry : entries) {
+            // Format: "angle:saturated/total:worst_pct"
+            String[] parts = entry.split(":");
+            if (parts.length >= 3) {
+                String angle = parts[0];
+                String counts = parts[1]; // "3/2404"
+                String worst = parts[2];  // "21.6"
+
+                String[] countParts = counts.split("/");
+                int saturated = 0;
+                try {
+                    saturated = Integer.parseInt(countParts[0]);
+                } catch (NumberFormatException e) {
+                    // ignore
+                }
+
+                if (saturated > 0) {
+                    anySaturation = true;
+                    sb.append(String.format("  %s deg: %s tiles saturated (worst: %s%%)\n", angle, counts, worst));
+                }
+            }
+        }
+
+        if (!anySaturation) {
+            return null; // No saturation to report
+        }
+
+        return sb.toString().stripTrailing();
     }
 
     /**
