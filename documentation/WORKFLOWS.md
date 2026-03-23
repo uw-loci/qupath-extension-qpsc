@@ -73,14 +73,14 @@ Go to *Extensions -> QP Scope -> Bounded Acquisition*.
 
 QPSC connects to the microscope server automatically. If the connection fails, you will see an error -- start the server and try again.
 
-![Bounded Acquisition dialog](images/Docs_BoundedAcquisition.png)
+![Bounded Acquisition dialog with numbered sections](images/Docs_BoundedAcquisition.png)
 
-**2. Configure sample and project.**
+**2. Configure sample and project (section 1).**
 
 - **Sample Name** -- Give your acquisition a name (e.g., "Kidney_Section_01"). This becomes the project folder name. Invalid characters and Windows reserved names are blocked automatically.
 - **Projects Folder** -- If no QuPath project is currently open, choose where to create one. If a project is already open, QPSC adds the new image to it.
 
-**3. Select hardware.**
+**3. Select hardware (section 2).**
 
 - **Modality** -- Choose the imaging mode (e.g., "ppm_20x" for polarized light, "bf_10x" for brightfield). The available options come from your YAML configuration.
 - **Objective** -- Filters based on the selected modality.
@@ -88,22 +88,20 @@ QPSC connects to the microscope server automatically. If the connection fails, y
 
 These selections determine the camera field of view, pixel size, and available rotation angles.
 
-**4. Define the acquisition region.**
+**4. Define the acquisition region (section 3).**
 
 Two input modes are available:
 
 - *Start Point + Size* -- Enter a starting X/Y position (in micrometers) and the width/height of the region. Click **Get Stage Position** to auto-fill the start coordinates from the current stage location.
 - *Two Corners* -- Enter the coordinates of two opposite corners of the rectangle.
 
-The dialog shows a real-time preview of the tile grid, including the number of tiles, estimated acquisition time, and storage size.
+**5. Configure white balance and advanced options (section 4).**
 
-**5. Configure white balance mode.**
+Select a white balance mode from the dropdown. Options depend on your camera and modality. For PPM with a JAI camera, "per_angle" is recommended. Expand the Advanced section to override individual rotation angles or exposure times.
 
-Select a white balance mode from the dropdown. Options depend on your camera and modality. For PPM with a JAI camera, "per_angle" is recommended.
+**6. Review the acquisition preview (section 5).**
 
-**6. (Optional) Adjust advanced settings.**
-
-Expand the Advanced section to override individual rotation angles or exposure times if needed for this specific acquisition.
+The bottom section shows the tile grid summary: number of tiles, estimated acquisition time, and storage size.
 
 **7. Click OK to start.**
 
@@ -116,7 +114,7 @@ QPSC will:
 - Automatically stitch tiles when acquisition finishes.
 - Add the stitched image to the QuPath project.
 
-![Acquisition progress dialog](../images/Docs_AcquisitionWorkflowProgress.png)
+![Acquisition progress dialog](images/Docs_AcquisitionWorkflowProgress.png)
 
 **8. Review the result.**
 
@@ -221,7 +219,7 @@ QPSC will:
 - Acquire tiles for each annotated region in sequence.
 - Stitch each region and add the result to the project.
 
-![Acquisition progress dialog](../images/Docs_AcquisitionWorkflowProgress.png)
+![Acquisition progress dialog](images/Docs_AcquisitionWorkflowProgress.png)
 
 **6. Review results.**
 
@@ -310,7 +308,7 @@ The menu item is only enabled when a macro image is available (either directly f
 
 A dialog asks which microscope/scanner produced the overview image. This selection determines where the alignment is saved and which hardware parameters are used.
 
-![Microscope selection dialog](../images/Docs_MicroscopeAlignment_SelectSourceMicroscope.png)
+![Microscope selection dialog](images/Docs_MicroscopeAlignment_SelectSourceMicroscope.png)
 
 **2. Configure sample details.**
 
@@ -393,7 +391,9 @@ These tools should be configured before your first acquisition. Most only need t
 
 A guided dashboard that checks all prerequisites and walks you through the setup process. It shows live status indicators for server connection, white balance calibration, background collection, and alignment. If anything is missing, click the step to launch the appropriate tool. When everything is green, launch Bounded Acquisition or Existing Image directly from the wizard.
 
-![Acquisition Wizard dashboard](../images/Docs_AcquisitionWizard.png)
+![Acquisition Wizard dashboard with numbered sections](images/Docs_AcquisitionWizard.png)
+
+The numbered sections are: **(1)** Hardware Configuration (modality, objective, detector), **(2)** Server Connection status, **(3)** White Balance calibration status, **(4)** Background Correction status, **(5)** Microscope Alignment status, and **(6)** Start buttons for Bounded Acquisition or Existing Image workflows. Click any section with a warning icon to launch the appropriate setup tool.
 
 Full documentation: [Acquisition Wizard](tools/acquisition-wizard.md)
 
@@ -403,7 +403,7 @@ Full documentation: [Acquisition Wizard](tools/acquisition-wizard.md)
 
 Configure and test the socket connection between QuPath and the microscope server. Set the host address and port, test connectivity, configure timeouts, and set up push notifications (via ntfy.sh) so you receive alerts when long acquisitions finish or fail.
 
-![Communication Settings dialog](../images/Docs_CommunicationSettings.png)
+![Communication Settings dialog](images/Docs_CommunicationSettings.png)
 
 Full documentation: [Communication Settings](tools/server-connection.md)
 
@@ -415,7 +415,7 @@ Captures flat-field correction images that remove uneven illumination from acqui
 
 Run this whenever you change objectives, detectors, or illumination settings.
 
-![Background Collection dialog](../images/Docs_BackgroundCollection.png)
+![Background Collection dialog](images/Docs_BackgroundCollection.png)
 
 Full documentation: [Background Collection](tools/background-collection.md)
 
@@ -430,7 +430,7 @@ Calibrate per-channel (R, G, B) exposure times for JAI 3-CCD prism cameras. Supp
 
 Results are saved to YAML and used automatically by Background Collection and acquisition workflows.
 
-![White Balance Calibration dialog](../images/Docs_WhiteBalanceCalibration.png)
+![White Balance Calibration dialog](images/Docs_WhiteBalanceCalibration.png)
 
 Full documentation: [White Balance Calibration](tools/white-balance-calibration.md)
 
@@ -440,7 +440,7 @@ Full documentation: [White Balance Calibration](tools/white-balance-calibration.
 
 Configure autofocus parameters for each objective lens: search range, step size, scoring method, and interpolation. Good autofocus settings are essential for consistent image quality during acquisition.
 
-![Autofocus Configuration Editor](../images/Docs_AutofocusConfigurationEditor.png)
+![Autofocus Configuration Editor](images/Docs_AutofocusConfigurationEditor.png)
 
 Full documentation: [Autofocus Editor](tools/autofocus-editor.md)
 
@@ -470,8 +470,11 @@ A live camera feed window with integrated stage controls. Use it to visually nav
 - Per-channel saturation monitoring.
 - Saved stage position management.
 
-![Live Viewer window](../images/Docs_LiveViewer.png)
-![Live Viewer position controls](../images/Docs_LiveViewer_Position.png)
+![Live Viewer window with numbered regions](images/Docs_LiveViewer.png)
+
+Regions: **(1)** Toolbar -- Live toggle, Refine Focus, Sweep Focus buttons, display scaling. **(2)** Live image feed from the camera. **(3)** Stage Control panel -- XY/Z position, virtual joystick, step size, saved points. **(4)** Histogram and contrast controls -- RGB means, min/max sliders, auto-scale. **(5)** Status bar -- connection state, frame rate.
+
+![Live Viewer position controls detail](images/Docs_LiveViewer_Position.png)
 
 Full documentation: [Live Viewer](tools/live-viewer.md)
 
@@ -481,7 +484,7 @@ Full documentation: [Live Viewer](tools/live-viewer.md)
 
 A visual bird's-eye view of the microscope stage insert showing slide positions and the current objective location. The map updates in real time as the stage moves. Double-click anywhere on the map to navigate the stage to that position. Use the dropdown to switch between insert configurations (single slide, multi-slide).
 
-![Stage Map window](../images/Docs_StageMap.png)
+![Stage Map window](images/Docs_StageMap.png)
 
 Full documentation: [Stage Map](tools/stage-map.md)
 
