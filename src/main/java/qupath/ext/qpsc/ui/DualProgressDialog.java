@@ -299,7 +299,7 @@ public class DualProgressDialog {
         }
 
         if (filesCompleted > 0 && filesCompleted % 10 == 0) {
-            logger.debug("Current annotation progress: {}/{} files", filesCompleted, currentAnnotationExpectedFiles);
+            logger.info("Current annotation progress: {}/{} files", filesCompleted, currentAnnotationExpectedFiles);
         }
     }
 
@@ -569,25 +569,33 @@ public class DualProgressDialog {
 
         // Build informative display
         String estimate = formatTime(remainingSeconds);
-        if (logger.isDebugEnabled()) {
-            logger.debug(
-                    "Time estimate breakdown: {} tiles @ {}ms = {}ms, {} adaptive AF @ {}ms = {}ms, "
-                            + "{} full AF @ {}ms = {}ms, total = {}s",
-                    totalTilesRemaining,
-                    timing.baseTileTimeMs,
-                    tileTimeMs,
-                    totalRemainingAdaptiveAf,
-                    timing.adaptiveAfAddedTimeMs,
-                    adaptiveAfTimeMs,
-                    remainingFullAf,
-                    timing.fullAfAddedTimeMs,
-                    fullAfTimeMs,
-                    remainingSeconds);
-        }
 
         // Display remaining count in positions (divide by angle count)
         int angles = angleCount.get();
         int positionsRemaining = totalTilesRemaining / Math.max(1, angles);
+
+        // Log estimate breakdown periodically (every 25 tiles)
+        int totalCompleted = totalTilesCompleted.get();
+        if (totalCompleted > 0 && totalCompleted % 25 == 0) {
+            long elapsedMs = now - workflowStartTime.get();
+            double actualAvgMs = (double) elapsedMs / totalCompleted;
+            logger.info(
+                    "Time estimate: {} remaining ({} positions). "
+                            + "Breakdown: {} tiles @ {}ms/tile + {} AF @ {}ms + {} fullAF @ {}ms. "
+                            + "Actual avg: {}ms/tile over {} tiles ({}s elapsed)",
+                    estimate,
+                    positionsRemaining,
+                    totalTilesRemaining,
+                    timing.baseTileTimeMs,
+                    totalRemainingAdaptiveAf,
+                    timing.adaptiveAfAddedTimeMs,
+                    remainingFullAf,
+                    timing.fullAfAddedTimeMs,
+                    Math.round(actualAvgMs),
+                    totalCompleted,
+                    elapsedMs / 1000);
+        }
+
         timeLabel.setText(String.format(
                 "Time remaining: %s (%d positions, %d AF ops)",
                 estimate, positionsRemaining, totalRemainingAdaptiveAf + remainingFullAf));
