@@ -37,15 +37,17 @@ Only valid hardware combinations are shown via cascading selection.
 
 Two input modes are available:
 
-**Start Point + Size Mode:**
+**Center Point + Size Mode:**
+
+The center position defines the midpoint of the acquisition area. Tiles extend equally in all directions from this point.
 
 | Option | Type | Description |
 |--------|------|-------------|
-| Start X (um) | Spinner | Starting X coordinate in micrometers |
-| Start Y (um) | Spinner | Starting Y coordinate in micrometers |
-| Width (um) | Spinner | Region width in micrometers |
-| Height (um) | Spinner | Region height in micrometers |
-| Get Stage Position | Button | Populate start coordinates from current stage position |
+| Center X (um) | Text | Center X coordinate of the acquisition region in micrometers |
+| Center Y (um) | Text | Center Y coordinate of the acquisition region in micrometers |
+| Width (um) | Text | Total width of the acquisition region in micrometers |
+| Height (um) | Text | Total height of the acquisition region in micrometers |
+| Use Current Position as Center | Button | Set center coordinates from the current stage position (Live Viewer field of view center) |
 
 **Two Corners Mode:**
 

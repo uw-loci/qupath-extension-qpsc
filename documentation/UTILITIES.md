@@ -135,6 +135,40 @@ Measure camera noise statistics (mean, standard deviation, SNR) with Quick, Full
 
 ---
 
+## Internal Utilities
+
+### MacroImageAnalyzer (Tissue Detection)
+
+`MacroImageAnalyzer` provides automatic tissue detection on macro/overview images. It is called internally by the Existing Image workflow when no annotations are present and the user chooses "Run tissue detection."
+
+**Available Threshold Methods:**
+
+| Method | Description |
+|--------|-------------|
+| Otsu | Standard Otsu thresholding on grayscale |
+| Mean | Mean intensity threshold |
+| Percentile | Percentile-based threshold |
+| Fixed | User-specified fixed threshold value |
+| H&E Eosin / H&E Dual / Color Deconvolution | Color-space methods for stained tissue |
+| **Artifact-aware (ARTIFACT_FILTER)** | **Otsu with artifact masking and morphological cleanup** |
+
+**ARTIFACT_FILTER Method (default):**
+
+The artifact-aware method combines artifact masking with Otsu thresholding to handle slides that have pen marks, dust, or other non-tissue debris. The algorithm is inspired by LazySlide (Zheng et al. 2026, Nature Methods).
+
+**How it works:**
+1. For each pixel, compute an artifact score: `max(R-G, 0) * max(B-G, 0)`. Tissue is typically green-dominant (in grayscale terms), so pixels where both red and blue significantly exceed green are flagged as potential artifacts.
+2. Apply Otsu thresholding to the artifact score image to classify artifact vs. non-artifact pixels.
+3. Apply standard Otsu thresholding on the grayscale image for tissue vs. background segmentation.
+4. Combine: a pixel is classified as tissue only if it passes the grayscale threshold AND is not flagged as an artifact.
+5. Apply morphological cleanup (median filter + morphological closing) to remove noise and fill gaps.
+
+**Configuration:** The artifact filter parameters (median kernel size, closing kernel size, closing iterations) are configurable via Preferences. See [Tissue Detection Parameters](PREFERENCES.md#tissue-detection-parameters) for details.
+
+**No additional dependencies:** The artifact filter uses QuPath's bundled OpenCV -- no external libraries are required.
+
+---
+
 ## See Also
 
 - [Workflows Guide](WORKFLOWS.md) - Step-by-step workflow documentation

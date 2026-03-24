@@ -35,7 +35,21 @@ public class MacroImageAnalyzer {
         IJ_AUTO("ImageJ Auto threshold"),
         HE_EOSIN("H&E Eosin detection"),
         HE_DUAL("H&E Dual threshold"),
-        COLOR_DECONVOLUTION("Color deconvolution");
+        COLOR_DECONVOLUTION("Color deconvolution"),
+        /**
+         * Artifact-aware tissue detection using color channel differences.
+         * Computes max(R-G, 0) * max(B-G, 0) per pixel, then applies Otsu
+         * thresholding on the result. Effectively rejects non-tissue artifacts
+         * (pen marks, dust) that have unusual color properties.
+         * <p>
+         * Includes optional morphological cleanup (median blur + morphological close)
+         * for smoother tissue boundaries.
+         * <p>
+         * Algorithm inspired by LazySlide (MIT License).
+         * Zheng, Y. et al. Nature Methods (2026).
+         * <a href="https://doi.org/10.1038/s41592-026-03044-7">doi:10.1038/s41592-026-03044-7</a>
+         */
+        ARTIFACT_FILTER("Artifact-aware (LazySlide-inspired)");
 
         private final String description;
 
@@ -211,8 +225,10 @@ public class MacroImageAnalyzer {
         int threshold = calculateThreshold(macro, method, params);
         BufferedImage thresholded;
 
-        // For H&E methods, we need special handling
-        if (method == ThresholdMethod.HE_EOSIN
+        // Different handling for each method category
+        if (method == ThresholdMethod.ARTIFACT_FILTER) {
+            thresholded = applyArtifactFilter(macro, params);
+        } else if (method == ThresholdMethod.HE_EOSIN
                 || method == ThresholdMethod.HE_DUAL
                 || method == ThresholdMethod.COLOR_DECONVOLUTION) {
             thresholded = applyColorThreshold(macro, method, params);
@@ -268,8 +284,8 @@ public class MacroImageAnalyzer {
                 logger.warn("ImageJ auto threshold not implemented, using Otsu");
                 yield calculateOtsuThreshold(histogram);
             }
-            case HE_EOSIN, HE_DUAL, COLOR_DECONVOLUTION -> {
-                // These are handled separately in applyColorThreshold
+            case HE_EOSIN, HE_DUAL, COLOR_DECONVOLUTION, ARTIFACT_FILTER -> {
+                // These are handled separately in applyColorThreshold / applyArtifactFilter
                 yield 0;
             }
         };
@@ -519,6 +535,200 @@ public class MacroImageAnalyzer {
 
         // If there's significant color variation, it's likely stained tissue
         return colorfulness > 0.1;
+    }
+
+    /**
+     * Artifact-aware tissue detection using color channel difference filtering.
+     * <p>
+     * Algorithm inspired by LazySlide (MIT License).
+     * Zheng, Y. et al. Nature Methods (2026).
+     * https://doi.org/10.1038/s41592-026-03044-7
+     * <p>
+     * Computes max(R-G, 0) * max(B-G, 0) per pixel to identify non-tissue artifacts,
+     * then applies Otsu thresholding on the grayscale image with artifact masking.
+     * Includes morphological cleanup (median blur + morphological closing).
+     *
+     * @param image the RGB macro image
+     * @param params additional parameters (medianKernel, morphCloseKernel, morphCloseIter)
+     * @return binary thresholded image (black=tissue, white=background)
+     */
+    private static BufferedImage applyArtifactFilter(BufferedImage image, Map<String, Object> params) {
+        int width = image.getWidth();
+        int height = image.getHeight();
+
+        int medianKernel = (Integer) params.getOrDefault("medianKernel", 17);
+        int morphCloseKernel = (Integer) params.getOrDefault("morphCloseKernel", 7);
+        int morphCloseIter = (Integer) params.getOrDefault("morphCloseIter", 3);
+
+        // Step 1: Compute artifact filter image: max(R-G, 0) * max(B-G, 0)
+        // High values indicate artifacts (pen marks, dust with non-tissue color)
+        int[] artifactScores = new int[width * height];
+        int maxScore = 0;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int rgb = image.getRGB(x, y);
+                int r = (rgb >> 16) & 0xFF;
+                int g = (rgb >> 8) & 0xFF;
+                int b = rgb & 0xFF;
+
+                int rgDiff = Math.max(r - g, 0);
+                int bgDiff = Math.max(b - g, 0);
+                int score = rgDiff * bgDiff;
+                artifactScores[y * width + x] = score;
+                maxScore = Math.max(maxScore, score);
+            }
+        }
+
+        // Build artifact score histogram and apply Otsu to identify artifact regions
+        boolean[] isArtifact = new boolean[width * height];
+        if (maxScore > 0) {
+            int[] artifactHist = new int[256];
+            for (int i = 0; i < artifactScores.length; i++) {
+                int normalized = (int) ((long) artifactScores[i] * 255 / maxScore);
+                artifactHist[Math.min(normalized, 255)]++;
+            }
+            int artifactThreshold = calculateOtsuThreshold(artifactHist);
+            logger.info("Artifact filter Otsu threshold: {} (normalized)", artifactThreshold);
+
+            for (int i = 0; i < artifactScores.length; i++) {
+                int normalized = (int) ((long) artifactScores[i] * 255 / maxScore);
+                isArtifact[i] = normalized >= artifactThreshold;
+            }
+        }
+
+        // Step 2: Convert to grayscale and apply Otsu for tissue detection
+        BufferedImage gray = convertToGrayscale(image);
+        int[] grayHist = new int[256];
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int pixel = gray.getRGB(x, y) & 0xFF;
+                grayHist[pixel]++;
+            }
+        }
+        int tissueThreshold = calculateOtsuThreshold(grayHist);
+        logger.info("Tissue Otsu threshold: {}", tissueThreshold);
+
+        // Step 3: Create binary image (tissue = dark in grayscale AND not artifact)
+        int[] binaryPixels = new int[width * height];
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int idx = y * width + x;
+                int grayVal = gray.getRGB(x, y) & 0xFF;
+                boolean isTissue = grayVal < tissueThreshold && !isArtifact[idx];
+                binaryPixels[idx] = isTissue ? 1 : 0;
+            }
+        }
+
+        // Step 4: Morphological cleanup (median blur approximation + closing)
+        // Median blur: replace each pixel with the median of its neighborhood
+        if (medianKernel > 1) {
+            binaryPixels = applyMedianFilter(binaryPixels, width, height, medianKernel);
+        }
+
+        // Morphological closing: dilate then erode (fills small gaps in tissue)
+        for (int iter = 0; iter < morphCloseIter; iter++) {
+            binaryPixels = morphDilate(binaryPixels, width, height, morphCloseKernel);
+            binaryPixels = morphErode(binaryPixels, width, height, morphCloseKernel);
+        }
+
+        // Convert back to BufferedImage
+        BufferedImage binary = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_BINARY);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int pixel = binaryPixels[y * width + x] == 1 ? 0x000000 : 0xFFFFFF;
+                binary.setRGB(x, y, pixel);
+            }
+        }
+
+        logger.info("Artifact filter complete (medianK={}, morphCloseK={}, iter={})",
+                medianKernel, morphCloseKernel, morphCloseIter);
+        return binary;
+    }
+
+    /**
+     * Applies a median filter to a binary image.
+     * Simple implementation using a square kernel.
+     */
+    private static int[] applyMedianFilter(int[] pixels, int width, int height, int kernelSize) {
+        int[] result = new int[width * height];
+        int half = kernelSize / 2;
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int ones = 0;
+                int total = 0;
+                for (int ky = -half; ky <= half; ky++) {
+                    for (int kx = -half; kx <= half; kx++) {
+                        int ny = y + ky;
+                        int nx = x + kx;
+                        if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+                            ones += pixels[ny * width + nx];
+                            total++;
+                        }
+                    }
+                }
+                result[y * width + x] = (ones > total / 2) ? 1 : 0;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Morphological dilation on a binary int array.
+     */
+    private static int[] morphDilate(int[] pixels, int width, int height, int kernelSize) {
+        int[] result = new int[width * height];
+        int half = kernelSize / 2;
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                boolean found = false;
+                outer:
+                for (int ky = -half; ky <= half && !found; ky++) {
+                    for (int kx = -half; kx <= half && !found; kx++) {
+                        int ny = y + ky;
+                        int nx = x + kx;
+                        if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+                            if (pixels[ny * width + nx] == 1) {
+                                found = true;
+                            }
+                        }
+                    }
+                }
+                result[y * width + x] = found ? 1 : 0;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Morphological erosion on a binary int array.
+     */
+    private static int[] morphErode(int[] pixels, int width, int height, int kernelSize) {
+        int[] result = new int[width * height];
+        int half = kernelSize / 2;
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                boolean allSet = true;
+                for (int ky = -half; ky <= half && allSet; ky++) {
+                    for (int kx = -half; kx <= half && allSet; kx++) {
+                        int ny = y + ky;
+                        int nx = x + kx;
+                        if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+                            if (pixels[ny * width + nx] == 0) {
+                                allSet = false;
+                            }
+                        } else {
+                            // Treat out-of-bounds as background
+                            allSet = false;
+                        }
+                    }
+                }
+                result[y * width + x] = allSet ? 1 : 0;
+            }
+        }
+        return result;
     }
 
     /**

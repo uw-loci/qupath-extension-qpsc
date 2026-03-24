@@ -18,6 +18,11 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Projects Folder](#projects-folder) | Directory | - | Root folder for slide projects |
 | [Extension Location](#extension-location) | Directory | - | QPSC extension installation directory |
 | [Tissue Detection Script](#tissue-detection-script) | File | - | Optional Groovy script for tissue detection |
+| [Tissue Artifact Filter Enabled](#tissue-artifact-filter-enabled) | Boolean | ON | Use artifact-aware tissue detection |
+| [Tissue Two-Pass Refine](#tissue-two-pass-refine) | Boolean | OFF | Apply second refinement pass |
+| [Tissue Median Kernel](#tissue-median-kernel) | Integer | 17 | Median filter kernel size |
+| [Tissue Morph Close Kernel](#tissue-morph-close-kernel) | Integer | 7 | Morphological closing kernel size |
+| [Tissue Morph Close Iterations](#tissue-morph-close-iterations) | Integer | 3 | Morphological closing iterations |
 | [Tile Handling Method](#tile-handling-method) | Choice | None | How to handle intermediate tiles |
 | [Tile Overlap Percent](#tile-overlap-percent) | Double | 10.0 | Overlap between adjacent tiles |
 | [Compression type](#compression-type) | Choice | DEFAULT | OME pyramid compression |
@@ -235,6 +240,113 @@ Directory where the QPSC extension is installed. Used to locate built-in scripts
 
 **Description:**
 Optional Groovy script for automatic tissue detection before imaging. If specified, this script runs to identify tissue regions.
+
+---
+
+## Tissue Detection Parameters
+
+These settings control the built-in artifact-aware tissue detection algorithm used by `MacroImageAnalyzer`. The algorithm identifies tissue regions on macro/overview images while filtering out non-tissue artifacts such as pen marks, dust, and slide edge debris. Algorithm inspired by LazySlide (Zheng et al. 2026, Nature Methods).
+
+### Tissue Artifact Filter Enabled
+
+| Property | Value |
+|----------|-------|
+| Type | Boolean |
+| Default | ON |
+| Requires Restart | No |
+
+**Description:**
+When enabled, tissue detection uses the ARTIFACT_FILTER method which computes `max(R-G, 0) * max(B-G, 0)` per pixel to identify non-tissue artifacts (pen marks, dust, colored debris). Pixels with high artifact scores are excluded before applying Otsu thresholding on grayscale intensity for tissue segmentation.
+
+When disabled, tissue detection falls back to standard Otsu thresholding without artifact masking.
+
+**When to Enable:**
+- Slides with pen marks or colored labels near tissue
+- Samples with dust or debris on the coverslip
+- Any case where standard thresholding incorrectly includes non-tissue regions
+
+**When to Disable:**
+- Clean slides without artifacts
+- Samples where the artifact filter incorrectly masks tissue (e.g., tissue with unusual color properties)
+
+---
+
+### Tissue Two-Pass Refine
+
+| Property | Value |
+|----------|-------|
+| Type | Boolean |
+| Default | OFF |
+| Requires Restart | No |
+
+**Description:**
+When enabled, runs a second refinement pass after the initial tissue detection. The refinement pass can improve boundary accuracy for tissue regions with ambiguous edges.
+
+**When to Enable:**
+- Tissue regions have irregular or poorly defined boundaries
+- Initial detection includes too much background at tissue edges
+- High-precision region selection is required
+
+---
+
+### Tissue Median Kernel
+
+| Property | Value |
+|----------|-------|
+| Type | Integer |
+| Default | 17 |
+| Range | 3-51 (must be odd) |
+| Requires Restart | No |
+
+**Description:**
+Size of the median filter kernel applied to the binary tissue mask. The median filter removes salt-and-pepper noise (small isolated pixels) from the detection result. Larger values produce smoother masks but may lose fine tissue detail.
+
+**Recommended Ranges:**
+- **3-9**: Minimal smoothing, preserves small tissue fragments
+- **11-21**: Moderate smoothing (default range), good balance
+- **23-51**: Heavy smoothing, only large tissue regions retained
+
+**Note:** The value must be odd. If an even number is provided, it will be rounded to the nearest odd value internally.
+
+---
+
+### Tissue Morph Close Kernel
+
+| Property | Value |
+|----------|-------|
+| Type | Integer |
+| Default | 7 |
+| Range | 3-31 (must be odd) |
+| Requires Restart | No |
+
+**Description:**
+Size of the structuring element for morphological closing (dilation followed by erosion). Closing fills small gaps and holes within detected tissue regions. Larger kernels bridge larger gaps but may merge separate tissue fragments.
+
+**Recommended Ranges:**
+- **3-5**: Fills tiny holes only
+- **7-11**: Fills moderate gaps (default range), suitable for most tissue types
+- **13-31**: Fills large holes, may merge nearby tissue regions
+
+---
+
+### Tissue Morph Close Iterations
+
+| Property | Value |
+|----------|-------|
+| Type | Integer |
+| Default | 3 |
+| Range | 1-10 |
+| Requires Restart | No |
+
+**Description:**
+Number of times the morphological closing operation is repeated. More iterations progressively fill larger gaps and smooth tissue region boundaries.
+
+**Recommended Ranges:**
+- **1-2**: Light cleanup, preserves tissue boundaries closely
+- **3-5**: Moderate cleanup (default range), fills most internal holes
+- **6-10**: Aggressive cleanup, produces very smooth regions
+
+**Tip:** Increasing iterations has a similar effect to increasing the kernel size, but with finer control. Start with the default (3) and adjust if tissue regions appear fragmented.
 
 ---
 

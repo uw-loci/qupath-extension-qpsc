@@ -294,6 +294,62 @@ public class PersistentPreferences {
         tissueBrightnessMaxSaved.setValue(String.valueOf(brightness));
     }
 
+    // Artifact filter parameters (inspired by LazySlide, Zheng et al. 2026, Nature Methods)
+    private static final StringProperty tissueArtifactFilterEnabledSaved =
+            PathPrefs.createPersistentPreference("TissueArtifactFilterEnabled", "true");
+
+    private static final StringProperty tissueTwoPassRefineSaved =
+            PathPrefs.createPersistentPreference("TissueTwoPassRefine", "false");
+
+    private static final StringProperty tissueMedianKernelSaved =
+            PathPrefs.createPersistentPreference("TissueMedianKernel", "17");
+
+    private static final StringProperty tissueMorphCloseKernelSaved =
+            PathPrefs.createPersistentPreference("TissueMorphCloseKernel", "7");
+
+    private static final StringProperty tissueMorphCloseIterSaved =
+            PathPrefs.createPersistentPreference("TissueMorphCloseIter", "3");
+
+    public static boolean isTissueArtifactFilterEnabled() {
+        return Boolean.parseBoolean(tissueArtifactFilterEnabledSaved.getValue());
+    }
+
+    public static void setTissueArtifactFilterEnabled(final boolean enabled) {
+        tissueArtifactFilterEnabledSaved.setValue(String.valueOf(enabled));
+    }
+
+    public static boolean isTissueTwoPassRefine() {
+        return Boolean.parseBoolean(tissueTwoPassRefineSaved.getValue());
+    }
+
+    public static void setTissueTwoPassRefine(final boolean enabled) {
+        tissueTwoPassRefineSaved.setValue(String.valueOf(enabled));
+    }
+
+    public static int getTissueMedianKernel() {
+        return Integer.parseInt(tissueMedianKernelSaved.getValue());
+    }
+
+    public static void setTissueMedianKernel(final int kernel) {
+        tissueMedianKernelSaved.setValue(String.valueOf(kernel));
+    }
+
+    public static int getTissueMorphCloseKernel() {
+        return Integer.parseInt(tissueMorphCloseKernelSaved.getValue());
+    }
+
+    public static void setTissueMorphCloseKernel(final int kernel) {
+        tissueMorphCloseKernelSaved.setValue(String.valueOf(kernel));
+    }
+
+    public static int getTissueMorphCloseIter() {
+        return Integer.parseInt(tissueMorphCloseIterSaved.getValue());
+    }
+
+    public static void setTissueMorphCloseIter(final int iter) {
+        tissueMorphCloseIterSaved.setValue(String.valueOf(iter));
+    }
+
     // ================== EXISTING IMAGE WORKFLOW ==================
     private static final StringProperty macroImagePixelSizeInMicrons =
             PathPrefs.createPersistentPreference("macroImagePixelSizeInMicrons", "7.2");

@@ -92,7 +92,7 @@ These selections determine the camera field of view, pixel size, and available r
 
 Two input modes are available:
 
-- *Start Point + Size* -- Enter a starting X/Y position (in micrometers) and the width/height of the region. Click **Get Stage Position** to auto-fill the start coordinates from the current stage location.
+- *Center Point + Size* -- Enter the center X/Y position (in micrometers) and the width/height of the region. The acquisition area extends equally in all directions from the center point. Click **Use Current Position as Center** to set the center to the current stage location.
 - *Two Corners* -- Enter the coordinates of two opposite corners of the rectangle.
 
 **5. Configure white balance and advanced options (section 4).**
@@ -231,7 +231,7 @@ Each annotated region produces a separate stitched image in the project. Images 
 
 If you start the workflow without annotations, QPSC presents three options:
 
-- **Run tissue detection** -- QPSC applies automatic tissue detection to find regions of interest. Detected regions become annotations with the "Tissue" class.
+- **Run tissue detection** -- QPSC applies automatic tissue detection to find regions of interest. Detected regions become annotations with the "Tissue" class. By default, this uses the artifact-aware ARTIFACT_FILTER method, which masks out pen marks, dust, and other non-tissue debris before thresholding. The artifact filter and its morphological cleanup parameters can be tuned in Preferences (see [Tissue Detection Parameters](PREFERENCES.md#tissue-detection-parameters)).
 - **Draw annotations manually** -- The dialog waits while you draw annotations in QuPath, then re-checks for them.
 - **Cancel** -- Exit the workflow to prepare the image further.
 

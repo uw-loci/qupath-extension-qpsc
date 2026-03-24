@@ -91,6 +91,7 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 
 ### Technical Features
 
+- **Artifact-Aware Tissue Detection**: Automatic tissue detection with artifact filtering that masks out pen marks, dust, and debris using a color-based scoring algorithm (inspired by LazySlide, Zheng et al. 2026, Nature Methods). Configurable morphological cleanup parameters.
 - **Automatic Stitching**: Tiles are automatically stitched into pyramidal OME-TIFF/OME-ZARR images
 - **Project Integration**: Acquired images automatically added to your QuPath project
 - **Real-time Progress**: Live feedback during acquisition via socket communication with CONFIG handshake validation

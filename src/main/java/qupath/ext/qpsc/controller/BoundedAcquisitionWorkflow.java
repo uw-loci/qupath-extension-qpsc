@@ -476,21 +476,23 @@ public class BoundedAcquisitionWorkflow {
                                 });
                     })
                     .exceptionally(ex -> {
-                        Throwable cause = ex.getCause();
-                        String message = cause != null ? cause.getMessage() : ex.getMessage();
+                        Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                        String message = cause.getMessage();
 
-                        if (message != null
-                                && (message.contains("BACKGROUND_MISMATCH_CANCELLED")
-                                        || message.contains("ANGLE_SELECTION_CANCELLED"))) {
-                            logger.info("Acquisition cancelled by user: {}", message);
+                        // User cancellation from dialogs (angle selection, background mismatch)
+                        // can arrive as CancellationException or as a message containing
+                        // specific cancel tokens.
+                        boolean isCancellation = cause instanceof java.util.concurrent.CancellationException
+                                || (message != null && (message.contains("BACKGROUND_MISMATCH_CANCELLED")
+                                        || message.contains("ANGLE_SELECTION_CANCELLED")));
+
+                        if (isCancellation) {
+                            logger.info("Acquisition cancelled by user");
                             Platform.runLater(() -> qupath.fx.dialogs.Dialogs.showInfoNotification(
                                     "Acquisition Cancelled", "Acquisition was cancelled by user request"));
                         } else {
                             logger.error("Workflow failed", ex);
-                            String msg = ex.getMessage();
-                            if (msg == null || msg.isEmpty()) {
-                                msg = cause != null ? cause.getMessage() : "Unknown error occurred";
-                            }
+                            String msg = message != null ? message : "Unknown error occurred";
                             final String finalErrorMsg = msg;
                             Platform.runLater(() -> UIFunctions.notifyUserOfError(finalErrorMsg, "Acquisition Error"));
                         }

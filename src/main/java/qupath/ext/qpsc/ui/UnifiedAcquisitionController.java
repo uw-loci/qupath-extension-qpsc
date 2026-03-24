@@ -419,7 +419,7 @@ public class UnifiedAcquisitionController {
 
             // Mode selection toggle
             ToggleGroup modeGroup = new ToggleGroup();
-            startSizeMode = new RadioButton("Start Point + Size");
+            startSizeMode = new RadioButton("Center Point + Size");
             twoCornersMode = new RadioButton("Two Corners");
             startSizeMode.setToggleGroup(modeGroup);
             twoCornersMode.setToggleGroup(modeGroup);
@@ -428,17 +428,30 @@ public class UnifiedAcquisitionController {
             HBox modeBox = new HBox(20, startSizeMode, twoCornersMode);
             modeBox.setAlignment(Pos.CENTER_LEFT);
 
-            // === Start + Size Mode Pane ===
+            // Description label for center+size mode
+            Label centerModeDescription = new Label(
+                    "The center position defines the midpoint of the acquisition area. "
+                    + "Tiles extend equally in all directions from this point.");
+            centerModeDescription.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+            centerModeDescription.setWrapText(true);
+
+            // === Center + Size Mode Pane ===
             startSizePane = new GridPane();
             startSizePane.setHgap(10);
             startSizePane.setVgap(8);
 
             startXField = new TextField();
             startYField = new TextField();
-            startXField.setPromptText("X");
-            startYField.setPromptText("Y");
+            startXField.setPromptText("Center X");
+            startYField.setPromptText("Center Y");
             startXField.setPrefWidth(120);
             startYField.setPrefWidth(120);
+            startXField.setTooltip(new Tooltip(
+                    "Center X coordinate of the acquisition region in micrometers.\n"
+                    + "The tiled area extends equally in both directions from this point."));
+            startYField.setTooltip(new Tooltip(
+                    "Center Y coordinate of the acquisition region in micrometers.\n"
+                    + "The tiled area extends equally in both directions from this point."));
 
             widthField = new TextField(PersistentPreferences.getBoundingBoxWidth());
             heightField = new TextField(PersistentPreferences.getBoundingBoxHeight());
@@ -446,15 +459,20 @@ public class UnifiedAcquisitionController {
             heightField.setPromptText("Height");
             widthField.setPrefWidth(120);
             heightField.setPrefWidth(120);
+            widthField.setTooltip(new Tooltip("Total width of the acquisition region in micrometers."));
+            heightField.setTooltip(new Tooltip("Total height of the acquisition region in micrometers."));
 
-            Button getStartPosBtn = new Button("Get Stage Position");
+            Button getStartPosBtn = new Button("Use Current Position as Center");
+            getStartPosBtn.setTooltip(new Tooltip(
+                    "Set the center of the acquisition region to the current\n"
+                    + "stage position (center of the Live Viewer field of view)."));
             getStartPosBtn.setOnAction(e -> {
                 try {
                     double[] coords = MicroscopeController.getInstance().getStagePositionXY();
                     if (coords != null && coords.length >= 2) {
                         startXField.setText(String.format("%.2f", coords[0]));
                         startYField.setText(String.format("%.2f", coords[1]));
-                        logger.info("Updated start position from stage: X={}, Y={}", coords[0], coords[1]);
+                        logger.info("Updated center position from stage: X={}, Y={}", coords[0], coords[1]);
                         if (widthField.getText().trim().isEmpty()) widthField.setText("2000");
                         if (heightField.getText().trim().isEmpty()) heightField.setText("2000");
                     }
@@ -465,9 +483,9 @@ public class UnifiedAcquisitionController {
             });
 
             int row = 0;
-            startSizePane.add(new Label("Start X (um):"), 0, row);
+            startSizePane.add(new Label("Center X (um):"), 0, row);
             startSizePane.add(startXField, 1, row);
-            startSizePane.add(new Label("Start Y (um):"), 2, row);
+            startSizePane.add(new Label("Center Y (um):"), 2, row);
             startSizePane.add(startYField, 3, row);
             startSizePane.add(getStartPosBtn, 4, row);
             row++;
@@ -611,7 +629,13 @@ public class UnifiedAcquisitionController {
             }
 
             // Assemble content
-            content.getChildren().addAll(modeBox, startSizePane, twoCornersPane, calculatedBoundsLabel);
+            content.getChildren().addAll(modeBox, centerModeDescription, startSizePane, twoCornersPane, calculatedBoundsLabel);
+
+            // Show/hide description label based on mode
+            twoCornersMode.selectedProperty().addListener((obs, old, selected) -> {
+                centerModeDescription.setVisible(!selected);
+                centerModeDescription.setManaged(!selected);
+            });
 
             regionPane = new TitledPane("ACQUISITION REGION", content);
             regionPane.setExpanded(true);
@@ -1030,10 +1054,11 @@ public class UnifiedAcquisitionController {
                 // Update calculated bounds
                 double x1, y1, x2, y2;
                 if (isStartSizeMode) {
-                    x1 = startX;
-                    y1 = startY;
-                    x2 = startX + width;
-                    y2 = startY + height;
+                    // Center point + size: startX/Y is the center of the region
+                    x1 = startX - width / 2.0;
+                    y1 = startY - height / 2.0;
+                    x2 = startX + width / 2.0;
+                    y2 = startY + height / 2.0;
                 } else {
                     // Two corners mode - ensure proper min/max ordering
                     double endX = Double.parseDouble(endXField.getText().trim());
@@ -1044,7 +1069,8 @@ public class UnifiedAcquisitionController {
                     y2 = Math.max(startY, endY);
                 }
                 calculatedBoundsLabel.setText(
-                        String.format("Calculated bounds: (%.1f, %.1f) to (%.1f, %.1f)", x1, y1, x2, y2));
+                        String.format("Bounds: (%.1f, %.1f) to (%.1f, %.1f)  [center: %.1f, %.1f]",
+                                x1, y1, x2, y2, (x1 + x2) / 2.0, (y1 + y2) / 2.0));
                 calculatedBoundsLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #28a745;");
 
                 // Update preview labels
@@ -1228,10 +1254,11 @@ public class UnifiedAcquisitionController {
                 if (isStartSizeMode) {
                     double width = Double.parseDouble(widthField.getText().trim());
                     double height = Double.parseDouble(heightField.getText().trim());
-                    x1 = startX;
-                    y1 = startY;
-                    x2 = startX + width;
-                    y2 = startY + height;
+                    // Center point + size: startX/Y is the center of the region
+                    x1 = startX - width / 2.0;
+                    y1 = startY - height / 2.0;
+                    x2 = startX + width / 2.0;
+                    y2 = startY + height / 2.0;
                 } else {
                     double endX = Double.parseDouble(endXField.getText().trim());
                     double endY = Double.parseDouble(endYField.getText().trim());
