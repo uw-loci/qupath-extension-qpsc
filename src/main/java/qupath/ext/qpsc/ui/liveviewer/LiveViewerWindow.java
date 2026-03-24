@@ -261,6 +261,13 @@ public class LiveViewerWindow {
         stage.setTitle("Live Viewer");
         stage.initModality(Modality.NONE);
 
+        // Set QuPath as owner so the Live Viewer stays above QuPath
+        // but does not float above all other Windows applications.
+        QuPathGUI qupath = QuPathGUI.getInstance();
+        if (qupath != null && qupath.getStage() != null) {
+            stage.initOwner(qupath.getStage());
+        }
+
         // Toolbar with Live toggle button and display scale selector
         liveToggleButton = new Button("Live: OFF");
         liveToggleButton.setStyle("-fx-font-weight: bold;");
