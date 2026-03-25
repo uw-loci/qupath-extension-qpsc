@@ -31,7 +31,9 @@ The three components must be started in this order:
 | 2 | **Python Server** | Run `start_server.bat` (or `python -m microscope_command_server.server.qp_server`). Wait for "Server ready." |
 | 3 | **QuPath** | Launch QuPath. The QP Scope menu will auto-connect if enabled in preferences. |
 
-> **Tip:** Create desktop shortcuts for all three applications and arrange them left-to-right in startup order. The `start_server.bat` script (in the microscope_command_server folder) automatically activates the Python virtual environment and launches the server -- ideal as a desktop shortcut.
+> **Tip:** If you installed QPSC with the [PPM-QuPath.ps1 installer](https://github.com/uw-loci/QPSC), it creates a `Launch-QPSC.ps1` script in your install directory that starts the Python server (and optionally QuPath) with package verification. You still need to start Micro-Manager manually first.
+>
+> For a simpler approach, create desktop shortcuts for all three applications arranged left-to-right in startup order. The `start_server.bat` script (in the microscope_command_server folder) activates the virtual environment and launches the server -- ideal as a desktop shortcut.
 
 ### First-Time Setup Checklist
 
