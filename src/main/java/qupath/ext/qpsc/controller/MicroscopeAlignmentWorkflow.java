@@ -501,6 +501,30 @@ public class MicroscopeAlignmentWorkflow {
                             projectsFolderPath, sampleName, sampleSetup.modality());
                 }
 
+                // Ensure the user is viewing the flipped image (if flipping is configured).
+                // The Live Viewer and eyepiece show the optically flipped view, so the
+                // QuPath image must match for the user to identify corresponding features
+                // during alignment point selection.
+                if (flipX || flipY) {
+                    @SuppressWarnings("unchecked")
+                    Project<BufferedImage> currentProject = (Project<BufferedImage>) gui.getProject();
+                    if (currentProject != null) {
+                        try {
+                            Boolean flipResult = ImageFlipHelper.validateAndFlipIfNeeded(
+                                            gui, currentProject, sampleSetup.sampleName())
+                                    .get(30, java.util.concurrent.TimeUnit.SECONDS);
+                            if (Boolean.TRUE.equals(flipResult)) {
+                                logger.info("Flipped image loaded for alignment (matches Live Viewer orientation)");
+                            } else {
+                                logger.warn(
+                                        "Image flip validation returned false - alignment may use wrong orientation");
+                            }
+                        } catch (Exception e) {
+                            logger.error("Failed to validate/create flipped image for alignment: {}", e.getMessage());
+                        }
+                    }
+                }
+
                 // Only run tissue detection if there are no existing annotations
                 boolean hasExistingAnnotations =
                         !gui.getViewer().getHierarchy().getAnnotationObjects().isEmpty();
