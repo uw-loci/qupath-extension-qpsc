@@ -878,9 +878,14 @@ public class StageMapWindow {
                 macroOverlayCheckbox.setDisable(false);
                 logger.info("Macro overlay available for sample '{}' - checkbox enabled", sampleName);
 
-                // If checkbox is already selected, update the overlay
-                if (macroOverlayCheckbox.isSelected()) {
-                    logger.info("Macro overlay checkbox already selected - applying overlay");
+                // Auto-select the overlay when a macro image is detected.
+                // This fires the selectedProperty listener which calls applyMacroOverlayToCanvas().
+                if (!macroOverlayCheckbox.isSelected()) {
+                    logger.info("Macro overlay auto-enabled (macro image detected for '{}')", sampleName);
+                    macroOverlayCheckbox.setSelected(true);
+                } else {
+                    // Already selected (e.g., user toggled manually) -- just refresh
+                    logger.info("Macro overlay checkbox already selected - refreshing overlay");
                     applyMacroOverlayToCanvas();
                 }
             } else {
