@@ -250,17 +250,7 @@ public class AutofocusEditorWorkflow {
                 workingSettings.put(
                         obj,
                         new AutofocusSettings(
-                                obj,
-                                9,
-                                15.0,
-                                5,
-                                100,
-                                "quadratic",
-                                "normalized_variance",
-                                0.005,
-                                0.2,
-                                10.0,
-                                6));
+                                obj, 9, 15.0, 5, 100, "quadratic", "normalized_variance", 0.005, 0.2, 10.0, 6));
             }
         }
 
@@ -374,25 +364,24 @@ public class AutofocusEditorWorkflow {
                 .addAll("normalized_variance", "laplacian_variance", "sobel", "brenner_gradient", "p98_p2");
         scoreMetricCombo.setValue("normalized_variance");
         scoreMetricCombo.setPrefWidth(200);
-        scoreMetricCombo.setTooltip(new Tooltip(
-                "Algorithm for measuring image sharpness.\n"
-                        + "Used by BOTH standard autofocus and sweep drift check.\n\n"
-                        + "normalized_variance (recommended):\n"
-                        + "  + Best sensitivity (145% signal at 20x)\n"
-                        + "  + Works well on dim and bright tissue\n"
-                        + "  + Amplifies changes on low-contrast samples\n\n"
-                        + "laplacian_variance (~5ms):\n"
-                        + "  + Good for 10x or lower magnification\n"
-                        + "  - Poor sensitivity at 20x+ (<2% signal)\n\n"
-                        + "sobel (~5ms):\n"
-                        + "  + Edge-sensitive metric (40% signal)\n"
-                        + "  + Good for high-contrast features\n\n"
-                        + "brenner_gradient (~3ms):\n"
-                        + "  + Fastest option (12% signal)\n"
-                        + "  - Lower sensitivity\n\n"
-                        + "p98_p2 (histogram spread):\n"
-                        + "  + Good sensitivity (70% signal)\n"
-                        + "  + Simple and robust"));
+        scoreMetricCombo.setTooltip(new Tooltip("Algorithm for measuring image sharpness.\n"
+                + "Used by BOTH standard autofocus and sweep drift check.\n\n"
+                + "normalized_variance (recommended):\n"
+                + "  + Best sensitivity (145% signal at 20x)\n"
+                + "  + Works well on dim and bright tissue\n"
+                + "  + Amplifies changes on low-contrast samples\n\n"
+                + "laplacian_variance (~5ms):\n"
+                + "  + Good for 10x or lower magnification\n"
+                + "  - Poor sensitivity at 20x+ (<2% signal)\n\n"
+                + "sobel (~5ms):\n"
+                + "  + Edge-sensitive metric (40% signal)\n"
+                + "  + Good for high-contrast features\n\n"
+                + "brenner_gradient (~3ms):\n"
+                + "  + Fastest option (12% signal)\n"
+                + "  - Lower sensitivity\n\n"
+                + "p98_p2 (histogram spread):\n"
+                + "  + Good sensitivity (70% signal)\n"
+                + "  + Simple and robust"));
         Label scoreMetricDesc = new Label("(Focus metric - shared by standard AF and sweep)");
         scoreMetricDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
@@ -506,19 +495,18 @@ public class AutofocusEditorWorkflow {
         Label sweepRangeLabel = new Label("sweep_range_um:");
         TextField sweepRangeField = new TextField("10.0");
         sweepRangeField.setPrefWidth(100);
-        sweepRangeField.setTooltip(
-                new Tooltip("Total Z range for the sweep drift check.\n"
-                        + "The sweep samples positions from -range/2 to +range/2\n"
-                        + "around the current Z position.\n\n"
-                        + "Larger range (15-20um):\n"
-                        + "  + Catches larger drift\n"
-                        + "  + Better for samples with significant thermal drift\n"
-                        + "  - Slightly slower\n\n"
-                        + "Smaller range (6-10um):\n"
-                        + "  + Faster sweep\n"
-                        + "  + Higher precision within range\n"
-                        + "  - May miss large drift events\n\n"
-                        + "Typical: 10um (+/-5um) for most samples"));
+        sweepRangeField.setTooltip(new Tooltip("Total Z range for the sweep drift check.\n"
+                + "The sweep samples positions from -range/2 to +range/2\n"
+                + "around the current Z position.\n\n"
+                + "Larger range (15-20um):\n"
+                + "  + Catches larger drift\n"
+                + "  + Better for samples with significant thermal drift\n"
+                + "  - Slightly slower\n\n"
+                + "Smaller range (6-10um):\n"
+                + "  + Faster sweep\n"
+                + "  + Higher precision within range\n"
+                + "  - May miss large drift events\n\n"
+                + "Typical: 10um (+/-5um) for most samples"));
         Label sweepRangeDesc = new Label("(Total Z range in um, centered on current position)");
         sweepRangeDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
@@ -526,17 +514,16 @@ public class AutofocusEditorWorkflow {
         Spinner<Integer> sweepNStepsSpinner = new Spinner<>(3, 20, 6, 1);
         sweepNStepsSpinner.setEditable(true);
         sweepNStepsSpinner.setPrefWidth(100);
-        sweepNStepsSpinner.setTooltip(new Tooltip(
-                "Number of Z positions sampled during sweep drift check.\n\n"
-                        + "More steps (8-12):\n"
-                        + "  + Better peak resolution\n"
-                        + "  + More reliable on noisy samples\n"
-                        + "  - Slower (~0.7s per step)\n\n"
-                        + "Fewer steps (4-6):\n"
-                        + "  + Faster sweep\n"
-                        + "  + Adequate for typical drift\n"
-                        + "  - Coarser peak detection\n\n"
-                        + "Typical: 6 steps (~3s total)"));
+        sweepNStepsSpinner.setTooltip(new Tooltip("Number of Z positions sampled during sweep drift check.\n\n"
+                + "More steps (8-12):\n"
+                + "  + Better peak resolution\n"
+                + "  + More reliable on noisy samples\n"
+                + "  - Slower (~0.7s per step)\n\n"
+                + "Fewer steps (4-6):\n"
+                + "  + Faster sweep\n"
+                + "  + Adequate for typical drift\n"
+                + "  - Coarser peak detection\n\n"
+                + "Typical: 6 steps (~3s total)"));
         Label sweepNStepsDesc = new Label("(Number of Z positions to sample)");
         sweepNStepsDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
@@ -914,10 +901,8 @@ public class AutofocusEditorWorkflow {
                                 : 6;
 
                         // Legacy support: old adaptive_initial_step_um -> sweep_range_um
-                        if (!entry.containsKey("sweep_range_um")
-                                && entry.containsKey("adaptive_initial_step_um")) {
-                            sweepRangeUm =
-                                    ((Number) entry.get("adaptive_initial_step_um")).doubleValue() * 2;
+                        if (!entry.containsKey("sweep_range_um") && entry.containsKey("adaptive_initial_step_um")) {
+                            sweepRangeUm = ((Number) entry.get("adaptive_initial_step_um")).doubleValue() * 2;
                         }
 
                         logger.info(

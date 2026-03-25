@@ -2873,7 +2873,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             if (parts.length >= 3) {
                 String angle = parts[0];
                 String counts = parts[1]; // "3/2404"
-                String worst = parts[2];  // "21.6"
+                String worst = parts[2]; // "21.6"
 
                 String[] countParts = counts.split("/");
                 int saturated = 0;

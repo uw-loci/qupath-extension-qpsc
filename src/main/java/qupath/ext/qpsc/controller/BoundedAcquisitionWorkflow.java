@@ -483,8 +483,9 @@ public class BoundedAcquisitionWorkflow {
                         // can arrive as CancellationException or as a message containing
                         // specific cancel tokens.
                         boolean isCancellation = cause instanceof java.util.concurrent.CancellationException
-                                || (message != null && (message.contains("BACKGROUND_MISMATCH_CANCELLED")
-                                        || message.contains("ANGLE_SELECTION_CANCELLED")));
+                                || (message != null
+                                        && (message.contains("BACKGROUND_MISMATCH_CANCELLED")
+                                                || message.contains("ANGLE_SELECTION_CANCELLED")));
 
                         if (isCancellation) {
                             logger.info("Acquisition cancelled by user");

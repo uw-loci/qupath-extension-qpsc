@@ -37,7 +37,12 @@ public class RefineFocusController {
     private final double searchRangeUm; // 0 = auto from pixel size
 
     /** Outcome of the refine focus operation. */
-    public enum Outcome { IN_PROGRESS, SUCCESS, FAILED, ERROR }
+    public enum Outcome {
+        IN_PROGRESS,
+        SUCCESS,
+        FAILED,
+        ERROR
+    }
 
     /**
      * Callback for status updates from the focus algorithm.
@@ -56,8 +61,8 @@ public class RefineFocusController {
      * @param frameSupplier supplies the latest camera frame
      * @param searchRangeUm user-selected search range in um, or 0 for auto (based on pixel size)
      */
-    public RefineFocusController(MicroscopeSocketClient socketClient, Supplier<FrameData> frameSupplier,
-                                 double searchRangeUm) {
+    public RefineFocusController(
+            MicroscopeSocketClient socketClient, Supplier<FrameData> frameSupplier, double searchRangeUm) {
         this.socketClient = socketClient;
         this.frameSupplier = frameSupplier;
         this.searchRangeUm = searchRangeUm;
@@ -88,7 +93,10 @@ public class RefineFocusController {
 
         try {
             // Phase 0: PREFLIGHT
-            if (cancelled) { finish(callback, "Cancelled", Outcome.SUCCESS); return; }
+            if (cancelled) {
+                finish(callback, "Cancelled", Outcome.SUCCESS);
+                return;
+            }
 
             FrameData frame = frameSupplier.get();
             if (frame == null) {
@@ -98,9 +106,12 @@ public class RefineFocusController {
 
             double satPct = checkSaturation(frame);
             if (satPct > SATURATION_ABORT_PCT) {
-                finish(callback, String.format(
-                        "Aborted: %.1f%% saturated pixels (>%.0f%% threshold). Reduce exposure first.",
-                        satPct, SATURATION_ABORT_PCT), Outcome.ERROR);
+                finish(
+                        callback,
+                        String.format(
+                                "Aborted: %.1f%% saturated pixels (>%.0f%% threshold). Reduce exposure first.",
+                                satPct, SATURATION_ABORT_PCT),
+                        Outcome.ERROR);
                 return;
             }
 
@@ -113,11 +124,18 @@ public class RefineFocusController {
             long ts = captureTimestamp();
             double baseMetric = measureFocus(ts);
             double bestMetric = baseMetric;
-            logger.info("Refine Focus: startZ={}, baseMetric={}, step={}, maxTravel={}",
-                    fmt(startZ), fmt(baseMetric), fmt(initialStep), fmt(maxTravel));
+            logger.info(
+                    "Refine Focus: startZ={}, baseMetric={}, step={}, maxTravel={}",
+                    fmt(startZ),
+                    fmt(baseMetric),
+                    fmt(initialStep),
+                    fmt(maxTravel));
 
             // Phase 1: DETERMINE DIRECTION
-            if (cancelled) { moveAndFinish(bestZ, startZ, callback); return; }
+            if (cancelled) {
+                moveAndFinish(bestZ, startZ, callback);
+                return;
+            }
             callback.onStatusUpdate("Refine Focus: determining direction...", Outcome.IN_PROGRESS);
 
             // Try positive direction
@@ -127,7 +145,10 @@ public class RefineFocusController {
             settle();
             double metricPlus = measureFocus(ts);
 
-            if (cancelled) { moveAndFinish(bestZ, startZ, callback); return; }
+            if (cancelled) {
+                moveAndFinish(bestZ, startZ, callback);
+                return;
+            }
 
             // Try negative direction
             double testZMinus = startZ - initialStep;
@@ -139,12 +160,14 @@ public class RefineFocusController {
             // Return to start before deciding
             moveZ(startZ);
 
-            logger.info("Refine Focus direction probe: base={}, plus={}, minus={}",
-                    fmt(baseMetric), fmt(metricPlus), fmt(metricMinus));
+            logger.info(
+                    "Refine Focus direction probe: base={}, plus={}, minus={}",
+                    fmt(baseMetric),
+                    fmt(metricPlus),
+                    fmt(metricMinus));
 
             // Check if neither direction improves focus
-            if (metricPlus <= baseMetric + IMPROVEMENT_THRESHOLD
-                    && metricMinus <= baseMetric + IMPROVEMENT_THRESHOLD) {
+            if (metricPlus <= baseMetric + IMPROVEMENT_THRESHOLD && metricMinus <= baseMetric + IMPROVEMENT_THRESHOLD) {
                 // Both directions are worse -- either already at focus or featureless
                 if (baseMetric > 20) {
                     // Decent baseline metric = likely already at best focus
@@ -155,7 +178,8 @@ public class RefineFocusController {
                     finish(callback, msg, Outcome.SUCCESS);
                 } else {
                     // Low baseline metric = featureless or very far from focus
-                    finish(callback,
+                    finish(
+                            callback,
                             "Failed to find focus! Get closer to focus manually, or widen the search range.",
                             Outcome.FAILED);
                 }
@@ -196,7 +220,10 @@ public class RefineFocusController {
             //   (bisects interval between last good position and overshoot)
             // On boundary hit: reverse direction + halve step (physical constraint)
             while (stepUm >= MIN_STEP_UM) {
-                if (cancelled) { moveAndFinish(bestZ, startZ, callback); return; }
+                if (cancelled) {
+                    moveAndFinish(bestZ, startZ, callback);
+                    return;
+                }
 
                 double targetZ = currentZ + (direction * stepUm);
 
@@ -222,11 +249,16 @@ public class RefineFocusController {
                 settle();
                 double metric = measureFocus(ts);
 
-                callback.onStatusUpdate(String.format(
-                        "Refine Focus: step=%.1fum, metric=%.1f (best=%.1f)",
-                        stepUm, metric, bestMetric), Outcome.IN_PROGRESS);
-                logger.info("Refine Focus: z={}, step={}, dir={}, metric={}, best={}",
-                        fmt(targetZ), fmt(stepUm), direction, fmt(metric), fmt(bestMetric));
+                callback.onStatusUpdate(
+                        String.format("Refine Focus: step=%.1fum, metric=%.1f (best=%.1f)", stepUm, metric, bestMetric),
+                        Outcome.IN_PROGRESS);
+                logger.info(
+                        "Refine Focus: z={}, step={}, dir={}, metric={}, best={}",
+                        fmt(targetZ),
+                        fmt(stepUm),
+                        direction,
+                        fmt(metric),
+                        fmt(bestMetric));
 
                 if (metric > bestMetric + IMPROVEMENT_THRESHOLD) {
                     bestMetric = metric;
@@ -243,8 +275,8 @@ public class RefineFocusController {
             // Phase 3: FINALIZE
             moveZ(bestZ);
             double shift = bestZ - startZ;
-            String msg = String.format("Refine Focus complete: shifted %.1fum (metric %.1f -> %.1f)",
-                    shift, baseMetric, bestMetric);
+            String msg = String.format(
+                    "Refine Focus complete: shifted %.1fum (metric %.1f -> %.1f)", shift, baseMetric, bestMetric);
             logger.info(msg);
             finish(callback, msg, Outcome.SUCCESS);
 
@@ -252,13 +284,19 @@ public class RefineFocusController {
             logger.error("Refine Focus failed: {}", e.getMessage());
             // Try to return to best known position
             if (!Double.isNaN(bestZ)) {
-                try { socketClient.moveStageZ(bestZ); } catch (IOException ignored) { }
+                try {
+                    socketClient.moveStageZ(bestZ);
+                } catch (IOException ignored) {
+                }
             }
             finish(callback, "Refine Focus error: " + e.getMessage(), Outcome.ERROR);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             if (!Double.isNaN(bestZ)) {
-                try { socketClient.moveStageZ(bestZ); } catch (IOException ignored) { }
+                try {
+                    socketClient.moveStageZ(bestZ);
+                } catch (IOException ignored) {
+                }
             }
             finish(callback, "Refine Focus interrupted", Outcome.ERROR);
         }
@@ -417,7 +455,10 @@ public class RefineFocusController {
                         int byteOff = off + c * 2;
                         val = ((raw[byteOff] & 0xFF) << 8) | (raw[byteOff + 1] & 0xFF);
                     }
-                    if (val >= maxVal) { anySaturated = true; break; }
+                    if (val >= maxVal) {
+                        anySaturated = true;
+                        break;
+                    }
                 }
                 if (anySaturated) saturatedCount++;
             }
@@ -436,11 +477,11 @@ public class RefineFocusController {
         try {
             double pixelSize = socketClient.getMicroscopePixelSize();
             // Steps sized to ~2-3x depth of field per objective
-            if (pixelSize > 1.0) return 20.0;   // 4x-5x
-            if (pixelSize > 0.5) return 10.0;   // 10x
-            if (pixelSize > 0.2) return 5.0;    // 20x
-            if (pixelSize > 0.1) return 3.0;    // 40x
-            return 1.0;                          // 60x-100x
+            if (pixelSize > 1.0) return 20.0; // 4x-5x
+            if (pixelSize > 0.5) return 10.0; // 10x
+            if (pixelSize > 0.2) return 5.0; // 20x
+            if (pixelSize > 0.1) return 3.0; // 40x
+            return 1.0; // 60x-100x
         } catch (IOException e) {
             logger.warn("Could not query pixel size for step sizing, using default 5.0um: {}", e.getMessage());
             return 5.0;
@@ -453,11 +494,11 @@ public class RefineFocusController {
         }
         try {
             double pixelSize = socketClient.getMicroscopePixelSize();
-            if (pixelSize > 1.0) return 100.0;  // 4x-5x
-            if (pixelSize > 0.5) return 60.0;   // 10x
-            if (pixelSize > 0.2) return 40.0;   // 20x
-            if (pixelSize > 0.1) return 30.0;   // 40x
-            return 15.0;                         // 60x-100x
+            if (pixelSize > 1.0) return 100.0; // 4x-5x
+            if (pixelSize > 0.5) return 60.0; // 10x
+            if (pixelSize > 0.2) return 40.0; // 20x
+            if (pixelSize > 0.1) return 30.0; // 40x
+            return 15.0; // 60x-100x
         } catch (IOException e) {
             logger.warn("Could not query pixel size for max travel, using default 40um: {}", e.getMessage());
             return 40.0;
@@ -475,7 +516,10 @@ public class RefineFocusController {
     }
 
     private void moveAndFinish(double bestZ, double startZ, StatusCallback callback) {
-        try { socketClient.moveStageZ(bestZ); } catch (IOException ignored) { }
+        try {
+            socketClient.moveStageZ(bestZ);
+        } catch (IOException ignored) {
+        }
         double shift = bestZ - startZ;
         String msg = cancelled
                 ? String.format("Refine Focus cancelled: shifted %.1fum to best position", shift)

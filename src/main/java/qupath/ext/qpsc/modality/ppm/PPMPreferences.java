@@ -70,8 +70,7 @@ public class PPMPreferences {
             PathPrefs.createPersistentPreference("PPMBirefringenceThreshold", "100.0");
 
     // Number of bins for polarity plot rose diagrams (18 bins = 10 deg each)
-    private static final StringProperty histogramBins =
-            PathPrefs.createPersistentPreference("PPMHistogramBins", "18");
+    private static final StringProperty histogramBins = PathPrefs.createPersistentPreference("PPMHistogramBins", "18");
 
     // HSV saturation threshold for valid pixel filtering
     private static final StringProperty saturationThreshold =
@@ -82,8 +81,7 @@ public class PPMPreferences {
             PathPrefs.createPersistentPreference("PPMValueThreshold", "0.2");
 
     // Dilation distance in micrometers for surface perpendicularity analysis
-    private static final StringProperty dilationUm =
-            PathPrefs.createPersistentPreference("PPMDilationUm", "50.0");
+    private static final StringProperty dilationUm = PathPrefs.createPersistentPreference("PPMDilationUm", "50.0");
 
     // TACS angle threshold in degrees for PS-TACS classification
     private static final StringProperty tacsThresholdDeg =

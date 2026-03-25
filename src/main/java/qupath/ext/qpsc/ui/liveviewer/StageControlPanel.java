@@ -52,10 +52,10 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.StagePositionManager;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
-import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.Project;
+import qupath.lib.projects.ProjectImageEntry;
 
 /**
  * Collapsible panel for Live Viewer containing stage movement controls.
@@ -808,8 +808,9 @@ public class StageControlPanel extends TitledPane {
         initializeCentroidButton();
         QuPathGUI guiRef = QuPathGUI.getInstance();
         if (guiRef != null && guiRef.getViewer() != null) {
-            guiRef.getViewer().imageDataProperty().addListener((obs, oldData, newData) ->
-                    Platform.runLater(this::initializeCentroidButton));
+            guiRef.getViewer()
+                    .imageDataProperty()
+                    .addListener((obs, oldData, newData) -> Platform.runLater(this::initializeCentroidButton));
         }
     }
 
@@ -1321,8 +1322,10 @@ public class StageControlPanel extends TitledPane {
                 if (entry != null) {
                     double[] offset = ImageMetadataManager.getXYOffset(entry);
                     if (offset[0] != 0 || offset[1] != 0) {
-                        double pixelSize = gui.getImageData().getServer()
-                                .getPixelCalibration().getAveragedPixelSizeMicrons();
+                        double pixelSize = gui.getImageData()
+                                .getServer()
+                                .getPixelCalibration()
+                                .getAveragedPixelSizeMicrons();
 
                         // Derive the pixel-to-stage direction from the parent alignment
                         // transform's scale signs. The alignment bakes in the combined
@@ -1339,12 +1342,14 @@ public class StageControlPanel extends TitledPane {
                                 signX = parentTransform.getScaleX() < 0 ? -1.0 : 1.0;
                                 signY = parentTransform.getScaleY() < 0 ? -1.0 : 1.0;
                             } else {
-                                logger.warn("Could not load parent alignment for '{}' "
-                                        + "- defaulting sign to +1", baseName);
+                                logger.warn(
+                                        "Could not load parent alignment for '{}' " + "- defaulting sign to +1",
+                                        baseName);
                             }
                         } else {
-                            logger.warn("No base_image metadata on entry '{}' "
-                                    + "- defaulting sign to +1", entry.getImageName());
+                            logger.warn(
+                                    "No base_image metadata on entry '{}' " + "- defaulting sign to +1",
+                                    entry.getImageName());
                         }
 
                         int imgW = gui.getImageData().getServer().getWidth();
@@ -1360,21 +1365,26 @@ public class StageControlPanel extends TitledPane {
                         double halfH = imgH / 2.0;
                         double targetX = offset[0] + (centroidX - halfW) * pixelSize * signX;
                         double targetY = offset[1] + (centroidY - halfH) * pixelSize * signY;
-                        logger.info("Sub-image centroid: pixel ({}, {}) - center ({}, {}) "
+                        logger.info(
+                                "Sub-image centroid: pixel ({}, {}) - center ({}, {}) "
                                         + "* {}um * sign({}, {}) [base={}] "
                                         + "+ offset ({}, {}) -> stage ({}, {})",
-                                String.format("%.1f", centroidX), String.format("%.1f", centroidY),
-                                String.format("%.1f", halfW), String.format("%.1f", halfH),
+                                String.format("%.1f", centroidX),
+                                String.format("%.1f", centroidY),
+                                String.format("%.1f", halfW),
+                                String.format("%.1f", halfH),
                                 String.format("%.4f", pixelSize),
-                                String.format("%.0f", signX), String.format("%.0f", signY),
+                                String.format("%.0f", signX),
+                                String.format("%.0f", signY),
                                 baseName,
-                                String.format("%.1f", offset[0]), String.format("%.1f", offset[1]),
-                                String.format("%.1f", targetX), String.format("%.1f", targetY));
+                                String.format("%.1f", offset[0]),
+                                String.format("%.1f", offset[1]),
+                                String.format("%.1f", targetX),
+                                String.format("%.1f", targetY));
                         moveToStagePosition(targetX, targetY);
                         return;
                     } else {
-                        logger.info("Sub-image entry found but XY offset is (0,0): {}",
-                                entry.getImageName());
+                        logger.info("Sub-image entry found but XY offset is (0,0): {}", entry.getImageName());
                     }
                 } else {
                     logger.warn("Could not find project entry for current image - "
@@ -1438,13 +1448,13 @@ public class StageControlPanel extends TitledPane {
                         // coordinate space the alignment was calibrated in.
                         if (prefFlipX && !imageFlipX) {
                             adjustedX = imgWidth - centroidX;
-                            logger.debug("Flipping centroid X: {} -> {} (image width={})",
-                                    centroidX, adjustedX, imgWidth);
+                            logger.debug(
+                                    "Flipping centroid X: {} -> {} (image width={})", centroidX, adjustedX, imgWidth);
                         }
                         if (prefFlipY && !imageFlipY) {
                             adjustedY = imgHeight - centroidY;
-                            logger.debug("Flipping centroid Y: {} -> {} (image height={})",
-                                    centroidY, adjustedY, imgHeight);
+                            logger.debug(
+                                    "Flipping centroid Y: {} -> {} (image height={})", centroidY, adjustedY, imgHeight);
                         }
                     }
                 } catch (Exception e) {

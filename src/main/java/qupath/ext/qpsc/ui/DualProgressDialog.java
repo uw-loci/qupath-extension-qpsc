@@ -283,7 +283,8 @@ public class DualProgressDialog {
                     // First tile - likely includes full autofocus
                     detectedFullAfTime = tileTime;
                     firstTileProcessed.set(true);
-                    logger.info("First tile time (likely includes full AF): {} ms -- excluded from estimates", tileTime);
+                    logger.info(
+                            "First tile time (likely includes full AF): {} ms -- excluded from estimates", tileTime);
                     // Do NOT add first tile to allTileTimes -- it includes full AF
                     // setup overhead that skews early estimates
                 } else {

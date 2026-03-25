@@ -555,12 +555,13 @@ public class UIFunctions {
         }
 
         // Send push notification so user knows even if away from workstation
-        qupath.ext.qpsc.service.notification.NotificationService.getInstance().notify(
-                "Manual Focus Required",
-                "Autofocus failed during acquisition. User intervention needed at the microscope."
-                        + (retriesRemaining > 0 ? " (" + retriesRemaining + " retries remaining)" : ""),
-                qupath.ext.qpsc.service.notification.NotificationPriority.URGENT,
-                qupath.ext.qpsc.service.notification.NotificationEvent.ACQUISITION_ERROR);
+        qupath.ext.qpsc.service.notification.NotificationService.getInstance()
+                .notify(
+                        "Manual Focus Required",
+                        "Autofocus failed during acquisition. User intervention needed at the microscope."
+                                + (retriesRemaining > 0 ? " (" + retriesRemaining + " retries remaining)" : ""),
+                        qupath.ext.qpsc.service.notification.NotificationPriority.URGENT,
+                        qupath.ext.qpsc.service.notification.NotificationEvent.ACQUISITION_ERROR);
 
         Alert alert = new Alert(Alert.AlertType.WARNING);
         alert.setTitle("Manual Focus Required");

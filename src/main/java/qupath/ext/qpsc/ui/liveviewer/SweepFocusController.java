@@ -40,8 +40,8 @@ public class SweepFocusController {
     // Reuse the focus metric from RefineFocusController
     private final RefineFocusController metricHelper;
 
-    public SweepFocusController(MicroscopeSocketClient socketClient, Supplier<FrameData> frameSupplier,
-                                double searchRangeUm) {
+    public SweepFocusController(
+            MicroscopeSocketClient socketClient, Supplier<FrameData> frameSupplier, double searchRangeUm) {
         this.socketClient = socketClient;
         this.frameSupplier = frameSupplier;
         this.searchRangeUm = searchRangeUm;
@@ -77,9 +77,12 @@ public class SweepFocusController {
 
             double satPct = metricHelper.checkSaturation(frame);
             if (satPct > SATURATION_ABORT_PCT) {
-                finish(callback, String.format(
-                        "Aborted: %.1f%% saturated pixels (>%.0f%% threshold). Reduce exposure first.",
-                        satPct, SATURATION_ABORT_PCT), Outcome.ERROR);
+                finish(
+                        callback,
+                        String.format(
+                                "Aborted: %.1f%% saturated pixels (>%.0f%% threshold). Reduce exposure first.",
+                                satPct, SATURATION_ABORT_PCT),
+                        Outcome.ERROR);
                 return;
             }
 
@@ -108,11 +111,19 @@ public class SweepFocusController {
             }
 
             double stepSize = actualRange / NUM_STEPS;
-            logger.info("Sweep Focus: {} steps of {}um over [{} -> {}] (current={})",
-                    NUM_STEPS, fmt(stepSize), fmt(sweepStart), fmt(sweepEnd), fmt(currentZ));
+            logger.info(
+                    "Sweep Focus: {} steps of {}um over [{} -> {}] (current={})",
+                    NUM_STEPS,
+                    fmt(stepSize),
+                    fmt(sweepStart),
+                    fmt(sweepEnd),
+                    fmt(currentZ));
 
             // Phase 1: MOVE TO START (blocking)
-            if (cancelled) { returnToZ(startZ, callback); return; }
+            if (cancelled) {
+                returnToZ(startZ, callback);
+                return;
+            }
             callback.onStatusUpdate("Sweep Focus: moving to start...", Outcome.IN_PROGRESS);
             socketClient.moveStageZ(sweepStart);
 
@@ -120,7 +131,10 @@ public class SweepFocusController {
             // Each moveStageZ blocks only for hardware transit time (~20-50ms for 1um).
             // No settle delay needed: wait_for_device is the settle.
             // Grab cached frame (from live stream) at each position -- no freshness check.
-            if (cancelled) { returnToZ(startZ, callback); return; }
+            if (cancelled) {
+                returnToZ(startZ, callback);
+                return;
+            }
             callback.onStatusUpdate("Sweep Focus: sweeping...", Outcome.IN_PROGRESS);
 
             List<double[]> measurements = new ArrayList<>();
@@ -147,8 +161,8 @@ public class SweepFocusController {
                 }
 
                 if (i % 5 == 0) {
-                    callback.onStatusUpdate(String.format(
-                            "Sweep Focus: %d/%d (Z=%.1f)", i, NUM_STEPS, z), Outcome.IN_PROGRESS);
+                    callback.onStatusUpdate(
+                            String.format("Sweep Focus: %d/%d (Z=%.1f)", i, NUM_STEPS, z), Outcome.IN_PROGRESS);
                 }
             }
 
@@ -156,7 +170,10 @@ public class SweepFocusController {
             logger.info("Sweep Focus: collected {} measurements in {}ms", measurements.size(), sweepMs);
 
             // Phase 3: FIND PEAK
-            if (cancelled) { returnToZ(startZ, callback); return; }
+            if (cancelled) {
+                returnToZ(startZ, callback);
+                return;
+            }
 
             if (measurements.size() < 3) {
                 logger.warn("Sweep Focus: only {} measurements", measurements.size());
@@ -196,23 +213,32 @@ public class SweepFocusController {
                 }
             }
 
-            logger.info("Sweep Focus: peak at Z={}, metric={} ({} measurements)",
-                    fmt(bestZ), fmt(bestMetric), measurements.size());
+            logger.info(
+                    "Sweep Focus: peak at Z={}, metric={} ({} measurements)",
+                    fmt(bestZ),
+                    fmt(bestMetric),
+                    measurements.size());
 
             // Phase 4: MOVE TO BEST (blocking)
             socketClient.moveStageZ(bestZ);
             double sweepShift = bestZ - startZ;
             double baseMetric = measurements.get(0)[1];
-            logger.info("Sweep phase complete: shifted {}um, {} pts (metric {} -> {})",
-                    fmt(sweepShift), measurements.size(), fmt(baseMetric), fmt(bestMetric));
+            logger.info(
+                    "Sweep phase complete: shifted {}um, {} pts (metric {} -> {})",
+                    fmt(sweepShift),
+                    measurements.size(),
+                    fmt(baseMetric),
+                    fmt(bestMetric));
 
             // Phase 5: AUTO-REFINE around the sweep peak with tight range
-            if (cancelled) { finish(callback, "Sweep Focus cancelled", Outcome.SUCCESS); return; }
+            if (cancelled) {
+                finish(callback, "Sweep Focus cancelled", Outcome.SUCCESS);
+                return;
+            }
             callback.onStatusUpdate("Sweep Focus: refining...", Outcome.IN_PROGRESS);
 
             double refineRange = 3.0; // tight range around the sweep peak
-            RefineFocusController refiner = new RefineFocusController(
-                    socketClient, frameSupplier, refineRange);
+            RefineFocusController refiner = new RefineFocusController(socketClient, frameSupplier, refineRange);
 
             // Track refinement result via a simple holder
             final double[] refineResult = {bestZ, bestMetric};
@@ -223,7 +249,8 @@ public class SweepFocusController {
                         double finalZ = socketClient.getStageZ();
                         refineResult[0] = finalZ;
                         logger.info("Refinement succeeded: final Z={}", fmt(finalZ));
-                    } catch (IOException ignored) { }
+                    } catch (IOException ignored) {
+                    }
                 } else {
                     // Refinement didn't improve -- that's OK, sweep was accurate enough
                     logger.info("Refinement found no improvement -- sweep result is best");
@@ -231,15 +258,18 @@ public class SweepFocusController {
             });
 
             double finalShift = refineResult[0] - startZ;
-            String msg = String.format("Sweep+Refine complete: shifted %.1fum, %d sweep pts",
-                    finalShift, measurements.size());
+            String msg = String.format(
+                    "Sweep+Refine complete: shifted %.1fum, %d sweep pts", finalShift, measurements.size());
             logger.info(msg);
             finish(callback, msg, Outcome.SUCCESS);
 
         } catch (IOException e) {
             logger.error("Sweep Focus failed: {}", e.getMessage());
             if (!Double.isNaN(startZ)) {
-                try { socketClient.moveStageZ(startZ); } catch (IOException ignored) { }
+                try {
+                    socketClient.moveStageZ(startZ);
+                } catch (IOException ignored) {
+                }
             }
             finish(callback, "Sweep Focus error: " + e.getMessage(), Outcome.ERROR);
         }
@@ -257,7 +287,9 @@ public class SweepFocusController {
             if (f != null && f.timestampMs() > afterTimestamp) {
                 return f;
             }
-            try { Thread.sleep(30); } catch (InterruptedException e) {
+            try {
+                Thread.sleep(30);
+            } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return null;
             }
@@ -271,11 +303,11 @@ public class SweepFocusController {
         }
         try {
             double pixelSize = socketClient.getMicroscopePixelSize();
-            if (pixelSize > 1.0) return 100.0;  // 4x-5x
-            if (pixelSize > 0.5) return 60.0;   // 10x
-            if (pixelSize > 0.2) return 40.0;   // 20x
-            if (pixelSize > 0.1) return 30.0;   // 40x
-            return 15.0;                         // 60x-100x
+            if (pixelSize > 1.0) return 100.0; // 4x-5x
+            if (pixelSize > 0.5) return 60.0; // 10x
+            if (pixelSize > 0.2) return 40.0; // 20x
+            if (pixelSize > 0.1) return 30.0; // 40x
+            return 15.0; // 60x-100x
         } catch (IOException e) {
             logger.warn("Could not query pixel size, using default 40um: {}", e.getMessage());
             return 40.0;
@@ -283,7 +315,10 @@ public class SweepFocusController {
     }
 
     private void returnToZ(double z, StatusCallback callback) {
-        try { socketClient.moveStageZ(z); } catch (IOException ignored) { }
+        try {
+            socketClient.moveStageZ(z);
+        } catch (IOException ignored) {
+        }
         finish(callback, cancelled ? "Sweep Focus cancelled" : "Sweep Focus complete", Outcome.SUCCESS);
     }
 

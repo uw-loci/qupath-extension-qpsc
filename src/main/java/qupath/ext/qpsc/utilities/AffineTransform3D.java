@@ -67,15 +67,15 @@ public class AffineTransform3D {
     public static AffineTransform3D from2D(AffineTransform transform2d, double zScale, double zOffset) {
         double[] m = new double[16];
         // XY block from 2D transform
-        m[0] = transform2d.getScaleX();   // m00
-        m[1] = transform2d.getShearX();   // m01
+        m[0] = transform2d.getScaleX(); // m00
+        m[1] = transform2d.getShearX(); // m01
         m[3] = transform2d.getTranslateX(); // tx
-        m[4] = transform2d.getShearY();   // m10
-        m[5] = transform2d.getScaleY();   // m11
+        m[4] = transform2d.getShearY(); // m10
+        m[5] = transform2d.getScaleY(); // m11
         m[7] = transform2d.getTranslateY(); // ty
         // Z block
-        m[10] = zScale;                   // m22
-        m[11] = zOffset;                  // tz
+        m[10] = zScale; // m22
+        m[11] = zOffset; // tz
         // Homogeneous row
         m[15] = 1;
         return new AffineTransform3D(m);
@@ -120,13 +120,13 @@ public class AffineTransform3D {
      */
     public AffineTransform to2D() {
         return new AffineTransform(
-                matrix[0],  // m00 = scaleX
-                matrix[4],  // m10 = shearY
-                matrix[1],  // m01 = shearX
-                matrix[5],  // m11 = scaleY
-                matrix[3],  // m02 = translateX
-                matrix[7]   // m12 = translateY
-        );
+                matrix[0], // m00 = scaleX
+                matrix[4], // m10 = shearY
+                matrix[1], // m01 = shearX
+                matrix[5], // m11 = scaleY
+                matrix[3], // m02 = translateX
+                matrix[7] // m12 = translateY
+                );
     }
 
     /** Z scale factor (m22). */
@@ -154,9 +154,12 @@ public class AffineTransform3D {
      * In this case, the transform is effectively 2D and {@link #to2D()} is lossless.
      */
     public boolean isEffectively2D() {
-        return matrix[10] == 1.0 && matrix[11] == 0.0
-                && matrix[2] == 0.0 && matrix[6] == 0.0  // no XY->Z coupling
-                && matrix[8] == 0.0 && matrix[9] == 0.0;  // no Z->XY coupling
+        return matrix[10] == 1.0
+                && matrix[11] == 0.0
+                && matrix[2] == 0.0
+                && matrix[6] == 0.0 // no XY->Z coupling
+                && matrix[8] == 0.0
+                && matrix[9] == 0.0; // no Z->XY coupling
     }
 
     /**
@@ -184,9 +187,8 @@ public class AffineTransform3D {
             }
         }
         // General 4x4 inversion would go here for future use
-        throw new UnsupportedOperationException(
-                "General 4x4 matrix inversion not yet implemented. "
-                        + "Use decoupled XY+Z transforms (from2D factory) for current workflows.");
+        throw new UnsupportedOperationException("General 4x4 matrix inversion not yet implemented. "
+                + "Use decoupled XY+Z transforms (from2D factory) for current workflows.");
     }
 
     /**

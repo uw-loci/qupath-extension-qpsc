@@ -21,9 +21,9 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.WbMode;
-import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.SampleNameValidator;
@@ -429,8 +429,7 @@ public class UnifiedAcquisitionController {
             modeBox.setAlignment(Pos.CENTER_LEFT);
 
             // Description label for center+size mode
-            Label centerModeDescription = new Label(
-                    "The center position defines the midpoint of the acquisition area. "
+            Label centerModeDescription = new Label("The center position defines the midpoint of the acquisition area. "
                     + "Tiles extend equally in all directions from this point.");
             centerModeDescription.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
             centerModeDescription.setWrapText(true);
@@ -446,11 +445,9 @@ public class UnifiedAcquisitionController {
             startYField.setPromptText("Center Y");
             startXField.setPrefWidth(120);
             startYField.setPrefWidth(120);
-            startXField.setTooltip(new Tooltip(
-                    "Center X coordinate of the acquisition region in micrometers.\n"
+            startXField.setTooltip(new Tooltip("Center X coordinate of the acquisition region in micrometers.\n"
                     + "The tiled area extends equally in both directions from this point."));
-            startYField.setTooltip(new Tooltip(
-                    "Center Y coordinate of the acquisition region in micrometers.\n"
+            startYField.setTooltip(new Tooltip("Center Y coordinate of the acquisition region in micrometers.\n"
                     + "The tiled area extends equally in both directions from this point."));
 
             widthField = new TextField(PersistentPreferences.getBoundingBoxWidth());
@@ -463,8 +460,7 @@ public class UnifiedAcquisitionController {
             heightField.setTooltip(new Tooltip("Total height of the acquisition region in micrometers."));
 
             Button getStartPosBtn = new Button("Use Current Position as Center");
-            getStartPosBtn.setTooltip(new Tooltip(
-                    "Set the center of the acquisition region to the current\n"
+            getStartPosBtn.setTooltip(new Tooltip("Set the center of the acquisition region to the current\n"
                     + "stage position (center of the Live Viewer field of view)."));
             getStartPosBtn.setOnAction(e -> {
                 try {
@@ -629,7 +625,8 @@ public class UnifiedAcquisitionController {
             }
 
             // Assemble content
-            content.getChildren().addAll(modeBox, centerModeDescription, startSizePane, twoCornersPane, calculatedBoundsLabel);
+            content.getChildren()
+                    .addAll(modeBox, centerModeDescription, startSizePane, twoCornersPane, calculatedBoundsLabel);
 
             // Show/hide description label based on mode
             twoCornersMode.selectedProperty().addListener((obs, old, selected) -> {
@@ -1068,9 +1065,9 @@ public class UnifiedAcquisitionController {
                     x2 = Math.max(startX, endX);
                     y2 = Math.max(startY, endY);
                 }
-                calculatedBoundsLabel.setText(
-                        String.format("Bounds: (%.1f, %.1f) to (%.1f, %.1f)  [center: %.1f, %.1f]",
-                                x1, y1, x2, y2, (x1 + x2) / 2.0, (y1 + y2) / 2.0));
+                calculatedBoundsLabel.setText(String.format(
+                        "Bounds: (%.1f, %.1f) to (%.1f, %.1f)  [center: %.1f, %.1f]",
+                        x1, y1, x2, y2, (x1 + x2) / 2.0, (y1 + y2) / 2.0));
                 calculatedBoundsLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #28a745;");
 
                 // Update preview labels

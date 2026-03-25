@@ -366,10 +366,7 @@ public class BackgroundSettingsReader {
             }
 
             logger.info(
-                    "Found background settings for {} WB modes under {}: {}",
-                    result.size(),
-                    basePath,
-                    result.keySet());
+                    "Found background settings for {} WB modes under {}: {}", result.size(), basePath, result.keySet());
 
         } catch (Exception e) {
             logger.error("Error scanning for background settings", e);

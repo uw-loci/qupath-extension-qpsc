@@ -109,7 +109,8 @@ public class BackgroundValidityChecker {
 
         // Check if calibration is newer than background collection
         if (configManager != null) {
-            String calibTs = configManager.getWbCalibrationTimestamp(mode.getProtocolName(), modality, objective, detector);
+            String calibTs =
+                    configManager.getWbCalibrationTimestamp(mode.getProtocolName(), modality, objective, detector);
             if (calibTs != null) {
                 // Get the background file's last-modified time as a proxy for collection timestamp
                 // (background_settings.yml is written at collection time)
@@ -117,8 +118,9 @@ public class BackgroundValidityChecker {
                     try {
                         java.io.File settingsFile = new java.io.File(bg.settingsFilePath);
                         if (settingsFile.exists()) {
-                            java.time.Instant fileModified =
-                                    java.nio.file.Files.getLastModifiedTime(settingsFile.toPath()).toInstant();
+                            java.time.Instant fileModified = java.nio.file.Files.getLastModifiedTime(
+                                            settingsFile.toPath())
+                                    .toInstant();
                             LocalDateTime bgTime =
                                     LocalDateTime.ofInstant(fileModified, java.time.ZoneId.systemDefault());
 

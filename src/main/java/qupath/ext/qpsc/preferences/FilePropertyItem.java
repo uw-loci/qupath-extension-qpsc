@@ -36,8 +36,8 @@ public class FilePropertyItem implements PropertySheet.Item {
      * @param description   tooltip/description text
      * @param directoryMode true for directory chooser, false for file chooser
      */
-    public FilePropertyItem(StringProperty property, String name, String category,
-                            String description, boolean directoryMode) {
+    public FilePropertyItem(
+            StringProperty property, String name, String category, String description, boolean directoryMode) {
         this.property = property;
         this.name = name;
         this.category = category;
@@ -145,7 +145,9 @@ public class FilePropertyItem implements PropertySheet.Item {
         }
 
         @Override
-        public Node getEditor() { return editor; }
+        public Node getEditor() {
+            return editor;
+        }
 
         @Override
         public File getValue() {
@@ -202,7 +204,9 @@ public class FilePropertyItem implements PropertySheet.Item {
         }
 
         @Override
-        public Node getEditor() { return editor; }
+        public Node getEditor() {
+            return editor;
+        }
 
         @Override
         public File getValue() {

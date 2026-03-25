@@ -88,7 +88,8 @@ public class SaturationSummaryDialog {
         summary.setWrapText(true);
         summary.setStyle("-fx-font-size: 12px;");
 
-        Label instruction = new Label("Click a row to move stage to that tile position (requires microscope connection)");
+        Label instruction =
+                new Label("Click a row to move stage to that tile position (requires microscope connection)");
         instruction.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
 
         // Table
@@ -96,11 +97,13 @@ public class SaturationSummaryDialog {
         table.setItems(FXCollections.observableArrayList(tiles));
 
         TableColumn<Map<String, Object>, String> angleCol = new TableColumn<>("Angle");
-        angleCol.setCellValueFactory(d -> new SimpleStringProperty(String.valueOf(d.getValue().get("angle"))));
+        angleCol.setCellValueFactory(
+                d -> new SimpleStringProperty(String.valueOf(d.getValue().get("angle"))));
         angleCol.setPrefWidth(60);
 
         TableColumn<Map<String, Object>, String> fileCol = new TableColumn<>("Tile");
-        fileCol.setCellValueFactory(d -> new SimpleStringProperty(String.valueOf(d.getValue().get("filename"))));
+        fileCol.setCellValueFactory(
+                d -> new SimpleStringProperty(String.valueOf(d.getValue().get("filename"))));
         fileCol.setPrefWidth(120);
 
         TableColumn<Map<String, Object>, Number> worstCol = new TableColumn<>("Worst %");
@@ -205,20 +208,23 @@ public class SaturationSummaryDialog {
         logger.info("Navigating to saturated tile {} at ({}, {})", tile.get("filename"), x, y);
 
         // Move stage on background thread
-        new Thread(() -> {
-            try {
-                MicroscopeController controller = MicroscopeController.getInstance();
-                if (controller != null && controller.isConnected()) {
-                    controller.moveStageXY(x, y);
-                    logger.info("Stage moved to ({}, {})", x, y);
-                } else {
-                    logger.warn("Microscope not connected -- cannot navigate to tile");
-                    Platform.runLater(() -> qupath.fx.dialogs.Dialogs.showWarningNotification(
-                            "Not Connected", "Microscope not connected. Cannot navigate to tile."));
-                }
-            } catch (Exception e) {
-                logger.error("Failed to navigate to tile", e);
-            }
-        }, "SaturationNav").start();
+        new Thread(
+                        () -> {
+                            try {
+                                MicroscopeController controller = MicroscopeController.getInstance();
+                                if (controller != null && controller.isConnected()) {
+                                    controller.moveStageXY(x, y);
+                                    logger.info("Stage moved to ({}, {})", x, y);
+                                } else {
+                                    logger.warn("Microscope not connected -- cannot navigate to tile");
+                                    Platform.runLater(() -> qupath.fx.dialogs.Dialogs.showWarningNotification(
+                                            "Not Connected", "Microscope not connected. Cannot navigate to tile."));
+                                }
+                            } catch (Exception e) {
+                                logger.error("Failed to navigate to tile", e);
+                            }
+                        },
+                        "SaturationNav")
+                .start();
     }
 }

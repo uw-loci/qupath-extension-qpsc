@@ -21,10 +21,10 @@ import qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.BackgroundCollect
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.modality.WbMode;
 import qupath.ext.qpsc.modality.ppm.RotationManager;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.modality.WbMode;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
@@ -382,7 +382,8 @@ public class BackgroundCollectionController {
                 if (!detectors.isEmpty()) {
                     String detector = detectors.iterator().next();
                     // Look up backgrounds for the currently selected WB mode
-                    String selectedWbMode = WbMode.fromDisplayName(wbModeComboBox.getValue()).getProtocolName();
+                    String selectedWbMode =
+                            WbMode.fromDisplayName(wbModeComboBox.getValue()).getProtocolName();
                     existingBackgroundSettings = BackgroundSettingsReader.findBackgroundSettings(
                             baseBackgroundFolder, modality, objective, detector, selectedWbMode);
 
@@ -434,7 +435,8 @@ public class BackgroundCollectionController {
         getBackgroundCollectionDefaults(modality, objective, finalDetector)
                 .thenAccept(defaultExposures -> {
                     Platform.runLater(() -> {
-                        boolean perAngleWbEnabled = WbMode.fromDisplayName(wbModeComboBox.getValue()) == WbMode.PER_ANGLE;
+                        boolean perAngleWbEnabled =
+                                WbMode.fromDisplayName(wbModeComboBox.getValue()) == WbMode.PER_ANGLE;
                         logger.info(
                                 "DEBUG: Inside callback - capturedSettings = {}, perAngleWB = {}",
                                 capturedSettings != null ? "FOUND" : "NULL",
@@ -632,9 +634,8 @@ public class BackgroundCollectionController {
             }
             String detector = detectors.iterator().next();
 
-            List<BackgroundValidityChecker.WbModeValidity> validities =
-                    BackgroundValidityChecker.checkAllModes(
-                            baseBackgroundFolder, modality, objective, detector, configManager);
+            List<BackgroundValidityChecker.WbModeValidity> validities = BackgroundValidityChecker.checkAllModes(
+                    baseBackgroundFolder, modality, objective, detector, configManager);
 
             Label header = new Label("Background Status Per WB Mode:");
             header.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
@@ -653,8 +654,8 @@ public class BackgroundCollectionController {
                         color = "#E65100";
                     }
                 }
-                Label line = new Label(String.format(
-                        "  %s  %s -- %s", prefix, validity.mode().getDisplayName(), validity.message()));
+                Label line = new Label(
+                        String.format("  %s  %s -- %s", prefix, validity.mode().getDisplayName(), validity.message()));
                 line.setStyle("-fx-text-fill: " + color + "; -fx-font-size: 11px;");
                 wbValidityPanel.getChildren().add(line);
             }

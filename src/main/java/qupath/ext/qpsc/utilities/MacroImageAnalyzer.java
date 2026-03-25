@@ -640,8 +640,11 @@ public class MacroImageAnalyzer {
             }
         }
 
-        logger.info("Artifact filter complete (medianK={}, morphCloseK={}, iter={})",
-                medianKernel, morphCloseKernel, morphCloseIter);
+        logger.info(
+                "Artifact filter complete (medianK={}, morphCloseK={}, iter={})",
+                medianKernel,
+                morphCloseKernel,
+                morphCloseIter);
         return binary;
     }
 

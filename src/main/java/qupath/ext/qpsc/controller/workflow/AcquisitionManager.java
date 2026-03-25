@@ -866,8 +866,7 @@ public class AcquisitionManager {
                         } else {
                             // Fallback: simple notification
                             Platform.runLater(() -> Dialogs.showWarningNotification(
-                                    "Saturation Detected",
-                                    "Some tiles had saturated pixels:\n" + satSummary));
+                                    "Saturation Detected", "Some tiles had saturated pixels:\n" + satSummary));
                         }
                     }
                     return true;
@@ -1001,14 +1000,14 @@ public class AcquisitionManager {
         }
 
         // Push notification
-        qupath.ext.qpsc.service.notification.NotificationService.getInstance().notify(
-                "Hardware Error - Acquisition Paused",
-                "A hardware communication error occurred. Acquisition is paused and waiting for user intervention.",
-                qupath.ext.qpsc.service.notification.NotificationPriority.URGENT,
-                qupath.ext.qpsc.service.notification.NotificationEvent.ACQUISITION_ERROR);
+        qupath.ext.qpsc.service.notification.NotificationService.getInstance()
+                .notify(
+                        "Hardware Error - Acquisition Paused",
+                        "A hardware communication error occurred. Acquisition is paused and waiting for user intervention.",
+                        qupath.ext.qpsc.service.notification.NotificationPriority.URGENT,
+                        qupath.ext.qpsc.service.notification.NotificationEvent.ACQUISITION_ERROR);
 
-        javafx.scene.control.Alert alert =
-                new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+        javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
         alert.setTitle("Hardware Error During Acquisition");
         alert.setHeaderText("A hardware communication error occurred.\n"
                 + "The acquisition is paused. You can fix the issue in Micro-Manager\n"
@@ -1023,11 +1022,12 @@ public class AcquisitionManager {
         textArea.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
 
         javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(8);
-        content.getChildren().addAll(
-                new javafx.scene.control.Label("Error details:"),
-                textArea,
-                new javafx.scene.control.Label(
-                        "Check the device connection in Micro-Manager before retrying."));
+        content.getChildren()
+                .addAll(
+                        new javafx.scene.control.Label("Error details:"),
+                        textArea,
+                        new javafx.scene.control.Label(
+                                "Check the device connection in Micro-Manager before retrying."));
         alert.getDialogPane().setContent(content);
         alert.getDialogPane().setMinWidth(550);
 
@@ -1036,8 +1036,8 @@ public class AcquisitionManager {
                 new javafx.scene.control.ButtonType("Retry", javafx.scene.control.ButtonBar.ButtonData.YES);
         javafx.scene.control.ButtonType skipButton =
                 new javafx.scene.control.ButtonType("Skip Tile", javafx.scene.control.ButtonBar.ButtonData.NO);
-        javafx.scene.control.ButtonType cancelButton =
-                new javafx.scene.control.ButtonType("Cancel Acquisition", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+        javafx.scene.control.ButtonType cancelButton = new javafx.scene.control.ButtonType(
+                "Cancel Acquisition", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
         alert.getButtonTypes().setAll(retryButton, skipButton, cancelButton);
 
         java.util.Optional<javafx.scene.control.ButtonType> result = alert.showAndWait();
@@ -1067,8 +1067,8 @@ public class AcquisitionManager {
             if (subdirs == null) return;
 
             for (java.io.File subdir : subdirs) {
-                java.io.File[] tiffs = subdir.listFiles(
-                        f -> f.isFile() && f.getName().endsWith(".tif"));
+                java.io.File[] tiffs =
+                        subdir.listFiles(f -> f.isFile() && f.getName().endsWith(".tif"));
                 if (tiffs == null) continue;
                 for (java.io.File tif : tiffs) {
                     long mod = tif.lastModified();
@@ -1080,8 +1080,7 @@ public class AcquisitionManager {
             }
 
             if (bestFile != null) {
-                qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.showAcquiredTile(
-                        bestFile.getAbsolutePath());
+                qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.showAcquiredTile(bestFile.getAbsolutePath());
             }
         } catch (Exception e) {
             logger.debug("Error finding latest tile for viewer: {}", e.getMessage());

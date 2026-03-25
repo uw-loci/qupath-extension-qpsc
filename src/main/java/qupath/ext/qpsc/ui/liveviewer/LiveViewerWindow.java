@@ -9,7 +9,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import javax.imageio.ImageIO;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -34,6 +33,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
@@ -317,9 +317,9 @@ public class LiveViewerWindow {
                     for (int x = 0; x < w; x++) {
                         int pixel = img.getRGB(x, y);
                         int idx = (y * w + x) * 3;
-                        rgb[idx] = (byte) ((pixel >> 16) & 0xFF);     // R
-                        rgb[idx + 1] = (byte) ((pixel >> 8) & 0xFF);  // G
-                        rgb[idx + 2] = (byte) (pixel & 0xFF);         // B
+                        rgb[idx] = (byte) ((pixel >> 16) & 0xFF); // R
+                        rgb[idx + 1] = (byte) ((pixel >> 8) & 0xFF); // G
+                        rgb[idx + 2] = (byte) (pixel & 0xFF); // B
                     }
                 }
 
@@ -360,15 +360,13 @@ public class LiveViewerWindow {
         // Refine focus button and search range selector
         refineFocusButton = new Button("Refine Focus");
         refineFocusButton.setTooltip(new Tooltip(
-                "Automatically refine Z focus using histogram contrast. "
-                        + "Best used when already close to focus."));
+                "Automatically refine Z focus using histogram contrast. " + "Best used when already close to focus."));
         refineFocusButton.setDisable(true); // disabled until live is ON
         refineFocusButton.setOnAction(e -> handleRefineFocus());
 
         sweepFocusButton = new Button("Sweep Focus");
-        sweepFocusButton.setTooltip(new Tooltip(
-                "Continuous Z sweep autofocus. Ramps Z while streaming "
-                        + "frames to find the best focus in one pass."));
+        sweepFocusButton.setTooltip(new Tooltip("Continuous Z sweep autofocus. Ramps Z while streaming "
+                + "frames to find the best focus in one pass."));
         sweepFocusButton.setDisable(true);
         sweepFocusButton.setOnAction(e -> handleSweepFocus());
 
@@ -376,11 +374,10 @@ public class LiveViewerWindow {
         focusRangeCombo.getItems().addAll("Auto", "1um", "2um", "5um", "10um", "20um");
         focusRangeCombo.setValue("Auto");
         focusRangeCombo.setPrefWidth(70);
-        focusRangeCombo.setTooltip(new Tooltip(
-                "Search range for Refine Focus.\n"
-                        + "Auto: determined from objective magnification.\n"
-                        + "Smaller = faster but must be closer to focus.\n"
-                        + "Larger = searches wider but takes longer."));
+        focusRangeCombo.setTooltip(new Tooltip("Search range for Refine Focus.\n"
+                + "Auto: determined from objective magnification.\n"
+                + "Smaller = faster but must be closer to focus.\n"
+                + "Larger = searches wider but takes longer."));
         focusRangeCombo.setDisable(true);
 
         // Display scale selector
@@ -423,10 +420,9 @@ public class LiveViewerWindow {
 
         // Show acquired tiles checkbox
         showTilesCheckBox = new CheckBox("Show Tiles");
-        showTilesCheckBox.setTooltip(new Tooltip(
-                "During acquisition, display each acquired tile in this viewer.\n"
-                        + "Useful for checking focus drift without waiting for stitching.\n"
-                        + "Updates at most once every 8 seconds to avoid I/O overhead."));
+        showTilesCheckBox.setTooltip(new Tooltip("During acquisition, display each acquired tile in this viewer.\n"
+                + "Useful for checking focus drift without waiting for stitching.\n"
+                + "Updates at most once every 8 seconds to avoid I/O overhead."));
         showTilesCheckBox.setSelected(false);
         showTilesCheckBox.selectedProperty().addListener((obs, oldVal, newVal) -> {
             showTilesEnabled = newVal;
@@ -438,8 +434,16 @@ public class LiveViewerWindow {
 
         Button docHelpButton = DocumentationHelper.createHelpButton("liveViewer");
 
-        HBox toolbar = new HBox(8, liveToggleButton, refineFocusButton, sweepFocusButton, focusRangeCombo,
-                showTilesCheckBox, spacer, scaleLabel, scaleCombo);
+        HBox toolbar = new HBox(
+                8,
+                liveToggleButton,
+                refineFocusButton,
+                sweepFocusButton,
+                focusRangeCombo,
+                showTilesCheckBox,
+                spacer,
+                scaleLabel,
+                scaleCombo);
         if (docHelpButton != null) toolbar.getChildren().add(docHelpButton);
         toolbar.setPadding(new Insets(4, 8, 4, 8));
         toolbar.setAlignment(Pos.CENTER_LEFT);
@@ -668,15 +672,12 @@ public class LiveViewerWindow {
         if (rangeSelection != null && rangeSelection.endsWith("um")) {
             try {
                 searchRange = Double.parseDouble(rangeSelection.replace("um", ""));
-            } catch (NumberFormatException ignored) { }
+            } catch (NumberFormatException ignored) {
+            }
         }
 
         // Create controller with frame supplier reading lastFrame
-        refineFocusController = new RefineFocusController(
-                controller.getSocketClient(),
-                () -> lastFrame,
-                searchRange
-        );
+        refineFocusController = new RefineFocusController(controller.getSocketClient(), () -> lastFrame, searchRange);
 
         // Update button to cancel mode, lock live toggle during focus
         refineFocusButton.setText("Cancel Focus");
@@ -705,10 +706,9 @@ public class LiveViewerWindow {
                     if (outcome == RefineFocusController.Outcome.FAILED) {
                         refineFocusButton.setText("FAILED");
                         refineFocusButton.setStyle("-fx-font-size: 11; -fx-base: #F44336;");
-                        refineFocusButton.setTooltip(new Tooltip(
-                                "No focus improvement found within search range.\n"
-                                        + "- Get closer to focus manually (scroll Z), then retry\n"
-                                        + "- Or widen the search range dropdown"));
+                        refineFocusButton.setTooltip(new Tooltip("No focus improvement found within search range.\n"
+                                + "- Get closer to focus manually (scroll Z), then retry\n"
+                                + "- Or widen the search range dropdown"));
                         refineFocusButton.setDisable(!liveActive);
                     } else {
                         refineFocusButton.setText("Refine Focus");
@@ -749,11 +749,11 @@ public class LiveViewerWindow {
         if (rangeSelection != null && rangeSelection.endsWith("um")) {
             try {
                 searchRange = Double.parseDouble(rangeSelection.replace("um", ""));
-            } catch (NumberFormatException ignored) { }
+            } catch (NumberFormatException ignored) {
+            }
         }
 
-        sweepFocusController = new SweepFocusController(
-                controller.getSocketClient(), () -> lastFrame, searchRange);
+        sweepFocusController = new SweepFocusController(controller.getSocketClient(), () -> lastFrame, searchRange);
 
         sweepFocusButton.setText("Cancel Sweep");
         sweepFocusButton.setStyle("");
