@@ -304,10 +304,22 @@ public class MicroscopeAlignmentWorkflow {
                 croppedResult.getCropOffsetX(),
                 croppedResult.getCropOffsetY());
 
-        // Get flip settings - use entry metadata if available (handles flipped/derived images),
-        // fall back to preferences for new images not yet in a project
-        boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
-        boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+        // Get flip settings: scanner config -> entry metadata -> preference fallback
+        boolean flipX = false;
+        boolean flipY = false;
+        try {
+            Boolean configFlipX = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "flip_x");
+            Boolean configFlipY = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "flip_y");
+            if (configFlipX != null) flipX = configFlipX;
+            if (configFlipY != null) flipY = configFlipY;
+            logger.info("Using flip settings from scanner config: flipX={}, flipY={}", flipX, flipY);
+        } catch (Exception e) {
+            // Fall back to preference
+            flipX = QPPreferenceDialog.getFlipMacroXProperty();
+            flipY = QPPreferenceDialog.getFlipMacroYProperty();
+            logger.info("Using flip settings from preferences (no scanner config): flipX={}, flipY={}", flipX, flipY);
+        }
+        // Override with entry metadata if available
         if (gui.getProject() != null && gui.getImageData() != null) {
             @SuppressWarnings("unchecked")
             Project<BufferedImage> proj = (Project<BufferedImage>) gui.getProject();
@@ -426,10 +438,23 @@ public class MicroscopeAlignmentWorkflow {
                 // Create a mutable holder for detection results that may be updated
                 final MacroImageResults[] detectionResultsHolder = {detectionResults};
 
-                // Get flip settings - use entry metadata if available (handles flipped/derived images),
-                // fall back to preferences for new images not yet in a project
-                boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
-                boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+                // Get flip settings: scanner config -> entry metadata -> preference fallback
+                boolean flipX = false;
+                boolean flipY = false;
+                try {
+                    Map<String, Object> scannerConfig = MinorFunctions.loadYamlFile(selectedScannerConfigPath);
+                    Boolean configFlipX = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "flip_x");
+                    Boolean configFlipY = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "flip_y");
+                    if (configFlipX != null) flipX = configFlipX;
+                    if (configFlipY != null) flipY = configFlipY;
+                    logger.info("Using flip settings from scanner config: flipX={}, flipY={}", flipX, flipY);
+                } catch (Exception e) {
+                    // Fall back to preference
+                    flipX = QPPreferenceDialog.getFlipMacroXProperty();
+                    flipY = QPPreferenceDialog.getFlipMacroYProperty();
+                    logger.info("Using flip settings from preferences (no scanner config): flipX={}, flipY={}", flipX, flipY);
+                }
+                // Override with entry metadata if available
                 if (gui.getProject() != null && gui.getImageData() != null) {
                     @SuppressWarnings("unchecked")
                     Project<BufferedImage> proj = (Project<BufferedImage>) gui.getProject();
@@ -586,9 +611,23 @@ public class MicroscopeAlignmentWorkflow {
             Map<String, Object> projectDetails,
             AffineTransformManager transformManager) {
         try {
-            // Get flip settings from the current image (may be the flipped entry now)
-            boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
-            boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+            // Get flip settings: scanner config -> entry metadata -> preference fallback
+            boolean flipX = false;
+            boolean flipY = false;
+            try {
+                Map<String, Object> scannerConfig = MinorFunctions.loadYamlFile(selectedScannerConfigPath);
+                Boolean configFlipX = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "flip_x");
+                Boolean configFlipY = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "flip_y");
+                if (configFlipX != null) flipX = configFlipX;
+                if (configFlipY != null) flipY = configFlipY;
+                logger.info("Using flip settings from scanner config: flipX={}, flipY={}", flipX, flipY);
+            } catch (Exception e) {
+                // Fall back to preference
+                flipX = QPPreferenceDialog.getFlipMacroXProperty();
+                flipY = QPPreferenceDialog.getFlipMacroYProperty();
+                logger.info("Using flip settings from preferences (no scanner config): flipX={}, flipY={}", flipX, flipY);
+            }
+            // Override with entry metadata if available
             if (gui.getProject() != null && gui.getImageData() != null) {
                 @SuppressWarnings("unchecked")
                 Project<BufferedImage> proj = (Project<BufferedImage>) gui.getProject();
@@ -596,7 +635,7 @@ public class MicroscopeAlignmentWorkflow {
                 if (currentEntry != null && ImageMetadataManager.isFlipped(currentEntry)) {
                     flipX = ImageMetadataManager.isFlippedX(currentEntry);
                     flipY = ImageMetadataManager.isFlippedY(currentEntry);
-                    logger.info("Using flip state from current entry metadata: flipX={}, flipY={}", flipX, flipY);
+                    logger.info("Using flip state from entry metadata: flipX={}, flipY={}", flipX, flipY);
                 }
             }
 
@@ -660,7 +699,8 @@ public class MicroscopeAlignmentWorkflow {
                     modeWithIndex,
                     stageInvertedX,
                     stageInvertedY,
-                    null); // Pass null for bounds
+                    null, // Pass null for bounds
+                    selectedScannerConfigPath);
 
             // Build an existing transform estimate for auto-move (if refining an existing transform)
             AffineTransform existingTransformEstimate = null;
@@ -752,7 +792,8 @@ public class MicroscopeAlignmentWorkflow {
             String modeWithIndex,
             boolean stageInvertedX,
             boolean stageInvertedY,
-            Rectangle dataBounds) {
+            Rectangle dataBounds,
+            String selectedScannerConfigPath) {
 
         // First, try to get tissue annotations specifically
         var tissueAnnotations = gui.getViewer().getHierarchy().getAnnotationObjects().stream()
@@ -760,8 +801,19 @@ public class MicroscopeAlignmentWorkflow {
                 .toList();
 
         // Log both optical flip (for image orientation) and stage inversion (for tile traversal)
-        boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
-        boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+        // Try scanner config first, fall back to preferences
+        boolean flipX = false;
+        boolean flipY = false;
+        try {
+            Map<String, Object> scannerConfig = MinorFunctions.loadYamlFile(selectedScannerConfigPath);
+            Boolean configFlipX = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "flip_x");
+            Boolean configFlipY = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "flip_y");
+            if (configFlipX != null) flipX = configFlipX;
+            if (configFlipY != null) flipY = configFlipY;
+        } catch (Exception e) {
+            flipX = QPPreferenceDialog.getFlipMacroXProperty();
+            flipY = QPPreferenceDialog.getFlipMacroYProperty();
+        }
         logger.info(
                 "Creating alignment tiles: opticalFlip=({}, {}), stageInverted=({}, {})",
                 flipX,
