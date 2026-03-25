@@ -744,7 +744,7 @@ public class AcquisitionManager {
                                 try {
                                     java.util.List<String> lines = java.nio.file.Files.readAllLines(metadataPath);
                                     int timingWindowSize = 10;
-                                    int afNTiles = 5;
+                                    int afNTiles = 5; // Total AF positions (count, not interval)
                                     int totalTiles = 0;
 
                                     for (String line : lines) {
