@@ -625,6 +625,34 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     logger.info("=== Python Server Versions ===");
                     logger.info("  {}", verJson);
                     logger.info("==============================");
+
+                    // Check if server supports REQHWER (added in 1.2.1)
+                    try {
+                        // Parse version from JSON like {"Microscope Command Server": "1.2.1", ...}
+                        String versionKey = "Microscope Command Server";
+                        int idx = verJson.indexOf(versionKey);
+                        if (idx >= 0) {
+                            int colonIdx = verJson.indexOf(':', idx);
+                            int quoteStart = verJson.indexOf('"', colonIdx + 1);
+                            int quoteEnd = verJson.indexOf('"', quoteStart + 1);
+                            if (quoteStart >= 0 && quoteEnd > quoteStart) {
+                                String ver = verJson.substring(quoteStart + 1, quoteEnd);
+                                String[] parts = ver.split("\\.");
+                                int major = Integer.parseInt(parts[0]);
+                                int minor = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+                                int patch = parts.length > 2 ? Integer.parseInt(parts[2]) : 0;
+                                // REQHWER added in 1.2.1
+                                hwErrorCheckSupported = (major > 1)
+                                        || (major == 1 && minor > 2)
+                                        || (major == 1 && minor == 2 && patch >= 1);
+                                if (hwErrorCheckSupported) {
+                                    logger.info("Server supports hardware error recovery (v{})", ver);
+                                }
+                            }
+                        }
+                    } catch (Exception parseEx) {
+                        logger.debug("Could not parse server version for REQHWER support: {}", parseEx.getMessage());
+                    }
                 } else if ("CFG_FAIL".equals(responseStr)) {
                     // Read error message: 4-byte length + message
                     byte[] lengthBytes = new byte[4];
@@ -2998,8 +3026,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     // Tracks whether the server supports the REQHWER command.
-    // Set to false on first timeout to avoid repeated failures against older servers.
-    private volatile boolean hwErrorCheckSupported = true;
+    // Defaults to false -- enabled only when server version >= 1.2.1 is confirmed
+    // during CONFIG handshake. Prevents sending unknown commands to older servers.
+    private volatile boolean hwErrorCheckSupported = false;
 
     /**
      * Checks if a hardware error recovery is requested by the server.
@@ -3049,19 +3078,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 }
             }
         } catch (Exception e) {
-            // Server likely doesn't support REQHWER (older version).
-            // Disable future checks and reconnect to fix desynchronized socket.
+            // Server doesn't support REQHWER -- permanently disable.
+            // Do NOT call handleIOException: that tears down the connection
+            // and disrupts ongoing acquisition/alignment monitoring.
             hwErrorCheckSupported = false;
-            logger.info(
-                    "Hardware error check disabled (server may not support REQHWER): {}. "
-                            + "Reconnecting to restore socket state.",
-                    e.getMessage());
-            try {
-                handleIOException(
-                        (e instanceof java.io.IOException) ? (java.io.IOException) e : new java.io.IOException(e));
-            } catch (Exception ignored) {
-                // Reconnect is best-effort
-            }
+            logger.debug("Hardware error check disabled (server does not support REQHWER)");
             return null;
         }
     }
