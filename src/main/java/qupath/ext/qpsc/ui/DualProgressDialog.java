@@ -301,7 +301,7 @@ public class DualProgressDialog {
         }
 
         if (filesCompleted > 0 && filesCompleted % 10 == 0) {
-            logger.info("Current annotation progress: {}/{} files", filesCompleted, currentAnnotationExpectedFiles);
+            logger.debug("Current annotation progress: {}/{} files", filesCompleted, currentAnnotationExpectedFiles);
         }
     }
 

@@ -154,7 +154,7 @@ public class UIFunctions {
 
                 // Log progress updates
                 if (current != lastSeenProgress.get()) {
-                    logger.info("PROGRESS UPDATE: {} of {} files", current, totalFiles);
+                    logger.debug("PROGRESS UPDATE: {} of {} files", current, totalFiles);
                     lastSeenProgress.set(current);
                     lastProgressTime.set(now);
                 }
