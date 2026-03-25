@@ -452,7 +452,10 @@ public class MicroscopeAlignmentWorkflow {
                     // Fall back to preference
                     flipX = QPPreferenceDialog.getFlipMacroXProperty();
                     flipY = QPPreferenceDialog.getFlipMacroYProperty();
-                    logger.info("Using flip settings from preferences (no scanner config): flipX={}, flipY={}", flipX, flipY);
+                    logger.info(
+                            "Using flip settings from preferences (no scanner config): flipX={}, flipY={}",
+                            flipX,
+                            flipY);
                 }
                 // Override with entry metadata if available
                 if (gui.getProject() != null && gui.getImageData() != null) {
@@ -625,7 +628,8 @@ public class MicroscopeAlignmentWorkflow {
                 // Fall back to preference
                 flipX = QPPreferenceDialog.getFlipMacroXProperty();
                 flipY = QPPreferenceDialog.getFlipMacroYProperty();
-                logger.info("Using flip settings from preferences (no scanner config): flipX={}, flipY={}", flipX, flipY);
+                logger.info(
+                        "Using flip settings from preferences (no scanner config): flipX={}, flipY={}", flipX, flipY);
             }
             // Override with entry metadata if available
             if (gui.getProject() != null && gui.getImageData() != null) {
