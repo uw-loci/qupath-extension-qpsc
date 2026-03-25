@@ -2997,18 +2997,29 @@ public class MicroscopeSocketClient implements AutoCloseable {
         return acknowledged;
     }
 
+    // Tracks whether the server supports the REQHWER command.
+    // Set to false on first timeout to avoid repeated failures against older servers.
+    private volatile boolean hwErrorCheckSupported = true;
+
     /**
      * Checks if a hardware error recovery is requested by the server.
-     * Must read the variable-length error message within the same socket lock
-     * as the command, since the message follows the 8-byte status.
+     * <p>
+     * This is a best-effort, non-critical check. If the server does not support
+     * the REQHWER command (older versions), the first timeout auto-disables
+     * future checks to avoid reconnection loops. Does NOT call handleIOException
+     * on failure -- the connection stays intact.
      *
-     * @return the error message if recovery is requested, or null if no error
-     * @throws IOException if communication fails
+     * @return the error message if recovery is requested, or null if no error or unsupported
      */
-    public String checkHardwareError() throws IOException {
-        synchronized (socketLock) {
-            ensureConnected();
-            try {
+    public String checkHardwareError() {
+        if (!hwErrorCheckSupported) {
+            return null;
+        }
+
+        try {
+            synchronized (socketLock) {
+                ensureConnected();
+
                 output.write(Command.REQHWER.getValue());
                 output.flush();
                 lastActivityTime.set(System.currentTimeMillis());
@@ -3036,10 +3047,22 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     logger.warn("Unknown hardware error status: {}", status);
                     return null;
                 }
-            } catch (IOException e) {
-                handleIOException(e);
-                throw e;
             }
+        } catch (Exception e) {
+            // Server likely doesn't support REQHWER (older version).
+            // Disable future checks and reconnect to fix desynchronized socket.
+            hwErrorCheckSupported = false;
+            logger.info(
+                    "Hardware error check disabled (server may not support REQHWER): {}. "
+                            + "Reconnecting to restore socket state.",
+                    e.getMessage());
+            try {
+                handleIOException(
+                        (e instanceof java.io.IOException) ? (java.io.IOException) e : new java.io.IOException(e));
+            } catch (Exception ignored) {
+                // Reconnect is best-effort
+            }
+            return null;
         }
     }
 
@@ -3179,23 +3202,20 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         // Not critical - just continue monitoring
                     }
 
-                // Check for hardware error recovery request
-                if (currentState != AcquisitionState.CANCELLING)
-                    try {
-                        String hwError = checkHardwareError();
-                        if (hwError != null) {
-                            // Hardware error -- reset timeout since we're waiting for user
+                // Check for hardware error recovery request (non-critical, auto-disables
+                // if the server doesn't support REQHWER)
+                if (currentState != AcquisitionState.CANCELLING) {
+                    String hwError = checkHardwareError();
+                    if (hwError != null) {
+                        lastProgressUpdateTime.set(System.currentTimeMillis());
+                        if (hardwareErrorCallback != null) {
+                            hardwareErrorCallback.accept(hwError);
                             lastProgressUpdateTime.set(System.currentTimeMillis());
-                            if (hardwareErrorCallback != null) {
-                                hardwareErrorCallback.accept(hwError);
-                                lastProgressUpdateTime.set(System.currentTimeMillis());
-                            } else {
-                                logger.warn("Hardware error reported but no handler: {}", hwError);
-                            }
+                        } else {
+                            logger.warn("Hardware error reported but no handler: {}", hwError);
                         }
-                    } catch (IOException e) {
-                        logger.debug("Failed to check hardware error status: {}", e.getMessage());
                     }
+                }
 
                 // Get progress if running
                 if (currentState == AcquisitionState.RUNNING && progressCallback != null) {
