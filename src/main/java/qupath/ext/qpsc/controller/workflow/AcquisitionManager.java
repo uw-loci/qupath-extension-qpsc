@@ -993,6 +993,20 @@ public class AcquisitionManager {
      * @return User's choice: "retry", "skip", or "cancel"
      */
     private static String showHardwareErrorDialog(String errorMessage) {
+        // System beep
+        try {
+            java.awt.Toolkit.getDefaultToolkit().beep();
+        } catch (Exception e) {
+            // Ignore
+        }
+
+        // Push notification
+        qupath.ext.qpsc.service.notification.NotificationService.getInstance().notify(
+                "Hardware Error - Acquisition Paused",
+                "A hardware communication error occurred. Acquisition is paused and waiting for user intervention.",
+                qupath.ext.qpsc.service.notification.NotificationPriority.URGENT,
+                qupath.ext.qpsc.service.notification.NotificationEvent.ACQUISITION_ERROR);
+
         javafx.scene.control.Alert alert =
                 new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
         alert.setTitle("Hardware Error During Acquisition");
