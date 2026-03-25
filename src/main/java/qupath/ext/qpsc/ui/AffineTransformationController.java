@@ -1,6 +1,7 @@
 package qupath.ext.qpsc.ui;
 
 import java.awt.geom.AffineTransform;
+import java.awt.geom.Point2D;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
@@ -21,6 +22,40 @@ import qupath.lib.scripting.QP;
 public class AffineTransformationController {
 
     private static final Logger logger = LoggerFactory.getLogger(AffineTransformationController.class);
+
+    /**
+     * A paired pixel coordinate and measured stage coordinate collected during alignment.
+     *
+     * @param pixelPoint  the tile centroid in full-resolution pixel coordinates
+     * @param stagePoint  the measured stage position (um) after the user confirmed alignment
+     * @param tileName    human-readable name of the tile used for this point
+     */
+    public record AlignmentPoint(Point2D pixelPoint, Point2D stagePoint, String tileName) {}
+
+    /**
+     * Alignment points collected during the most recent alignment session.
+     * Populated by {@link #setupAffineTransformationAndValidationGUI} and its
+     * refinement steps. The list is cleared at the start of each new session.
+     *
+     * <p>Thread-safety: all mutations happen on the FX application thread (inside
+     * {@code Platform.runLater} or {@code CompletableFuture} callbacks that execute
+     * on the FX thread), so no additional synchronization is needed.
+     */
+    private static final List<AlignmentPoint> alignmentPoints = new ArrayList<>();
+
+    /** Maximum translation shift (um) between consecutive refinements before warning. */
+    private static final double TRANSLATION_SHIFT_WARN_UM = 2000.0;
+
+    /**
+     * Returns an unmodifiable snapshot of the alignment points collected during the
+     * most recent alignment session.  Each point pairs a full-resolution pixel
+     * coordinate with the measured stage position the user confirmed.
+     *
+     * @return unmodifiable list of alignment points (may be empty if no session has run)
+     */
+    public static List<AlignmentPoint> getAlignmentPoints() {
+        return Collections.unmodifiableList(new ArrayList<>(alignmentPoints));
+    }
 
     /**
      * Launches the full affine alignment GUI flow with manual stage navigation.
@@ -63,6 +98,9 @@ public class AffineTransformationController {
 
         Platform.runLater(() -> {
             try {
+                // Clear alignment points from any previous session
+                alignmentPoints.clear();
+
                 logger.info(
                         "Starting affine transformation setup (pixelSize: {}, stageInvertedX: {}, stageInvertedY: {}, hasEstimate: {})",
                         macroPixelSizeMicrons,
@@ -143,6 +181,12 @@ public class AffineTransformationController {
                                     AffineTransform transform = TransformationFunctions.addTranslationToScaledAffine(
                                             scalingTransform, qpRefCoords, measuredStageCoords);
                                     logger.info("Calculated affine transform from alignment: {}", transform);
+
+                                    // Record the initial reference alignment point
+                                    alignmentPoints.add(new AlignmentPoint(
+                                            new Point2D.Double(qpRefCoords[0], qpRefCoords[1]),
+                                            new Point2D.Double(measuredStageCoords[0], measuredStageCoords[1]),
+                                            refTile.getName() != null ? refTile.getName() : "reference"));
 
                                     // 6. Secondary refinement with geometric extremes
                                     Collection<PathObject> allTiles =
@@ -243,6 +287,20 @@ public class AffineTransformationController {
                         AffineTransform newTransform = TransformationFunctions.addTranslationToScaledAffine(
                                 currentTransform, tileCoords, measuredCoords);
                         logger.info("Refined transform after tile '{}': {}", tile.getName(), newTransform);
+
+                        // Record this refinement point
+                        String tileName = tile.getName() != null ? tile.getName() : "refinement";
+                        alignmentPoints.add(new AlignmentPoint(
+                                new Point2D.Double(tileCoords[0], tileCoords[1]),
+                                new Point2D.Double(measuredCoords[0], measuredCoords[1]),
+                                tileName));
+
+                        // Compute residuals for all previous points against the new transform
+                        logResiduals(newTransform);
+
+                        // Check translation stability between consecutive transforms
+                        checkTranslationStability(currentTransform, newTransform, tileName);
+
                         tileFuture.complete(newTransform);
                     } catch (Exception e) {
                         logger.error("Error getting stage position during refinement", e);
@@ -257,5 +315,53 @@ public class AffineTransformationController {
         });
 
         return tileFuture;
+    }
+
+    /**
+     * Computes and logs the back-projection residual error for every recorded alignment
+     * point against the given transform. The residual is the Euclidean distance (in um)
+     * between the predicted stage position and the actual measured stage position.
+     *
+     * @param transform the current affine transform (pixel -> stage)
+     */
+    private static void logResiduals(AffineTransform transform) {
+        if (alignmentPoints.isEmpty()) {
+            return;
+        }
+        logger.info("--- Residual errors for {} alignment point(s) ---", alignmentPoints.size());
+        double maxResidual = 0;
+        for (int i = 0; i < alignmentPoints.size(); i++) {
+            AlignmentPoint pt = alignmentPoints.get(i);
+            Point2D predicted = transform.transform(pt.pixelPoint(), null);
+            double residualUm = predicted.distance(pt.stagePoint());
+            maxResidual = Math.max(maxResidual, residualUm);
+            logger.info("  Residual for point {} ('{}'): {} um", i, pt.tileName(), String.format("%.1f", residualUm));
+        }
+        logger.info("  Max residual: {} um", String.format("%.1f", maxResidual));
+    }
+
+    /**
+     * Compares the translation components of two consecutive transforms and logs a
+     * warning if the shift exceeds {@link #TRANSLATION_SHIFT_WARN_UM}.
+     *
+     * @param previousTransform the transform before refinement
+     * @param newTransform      the transform after refinement
+     * @param tileName          name of the tile used for this refinement (for logging)
+     */
+    private static void checkTranslationStability(
+            AffineTransform previousTransform, AffineTransform newTransform, String tileName) {
+        double dTx = Math.abs(newTransform.getTranslateX() - previousTransform.getTranslateX());
+        double dTy = Math.abs(newTransform.getTranslateY() - previousTransform.getTranslateY());
+        double shift = Math.sqrt(dTx * dTx + dTy * dTy);
+        if (shift > TRANSLATION_SHIFT_WARN_UM) {
+            logger.warn(
+                    "Large translation shift after tile '{}': {} um "
+                            + "(threshold: {} um). This may indicate a misaligned point.",
+                    tileName,
+                    String.format("%.1f", shift),
+                    String.format("%.0f", TRANSLATION_SHIFT_WARN_UM));
+        } else {
+            logger.info("Translation shift after tile '{}': {} um [stable]", tileName, String.format("%.1f", shift));
+        }
     }
 }

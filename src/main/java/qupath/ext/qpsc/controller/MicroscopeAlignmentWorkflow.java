@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.model.SampleSetupResult;
@@ -212,6 +214,188 @@ public class MicroscopeAlignmentWorkflow {
             int originalMacroHeight,
             Rectangle dataBounds,
             BufferedImage processedMacroImag) {}
+
+    /**
+     * Holds alignment quality metrics computed from the completed transform and the
+     * alignment points collected during the interactive refinement session.
+     *
+     * @param scaleX           X scale factor of the full-res-to-stage transform
+     * @param scaleY           Y scale factor of the full-res-to-stage transform
+     * @param expectedScale    expected scale (image pixel size in um)
+     * @param scaleXOk         true if scaleX magnitude matches expected within 1%
+     * @param scaleYOk         true if scaleY magnitude matches expected within 1%
+     * @param scaleXNegative   true if scaleX is negative (possible flip misconfiguration)
+     * @param scaleYNegative   true if scaleY is negative (possible flip misconfiguration)
+     * @param maxResidualUm    maximum back-projection residual across all alignment points (um)
+     * @param meanResidualUm   mean back-projection residual (um)
+     * @param numPoints        number of alignment points used
+     * @param hasWarnings      true if any metric failed its check
+     */
+    private record AlignmentQuality(
+            double scaleX,
+            double scaleY,
+            double expectedScale,
+            boolean scaleXOk,
+            boolean scaleYOk,
+            boolean scaleXNegative,
+            boolean scaleYNegative,
+            double maxResidualUm,
+            double meanResidualUm,
+            int numPoints,
+            boolean hasWarnings) {}
+
+    /**
+     * Evaluates the quality of a completed alignment transform by checking scale factors
+     * and computing residual errors from the alignment points.
+     *
+     * @param transform          the full-res-to-stage affine transform
+     * @param expectedPixelSize  the image pixel size in um (expected scale magnitude)
+     * @return an {@link AlignmentQuality} record summarizing the validation results
+     */
+    private static AlignmentQuality evaluateAlignment(AffineTransform transform, double expectedPixelSize) {
+        double sx = transform.getScaleX();
+        double sy = transform.getScaleY();
+
+        // Scale sign check -- on a flipped image the scale should be positive
+        boolean sxNeg = sx < 0;
+        boolean syNeg = sy < 0;
+
+        // Scale magnitude check -- should match pixel size within 1%
+        double tolerance = 0.01;
+        boolean sxOk = Math.abs((Math.abs(sx) - expectedPixelSize) / expectedPixelSize) <= tolerance;
+        boolean syOk = Math.abs((Math.abs(sy) - expectedPixelSize) / expectedPixelSize) <= tolerance;
+
+        // Compute residuals from alignment points
+        List<AffineTransformationController.AlignmentPoint> points =
+                AffineTransformationController.getAlignmentPoints();
+        double maxResidual = 0;
+        double sumResidual = 0;
+        for (AffineTransformationController.AlignmentPoint pt : points) {
+            Point2D predicted = transform.transform(pt.pixelPoint(), null);
+            double residual = predicted.distance(pt.stagePoint());
+            maxResidual = Math.max(maxResidual, residual);
+            sumResidual += residual;
+        }
+        double meanResidual = points.isEmpty() ? 0 : sumResidual / points.size();
+
+        boolean hasWarnings = sxNeg || syNeg || !sxOk || !syOk;
+        // A max residual above 500 um (about 1.5 FOVs at 20x) is also a warning
+        if (maxResidual > 500.0) {
+            hasWarnings = true;
+        }
+
+        return new AlignmentQuality(
+                sx,
+                sy,
+                expectedPixelSize,
+                sxOk,
+                syOk,
+                sxNeg,
+                syNeg,
+                maxResidual,
+                meanResidual,
+                points.size(),
+                hasWarnings);
+    }
+
+    /**
+     * Builds a human-readable summary string from alignment quality metrics.
+     *
+     * @param quality the alignment quality record
+     * @return multi-line summary suitable for display in a dialog
+     */
+    private static String buildQualitySummary(AlignmentQuality quality) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format(
+                "Scale X: %.6f (expected: ~%.6f) %s%n",
+                quality.scaleX(),
+                quality.expectedScale(),
+                quality.scaleXNegative() ? "[NEGATIVE]" : (quality.scaleXOk() ? "[OK]" : "[MISMATCH]")));
+        sb.append(String.format(
+                "Scale Y: %.6f (expected: ~%.6f) %s%n",
+                quality.scaleY(),
+                quality.expectedScale(),
+                quality.scaleYNegative() ? "[NEGATIVE]" : (quality.scaleYOk() ? "[OK]" : "[MISMATCH]")));
+
+        if (quality.numPoints() > 0) {
+            String residualStatus;
+            if (quality.maxResidualUm() <= 500.0) {
+                residualStatus = "[OK - within 1.5 FOV]";
+            } else {
+                residualStatus = "[HIGH]";
+            }
+            sb.append(String.format("Max residual: %.1f um %s%n", quality.maxResidualUm(), residualStatus));
+            sb.append(String.format("Mean residual: %.1f um%n", quality.meanResidualUm()));
+            sb.append(String.format("Alignment points: %d%n", quality.numPoints()));
+        } else {
+            sb.append(String.format("Alignment points: none collected%n"));
+        }
+
+        // Add suggestions if there are warnings
+        if (quality.hasWarnings()) {
+            sb.append(String.format("%n--- Suggestions ---%n"));
+            if (quality.scaleXNegative() || quality.scaleYNegative()) {
+                sb.append("- Scale is negative -- this may indicate a flip/inversion\n");
+                sb.append("  misconfiguration. Check the flip_x/flip_y settings in\n");
+                sb.append("  your scanner configuration file.\n");
+            }
+            if (!quality.scaleXOk() || !quality.scaleYOk()) {
+                sb.append("- Scale magnitude does not match the image pixel size.\n");
+                sb.append("  This may indicate the wrong image or pixel size setting.\n");
+            }
+            if (quality.maxResidualUm() > 500.0) {
+                sb.append(String.format(
+                        "- Max residual (%.1f um) is high. Consider re-running\n", quality.maxResidualUm()));
+                sb.append("  the alignment with more careful stage positioning.\n");
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Shows a validation dialog on the FX thread summarizing alignment quality.
+     * Returns a CompletableFuture that completes with {@code true} if the user
+     * accepts the alignment or {@code false} if they cancel.
+     *
+     * @param quality the computed alignment quality metrics
+     * @return CompletableFuture resolving to the user's decision
+     */
+    private static CompletableFuture<Boolean> showValidationDialog(AlignmentQuality quality) {
+        CompletableFuture<Boolean> result = new CompletableFuture<>();
+
+        Platform.runLater(() -> {
+            try {
+                Alert.AlertType type = quality.hasWarnings() ? Alert.AlertType.WARNING : Alert.AlertType.CONFIRMATION;
+                Alert alert = new Alert(type);
+
+                if (quality.hasWarnings()) {
+                    alert.setTitle("Alignment Quality Warning");
+                    alert.setHeaderText("WARNING: Alignment may be incorrect");
+                } else {
+                    alert.setTitle("Alignment Quality Summary");
+                    alert.setHeaderText("Alignment looks good");
+                }
+
+                alert.setContentText(buildQualitySummary(quality));
+
+                // Customize buttons
+                ButtonType saveButton = new ButtonType(quality.hasWarnings() ? "Save Anyway" : "Save Alignment");
+                ButtonType cancelButton = ButtonType.CANCEL;
+                alert.getButtonTypes().setAll(saveButton, cancelButton);
+
+                alert.showAndWait()
+                        .ifPresentOrElse(
+                                response -> result.complete(response == saveButton), () -> result.complete(false));
+            } catch (Exception e) {
+                logger.error("Error showing validation dialog", e);
+                // On error, allow saving to avoid blocking the workflow
+                result.complete(true);
+            }
+        });
+
+        return result;
+    }
 
     /**
      * Performs all detection BEFORE project creation while macro image is still available.
@@ -739,31 +923,52 @@ public class MicroscopeAlignmentWorkflow {
             // Setup manual transform - this returns a full-res->stage transform
             AffineTransformationController.setupAffineTransformationAndValidationGUI(
                             mainPixelSize, stageInvertedX, stageInvertedY, existingTransformEstimate)
-                    .thenAccept(fullResToStageTransform -> {
+                    .thenCompose(fullResToStageTransform -> {
                         if (fullResToStageTransform == null) {
                             logger.info("Transform setup cancelled");
                             removeAlignmentTiles(gui);
-                            return;
+                            return CompletableFuture.completedFuture(null);
                         }
 
                         logger.info("Alignment transform complete (full-res->stage): {}", fullResToStageTransform);
 
-                        // Set the current transform for immediate use
-                        MicroscopeController.getInstance().setCurrentTransform(fullResToStageTransform);
+                        // Evaluate alignment quality before saving
+                        AlignmentQuality quality = evaluateAlignment(fullResToStageTransform, mainPixelSize);
+                        logger.info(
+                                "Alignment quality: scaleX={}, scaleY={}, expected={}, "
+                                        + "maxResidual={} um, points={}, warnings={}",
+                                String.format("%.6f", quality.scaleX()),
+                                String.format("%.6f", quality.scaleY()),
+                                String.format("%.6f", quality.expectedScale()),
+                                String.format("%.1f", quality.maxResidualUm()),
+                                quality.numPoints(),
+                                quality.hasWarnings());
 
-                        // Create and save the general macro->stage transform
-                        saveGeneralTransform(
-                                gui,
-                                alignConfig,
-                                fullResToStageTransform,
-                                detectionResultsHolder[0],
-                                macroPixelSize,
-                                stageInvertedX,
-                                stageInvertedY,
-                                transformManager,
-                                selectedScanner);
+                        // Show validation dialog and wait for user decision
+                        return showValidationDialog(quality).thenAccept(userAccepted -> {
+                            if (!Boolean.TRUE.equals(userAccepted)) {
+                                logger.info("User cancelled alignment after reviewing quality summary");
+                                removeAlignmentTiles(gui);
+                                return;
+                            }
 
-                        removeAlignmentTiles(gui);
+                            // Set the current transform for immediate use
+                            MicroscopeController.getInstance().setCurrentTransform(fullResToStageTransform);
+
+                            // Create and save the general macro->stage transform
+                            saveGeneralTransform(
+                                    gui,
+                                    alignConfig,
+                                    fullResToStageTransform,
+                                    detectionResultsHolder[0],
+                                    macroPixelSize,
+                                    stageInvertedX,
+                                    stageInvertedY,
+                                    transformManager,
+                                    selectedScanner);
+
+                            removeAlignmentTiles(gui);
+                        });
                     })
                     .exceptionally(ex -> {
                         logger.error("Error in transform setup", ex);
