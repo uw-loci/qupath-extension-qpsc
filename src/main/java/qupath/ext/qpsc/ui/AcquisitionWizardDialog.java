@@ -130,6 +130,17 @@ public class AcquisitionWizardDialog {
 
         wizardStage.show();
 
+        // Auto-open companion windows (Live Viewer and Stage Map) if not already open.
+        // Uses the same code paths as the menu items so Dialog Manager is triggered.
+        try {
+            qupath.ext.qpsc.controller.QPScopeController.getInstance().startWorkflow("liveViewer");
+            logger.info("Auto-opened Live Viewer from Acquisition Wizard");
+        } catch (Exception e) {
+            logger.debug("Could not auto-open Live Viewer: {}", e.getMessage());
+        }
+        qupath.ext.qpsc.ui.stagemap.StageMapWindow.show();
+        logger.info("Auto-opened Stage Map from Acquisition Wizard");
+
         // Auto-collapse when the wizard loses focus (user clicks on QuPath
         // or another window), and auto-refresh + expand when it regains focus.
         wizardStage.focusedProperty().addListener((obs, wasFocused, isFocused) -> {
