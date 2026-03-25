@@ -152,6 +152,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         ACKMF("ackmf___"),
         /** Skip autofocus retry - use current focus */
         SKIPAF("skipaf__"),
+        /** Check if hardware error recovery is requested */
+        REQHWER("reqhwer_"),
+        /** Acknowledge hardware error - user chose retry/skip/cancel */
+        ACKHWER("ackhwer_"),
         /** Run autofocus parameter benchmark */
         AFBENCH("afbench_"),
         /** PPM birefringence maximization test */
@@ -2994,6 +2998,72 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
+     * Checks if a hardware error recovery is requested by the server.
+     * Must read the variable-length error message within the same socket lock
+     * as the command, since the message follows the 8-byte status.
+     *
+     * @return the error message if recovery is requested, or null if no error
+     * @throws IOException if communication fails
+     */
+    public String checkHardwareError() throws IOException {
+        synchronized (socketLock) {
+            ensureConnected();
+            try {
+                output.write(Command.REQHWER.getValue());
+                output.flush();
+                lastActivityTime.set(System.currentTimeMillis());
+
+                // Read 8-byte status
+                byte[] statusBytes = new byte[8];
+                input.readFully(statusBytes);
+                String status = new String(statusBytes, StandardCharsets.UTF_8).trim();
+
+                if ("IDLE____".equals(status)) {
+                    return null;
+                } else if (status.startsWith("HWERR")) {
+                    // Read 4-byte message length (big-endian), then message body
+                    byte[] lenBytes = new byte[4];
+                    input.readFully(lenBytes);
+                    int msgLen = ((lenBytes[0] & 0xFF) << 24)
+                            | ((lenBytes[1] & 0xFF) << 16)
+                            | ((lenBytes[2] & 0xFF) << 8)
+                            | (lenBytes[3] & 0xFF);
+                    byte[] msgBytes = new byte[msgLen];
+                    input.readFully(msgBytes);
+                    lastActivityTime.set(System.currentTimeMillis());
+                    return new String(msgBytes, StandardCharsets.UTF_8);
+                } else {
+                    logger.warn("Unknown hardware error status: {}", status);
+                    return null;
+                }
+            } catch (IOException e) {
+                handleIOException(e);
+                throw e;
+            }
+        }
+    }
+
+    /**
+     * Sends the user's choice for hardware error recovery back to the server.
+     *
+     * @param choice one of "retry", "skip", or "cancel"
+     * @return true if acknowledgment was successful
+     * @throws IOException if communication fails
+     */
+    public boolean acknowledgeHardwareError(String choice) throws IOException {
+        // Pad choice to 8 bytes
+        String padded = String.format("%-8s", choice).substring(0, 8);
+        byte[] response = executeCommand(Command.ACKHWER, padded.getBytes(StandardCharsets.UTF_8), 3);
+        String ack = new String(response, StandardCharsets.UTF_8).trim();
+        boolean acknowledged = "ACK".equals(ack);
+        logger.info("Hardware error recovery {}: user chose '{}'", acknowledged ? "acknowledged" : "failed", choice);
+        if (acknowledged) {
+            resetProgressTimeout();
+        }
+        return acknowledged;
+    }
+
+    /**
      * Resets the progress timeout timer.
      * Call this when a significant event occurs that should reset the timeout
      * (e.g., manual focus acknowledgment, user interaction).
@@ -3023,7 +3093,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
     /**
      * Monitors acquisition progress until completion or timeout.
      * Calls the progress callback periodically, and handles manual focus requests
-     * via the dedicated manualFocusCallback.
+     * and hardware error recovery via dedicated callbacks.
      *
      * @param progressCallback Callback for progress updates (can be null)
      * @param manualFocusCallback Callback for manual focus requests, receives retries remaining (can be null)
@@ -3036,6 +3106,28 @@ public class MicroscopeSocketClient implements AutoCloseable {
     public AcquisitionState monitorAcquisition(
             Consumer<AcquisitionProgress> progressCallback,
             Consumer<Integer> manualFocusCallback,
+            long pollIntervalMs,
+            long timeoutMs)
+            throws IOException, InterruptedException {
+        return monitorAcquisition(progressCallback, manualFocusCallback, null, pollIntervalMs, timeoutMs);
+    }
+
+    /**
+     * Monitors acquisition progress with hardware error recovery support.
+     *
+     * @param progressCallback Callback for progress updates (can be null)
+     * @param manualFocusCallback Callback for manual focus requests (can be null)
+     * @param hardwareErrorCallback Callback for hardware errors, receives error message (can be null)
+     * @param pollIntervalMs Interval between progress checks in milliseconds
+     * @param timeoutMs Maximum time to wait in milliseconds (0 for no timeout)
+     * @return Final acquisition state
+     * @throws IOException if communication fails
+     * @throws InterruptedException if thread is interrupted
+     */
+    public AcquisitionState monitorAcquisition(
+            Consumer<AcquisitionProgress> progressCallback,
+            Consumer<Integer> manualFocusCallback,
+            Consumer<String> hardwareErrorCallback,
             long pollIntervalMs,
             long timeoutMs)
             throws IOException, InterruptedException {
@@ -3085,6 +3177,24 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     } catch (IOException e) {
                         logger.debug("Failed to check manual focus status: {}", e.getMessage());
                         // Not critical - just continue monitoring
+                    }
+
+                // Check for hardware error recovery request
+                if (currentState != AcquisitionState.CANCELLING)
+                    try {
+                        String hwError = checkHardwareError();
+                        if (hwError != null) {
+                            // Hardware error -- reset timeout since we're waiting for user
+                            lastProgressUpdateTime.set(System.currentTimeMillis());
+                            if (hardwareErrorCallback != null) {
+                                hardwareErrorCallback.accept(hwError);
+                                lastProgressUpdateTime.set(System.currentTimeMillis());
+                            } else {
+                                logger.warn("Hardware error reported but no handler: {}", hwError);
+                            }
+                        }
+                    } catch (IOException e) {
+                        logger.debug("Failed to check hardware error status: {}", e.getMessage());
                     }
 
                 // Get progress if running

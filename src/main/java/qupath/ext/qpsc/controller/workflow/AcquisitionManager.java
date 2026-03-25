@@ -811,6 +811,37 @@ public class AcquisitionManager {
                                 timing,
                                 UIFunctions::showManualFocusDialog);
                     },
+                    // Hardware error callback - shows dialog with error details
+                    errorMessage -> {
+                        logger.warn("Hardware error during acquisition: {}", errorMessage);
+                        if (progressDialog != null) {
+                            progressDialog.pauseTimingForManualFocus();
+                        }
+                        try {
+                            java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+                            final String[] userChoice = {"cancel"};
+                            Platform.runLater(() -> {
+                                try {
+                                    userChoice[0] = showHardwareErrorDialog(errorMessage);
+                                } finally {
+                                    latch.countDown();
+                                }
+                            });
+                            latch.await();
+                            socketClient.acknowledgeHardwareError(userChoice[0]);
+                            logger.info("User chose '{}' for hardware error recovery", userChoice[0]);
+                        } catch (Exception e) {
+                            logger.error("Error handling hardware error dialog", e);
+                            try {
+                                socketClient.acknowledgeHardwareError("cancel");
+                            } catch (IOException ex) {
+                                logger.error("Failed to send cancel for hardware error", ex);
+                            }
+                        }
+                        if (progressDialog != null) {
+                            progressDialog.resumeTimingAfterManualFocus();
+                        }
+                    },
                     500, // Poll every 500ms for responsive UI
                     ACQUISITION_TIMEOUT_MS);
 
@@ -954,6 +985,55 @@ public class AcquisitionManager {
      * @param annotation The annotation to estimate tiles for
      * @return Estimated number of tiles (minimum 1)
      */
+    /**
+     * Shows a hardware error dialog with the error message in a scrollable text area.
+     * Called on the FX Application Thread.
+     *
+     * @param errorMessage The hardware error details
+     * @return User's choice: "retry", "skip", or "cancel"
+     */
+    private static String showHardwareErrorDialog(String errorMessage) {
+        javafx.scene.control.Alert alert =
+                new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+        alert.setTitle("Hardware Error During Acquisition");
+        alert.setHeaderText("A hardware communication error occurred.\n"
+                + "The acquisition is paused. You can fix the issue in Micro-Manager\n"
+                + "and retry, skip this tile, or cancel the acquisition.");
+
+        // Scrollable error details
+        javafx.scene.control.TextArea textArea = new javafx.scene.control.TextArea(errorMessage);
+        textArea.setEditable(false);
+        textArea.setWrapText(true);
+        textArea.setMaxWidth(Double.MAX_VALUE);
+        textArea.setMaxHeight(200);
+        textArea.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
+
+        javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(8);
+        content.getChildren().addAll(
+                new javafx.scene.control.Label("Error details:"),
+                textArea,
+                new javafx.scene.control.Label(
+                        "Check the device connection in Micro-Manager before retrying."));
+        alert.getDialogPane().setContent(content);
+        alert.getDialogPane().setMinWidth(550);
+
+        // Custom buttons
+        javafx.scene.control.ButtonType retryButton =
+                new javafx.scene.control.ButtonType("Retry", javafx.scene.control.ButtonBar.ButtonData.YES);
+        javafx.scene.control.ButtonType skipButton =
+                new javafx.scene.control.ButtonType("Skip Tile", javafx.scene.control.ButtonBar.ButtonData.NO);
+        javafx.scene.control.ButtonType cancelButton =
+                new javafx.scene.control.ButtonType("Cancel Acquisition", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+        alert.getButtonTypes().setAll(retryButton, skipButton, cancelButton);
+
+        java.util.Optional<javafx.scene.control.ButtonType> result = alert.showAndWait();
+        if (result.isPresent()) {
+            if (result.get() == retryButton) return "retry";
+            if (result.get() == skipButton) return "skip";
+        }
+        return "cancel";
+    }
+
     /**
      * Finds the most recently modified TIFF in any angle subdirectory under tileDirPath
      * and sends it to the Live Viewer for display.
