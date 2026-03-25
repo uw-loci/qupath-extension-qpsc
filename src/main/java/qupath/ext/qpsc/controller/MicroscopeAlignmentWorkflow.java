@@ -505,171 +505,240 @@ public class MicroscopeAlignmentWorkflow {
                 // The Live Viewer and eyepiece show the optically flipped view, so the
                 // QuPath image must match for the user to identify corresponding features
                 // during alignment point selection.
+                //
+                // IMPORTANT: The flip opens a new image entry which requires the FX thread.
+                // We must NOT block the FX thread waiting for it. Instead, chain the
+                // remaining workflow steps as a callback after the flip completes.
                 if (flipX || flipY) {
                     @SuppressWarnings("unchecked")
                     Project<BufferedImage> currentProject = (Project<BufferedImage>) gui.getProject();
                     if (currentProject != null) {
-                        try {
-                            Boolean flipResult = ImageFlipHelper.validateAndFlipIfNeeded(
-                                            gui, currentProject, sampleSetup.sampleName())
-                                    .get(30, java.util.concurrent.TimeUnit.SECONDS);
-                            if (Boolean.TRUE.equals(flipResult)) {
-                                logger.info("Flipped image loaded for alignment (matches Live Viewer orientation)");
-                            } else {
-                                logger.warn(
-                                        "Image flip validation returned false - alignment may use wrong orientation");
-                            }
-                        } catch (Exception e) {
-                            logger.error("Failed to validate/create flipped image for alignment: {}", e.getMessage());
-                        }
+                        // Capture variables needed by the continuation
+                        final Map<String, Object> finalProjectDetails = projectDetails;
+                        ImageFlipHelper.validateAndFlipIfNeeded(gui, currentProject, sampleSetup.sampleName())
+                                .thenAccept(flipResult -> {
+                                    if (Boolean.TRUE.equals(flipResult)) {
+                                        logger.info(
+                                                "Flipped image loaded for alignment (matches Live Viewer orientation)");
+                                    } else {
+                                        logger.warn("Image flip returned false - alignment may use wrong orientation");
+                                    }
+                                    // Continue the rest of the workflow on the FX thread
+                                    // after the flipped image is loaded
+                                    Platform.runLater(() -> continueAlignmentAfterFlip(
+                                            gui,
+                                            sampleSetup,
+                                            alignConfig,
+                                            detectionResultsHolder,
+                                            selectedScanner,
+                                            selectedScannerConfigPath,
+                                            finalProjectDetails,
+                                            transformManager));
+                                })
+                                .exceptionally(ex -> {
+                                    logger.error("Failed to create flipped image: {}", ex.getMessage());
+                                    // Continue anyway on the original image
+                                    Platform.runLater(() -> continueAlignmentAfterFlip(
+                                            gui,
+                                            sampleSetup,
+                                            alignConfig,
+                                            detectionResultsHolder,
+                                            selectedScanner,
+                                            selectedScannerConfigPath,
+                                            finalProjectDetails,
+                                            transformManager));
+                                    return null;
+                                });
+                        return; // Don't fall through -- continuation handles the rest
                     }
                 }
 
-                // Only run tissue detection if there are no existing annotations
-                boolean hasExistingAnnotations =
-                        !gui.getViewer().getHierarchy().getAnnotationObjects().isEmpty();
-                if (hasExistingAnnotations) {
-                    logger.info(
-                            "Existing annotations found ({} total), skipping tissue detection",
-                            gui.getViewer()
-                                    .getHierarchy()
-                                    .getAnnotationObjects()
-                                    .size());
-                } else {
-                    runTissueDetectionScript(gui);
+                // No flip needed -- continue directly
+                continueAlignmentAfterFlip(
+                        gui,
+                        sampleSetup,
+                        alignConfig,
+                        detectionResultsHolder,
+                        selectedScanner,
+                        selectedScannerConfigPath,
+                        projectDetails,
+                        transformManager);
+
+            } catch (Exception e) {
+                logger.error("Error in alignment workflow", e);
+                UIFunctions.notifyUserOfError("Alignment error: " + e.getMessage(), "Alignment Error");
+            }
+        });
+    }
+
+    /**
+     * Continues the alignment workflow after the image flip (if any) has completed.
+     * This is extracted as a separate method to avoid blocking the FX thread while
+     * waiting for the flipped image to load.
+     */
+    private static void continueAlignmentAfterFlip(
+            QuPathGUI gui,
+            SampleSetupResult sampleSetup,
+            MacroImageController.AlignmentConfig alignConfig,
+            MacroImageResults[] detectionResultsHolder,
+            String selectedScanner,
+            String selectedScannerConfigPath,
+            Map<String, Object> projectDetails,
+            AffineTransformManager transformManager) {
+        try {
+            // Get flip settings from the current image (may be the flipped entry now)
+            boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
+            boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+            if (gui.getProject() != null && gui.getImageData() != null) {
+                @SuppressWarnings("unchecked")
+                Project<BufferedImage> proj = (Project<BufferedImage>) gui.getProject();
+                var currentEntry = proj.getEntry(gui.getImageData());
+                if (currentEntry != null && ImageMetadataManager.isFlipped(currentEntry)) {
+                    flipX = ImageMetadataManager.isFlippedX(currentEntry);
+                    flipY = ImageMetadataManager.isFlippedY(currentEntry);
+                    logger.info("Using flip state from current entry metadata: flipX={}, flipY={}", flipX, flipY);
                 }
+            }
 
-                // Get stage axis inversion settings (not optical flip -- see CLAUDE.md)
-                boolean stageInvertedX = QPPreferenceDialog.getStageInvertedXProperty();
-                boolean stageInvertedY = QPPreferenceDialog.getStageInvertedYProperty();
+            // Only run tissue detection if there are no existing annotations
+            boolean hasExistingAnnotations =
+                    !gui.getViewer().getHierarchy().getAnnotationObjects().isEmpty();
+            if (hasExistingAnnotations) {
+                logger.info(
+                        "Existing annotations found ({} total), skipping tissue detection",
+                        gui.getViewer().getHierarchy().getAnnotationObjects().size());
+            } else {
+                runTissueDetectionScript(gui);
+            }
 
-                // Get macro pixel size using the SELECTED SCANNER config
-                double macroPixelSize;
-                try {
-                    // Load the scanner configuration directly
-                    Map<String, Object> scannerConfig = MinorFunctions.loadYamlFile(selectedScannerConfigPath);
-                    Double pixelSize = MinorFunctions.getYamlDouble(scannerConfig, "macro", "pixel_size_um");
+            // Get stage axis inversion settings (not optical flip -- see CLAUDE.md)
+            boolean stageInvertedX = QPPreferenceDialog.getStageInvertedXProperty();
+            boolean stageInvertedY = QPPreferenceDialog.getStageInvertedYProperty();
 
-                    if (pixelSize == null || pixelSize <= 0) {
-                        String error = String.format(
-                                "Scanner '%s' has no valid macro pixel size configured. "
-                                        + "This is required for accurate alignment. "
-                                        + "Please add 'macro: pixel_size_um:' to the scanner configuration.",
-                                selectedScanner);
-                        logger.error(error);
-                        UIFunctions.notifyUserOfError(
-                                error + "\n\nCannot proceed with alignment.", "Configuration Error");
-                        return;
-                    }
+            // Get macro pixel size using the SELECTED SCANNER config
+            double macroPixelSize;
+            try {
+                // Load the scanner configuration directly
+                Map<String, Object> scannerConfig = MinorFunctions.loadYamlFile(selectedScannerConfigPath);
+                Double pixelSize = MinorFunctions.getYamlDouble(scannerConfig, "macro", "pixel_size_um");
 
-                    macroPixelSize = pixelSize;
-                    logger.info(
-                            "Using macro pixel size {} um from scanner '{}' configuration",
-                            macroPixelSize,
+                if (pixelSize == null || pixelSize <= 0) {
+                    String error = String.format(
+                            "Scanner '%s' has no valid macro pixel size configured. "
+                                    + "This is required for accurate alignment. "
+                                    + "Please add 'macro: pixel_size_um:' to the scanner configuration.",
                             selectedScanner);
-                } catch (Exception e) {
-                    logger.error("Failed to get macro pixel size: {}", e.getMessage());
-                    UIFunctions.notifyUserOfError(
-                            e.getMessage() + "\n\nCannot proceed with alignment.", "Configuration Error");
+                    logger.error(error);
+                    UIFunctions.notifyUserOfError(error + "\n\nCannot proceed with alignment.", "Configuration Error");
                     return;
                 }
 
-                double mainPixelSize =
-                        gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
-
-                // Create tiles for manual alignment
-                String tempTileDirectory = (String) projectDetails.get("tempTileDirectory");
-                String modeWithIndex = (String) projectDetails.get("imagingModeWithIndex");
-
-                // Create tiles for alignment (in full resolution coordinates)
-                createAlignmentTiles(
-                        gui,
-                        sampleSetup,
-                        tempTileDirectory,
-                        modeWithIndex,
-                        stageInvertedX,
-                        stageInvertedY,
-                        null); // Pass null for bounds
-
-                // Build an existing transform estimate for auto-move (if refining an existing transform)
-                AffineTransform existingTransformEstimate = null;
-                if (alignConfig.useExistingTransform()
-                        && alignConfig.selectedTransform() != null
-                        && detectionResultsHolder[0].greenBoxTransform() != null) {
-                    AffineTransform macroToStage =
-                            alignConfig.selectedTransform().getTransform();
-                    AffineTransform macroFlippedToFullRes = detectionResultsHolder[0].greenBoxTransform();
-                    existingTransformEstimate = TransformationFunctions.buildFullResToStageEstimate(
-                            macroToStage, macroFlippedToFullRes, mainPixelSize);
-                    if (existingTransformEstimate != null) {
-                        logger.info("Built fullRes->stage estimate for auto-move during alignment");
-                    } else {
-                        logger.info("Could not build transform estimate, falling back to manual navigation");
-                    }
-                }
-
-                // The scaling transform sign must account for BOTH stage inversion AND
-                // optical flip. When the image is flipped in QuPath, the pixel coordinates
-                // are reversed relative to physical slide coordinates, which has the same
-                // effect as stage inversion on the scale factor. XOR combines them:
-                //   flip=T, invert=F -> negate (coords are reversed)
-                //   flip=F, invert=T -> negate (stage direction is reversed)
-                //   flip=T, invert=T -> positive (they cancel out)
-                //   flip=F, invert=F -> positive (normal)
-                boolean effectiveInvertX = flipX ^ stageInvertedX;
-                boolean effectiveInvertY = flipY ^ stageInvertedY;
+                macroPixelSize = pixelSize;
                 logger.info(
-                        "Effective scale direction: invertX={} (flip={} ^ stageInvert={}), "
-                                + "invertY={} (flip={} ^ stageInvert={})",
-                        effectiveInvertX,
-                        flipX,
-                        stageInvertedX,
-                        effectiveInvertY,
-                        flipY,
-                        stageInvertedY);
-
-                // Setup manual transform - this returns a full-res->stage transform
-                AffineTransformationController.setupAffineTransformationAndValidationGUI(
-                                mainPixelSize, effectiveInvertX, effectiveInvertY, existingTransformEstimate)
-                        .thenAccept(fullResToStageTransform -> {
-                            if (fullResToStageTransform == null) {
-                                logger.info("Transform setup cancelled");
-                                removeAlignmentTiles(gui);
-                                return;
-                            }
-
-                            logger.info("Alignment transform complete (full-res->stage): {}", fullResToStageTransform);
-
-                            // Set the current transform for immediate use
-                            MicroscopeController.getInstance().setCurrentTransform(fullResToStageTransform);
-
-                            // Create and save the general macro->stage transform
-                            saveGeneralTransform(
-                                    gui,
-                                    alignConfig,
-                                    fullResToStageTransform,
-                                    detectionResultsHolder[0],
-                                    macroPixelSize,
-                                    stageInvertedX,
-                                    stageInvertedY,
-                                    transformManager,
-                                    selectedScanner);
-
-                            removeAlignmentTiles(gui);
-                        })
-                        .exceptionally(ex -> {
-                            logger.error("Error in transform setup", ex);
-                            removeAlignmentTiles(gui);
-                            Platform.runLater(() -> UIFunctions.notifyUserOfError(
-                                    "Transform setup failed: " + ex.getMessage(), "Transform Error"));
-                            return null;
-                        });
-
+                        "Using macro pixel size {} um from scanner '{}' configuration",
+                        macroPixelSize,
+                        selectedScanner);
             } catch (Exception e) {
-                logger.error("Error processing alignment", e);
-                UIFunctions.notifyUserOfError("Failed to process alignment: " + e.getMessage(), "Alignment Error");
+                logger.error("Failed to get macro pixel size: {}", e.getMessage());
+                UIFunctions.notifyUserOfError(
+                        e.getMessage() + "\n\nCannot proceed with alignment.", "Configuration Error");
+                return;
             }
-        });
+
+            double mainPixelSize =
+                    gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
+
+            // Create tiles for manual alignment
+            String tempTileDirectory = (String) projectDetails.get("tempTileDirectory");
+            String modeWithIndex = (String) projectDetails.get("imagingModeWithIndex");
+
+            // Create tiles for alignment (in full resolution coordinates)
+            createAlignmentTiles(
+                    gui,
+                    sampleSetup,
+                    tempTileDirectory,
+                    modeWithIndex,
+                    stageInvertedX,
+                    stageInvertedY,
+                    null); // Pass null for bounds
+
+            // Build an existing transform estimate for auto-move (if refining an existing transform)
+            AffineTransform existingTransformEstimate = null;
+            if (alignConfig.useExistingTransform()
+                    && alignConfig.selectedTransform() != null
+                    && detectionResultsHolder[0].greenBoxTransform() != null) {
+                AffineTransform macroToStage = alignConfig.selectedTransform().getTransform();
+                AffineTransform macroFlippedToFullRes = detectionResultsHolder[0].greenBoxTransform();
+                existingTransformEstimate = TransformationFunctions.buildFullResToStageEstimate(
+                        macroToStage, macroFlippedToFullRes, mainPixelSize);
+                if (existingTransformEstimate != null) {
+                    logger.info("Built fullRes->stage estimate for auto-move during alignment");
+                } else {
+                    logger.info("Could not build transform estimate, falling back to manual navigation");
+                }
+            }
+
+            // The scaling transform sign must account for BOTH stage inversion AND
+            // optical flip. When the image is flipped in QuPath, the pixel coordinates
+            // are reversed relative to physical slide coordinates, which has the same
+            // effect as stage inversion on the scale factor. XOR combines them:
+            //   flip=T, invert=F -> negate (coords are reversed)
+            //   flip=F, invert=T -> negate (stage direction is reversed)
+            //   flip=T, invert=T -> positive (they cancel out)
+            //   flip=F, invert=F -> positive (normal)
+            boolean effectiveInvertX = flipX ^ stageInvertedX;
+            boolean effectiveInvertY = flipY ^ stageInvertedY;
+            logger.info(
+                    "Effective scale direction: invertX={} (flip={} ^ stageInvert={}), "
+                            + "invertY={} (flip={} ^ stageInvert={})",
+                    effectiveInvertX,
+                    flipX,
+                    stageInvertedX,
+                    effectiveInvertY,
+                    flipY,
+                    stageInvertedY);
+
+            // Setup manual transform - this returns a full-res->stage transform
+            AffineTransformationController.setupAffineTransformationAndValidationGUI(
+                            mainPixelSize, effectiveInvertX, effectiveInvertY, existingTransformEstimate)
+                    .thenAccept(fullResToStageTransform -> {
+                        if (fullResToStageTransform == null) {
+                            logger.info("Transform setup cancelled");
+                            removeAlignmentTiles(gui);
+                            return;
+                        }
+
+                        logger.info("Alignment transform complete (full-res->stage): {}", fullResToStageTransform);
+
+                        // Set the current transform for immediate use
+                        MicroscopeController.getInstance().setCurrentTransform(fullResToStageTransform);
+
+                        // Create and save the general macro->stage transform
+                        saveGeneralTransform(
+                                gui,
+                                alignConfig,
+                                fullResToStageTransform,
+                                detectionResultsHolder[0],
+                                macroPixelSize,
+                                stageInvertedX,
+                                stageInvertedY,
+                                transformManager,
+                                selectedScanner);
+
+                        removeAlignmentTiles(gui);
+                    })
+                    .exceptionally(ex -> {
+                        logger.error("Error in transform setup", ex);
+                        removeAlignmentTiles(gui);
+                        Platform.runLater(() -> UIFunctions.notifyUserOfError(
+                                "Transform setup failed: " + ex.getMessage(), "Transform Error"));
+                        return null;
+                    });
+
+        } catch (Exception e) {
+            logger.error("Error processing alignment", e);
+            UIFunctions.notifyUserOfError("Failed to process alignment: " + e.getMessage(), "Alignment Error");
+        }
     }
 
     /**
