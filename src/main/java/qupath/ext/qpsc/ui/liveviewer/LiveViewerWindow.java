@@ -1,5 +1,7 @@
 package qupath.ext.qpsc.ui.liveviewer;
 
+import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -7,11 +9,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import javax.imageio.ImageIO;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
@@ -124,6 +128,12 @@ public class LiveViewerWindow {
     private volatile double explicitScale = 1.0;
     private ScrollPane scrollPane; // Store reference for mode switching
     private StackPane imageContainer; // Inner container for centering
+
+    // Tile viewing during acquisition
+    private CheckBox showTilesCheckBox;
+    private volatile boolean showTilesEnabled = false;
+    private static final long TILE_DISPLAY_THROTTLE_MS = 8000; // At most once per 8 seconds
+    private volatile long lastTileDisplayTime = 0;
 
     // Root content pane
     private BorderPane expandedContent;
@@ -256,6 +266,79 @@ public class LiveViewerWindow {
         }
     }
 
+    /**
+     * Returns true if the "Show Tiles" checkbox is checked and the viewer is open.
+     * Called by AcquisitionManager to decide whether to load and display tiles.
+     */
+    public static boolean isShowTilesEnabled() {
+        return instance != null && instance.showTilesEnabled;
+    }
+
+    /**
+     * Display an acquired tile image in the Live Viewer.
+     * Reads the TIFF from disk on a background thread, converts to FrameData,
+     * and renders via the existing renderFrame pipeline.
+     * <p>
+     * Throttled to at most once per TILE_DISPLAY_THROTTLE_MS to avoid I/O overhead.
+     * Thread-safe -- can be called from any thread.
+     *
+     * @param tilePath Absolute path to a TIFF tile file
+     */
+    public static void showAcquiredTile(String tilePath) {
+        if (instance == null || !instance.showTilesEnabled) return;
+
+        long now = System.currentTimeMillis();
+        if (now - instance.lastTileDisplayTime < TILE_DISPLAY_THROTTLE_MS) return;
+        instance.lastTileDisplayTime = now;
+
+        // Read TIFF on a background thread to avoid blocking the caller
+        ExecutorService histExec = instance.histogramExecutor;
+        if (histExec == null || histExec.isShutdown()) return;
+
+        histExec.submit(() -> {
+            try {
+                File tileFile = new File(tilePath);
+                if (!tileFile.exists()) {
+                    logger.debug("Tile file not found: {}", tilePath);
+                    return;
+                }
+
+                BufferedImage img = ImageIO.read(tileFile);
+                if (img == null) {
+                    logger.debug("Failed to read tile image: {}", tilePath);
+                    return;
+                }
+
+                // Convert BufferedImage to FrameData (RGB 8-bit)
+                int w = img.getWidth();
+                int h = img.getHeight();
+                byte[] rgb = new byte[w * h * 3];
+                for (int y = 0; y < h; y++) {
+                    for (int x = 0; x < w; x++) {
+                        int pixel = img.getRGB(x, y);
+                        int idx = (y * w + x) * 3;
+                        rgb[idx] = (byte) ((pixel >> 16) & 0xFF);     // R
+                        rgb[idx + 1] = (byte) ((pixel >> 8) & 0xFF);  // G
+                        rgb[idx + 2] = (byte) (pixel & 0xFF);         // B
+                    }
+                }
+
+                FrameData frame = new FrameData(w, h, 3, 1, rgb, System.currentTimeMillis());
+
+                String fileName = tileFile.getName();
+                Platform.runLater(() -> {
+                    if (instance != null) {
+                        instance.renderFrame(frame);
+                        instance.updateStatus("Tile: " + fileName);
+                    }
+                });
+
+            } catch (Exception e) {
+                logger.debug("Error displaying acquired tile: {}", e.getMessage());
+            }
+        });
+    }
+
     private void buildUI() {
         stage = new Stage();
         stage.setTitle("Live Viewer");
@@ -338,12 +421,25 @@ public class LiveViewerWindow {
             logger.info("Display mode changed to {}", selected);
         });
 
+        // Show acquired tiles checkbox
+        showTilesCheckBox = new CheckBox("Show Tiles");
+        showTilesCheckBox.setTooltip(new Tooltip(
+                "During acquisition, display each acquired tile in this viewer.\n"
+                        + "Useful for checking focus drift without waiting for stitching.\n"
+                        + "Updates at most once every 8 seconds to avoid I/O overhead."));
+        showTilesCheckBox.setSelected(false);
+        showTilesCheckBox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            showTilesEnabled = newVal;
+            logger.info("Show tiles during acquisition: {}", newVal);
+        });
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button docHelpButton = DocumentationHelper.createHelpButton("liveViewer");
 
-        HBox toolbar = new HBox(8, liveToggleButton, refineFocusButton, sweepFocusButton, focusRangeCombo, spacer, scaleLabel, scaleCombo);
+        HBox toolbar = new HBox(8, liveToggleButton, refineFocusButton, sweepFocusButton, focusRangeCombo,
+                showTilesCheckBox, spacer, scaleLabel, scaleCombo);
         if (docHelpButton != null) toolbar.getChildren().add(docHelpButton);
         toolbar.setPadding(new Insets(4, 8, 4, 8));
         toolbar.setAlignment(Pos.CENTER_LEFT);

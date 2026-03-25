@@ -725,6 +725,9 @@ public class AcquisitionManager {
         // Flag to track if we're currently handling a manual focus request (to avoid showing multiple dialogs)
         AtomicBoolean handlingManualFocus = new AtomicBoolean(false);
 
+        // For tile viewer: track previous progress to detect new tiles
+        final AtomicInteger lastTileProgress = new AtomicInteger(0);
+
         try {
             // Monitor acquisition with regular status updates
             MicroscopeSocketClient.AcquisitionState finalState = socketClient.monitorAcquisition(
@@ -733,6 +736,13 @@ public class AcquisitionManager {
                         // Update dual progress dialog
                         if (progressDialog != null && !progressDialog.isCancelled()) {
                             Platform.runLater(() -> progressDialog.updateCurrentAnnotationProgress(progress.current));
+                        }
+
+                        // Show acquired tile in Live Viewer (if enabled)
+                        if (qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.isShowTilesEnabled()
+                                && progress.current > lastTileProgress.get()) {
+                            lastTileProgress.set(progress.current);
+                            findAndDisplayLatestTile(tileDirPath);
                         }
 
                         // Check for acquisition metadata file (only once)
@@ -944,6 +954,46 @@ public class AcquisitionManager {
      * @param annotation The annotation to estimate tiles for
      * @return Estimated number of tiles (minimum 1)
      */
+    /**
+     * Finds the most recently modified TIFF in any angle subdirectory under tileDirPath
+     * and sends it to the Live Viewer for display.
+     * Scans all subdirectories (e.g., 90/, 7/, -7/) since PPM and other modalities
+     * save tiles to multiple angle directories.
+     */
+    private void findAndDisplayLatestTile(String tileDirPath) {
+        try {
+            Path tileDir = Paths.get(tileDirPath);
+            if (!Files.exists(tileDir)) return;
+
+            // Find the most recently modified .tif in any subdirectory
+            java.io.File bestFile = null;
+            long bestTime = 0;
+
+            java.io.File[] subdirs = tileDir.toFile().listFiles(java.io.File::isDirectory);
+            if (subdirs == null) return;
+
+            for (java.io.File subdir : subdirs) {
+                java.io.File[] tiffs = subdir.listFiles(
+                        f -> f.isFile() && f.getName().endsWith(".tif"));
+                if (tiffs == null) continue;
+                for (java.io.File tif : tiffs) {
+                    long mod = tif.lastModified();
+                    if (mod > bestTime) {
+                        bestTime = mod;
+                        bestFile = tif;
+                    }
+                }
+            }
+
+            if (bestFile != null) {
+                qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.showAcquiredTile(
+                        bestFile.getAbsolutePath());
+            }
+        } catch (Exception e) {
+            logger.debug("Error finding latest tile for viewer: {}", e.getMessage());
+        }
+    }
+
     private int estimateTileCount(PathObject annotation) {
         try {
             // Get annotation bounds in image pixels
