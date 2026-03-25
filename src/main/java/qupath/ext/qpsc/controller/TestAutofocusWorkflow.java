@@ -57,12 +57,12 @@ public class TestAutofocusWorkflow {
     }
 
     /**
-     * Main entry point for adaptive autofocus test workflow.
+     * Main entry point for sweep drift check test workflow.
      * Uses default output path and reads objective from config.
      */
-    public static void runAdaptive() {
+    public static void runSweep() {
         String defaultOutputPath = getDefaultOutputPath();
-        runAdaptive(defaultOutputPath, null); // null = read from config
+        runSweep(defaultOutputPath, null); // null = read from config
     }
 
     /**
@@ -110,15 +110,15 @@ public class TestAutofocusWorkflow {
     }
 
     /**
-     * Run ADAPTIVE autofocus test with specified output path and objective.
-     * Tests the intelligent bidirectional search algorithm used during acquisitions.
+     * Run SWEEP drift check test with specified output path and objective.
+     * Tests the sweep-based focus correction used during acquisitions.
      *
      * @param outputPath Directory where diagnostic plots will be saved
      * @param objectiveOverride Objective to use, or null to read from config
      */
-    public static void runAdaptive(String outputPath, String objectiveOverride) {
-        logger.info("Starting ADAPTIVE autofocus test workflow");
-        runTest(outputPath, true, objectiveOverride); // true = adaptive
+    public static void runSweep(String outputPath, String objectiveOverride) {
+        logger.info("Starting SWEEP drift check test workflow");
+        runTest(outputPath, true, objectiveOverride); // true = sweep (was adaptive)
     }
 
     /**
@@ -195,7 +195,7 @@ public class TestAutofocusWorkflow {
                 // Show confirmation dialog
                 String dialogTitle = isAdaptive ? "Test Adaptive Autofocus" : "Test Standard Autofocus";
                 String algorithmDesc = isAdaptive
-                        ? "The microscope will perform an intelligent bidirectional search (same algorithm used during acquisitions)."
+                        ? "The microscope will perform a sweep drift check (same algorithm used during acquisitions)."
                         : "The microscope will perform a symmetric Z-sweep centered on current position.";
 
                 boolean proceed = Dialogs.showConfirmDialog(
