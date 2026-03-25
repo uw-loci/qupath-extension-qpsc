@@ -277,21 +277,23 @@ public class DualProgressDialog {
                     recentTileTimes.removeFirst();
                 }
 
-                // Also track in allTileTimes for statistical analysis
-                allTileTimes.addLast(tileTime);
-                // Keep a larger window for statistical detection (3x timing window)
-                int maxAllTimes = windowSize * 3;
-                while (allTileTimes.size() > maxAllTimes) {
-                    allTileTimes.removeFirst();
-                }
-
                 // Detect full autofocus time from first tile spike
                 // The first tile with tissue will have a much longer time due to full AF
                 if (!firstTileProcessed.get() && filesCompleted == 1) {
                     // First tile - likely includes full autofocus
                     detectedFullAfTime = tileTime;
                     firstTileProcessed.set(true);
-                    logger.info("First tile time (likely includes full AF): {} ms", tileTime);
+                    logger.info("First tile time (likely includes full AF): {} ms -- excluded from estimates", tileTime);
+                    // Do NOT add first tile to allTileTimes -- it includes full AF
+                    // setup overhead that skews early estimates
+                } else {
+                    // Track in allTileTimes for statistical analysis (skip first tile)
+                    allTileTimes.addLast(tileTime);
+                    // Keep a larger window for statistical detection (3x timing window)
+                    int maxAllTimes = windowSize * 3;
+                    while (allTileTimes.size() > maxAllTimes) {
+                        allTileTimes.removeFirst();
+                    }
                 }
             }
             lastTileCompletionTime.set(now);
