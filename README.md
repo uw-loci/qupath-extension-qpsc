@@ -112,11 +112,11 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 - Optional: Motorized Z-stage for autofocus, rotation stage for polarized imaging (PPM)
 
 **Software Requirements:**
-- **Operating System**: Windows 10+ (primary), Linux (limited testing), macOS (untested)
+- **Operating System**: **Windows 10+** (required -- microscope hardware drivers and Micro-Manager device adapters are Windows-only)
 - [QuPath 0.6.0+](https://qupath.github.io/) with Java 21+
 - [qupath-extension-tiles-to-pyramid](https://github.com/uw-loci/qupath-extension-tiles-to-pyramid) - Required for image stitching
 - [Micro-Manager 2.0](https://micro-manager.org/) configured for your microscope
-- Python 3.8+ with [Pycro-Manager](https://pycro-manager.readthedocs.io/) installed
+- Python 3.10+ with [Pycro-Manager](https://pycro-manager.readthedocs.io/) installed
 
 ### Installation
 
@@ -143,6 +143,8 @@ If configuring manually, verify each component:
 - [ ] **Micro-Manager**: Can control stage manually (test XY movement)
 - [ ] **Python Server**: Server script starts without errors
 - [ ] **Connection**: Use the "Live Viewer" to test QuPath can move the stage
+
+**Startup order (every session):** Launch in this order: **Micro-Manager** (load hardware config) -> **Python Server** (run `start_server.bat`) -> **QuPath**. Create desktop shortcuts for all three arranged left-to-right for convenience. See the [Workflows Guide](documentation/WORKFLOWS.md#startup-order-every-session) for details.
 
 **Recommended first test:** Use the "Live Viewer" from the QP Scope menu to verify camera feed and stage movement before attempting a full acquisition.
 

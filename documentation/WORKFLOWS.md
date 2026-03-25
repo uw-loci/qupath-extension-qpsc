@@ -15,32 +15,42 @@ QPSC connects QuPath to your microscope via Pycro-Manager and Micro-Manager. You
 
 ---
 
-## Before You Begin: Prerequisites Checklist
+## Before You Begin
 
-Complete these steps before running any acquisition workflow. If you are unsure about any of them, open the **Acquisition Wizard** (Extensions -> QP Scope -> Acquisition Wizard...) -- it checks each prerequisite and launches the right tool for you.
+### Platform Requirements
+
+QPSC requires **Windows 10+** for microscope control. Most microscope hardware drivers (stages, cameras, rotation stages) are Windows-only, and Micro-Manager's device adapter ecosystem is most complete on Windows. Development and testing are done on Windows; Linux and macOS are not supported for acquisition.
+
+### Startup Order (Every Session)
+
+The three components must be started in this order:
+
+| Step | Application | What to Do |
+|------|-------------|------------|
+| 1 | **Micro-Manager** | Launch and load your hardware configuration. Verify the camera and stage respond. |
+| 2 | **Python Server** | Run `start_server.bat` (or `python -m microscope_command_server.server.qp_server`). Wait for "Server ready." |
+| 3 | **QuPath** | Launch QuPath. The QP Scope menu will auto-connect if enabled in preferences. |
+
+> **Tip:** Create desktop shortcuts for all three applications and arrange them left-to-right in startup order. The `start_server.bat` script (in the microscope_command_server folder) automatically activates the Python virtual environment and launches the server -- ideal as a desktop shortcut.
+
+### First-Time Setup Checklist
+
+If this is your first time, complete these additional steps. The **Acquisition Wizard** (Extensions -> QP Scope -> Acquisition Wizard...) checks each prerequisite and launches the right tool for you.
 
 1. **Install QPSC and its dependencies.**
-   The extension JAR, the tiles-to-pyramid extension JAR, and the Python microscope server must all be installed. See the [main README](../README.md) for details.
+   The extension JAR, the tiles-to-pyramid extension JAR, and the Python microscope server must all be installed. See the [main README](../README.md) and [Installation Guide](INSTALLATION.md) for details.
 
 2. **Create a microscope configuration file.**
-   If this is your first time, the **Setup Wizard** (Extensions -> QP Scope -> Utilities -> Setup Wizard...) will appear automatically. It walks you through hardware selection, pixel size calibration, and server connection. See [Setup Wizard docs](tools/setup-wizard.md).
+   The **Setup Wizard** appears automatically on first launch and walks you through hardware selection, pixel size calibration, and server connection. See [Setup Wizard docs](tools/setup-wizard.md).
 
-3. **Start the Python microscope server.**
-   On the microscope computer, launch the `microscope_command_server`. QPSC communicates with the microscope over a socket connection.
+3. **Collect background images.**
+   Used for flat-field correction. See [Background Collection docs](tools/background-collection.md).
 
-4. **Connect QuPath to the server.**
-   Open Communication Settings and click *Test Connection*. See [Communication Settings docs](tools/server-connection.md).
+4. **Calibrate white balance (JAI cameras only).**
+   If using a JAI 3-CCD prism camera. See [White Balance Calibration docs](tools/white-balance-calibration.md).
 
-5. **Collect background images (recommended).**
-   Background images are used for flat-field correction. See [Background Collection docs](tools/background-collection.md).
-
-6. **Calibrate white balance (JAI cameras only).**
-   If you are using a JAI 3-CCD prism camera, run white balance calibration before your first acquisition. See [White Balance Calibration docs](tools/white-balance-calibration.md).
-
-7. **Configure autofocus (optional but recommended).**
-   Set search range, step size, and scoring method for each objective. See [Autofocus Editor docs](tools/autofocus-editor.md).
-
-Once these steps are complete, you are ready to acquire data.
+5. **Configure autofocus (recommended).**
+   Set search range, step size, and scoring method per objective. See [Autofocus Editor docs](tools/autofocus-editor.md).
 
 ---
 
