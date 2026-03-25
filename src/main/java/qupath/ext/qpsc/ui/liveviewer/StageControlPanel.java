@@ -336,12 +336,7 @@ public class StageControlPanel extends TitledPane {
         TabPane tabPane = new TabPane();
         tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
-        // ============ TAB 1: POSITION (Move to specific coordinates) ============
-        Tab positionTab = new Tab("Position");
-        VBox positionContent = new VBox(6);
-        positionContent.setPadding(new Insets(8));
-
-        // X/Y fields and Move XY button
+        // Create UI controls for move-to-position (placed in Navigate tab below Z scroll)
         Label xLabel = new Label("X:");
         xLabel.setStyle("-fx-font-size: 10px;");
         xField.setPrefWidth(70);
@@ -350,11 +345,8 @@ public class StageControlPanel extends TitledPane {
         yField.setPrefWidth(70);
         Button moveXYBtn = new Button("Move XY");
         moveXYBtn.setStyle("-fx-font-size: 10px;");
-        HBox xyRow = new HBox(4, xLabel, xField, yLabel, yField, moveXYBtn);
-        xyRow.setAlignment(Pos.CENTER_LEFT);
         xyStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
 
-        // Z field, Move Z button, Z step control (uses shared zStepField)
         Label zLabel = new Label("Z:");
         zLabel.setStyle("-fx-font-size: 10px;");
         zField.setPrefWidth(70);
@@ -371,7 +363,6 @@ public class StageControlPanel extends TitledPane {
         Label zUmLabel = new Label("um");
         zUmLabel.setStyle("-fx-font-size: 10px;");
 
-        // Help button for Z scroll behavior
         Button zHelpBtn = new Button("?");
         zHelpBtn.setStyle("-fx-font-size: 9px; -fx-min-width: 18px; -fx-min-height: 18px; -fx-padding: 0;");
         Tooltip zHelpTooltip =
@@ -388,8 +379,6 @@ public class StageControlPanel extends TitledPane {
         zHelpTooltip.setHideDelay(Duration.millis(200));
         Tooltip.install(zHelpBtn, zHelpTooltip);
 
-        HBox zRow = new HBox(4, zLabel, zField, moveZBtn, zStepLabel, zStepField, zUmLabel, zHelpBtn);
-        zRow.setAlignment(Pos.CENTER_LEFT);
         zStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
 
         // Z scroll handler
@@ -398,14 +387,11 @@ public class StageControlPanel extends TitledPane {
         moveZBtn.setOnScroll(zScrollHandler);
         zStepField.setOnScroll(zScrollHandler);
 
-        // R field and Move R button
         Label rLabel = new Label("R:");
         rLabel.setStyle("-fx-font-size: 10px;");
         rField.setPrefWidth(70);
         Button moveRBtn = new Button("Move R");
         moveRBtn.setStyle("-fx-font-size: 10px;");
-        HBox rRow = new HBox(4, rLabel, rField, moveRBtn);
-        rRow.setAlignment(Pos.CENTER_LEFT);
         rStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
 
         // Wire up move button handlers
@@ -419,15 +405,7 @@ public class StageControlPanel extends TitledPane {
         zField.setOnAction(e -> handleMoveZ());
         rField.setOnAction(e -> handleMoveR());
 
-        // Go to centroid section
-        HBox centroidRow = new HBox(6, goToCentroidBtn, centroidStatus);
-        centroidRow.setAlignment(Pos.CENTER_LEFT);
-        VBox centroidSection = new VBox(4, new Separator(), centroidRow, availableLabel, alignmentListView);
-
-        positionContent.getChildren().addAll(xyRow, xyStatus, zRow, zStatus, rRow, rStatus, centroidSection);
-        positionTab.setContent(positionContent);
-
-        // ============ TAB 2: NAVIGATE (Arrows, joystick, step controls) ============
+        // ============ TAB 1: NAVIGATE (Arrows, joystick, step controls, position, centroid) ============
         Tab navigateTab = new Tab("Navigate");
         VBox navigateContent = new VBox(8);
         navigateContent.setPadding(new Insets(8));
@@ -573,75 +551,27 @@ public class StageControlPanel extends TitledPane {
         VBox navSection = new VBox(4, navGrid, keyboardHint);
         navSection.setAlignment(Pos.CENTER);
 
-        // Z scroll section for Navigate tab (shares zField and zStepField with Position tab)
-        Label navZLabel = new Label("Z (scroll):");
-        navZLabel.setStyle("-fx-font-size: 10px;");
-
-        // Create a display-only field that mirrors zField
-        TextField navZField = new TextField();
-        navZField.setPrefWidth(70);
-        navZField.textProperty().bindBidirectional(zField.textProperty());
-        Tooltip navZFieldTooltip = new Tooltip("Current Z position. Scroll mouse wheel here to adjust focus.\n"
-                + "Step size is controlled by the step field to the right.");
-        navZFieldTooltip.setShowDelay(Duration.millis(300));
-        Tooltip.install(navZField, navZFieldTooltip);
-
-        Label navZStepLabel = new Label("step:");
-        navZStepLabel.setStyle("-fx-font-size: 10px;");
-
-        // Create a display-only field that mirrors zStepField
-        TextField navZStepFieldMirror = new TextField();
-        navZStepFieldMirror.setPrefWidth(45);
-        navZStepFieldMirror.setAlignment(Pos.CENTER);
-        navZStepFieldMirror.textProperty().bindBidirectional(zStepField.textProperty());
-        Tooltip navZStepTooltip =
-                new Tooltip("Z step size in micrometers.\n" + "Scroll mouse wheel over Z controls to adjust focus.");
-        navZStepTooltip.setShowDelay(Duration.millis(300));
-        Tooltip.install(navZStepFieldMirror, navZStepTooltip);
-
-        Label navZUmLabel = new Label("um");
-        navZUmLabel.setStyle("-fx-font-size: 10px;");
-
-        // Help button for Z in Navigate tab
-        Button navZHelpBtn = new Button("?");
-        navZHelpBtn.setStyle("-fx-font-size: 9px; -fx-min-width: 18px; -fx-min-height: 18px; -fx-padding: 0;");
-        Tooltip navZHelpTooltip =
-                new Tooltip("Z Focus Control via Mouse Scroll Wheel\n" + "=========================================\n\n"
-                        + "Hover your mouse over any of these controls and scroll:\n"
-                        + "  - Z position field\n"
-                        + "  - Step size field\n\n"
-                        + "Scroll UP = Move Z up (toward sample)\n"
-                        + "Scroll DOWN = Move Z down (away from sample)\n\n"
-                        + "The step size determines how much Z moves per scroll tick.");
-        navZHelpTooltip.setShowDelay(Duration.ZERO);
-        navZHelpTooltip.setShowDuration(Duration.INDEFINITE);
-        navZHelpTooltip.setHideDelay(Duration.millis(200));
-        Tooltip.install(navZHelpBtn, navZHelpTooltip);
-
-        HBox navZRow = new HBox(4, navZLabel, navZField, navZStepLabel, navZStepFieldMirror, navZUmLabel, navZHelpBtn);
-        navZRow.setAlignment(Pos.CENTER_LEFT);
-
-        // Z scroll handler for navigate tab
-        javafx.event.EventHandler<ScrollEvent> navZScrollHandler = event -> handleZScroll(event, zStepField);
-        navZField.setOnScroll(navZScrollHandler);
-        navZStepFieldMirror.setOnScroll(navZScrollHandler);
-
-        // Enter key in navigate Z field triggers move
-        navZField.setOnAction(e -> handleMoveZ());
-
-        // Z status for navigate tab (bound to main zStatus)
-        Label navZStatus = new Label();
-        navZStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
-        navZStatus.textProperty().bind(zStatus.textProperty());
-
-        VBox navZSection = new VBox(2, navZRow);
-        navZSection.setAlignment(Pos.CENTER_LEFT);
-
-        // XY status shown in navigate tab too
+        // XY status shown below navigation grid
         Label navXyStatus = new Label();
         navXyStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
-        // Bind to xyStatus text
         navXyStatus.textProperty().bind(xyStatus.textProperty());
+
+        // --- Move-to-position controls (formerly the Position tab) ---
+        Label moveToLabel = new Label("Move to Position");
+        moveToLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
+
+        HBox moveXyRow = new HBox(4, xLabel, xField, yLabel, yField, moveXYBtn);
+        moveXyRow.setAlignment(Pos.CENTER_LEFT);
+
+        HBox moveZRow = new HBox(4, zLabel, zField, moveZBtn, zStepLabel, zStepField, zUmLabel, zHelpBtn);
+        moveZRow.setAlignment(Pos.CENTER_LEFT);
+
+        HBox moveRRow = new HBox(4, rLabel, rField, moveRBtn);
+        moveRRow.setAlignment(Pos.CENTER_LEFT);
+
+        HBox centroidRow = new HBox(6, goToCentroidBtn, centroidStatus);
+        centroidRow.setAlignment(Pos.CENTER_LEFT);
+        VBox centroidSection = new VBox(4, centroidRow, availableLabel, alignmentListView);
 
         navigateContent
                 .getChildren()
@@ -653,11 +583,18 @@ public class StageControlPanel extends TitledPane {
                         navSection,
                         navXyStatus,
                         new Separator(),
-                        navZSection,
-                        navZStatus);
+                        moveToLabel,
+                        moveXyRow,
+                        xyStatus,
+                        moveZRow,
+                        zStatus,
+                        moveRRow,
+                        rStatus,
+                        new Separator(),
+                        centroidSection);
         navigateTab.setContent(navigateContent);
 
-        // ============ TAB 3: SAVED POINTS ============
+        // ============ TAB 2: SAVED POINTS (was Tab 3) ============
         Tab savedPointsTab = new Tab("Saved Points");
         VBox savedPointsContent = new VBox(8);
         savedPointsContent.setPadding(new Insets(8));
@@ -723,7 +660,7 @@ public class StageControlPanel extends TitledPane {
         loadSavedPointsFromPrefs();
 
         // Add tabs to TabPane and default to Navigate tab
-        tabPane.getTabs().addAll(positionTab, navigateTab, savedPointsTab);
+        tabPane.getTabs().addAll(navigateTab, savedPointsTab);
         tabPane.getSelectionModel().select(navigateTab);
 
         content.getChildren().add(tabPane);
