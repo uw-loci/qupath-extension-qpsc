@@ -13,6 +13,8 @@ area produces equal R, G, B intensity values.
 Use this tool before background collection and acquisition whenever the camera,
 light source, or optical path has changed.
 
+![White Balance Calibration dialog](../images/Docs_WhiteBalanceCalibration.png)
+
 ## Prerequisites
 
 - Microscope positioned at a clean, white reference area (blank slide or uniform

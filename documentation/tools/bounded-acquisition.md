@@ -7,6 +7,8 @@
 
 Acquire high-resolution images by defining stage coordinates directly. This workflow creates a new QuPath project and acquires a rectangular region of the slide. Use this when starting fresh without an existing overview image, when you know the stage coordinates of the region you want, or when setting up a new sample for imaging.
 
+![Bounded Acquisition dialog](../images/Docs_BoundedAcquisition.png)
+
 ## Prerequisites
 
 - Python microscope server running
@@ -118,6 +120,8 @@ After all tiles are captured, automatic stitching begins:
 - Image opens in QuPath viewer
 - Metadata is populated with acquisition details
 - Temporary tiles are handled per preferences
+
+![Acquisition progress dialog](../images/Docs_AcquisitionWorkflowProgress.png)
 
 ## Output
 

@@ -7,6 +7,8 @@
 
 Acquire flat-field correction images for improved image quality. Background images correct for uneven illumination, dust on optics, and sensor artifacts. These correction images are essential for producing high-quality stitched acquisitions.
 
+![Background Collection dialog](../images/Docs_BackgroundCollection.png)
+
 ## Prerequisites
 
 - Microscope positioned at a clean, blank area (empty slide or uniform background)

@@ -7,6 +7,10 @@
 
 Real-time camera feed with integrated stage control, histogram, and noise statistics. This is the primary tool for verifying microscope communication, positioning the stage, and checking camera settings before acquisition. Use this as a first test after setting up a microscope connection.
 
+![Live Viewer window](../images/Docs_LiveViewer.png)
+
+![Live Viewer position controls](../images/Docs_LiveViewer_Position.png)
+
 ## Prerequisites
 
 - Connected to microscope server (see [Communication Settings](server-connection.md))

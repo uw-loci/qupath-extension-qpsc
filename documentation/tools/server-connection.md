@@ -7,6 +7,10 @@
 
 Configure and test the connection between QuPath and the microscope control server, and manage notification alerts for workflow events. The Python microscope server handles communication with Micro-Manager and the physical microscope hardware. This tool lets you set connection parameters, test connectivity, monitor connection health, and configure push notifications.
 
+![Communication Settings dialog](../images/Docs_CommunicationSettings.png)
+
+![Communication Settings alerts tab](../images/Docs_CommunicationSettings_Alerts.png)
+
 ## Prerequisites
 
 - Python microscope server installed and running (or ready to start)

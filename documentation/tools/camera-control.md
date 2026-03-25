@@ -7,6 +7,8 @@
 
 View and test camera exposure and gain settings loaded from calibration profiles. This utility is particularly useful for JAI 3-CCD camera white balance troubleshooting and verifying calibration values before acquisition. Changes made here are for testing only and are not saved to the YAML calibration file.
 
+![Camera Control dialog](../images/Docs_CameraControl.png)
+
 ## Prerequisites
 
 - Connected to microscope server (will prompt if not connected)

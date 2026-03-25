@@ -13,6 +13,8 @@ Use this tool when you want a guided, step-by-step approach to setting up and
 starting a microscope acquisition. It is especially helpful for new users or
 when switching between hardware configurations.
 
+![Acquisition Wizard dashboard](../images/Docs_AcquisitionWizard.png)
+
 ## Prerequisites
 
 - A valid microscope configuration YAML file must be set in QP Scope preferences.

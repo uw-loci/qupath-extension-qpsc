@@ -158,6 +158,8 @@ Open the **QP Scope** menu in QuPath to access all features:
 | [Existing Image Acquisition](documentation/tools/existing-image-acquisition.md) | Re-acquire regions from a previously scanned slide |
 | [Microscope Alignment](documentation/tools/microscope-alignment.md) | Initial setup - align QuPath coordinates to stage |
 
+> **Not sure which workflow to use?** See the [Workflows Guide](documentation/WORKFLOWS.md) for a decision guide, prerequisites checklist, and typical session walkthrough.
+
 **Calibration (run as needed):**
 | Menu Item | When to Use |
 |-----------|-------------|

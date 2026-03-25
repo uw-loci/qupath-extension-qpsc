@@ -13,6 +13,8 @@ runs during tiled acquisition.
 Use this tool when setting up a new objective for acquisition or when adjusting
 autofocus behavior for different sample types (e.g., thick vs. thin sections).
 
+![Autofocus Configuration Editor dialog](../images/Docs_AutofocusConfigurationEditor.png)
+
 ## Prerequisites
 
 - Microscope configuration YAML loaded with objective definitions

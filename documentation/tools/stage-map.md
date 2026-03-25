@@ -7,6 +7,8 @@
 
 Visual representation of the microscope stage insert showing slide positions. Helps users understand where slides are located on the stage, see the current stage position, and optionally overlay macro images for spatial reference. Use this tool to verify slide placement and prevent moving to positions outside the stage insert.
 
+![Stage Map window](../images/Docs_StageMap.png)
+
 ## Prerequisites
 
 - Connected to microscope server (see [Communication Settings](server-connection.md))
