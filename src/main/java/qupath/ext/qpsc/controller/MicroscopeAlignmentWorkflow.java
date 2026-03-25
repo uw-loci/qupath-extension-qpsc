@@ -725,26 +725,20 @@ public class MicroscopeAlignmentWorkflow {
             // The scaling transform sign must account for BOTH stage inversion AND
             // optical flip. When the image is flipped in QuPath, the pixel coordinates
             // are reversed relative to physical slide coordinates, which has the same
-            // effect as stage inversion on the scale factor. XOR combines them:
-            //   flip=T, invert=F -> negate (coords are reversed)
-            //   flip=F, invert=T -> negate (stage direction is reversed)
-            //   flip=T, invert=T -> positive (they cancel out)
-            //   flip=F, invert=F -> positive (normal)
-            boolean effectiveInvertX = flipX ^ stageInvertedX;
-            boolean effectiveInvertY = flipY ^ stageInvertedY;
+            // When viewing the FLIPPED image (ensured via ImageFlipHelper earlier),
+            // the pixel coordinates are already in the optically correct space.
+            // The pixel-to-stage transform only needs stage axis inversion --
+            // the optical flip is already "baked in" by the flipped image entry.
+            // Do NOT XOR flip with stageInvert here; that double-applies the flip.
             logger.info(
-                    "Effective scale direction: invertX={} (flip={} ^ stageInvert={}), "
-                            + "invertY={} (flip={} ^ stageInvert={})",
-                    effectiveInvertX,
-                    flipX,
+                    "Alignment on flipped image: stageInverted=({}, {}), "
+                            + "optical flip already applied via flipped image entry",
                     stageInvertedX,
-                    effectiveInvertY,
-                    flipY,
                     stageInvertedY);
 
             // Setup manual transform - this returns a full-res->stage transform
             AffineTransformationController.setupAffineTransformationAndValidationGUI(
-                            mainPixelSize, effectiveInvertX, effectiveInvertY, existingTransformEstimate)
+                            mainPixelSize, stageInvertedX, stageInvertedY, existingTransformEstimate)
                     .thenAccept(fullResToStageTransform -> {
                         if (fullResToStageTransform == null) {
                             logger.info("Transform setup cancelled");
