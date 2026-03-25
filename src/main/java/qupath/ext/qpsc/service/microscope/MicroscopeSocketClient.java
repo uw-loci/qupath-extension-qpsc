@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
@@ -94,6 +95,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
         t.setDaemon(true);
         return t;
     });
+
+    // Connection stability tracking
+    private final AtomicInteger consecutiveErrors = new AtomicInteger(0);
+    private volatile boolean userAlertedAboutConnectionIssue = false;
+    private static final int ERROR_THRESHOLD_FOR_ALERT = 3;
 
     // Configuration
     private final int maxReconnectAttempts;
@@ -2411,9 +2417,12 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     byte[] response = new byte[expectedResponseBytes];
                     input.readFully(response);
                     lastActivityTime.set(System.currentTimeMillis());
+                    // Successful command -- reset error tracking
+                    consecutiveErrors.set(0);
                     return response;
                 }
 
+                consecutiveErrors.set(0);
                 return new byte[0];
 
             } catch (IOException e) {
@@ -2452,6 +2461,46 @@ public class MicroscopeSocketClient implements AutoCloseable {
     private void handleIOException(IOException e) {
         logger.error("Communication error with microscope server", e);
 
+        int errorCount = consecutiveErrors.incrementAndGet();
+
+        // Alert user after repeated failures
+        if (errorCount >= ERROR_THRESHOLD_FOR_ALERT && !userAlertedAboutConnectionIssue) {
+            userAlertedAboutConnectionIssue = true;
+            String errorMsg = e.getMessage() != null ? e.getMessage() : "Unknown communication error";
+            logger.warn("Connection unstable: {} consecutive errors. Alerting user.", errorCount);
+
+            // Push notification
+            try {
+                qupath.ext.qpsc.service.notification.NotificationService.getInstance()
+                        .notify(
+                                "Microscope Connection Unstable",
+                                errorCount + " consecutive communication errors. "
+                                        + "Check the server terminal and Micro-Manager.",
+                                qupath.ext.qpsc.service.notification.NotificationPriority.URGENT,
+                                qupath.ext.qpsc.service.notification.NotificationEvent.ACQUISITION_ERROR);
+            } catch (Exception notifEx) {
+                logger.debug("Failed to send connection alert notification: {}", notifEx.getMessage());
+            }
+
+            // Show dialog on FX thread
+            javafx.application.Platform.runLater(() -> {
+                try {
+                    java.awt.Toolkit.getDefaultToolkit().beep();
+                } catch (Exception ignored) {
+                }
+                qupath.fx.dialogs.Dialogs.showErrorMessage(
+                        "Microscope Connection Unstable",
+                        "There have been " + errorCount + " consecutive communication errors "
+                                + "with the microscope server.\n\n"
+                                + "Latest error: " + errorMsg + "\n\n"
+                                + "Please check:\n"
+                                + "  - Is the Python server still running?\n"
+                                + "  - Is Micro-Manager responsive?\n"
+                                + "  - Are there errors in the server terminal?\n\n"
+                                + "The system will continue attempting to reconnect.");
+            });
+        }
+
         // Mark as disconnected
         connected.set(false);
 
@@ -2476,6 +2525,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     Thread.sleep(reconnectDelayMs);
                     connect();
                     logger.info("Successfully reconnected to microscope server");
+                    consecutiveErrors.set(0);
+                    userAlertedAboutConnectionIssue = false;
                     break;
                 } catch (Exception e) {
                     logger.warn("Reconnection attempt {} failed: {}", attempts, e.getMessage());
