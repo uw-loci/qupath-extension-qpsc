@@ -32,14 +32,22 @@ jobs:
 
       - name: Grant execute permission for gradlew
         if: runner.os != 'Windows'
-        run: chmod +x gradlew
+        run: |
+          chmod +x gradlew
+          chmod +x tiles-to-pyramid/gradlew
+
+      - name: Publish tiles-to-pyramid to local Maven
+        run: |
+          cd tiles-to-pyramid
+          ./gradlew publishToMavenLocal
+        shell: bash
 
       - name: Build and test (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run ./gradlew build --include-build tiles-to-pyramid
+        run: xvfb-run ./gradlew build
         env:
           DISPLAY: ':99'
 
       - name: Build and test (Windows)
         if: runner.os == 'Windows'
-        run: ./gradlew build --include-build tiles-to-pyramid
+        run: ./gradlew build
