@@ -29,6 +29,28 @@ autofocus behavior for different sample types (e.g., thick vs. thin sections).
 | search_range_um | Spinner | 10-50 | Total Z range to search in micrometers |
 | n_tiles | Spinner | 3-10 | Autofocus runs every N tiles during acquisition |
 
+### Sweep Drift Check
+
+The Sweep Drift Check section configures a periodic Z sweep that monitors focus drift during acquisition.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| sweep_range_um | Spinner | 10 | Total Z range for the sweep in micrometers |
+| sweep_n_steps | Spinner | 6 | Number of Z positions to sample during each sweep |
+| score_metric | ComboBox | normalized_variance | Focus quality metric used to evaluate each Z position |
+
+**Available score_metric options:**
+
+| Metric | Description |
+|--------|-------------|
+| `normalized_variance` | Default and recommended. Variance of the image normalized by its mean intensity. |
+| `laplacian_variance` | Variance of the Laplacian-filtered image. |
+| `sobel` | Sum of Sobel edge magnitudes. |
+| `brenner_gradient` | Brenner gradient-based focus measure. |
+| `p98_p2` | Difference between 98th and 2nd intensity percentiles. |
+
+**Test Sweep Drift Check** button: runs a single sweep at the current position so you can verify parameters before acquisition.
+
 ### Buttons
 
 | Button | Action |
@@ -44,7 +66,9 @@ autofocus behavior for different sample types (e.g., thick vs. thin sections).
 3. Adjust **n_steps** -- the number of Z positions sampled during each autofocus run.
 4. Adjust **search_range_um** -- the total Z range (in um) over which focus is searched.
 5. Adjust **n_tiles** -- how often autofocus triggers (every N tiles).
-6. Click **Write to File** to save settings, or **OK** to save and close.
+6. Configure **Sweep Drift Check** parameters if needed (sweep_range_um, sweep_n_steps, score_metric).
+7. Click **Test Sweep Drift Check** to verify the sweep works at the current position.
+8. Click **Write to File** to save settings, or **OK** to save and close.
 
 ## Output
 

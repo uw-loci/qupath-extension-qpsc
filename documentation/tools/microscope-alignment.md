@@ -61,6 +61,8 @@ Mark at least 3 points. More points improve accuracy.
 
 If multiple images exist in the project, select the macro/overview image to use for alignment. The image must have visible features that you can also locate under the microscope.
 
+The alignment workflow automatically loads the flipped version of the macro image (matching the Live Viewer orientation) before point selection begins. This ensures that image coordinates correspond correctly to what you see through the camera.
+
 ### Step 2: Point Marking
 
 For each calibration point:
@@ -96,7 +98,15 @@ If validation fails:
 - Check for systematic errors (flip/invert settings)
 - Ensure points were accurately marked in both coordinate systems
 
-### Step 5: Save Transform
+### Step 5: Quality Summary and Save
+
+After calculating the transform, a quality summary dialog is displayed with pass/warn/fail indicators for:
+
+- **Scale** -- Whether the computed pixel-to-stage scale matches the expected value
+- **Residuals** -- Whether the point-fitting residual errors are within acceptable limits
+- **Translation stability** -- Whether the translation component is consistent across point subsets
+
+If any indicator shows a warning or failure, you must acknowledge the issue before the alignment is saved. This prevents silently saving a poor-quality transform.
 
 Give the transform a descriptive name and save it. Saved transforms are stored in the configuration folder and can be selected in the [Existing Image Acquisition](existing-image-acquisition.md) workflow. Multiple transforms can exist for different conditions.
 

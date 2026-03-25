@@ -24,6 +24,7 @@ Real-time camera feed with integrated stage control, histogram, and noise statis
 |--------|------|-------------|
 | Fit Mode | Toggle | Scale image to fit the dialog window |
 | Display Scale | ComboBox | Select display magnification level |
+| Show Tiles | CheckBox | During acquisition, display the most recently acquired tile instead of the live feed. Updates approximately every 8 seconds as new tiles are captured. Useful for monitoring focus drift without waiting for stitching to complete. Works with multi-angle acquisitions (PPM). |
 
 Double-click on the camera image to center the stage at that position.
 
@@ -36,7 +37,11 @@ Double-click on the camera image to center the stage at that position.
 
 The histogram shows a 256-bin luminance distribution updated in real time. Per-channel (R/G/B) saturation percentages are displayed below the histogram and turn red when any channel exceeds 1% saturation.
 
-### Stage Control - Movement Tab
+### Stage Control - Navigate Tab
+
+The Navigate tab combines movement controls and direct position entry in a single panel.
+
+**Movement Controls:**
 
 | Option | Type | Description |
 |--------|------|-------------|
@@ -47,6 +52,14 @@ The histogram shows a 256-bin luminance distribution updated in real time. Per-c
 | Sample Movement | CheckBox | Enable "sample perspective" movement (direction inversion for intuitive control) |
 | Z Controls | Spinner + Buttons | Z position display with up/down buttons |
 | Polarizer Controls | Spinner | Rotation angle control (PPM modality only) |
+
+**Move to Position:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| X / Y / Z / R Fields | TextField | Enter absolute coordinates (um) or rotation angle to move to |
+| Move Buttons | Button | Move the stage to the entered coordinate for that axis |
+| Go to Centroid | Button | Move the stage to the centroid of the current QuPath annotation |
 
 ### Stage Control - Saved Points Tab
 

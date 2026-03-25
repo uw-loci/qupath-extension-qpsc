@@ -19,7 +19,7 @@ Visual representation of the microscope stage insert showing slide positions. He
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | Insert Configuration | ComboBox | From config | Select the stage insert layout matching your hardware |
-| Overlay Macro | CheckBox | OFF | Overlay the current macro image on the map display |
+| Overlay Macro | CheckBox | Auto | Overlay the current macro image on the map display. Automatically enabled when a macro image and alignment transform are detected. Also updates when switching between images in the project. |
 
 ## Workflow
 

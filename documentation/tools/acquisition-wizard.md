@@ -77,6 +77,9 @@ Two large buttons to launch the main acquisition workflows:
 
 ## Behavior
 
+- When the wizard opens, it **automatically opens the Live Viewer and Stage Map**
+  if they are not already open. This ensures you have the camera feed and stage
+  overview available during setup.
 - The wizard is **non-modal** and **always-on-top**, so you can interact with
   QuPath and other dialogs while it remains visible.
 - When the wizard **loses focus** (you click elsewhere), it automatically
