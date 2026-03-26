@@ -54,6 +54,9 @@ public class DualProgressDialog {
     private final AtomicLong workflowStartTime = new AtomicLong(0);
     private final AtomicLong lastProgressTime = new AtomicLong(System.currentTimeMillis());
 
+    // Acquisition vs stitching time tracking
+    private final AtomicLong acquisitionEndTime = new AtomicLong(0);
+
     // Current annotation tracking
     private volatile String currentAnnotationName = "";
     private volatile int currentAnnotationExpectedFiles = 0;
@@ -490,10 +493,33 @@ public class DualProgressDialog {
         }
 
         if (completed >= totalAnnotations) {
-            // Workflow complete - show total time
-            long totalTime = now - workflowStartTime.get();
-            long totalSeconds = totalTime / 1000;
-            timeLabel.setText("Total time: " + formatTime(totalSeconds));
+            // All annotations done -- freeze acquisition time, show stitching time if active
+            long acqEnd = acquisitionEndTime.get();
+            if (acqEnd == 0) {
+                // First time we detect completion -- record the acquisition end time
+                acquisitionEndTime.set(now);
+                acqEnd = now;
+                logger.info(
+                        "Acquisition complete. Acquisition time: {}",
+                        formatTime((acqEnd - workflowStartTime.get()) / 1000));
+            }
+            long acqSeconds = (acqEnd - workflowStartTime.get()) / 1000;
+
+            if (hasActiveStitchingOperations()) {
+                long stitchSeconds = (now - acqEnd) / 1000;
+                timeLabel.setText(String.format(
+                        "Acquisition: %s | Stitching: %s", formatTime(acqSeconds), formatTime(stitchSeconds)));
+            } else {
+                long totalSeconds = (now - workflowStartTime.get()) / 1000;
+                long stitchSeconds = (now - acqEnd) / 1000;
+                if (stitchSeconds > 5) {
+                    timeLabel.setText(String.format(
+                            "Acquisition: %s | Stitching: %s | Total: %s",
+                            formatTime(acqSeconds), formatTime(stitchSeconds), formatTime(totalSeconds)));
+                } else {
+                    timeLabel.setText("Acquisition time: " + formatTime(acqSeconds));
+                }
+            }
             return;
         }
 
