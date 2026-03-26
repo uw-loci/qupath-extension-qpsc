@@ -534,21 +534,27 @@ public class DualProgressDialog {
             return;
         }
 
-        // Calculate time components using statistical separation
-        TimingComponents timing = calculateTimingComponents();
+        // Use actual rolling average -- no statistical decomposition needed.
+        // The rolling average naturally captures AF frequency since AF tiles
+        // are included in the window at their real occurrence rate.
+        long elapsedMs = now - workflowStartTime.get();
+        int totalCompleted = totalTilesCompleted.get();
+        if (totalCompleted == 0 || elapsedMs == 0) {
+            timeLabel.setText("Estimating...");
+            return;
+        }
+
+        double avgMsPerTile = (double) elapsedMs / totalCompleted;
 
         // Calculate remaining work
         int currentProgress = currentAnnotationProgress.get();
         int tilesRemainingCurrentAnnotation = Math.max(0, currentAnnotationExpectedFiles - currentProgress);
 
-        // Calculate tiles in future annotations
         int tilesRemainingFutureAnnotations;
         if (!futureTileCounts.isEmpty()) {
-            // Use actual tile counts if available
             tilesRemainingFutureAnnotations =
                     futureTileCounts.stream().mapToInt(Integer::intValue).sum();
         } else {
-            // Estimate based on current annotation
             int avgTilesPerAnnotation = totalTilesPerAnnotation.get() > 0
                     ? totalTilesPerAnnotation.get()
                     : (currentAnnotationExpectedFiles > 0 ? currentAnnotationExpectedFiles : 100);
@@ -557,77 +563,26 @@ public class DualProgressDialog {
         }
 
         int totalTilesRemaining = tilesRemainingCurrentAnnotation + tilesRemainingFutureAnnotations;
-
-        // Calculate remaining autofocus operations
-        int afPositionsPerAnnotation = afNTiles.get();
-
-        // Remaining adaptive AF in current annotation (proportional to remaining tiles)
-        // Use currentAnnotationExpectedFiles for fraction (same units as currentProgress = file count)
-        // totalTilesPerAnnotation from metadata may count XY positions only (not * angles)
-        int totalTilesCurrentAnnotation =
-                currentAnnotationExpectedFiles > 0 ? currentAnnotationExpectedFiles : totalTilesPerAnnotation.get();
-        int remainingAdaptiveAfCurrent = 0;
-        if (totalTilesCurrentAnnotation > 0 && afPositionsPerAnnotation > 0) {
-            // Calculate how many AF positions remain based on progress
-            double progressFraction = currentProgress / (double) totalTilesCurrentAnnotation;
-            int completedAfPositions = (int) (progressFraction * afPositionsPerAnnotation);
-            remainingAdaptiveAfCurrent = Math.max(0, afPositionsPerAnnotation - completedAfPositions - 1);
-            // Subtract 1 because first AF is full autofocus, handled separately
-        }
-
-        // Remaining adaptive AF in future annotations
-        int remainingAnnotations = totalAnnotations - completed - 1;
-        // Each future annotation has (afPositionsPerAnnotation - 1) adaptive AF positions
-        // because the first is a full autofocus
-        int remainingAdaptiveAfFuture = remainingAnnotations * Math.max(0, afPositionsPerAnnotation - 1);
-
-        int totalRemainingAdaptiveAf = remainingAdaptiveAfCurrent + remainingAdaptiveAfFuture;
-
-        // Remaining full autofocus operations (one per remaining annotation)
-        int remainingFullAf = remainingAnnotations;
-
-        // Calculate estimated remaining time
-        // Time = (remaining tiles * base tile time) + (remaining adaptive AF * adaptive AF added time)
-        //      + (remaining full AF * full AF added time)
-        long tileTimeMs = timing.baseTileTimeMs * totalTilesRemaining;
-        long adaptiveAfTimeMs = timing.adaptiveAfAddedTimeMs * totalRemainingAdaptiveAf;
-        long fullAfTimeMs = timing.fullAfAddedTimeMs * remainingFullAf;
-
-        long totalRemainingMs = tileTimeMs + adaptiveAfTimeMs + fullAfTimeMs;
+        long totalRemainingMs = (long) (avgMsPerTile * totalTilesRemaining);
         long remainingSeconds = totalRemainingMs / 1000;
 
-        // Build informative display
         String estimate = formatTime(remainingSeconds);
 
-        // Display remaining count in positions (divide by angle count)
         int angles = angleCount.get();
         int positionsRemaining = totalTilesRemaining / Math.max(1, angles);
 
-        // Log estimate breakdown periodically (every 25 tiles)
-        int totalCompleted = totalTilesCompleted.get();
+        // Log periodically (every 25 tiles)
         if (totalCompleted > 0 && totalCompleted % 25 == 0) {
-            long elapsedMs = now - workflowStartTime.get();
-            double actualAvgMs = (double) elapsedMs / totalCompleted;
             logger.info(
-                    "Time estimate: {} remaining ({} positions). "
-                            + "Breakdown: {} tiles @ {}ms/tile + {} AF @ {}ms + {} fullAF @ {}ms. "
-                            + "Actual avg: {}ms/tile over {} tiles ({}s elapsed)",
+                    "Time estimate: {} remaining ({} positions). " + "Avg: {}ms/tile over {} tiles ({}s elapsed)",
                     estimate,
                     positionsRemaining,
-                    totalTilesRemaining,
-                    timing.baseTileTimeMs,
-                    totalRemainingAdaptiveAf,
-                    timing.adaptiveAfAddedTimeMs,
-                    remainingFullAf,
-                    timing.fullAfAddedTimeMs,
-                    Math.round(actualAvgMs),
+                    Math.round(avgMsPerTile),
                     totalCompleted,
                     elapsedMs / 1000);
         }
 
-        timeLabel.setText(String.format(
-                "Time remaining: %s (%d positions, %d AF ops)",
-                estimate, positionsRemaining, totalRemainingAdaptiveAf + remainingFullAf));
+        timeLabel.setText(String.format("Time remaining: %s (%d positions)", estimate, positionsRemaining));
     }
 
     /**
