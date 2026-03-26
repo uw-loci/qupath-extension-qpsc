@@ -8,7 +8,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.workflow.AlignmentHelper;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
-import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
+import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
@@ -136,23 +136,61 @@ public class CalibrationChecker {
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+            // Reload to pick up any recent WB calibration changes
+            mgr.reload(configPath);
 
             String bgFolder = mgr.getBackgroundCorrectionFolder(modality);
             if (bgFolder == null) {
                 return new StepStatus(Status.WARNING, "No background correction folder configured for " + modality);
             }
 
-            // Try to find background settings for this hardware combination
-            BackgroundSettingsReader.BackgroundSettings settings =
-                    BackgroundSettingsReader.findBackgroundSettings(bgFolder, modality, objective, detector);
+            // Use BackgroundValidityChecker to cross-validate WB vs backgrounds
+            var allModeResults = BackgroundValidityChecker.checkAllModes(bgFolder, modality, objective, detector, mgr);
 
-            if (settings != null) {
-                return new StepStatus(
-                        Status.READY,
-                        String.format("Background images found (%d angles)", settings.angleExposures.size()));
+            boolean anyValid = false;
+            boolean anyStale = false;
+            boolean anyMissing = false;
+            int validCount = 0;
+            int staleCount = 0;
+            StringBuilder details = new StringBuilder();
+
+            for (var result : allModeResults) {
+                switch (result.status()) {
+                    case VALID -> {
+                        anyValid = true;
+                        validCount++;
+                    }
+                    case CALIBRATION_STALE -> {
+                        anyStale = true;
+                        staleCount++;
+                        details.append(result.mode().getDisplayName()).append(": stale. ");
+                    }
+                    case NO_BACKGROUNDS -> {
+                        anyMissing = true;
+                    }
+                    case NOT_NEEDED -> {} // Ignore "off" mode
+                }
             }
 
-            return new StepStatus(Status.WARNING, "No background images found - recommended for flat field correction");
+            if (anyStale) {
+                return new StepStatus(
+                        Status.WARNING,
+                        "Background images may be stale -- WB was recalibrated since last collection. "
+                                + details.toString().trim());
+            }
+
+            if (anyValid) {
+                return new StepStatus(
+                        Status.READY,
+                        String.format("Background images valid (%d WB mode%s)", validCount, validCount > 1 ? "s" : ""));
+            }
+
+            if (anyMissing) {
+                return new StepStatus(
+                        Status.WARNING, "No background images found - recommended for flat field correction");
+            }
+
+            return new StepStatus(Status.WARNING, "Could not verify background correction status");
 
         } catch (Exception e) {
             logger.debug("Error checking background correction", e);

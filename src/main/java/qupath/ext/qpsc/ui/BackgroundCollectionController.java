@@ -86,6 +86,18 @@ public class BackgroundCollectionController {
                 if (helpButton != null) graphicBox.getChildren().add(helpButton);
                 dialog.setGraphic(graphicBox);
 
+                // Reload config to pick up any recent WB calibration changes
+                // (WB writes directly to the YAML; the in-memory cache may be stale)
+                try {
+                    String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                    if (configPath != null) {
+                        MicroscopeConfigManager.getInstance(configPath).reload(configPath);
+                        logger.info("Reloaded config before background collection dialog");
+                    }
+                } catch (Exception ex) {
+                    logger.debug("Could not reload config: {}", ex.getMessage());
+                }
+
                 // Create UI - wrap content in ScrollPane to handle variable height
                 VBox content = createDialogContent();
                 ScrollPane scrollPane = new ScrollPane(content);
