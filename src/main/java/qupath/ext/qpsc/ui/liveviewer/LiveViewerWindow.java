@@ -118,8 +118,8 @@ public class LiveViewerWindow {
     // Desync detection
     private volatile long lastFrameArrivalTime = 0;
     private volatile long liveOnTimestamp = 0;
-    private static final long NO_FRAME_TIMEOUT_MS = 3000;
-    private static final long GRACE_PERIOD_MS = 2000;
+    private static final long NO_FRAME_TIMEOUT_MS = 5000;
+    private static final long GRACE_PERIOD_MS = 5000;
 
     // Display mode state
     // fitToContainer = true: image scales to fill container (no scrollbars)
