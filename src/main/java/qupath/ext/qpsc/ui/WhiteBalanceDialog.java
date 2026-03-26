@@ -214,7 +214,14 @@ public class WhiteBalanceDialog {
                 // Non-modal so user can interact with QuPath while dialog is open
                 dialog.setTitle("White Balance Calibration");
                 dialog.setHeaderText("Configure JAI camera white balance calibration");
-                dialog.setGraphic(DocumentationHelper.createHelpButton("whiteBalance"));
+                Button adviceButton = new Button("Advice");
+                adviceButton.setTooltip(new Tooltip("Best practices for white balance calibration"));
+                adviceButton.setStyle("-fx-font-size: 10px;");
+                adviceButton.setOnAction(ev -> CalibrationAdviceDialog.showWhiteBalanceAdvice());
+                Button wbHelpButton = DocumentationHelper.createHelpButton("whiteBalance");
+                javafx.scene.layout.HBox graphicBox = new javafx.scene.layout.HBox(8, adviceButton);
+                if (wbHelpButton != null) graphicBox.getChildren().add(wbHelpButton);
+                dialog.setGraphic(graphicBox);
                 dialog.setResizable(true);
 
                 // Main content container

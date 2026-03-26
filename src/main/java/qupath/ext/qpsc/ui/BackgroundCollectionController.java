@@ -77,7 +77,14 @@ public class BackgroundCollectionController {
                 Dialog<BackgroundCollectionResult> dialog = new Dialog<>();
                 dialog.setTitle("Background Collection");
                 dialog.setHeaderText("Configure background image acquisition for flat field correction");
-                dialog.setGraphic(DocumentationHelper.createHelpButton("backgroundCollection"));
+                Button adviceButton = new Button("Advice");
+                adviceButton.setTooltip(new Tooltip("Best practices for background image collection"));
+                adviceButton.setStyle("-fx-font-size: 10px;");
+                adviceButton.setOnAction(ev -> CalibrationAdviceDialog.showBackgroundAdvice());
+                Button helpButton = DocumentationHelper.createHelpButton("backgroundCollection");
+                javafx.scene.layout.HBox graphicBox = new javafx.scene.layout.HBox(8, adviceButton);
+                if (helpButton != null) graphicBox.getChildren().add(helpButton);
+                dialog.setGraphic(graphicBox);
 
                 // Create UI - wrap content in ScrollPane to handle variable height
                 VBox content = createDialogContent();
