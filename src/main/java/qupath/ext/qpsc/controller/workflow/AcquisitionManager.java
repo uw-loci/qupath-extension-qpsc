@@ -864,9 +864,21 @@ public class AcquisitionManager {
                             // Show detailed scrollable dialog with per-tile data
                             SaturationSummaryDialog.show(reportPath, satSummary);
                         } else {
-                            // Fallback: simple notification
-                            Platform.runLater(() -> Dialogs.showWarningNotification(
-                                    "Saturation Detected", "Some tiles had saturated pixels:\n" + satSummary));
+                            // Fallback: use a proper dialog instead of a toast notification
+                            // (toast notifications truncate long text)
+                            Platform.runLater(() -> {
+                                javafx.scene.control.Alert satAlert =
+                                        new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+                                satAlert.setTitle("Saturation Detected");
+                                satAlert.setHeaderText("Some tiles had saturated pixels");
+                                javafx.scene.control.TextArea satText = new javafx.scene.control.TextArea(satSummary);
+                                satText.setEditable(false);
+                                satText.setWrapText(true);
+                                satText.setPrefHeight(200);
+                                satAlert.getDialogPane().setContent(satText);
+                                satAlert.getDialogPane().setMinWidth(500);
+                                satAlert.showAndWait();
+                            });
                         }
                     }
                     return true;
