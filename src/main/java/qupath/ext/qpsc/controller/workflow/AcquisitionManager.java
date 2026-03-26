@@ -887,8 +887,7 @@ public class AcquisitionManager {
                         String tileDir2 = java.nio.file.Paths.get(
                                         state.projectInfo.getTempTileDirectory(), annotation.getName())
                                 .toString();
-                        String measurementsPath =
-                                tileDir2 + java.io.File.separator + "tile_measurements.json";
+                        String measurementsPath = tileDir2 + java.io.File.separator + "tile_measurements.json";
                         java.io.File measurementsFile = new java.io.File(measurementsPath);
                         if (measurementsFile.exists()) {
                             String measurementsJson = new String(
@@ -1452,8 +1451,7 @@ public class AcquisitionManager {
             java.util.List<PathObject> detections;
             QuPathGUI guiInstance = QuPathGUI.getInstance();
             if (guiInstance != null && guiInstance.getImageData() != null) {
-                detections = guiInstance.getImageData().getHierarchy()
-                        .getDetectionObjects().stream()
+                detections = guiInstance.getImageData().getHierarchy().getDetectionObjects().stream()
                         .filter(d -> {
                             PathObject parent = d.getParent();
                             return parent != null && parent.equals(annotation);
@@ -1484,8 +1482,7 @@ public class AcquisitionManager {
                 }
 
                 Boolean afPerformed = (Boolean) entry.get("af_performed");
-                detection.getMeasurements().put("af_performed",
-                        (afPerformed != null && afPerformed) ? 1.0 : 0.0);
+                detection.getMeasurements().put("af_performed", (afPerformed != null && afPerformed) ? 1.0 : 0.0);
 
                 // Encode af_type as numeric: 0=none, 1=sweep, 2=standard
                 String afType = (String) entry.get("af_type");
@@ -1503,8 +1500,7 @@ public class AcquisitionManager {
                 }
 
                 Boolean afFailed = (Boolean) entry.get("af_failed");
-                detection.getMeasurements().put("af_failed",
-                        (afFailed != null && afFailed) ? 1.0 : 0.0);
+                detection.getMeasurements().put("af_failed", (afFailed != null && afFailed) ? 1.0 : 0.0);
 
                 Number tileTime = (Number) entry.get("tile_time_ms");
                 if (tileTime != null) {
@@ -1514,12 +1510,17 @@ public class AcquisitionManager {
                 matched++;
             }
 
-            logger.info("Attached tile measurements to {}/{} detections for annotation '{}'",
-                    matched, detections.size(), annotation.getName());
+            logger.info(
+                    "Attached tile measurements to {}/{} detections for annotation '{}'",
+                    matched,
+                    detections.size(),
+                    annotation.getName());
 
             // Fire hierarchy update so measurement table refreshes
             if (guiInstance != null && guiInstance.getImageData() != null) {
-                guiInstance.getImageData().getHierarchy()
+                guiInstance
+                        .getImageData()
+                        .getHierarchy()
                         .fireHierarchyChangedEvent(
                                 guiInstance.getImageData().getHierarchy().getRootObject());
             } else {
