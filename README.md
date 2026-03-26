@@ -109,9 +109,18 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 ### Prerequisites
 
 **Hardware Requirements:**
-- Motorized XY microscope stage (controlled via Micro-Manager)
-- Digital camera compatible with Micro-Manager
-- Optional: Motorized Z-stage for autofocus, rotation stage for polarized imaging (PPM)
+
+| Component | Status | Purpose |
+|-----------|--------|---------|
+| Motorized XY stage | **Required** | Tile-based acquisition -- stage moves between tile positions |
+| Motorized Z stage | **Required** | Autofocus during acquisition (sweep drift check + standard AF) |
+| Digital camera | **Required** | Image capture (must be Micro-Manager compatible) |
+| Rotation stage (PSG) | Recommended (PPM) | Polarizer rotation for multi-angle PPM acquisition |
+| Motorized objective turret | Optional | Automated objective switching between modalities (not yet supported -- manual switching required) |
+| Motorized filter wheel | Optional | Automated filter changes for fluorescence (future modality support) |
+| Slide scanner with macro camera | Optional | Provides overview image for Existing Image workflow and Stage Map overlay |
+
+All motorized components must be controllable through [Micro-Manager](https://micro-manager.org/) device adapters.
 
 **Software Requirements:**
 - **Operating System**: **Windows 10+** (required -- microscope hardware drivers and Micro-Manager device adapters are Windows-only)
