@@ -881,6 +881,25 @@ public class AcquisitionManager {
                             });
                         }
                     }
+
+                    // Read per-tile measurements and attach to detection objects
+                    try {
+                        String tileDir2 = java.nio.file.Paths.get(
+                                        state.projectInfo.getTempTileDirectory(), annotation.getName())
+                                .toString();
+                        String measurementsPath =
+                                tileDir2 + java.io.File.separator + "tile_measurements.json";
+                        java.io.File measurementsFile = new java.io.File(measurementsPath);
+                        if (measurementsFile.exists()) {
+                            String measurementsJson = new String(
+                                    java.nio.file.Files.readAllBytes(measurementsFile.toPath()),
+                                    java.nio.charset.StandardCharsets.UTF_8);
+                            attachTileMeasurements(annotation, measurementsJson);
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Could not load tile measurements: {}", e.getMessage());
+                    }
+
                     return true;
 
                 case CANCELLED:
@@ -1390,5 +1409,125 @@ public class AcquisitionManager {
             }
         }
         return QPPreferenceDialog.getFlipMacroYProperty();
+    }
+
+    /**
+     * Parses per-tile measurement JSON and attaches values to detection objects.
+     *
+     * <p>The JSON is an array of objects produced by the Python server, each with:
+     * position_index, filename, z_um, af_performed, af_type, af_drift_um, af_failed,
+     * tile_time_ms.
+     *
+     * <p>Detections are matched by their TileNumber measurement (set during tile
+     * generation in {@link qupath.ext.qpsc.utilities.TilingUtilities}).
+     *
+     * @param annotation The annotation whose child detections should be updated
+     * @param json       Raw JSON string (array of measurement objects)
+     */
+    @SuppressWarnings("unchecked")
+    private void attachTileMeasurements(PathObject annotation, String json) {
+        try {
+            com.google.gson.Gson gson = new com.google.gson.Gson();
+            java.lang.reflect.Type listType =
+                    new com.google.gson.reflect.TypeToken<java.util.List<java.util.Map<String, Object>>>() {}.getType();
+            java.util.List<java.util.Map<String, Object>> measurements = gson.fromJson(json, listType);
+
+            if (measurements == null || measurements.isEmpty()) {
+                logger.debug("No tile measurements to attach");
+                return;
+            }
+
+            // Build lookup from position_index -> measurement entry
+            java.util.Map<Integer, java.util.Map<String, Object>> measurementsByIndex = new java.util.HashMap<>();
+            for (java.util.Map<String, Object> entry : measurements) {
+                Number posIdx = (Number) entry.get("position_index");
+                if (posIdx != null) {
+                    measurementsByIndex.put(posIdx.intValue(), entry);
+                }
+            }
+
+            // Get detection objects that are children of this annotation
+            // (QuPath resolves containment spatially, so child detections are
+            // those whose ROI falls inside the annotation ROI)
+            java.util.List<PathObject> detections;
+            QuPathGUI guiInstance = QuPathGUI.getInstance();
+            if (guiInstance != null && guiInstance.getImageData() != null) {
+                detections = guiInstance.getImageData().getHierarchy()
+                        .getDetectionObjects().stream()
+                        .filter(d -> {
+                            PathObject parent = d.getParent();
+                            return parent != null && parent.equals(annotation);
+                        })
+                        .collect(Collectors.toList());
+            } else {
+                detections = QP.getCurrentHierarchy().getDetectionObjects().stream()
+                        .filter(d -> {
+                            PathObject parent = d.getParent();
+                            return parent != null && parent.equals(annotation);
+                        })
+                        .collect(Collectors.toList());
+            }
+
+            int matched = 0;
+            for (PathObject detection : detections) {
+                // Match by TileNumber measurement (set during tile generation)
+                Number tileNum = detection.getMeasurements().get("TileNumber");
+                if (tileNum == null) continue;
+
+                java.util.Map<String, Object> entry = measurementsByIndex.get(tileNum.intValue());
+                if (entry == null) continue;
+
+                // Attach numeric measurements to the detection
+                Number zUm = (Number) entry.get("z_um");
+                if (zUm != null) {
+                    detection.getMeasurements().put("z_position_um", zUm.doubleValue());
+                }
+
+                Boolean afPerformed = (Boolean) entry.get("af_performed");
+                detection.getMeasurements().put("af_performed",
+                        (afPerformed != null && afPerformed) ? 1.0 : 0.0);
+
+                // Encode af_type as numeric: 0=none, 1=sweep, 2=standard
+                String afType = (String) entry.get("af_type");
+                double afTypeVal = 0.0;
+                if ("sweep".equals(afType)) {
+                    afTypeVal = 1.0;
+                } else if ("standard".equals(afType)) {
+                    afTypeVal = 2.0;
+                }
+                detection.getMeasurements().put("af_type", afTypeVal);
+
+                Number afDrift = (Number) entry.get("af_drift_um");
+                if (afDrift != null) {
+                    detection.getMeasurements().put("af_drift_um", afDrift.doubleValue());
+                }
+
+                Boolean afFailed = (Boolean) entry.get("af_failed");
+                detection.getMeasurements().put("af_failed",
+                        (afFailed != null && afFailed) ? 1.0 : 0.0);
+
+                Number tileTime = (Number) entry.get("tile_time_ms");
+                if (tileTime != null) {
+                    detection.getMeasurements().put("tile_time_ms", tileTime.doubleValue());
+                }
+
+                matched++;
+            }
+
+            logger.info("Attached tile measurements to {}/{} detections for annotation '{}'",
+                    matched, detections.size(), annotation.getName());
+
+            // Fire hierarchy update so measurement table refreshes
+            if (guiInstance != null && guiInstance.getImageData() != null) {
+                guiInstance.getImageData().getHierarchy()
+                        .fireHierarchyChangedEvent(
+                                guiInstance.getImageData().getHierarchy().getRootObject());
+            } else {
+                QP.fireHierarchyUpdate();
+            }
+
+        } catch (Exception e) {
+            logger.warn("Failed to attach tile measurements: {}", e.getMessage());
+        }
     }
 }
