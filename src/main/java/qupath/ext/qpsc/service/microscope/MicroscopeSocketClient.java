@@ -145,6 +145,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         TESTAF("testaf__"),
         /** Test adaptive autofocus at current position */
         TESTADAF("testadaf"),
+        /** Test autofocus validation (sweep + recovery) */
+        TESTAFV("testafv_"),
         /** Get acquisition status */
         STATUS("status__"),
         /** Get acquisition progress */
@@ -1424,6 +1426,92 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         logger.debug("Restored socket timeout to {}ms", originalTimeout);
                     } catch (IOException e) {
                         logger.warn("Failed to restore original socket timeout", e);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Runs the autofocus validation test (sweep from focus + recovery from defocus).
+     * Returns a JSON-decoded map of results.
+     */
+    public Map<String, String> testAutofocusValidation(String yamlPath, String outputPath, String objective)
+            throws IOException {
+
+        String message =
+                String.format("--yaml %s --output %s --objective %s %s", yamlPath, outputPath, objective, END_MARKER);
+        byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
+
+        logger.info("Sending autofocus validation test command");
+
+        synchronized (socketLock) {
+            ensureConnected();
+
+            int originalTimeout = readTimeout;
+            try {
+                if (socket != null) {
+                    socket.setSoTimeout(180000); // 3 minutes for both phases
+                }
+
+                output.write(Command.TESTAFV.getValue());
+                output.flush();
+                Thread.sleep(50);
+                output.write(messageBytes);
+                output.flush();
+                lastActivityTime.set(System.currentTimeMillis());
+
+                // Read STARTED acknowledgment
+                byte[] buffer = new byte[4096];
+                int bytesRead = input.read(buffer);
+                if (bytesRead > 0) {
+                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                    if (response.startsWith("FAILED:")) {
+                        throw new IOException("Server rejected validation test: " + response);
+                    }
+                }
+
+                // Wait for final result (JSON)
+                bytesRead = input.read(buffer);
+                if (bytesRead > 0) {
+                    String finalResponse = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                    logger.info("Validation test response: {}", finalResponse);
+
+                    if (finalResponse.startsWith("FAILED:")) {
+                        throw new IOException("Validation test failed: " + finalResponse.substring(7));
+                    }
+
+                    Map<String, String> result = new java.util.HashMap<>();
+                    if (finalResponse.startsWith("SUCCESS:")) {
+                        String json = finalResponse.substring(8);
+                        // Simple JSON parsing -- extract key-value pairs
+                        json = json.trim();
+                        if (json.startsWith("{")) json = json.substring(1);
+                        if (json.endsWith("}")) json = json.substring(0, json.length() - 1);
+                        for (String pair : json.split(",")) {
+                            String[] kv = pair.split(":", 2);
+                            if (kv.length == 2) {
+                                String key = kv[0].trim().replace("\"", "");
+                                String value = kv[1].trim().replace("\"", "");
+                                result.put(key, value);
+                            }
+                        }
+                    }
+                    lastActivityTime.set(System.currentTimeMillis());
+                    return result;
+                }
+
+                throw new IOException("No response from autofocus validation test");
+
+            } catch (IOException | InterruptedException e) {
+                handleIOException(new IOException("Autofocus validation test error", e));
+                throw new IOException("Autofocus validation test error: " + e.getMessage(), e);
+            } finally {
+                if (socket != null) {
+                    try {
+                        socket.setSoTimeout(originalTimeout);
+                    } catch (IOException ex) {
+                        logger.warn("Failed to restore socket timeout", ex);
                     }
                 }
             }

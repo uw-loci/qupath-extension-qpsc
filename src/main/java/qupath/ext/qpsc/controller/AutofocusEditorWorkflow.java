@@ -784,8 +784,62 @@ public class AutofocusEditorWorkflow {
         TitledPane sweepPane = new TitledPane("Sweep Drift Check (In-Acquisition Focus Correction)", sweepContent);
         sweepPane.setCollapsible(false);
 
-        // Write button row (only write button now - test buttons are in sections)
-        HBox buttonRow = new HBox(10, writeButton);
+        // "Validate Autofocus" button -- runs both sweep + recovery test
+        Button validateButton = new Button("Validate Autofocus Settings");
+        validateButton.setTooltip(new Tooltip("Test your autofocus settings on the current tissue.\n\n"
+                + "1. Manually focus on tissue using the Live Viewer first\n"
+                + "2. Click this button to run a two-phase validation:\n"
+                + "   - Phase 1: Sweep drift check from your focused position\n"
+                + "   - Phase 2: Defocus 80% of search range, then full recovery\n"
+                + "3. Results show how close each phase returns to your manual focus"));
+        validateButton.setStyle("-fx-font-weight: bold;");
+        validateButton.setOnAction(e -> {
+            try {
+                saveCurrentSettings.run();
+                saveAutofocusSettings(autofocusFile, workingSettings);
+                statusLabel.setText("Settings saved - running autofocus validation...");
+                statusLabel.setStyle("-fx-text-fill: blue; -fx-font-weight: bold;");
+
+                String currentObj = objectiveCombo.getValue();
+                String testOutputPath = new File(configDir, "autofocus_tests").getAbsolutePath();
+
+                // Run in background to avoid blocking UI
+                java.util.concurrent.CompletableFuture.runAsync(() -> {
+                    try {
+                        // Validate connection
+                        if (!qupath.ext.qpsc.controller.MicroscopeController.getInstance()
+                                .isConnected()) {
+                            Platform.runLater(() -> Dialogs.showErrorMessage(
+                                    "Connection Required", "Please connect to the microscope server first."));
+                            return;
+                        }
+
+                        var socketClient = qupath.ext.qpsc.controller.MicroscopeController.getInstance()
+                                .getSocketClient();
+                        var result = socketClient.testAutofocusValidation(configPath, testOutputPath, currentObj);
+
+                        Platform.runLater(() -> showValidationResult(result, statusLabel));
+
+                    } catch (Exception ex) {
+                        logger.error("Autofocus validation failed", ex);
+                        Platform.runLater(() -> {
+                            statusLabel.setText("Validation failed: " + ex.getMessage());
+                            statusLabel.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
+                            Dialogs.showErrorMessage(
+                                    "Autofocus Validation Failed",
+                                    "Error: " + ex.getMessage()
+                                            + "\n\nMake sure you are focused on tissue before running the test.");
+                        });
+                    }
+                });
+
+            } catch (Exception ex) {
+                Dialogs.showErrorMessage("Error", "Failed to start validation: " + ex.getMessage());
+            }
+        });
+
+        // Write button row
+        HBox buttonRow = new HBox(10, writeButton, validateButton);
         buttonRow.setAlignment(Pos.CENTER_LEFT);
 
         // Layout
@@ -1001,5 +1055,77 @@ public class AutofocusEditorWorkflow {
 
         logger.info(
                 "Saved autofocus settings for {} objectives to: {}", settings.size(), autofocusFile.getAbsolutePath());
+    }
+
+    /**
+     * Shows the autofocus validation result dialog.
+     */
+    private static void showValidationResult(Map<String, String> result, Label statusLabel) {
+        String sweepDelta = result.getOrDefault("sweep_delta_um", "?");
+        String recoveryDelta = result.getOrDefault("recovery_delta_um", "?");
+        String groundTruth = result.getOrDefault("ground_truth_z", "?");
+        String sweepZ = result.getOrDefault("sweep_z", "?");
+        String recoveryZ = result.getOrDefault("recovery_z", "?");
+        String defocusDist = result.getOrDefault("defocus_distance_um", "?");
+
+        boolean sweepOk = false;
+        boolean recoveryOk = false;
+        try {
+            sweepOk = Double.parseDouble(sweepDelta) < 5.0;
+        } catch (NumberFormatException ignored) {
+        }
+        try {
+            recoveryOk = !"FAILED".equals(recoveryDelta) && Double.parseDouble(recoveryDelta) < 5.0;
+        } catch (NumberFormatException ignored) {
+        }
+
+        String sweepStatus = sweepOk ? "[PASS]" : "[WARN]";
+        String recoveryStatus = recoveryOk ? "[PASS]" : ("FAILED".equals(recoveryDelta) ? "[FAIL]" : "[WARN]");
+
+        boolean allPass = sweepOk && recoveryOk;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Autofocus Validation Results\n");
+        sb.append("===========================\n\n");
+        sb.append(String.format("Manual focus (ground truth): Z = %s um\n\n", groundTruth));
+        sb.append(String.format(
+                "Phase 1 - Sweep Drift Check %s\n" + "  Sweep found: Z = %s um (delta: %s um)\n\n",
+                sweepStatus, sweepZ, sweepDelta));
+        sb.append(String.format(
+                "Phase 2 - Recovery from %s um defocus %s\n" + "  Autofocus recovered: Z = %s um (delta: %s um)\n\n",
+                defocusDist, recoveryStatus, recoveryZ, recoveryDelta));
+
+        if (allPass) {
+            sb.append("Your autofocus settings are working well for this tissue.");
+        } else {
+            sb.append("SUGGESTIONS:\n");
+            if (!sweepOk) {
+                sb.append("  - Sweep drift check was inaccurate. Try a different score_metric\n");
+                sb.append("    or increase sweep_n_steps.\n");
+            }
+            if (!recoveryOk) {
+                sb.append("  - Full autofocus did not recover well. Try increasing n_steps\n");
+                sb.append("    or search_range_um, or try a different score_metric.\n");
+            }
+        }
+
+        Alert alert = new Alert(allPass ? Alert.AlertType.INFORMATION : Alert.AlertType.WARNING);
+        alert.setTitle("Autofocus Validation");
+        alert.setHeaderText(allPass ? "Settings validated successfully" : "Settings may need adjustment");
+
+        TextArea textArea = new TextArea(sb.toString());
+        textArea.setEditable(false);
+        textArea.setWrapText(true);
+        textArea.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
+        textArea.setPrefHeight(300);
+        alert.getDialogPane().setContent(textArea);
+        alert.getDialogPane().setMinWidth(500);
+        alert.showAndWait();
+
+        statusLabel.setText(allPass ? "Validation PASSED" : "Validation: check results");
+        statusLabel.setStyle(
+                allPass
+                        ? "-fx-text-fill: green; -fx-font-weight: bold;"
+                        : "-fx-text-fill: orange; -fx-font-weight: bold;");
     }
 }
