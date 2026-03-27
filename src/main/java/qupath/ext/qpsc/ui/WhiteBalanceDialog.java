@@ -30,10 +30,11 @@ import qupath.lib.gui.prefs.PathPrefs;
  *
  * <p>This dialog provides two modes of white balance calibration:
  * <ul>
- *   <li><b>Simple White Balance</b>: Standard method - calibrates once and applies the same
- *       correction to all PPM angles. This has been the default approach.</li>
- *   <li><b>PPM White Balance</b>: Experimental per-angle calibration at each of the 4 standard
- *       PPM angles. Requires updated JAI camera DLL with per-channel exposure support.</li>
+ *   <li><b>Simple White Balance</b>: Calibrates at 90 degrees first, then automatically
+ *       calibrates all remaining angles using the 90-degree result as starting point.
+ *       Produces per-angle exposures for all angles (~1-2 min).</li>
+ *   <li><b>PPM White Balance</b>: Independent per-angle calibration at each of the 4 standard
+ *       PPM angles with per-angle target intensities. Most accurate but slower.</li>
  * </ul>
  *
  * <p>The dialog is non-modal to allow interaction with QuPath while it remains open.
@@ -715,9 +716,9 @@ public class WhiteBalanceDialog {
         Label modeLabel = WbMode.createColoredLabel(WbMode.SIMPLE);
         modeLabel.setStyle(modeLabel.getStyle() + " -fx-font-size: 13px;");
 
-        Label descLabel = new Label("Calibrates ONCE at 90 degrees and applies the same color correction\n"
-                + "to all PPM angles. Use this for single-angle brightfield acquisition\n"
-                + "or when per-angle color accuracy is not critical.\n\n"
+        Label descLabel = new Label("Calibrates at 90 degrees first, then automatically calibrates\n"
+                + "all remaining PPM angles using the 90-degree result as a starting point.\n"
+                + "This produces per-angle exposure settings for all angles (~1-2 min total).\n\n"
                 + "Navigate to a blank area of the slide first. If you see small debris\n"
                 + "or scratches in the Live Viewer, defocus slightly (1-2 Z steps) until\n"
                 + "the field looks clean -- the illumination pattern is preserved.\n\n"

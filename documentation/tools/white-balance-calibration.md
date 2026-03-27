@@ -26,7 +26,7 @@ light source, or optical path has changed.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| Mode | ComboBox | - | **Simple** (single angle) or **PPM** (4 angles) |
+| Mode | ComboBox | - | **Simple** (calibrates at 90 deg, then all angles; ~1-2 min) or **PPM** (independent calibration at all 4 angles with per-angle targets; most accurate) |
 | Target Intensity | Spinner | 200 | Target grayscale value to achieve per channel |
 | Tolerance | Spinner | 5 | Acceptable deviation from target intensity |
 | Max Analog Gain | Spinner | - | Maximum allowed analog gain setting |
@@ -48,12 +48,17 @@ When PPM mode is selected, individual targets can be configured for each angle:
 
 1. Position the microscope on a clean, white reference area.
 2. Open the White Balance Calibration dialog.
-3. Select **Simple** mode for single-angle calibration, or **PPM** for multi-angle.
+3. Select **Simple** or **PPM** mode:
+   - **Simple**: Calibrates R/G/B at 90 degrees first, then automatically rotates
+     to each remaining angle and calibrates there using the 90-degree result as a
+     starting point. Takes ~1-2 minutes for all angles.
+   - **PPM**: Fully independent calibration at each angle with configurable
+     per-angle target intensities. Most accurate but takes longer.
 4. Set the target intensity (default 200 is suitable for most cases).
 5. Click Start.
 6. The system iteratively adjusts R, G, B exposure times for each channel
    independently until all channels reach the target intensity within tolerance.
-7. For PPM mode, this process repeats at each polarizer angle.
+7. Both modes produce per-angle exposure settings for all angles.
 8. Calibration values are automatically saved.
 
 ## Output
