@@ -52,7 +52,15 @@ jobs:
         if: runner.os == 'Windows'
         run: ./gradlew build
 
+  screenshot-check:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for git log date comparisons
+
       - name: Check documentation screenshots freshness
-        if: runner.os == 'Linux'
-        run: bash tools/check-doc-images.sh || true
-        continue-on-error: true
+        run: bash tools/check-doc-images.sh --ci
