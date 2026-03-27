@@ -718,6 +718,9 @@ public class WhiteBalanceDialog {
         Label descLabel = new Label("Calibrates ONCE at 90 degrees and applies the same color correction\n"
                 + "to all PPM angles. Use this for single-angle brightfield acquisition\n"
                 + "or when per-angle color accuracy is not critical.\n\n"
+                + "Navigate to a blank area of the slide first. If you see small debris\n"
+                + "or scratches in the Live Viewer, defocus slightly (1-2 Z steps) until\n"
+                + "the field looks clean -- the illumination pattern is preserved.\n\n"
                 + "IMPORTANT: When you acquire tiles, select the matching WB mode\n"
                 + "(\"Simple (90deg)\" in the Hardware Configuration section).\n"
                 + "Background images must also be collected with this mode selected.");
@@ -836,6 +839,9 @@ public class WhiteBalanceDialog {
                 + "Each angle gets its own per-channel exposure and gain settings.\n"
                 + "Use this for multi-angle PPM acquisition where color accuracy\n"
                 + "between angles is important (e.g., birefringence quantification).\n\n"
+                + "Navigate to a blank area of the slide first. If you see small debris\n"
+                + "or scratches in the Live Viewer, defocus slightly (1-2 Z steps) until\n"
+                + "the field looks clean -- the illumination pattern is preserved.\n\n"
                 + "IMPORTANT: When you acquire tiles, select \"Per-angle (PPM)\" as\n"
                 + "the WB mode. Background images must also use Per-angle mode.\n"
                 + "Do NOT mix Per-angle WB with Simple backgrounds or vice versa.");
