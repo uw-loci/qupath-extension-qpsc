@@ -3,6 +3,8 @@ package qupath.ext.qpsc.preferences;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.StringProperty;
 import qupath.lib.gui.prefs.PathPrefs;
 
@@ -974,5 +976,36 @@ public class PersistentPreferences {
      */
     public static void setSavedStagePoints(String json) {
         savedStagePointsProperty.setValue(json != null ? json : "[]");
+    }
+
+    // ================== MENU DOT INDICATOR ==================
+    private static final BooleanProperty showMenuDotProperty =
+            PathPrefs.createPersistentPreference("qpscShowMenuDot", true);
+    // Default: teal (#009688) -- distinct from QuPath's blue, QPSC warning orange
+    private static final IntegerProperty menuDotColorProperty =
+            PathPrefs.createPersistentPreference("qpscMenuDotColor", 0xFF009688);
+
+    public static boolean isShowMenuDot() {
+        return showMenuDotProperty.get();
+    }
+
+    public static void setShowMenuDot(boolean show) {
+        showMenuDotProperty.set(show);
+    }
+
+    public static BooleanProperty showMenuDotProperty() {
+        return showMenuDotProperty;
+    }
+
+    public static int getMenuDotColor() {
+        return menuDotColorProperty.get();
+    }
+
+    public static void setMenuDotColor(int argb) {
+        menuDotColorProperty.set(argb);
+    }
+
+    public static IntegerProperty menuDotColorProperty() {
+        return menuDotColorProperty;
     }
 }

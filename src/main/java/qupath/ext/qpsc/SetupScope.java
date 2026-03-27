@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.QPScopeController;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
@@ -135,6 +136,16 @@ public class SetupScope implements QuPathExtension, GitHubProject {
     private void addMenuItem(QuPathGUI qupath) {
         // Create or get the top level Extensions > QP Scope menu
         var extensionMenu = qupath.getMenu("Extensions>" + EXTENSION_NAME, true);
+
+        // Add colored indicator dot for quick identification in the menu
+        if (PersistentPreferences.isShowMenuDot()) {
+            int argb = PersistentPreferences.getMenuDotColor();
+            int r = (argb >> 16) & 0xFF;
+            int g = (argb >> 8) & 0xFF;
+            int b = argb & 0xFF;
+            javafx.scene.paint.Color dotColor = javafx.scene.paint.Color.rgb(r, g, b);
+            extensionMenu.setGraphic(new javafx.scene.shape.Circle(4, dotColor));
+        }
 
         // === ACQUISITION WIZARD (top of menu) ===
         MenuItem wizardOption = new MenuItem(res.getString("menu.acquisitionWizard"));

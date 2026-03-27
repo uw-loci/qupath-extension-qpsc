@@ -335,8 +335,41 @@ public class StageMapWindow {
             }
         });
 
+        // Apply Flips checkbox -- flips the map, overlay, and coordinate system
+        CheckBox applyFlipsCheckbox = new CheckBox("Apply Flips");
+        applyFlipsCheckbox.setStyle("-fx-text-fill: #C62828; -fx-font-weight: bold; "
+                + "-fx-border-color: #C62828; -fx-border-width: 1; -fx-border-radius: 2; "
+                + "-fx-padding: 2 4;");
+        applyFlipsCheckbox.setTooltip(new Tooltip("Flip the Stage Map to match the Live Viewer orientation.\n\n"
+                + "When checked:\n"
+                + "  - Map and overlay are flipped to match what you see\n"
+                + "    through the eyepiece / Live Viewer\n"
+                + "  - Double-click coordinates are transformed to match\n"
+                + "  - Use this when the map appears mirrored relative\n"
+                + "    to the Live Viewer\n\n"
+                + "Reads flip settings from scanner configuration."));
+
+        // Read initial state from preferences
+        boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
+        boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+        applyFlipsCheckbox.setSelected(flipX || flipY);
+
+        applyFlipsCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            logger.info("Apply Flips toggled: {}", newVal);
+            if (canvas != null) {
+                canvas.setFlipsApplied(newVal);
+            }
+        });
+
         topBar.getChildren()
-                .addAll(insertLabel, insertComboBox, spacer, macroOverlayCheckbox, configButton, helpButton);
+                .addAll(
+                        insertLabel,
+                        insertComboBox,
+                        spacer,
+                        applyFlipsCheckbox,
+                        macroOverlayCheckbox,
+                        configButton,
+                        helpButton);
         return topBar;
     }
 

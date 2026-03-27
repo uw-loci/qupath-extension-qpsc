@@ -22,7 +22,7 @@ public enum WbMode {
     OFF("Off", "off", false, "#888888"),
     CAMERA_AWB("Camera AWB", "camera_awb", true, "#2E7D32"),
     SIMPLE("Simple (90deg)", "simple", true, "#1565C0"),
-    PER_ANGLE("Per-angle (PPM)", "per_angle", true, "#E65100");
+    PER_ANGLE("Per-angle (PPM)", "per_angle", true, "#7B1FA2");
 
     private final String displayName;
     private final String protocolName;

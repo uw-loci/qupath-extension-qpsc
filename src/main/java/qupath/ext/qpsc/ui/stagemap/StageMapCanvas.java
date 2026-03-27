@@ -22,6 +22,7 @@ import javafx.scene.text.Text;
 import javafx.scene.text.TextAlignment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 
 /**
  * Stage map visualization using WritableImage + Shape nodes.
@@ -111,6 +112,7 @@ public class StageMapCanvas extends StackPane {
     private double offsetY = 0;
     private boolean showLegalZones = true;
     private boolean showTarget = false;
+    private boolean flipsApplied = false;
 
     // Track size for recalculation
     private double lastWidth = 0;
@@ -856,6 +858,27 @@ public class StageMapCanvas extends StackPane {
     /**
      * Clears and hides the macro image overlay.
      */
+    /**
+     * Sets whether the map should be flipped to match the Live Viewer orientation.
+     * Applies a visual flip transform to the entire canvas.
+     */
+    public void setFlipsApplied(boolean applied) {
+        this.flipsApplied = applied;
+        // Use JavaFX scale transforms to flip the rendering
+        // The flip preferences determine which axes to flip
+        boolean flipX = applied && QPPreferenceDialog.getFlipMacroXProperty();
+        boolean flipY = applied && QPPreferenceDialog.getFlipMacroYProperty();
+        // Flip the entire StackPane so all child layers flip together
+        this.setScaleX(flipX ? -1 : 1);
+        this.setScaleY(flipY ? -1 : 1);
+        logger.info("Stage Map flips applied: {} (flipX={}, flipY={})", applied, flipX, flipY);
+    }
+
+    /** Returns whether flips are currently applied. */
+    public boolean isFlipsApplied() {
+        return flipsApplied;
+    }
+
     public void clearMacroOverlay() {
         boolean wasVisible = macroOverlayVisible;
         macroOverlayVisible = false;
