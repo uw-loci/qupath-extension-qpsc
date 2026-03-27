@@ -70,6 +70,19 @@ The Navigate tab combines movement controls and direct position entry in a singl
 
 Saved points are stored in JSON preferences and persist across sessions.
 
+### Stage Control - Camera Tab
+
+Shows the current hardware and provides quick access to white balance presets.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| Detector / Objective | Label | Read-only display of the current detector and objective from config |
+| WB Angle Presets | Buttons | One button per calibrated angle (e.g., "Uncrossed (90 deg)"). Clicking applies the per-channel exposures, gains, and rotates the polarizer to that angle. Exposure details shown below each button. |
+| Simple WB Preset | Button | Applies the Simple WB base exposures and gains at the uncrossed angle (shown only if Simple WB has been calibrated) |
+| Full Camera Control | Button | Opens the full [Camera Control](camera-control.md) dialog for detailed exposure and gain adjustments |
+
+When a preset is applied, the live feed pauses briefly while the camera settings and rotation stage are updated, then resumes automatically.
+
 ### Noise Stats Panel
 
 | Option | Type | Description |
@@ -87,9 +100,10 @@ Displays current R, G, B mean intensity values from the live feed. Useful for ca
 1. Open Live Viewer from the menu
 2. Verify the camera feed is displaying (confirms microscope communication)
 3. Use stage controls to navigate to the area of interest
-4. Check histogram and saturation indicators for proper exposure
-5. Use noise stats to verify camera performance
-6. Save important positions using the Saved Points tab
+4. Use the Camera tab to apply WB presets for the desired polarizer angle
+5. Check histogram and saturation indicators for proper exposure
+6. Use noise stats to verify camera performance
+7. Save important positions using the Saved Points tab
 
 ## Output
 
@@ -108,9 +122,9 @@ The Live Viewer does not produce persistent output files. It provides real-time 
 - **Image is saturated**: Reduce exposure time or lamp intensity; check the per-channel saturation indicators
 - **Stage does not move**: Check hardware initialization in Micro-Manager
 - The dialog is a singleton -- opening it again brings the existing window to front
-- Live streaming pauses automatically during acquisition and resumes afterward
+- Live streaming pauses automatically during acquisition, camera operations, and WB preset application, then resumes afterward
+- If frames stop arriving, the viewer will automatically attempt to restart the camera up to twice before turning off
 - Stage control settings (step size, sample movement mode) are persisted between sessions
-- Camera mode changes are handled cleanly during streaming
 
 ## See Also
 

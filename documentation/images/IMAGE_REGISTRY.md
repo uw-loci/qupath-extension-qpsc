@@ -19,8 +19,8 @@ This file tracks the relationship between documentation screenshots and the Java
 | `Docs_CommunicationSettings.png` | `ui/ServerConnectionController.java` | -- | CHECK |
 | `Docs_CommunicationSettings_Alerts.png` | `ui/ServerConnectionController.java` | -- | CHECK |
 | `Docs_ExistingImage_ConsolidatedDialog.png` | `ui/ExistingImageAcquisitionController.java` | -- | NEEDS UPDATE (WB mode in hardware section, Quick Start link) |
-| `Docs_LiveViewer.png` | `ui/liveviewer/LiveViewerWindow.java` | -- | NEEDS UPDATE (Camera Settings button, Show Tiles checkbox, tabs merged) |
-| `Docs_LiveViewer_Position.png` | `ui/liveviewer/StageControlPanel.java` | -- | NEEDS UPDATE (Position tab removed, merged into Navigate) |
+| `Docs_LiveViewer.png` | `ui/liveviewer/LiveViewerWindow.java` | -- | NEEDS UPDATE (Camera Settings button removed from toolbar, Show Tiles checkbox, Camera tab added) |
+| `Docs_LiveViewer_Position.png` | `ui/liveviewer/StageControlPanel.java` | -- | NEEDS UPDATE (Position tab merged into Navigate, new Camera tab with WB presets) |
 | `Docs_LiveViewer_SavedPoints.png` | `ui/liveviewer/StageControlPanel.java` | -- | CHECK |
 | `Docs_MicroscopeAlignment_SelectSourceMicroscope.png` | `ui/MicroscopeSelectionDialog.java` | -- | CHECK |
 | `Docs_StageMap.png` | `ui/stagemap/StageMapWindow.java`, `ui/stagemap/StageMapCanvas.java` | -- | NEEDS UPDATE (Apply Flips checkbox, auto-overlay) |
