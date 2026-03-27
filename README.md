@@ -104,7 +104,7 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 
 ## Getting Started
 
-> **New user?** Start with the **[Quick Start Guide](documentation/QUICKSTART.md)** -- it walks you from "QuPath is open" to "I have my first image" in 15 minutes.
+> **New user?** Start with the **[Quick Start Guide](documentation/QUICKSTART-BF.md)** -- it walks you from "QuPath is open" to "I have my first image" in 15 minutes.
 
 ### Prerequisites
 

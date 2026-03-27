@@ -431,7 +431,7 @@ public class LiveViewerWindow {
         });
 
         // Camera Control button
-        Button cameraControlButton = new Button("Camera");
+        Button cameraControlButton = new Button("Camera Settings");
         cameraControlButton.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; "
                 + "-fx-border-color: #4A90D9; -fx-border-width: 2; -fx-border-radius: 3; "
                 + "-fx-background-radius: 3;");

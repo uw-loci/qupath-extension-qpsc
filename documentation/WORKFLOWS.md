@@ -2,7 +2,7 @@
 
 QPSC connects QuPath to your microscope via Pycro-Manager and Micro-Manager. You draw annotations or define coordinates in QuPath, and QPSC moves the stage, captures tiles, stitches them, and imports the result back into your project -- all without leaving QuPath. This page helps you choose the right workflow and understand how the tools fit together. For installation instructions, see the [main README](../README.md).
 
-> **First time?** See the **[Quick Start Guide](QUICKSTART.md)** to get your first image in 15 minutes.
+> **First time?** See the **[Quick Start Guide](QUICKSTART-BF.md)** to get your first image in 15 minutes.
 
 ---
 

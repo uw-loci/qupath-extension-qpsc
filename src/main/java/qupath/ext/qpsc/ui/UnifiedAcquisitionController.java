@@ -449,10 +449,89 @@ public class UnifiedAcquisitionController {
             Label wbLabel = new Label("WB Mode:");
             grid.add(wbLabel, 0, row);
             grid.add(wbModeComboBox, 1, row);
+            row++;
+
+            // Pixel size mismatch warning
+            Label pixelSizeWarning = new Label();
+            pixelSizeWarning.setWrapText(true);
+            pixelSizeWarning.setStyle("-fx-text-fill: #C62828; -fx-font-weight: bold; -fx-font-size: 11px;");
+            pixelSizeWarning.setVisible(false);
+            pixelSizeWarning.setManaged(false);
+            grid.add(pixelSizeWarning, 0, row, 2, 1);
+
+            // Check pixel size when objective changes
+            objectiveBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+                checkPixelSizeMismatch(newVal, pixelSizeWarning);
+            });
 
             hardwarePane = new TitledPane("HARDWARE CONFIGURATION", grid);
             hardwarePane.setExpanded(true);
             hardwarePane.setStyle("-fx-font-weight: bold;");
+        }
+
+        private void checkPixelSizeMismatch(String objective, Label warningLabel) {
+            if (objective == null || objective.isEmpty()) {
+                warningLabel.setVisible(false);
+                warningLabel.setManaged(false);
+                return;
+            }
+
+            // Run in background to avoid blocking UI with socket call
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    if (!MicroscopeController.getInstance().isConnected()) return;
+
+                    double mmPixelSize =
+                            MicroscopeController.getInstance().getSocketClient().getMicroscopePixelSize();
+                    if (mmPixelSize <= 0) return;
+
+                    // Get QPSC config pixel size for the selected objective
+                    String modality = modalityBox.getValue();
+                    String detector = detectorBox.getValue() != null ? detectorBox.getValue() : "";
+                    double configPixelSize = configManager.getModalityPixelSize(modality, objective, detector);
+                    if (configPixelSize <= 0) return;
+
+                    // Round both to the fewer decimal places
+                    int mmDecimals = countDecimals(mmPixelSize);
+                    int cfgDecimals = countDecimals(configPixelSize);
+                    int minDecimals = Math.min(mmDecimals, cfgDecimals);
+                    minDecimals = Math.max(minDecimals, 2); // at least 2
+
+                    double scale = Math.pow(10, minDecimals);
+                    double mmRounded = Math.round(mmPixelSize * scale) / scale;
+                    double cfgRounded = Math.round(configPixelSize * scale) / scale;
+
+                    double diff = Math.abs(mmRounded - cfgRounded);
+                    double tolerance = cfgRounded * 0.1; // 10% tolerance
+
+                    javafx.application.Platform.runLater(() -> {
+                        if (diff > tolerance) {
+                            warningLabel.setText(String.format(
+                                    "WARNING: Pixel size mismatch! Micro-Manager reports %.4f um/px "
+                                            + "but QPSC config expects %.4f um/px for this objective. "
+                                            + "Check that the correct objective is selected in Micro-Manager.",
+                                    mmPixelSize, configPixelSize));
+                            warningLabel.setVisible(true);
+                            warningLabel.setManaged(true);
+                        } else {
+                            warningLabel.setVisible(false);
+                            warningLabel.setManaged(false);
+                        }
+                    });
+                } catch (Exception e) {
+                    // Non-critical -- just skip the check
+                    logger.debug("Could not check pixel size: {}", e.getMessage());
+                }
+            });
+        }
+
+        private static int countDecimals(double value) {
+            String text = String.valueOf(value);
+            int dotIndex = text.indexOf('.');
+            if (dotIndex < 0) return 0;
+            // Strip trailing zeros
+            String decimals = text.substring(dotIndex + 1).replaceAll("0+$", "");
+            return decimals.length();
         }
 
         private void createRegionSection() {
