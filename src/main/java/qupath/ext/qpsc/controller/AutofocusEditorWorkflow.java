@@ -1125,7 +1125,19 @@ public class AutofocusEditorWorkflow {
         textArea.setWrapText(true);
         textArea.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
         textArea.setPrefHeight(300);
-        alert.getDialogPane().setContent(textArea);
+
+        // "Open AF Configuration" button to jump directly to the editor
+        javafx.scene.control.Button afConfigBtn = new javafx.scene.control.Button("Open AF Configuration...");
+        afConfigBtn.setOnAction(e -> {
+            alert.close();
+            try {
+                qupath.ext.qpsc.controller.QPScopeController.getInstance().startWorkflow("autofocusEditor");
+            } catch (Exception ex) {
+                logger.warn("Could not open AF configuration editor: {}", ex.getMessage());
+            }
+        });
+        javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(8, textArea, afConfigBtn);
+        alert.getDialogPane().setContent(content);
         alert.getDialogPane().setMinWidth(500);
         alert.showAndWait();
 
