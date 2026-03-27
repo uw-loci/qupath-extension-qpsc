@@ -18,6 +18,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.modality.WbMode;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
@@ -710,11 +711,22 @@ public class WhiteBalanceDialog {
         VBox vbox = new VBox(10);
         vbox.setPadding(new Insets(10));
 
-        // Description
-        Label descLabel = new Label("Standard white balance method - calibrates once and applies the same correction\n"
-                + "to all PPM angles. This has been the default approach and works well for most cases.");
+        // Description with color-coded mode name
+        Label modeLabel = WbMode.createColoredLabel(WbMode.SIMPLE);
+        modeLabel.setStyle(modeLabel.getStyle() + " -fx-font-size: 13px;");
+
+        Label descLabel = new Label("Calibrates ONCE at 90 degrees and applies the same color correction\n"
+                + "to all PPM angles. Use this for single-angle brightfield acquisition\n"
+                + "or when per-angle color accuracy is not critical.\n\n"
+                + "IMPORTANT: When you acquire tiles, select the matching WB mode\n"
+                + "(\"Simple (90deg)\" in the Hardware Configuration section).\n"
+                + "Background images must also be collected with this mode selected.");
         descLabel.setWrapText(true);
         descLabel.setStyle("-fx-font-size: 11px;");
+
+        Hyperlink docLink = new Hyperlink("See White Balance documentation for details");
+        docLink.setOnAction(e -> DocumentationHelper.openDocumentation("whiteBalance"));
+        docLink.setStyle("-fx-font-size: 10px;");
 
         // Base exposure
         HBox expBox = new HBox(10);
@@ -750,7 +762,7 @@ public class WhiteBalanceDialog {
 
         targetBox.getChildren().addAll(targetLabel, targetSpinner, targetNote);
 
-        vbox.getChildren().addAll(descLabel, expBox, targetBox);
+        vbox.getChildren().addAll(modeLabel, descLabel, docLink, expBox, targetBox);
 
         TitledPane pane = new TitledPane("Simple White Balance", vbox);
         pane.setCollapsible(true);
@@ -816,13 +828,23 @@ public class WhiteBalanceDialog {
         VBox vbox = new VBox(10);
         vbox.setPadding(new Insets(10));
 
-        // Description/instruction
-        Label descLabel =
-                new Label("Per-angle white balance - calibrates separately at each of the 4 standard PPM angles.\n"
-                        + "Target intensities are pre-set based on optical properties (crossed is dim, uncrossed is bright).\n"
-                        + "Run 'Collect Background Images' first to determine exposure times at each angle.");
+        // Description with color-coded mode name
+        Label ppmModeLabel = WbMode.createColoredLabel(WbMode.PER_ANGLE);
+        ppmModeLabel.setStyle(ppmModeLabel.getStyle() + " -fx-font-size: 13px;");
+
+        Label descLabel = new Label("Calibrates SEPARATELY at each of the 4 PPM polarizer angles.\n"
+                + "Each angle gets its own per-channel exposure and gain settings.\n"
+                + "Use this for multi-angle PPM acquisition where color accuracy\n"
+                + "between angles is important (e.g., birefringence quantification).\n\n"
+                + "IMPORTANT: When you acquire tiles, select \"Per-angle (PPM)\" as\n"
+                + "the WB mode. Background images must also use Per-angle mode.\n"
+                + "Do NOT mix Per-angle WB with Simple backgrounds or vice versa.");
         descLabel.setWrapText(true);
-        descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        descLabel.setStyle("-fx-font-size: 11px;");
+
+        Hyperlink ppmDocLink = new Hyperlink("See White Balance documentation for details");
+        ppmDocLink.setOnAction(e -> DocumentationHelper.openDocumentation("whiteBalance"));
+        ppmDocLink.setStyle("-fx-font-size: 10px;");
 
         // Load configured angles from YAML (falls back to constants)
         Map<String, Double> configAngles = loadConfiguredAngles();
@@ -942,7 +964,7 @@ public class WhiteBalanceDialog {
                 new Label("(Angle values loaded from config and are editable. Targets match optical properties.)");
         noteLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
 
-        vbox.getChildren().addAll(descLabel, grid, noteLabel);
+        vbox.getChildren().addAll(ppmModeLabel, descLabel, ppmDocLink, grid, noteLabel);
 
         TitledPane pane = new TitledPane("PPM White Balance (4 Angles)", vbox);
         pane.setCollapsible(true);
