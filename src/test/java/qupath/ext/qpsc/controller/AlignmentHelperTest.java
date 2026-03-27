@@ -26,8 +26,8 @@ class AlignmentHelperTest {
     // Base confidence values from AlignmentHelper
     private static final double BASE_SLIDE_SPECIFIC = 0.85;
     private static final double BASE_GENERAL = 0.65;
-    private static final double AGE_PENALTY_PER_DAY = 0.01;
-    private static final double MAX_AGE_PENALTY = 0.2;
+    private static final double AGE_PENALTY_PER_DAY = 0.003;
+    private static final double MAX_AGE_PENALTY = 0.3;
 
     // ==================== Slide-Specific Confidence Tests ====================
 
