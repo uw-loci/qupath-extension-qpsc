@@ -776,15 +776,16 @@ public class AcquisitionWizardDialog {
             button.setText("Testing...");
 
             java.util.concurrent.CompletableFuture.runAsync(() -> {
+                        // Stop live viewing -- AF validation moves Z and snaps images
+                        MicroscopeController mc = MicroscopeController.getInstance();
+                        MicroscopeController.LiveViewState liveState = mc.stopAllLiveViewing();
                         try {
-                            var socketClient =
-                                    MicroscopeController.getInstance().getSocketClient();
+                            var socketClient = mc.getSocketClient();
                             var result = socketClient.testAutofocusValidation(configPath, testOutputPath, objective);
 
                             javafx.application.Platform.runLater(() -> {
                                 button.setDisable(false);
                                 button.setText("Validate AF");
-                                // Reuse the result dialog from AutofocusEditorWorkflow
                                 qupath.ext.qpsc.controller.AutofocusEditorWorkflow.showValidationResultStatic(result);
                             });
                         } catch (Exception ex) {
@@ -797,6 +798,8 @@ public class AcquisitionWizardDialog {
                                         "Error: " + ex.getMessage()
                                                 + "\n\nMake sure you are focused on tissue before testing.");
                             });
+                        } finally {
+                            mc.restoreLiveViewState(liveState);
                         }
                     })
                     .exceptionally(ex -> {

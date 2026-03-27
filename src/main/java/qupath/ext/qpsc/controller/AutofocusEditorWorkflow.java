@@ -805,17 +805,18 @@ public class AutofocusEditorWorkflow {
 
                 // Run in background to avoid blocking UI
                 java.util.concurrent.CompletableFuture.runAsync(() -> {
+                    // Stop live viewing -- AF validation moves Z and snaps images
+                    MicroscopeController mc = MicroscopeController.getInstance();
+                    MicroscopeController.LiveViewState liveState = null;
                     try {
-                        // Validate connection
-                        if (!qupath.ext.qpsc.controller.MicroscopeController.getInstance()
-                                .isConnected()) {
+                        if (!mc.isConnected()) {
                             Platform.runLater(() -> Dialogs.showErrorMessage(
                                     "Connection Required", "Please connect to the microscope server first."));
                             return;
                         }
 
-                        var socketClient = qupath.ext.qpsc.controller.MicroscopeController.getInstance()
-                                .getSocketClient();
+                        liveState = mc.stopAllLiveViewing();
+                        var socketClient = mc.getSocketClient();
                         var result = socketClient.testAutofocusValidation(configPath, testOutputPath, currentObj);
 
                         Platform.runLater(() -> showValidationResult(result, statusLabel));
@@ -830,6 +831,10 @@ public class AutofocusEditorWorkflow {
                                     "Error: " + ex.getMessage()
                                             + "\n\nMake sure you are focused on tissue before running the test.");
                         });
+                    } finally {
+                        if (liveState != null) {
+                            mc.restoreLiveViewState(liveState);
+                        }
                     }
                 });
 
