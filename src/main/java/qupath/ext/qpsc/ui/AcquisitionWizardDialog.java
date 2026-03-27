@@ -725,8 +725,90 @@ public class AcquisitionWizardDialog {
         });
         updateAutofocusCheckBoxStyle();
 
-        section.getChildren().add(disableAutofocusCheckBox);
+        Button validateAfButton = new Button("Validate AF");
+        validateAfButton.setStyle("-fx-font-size: 11px; -fx-border-color: #4A90D9; -fx-border-width: 1.5; "
+                + "-fx-border-radius: 3; -fx-background-radius: 3;");
+        validateAfButton.setTooltip(new Tooltip("Test autofocus on current tissue position.\n\n"
+                + "HOW TO USE:\n"
+                + "  1. Navigate to tissue using the Live Viewer\n"
+                + "  2. Manually focus on the tissue (scroll Z until sharp)\n"
+                + "  3. Click this button\n\n"
+                + "THE TEST:\n"
+                + "  Phase 1: Sweep drift check from your focused position\n"
+                + "  Phase 2: Defocus 80%, then full autofocus recovery\n"
+                + "  Results show pass/fail for each phase.\n\n"
+                + "TO CHANGE SETTINGS:\n"
+                + "  Extensions > QP Scope > Autofocus Configuration Editor\n"
+                + "  Adjust search range, step count, or score metric there."));
+        validateAfButton.setOnAction(e -> runAutofocusValidation(validateAfButton));
+
+        section.getChildren().addAll(disableAutofocusCheckBox, validateAfButton);
         return section;
+    }
+
+    private void runAutofocusValidation(Button button) {
+        try {
+            if (!MicroscopeController.getInstance().isConnected()) {
+                qupath.fx.dialogs.Dialogs.showErrorMessage(
+                        "Connection Required", "Connect to the microscope server first.");
+                return;
+            }
+
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath == null) {
+                qupath.fx.dialogs.Dialogs.showErrorMessage(
+                        "Configuration Error", "No microscope configuration file set.");
+                return;
+            }
+
+            // Get current objective from wizard selection
+            String objective = getSelectedObjective();
+            if (objective == null || objective.isEmpty()) {
+                qupath.fx.dialogs.Dialogs.showErrorMessage(
+                        "Selection Required", "Select an objective in the wizard first.");
+                return;
+            }
+
+            String testOutputPath =
+                    new java.io.File(configPath).getParent() + java.io.File.separator + "autofocus_tests";
+
+            button.setDisable(true);
+            button.setText("Testing...");
+
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                        try {
+                            var socketClient =
+                                    MicroscopeController.getInstance().getSocketClient();
+                            var result = socketClient.testAutofocusValidation(configPath, testOutputPath, objective);
+
+                            javafx.application.Platform.runLater(() -> {
+                                button.setDisable(false);
+                                button.setText("Validate AF");
+                                // Reuse the result dialog from AutofocusEditorWorkflow
+                                qupath.ext.qpsc.controller.AutofocusEditorWorkflow.showValidationResultStatic(result);
+                            });
+                        } catch (Exception ex) {
+                            logger.error("Autofocus validation failed", ex);
+                            javafx.application.Platform.runLater(() -> {
+                                button.setDisable(false);
+                                button.setText("Validate AF");
+                                qupath.fx.dialogs.Dialogs.showErrorMessage(
+                                        "Autofocus Validation Failed",
+                                        "Error: " + ex.getMessage()
+                                                + "\n\nMake sure you are focused on tissue before testing.");
+                            });
+                        }
+                    })
+                    .exceptionally(ex -> {
+                        javafx.application.Platform.runLater(() -> {
+                            button.setDisable(false);
+                            button.setText("Validate AF");
+                        });
+                        return null;
+                    });
+        } catch (Exception ex) {
+            qupath.fx.dialogs.Dialogs.showErrorMessage("Error", "Failed to start validation: " + ex.getMessage());
+        }
     }
 
     private void updateAutofocusCheckBoxStyle() {

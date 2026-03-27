@@ -1058,6 +1058,13 @@ public class AutofocusEditorWorkflow {
     }
 
     /**
+     * Shows the autofocus validation result dialog (public entry point for Acquisition Wizard).
+     */
+    public static void showValidationResultStatic(Map<String, String> result) {
+        showValidationResult(result, null);
+    }
+
+    /**
      * Shows the autofocus validation result dialog.
      */
     private static void showValidationResult(Map<String, String> result, Label statusLabel) {
@@ -1122,10 +1129,12 @@ public class AutofocusEditorWorkflow {
         alert.getDialogPane().setMinWidth(500);
         alert.showAndWait();
 
-        statusLabel.setText(allPass ? "Validation PASSED" : "Validation: check results");
-        statusLabel.setStyle(
-                allPass
-                        ? "-fx-text-fill: green; -fx-font-weight: bold;"
-                        : "-fx-text-fill: orange; -fx-font-weight: bold;");
+        if (statusLabel != null) {
+            statusLabel.setText(allPass ? "Validation PASSED" : "Validation: check results");
+            statusLabel.setStyle(
+                    allPass
+                            ? "-fx-text-fill: green; -fx-font-weight: bold;"
+                            : "-fx-text-fill: orange; -fx-font-weight: bold;");
+        }
     }
 }
