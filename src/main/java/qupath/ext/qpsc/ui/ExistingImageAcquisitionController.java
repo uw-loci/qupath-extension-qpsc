@@ -284,6 +284,7 @@ public class ExistingImageAcquisitionController {
             // Build all sections
             createVariantBanner();
             createProjectSection();
+            createWbModeCombo();
             createHardwareSection();
             createAlignmentSection();
             createRefinementSection();
@@ -439,6 +440,40 @@ public class ExistingImageAcquisitionController {
             projectPane.setStyle("-fx-font-weight: bold;");
         }
 
+        private void createWbModeCombo() {
+            wbModeComboBox = new ComboBox<>();
+            wbModeComboBox.getItems().addAll("Off", "Camera AWB", "Simple (90deg)", "Per-angle (PPM)");
+            String savedWBMode = PersistentPreferences.getLastWhiteBalanceMode();
+            if (wbModeComboBox.getItems().contains(savedWBMode)) {
+                wbModeComboBox.setValue(savedWBMode);
+            } else {
+                wbModeComboBox.setValue("Per-angle (PPM)");
+            }
+            WbMode.applyColorCellFactory(wbModeComboBox);
+            wbModeComboBox.setTooltip(new Tooltip("White balance mode:\n"
+                    + "  Off - No white balance correction\n"
+                    + "  Camera AWB - Set in MicroManager before acquisition\n"
+                    + "  Simple (90deg) - Use 90deg R:G:B ratios, scaled per angle\n"
+                    + "  Per-angle (PPM) - Independent calibration per angle (default)"));
+
+            enableWhiteBalanceCheckBox = new CheckBox();
+            enableWhiteBalanceCheckBox.setSelected(true);
+            enableWhiteBalanceCheckBox.setVisible(false);
+            enableWhiteBalanceCheckBox.setManaged(false);
+            perAngleWhiteBalanceCheckBox = new CheckBox();
+            perAngleWhiteBalanceCheckBox.setSelected(false);
+            perAngleWhiteBalanceCheckBox.setVisible(false);
+            perAngleWhiteBalanceCheckBox.setManaged(false);
+
+            wbModeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+                if (newVal != null) {
+                    enableWhiteBalanceCheckBox.setSelected(!"Off".equals(newVal));
+                    perAngleWhiteBalanceCheckBox.setSelected("Per-angle (PPM)".equals(newVal));
+                    PersistentPreferences.setLastWhiteBalanceMode(newVal);
+                }
+            });
+        }
+
         private void createHardwareSection() {
             GridPane grid = new GridPane();
             grid.setHgap(10);
@@ -489,6 +524,10 @@ public class ExistingImageAcquisitionController {
 
             grid.add(new Label("Detector:"), 0, row);
             grid.add(detectorBox, 1, row);
+            row++;
+
+            grid.add(new Label("WB Mode:"), 0, row);
+            grid.add(wbModeComboBox, 1, row);
 
             hardwarePane = new TitledPane("HARDWARE CONFIGURATION", grid);
             hardwarePane.setExpanded(true);
@@ -691,55 +730,7 @@ public class ExistingImageAcquisitionController {
             // Note: Green box detection parameters are handled by ExistingAlignmentPath
             // which shows its own dialog during the alignment process
 
-            // === JAI WHITE BALANCE SECTION ===
-            // Only visible when JAI camera is selected
-            whiteBalanceSection = new VBox(8);
-            whiteBalanceSection.setPadding(new Insets(5, 0, 10, 0));
-
-            Label wbHeader = new Label("JAI Camera White Balance");
-            wbHeader.setStyle("-fx-font-weight: bold;");
-
-            // WB mode dropdown
-            wbModeComboBox = new ComboBox<>();
-            wbModeComboBox.getItems().addAll("Off", "Camera AWB", "Simple (90deg)", "Per-angle (PPM)");
-            String savedWBMode = PersistentPreferences.getLastWhiteBalanceMode();
-            if (wbModeComboBox.getItems().contains(savedWBMode)) {
-                wbModeComboBox.setValue(savedWBMode);
-            } else {
-                wbModeComboBox.setValue("Per-angle (PPM)");
-            }
-            WbMode.applyColorCellFactory(wbModeComboBox);
-            wbModeComboBox.setTooltip(new Tooltip("White balance mode:\n" + "  Off - No white balance correction\n"
-                    + "  Camera AWB - Set in MicroManager before acquisition; clear by restarting MM (wait 30s)\n"
-                    + "  Simple (90deg) - Use 90deg R:G:B ratios, uniformly scaled per angle\n"
-                    + "  Per-angle (PPM) - Independent calibration per angle (default)"));
-
-            // Hidden legacy checkboxes for backward compat
-            enableWhiteBalanceCheckBox = new CheckBox();
-            enableWhiteBalanceCheckBox.setSelected(true);
-            enableWhiteBalanceCheckBox.setVisible(false);
-            enableWhiteBalanceCheckBox.setManaged(false);
-            perAngleWhiteBalanceCheckBox = new CheckBox();
-            perAngleWhiteBalanceCheckBox.setSelected(false);
-            perAngleWhiteBalanceCheckBox.setVisible(false);
-            perAngleWhiteBalanceCheckBox.setManaged(false);
-
-            wbModeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
-                if (newVal != null) {
-                    enableWhiteBalanceCheckBox.setSelected(!"Off".equals(newVal));
-                    perAngleWhiteBalanceCheckBox.setSelected("Per-angle (PPM)".equals(newVal));
-                    PersistentPreferences.setLastWhiteBalanceMode(newVal);
-                }
-            });
-
-            javafx.scene.layout.HBox wbModeRow = new javafx.scene.layout.HBox(10);
-            wbModeRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-            Label wbModeLabel = new Label("WB Mode:");
-            wbModeRow.getChildren().addAll(wbModeLabel, wbModeComboBox);
-
-            whiteBalanceSection.getChildren().addAll(wbHeader, wbModeRow);
-            whiteBalanceSection.setVisible(false); // Hidden by default
-            whiteBalanceSection.setManaged(false);
+            // WB combo already created in createWbModeCombo()
 
             // Modality-specific options (will be populated by updateModalityUI)
             modalityContent = new VBox(5);
@@ -750,7 +741,7 @@ public class ExistingImageAcquisitionController {
             modalityPane = new TitledPane("Modality Options", modalityContent);
             modalityPane.setExpanded(false);
 
-            content.getChildren().addAll(whiteBalanceSection, modalityPane);
+            content.getChildren().addAll(modalityPane);
 
             advancedPane = new TitledPane("ADVANCED OPTIONS", content);
             advancedPane.setExpanded(false);
