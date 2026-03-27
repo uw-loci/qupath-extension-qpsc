@@ -59,7 +59,15 @@ public final class DocumentationHelper {
             Map.entry("ppmPolarityPlot", "ppm-polarity-plot.md"),
             Map.entry("ppmPerpendicularity", "surface-perpendicularity.md"),
             Map.entry("ppmBatchAnalysis", "batch-ppm-analysis.md"),
-            Map.entry("ppmBackPropagate", "back-propagate-annotations.md"));
+            Map.entry("ppmBackPropagate", "back-propagate-annotations.md"),
+            Map.entry("quickstartBF", "QUICKSTART-BF.md"),
+            Map.entry("workflows", "WORKFLOWS.md"));
+
+    private static final String ROOT_DOC_URL =
+            "https://github.com/uw-loci/qupath-extension-qpsc/blob/main/documentation/";
+
+    /** Tool IDs whose documentation is in the root documentation/ folder (not tools/). */
+    private static final java.util.Set<String> ROOT_DOCS = java.util.Set.of("quickstartBF", "workflows");
 
     /** Tool IDs whose documentation lives in the PPM extension repository. */
     private static final java.util.Set<String> PPM_TOOLS = java.util.Set.of(
@@ -89,7 +97,7 @@ public final class DocumentationHelper {
             logger.warn("No documentation mapping for tool ID: {}", toolId);
             return null;
         }
-        String base = PPM_TOOLS.contains(toolId) ? PPM_BASE_URL : BASE_URL;
+        String base = PPM_TOOLS.contains(toolId) ? PPM_BASE_URL : ROOT_DOCS.contains(toolId) ? ROOT_DOC_URL : BASE_URL;
         return base + filename;
     }
 

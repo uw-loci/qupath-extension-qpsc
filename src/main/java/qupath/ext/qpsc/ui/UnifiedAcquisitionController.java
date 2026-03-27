@@ -434,7 +434,12 @@ public class UnifiedAcquisitionController {
 
             int row = 0;
             grid.add(new Label("Modality:"), 0, row);
-            grid.add(modalityBox, 1, row);
+            Hyperlink quickStartLink = new Hyperlink("Quick Start Guide");
+            quickStartLink.setStyle("-fx-font-size: 10px;");
+            quickStartLink.setOnAction(e -> DocumentationHelper.openDocumentation("quickstartBF"));
+            HBox modalityRow = new HBox(8, modalityBox, quickStartLink);
+            modalityRow.setAlignment(Pos.CENTER_LEFT);
+            grid.add(modalityRow, 1, row);
             row++;
 
             grid.add(new Label("Objective:"), 0, row);
