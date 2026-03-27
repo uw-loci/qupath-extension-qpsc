@@ -37,6 +37,7 @@ import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.controller.QPScopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.lib.gui.QuPathGUI;
@@ -429,6 +430,20 @@ public class LiveViewerWindow {
             logger.info("Show tiles during acquisition: {}", newVal);
         });
 
+        // Camera Control button
+        Button cameraControlButton = new Button("Camera");
+        cameraControlButton.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; "
+                + "-fx-border-color: #4A90D9; -fx-border-width: 2; -fx-border-radius: 3; "
+                + "-fx-background-radius: 3;");
+        cameraControlButton.setTooltip(new Tooltip("Open Camera Control to adjust exposure and gain settings"));
+        cameraControlButton.setOnAction(e -> {
+            try {
+                QPScopeController.getInstance().startWorkflow("cameraControl");
+            } catch (Exception ex) {
+                logger.warn("Could not open Camera Control: {}", ex.getMessage());
+            }
+        });
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
@@ -440,6 +455,7 @@ public class LiveViewerWindow {
                 refineFocusButton,
                 sweepFocusButton,
                 focusRangeCombo,
+                cameraControlButton,
                 showTilesCheckBox,
                 spacer,
                 scaleLabel,
