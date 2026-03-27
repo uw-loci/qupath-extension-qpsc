@@ -42,8 +42,10 @@ public class AlignmentHelper {
     // Confidence thresholds
     private static final double BASE_CONFIDENCE_SLIDE_SPECIFIC = 0.85;
     private static final double BASE_CONFIDENCE_GENERAL = 0.65;
-    private static final double CONFIDENCE_AGE_PENALTY_PER_DAY = 0.01;
-    private static final double MAX_AGE_PENALTY = 0.2;
+    // Age penalty: 0.003 per day means ~30 days before reaching "aging" threshold
+    // (0.85 base - 30*0.003 = 0.76, still > 0.7). Turns orange after ~50 days.
+    private static final double CONFIDENCE_AGE_PENALTY_PER_DAY = 0.003;
+    private static final double MAX_AGE_PENALTY = 0.3;
 
     /**
      * Result from checking for existing slide alignment.

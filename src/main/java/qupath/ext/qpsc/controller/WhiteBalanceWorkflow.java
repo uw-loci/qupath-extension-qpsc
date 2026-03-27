@@ -261,10 +261,18 @@ public class WhiteBalanceWorkflow {
                             progressStage.close();
                             Dialogs.showErrorMessage("White Balance Failed", "Calibration failed: " + e.getMessage());
                         });
-                    } finally {
-                        // Restore live viewing state after calibration completes
-                        MicroscopeController.getInstance().restoreLiveViewState(liveViewState);
+                        // On failure, do NOT restore live mode -- the camera may be in a bad
+                        // state. User can manually re-enable live mode after investigating.
+                        logger.info("Skipping live mode restore after WB failure");
+                        return;
                     }
+                    // Only restore live mode on success (camera is in a known good state)
+                    try {
+                        Thread.sleep(500); // Let camera settle before restarting live
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                    MicroscopeController.getInstance().restoreLiveViewState(liveViewState);
                     // Don't close client - it's the singleton's shared connection
                 },
                 "WhiteBalanceCalibration");
@@ -361,10 +369,15 @@ public class WhiteBalanceWorkflow {
                             Dialogs.showErrorMessage(
                                     "PPM White Balance Failed", "Calibration failed: " + e.getMessage());
                         });
-                    } finally {
-                        // Restore live viewing state after calibration completes
-                        MicroscopeController.getInstance().restoreLiveViewState(liveViewState);
+                        logger.info("Skipping live mode restore after PPM WB failure");
+                        return;
                     }
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                    MicroscopeController.getInstance().restoreLiveViewState(liveViewState);
                     // Don't close client - it's the singleton's shared connection
                 },
                 "PPMWhiteBalanceCalibration");
