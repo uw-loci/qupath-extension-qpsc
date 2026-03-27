@@ -99,23 +99,21 @@ public class CalibrationChecker {
             }
 
             if (!hasPerAngle && !hasSimple) {
-                // Check gains as a last-resort fallback
                 var gains = mgr.getModalityGains(modality, objective, detector);
                 if (gains instanceof java.util.Map<?, ?> gainMap && !gainMap.isEmpty()) {
-                    return new StepStatus(
-                            Status.READY, "White balance gain calibration found (" + gainMap.size() + " angles)");
+                    return new StepStatus(Status.READY, "WB gains found (" + gainMap.size() + " angles)");
                 }
-                return new StepStatus(Status.WARNING, "No white balance calibration found - run WB before acquisition");
+                return new StepStatus(Status.WARNING, "No WB calibration -- run before acquisition");
             }
 
-            // Build descriptive message showing which modes are calibrated
-            // and whether backgrounds need re-collecting
-            StringBuilder msg = new StringBuilder("WB calibrated: ");
-            if (hasPerAngle) {
-                msg.append("Per-angle (").append(angleCount).append(" angles)");
-                if (hasSimple) msg.append(", Simple");
+            // Build short message: "Per-angle (4) + Simple" or "Per-angle (4)" or "Simple"
+            String msg;
+            if (hasPerAngle && hasSimple) {
+                msg = "Per-angle (" + angleCount + ") + Simple WB";
+            } else if (hasPerAngle) {
+                msg = "Per-angle WB (" + angleCount + " angles)";
             } else {
-                msg.append("Simple only");
+                msg = "Simple WB calibrated";
             }
 
             // Check if backgrounds are stale relative to WB
@@ -125,11 +123,11 @@ public class CalibrationChecker {
                 boolean anyStale = allResults.stream()
                         .anyMatch(r -> r.status() == BackgroundValidityChecker.ValidityStatus.CALIBRATION_STALE);
                 if (anyStale) {
-                    return new StepStatus(Status.WARNING, msg + " -- backgrounds need re-collecting");
+                    return new StepStatus(Status.WARNING, msg + " -- re-collect backgrounds");
                 }
             }
 
-            return new StepStatus(Status.READY, msg.toString());
+            return new StepStatus(Status.READY, msg);
 
         } catch (Exception e) {
             logger.debug("Error checking white balance status", e);
@@ -194,32 +192,20 @@ public class CalibrationChecker {
             }
 
             if (anyStale) {
-                return new StepStatus(
-                        Status.WARNING,
-                        "Backgrounds stale -- re-collect after WB change. "
-                                + details.toString().trim());
+                return new StepStatus(Status.WARNING, "Backgrounds stale -- re-collect after WB change");
             }
 
             if (anyValid) {
-                // Build a message showing which modes are valid
-                StringBuilder validDetails = new StringBuilder("Backgrounds valid for ");
-                boolean first = true;
-                for (var result : allModeResults) {
-                    if (result.status() == BackgroundValidityChecker.ValidityStatus.VALID) {
-                        if (!first) validDetails.append(", ");
-                        validDetails.append(result.mode().getDisplayName());
-                        first = false;
-                    }
-                }
-                return new StepStatus(Status.READY, validDetails.toString());
+                return new StepStatus(
+                        Status.READY,
+                        String.format("Backgrounds valid (%d mode%s)", validCount, validCount > 1 ? "s" : ""));
             }
 
             if (anyMissing) {
-                return new StepStatus(
-                        Status.WARNING, "No background images found - recommended for flat field correction");
+                return new StepStatus(Status.WARNING, "No backgrounds -- recommended before acquisition");
             }
 
-            return new StepStatus(Status.WARNING, "Could not verify background correction status");
+            return new StepStatus(Status.WARNING, "Could not verify background status");
 
         } catch (Exception e) {
             logger.debug("Error checking background correction", e);

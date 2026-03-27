@@ -659,12 +659,330 @@ public class StageControlPanel extends TitledPane {
         // Load saved points from preferences
         loadSavedPointsFromPrefs();
 
+        // Camera tab with WB angle presets
+        Tab cameraTab = buildCameraTab();
+
         // Add tabs to TabPane and default to Navigate tab
-        tabPane.getTabs().addAll(navigateTab, savedPointsTab);
+        tabPane.getTabs().addAll(navigateTab, savedPointsTab, cameraTab);
         tabPane.getSelectionModel().select(navigateTab);
 
         content.getChildren().add(tabPane);
         return content;
+    }
+
+    // ------------------------------------------------------------------
+    // Camera tab
+    // ------------------------------------------------------------------
+
+    private Label cameraStatusLabel;
+
+    /**
+     * Builds the Camera tab with WB angle presets and a link to full Camera Control.
+     */
+    @SuppressWarnings("unchecked")
+    private Tab buildCameraTab() {
+        Tab tab = new Tab("Camera");
+        VBox cameraContent = new VBox(6);
+        cameraContent.setPadding(new Insets(6));
+
+        // Read-only hardware info
+        String detectorId = "Unknown";
+        String objectiveId = "Unknown";
+        try {
+            var modalities = mgr.getAvailableModalities();
+            String mod = (modalities != null && !modalities.isEmpty())
+                    ? modalities.iterator().next()
+                    : "ppm";
+            var objectives = mgr.getAvailableObjectivesForModality(mod);
+            if (objectives != null && !objectives.isEmpty()) {
+                objectiveId = objectives.iterator().next();
+                var detectors = mgr.getAvailableDetectorsForModalityObjective(mod, objectiveId);
+                if (detectors != null && !detectors.isEmpty()) {
+                    detectorId = detectors.iterator().next();
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not read hardware IDs: {}", e.getMessage());
+        }
+
+        GridPane hwGrid = new GridPane();
+        hwGrid.setHgap(4);
+        hwGrid.setVgap(2);
+        Label detLabel = new Label("Detector:");
+        detLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
+        Label detValue = new Label(shortenId(detectorId));
+        detValue.setStyle("-fx-font-size: 10px;");
+        detValue.setTooltip(new Tooltip(detectorId));
+        Label objLabel = new Label("Objective:");
+        objLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
+        Label objValue = new Label(shortenId(objectiveId));
+        objValue.setStyle("-fx-font-size: 10px;");
+        objValue.setTooltip(new Tooltip(objectiveId));
+        hwGrid.add(detLabel, 0, 0);
+        hwGrid.add(detValue, 1, 0);
+        hwGrid.add(objLabel, 0, 1);
+        hwGrid.add(objValue, 1, 1);
+
+        cameraContent.getChildren().addAll(hwGrid, new Separator());
+
+        // WB angle preset buttons
+        Label presetHeader = new Label("Apply WB Preset");
+        presetHeader.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
+        cameraContent.getChildren().add(presetHeader);
+
+        // Load angles and their calibrated exposures
+        boolean anyPresets = false;
+        try {
+            var modalities2 = mgr.getAvailableModalities();
+            String modality = (modalities2 != null && !modalities2.isEmpty())
+                    ? modalities2.iterator().next()
+                    : "ppm";
+            var detectors2 = mgr.getAvailableDetectorsForModalityObjective(modality, objectiveId);
+            String det = (detectors2 != null && !detectors2.isEmpty())
+                    ? detectors2.iterator().next()
+                    : detectorId;
+
+            // Load rotation angles from config
+            java.util.Map<String, Double> ppmAngles = loadPpmAnglesLocal(mgr);
+
+            // Load per-angle exposures
+            var exposures = mgr.getModalityExposures(modality, objectiveId, det);
+            var gainsObj = mgr.getModalityGains(modality, objectiveId, det);
+            java.util.Map<String, Object> gains =
+                    (gainsObj instanceof java.util.Map<?, ?>) ? (java.util.Map<String, Object>) gainsObj : null;
+
+            if (exposures != null && !exposures.isEmpty()) {
+                final String fModality = modality;
+                final String fObjective = objectiveId;
+                final String fDetector = det;
+
+                for (var entry : ppmAngles.entrySet()) {
+                    String angleName = entry.getKey();
+                    double angleDeg = entry.getValue();
+
+                    Object angleExp = exposures.get(angleName);
+                    if (angleExp == null) continue;
+
+                    // Parse per-channel exposures: {r: X, g: Y, b: Z}
+                    float[] expArray = parseExposures(angleExp);
+                    if (expArray == null) continue;
+
+                    // Parse gains for this angle
+                    float[] gainArray = parseGains(gains, angleName);
+
+                    String label = capitalize(angleName) + " (" + (int) angleDeg + " deg)";
+                    String detail = String.format("R=%.1f G=%.1f B=%.1f ms", expArray[0], expArray[1], expArray[2]);
+
+                    Button presetBtn = new Button(label);
+                    presetBtn.setMaxWidth(Double.MAX_VALUE);
+                    presetBtn.setStyle("-fx-font-size: 10px;");
+                    presetBtn.setTooltip(new Tooltip("Apply: " + detail));
+                    final float[] fExp = expArray;
+                    final float[] fGain = gainArray;
+                    presetBtn.setOnAction(e -> applyWbPreset(angleName, angleDeg, fExp, fGain));
+
+                    Label detailLabel = new Label("  " + detail);
+                    detailLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #666;");
+
+                    cameraContent.getChildren().addAll(presetBtn, detailLabel);
+                    anyPresets = true;
+                }
+            }
+
+            // Check for Simple WB preset (uncrossed angle)
+            Object simpleWb = mgr.getProfileSetting(modality, objectiveId, det, "simple_wb");
+            if (simpleWb instanceof java.util.Map<?, ?> simpleMap) {
+                Object baseExp = simpleMap.get("base_exposures_ms");
+                Object baseGains = simpleMap.get("base_gains");
+                if (baseExp instanceof java.util.Map<?, ?> baseExpMap) {
+                    float r = toFloat(baseExpMap.get("r"));
+                    float g = toFloat(baseExpMap.get("g"));
+                    float b = toFloat(baseExpMap.get("b"));
+                    float[] simpleExpArray = {r, g, b};
+                    float[] simpleGainArray = parseGainsFromMap(
+                            baseGains instanceof java.util.Map<?, ?>
+                                    ? (java.util.Map<String, Object>) baseGains
+                                    : null);
+
+                    double uncrossedDeg = ppmAngles.getOrDefault("uncrossed", 90.0);
+                    String detail = String.format("R=%.1f G=%.1f B=%.1f ms", r, g, b);
+
+                    Button simpleBtn = new Button("Uncrossed (Simple WB)");
+                    simpleBtn.setMaxWidth(Double.MAX_VALUE);
+                    simpleBtn.setStyle("-fx-font-size: 10px; -fx-text-fill: #1565C0;");
+                    simpleBtn.setTooltip(new Tooltip("Apply Simple WB: " + detail));
+                    simpleBtn.setOnAction(
+                            e -> applyWbPreset("uncrossed", uncrossedDeg, simpleExpArray, simpleGainArray));
+
+                    Label simpleDetail = new Label("  " + detail);
+                    simpleDetail.setStyle("-fx-font-size: 9px; -fx-text-fill: #666;");
+
+                    cameraContent.getChildren().addAll(simpleBtn, simpleDetail);
+                    anyPresets = true;
+                }
+            }
+
+        } catch (Exception e) {
+            logger.debug("Could not load WB presets: {}", e.getMessage());
+        }
+
+        if (!anyPresets) {
+            Label noPresets = new Label("No WB presets available.\nRun White Balance calibration first.");
+            noPresets.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
+            noPresets.setWrapText(true);
+            cameraContent.getChildren().add(noPresets);
+        }
+
+        // Status label
+        cameraStatusLabel = new Label();
+        cameraStatusLabel.setStyle("-fx-font-size: 10px;");
+        cameraStatusLabel.setWrapText(true);
+        cameraContent.getChildren().addAll(new Separator(), cameraStatusLabel);
+
+        // Full Camera Control button
+        Button fullControlBtn = new Button("Full Camera Control...");
+        fullControlBtn.setMaxWidth(Double.MAX_VALUE);
+        fullControlBtn.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
+        fullControlBtn.setOnAction(e -> {
+            try {
+                qupath.ext.qpsc.controller.QPScopeController.getInstance().startWorkflow("cameraControl");
+            } catch (Exception ex) {
+                logger.warn("Could not open Camera Control: {}", ex.getMessage());
+            }
+        });
+        cameraContent.getChildren().add(fullControlBtn);
+
+        tab.setContent(cameraContent);
+        return tab;
+    }
+
+    /**
+     * Apply a WB preset: set camera mode, exposures, gains, and rotate stage.
+     */
+    private void applyWbPreset(String angleName, double angleDeg, float[] exposures, float[] gains) {
+        cameraStatusLabel.setText("Applying " + angleName + "...");
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        Thread thread = new Thread(
+                () -> {
+                    try {
+                        MicroscopeController controller = MicroscopeController.getInstance();
+                        if (controller == null) {
+                            Platform.runLater(() -> {
+                                cameraStatusLabel.setText("Not connected");
+                                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                            });
+                            return;
+                        }
+                        controller.withLiveModeHandling(
+                                () -> controller.applyCameraSettingsForAngle(angleName, exposures, gains, angleDeg));
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText(
+                                    "Applied: " + capitalize(angleName) + " (" + (int) angleDeg + " deg)");
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                        });
+                    } catch (Exception ex) {
+                        logger.error("Failed to apply WB preset: {}", ex.getMessage());
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Failed: " + ex.getMessage());
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                        });
+                    }
+                },
+                "WB-Preset-Apply");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    /** Load PPM angles from config, falling back to defaults. */
+    @SuppressWarnings("unchecked")
+    private static java.util.Map<String, Double> loadPpmAnglesLocal(MicroscopeConfigManager mgr) {
+        try {
+            var rotationAngles = mgr.getRotationAngles("ppm");
+            if (rotationAngles != null && !rotationAngles.isEmpty()) {
+                java.util.Map<String, Double> angles = new java.util.LinkedHashMap<>();
+                for (java.util.Map<String, Object> angle : rotationAngles) {
+                    String name = (String) angle.get("name");
+                    Number tick = (Number) angle.get("tick");
+                    if (name != null && tick != null) {
+                        angles.put(name, tick.doubleValue());
+                    }
+                }
+                if (!angles.isEmpty()) return angles;
+            }
+        } catch (Exception e) {
+            logger.debug("Failed to load angles: {}", e.getMessage());
+        }
+        java.util.Map<String, Double> defaults = new java.util.LinkedHashMap<>();
+        defaults.put("uncrossed", 90.0);
+        defaults.put("crossed", 0.0);
+        defaults.put("positive", 7.0);
+        defaults.put("negative", -7.0);
+        return defaults;
+    }
+
+    /** Parse per-channel exposures from YAML map like {r: X, g: Y, b: Z} or {all: X, r: Y, ...}. */
+    @SuppressWarnings("unchecked")
+    private static float[] parseExposures(Object angleExp) {
+        if (angleExp instanceof java.util.Map<?, ?> map) {
+            float r = toFloat(map.get("r"));
+            float g = toFloat(map.get("g"));
+            float b = toFloat(map.get("b"));
+            if (r > 0 && g > 0 && b > 0) return new float[] {r, g, b};
+        } else if (angleExp instanceof Number num) {
+            // Single exposure value (unified)
+            float v = num.floatValue();
+            return new float[] {v};
+        }
+        return null;
+    }
+
+    /** Parse gains for a specific angle from the gains map. */
+    @SuppressWarnings("unchecked")
+    private static float[] parseGains(java.util.Map<String, Object> gains, String angleName) {
+        if (gains == null) return new float[] {1.0f};
+        Object angleGains = gains.get(angleName);
+        if (angleGains instanceof java.util.Map<?, ?> map) {
+            return parseGainsFromMap((java.util.Map<String, Object>) map);
+        }
+        return new float[] {1.0f};
+    }
+
+    /** Parse gains from a map with unified_gain, analog_red, analog_blue keys. */
+    private static float[] parseGainsFromMap(java.util.Map<String, Object> map) {
+        if (map == null) return new float[] {1.0f};
+        float unified = toFloat(map.getOrDefault("unified_gain", 1.0));
+        Object aRed = map.get("analog_red");
+        Object aBlue = map.get("analog_blue");
+        if (aRed != null && aBlue != null) {
+            return new float[] {unified, toFloat(aRed), toFloat(aBlue)};
+        }
+        return new float[] {unified};
+    }
+
+    /** Shorten a LOCI ID for display: "LOCI_DETECTOR_JAI_001" -> "JAI_001". */
+    private static String shortenId(String id) {
+        if (id == null) return "?";
+        // Remove common LOCI prefixes
+        String s = id.replace("LOCI_DETECTOR_", "").replace("LOCI_OBJECTIVE_", "");
+        return s.length() > 20 ? s.substring(0, 20) + "..." : s;
+    }
+
+    private static float toFloat(Object o) {
+        if (o instanceof Number n) return n.floatValue();
+        if (o instanceof String s) {
+            try {
+                return Float.parseFloat(s);
+            } catch (NumberFormatException e) {
+                return 0f;
+            }
+        }
+        return 0f;
+    }
+
+    private static String capitalize(String s) {
+        if (s == null || s.isEmpty()) return s;
+        return s.substring(0, 1).toUpperCase() + s.substring(1);
     }
 
     private void setupEventHandlers() {
