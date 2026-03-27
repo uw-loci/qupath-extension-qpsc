@@ -697,6 +697,8 @@ public class BackgroundCollectionController {
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
+            // Reload to pick up wb_last_modified changes from recent WB calibration
+            configManager.reload(configPath);
             String baseBackgroundFolder = configManager.getBackgroundCorrectionFolder(modality);
 
             if (baseBackgroundFolder == null) {

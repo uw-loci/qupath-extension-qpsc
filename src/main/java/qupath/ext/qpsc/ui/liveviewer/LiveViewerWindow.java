@@ -116,11 +116,14 @@ public class LiveViewerWindow {
     private volatile long statusHoldUntil = 0;
     private static final long STATUS_HOLD_MS = 5000;
 
-    // Desync detection
+    // Desync detection and auto-recovery
     private volatile long lastFrameArrivalTime = 0;
     private volatile long liveOnTimestamp = 0;
-    private static final long NO_FRAME_TIMEOUT_MS = 5000;
-    private static final long GRACE_PERIOD_MS = 5000;
+    private static final long NO_FRAME_TIMEOUT_MS = 10_000; // 10s before considering desync
+    private static final long GRACE_PERIOD_MS = 10_000; // 10s grace after turning ON
+    private static final int MAX_RECOVERY_ATTEMPTS = 2;
+    private volatile int recoveryAttempts = 0;
+    private volatile boolean recoveryInProgress = false;
 
     // Display mode state
     // fitToContainer = true: image scales to fill container (no scrollbars)
@@ -247,12 +250,14 @@ public class LiveViewerWindow {
             if (controller != null) {
                 controller.startContinuousAcquisition();
                 instance.liveActive = true;
-                // Reset FPS counter and desync tracking
+                // Reset FPS counter, desync tracking, and recovery state
                 instance.frameCount.set(0);
                 instance.fpsWindowStart.set(System.currentTimeMillis());
                 instance.currentFps = 0;
                 instance.liveOnTimestamp = System.currentTimeMillis();
                 instance.lastFrameArrivalTime = System.currentTimeMillis();
+                instance.recoveryAttempts = 0;
+                instance.recoveryInProgress = false;
                 // Cosmetic UI update
                 Platform.runLater(() -> {
                     if (instance != null) {
@@ -606,15 +611,19 @@ public class LiveViewerWindow {
 
                             if (newState) {
                                 updateStatus("Live ON - streaming...");
-                                // Reset FPS counter and desync tracking on start
+                                // Reset FPS counter, desync tracking, and recovery state
                                 frameCount.set(0);
                                 fpsWindowStart.set(System.currentTimeMillis());
                                 currentFps = 0;
                                 liveOnTimestamp = System.currentTimeMillis();
                                 lastFrameArrivalTime = System.currentTimeMillis();
+                                recoveryAttempts = 0;
+                                recoveryInProgress = false;
                             } else {
                                 updateStatus("Live OFF");
                                 lastFrameArrivalTime = 0;
+                                recoveryAttempts = 0;
+                                recoveryInProgress = false;
                             }
                         });
                     } catch (IOException e) {
@@ -860,25 +869,49 @@ public class LiveViewerWindow {
 
             FrameData frame = controller.getFrame();
             if (frame == null) {
-                // No-frame timeout -- fixes desync Scenario B
-                // (button says ON but no frames arrive)
+                // No-frame timeout with auto-recovery
                 long now = System.currentTimeMillis();
                 long elapsed = now - liveOnTimestamp;
                 long sinceLast = now - lastFrameArrivalTime;
-                if (elapsed > GRACE_PERIOD_MS && sinceLast > NO_FRAME_TIMEOUT_MS) {
-                    logger.warn("No frames for {}ms with liveActive=true -- auto-correcting to OFF", sinceLast);
-                    liveActive = false;
-                    Platform.runLater(() -> {
-                        updateLiveButtonStyle(false);
-                        updateStatus("Live OFF (no frames detected -- camera may need restart)");
-                    });
+                if (elapsed > GRACE_PERIOD_MS && sinceLast > NO_FRAME_TIMEOUT_MS && !recoveryInProgress) {
+                    if (recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
+                        // Auto-recovery: stop camera, restart, try again
+                        recoveryInProgress = true;
+                        recoveryAttempts++;
+                        logger.info(
+                                "No frames for {}ms -- auto-recovery attempt {}/{}",
+                                sinceLast,
+                                recoveryAttempts,
+                                MAX_RECOVERY_ATTEMPTS);
+                        Platform.runLater(() -> updateStatus("Reconnecting camera..."));
+                        attemptAutoRecovery(controller);
+                    } else {
+                        // Recovery exhausted -- turn off
+                        logger.warn("No frames for {}ms, recovery exhausted -- turning live OFF", sinceLast);
+                        liveActive = false;
+                        try {
+                            controller.stopContinuousAcquisition();
+                        } catch (IOException ex) {
+                            logger.debug("Stop during final shutdown: {}", ex.getMessage());
+                        }
+                        Platform.runLater(() -> {
+                            updateLiveButtonStyle(false);
+                            updateRefineFocusButtonState();
+                            updateStatus("Live OFF (no frames -- check camera connection)");
+                        });
+                    }
                 }
                 return;
             }
 
-            // Frame arrived -- track arrival time
+            // Frame arrived -- track arrival time and reset recovery counter
             lastFrame = frame;
             lastFrameArrivalTime = System.currentTimeMillis();
+            if (recoveryAttempts > 0) {
+                logger.info("Frames restored after {} recovery attempt(s)", recoveryAttempts);
+                recoveryAttempts = 0;
+                Platform.runLater(() -> updateStatus("Live ON - streaming..."));
+            }
 
             // Track FPS
             int count = frameCount.incrementAndGet();
@@ -1196,6 +1229,34 @@ public class LiveViewerWindow {
     private void updateStatusHeld(String text) {
         statusLabel.setText(text);
         statusHoldUntil = System.currentTimeMillis() + STATUS_HOLD_MS;
+    }
+
+    /**
+     * Attempts to recover from a no-frames condition by stopping and restarting
+     * continuous acquisition. Runs on the frame poller thread (background).
+     */
+    private void attemptAutoRecovery(MicroscopeController controller) {
+        try {
+            // Stop camera to reset state
+            controller.stopContinuousAcquisition();
+            Thread.sleep(500);
+
+            // Restart
+            controller.startContinuousAcquisition();
+
+            // Reset tracking timestamps to give camera time to start
+            liveOnTimestamp = System.currentTimeMillis();
+            lastFrameArrivalTime = System.currentTimeMillis();
+            logger.info("Auto-recovery: restarted continuous acquisition");
+            Platform.runLater(() -> updateStatus("Live ON - reconnecting..."));
+        } catch (IOException e) {
+            logger.warn("Auto-recovery failed: {}", e.getMessage());
+            Platform.runLater(() -> updateStatus("Recovery failed: " + e.getMessage()));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            recoveryInProgress = false;
+        }
     }
 
     /**

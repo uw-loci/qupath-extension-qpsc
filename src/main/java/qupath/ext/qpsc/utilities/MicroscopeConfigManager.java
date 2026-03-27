@@ -1265,45 +1265,39 @@ public class MicroscopeConfigManager {
     }
 
     /**
-     * Get the calibration timestamp for a specific WB mode and hardware combination.
+     * Get the timestamp of the most recent white balance calibration change.
      *
-     * <p>For "per_angle": reads calibration_targets.background_exposures.last_calibrated
-     * <p>For "simple": reads imaging_profiles.{modality}.{objective}.{detector}.simple_wb.last_calibrated
-     * <p>For "camera_awb" and "off": returns null (no calibration tracked).
+     * <p>Uses the global {@code wb_last_modified} field at the detector profile level,
+     * which is updated by ANY WB operation (per-angle or simple). This means any WB
+     * change invalidates all background images regardless of mode.
      *
-     * @param wbMode The WB mode protocol name (e.g., "per_angle", "simple")
+     * @param wbMode The WB mode protocol name (ignored -- all modes use global timestamp)
      * @param modality The modality name (e.g., "ppm")
      * @param objective The objective ID
      * @param detector The detector ID
      * @return ISO timestamp string, or null if not found
      */
-    @SuppressWarnings("unchecked")
     public String getWbCalibrationTimestamp(String wbMode, String modality, String objective, String detector) {
-        if (wbMode == null || imageprocessingData == null) {
+        if (imageprocessingData == null) {
             return null;
         }
 
         try {
-            if ("per_angle".equals(wbMode)) {
-                // calibration_targets.background_exposures.last_calibrated
-                Map<String, Object> calTargets = (Map<String, Object>) imageprocessingData.get("calibration_targets");
-                if (calTargets != null) {
-                    Map<String, Object> bgExposures = (Map<String, Object>) calTargets.get("background_exposures");
-                    if (bgExposures != null) {
-                        Object ts = bgExposures.get("last_calibrated");
-                        if (ts != null) {
-                            return ts.toString();
-                        }
-                    }
-                }
-            } else if ("simple".equals(wbMode)) {
-                // imaging_profiles.{modality}.{objective}.{detector}.simple_wb.last_calibrated
+            // Primary: global wb_last_modified at detector profile level
+            // Set by ANY WB calibration (per-angle or simple)
+            Object globalTs = getProfileSetting(modality, objective, detector, "wb_last_modified");
+            if (globalTs != null) {
+                return globalTs.toString();
+            }
+
+            // Fallback for configs written before wb_last_modified was added:
+            // check mode-specific timestamps
+            if ("simple".equals(wbMode)) {
                 Object result = getProfileSetting(modality, objective, detector, "simple_wb", "last_calibrated");
                 if (result != null) {
                     return result.toString();
                 }
             }
-            // "camera_awb" and "off" have no tracked calibration timestamp
         } catch (Exception e) {
             logger.debug("Error reading WB calibration timestamp for mode '{}': {}", wbMode, e.getMessage());
         }

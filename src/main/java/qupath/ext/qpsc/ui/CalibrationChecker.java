@@ -75,40 +75,61 @@ public class CalibrationChecker {
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+            mgr.reload(configPath); // Pick up recent WB changes
 
             // For non-JAI cameras, WB must be configured through MicroManager
             if (!mgr.isJAICamera(detector)) {
                 return new StepStatus(Status.NOT_APPLICABLE, "Set white balance in MicroManager for this camera");
             }
 
-            // WB calibration is stored in imaging_profiles under:
-            //   exposures_ms.<angle> - per-angle per-channel exposures (from per_angle WB)
-            //   gains.<angle> - per-angle gain settings (from per_angle WB)
-            //   simple_wb - simple WB mode data
-            // Check exposures_ms first (set by both per_angle and simple modes during acquisition),
-            // then simple_wb as a secondary indicator.
-            var exposures = mgr.getModalityExposures(modality, objective, detector);
-            var gains = mgr.getModalityGains(modality, objective, detector);
+            // Check which WB modes have been calibrated
+            boolean hasPerAngle = false;
+            int angleCount = 0;
+            boolean hasSimple = false;
 
+            var exposures = mgr.getModalityExposures(modality, objective, detector);
             if (exposures instanceof java.util.Map<?, ?> expMap && !expMap.isEmpty()) {
-                return new StepStatus(Status.READY, "White balance calibration found (" + expMap.size() + " angles)");
+                hasPerAngle = true;
+                angleCount = expMap.size();
             }
 
-            // Also check simple_wb section (written by simple WB calibration)
             Object simpleWb = mgr.getProfileSetting(modality, objective, detector, "simple_wb");
             if (simpleWb != null) {
-                return new StepStatus(Status.READY, "Simple white balance calibration found");
+                hasSimple = true;
             }
 
-            // Check gains as a fallback (may exist without exposures_ms in some edge cases)
-            if (gains instanceof java.util.Map<?, ?> gainMap && !gainMap.isEmpty()) {
-                return new StepStatus(
-                        Status.READY, "White balance gain calibration found (" + gainMap.size() + " angles)");
+            if (!hasPerAngle && !hasSimple) {
+                // Check gains as a last-resort fallback
+                var gains = mgr.getModalityGains(modality, objective, detector);
+                if (gains instanceof java.util.Map<?, ?> gainMap && !gainMap.isEmpty()) {
+                    return new StepStatus(
+                            Status.READY, "White balance gain calibration found (" + gainMap.size() + " angles)");
+                }
+                return new StepStatus(Status.WARNING, "No white balance calibration found - run WB before acquisition");
             }
 
-            return new StepStatus(
-                    Status.WARNING,
-                    "No white balance calibration found for JAI camera - recommended before acquisition");
+            // Build descriptive message showing which modes are calibrated
+            // and whether backgrounds need re-collecting
+            StringBuilder msg = new StringBuilder("WB calibrated: ");
+            if (hasPerAngle) {
+                msg.append("Per-angle (").append(angleCount).append(" angles)");
+                if (hasSimple) msg.append(", Simple");
+            } else {
+                msg.append("Simple only");
+            }
+
+            // Check if backgrounds are stale relative to WB
+            String bgFolder = mgr.getBackgroundCorrectionFolder(modality);
+            if (bgFolder != null) {
+                var allResults = BackgroundValidityChecker.checkAllModes(bgFolder, modality, objective, detector, mgr);
+                boolean anyStale = allResults.stream()
+                        .anyMatch(r -> r.status() == BackgroundValidityChecker.ValidityStatus.CALIBRATION_STALE);
+                if (anyStale) {
+                    return new StepStatus(Status.WARNING, msg + " -- backgrounds need re-collecting");
+                }
+            }
+
+            return new StepStatus(Status.READY, msg.toString());
 
         } catch (Exception e) {
             logger.debug("Error checking white balance status", e);
@@ -175,14 +196,22 @@ public class CalibrationChecker {
             if (anyStale) {
                 return new StepStatus(
                         Status.WARNING,
-                        "Background images may be stale -- WB was recalibrated since last collection. "
+                        "Backgrounds stale -- re-collect after WB change. "
                                 + details.toString().trim());
             }
 
             if (anyValid) {
-                return new StepStatus(
-                        Status.READY,
-                        String.format("Background images valid (%d WB mode%s)", validCount, validCount > 1 ? "s" : ""));
+                // Build a message showing which modes are valid
+                StringBuilder validDetails = new StringBuilder("Backgrounds valid for ");
+                boolean first = true;
+                for (var result : allModeResults) {
+                    if (result.status() == BackgroundValidityChecker.ValidityStatus.VALID) {
+                        if (!first) validDetails.append(", ");
+                        validDetails.append(result.mode().getDisplayName());
+                        first = false;
+                    }
+                }
+                return new StepStatus(Status.READY, validDetails.toString());
             }
 
             if (anyMissing) {
