@@ -36,22 +36,33 @@ publishing {
 
 allprojects {
     repositories {
-        mavenLocal() // Checks your local Maven repository first.
+        // tiles-to-pyramid is ONLY available from local Maven (publishToMavenLocal).
+        // It is not hosted on any remote repository.
+        mavenLocal()
         mavenCentral()
         // SciJava repository - mirrors many OME/Bio-Formats artifacts
         maven {
             name = "SciJava"
             url = uri("https://maven.scijava.org/content/repositories/releases")
+            content {
+                excludeGroup("io.github.uw-loci")
+            }
         }
         // Alternative OME repository URL
         maven {
             name = "OME-Artifacts"
             url = uri("https://artifacts.openmicroscopy.org/artifactory/maven/")
+            content {
+                excludeGroup("io.github.uw-loci")
+            }
         }
         // Original OME repository (may be unreliable)
         maven {
             name = "OME"
             url = uri("https://repo.openmicroscopy.org/artifactory/ome-releases")
+            content {
+                excludeGroup("io.github.uw-loci")
+            }
         }
     }
 }
