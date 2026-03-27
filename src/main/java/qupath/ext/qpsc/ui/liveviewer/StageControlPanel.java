@@ -807,16 +807,19 @@ public class StageControlPanel extends TitledPane {
 
                     String label = capitalize(angleName) + " (" + (int) angleDeg + " deg)";
                     String detail = String.format("R=%.1f G=%.1f B=%.1f ms", expArray[0], expArray[1], expArray[2]);
+                    String gainDetail = gainArray.length == 3
+                            ? String.format(", gain=%.1f aR=%.2f aB=%.2f", gainArray[0], gainArray[1], gainArray[2])
+                            : String.format(", gain=%.1f", gainArray[0]);
 
                     Button presetBtn = new Button(label);
                     presetBtn.setMaxWidth(Double.MAX_VALUE);
                     presetBtn.setStyle("-fx-font-size: 10px;");
-                    presetBtn.setTooltip(new Tooltip("Apply: " + detail));
+                    presetBtn.setTooltip(new Tooltip("Apply: " + detail + gainDetail));
                     final float[] fExp = expArray;
                     final float[] fGain = gainArray;
                     presetBtn.setOnAction(e -> applyWbPreset(angleName, angleDeg, fExp, fGain));
 
-                    Label detailLabel = new Label("  " + detail);
+                    Label detailLabel = new Label("  " + detail + gainDetail);
                     detailLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #666;");
 
                     cameraContent.getChildren().addAll(presetBtn, detailLabel);
@@ -986,11 +989,19 @@ public class StageControlPanel extends TitledPane {
     /** Parse gains from a map with unified_gain, analog_red, analog_blue keys. */
     private static float[] parseGainsFromMap(java.util.Map<String, Object> map) {
         if (map == null) return new float[] {1.0f};
+        // New format: unified_gain + analog_red + analog_blue
         float unified = toFloat(map.getOrDefault("unified_gain", 1.0));
         Object aRed = map.get("analog_red");
         Object aBlue = map.get("analog_blue");
         if (aRed != null && aBlue != null) {
             return new float[] {unified, toFloat(aRed), toFloat(aBlue)};
+        }
+        // Old format: r/g/b gain values (no unified_gain key)
+        Object oldR = map.get("r");
+        Object oldB = map.get("b");
+        if (oldR != null && oldB != null) {
+            // Old format used per-channel gains directly; map to unified=1 + analog R/B
+            return new float[] {1.0f, toFloat(oldR), toFloat(oldB)};
         }
         return new float[] {unified};
     }
