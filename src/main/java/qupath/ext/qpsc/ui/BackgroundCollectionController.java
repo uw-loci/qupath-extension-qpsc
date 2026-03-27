@@ -229,7 +229,10 @@ public class BackgroundCollectionController {
                                     acquiringLabel.setText("Background collection complete!");
                                     acquiringLabel.setStyle(
                                             "-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: #2E7D32;");
-                                    future.complete(result);
+                                    // Complete with null -- acquisition already ran above.
+                                    // Completing with result would trigger run()'s thenAccept
+                                    // and execute the acquisition a second time.
+                                    future.complete(null);
                                     // Close dialog after a brief pause
                                     new javafx.animation.PauseTransition(javafx.util.Duration.seconds(1.5))
                                             .onFinishedProperty()
