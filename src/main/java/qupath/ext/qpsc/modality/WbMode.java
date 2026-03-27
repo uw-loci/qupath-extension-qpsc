@@ -20,7 +20,7 @@ import javafx.scene.control.ListCell;
  */
 public enum WbMode {
     OFF("Off", "off", false, "#888888"),
-    CAMERA_AWB("Camera AWB", "camera_awb", true, "#2E7D32"),
+    CAMERA_AWB("Camera AWB", "camera_awb", true, "#00796B"),
     SIMPLE("Simple (90deg)", "simple", true, "#1565C0"),
     PER_ANGLE("Per-angle (PPM)", "per_angle", true, "#7B1FA2");
 
