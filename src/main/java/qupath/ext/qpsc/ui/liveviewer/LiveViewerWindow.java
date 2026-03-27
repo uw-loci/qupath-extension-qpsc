@@ -1262,11 +1262,17 @@ public class LiveViewerWindow {
     /**
      * Called when frames arrive but liveActive is false.
      * Camera is still streaming after user clicked OFF -- notify via status.
+     *
+     * <p>Guard: re-check liveActive inside Platform.runLater because the toggle
+     * thread may have set it to true between the poller's check and FX execution.
+     * Without this guard, the button flips back to OFF immediately after turning ON.
      */
     private void handleUnexpectedFrame() {
         Platform.runLater(() -> {
-            updateStatus("Live OFF (camera still sending frames -- click Live to sync)");
-            updateLiveButtonStyle(false);
+            if (!liveActive) {
+                updateStatus("Live OFF (camera still sending frames -- click Live to sync)");
+                updateLiveButtonStyle(false);
+            }
         });
     }
 
