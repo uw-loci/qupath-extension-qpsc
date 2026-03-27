@@ -99,6 +99,15 @@ public class BackgroundCollectionWorkflow {
     }
 
     /**
+     * Executes background acquisition directly (called from BackgroundCollectionController
+     * when the dialog stays open during acquisition).
+     */
+    public static void executeBackgroundAcquisitionDirect(
+            String modality, String objective, List<AngleExposure> angleExposures, String outputPath, String wbMode) {
+        executeBackgroundAcquisition(modality, objective, angleExposures, outputPath, wbMode);
+    }
+
+    /**
      * Executes the background acquisition process via socket communication.
      *
      * @param modality The modality (e.g., "ppm")

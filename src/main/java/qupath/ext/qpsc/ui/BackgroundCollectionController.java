@@ -187,25 +187,80 @@ public class BackgroundCollectionController {
                     }
                 }
 
-                // Set result converter
-                dialog.setResultConverter(dialogButton -> {
-                    if (dialogButton == okButtonType) {
-                        return createResult();
-                    }
-                    return null;
+                // Add a status label at the bottom for acquisition progress
+                Label acquiringLabel = new Label();
+                acquiringLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: #1565C0;");
+                acquiringLabel.setVisible(false);
+                acquiringLabel.setWrapText(true);
+                // Add it below the scroll pane
+                VBox dialogContent = new VBox(8, scrollPane, acquiringLabel);
+                dialog.getDialogPane().setContent(dialogContent);
+
+                // Intercept OK button to run acquisition while keeping dialog open
+                okButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+                    // Prevent dialog from closing
+                    event.consume();
+
+                    BackgroundCollectionResult result = createResult();
+                    if (result == null) return;
+
+                    // Save exposure changes to YAML config
+                    saveExposureChangesToConfig(result.modality(), result.angleExposures());
+
+                    // Disable all controls during acquisition
+                    okButton.setDisable(true);
+                    Button cancelBtn = (Button) dialog.getDialogPane().lookupButton(ButtonType.CANCEL);
+                    if (cancelBtn != null) cancelBtn.setDisable(true);
+                    acquiringLabel.setText("Acquiring background images, please wait...");
+                    acquiringLabel.setVisible(true);
+
+                    // Run acquisition in background
+                    java.util.concurrent.CompletableFuture.runAsync(() -> {
+                                qupath.ext.qpsc.controller.BackgroundCollectionWorkflow
+                                        .executeBackgroundAcquisitionDirect(
+                                                result.modality(),
+                                                result.objective(),
+                                                result.angleExposures(),
+                                                result.outputPath(),
+                                                result.wbMode());
+                            })
+                            .thenRun(() -> {
+                                Platform.runLater(() -> {
+                                    acquiringLabel.setText("Background collection complete!");
+                                    acquiringLabel.setStyle(
+                                            "-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: #2E7D32;");
+                                    future.complete(result);
+                                    // Close dialog after a brief pause
+                                    new javafx.animation.PauseTransition(javafx.util.Duration.seconds(1.5))
+                                            .onFinishedProperty()
+                                            .set(e2 -> dialog.close());
+                                    javafx.animation.PauseTransition pause =
+                                            new javafx.animation.PauseTransition(javafx.util.Duration.seconds(1.5));
+                                    pause.setOnFinished(e2 -> dialog.close());
+                                    pause.play();
+                                });
+                            })
+                            .exceptionally(ex -> {
+                                Platform.runLater(() -> {
+                                    acquiringLabel.setText("Acquisition failed: " + ex.getMessage());
+                                    acquiringLabel.setStyle(
+                                            "-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: #C62828;");
+                                    okButton.setDisable(false);
+                                    if (cancelBtn != null) cancelBtn.setDisable(false);
+                                });
+                                return null;
+                            });
                 });
 
+                // Set result converter for cancel
+                dialog.setResultConverter(dialogButton -> null);
+
                 // Show dialog
-                dialog.showAndWait()
-                        .ifPresentOrElse(
-                                result -> {
-                                    if (result != null) {
-                                        // Save exposure changes to YAML config
-                                        saveExposureChangesToConfig(result.modality(), result.angleExposures());
-                                    }
-                                    future.complete(result);
-                                },
-                                () -> future.complete(null));
+                dialog.showAndWait().ifPresent(result -> {});
+                // If future wasn't completed by the OK handler (user cancelled), complete with null
+                if (!future.isDone()) {
+                    future.complete(null);
+                }
 
             } catch (Exception e) {
                 logger.error("Error creating background collection dialog", e);
