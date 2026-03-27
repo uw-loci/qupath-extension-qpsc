@@ -685,7 +685,7 @@ public class StageControlPanel extends TitledPane {
         VBox cameraContent = new VBox(6);
         cameraContent.setPadding(new Insets(6));
 
-        // Read-only hardware info
+        // Detect current objective/detector by matching MicroManager pixel size against config
         String detectorId = "Unknown";
         String objectiveId = "Unknown";
         try {
@@ -694,9 +694,44 @@ public class StageControlPanel extends TitledPane {
                     ? modalities.iterator().next()
                     : "ppm";
             var objectives = mgr.getAvailableObjectivesForModality(mod);
-            if (objectives != null && !objectives.isEmpty()) {
-                objectiveId = objectives.iterator().next();
-                var detectors = mgr.getAvailableDetectorsForModalityObjective(mod, objectiveId);
+            var detectors = mgr.getHardwareDetectors();
+
+            // Try pixel-size matching first (same approach as CameraControlController)
+            boolean detected = false;
+            MicroscopeController mc = MicroscopeController.getInstance();
+            if (mc != null && mc.isConnected() && objectives != null && detectors != null) {
+                try {
+                    double mmPixelSize = mc.getSocketClient().getMicroscopePixelSize();
+                    if (mmPixelSize > 0) {
+                        for (String obj : objectives) {
+                            for (String det : detectors) {
+                                Double configPx = mgr.getHardwarePixelSize(obj, det);
+                                if (configPx != null && Math.abs(configPx - mmPixelSize) < 0.001) {
+                                    objectiveId = obj;
+                                    detectorId = det;
+                                    detected = true;
+                                    logger.info(
+                                            "Camera tab: detected {}/{} from MM pixel size {}", obj, det, mmPixelSize);
+                                    break;
+                                }
+                            }
+                            if (detected) break;
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.debug("Camera tab: pixel size detection failed: {}", e.getMessage());
+                }
+            }
+
+            // Fall back to last-used preferences
+            if (!detected) {
+                String lastObj = PersistentPreferences.getLastObjective();
+                if (lastObj != null && !lastObj.isEmpty() && objectives != null && objectives.contains(lastObj)) {
+                    objectiveId = lastObj;
+                }
+                if (objectives != null && !objectives.isEmpty() && "Unknown".equals(objectiveId)) {
+                    objectiveId = objectives.iterator().next();
+                }
                 if (detectors != null && !detectors.isEmpty()) {
                     detectorId = detectors.iterator().next();
                 }
