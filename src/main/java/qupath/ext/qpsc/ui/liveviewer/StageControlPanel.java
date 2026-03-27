@@ -671,213 +671,71 @@ public class StageControlPanel extends TitledPane {
     }
 
     // ------------------------------------------------------------------
-    // Camera tab
+    // Camera tab (modality-dependent)
     // ------------------------------------------------------------------
 
     private Label cameraStatusLabel;
+    private VBox cameraModContent; // Swapped when modality changes
+    private String currentCameraObjectiveId;
+    private String currentCameraDetectorId;
 
     /**
-     * Builds the Camera tab with WB angle presets and a link to full Camera Control.
+     * Builds the Camera tab with modality dropdown and modality-specific content.
      */
-    @SuppressWarnings("unchecked")
     private Tab buildCameraTab() {
         Tab tab = new Tab("Camera");
         VBox cameraContent = new VBox(6);
         cameraContent.setPadding(new Insets(6));
 
-        // Detect current objective/detector by matching MicroManager pixel size against config
-        String detectorId = "Unknown";
-        String objectiveId = "Unknown";
-        try {
-            var modalities = mgr.getAvailableModalities();
-            String mod = (modalities != null && !modalities.isEmpty())
-                    ? modalities.iterator().next()
-                    : "ppm";
-            var objectives = mgr.getAvailableObjectivesForModality(mod);
-            var detectors = mgr.getHardwareDetectors();
+        // Detect current objective/detector by matching MicroManager pixel size
+        detectCurrentHardware();
 
-            // Try pixel-size matching first (same approach as CameraControlController)
-            boolean detected = false;
-            MicroscopeController mc = MicroscopeController.getInstance();
-            if (mc != null && mc.isConnected() && objectives != null && detectors != null) {
-                try {
-                    double mmPixelSize = mc.getSocketClient().getMicroscopePixelSize();
-                    if (mmPixelSize > 0) {
-                        for (String obj : objectives) {
-                            for (String det : detectors) {
-                                Double configPx = mgr.getHardwarePixelSize(obj, det);
-                                if (configPx != null && Math.abs(configPx - mmPixelSize) < 0.001) {
-                                    objectiveId = obj;
-                                    detectorId = det;
-                                    detected = true;
-                                    logger.info(
-                                            "Camera tab: detected {}/{} from MM pixel size {}", obj, det, mmPixelSize);
-                                    break;
-                                }
-                            }
-                            if (detected) break;
-                        }
-                    }
-                } catch (Exception e) {
-                    logger.debug("Camera tab: pixel size detection failed: {}", e.getMessage());
-                }
-            }
-
-            // Fall back to last-used preferences
-            if (!detected) {
-                String lastObj = PersistentPreferences.getLastObjective();
-                if (lastObj != null && !lastObj.isEmpty() && objectives != null && objectives.contains(lastObj)) {
-                    objectiveId = lastObj;
-                }
-                if (objectives != null && !objectives.isEmpty() && "Unknown".equals(objectiveId)) {
-                    objectiveId = objectives.iterator().next();
-                }
-                if (detectors != null && !detectors.isEmpty()) {
-                    detectorId = detectors.iterator().next();
-                }
-            }
-        } catch (Exception e) {
-            logger.debug("Could not read hardware IDs: {}", e.getMessage());
-        }
-
+        // Hardware info (read-only)
         GridPane hwGrid = new GridPane();
         hwGrid.setHgap(4);
         hwGrid.setVgap(2);
         Label detLabel = new Label("Detector:");
         detLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
-        Label detValue = new Label(shortenId(detectorId));
+        Label detValue = new Label(shortenId(currentCameraDetectorId));
         detValue.setStyle("-fx-font-size: 10px;");
-        detValue.setTooltip(new Tooltip(detectorId));
+        detValue.setTooltip(new Tooltip(currentCameraDetectorId));
         Label objLabel = new Label("Objective:");
         objLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
-        Label objValue = new Label(shortenId(objectiveId));
+        Label objValue = new Label(shortenId(currentCameraObjectiveId));
         objValue.setStyle("-fx-font-size: 10px;");
-        objValue.setTooltip(new Tooltip(objectiveId));
+        objValue.setTooltip(new Tooltip(currentCameraObjectiveId));
         hwGrid.add(detLabel, 0, 0);
         hwGrid.add(detValue, 1, 0);
         hwGrid.add(objLabel, 0, 1);
         hwGrid.add(objValue, 1, 1);
 
-        cameraContent.getChildren().addAll(hwGrid, new Separator());
-
-        // WB angle preset buttons
-        Label presetHeader = new Label("Apply WB Preset");
-        presetHeader.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
-        cameraContent.getChildren().add(presetHeader);
-
-        // Load angles and their calibrated exposures
-        boolean anyPresets = false;
+        // Modality dropdown
+        ComboBox<String> modalityCombo = new ComboBox<>();
         try {
-            var modalities2 = mgr.getAvailableModalities();
-            String modality = (modalities2 != null && !modalities2.isEmpty())
-                    ? modalities2.iterator().next()
-                    : "ppm";
-            var detectors2 = mgr.getAvailableDetectorsForModalityObjective(modality, objectiveId);
-            String det = (detectors2 != null && !detectors2.isEmpty())
-                    ? detectors2.iterator().next()
-                    : detectorId;
-
-            // Load rotation angles from config
-            java.util.Map<String, Double> ppmAngles = loadPpmAnglesLocal(mgr);
-
-            // Load per-angle exposures
-            var exposures = mgr.getModalityExposures(modality, objectiveId, det);
-            var gainsObj = mgr.getModalityGains(modality, objectiveId, det);
-            java.util.Map<String, Object> gains =
-                    (gainsObj instanceof java.util.Map<?, ?>) ? (java.util.Map<String, Object>) gainsObj : null;
-
-            if (exposures != null && !exposures.isEmpty()) {
-                final String fModality = modality;
-                final String fObjective = objectiveId;
-                final String fDetector = det;
-
-                for (var entry : ppmAngles.entrySet()) {
-                    String angleName = entry.getKey();
-                    double angleDeg = entry.getValue();
-
-                    Object angleExp = exposures.get(angleName);
-                    if (angleExp == null) continue;
-
-                    // Parse per-channel exposures: {r: X, g: Y, b: Z}
-                    float[] expArray = parseExposures(angleExp);
-                    if (expArray == null) continue;
-
-                    // Parse gains for this angle
-                    float[] gainArray = parseGains(gains, angleName);
-
-                    String label = capitalize(angleName) + " (" + (int) angleDeg + " deg)";
-                    String detail = String.format("R=%.1f G=%.1f B=%.1f ms", expArray[0], expArray[1], expArray[2]);
-                    String gainDetail = gainArray.length == 3
-                            ? String.format(", gain=%.1f aR=%.2f aB=%.2f", gainArray[0], gainArray[1], gainArray[2])
-                            : String.format(", gain=%.1f", gainArray[0]);
-
-                    Button presetBtn = new Button(label);
-                    presetBtn.setMaxWidth(Double.MAX_VALUE);
-                    presetBtn.setStyle("-fx-font-size: 10px;");
-                    presetBtn.setTooltip(new Tooltip("Apply: " + detail + gainDetail));
-                    final float[] fExp = expArray;
-                    final float[] fGain = gainArray;
-                    presetBtn.setOnAction(e -> applyWbPreset(angleName, angleDeg, fExp, fGain));
-
-                    Label detailLabel = new Label("  " + detail + gainDetail);
-                    detailLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #666;");
-
-                    cameraContent.getChildren().addAll(presetBtn, detailLabel);
-                    anyPresets = true;
-                }
-            }
-
-            // Check for Simple WB preset (uncrossed angle)
-            Object simpleWb = mgr.getProfileSetting(modality, objectiveId, det, "simple_wb");
-            if (simpleWb instanceof java.util.Map<?, ?> simpleMap) {
-                Object baseExp = simpleMap.get("base_exposures_ms");
-                Object baseGains = simpleMap.get("base_gains");
-                if (baseExp instanceof java.util.Map<?, ?> baseExpMap) {
-                    float r = toFloat(baseExpMap.get("r"));
-                    float g = toFloat(baseExpMap.get("g"));
-                    float b = toFloat(baseExpMap.get("b"));
-                    float[] simpleExpArray = {r, g, b};
-                    float[] simpleGainArray = parseGainsFromMap(
-                            baseGains instanceof java.util.Map<?, ?>
-                                    ? (java.util.Map<String, Object>) baseGains
-                                    : null);
-
-                    double uncrossedDeg = ppmAngles.getOrDefault("uncrossed", 90.0);
-                    String detail = String.format("R=%.1f G=%.1f B=%.1f ms", r, g, b);
-
-                    Button simpleBtn = new Button("Uncrossed (Simple WB)");
-                    simpleBtn.setMaxWidth(Double.MAX_VALUE);
-                    simpleBtn.setStyle("-fx-font-size: 10px; -fx-text-fill: #1565C0;");
-                    simpleBtn.setTooltip(new Tooltip("Apply Simple WB: " + detail));
-                    simpleBtn.setOnAction(
-                            e -> applyWbPreset("uncrossed", uncrossedDeg, simpleExpArray, simpleGainArray));
-
-                    Label simpleDetail = new Label("  " + detail);
-                    simpleDetail.setStyle("-fx-font-size: 9px; -fx-text-fill: #666;");
-
-                    cameraContent.getChildren().addAll(simpleBtn, simpleDetail);
-                    anyPresets = true;
-                }
-            }
-
+            var modalities = mgr.getAvailableModalities();
+            if (modalities != null) modalityCombo.getItems().addAll(modalities);
         } catch (Exception e) {
-            logger.debug("Could not load WB presets: {}", e.getMessage());
+            logger.debug("Could not load modalities: {}", e.getMessage());
         }
+        if (modalityCombo.getItems().isEmpty()) modalityCombo.getItems().add("ppm");
+        modalityCombo.setValue(modalityCombo.getItems().get(0));
+        modalityCombo.setMaxWidth(Double.MAX_VALUE);
+        modalityCombo.setStyle("-fx-font-size: 10px;");
 
-        if (!anyPresets) {
-            Label noPresets = new Label("No WB presets available.\nRun White Balance calibration first.");
-            noPresets.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
-            noPresets.setWrapText(true);
-            cameraContent.getChildren().add(noPresets);
-        }
+        HBox modRow = new HBox(4, new Label("Modality:"), modalityCombo);
+        modRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        ((Label) modRow.getChildren().get(0)).setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
+        HBox.setHgrow(modalityCombo, javafx.scene.layout.Priority.ALWAYS);
 
-        // Status label
+        // Modality-specific content area (rebuilt on modality change)
+        cameraModContent = new VBox(6);
+
+        // Status label (shared across modalities)
         cameraStatusLabel = new Label();
         cameraStatusLabel.setStyle("-fx-font-size: 10px;");
         cameraStatusLabel.setWrapText(true);
-        cameraContent.getChildren().addAll(new Separator(), cameraStatusLabel);
 
-        // Full Camera Control button
+        // Full Camera Control button (shared)
         Button fullControlBtn = new Button("Full Camera Control...");
         fullControlBtn.setMaxWidth(Double.MAX_VALUE);
         fullControlBtn.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
@@ -888,14 +746,295 @@ public class StageControlPanel extends TitledPane {
                 logger.warn("Could not open Camera Control: {}", ex.getMessage());
             }
         });
-        cameraContent.getChildren().add(fullControlBtn);
+
+        cameraContent
+                .getChildren()
+                .addAll(
+                        hwGrid,
+                        new Separator(),
+                        modRow,
+                        new Separator(),
+                        cameraModContent,
+                        new Separator(),
+                        cameraStatusLabel,
+                        fullControlBtn);
+
+        // Populate initial content and wire dropdown
+        rebuildCameraModContent(modalityCombo.getValue());
+        modalityCombo.setOnAction(e -> {
+            cameraStatusLabel.setText("");
+            rebuildCameraModContent(modalityCombo.getValue());
+        });
 
         tab.setContent(cameraContent);
         return tab;
     }
 
+    /** Detect current objective/detector by matching MicroManager pixel size against config. */
+    private void detectCurrentHardware() {
+        currentCameraObjectiveId = "Unknown";
+        currentCameraDetectorId = "Unknown";
+        try {
+            var modalities = mgr.getAvailableModalities();
+            String mod = (modalities != null && !modalities.isEmpty())
+                    ? modalities.iterator().next()
+                    : "ppm";
+            var objectives = mgr.getAvailableObjectivesForModality(mod);
+            var detectors = mgr.getHardwareDetectors();
+
+            boolean detected = false;
+            MicroscopeController mc = MicroscopeController.getInstance();
+            if (mc != null && mc.isConnected() && objectives != null && detectors != null) {
+                try {
+                    double mmPx = mc.getSocketClient().getMicroscopePixelSize();
+                    if (mmPx > 0) {
+                        for (String obj : objectives) {
+                            for (String det : detectors) {
+                                Double cfgPx = mgr.getHardwarePixelSize(obj, det);
+                                if (cfgPx != null && Math.abs(cfgPx - mmPx) < 0.001) {
+                                    currentCameraObjectiveId = obj;
+                                    currentCameraDetectorId = det;
+                                    detected = true;
+                                    logger.info("Camera tab: detected {}/{} from MM pixel size {}", obj, det, mmPx);
+                                    break;
+                                }
+                            }
+                            if (detected) break;
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.debug("Camera tab: pixel size detection failed: {}", e.getMessage());
+                }
+            }
+            if (!detected) {
+                String lastObj = PersistentPreferences.getLastObjective();
+                if (lastObj != null && !lastObj.isEmpty() && objectives != null && objectives.contains(lastObj))
+                    currentCameraObjectiveId = lastObj;
+                if (objectives != null && !objectives.isEmpty() && "Unknown".equals(currentCameraObjectiveId))
+                    currentCameraObjectiveId = objectives.iterator().next();
+                if (detectors != null && !detectors.isEmpty())
+                    currentCameraDetectorId = detectors.iterator().next();
+            }
+        } catch (Exception e) {
+            logger.debug("Could not read hardware IDs: {}", e.getMessage());
+        }
+    }
+
+    /** Rebuild the modality-specific camera content area. */
+    private void rebuildCameraModContent(String modality) {
+        cameraModContent.getChildren().clear();
+        if (modality == null || modality.isEmpty()) return;
+
+        String norm = modality.toLowerCase();
+        if (norm.startsWith("ppm")) {
+            buildPpmCameraContent(modality);
+        } else if (norm.startsWith("brightfield") || norm.startsWith("bf")) {
+            buildBrightfieldCameraContent(modality);
+        } else {
+            buildGenericCameraContent(modality);
+        }
+    }
+
+    /** PPM modality: per-angle WB presets with rotation. */
+    @SuppressWarnings("unchecked")
+    private void buildPpmCameraContent(String modality) {
+        Label header = new Label("Apply WB Preset (PPM)");
+        header.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
+        cameraModContent.getChildren().add(header);
+
+        boolean anyPresets = false;
+        try {
+            String det = resolveDetector(modality);
+            java.util.Map<String, Double> ppmAngles = loadPpmAnglesLocal(mgr);
+            var exposures = mgr.getModalityExposures(modality, currentCameraObjectiveId, det);
+            var gainsObj = mgr.getModalityGains(modality, currentCameraObjectiveId, det);
+            java.util.Map<String, Object> gains =
+                    (gainsObj instanceof java.util.Map<?, ?>) ? (java.util.Map<String, Object>) gainsObj : null;
+
+            if (exposures != null && !exposures.isEmpty()) {
+                for (var entry : ppmAngles.entrySet()) {
+                    String angleName = entry.getKey();
+                    double angleDeg = entry.getValue();
+                    Object angleExp = exposures.get(angleName);
+                    if (angleExp == null) continue;
+                    float[] expArray = parseExposures(angleExp);
+                    if (expArray == null) continue;
+                    float[] gainArray = parseGains(gains, angleName);
+
+                    String label = capitalize(angleName) + " (" + (int) angleDeg + " deg)";
+                    String detail = formatExpDetail(expArray) + formatGainDetail(gainArray);
+
+                    Button btn = createPresetButton(label, detail);
+                    final float[] fExp = expArray;
+                    final float[] fGain = gainArray;
+                    btn.setOnAction(e -> applyWbPreset(angleName, angleDeg, fExp, fGain));
+
+                    cameraModContent.getChildren().addAll(btn, createDetailLabel(detail));
+                    anyPresets = true;
+                }
+            }
+
+            // Simple WB preset (uncrossed angle)
+            Object simpleWb = mgr.getProfileSetting(modality, currentCameraObjectiveId, det, "simple_wb");
+            if (simpleWb instanceof java.util.Map<?, ?> simpleMap) {
+                Object baseExp = simpleMap.get("base_exposures_ms");
+                Object baseGains = simpleMap.get("base_gains");
+                if (baseExp instanceof java.util.Map<?, ?> baseExpMap) {
+                    float[] sExp = {
+                        toFloat(baseExpMap.get("r")), toFloat(baseExpMap.get("g")), toFloat(baseExpMap.get("b"))
+                    };
+                    float[] sGain = parseGainsFromMap(
+                            baseGains instanceof java.util.Map<?, ?>
+                                    ? (java.util.Map<String, Object>) baseGains
+                                    : null);
+                    double uncrossedDeg = ppmAngles.getOrDefault("uncrossed", 90.0);
+
+                    Button btn = createPresetButton("Uncrossed (Simple WB)", formatExpDetail(sExp));
+                    btn.setStyle(btn.getStyle() + " -fx-text-fill: #1565C0;");
+                    btn.setOnAction(e -> applyWbPreset("uncrossed", uncrossedDeg, sExp, sGain));
+                    cameraModContent.getChildren().addAll(btn, createDetailLabel(formatExpDetail(sExp)));
+                    anyPresets = true;
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not load PPM presets: {}", e.getMessage());
+        }
+
+        if (!anyPresets) addNoPresetsLabel();
+    }
+
+    /** Brightfield modality: single WB preset, no rotation. */
+    @SuppressWarnings("unchecked")
+    private void buildBrightfieldCameraContent(String modality) {
+        Label header = new Label("Apply WB Preset (Brightfield)");
+        header.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
+        cameraModContent.getChildren().add(header);
+
+        boolean anyPresets = false;
+        try {
+            String det = resolveDetector(modality);
+            var exposures = mgr.getModalityExposures(modality, currentCameraObjectiveId, det);
+            var gainsObj = mgr.getModalityGains(modality, currentCameraObjectiveId, det);
+
+            // Brightfield uses a "single" key for exposures/gains
+            Object singleExp = (exposures != null) ? exposures.get("single") : null;
+            if (singleExp != null) {
+                float[] expArray = parseExposures(singleExp);
+                if (expArray != null) {
+                    // Parse gains
+                    float[] gainArray = {1.0f};
+                    if (gainsObj instanceof java.util.Map<?, ?> gainsMap) {
+                        gainArray = parseGainsFromMap((java.util.Map<String, Object>) gainsMap);
+                    } else if (gainsObj instanceof Number n) {
+                        gainArray = new float[] {n.floatValue()};
+                    }
+
+                    String detail = formatExpDetail(expArray) + formatGainDetail(gainArray);
+                    Button btn = createPresetButton("Brightfield WB", detail);
+                    final float[] fExp = expArray;
+                    final float[] fGain = gainArray;
+                    btn.setOnAction(e -> applyPresetNoRotation("Brightfield", fExp, fGain));
+                    cameraModContent.getChildren().addAll(btn, createDetailLabel(detail));
+                    anyPresets = true;
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not load brightfield presets: {}", e.getMessage());
+        }
+
+        if (!anyPresets) addNoPresetsLabel();
+    }
+
+    /** Generic fallback for unknown/future modalities. */
+    private void buildGenericCameraContent(String modality) {
+        Label info = new Label("Camera presets for '" + modality + "' are not yet configured.\n"
+                + "Use Full Camera Control for manual settings.");
+        info.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
+        info.setWrapText(true);
+        cameraModContent.getChildren().add(info);
+    }
+
+    /** Resolve the detector ID for a given modality. */
+    private String resolveDetector(String modality) {
+        var dets = mgr.getAvailableDetectorsForModalityObjective(modality, currentCameraObjectiveId);
+        return (dets != null && !dets.isEmpty()) ? dets.iterator().next() : currentCameraDetectorId;
+    }
+
+    // --- Shared UI helpers for camera presets ---
+
+    private Button createPresetButton(String label, String tooltipDetail) {
+        Button btn = new Button(label);
+        btn.setMaxWidth(Double.MAX_VALUE);
+        btn.setStyle("-fx-font-size: 10px;");
+        btn.setTooltip(new Tooltip("Apply: " + tooltipDetail));
+        return btn;
+    }
+
+    private Label createDetailLabel(String detail) {
+        Label lbl = new Label("  " + detail);
+        lbl.setStyle("-fx-font-size: 9px; -fx-text-fill: #666;");
+        return lbl;
+    }
+
+    private void addNoPresetsLabel() {
+        Label lbl = new Label("No WB presets available.\nRun White Balance calibration first.");
+        lbl.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
+        lbl.setWrapText(true);
+        cameraModContent.getChildren().add(lbl);
+    }
+
+    private static String formatExpDetail(float[] exp) {
+        if (exp.length == 3) return String.format("R=%.1f G=%.1f B=%.1f ms", exp[0], exp[1], exp[2]);
+        return String.format("%.1f ms", exp[0]);
+    }
+
+    private static String formatGainDetail(float[] gain) {
+        if (gain.length == 3) return String.format(", gain=%.1f aR=%.2f aB=%.2f", gain[0], gain[1], gain[2]);
+        return String.format(", gain=%.1f", gain[0]);
+    }
+
     /**
-     * Apply a WB preset: set camera mode, exposures, gains, and rotate stage.
+     * Apply a WB preset WITHOUT rotation (for brightfield and other non-PPM modalities).
+     */
+    private void applyPresetNoRotation(String name, float[] exposures, float[] gains) {
+        cameraStatusLabel.setText("Applying " + name + "...");
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        Thread thread = new Thread(
+                () -> {
+                    try {
+                        MicroscopeController controller = MicroscopeController.getInstance();
+                        if (controller == null) {
+                            Platform.runLater(() -> {
+                                cameraStatusLabel.setText("Not connected");
+                                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                            });
+                            return;
+                        }
+                        controller.withLiveModeHandling(() -> {
+                            controller.setCameraMode(exposures.length == 3);
+                            controller.setExposures(exposures);
+                            controller.setGains(gains);
+                        });
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Applied: " + name);
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                        });
+                    } catch (Exception ex) {
+                        logger.error("Failed to apply preset: {}", ex.getMessage());
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Failed: " + ex.getMessage());
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                        });
+                    }
+                },
+                "BF-Preset-Apply");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    /**
+     * Apply a WB preset: set camera mode, exposures, gains, and rotate stage (PPM).
      */
     private void applyWbPreset(String angleName, double angleDeg, float[] exposures, float[] gains) {
         cameraStatusLabel.setText("Applying " + angleName + "...");
