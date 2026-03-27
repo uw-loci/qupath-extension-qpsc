@@ -1086,6 +1086,7 @@ public class AcquisitionWizardDialog {
     }
 
     private void onBoundedAcquisition() {
+        if (!confirmCalibrationStatus()) return;
         try {
             QPScopeController.getInstance().startWorkflow("boundedAcquisition");
         } catch (IOException e) {
@@ -1094,10 +1095,85 @@ public class AcquisitionWizardDialog {
     }
 
     private void onExistingImageAcquisition() {
+        if (!confirmCalibrationStatus()) return;
         try {
             QPScopeController.getInstance().startWorkflow("existingImage");
         } catch (IOException e) {
             logger.error("Failed to launch existing image acquisition", e);
         }
+    }
+
+    /**
+     * Checks current calibration status and warns the user before acquisition
+     * if any steps are not READY. Returns true to proceed, false to cancel.
+     */
+    private boolean confirmCalibrationStatus() {
+        String modality = modalityCombo.getValue();
+        String objective = objectiveCombo.getValue();
+        String detector = detectorCombo.getValue();
+
+        List<String> warnings = new ArrayList<>();
+
+        // Check server connection
+        StepStatus connStatus = CalibrationChecker.checkServerConnection();
+        if (connStatus.status() == Status.NOT_READY) {
+            warnings.add("Server: " + connStatus.message());
+        }
+
+        // Check white balance
+        StepStatus wbStatus = CalibrationChecker.checkWhiteBalance(modality, objective, detector);
+        if (wbStatus.status() == Status.WARNING || wbStatus.status() == Status.NOT_READY) {
+            warnings.add("White Balance: " + wbStatus.message());
+        }
+
+        // Check background correction
+        StepStatus bgStatus = CalibrationChecker.checkBackgroundCorrection(modality, objective, detector);
+        if (bgStatus.status() == Status.WARNING || bgStatus.status() == Status.NOT_READY) {
+            warnings.add("Backgrounds: " + bgStatus.message());
+        }
+
+        // Check alignment
+        StepStatus alignStatus = CalibrationChecker.checkAlignment();
+        if (alignStatus.status() == Status.NOT_READY) {
+            warnings.add("Alignment: " + alignStatus.message());
+        }
+
+        if (warnings.isEmpty()) {
+            return true;
+        }
+
+        // Server not connected is a hard block
+        if (connStatus.status() == Status.NOT_READY) {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Cannot Start Acquisition");
+            alert.setHeaderText("Microscope server is not connected");
+            alert.setContentText(connStatus.message());
+            alert.showAndWait();
+            return false;
+        }
+
+        // Other issues get a warning with proceed/cancel
+        StringBuilder msg = new StringBuilder();
+        msg.append("The following calibration steps have warnings:\n\n");
+        for (String w : warnings) {
+            msg.append("  - ").append(w).append("\n");
+        }
+        msg.append("\nAcquiring with stale or missing calibration may produce ");
+        msg.append("incorrect flat-field correction or color balance.\n\n");
+        msg.append("Proceed anyway?");
+
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Calibration Warnings");
+        alert.setHeaderText("Some calibration steps are not ready");
+        alert.setContentText(msg.toString());
+        alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.CANCEL);
+
+        var result = alert.showAndWait();
+        if (result.isPresent() && result.get() == ButtonType.YES) {
+            logger.warn("User proceeding with calibration warnings: {}", warnings);
+            return true;
+        }
+        logger.info("User cancelled acquisition due to calibration warnings");
+        return false;
     }
 }
