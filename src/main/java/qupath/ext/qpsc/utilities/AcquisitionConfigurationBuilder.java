@@ -10,6 +10,7 @@ import qupath.ext.qpsc.modality.BackgroundValidationResult;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.model.SampleSetupResult;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 
 /**
@@ -106,39 +107,45 @@ public class AcquisitionConfigurationBuilder {
             logger.info("Resolved background folder path: {}", bgFolder);
         }
 
-        // Get autofocus parameters
-        Map<String, Object> afParams = configManager.getAutofocusParams(objective);
+        // Get autofocus parameters (skip entirely if user disabled all autofocus)
+        boolean autofocusDisabled = QPPreferenceDialog.getDisableAllAutofocus();
         int afTiles = 5; // defaults
         int afSteps = 11;
         double afRange = 50.0;
 
-        if (afParams != null) {
-            if (afParams.get("n_tiles") instanceof Number) {
-                afTiles = ((Number) afParams.get("n_tiles")).intValue();
-            }
-            if (afParams.get("n_steps") instanceof Number) {
-                afSteps = ((Number) afParams.get("n_steps")).intValue();
-            }
-            if (afParams.get("search_range_um") instanceof Number) {
-                afRange = ((Number) afParams.get("search_range_um")).doubleValue();
-            }
-            logger.info(
-                    "Using objective-specific autofocus parameters for {}: tiles={}, steps={}, range={}um",
-                    objective,
-                    afTiles,
-                    afSteps,
-                    afRange);
+        if (autofocusDisabled) {
+            logger.warn("ALL AUTOFOCUS DISABLED by user preference. Focus drift will NOT be corrected.");
         } else {
-            logger.warn(
-                    "No autofocus parameters found for objective {}. Using generic defaults: tiles={}, steps={}, range={}um. "
-                            + "This may result in suboptimal focus quality. Consider adding autofocus configuration for this objective.",
-                    objective,
-                    afTiles,
-                    afSteps,
-                    afRange);
+            Map<String, Object> afParams = configManager.getAutofocusParams(objective);
 
-            // Show user warning for missing autofocus configuration
-            showAutofocusConfigurationWarning(objective, afTiles, afSteps, afRange);
+            if (afParams != null) {
+                if (afParams.get("n_tiles") instanceof Number) {
+                    afTiles = ((Number) afParams.get("n_tiles")).intValue();
+                }
+                if (afParams.get("n_steps") instanceof Number) {
+                    afSteps = ((Number) afParams.get("n_steps")).intValue();
+                }
+                if (afParams.get("search_range_um") instanceof Number) {
+                    afRange = ((Number) afParams.get("search_range_um")).doubleValue();
+                }
+                logger.info(
+                        "Using objective-specific autofocus parameters for {}: tiles={}, steps={}, range={}um",
+                        objective,
+                        afTiles,
+                        afSteps,
+                        afRange);
+            } else {
+                logger.warn(
+                        "No autofocus parameters found for objective {}. Using generic defaults: tiles={}, steps={}, range={}um. "
+                                + "This may result in suboptimal focus quality. Consider adding autofocus configuration for this objective.",
+                        objective,
+                        afTiles,
+                        afSteps,
+                        afRange);
+
+                // Show user warning for missing autofocus configuration
+                showAutofocusConfigurationWarning(objective, afTiles, afSteps, afRange);
+            }
         }
 
         // Determine processing pipeline based on detector properties
@@ -161,8 +168,12 @@ public class AcquisitionConfigurationBuilder {
                 .regionName(regionName)
                 .angleExposures(angleExposures)
                 .hardware(objective, detector, explicitPixelSize)
-                .autofocus(afTiles, afSteps, afRange)
                 .processingPipeline(processingSteps);
+
+        // Only add autofocus parameters if autofocus is enabled
+        if (!autofocusDisabled) {
+            acquisitionBuilder.autofocus(afTiles, afSteps, afRange);
+        }
 
         // Only add background correction if enabled and configured
         if (bgEnabled && bgMethod != null && bgFolder != null) {

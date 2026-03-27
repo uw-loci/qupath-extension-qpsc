@@ -130,6 +130,10 @@ public class QPPreferenceDialog {
     private static final BooleanProperty skipManualAutofocusProperty =
             PathPrefs.createPersistentPreference("skipManualAutofocus", false);
 
+    // Disable ALL autofocus (standard + sweep) - DANGER: Focus drift will NOT be corrected
+    private static final BooleanProperty disableAllAutofocusProperty =
+            PathPrefs.createPersistentPreference("disableAllAutofocus", false);
+
     // --- Notification / Alert preferences ---
     private static final String ALERTS_CATEGORY = "QuPath SCope Alerts";
     private static final String PPM_CATEGORY = "PPM (Polarized Light Microscopy)";
@@ -304,6 +308,16 @@ public class QPPreferenceDialog {
                         + "continue imaging with whatever focus level results.\n\n"
                         + "Only enable this for unattended acquisition where some out-of-focus "
                         + "regions are acceptable.")
+                .build());
+
+        items.add(new PropertyItemBuilder<>(disableAllAutofocusProperty, Boolean.class)
+                .name("Disable All Autofocus (Danger)")
+                .category(CATEGORY)
+                .description("WARNING: Focus drift will NOT be corrected!\n\n"
+                        + "When enabled, ALL autofocus is skipped during acquisition "
+                        + "(both standard and sweep). Only use when you know the sample "
+                        + "is flat and already in focus.\n\n"
+                        + "This is also accessible via the Acquisition Wizard checkbox.")
                 .build());
 
         // Filename configuration section
@@ -534,6 +548,22 @@ public class QPPreferenceDialog {
 
     public static void setSkipManualAutofocus(boolean skip) {
         skipManualAutofocusProperty.set(skip);
+    }
+
+    /**
+     * Returns true if ALL autofocus (standard + sweep) should be disabled.
+     * WARNING: Focus drift will NOT be corrected during acquisition.
+     */
+    public static boolean getDisableAllAutofocus() {
+        return disableAllAutofocusProperty.get();
+    }
+
+    public static BooleanProperty disableAllAutofocusProperty() {
+        return disableAllAutofocusProperty;
+    }
+
+    public static void setDisableAllAutofocus(boolean disable) {
+        disableAllAutofocusProperty.set(disable);
     }
 
     public static String getMicroscopeConfigFileProperty() {

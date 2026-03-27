@@ -304,6 +304,7 @@ public class BackgroundCollectionController {
         } else {
             wbModeComboBox.setValue("Per-angle (PPM)");
         }
+        WbMode.applyColorCellFactory(wbModeComboBox);
         wbModeComboBox.setTooltip(
                 new Tooltip("White balance mode for background acquisition:\n" + "  Off - No white balance correction\n"
                         + "  Camera AWB - Set in MicroManager before acquisition; clear by restarting MM (wait 30s)\n"
@@ -662,21 +663,28 @@ public class BackgroundCollectionController {
 
             for (var validity : validities) {
                 String prefix;
-                String color;
+                String statusColor;
                 switch (validity.status()) {
                     case NOT_NEEDED, VALID -> {
                         prefix = "[OK]";
-                        color = "#2E7D32";
+                        statusColor = "#2E7D32";
                     }
                     default -> {
                         prefix = "[!!]";
-                        color = "#E65100";
+                        statusColor = "#E65100";
                     }
                 }
-                Label line = new Label(
-                        String.format("  %s  %s -- %s", prefix, validity.mode().getDisplayName(), validity.message()));
-                line.setStyle("-fx-text-fill: " + color + "; -fx-font-size: 11px;");
-                wbValidityPanel.getChildren().add(line);
+                // Use the WB mode's own color for the mode name portion
+                String modeColor = validity.mode().getColor();
+                Label prefixLabel = new Label("  " + prefix + "  ");
+                prefixLabel.setStyle("-fx-text-fill: " + statusColor + "; -fx-font-size: 11px;");
+                Label modeLabel = new Label(validity.mode().getDisplayName());
+                modeLabel.setStyle("-fx-text-fill: " + modeColor + "; -fx-font-size: 11px; -fx-font-weight: bold;");
+                Label msgLabel = new Label(" -- " + validity.message());
+                msgLabel.setStyle("-fx-text-fill: " + statusColor + "; -fx-font-size: 11px;");
+                javafx.scene.layout.HBox lineBox = new javafx.scene.layout.HBox(0, prefixLabel, modeLabel, msgLabel);
+                lineBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+                wbValidityPanel.getChildren().add(lineBox);
             }
         } catch (Exception e) {
             logger.warn("Failed to check WB mode validity: {}", e.getMessage());

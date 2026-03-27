@@ -708,6 +708,7 @@ public class ExistingImageAcquisitionController {
             } else {
                 wbModeComboBox.setValue("Per-angle (PPM)");
             }
+            WbMode.applyColorCellFactory(wbModeComboBox);
             wbModeComboBox.setTooltip(new Tooltip("White balance mode:\n" + "  Off - No white balance correction\n"
                     + "  Camera AWB - Set in MicroManager before acquisition; clear by restarting MM (wait 30s)\n"
                     + "  Simple (90deg) - Use 90deg R:G:B ratios, uniformly scaled per angle\n"

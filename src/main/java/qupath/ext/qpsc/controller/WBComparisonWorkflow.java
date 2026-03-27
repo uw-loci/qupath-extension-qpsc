@@ -414,8 +414,14 @@ public class WBComparisonWorkflow {
                 .hardware(objective, detector, pixelSize)
                 .angleExposures(modeAngleExposures)
                 .wbMode(wbMode)
-                .backgroundCorrection(true, "divide", bgDir)
-                .autofocus(params.afTiles(), params.afSteps(), params.afRange());
+                .backgroundCorrection(true, "divide", bgDir);
+
+        // Only add autofocus if not globally disabled
+        if (!qupath.ext.qpsc.preferences.QPPreferenceDialog.getDisableAllAutofocus()) {
+            builder.autofocus(params.afTiles(), params.afSteps(), params.afRange());
+        } else {
+            logger.warn("ALL AUTOFOCUS DISABLED by user preference for WB comparison acquisition");
+        }
 
         // Establish fresh connection before acquisition to avoid stale connection state
         // from calibration/background operations (which may leave the socket in an

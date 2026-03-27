@@ -88,6 +88,9 @@ public class AcquisitionWizardDialog {
     private Button boundedButton;
     private Button existingImageButton;
 
+    // Autofocus disable checkbox
+    private CheckBox disableAutofocusCheckBox;
+
     /**
      * Shows the wizard dialog. If already open, brings it to front and expands.
      */
@@ -253,6 +256,9 @@ public class AcquisitionWizardDialog {
                         this::onAlignment));
 
         root.getChildren().add(stepsBox);
+
+        // -- Autofocus override --
+        root.getChildren().add(createAutofocusOverrideSection());
 
         // -- Separator --
         root.getChildren().add(createSectionSeparator("Start Acquisition"));
@@ -694,6 +700,41 @@ public class AcquisitionWizardDialog {
 
             updateAcquireButtons();
         });
+    }
+
+    // ======================================================================
+    // Autofocus override
+    // ======================================================================
+
+    private HBox createAutofocusOverrideSection() {
+        HBox section = new HBox(8);
+        section.setPadding(new Insets(4, 16, 4, 16));
+        section.setAlignment(Pos.CENTER_LEFT);
+
+        disableAutofocusCheckBox = new CheckBox("Disable Autofocus");
+        disableAutofocusCheckBox.setTooltip(
+                new Tooltip("Skip all autofocus during acquisition. Only use when you know\n"
+                        + "the sample is flat and already in focus. Focus drift will NOT\n"
+                        + "be corrected."));
+
+        // Bind to the persistent preference (bidirectional)
+        disableAutofocusCheckBox.setSelected(QPPreferenceDialog.getDisableAllAutofocus());
+        disableAutofocusCheckBox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            QPPreferenceDialog.setDisableAllAutofocus(newVal);
+            updateAutofocusCheckBoxStyle();
+        });
+        updateAutofocusCheckBoxStyle();
+
+        section.getChildren().add(disableAutofocusCheckBox);
+        return section;
+    }
+
+    private void updateAutofocusCheckBoxStyle() {
+        if (disableAutofocusCheckBox.isSelected()) {
+            disableAutofocusCheckBox.setStyle("-fx-text-fill: #E65100; -fx-font-weight: bold; -fx-font-size: 12px;");
+        } else {
+            disableAutofocusCheckBox.setStyle("-fx-font-size: 12px;");
+        }
     }
 
     // ======================================================================
