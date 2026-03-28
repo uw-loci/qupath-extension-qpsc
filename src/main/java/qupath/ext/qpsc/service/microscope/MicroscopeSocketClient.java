@@ -214,7 +214,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
         /** Stop continuous sequence acquisition (core-level) */
         STOPSEQ("stopseq_"),
         /** Get MicroManager pixel size (um/pixel) */
-        GETPXSZ("getpxsz_");
+        GETPXSZ("getpxsz_"),
+        /** Z-stack acquisition at current XY */
+        ZSTACK("zstack__"),
+        /** Time-lapse acquisition at current position */
+        TLAPSE("tlapse__");
 
         private final byte[] value;
 
@@ -4698,6 +4702,130 @@ public class MicroscopeSocketClient implements AutoCloseable {
             } catch (IOException e) {
                 cleanupAuxiliary();
                 throw e;
+            }
+        }
+    }
+
+    // ==================== Z-Stack & Time-Lapse ====================
+
+    /**
+     * Start a Z-stack acquisition at the current XY position.
+     *
+     * @param outputFolder Output directory for Z-stack images
+     * @param zStart Start Z position (um, absolute)
+     * @param zEnd End Z position (um, absolute)
+     * @param zStep Z step size (um)
+     * @param modality Modality name (e.g., "brightfield", "ppm")
+     * @param anglesStr Angles string for PPM (e.g., "(7,-7,0,90)")
+     * @param wbMode White balance mode
+     * @param yamlPath Config YAML path
+     * @param objective Objective ID
+     * @param detector Detector ID
+     * @return Server response string
+     * @throws IOException if communication fails
+     */
+    public String startZStack(
+            String outputFolder,
+            double zStart,
+            double zEnd,
+            double zStep,
+            String modality,
+            String anglesStr,
+            String wbMode,
+            String yamlPath,
+            String objective,
+            String detector)
+            throws IOException {
+        StringBuilder msg = new StringBuilder();
+        msg.append("--output ").append(outputFolder);
+        msg.append(" --z-start ").append(zStart);
+        msg.append(" --z-end ").append(zEnd);
+        msg.append(" --z-step ").append(zStep);
+        if (modality != null) msg.append(" --modality ").append(modality);
+        if (anglesStr != null) msg.append(" --angles ").append(anglesStr);
+        if (wbMode != null) msg.append(" --wb-mode ").append(wbMode);
+        if (yamlPath != null) msg.append(" --yaml ").append(yamlPath);
+        if (objective != null) msg.append(" --objective ").append(objective);
+        if (detector != null) msg.append(" --detector ").append(detector);
+        msg.append(" ENDOFSTR");
+
+        return executeChunkedCommand(Command.ZSTACK, msg.toString(), "ZSTACK");
+    }
+
+    /**
+     * Start a time-lapse acquisition at the current position.
+     *
+     * @param outputFolder Output directory for time-lapse images
+     * @param timepoints Number of time points
+     * @param intervalSeconds Seconds between time points
+     * @param modality Modality name
+     * @param anglesStr Angles string for PPM
+     * @param wbMode White balance mode
+     * @param yamlPath Config YAML path
+     * @param objective Objective ID
+     * @param detector Detector ID
+     * @return Server response string
+     * @throws IOException if communication fails
+     */
+    public String startTimeLapse(
+            String outputFolder,
+            int timepoints,
+            double intervalSeconds,
+            String modality,
+            String anglesStr,
+            String wbMode,
+            String yamlPath,
+            String objective,
+            String detector)
+            throws IOException {
+        StringBuilder msg = new StringBuilder();
+        msg.append("--output ").append(outputFolder);
+        msg.append(" --timepoints ").append(timepoints);
+        msg.append(" --interval ").append(intervalSeconds);
+        if (modality != null) msg.append(" --modality ").append(modality);
+        if (anglesStr != null) msg.append(" --angles ").append(anglesStr);
+        if (wbMode != null) msg.append(" --wb-mode ").append(wbMode);
+        if (yamlPath != null) msg.append(" --yaml ").append(yamlPath);
+        if (objective != null) msg.append(" --objective ").append(objective);
+        if (detector != null) msg.append(" --detector ").append(detector);
+        msg.append(" ENDOFSTR");
+
+        return executeChunkedCommand(Command.TLAPSE, msg.toString(), "TLAPSE");
+    }
+
+    /**
+     * Execute a chunked command (send command byte + message, read STARTED then final response).
+     */
+    private String executeChunkedCommand(Command cmd, String message, String label) throws IOException {
+        synchronized (socketLock) {
+            output.write(cmd.getValue());
+            output.write(message.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            output.flush();
+
+            logger.info("{} command sent ({} bytes)", label, message.length());
+
+            // Read STARTED acknowledgment
+            byte[] startedBuf = new byte[4096];
+            int n = input.read(startedBuf);
+            if (n <= 0) throw new IOException(label + ": no response from server");
+            String startedResp = new String(startedBuf, 0, n, java.nio.charset.StandardCharsets.UTF_8);
+            logger.info("{} initial response: {}", label, startedResp);
+
+            if (startedResp.startsWith("FAILED")) {
+                throw new IOException(label + " failed: " + startedResp);
+            }
+
+            // Wait for final response (may take minutes for Z-stack/time-lapse)
+            socket.setSoTimeout(600_000); // 10 minute timeout
+            try {
+                byte[] finalBuf = new byte[8192];
+                int fn = input.read(finalBuf);
+                if (fn <= 0) throw new IOException(label + ": no final response");
+                String finalResp = new String(finalBuf, 0, fn, java.nio.charset.StandardCharsets.UTF_8);
+                logger.info("{} final response: {}", label, finalResp);
+                return finalResp;
+            } finally {
+                socket.setSoTimeout(readTimeout);
             }
         }
     }

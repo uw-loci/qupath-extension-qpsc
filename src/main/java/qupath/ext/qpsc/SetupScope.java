@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.controller.QPScopeController;
+import qupath.ext.qpsc.controller.StackTimeLapseWorkflow;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -360,6 +361,15 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         autofocusEditorOption,
                         autofocusBenchmarkOption);
 
+        // Z-Stack / Time-Lapse (needs microscope)
+        MenuItem stackTimeLapseOption = new MenuItem("Z-Stack / Time-Lapse...");
+        stackTimeLapseOption.setDisable(!configValid);
+        setMenuItemTooltip(
+                stackTimeLapseOption,
+                "Acquire a Z-stack or time-lapse at the current stage position. "
+                        + "Single-tile acquisition with configurable Z range or time intervals.");
+        stackTimeLapseOption.setOnAction(e -> StackTimeLapseWorkflow.show(qupath));
+
         // Propagation tools (project utilities, no microscope needed)
         MenuItem forwardPropagationOption = new MenuItem("Forward Propagation...");
         setMenuItemTooltip(
@@ -407,6 +417,8 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         utilitiesMenu
                 .getItems()
                 .addAll(
+                        new SeparatorMenuItem(),
+                        stackTimeLapseOption,
                         new SeparatorMenuItem(),
                         forwardPropagationOption,
                         backPropagationOption,
