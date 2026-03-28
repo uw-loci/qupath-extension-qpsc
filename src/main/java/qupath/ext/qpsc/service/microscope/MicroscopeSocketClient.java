@@ -4807,12 +4807,18 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if communication fails or matching fails
      */
     public String siftAutoAlign(
-            String wsiRegionPath, double microscopePixelSize, double wsiPixelSize, boolean flipX, boolean flipY)
+            String wsiRegionPath,
+            double microscopePixelSize,
+            double wsiPixelSize,
+            boolean flipX,
+            boolean flipY,
+            double minPixelSizeUm)
             throws IOException {
         StringBuilder msg = new StringBuilder();
         msg.append("--wsi-region ").append(wsiRegionPath);
         msg.append(" --micro-px ").append(microscopePixelSize);
         msg.append(" --wsi-px ").append(wsiPixelSize);
+        msg.append(" --min-px ").append(minPixelSizeUm);
         if (flipX) msg.append(" --flip-x");
         if (flipY) msg.append(" --flip-y");
         msg.append(" ENDOFSTR");

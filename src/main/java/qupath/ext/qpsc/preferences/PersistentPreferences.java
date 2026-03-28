@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.StringProperty;
 import qupath.lib.gui.prefs.PathPrefs;
@@ -1007,5 +1008,30 @@ public class PersistentPreferences {
 
     public static IntegerProperty menuDotColorProperty() {
         return menuDotColorProperty;
+    }
+
+    // ================== SIFT AUTO-ALIGNMENT ==================
+
+    private static final DoubleProperty siftMinPixelSizeProperty =
+            PathPrefs.createPersistentPreference("siftMinPixelSizeUm", 1.0);
+
+    /**
+     * Minimum pixel size (um/px) for SIFT auto-alignment matching.
+     * Both images are downsampled to at least this resolution before feature
+     * detection. Higher values = faster matching, better artifact suppression.
+     * Lower values = more detail preserved (needed for high-mag objectives
+     * like 63x oil where 1 um/px is a significant fraction of the FOV).
+     * Default: 1.0 um/px.
+     */
+    public static double getSiftMinPixelSize() {
+        return siftMinPixelSizeProperty.get();
+    }
+
+    public static void setSiftMinPixelSize(double umPerPixel) {
+        siftMinPixelSizeProperty.set(umPerPixel);
+    }
+
+    public static DoubleProperty siftMinPixelSizeProperty() {
+        return siftMinPixelSizeProperty;
     }
 }

@@ -496,8 +496,9 @@ public class SingleTileRefinement {
         MicroscopeController.LiveViewState liveState = mc.stopAllLiveViewing();
         try {
             // Call SIFT matching on the Python server
+            double minPx = qupath.ext.qpsc.preferences.PersistentPreferences.getSiftMinPixelSize();
             String response = mc.getSocketClient()
-                    .siftAutoAlign(tempFile.getAbsolutePath(), microPixelSize, wsiPixelSize, flipX, flipY);
+                    .siftAutoAlign(tempFile.getAbsolutePath(), microPixelSize, wsiPixelSize, flipX, flipY, minPx);
 
             // Parse response: "SUCCESS:offsetX,offsetY|inliers:N|confidence:C"
             if (!response.startsWith("SUCCESS:")) {
