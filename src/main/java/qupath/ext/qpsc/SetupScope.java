@@ -11,6 +11,7 @@ import javafx.scene.control.Tooltip;
 import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.controller.QPScopeController;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
@@ -359,6 +360,14 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         autofocusEditorOption,
                         autofocusBenchmarkOption);
 
+        // Forward propagation (project utility, no microscope needed)
+        MenuItem forwardPropagationOption = new MenuItem("Forward Propagation...");
+        setMenuItemTooltip(
+                forwardPropagationOption,
+                "Propagate annotations and detections from the base image to its acquired sub-images. "
+                        + "Uses the alignment transform to map coordinates between images.");
+        forwardPropagationOption.setOnAction(e -> ForwardPropagationWorkflow.run(qupath));
+
         // Stitching recovery (doesn't need microscope connection)
         MenuItem stitchingRecoveryOption = new MenuItem(res.getString("menu.stitchingRecovery"));
         setMenuItemTooltip(
@@ -392,6 +401,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 .getItems()
                 .addAll(
                         new SeparatorMenuItem(),
+                        forwardPropagationOption,
                         stitchingRecoveryOption,
                         new SeparatorMenuItem(),
                         setupWizardOption,
