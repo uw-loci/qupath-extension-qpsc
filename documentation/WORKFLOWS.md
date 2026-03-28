@@ -112,6 +112,10 @@ Microscope Alignment creates a coordinate transformation (affine transform) that
 
 You do *not* need to re-run alignment every time you load a new slide from the same scanner, as long as the slides are loaded consistently and the hardware has not changed.
 
+### SIFT Auto-Alignment
+
+During refinement, an **Auto-Align (SIFT)** button can automatically match the microscope view to the WSI tile using feature detection, eliminating the need for manual stage adjustment. This works best on tissue with visible structural features and handles different pixel sizes between the WSI and microscope automatically. Falls back to manual alignment if SIFT cannot find enough matching features.
+
 See [full documentation](tools/microscope-alignment.md) for step-by-step instructions, point distribution guidelines, flip/invert settings, and troubleshooting.
 
 ---

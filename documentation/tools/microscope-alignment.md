@@ -83,7 +83,32 @@ For each calibration point:
 
 After marking points, click **Calculate Transform**. The system computes the best-fit affine transformation and displays error statistics. Review the quality metrics to assess accuracy.
 
-### Step 4: Validation
+### Step 4: Refinement (Manual or Automatic)
+
+After the initial transform is calculated, single-tile refinement improves accuracy:
+
+1. Select a tile in the image
+2. The stage moves to the predicted position
+3. Refine using one of two methods:
+
+**Auto-Align (SIFT)** -- recommended when tissue features are visible:
+- Click the **Auto-Align (SIFT)** button in the refinement dialog
+- The system extracts a region from the WSI around the selected tile (with 160um search margin)
+- A microscope image is snapped and matched against the WSI region using SIFT feature detection
+- Pixel size differences between the WSI and microscope are automatically handled (both images are rescaled to the lower resolution)
+- Optical flip correction is applied based on image metadata
+- The stage moves to correct any offset found by the matching
+- The status shows the offset and number of matched features
+- Verify the live view matches the tile, then click "Save Refined Position"
+
+**Manual alignment** -- fallback when SIFT cannot find enough features:
+- Use the stage controls or Live Viewer to manually adjust the position
+- Match the live microscope view to the selected tile in QuPath
+- Click "Save Refined Position"
+
+SIFT auto-alignment works best on tissue with visible structural features. It may fail on blank areas, very uniform tissue, or regions with repetitive patterns. In those cases, use manual alignment.
+
+### Step 5: Validation
 
 Test the calculated transform:
 

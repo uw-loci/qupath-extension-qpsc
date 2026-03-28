@@ -37,6 +37,9 @@ This file tracks the relationship between documentation screenshots and the Java
 | Saturation Summary Dialog | `ui/SaturationSummaryDialog.java` | `Docs_SaturationSummary.png` |
 | Autofocus Validation Result | `controller/AutofocusEditorWorkflow.java` | `Docs_AutofocusValidation.png` |
 | Setup Wizard | `ui/setupwizard/SetupWizardDialog.java` | `Docs_SetupWizard.png` |
+| Alignment Refinement with SIFT | `controller/workflow/SingleTileRefinement.java` | `Docs_AlignmentRefinementSIFT.png` |
+| Propagation Manager | `controller/ForwardPropagationWorkflow.java` | `Docs_PropagationManager.png` |
+| Z-Stack / Time-Lapse Dialog | `controller/StackTimeLapseWorkflow.java` | `Docs_ZStackTimeLapse.png` |
 
 ## How to Use This Registry
 
