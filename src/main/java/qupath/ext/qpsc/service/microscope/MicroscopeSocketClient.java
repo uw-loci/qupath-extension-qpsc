@@ -218,7 +218,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         /** Z-stack acquisition at current XY */
         ZSTACK("zstack__"),
         /** Time-lapse acquisition at current position */
-        TLAPSE("tlapse__");
+        TLAPSE("tlapse__"),
+        /** SIFT auto-alignment: snap + match against WSI region */
+        SIFTAL("siftal__");
 
         private final byte[] value;
 
@@ -4791,6 +4793,54 @@ public class MicroscopeSocketClient implements AutoCloseable {
         msg.append(" ENDOFSTR");
 
         return executeChunkedCommand(Command.TLAPSE, msg.toString(), "TLAPSE");
+    }
+
+    /**
+     * Run SIFT auto-alignment: snap microscope image and match against a WSI region file.
+     *
+     * @param wsiRegionPath Path to the WSI region image file (PNG/TIFF)
+     * @param microscopePixelSize Microscope pixel size in um/pixel
+     * @param wsiPixelSize WSI pixel size in um/pixel
+     * @param flipX Whether WSI is flipped in X relative to microscope
+     * @param flipY Whether WSI is flipped in Y relative to microscope
+     * @return Response string with offset: "SUCCESS:x,y|inliers:N|confidence:C" or throws on failure
+     * @throws IOException if communication fails or matching fails
+     */
+    public String siftAutoAlign(
+            String wsiRegionPath, double microscopePixelSize, double wsiPixelSize, boolean flipX, boolean flipY)
+            throws IOException {
+        StringBuilder msg = new StringBuilder();
+        msg.append("--wsi-region ").append(wsiRegionPath);
+        msg.append(" --micro-px ").append(microscopePixelSize);
+        msg.append(" --wsi-px ").append(wsiPixelSize);
+        if (flipX) msg.append(" --flip-x");
+        if (flipY) msg.append(" --flip-y");
+        msg.append(" ENDOFSTR");
+
+        // SIFT uses a simple request/response (no STARTED/final pattern)
+        synchronized (socketLock) {
+            output.write(Command.SIFTAL.getValue());
+            output.write(msg.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            output.flush();
+
+            logger.info("SIFTAL command sent");
+
+            socket.setSoTimeout(30_000); // 30 second timeout for SIFT
+            try {
+                byte[] buf = new byte[4096];
+                int n = input.read(buf);
+                if (n <= 0) throw new IOException("SIFTAL: no response");
+                String response = new String(buf, 0, n, java.nio.charset.StandardCharsets.UTF_8);
+                logger.info("SIFTAL response: {}", response);
+
+                if (response.startsWith("FAILED")) {
+                    throw new IOException("SIFT matching failed: " + response.substring(7));
+                }
+                return response;
+            } finally {
+                socket.setSoTimeout(readTimeout);
+            }
+        }
     }
 
     /**

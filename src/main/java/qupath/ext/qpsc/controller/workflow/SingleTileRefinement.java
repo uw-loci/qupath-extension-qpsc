@@ -1,6 +1,8 @@
 package qupath.ext.qpsc.controller.workflow;
 
 import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -14,6 +16,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
@@ -23,8 +26,10 @@ import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.images.servers.ImageServer;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.ProjectImageEntry;
+import qupath.lib.regions.RegionRequest;
 
 /**
  * Helper for single-tile alignment refinement.
@@ -342,6 +347,53 @@ public class SingleTileRefinement {
             future.complete(new RefinementResult(null, selectedTile)); // Signal to switch to manual alignment
         });
 
+        // Auto-Align button (SIFT feature matching)
+        Button autoAlignButton = new Button("Auto-Align (SIFT)");
+        autoAlignButton.setStyle(
+                "-fx-font-weight: bold; -fx-border-color: #4A90D9; " + "-fx-border-width: 2; -fx-border-radius: 3;");
+        autoAlignButton.setTooltip(
+                new javafx.scene.control.Tooltip("Automatically align by matching the microscope view to the WSI tile\n"
+                        + "using SIFT feature detection. Searches within ~160um of the\n"
+                        + "predicted position. Requires tissue with visible features."));
+
+        Label autoAlignStatus = new Label();
+        autoAlignStatus.setWrapText(true);
+        autoAlignStatus.setStyle("-fx-font-size: 10px;");
+
+        autoAlignButton.setOnAction(e -> {
+            autoAlignButton.setDisable(true);
+            autoAlignStatus.setText("Running SIFT matching...");
+            autoAlignStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+            new Thread(
+                            () -> {
+                                try {
+                                    double[] offset = performSiftAutoAlign(gui, selectedTile);
+                                    Platform.runLater(() -> {
+                                        autoAlignButton.setDisable(false);
+                                        if (offset != null) {
+                                            autoAlignStatus.setText(String.format(
+                                                    "Aligned! Offset: (%.1f, %.1f) um. Verify and Save.",
+                                                    offset[0], offset[1]));
+                                            autoAlignStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                                        } else {
+                                            autoAlignStatus.setText("SIFT matching failed. Align manually.");
+                                            autoAlignStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: orange;");
+                                        }
+                                    });
+                                } catch (Exception ex) {
+                                    logger.error("Auto-align failed: {}", ex.getMessage());
+                                    Platform.runLater(() -> {
+                                        autoAlignButton.setDisable(false);
+                                        autoAlignStatus.setText("Error: " + ex.getMessage());
+                                        autoAlignStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                                    });
+                                }
+                            },
+                            "SIFT-AutoAlign")
+                    .start();
+        });
+
         // Layout
         HBox restoreBox = new HBox(restoreButton);
         restoreBox.setAlignment(Pos.CENTER_LEFT);
@@ -349,7 +401,15 @@ public class SingleTileRefinement {
         HBox buttonBox = new HBox(10, saveButton, skipButton, newAlignmentButton);
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
 
-        content.getChildren().addAll(headerLabel, instructionLabel, tileInfoLabel, restoreBox, buttonBox);
+        content.getChildren()
+                .addAll(
+                        headerLabel,
+                        instructionLabel,
+                        tileInfoLabel,
+                        autoAlignButton,
+                        autoAlignStatus,
+                        restoreBox,
+                        buttonBox);
 
         // Handle window close (X button)
         dialogStage.setOnCloseRequest(e -> {
@@ -360,5 +420,113 @@ public class SingleTileRefinement {
         Scene scene = new Scene(content);
         dialogStage.setScene(scene);
         dialogStage.show();
+    }
+
+    /**
+     * Perform SIFT-based auto-alignment.
+     *
+     * <p>Extracts a region from the WSI around the selected tile (160um margin),
+     * saves it as a temp file, sends it to the Python server for SIFT matching
+     * against a fresh microscope snapshot, and moves the stage by the resulting offset.
+     *
+     * @param gui QuPath GUI (for accessing the image server)
+     * @param selectedTile The tile being refined
+     * @return Offset in microns [x, y], or null if matching failed
+     */
+    private static double[] performSiftAutoAlign(QuPathGUI gui, PathObject selectedTile) throws Exception {
+
+        var imageData = gui.getImageData();
+        if (imageData == null) throw new IllegalStateException("No image data available");
+
+        ImageServer<BufferedImage> server = imageData.getServer();
+        double wsiPixelSize = server.getPixelCalibration().getAveragedPixelSizeMicrons();
+        if (Double.isNaN(wsiPixelSize) || wsiPixelSize <= 0) {
+            throw new IllegalStateException("WSI has no valid pixel size calibration");
+        }
+
+        // Get microscope pixel size
+        MicroscopeController mc = MicroscopeController.getInstance();
+        double microPixelSize = mc.getSocketClient().getMicroscopePixelSize();
+
+        // Calculate search region: tile bounds + 160um margin on each side
+        double marginUm = 160.0;
+        double marginPx = marginUm / wsiPixelSize;
+
+        double tileX = selectedTile.getROI().getBoundsX();
+        double tileY = selectedTile.getROI().getBoundsY();
+        double tileW = selectedTile.getROI().getBoundsWidth();
+        double tileH = selectedTile.getROI().getBoundsHeight();
+
+        int regionX = Math.max(0, (int) (tileX - marginPx));
+        int regionY = Math.max(0, (int) (tileY - marginPx));
+        int regionW = Math.min(server.getWidth() - regionX, (int) (tileW + 2 * marginPx));
+        int regionH = Math.min(server.getHeight() - regionY, (int) (tileH + 2 * marginPx));
+
+        logger.info(
+                "Extracting WSI region: ({}, {}) {}x{} pixels (margin={}um={}px)",
+                regionX,
+                regionY,
+                regionW,
+                regionH,
+                marginUm,
+                (int) marginPx);
+
+        // Read the WSI region at full resolution
+        RegionRequest request = RegionRequest.createInstance(server.getPath(), 1.0, regionX, regionY, regionW, regionH);
+        BufferedImage wsiRegion = server.readRegion(request);
+
+        // Save to temp file
+        File tempFile = File.createTempFile("sift_wsi_region_", ".png");
+        tempFile.deleteOnExit();
+        ImageIO.write(wsiRegion, "PNG", tempFile);
+        logger.info(
+                "Saved WSI region to temp file: {} ({}x{})",
+                tempFile.getAbsolutePath(),
+                wsiRegion.getWidth(),
+                wsiRegion.getHeight());
+
+        // Get flip status
+        ProjectImageEntry<?> entry = gui.getProject() != null && gui.getImageData() != null
+                ? gui.getProject().getEntry(gui.getImageData())
+                : null;
+        boolean flipX = entry != null && ImageMetadataManager.isFlippedX(entry);
+        boolean flipY = entry != null && ImageMetadataManager.isFlippedY(entry);
+
+        // Stop live streaming for clean snap
+        MicroscopeController.LiveViewState liveState = mc.stopAllLiveViewing();
+        try {
+            // Call SIFT matching on the Python server
+            String response = mc.getSocketClient()
+                    .siftAutoAlign(tempFile.getAbsolutePath(), microPixelSize, wsiPixelSize, flipX, flipY);
+
+            // Parse response: "SUCCESS:offsetX,offsetY|inliers:N|confidence:C"
+            if (!response.startsWith("SUCCESS:")) {
+                logger.warn("SIFT auto-align did not succeed: {}", response);
+                return null;
+            }
+
+            String[] parts = response.substring(8).split("\\|");
+            String[] offsets = parts[0].split(",");
+            double offsetX = Double.parseDouble(offsets[0]);
+            double offsetY = Double.parseDouble(offsets[1]);
+
+            logger.info("SIFT offset: ({}, {}) um", offsetX, offsetY);
+
+            // Move stage by the offset to correct alignment
+            double[] currentPos = mc.getStagePositionXY();
+            double newX = currentPos[0] + offsetX;
+            double newY = currentPos[1] + offsetY;
+            logger.info("Moving stage from ({}, {}) to ({}, {})", currentPos[0], currentPos[1], newX, newY);
+            mc.moveStageXY(newX, newY);
+
+            return new double[] {offsetX, offsetY};
+
+        } finally {
+            mc.restoreLiveViewState(liveState);
+            // Clean up temp file
+            if (!tempFile.delete()) {
+                logger.debug("Could not delete temp file: {}", tempFile);
+            }
+        }
     }
 }
