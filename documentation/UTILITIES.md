@@ -28,7 +28,7 @@ This document provides an overview of all utilities available in the QPSC extens
 | [PPM Polarity Plot](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-polarity-plot.md) | Polar histogram visualization of fiber orientations | Extensions > QP Scope > PPM Polarity Plot |
 | [Surface Perpendicularity](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/surface-perpendicularity.md) | Verify surface is perpendicular to optical axis | Extensions > QP Scope > Surface Perpendicularity |
 | [Batch PPM Analysis](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/batch-ppm-analysis.md) | Batch processing of PPM image sets | Extensions > QP Scope > Batch PPM Analysis |
-| [Back-Propagate Annotations](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/back-propagate-annotations.md) | Copy annotations from child images back to parent | Extensions > QP Scope > Back-Propagate Annotations |
+| [Propagation Manager](tools/propagation-manager.md) | Transfer objects between base and sub-images (bidirectional) | Extensions > QP Scope > Utilities > Forward/Back Propagation |
 
 ---
 
@@ -131,7 +131,7 @@ Measure camera noise statistics (mean, standard deviation, SNR) with Quick, Full
 | Tool | Purpose | Requires | Full Docs |
 |------|---------|----------|-----------|
 | Batch PPM Analysis | Run polarity and/or perpendicularity analysis across all annotations in a project; exports CSV | Sunburst calibration, project with annotated PPM images | [Guide](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/batch-ppm-analysis.md) |
-| Back-Propagate Annotations | Transfer annotations from sub-images back to parent/base images using alignment transforms | Multi-sample project with sub-images from Existing Image workflow, classified annotations | [Guide](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/back-propagate-annotations.md) |
+| [Propagation Manager](tools/propagation-manager.md) | Bidirectional transfer of annotations/detections between base images and sub-images | Multi-sample project with sub-images, alignment transform | [Guide](tools/propagation-manager.md) |
 
 ---
 
