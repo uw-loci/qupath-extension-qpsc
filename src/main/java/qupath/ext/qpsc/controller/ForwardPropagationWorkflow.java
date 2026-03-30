@@ -73,8 +73,11 @@ public class ForwardPropagationWorkflow {
 
         Project<BufferedImage> project = qupath.getProject();
 
-        // Build image groups: base_image -> list of sub-images
+        // Build image groups: base_image_name -> list of ALL entries sharing that base
+        // Base-like entries (originals, flipped versions) and sub-images are both tracked
+        Map<String, List<ProjectImageEntry<BufferedImage>>> baseVariants = new LinkedHashMap<>();
         Map<String, List<ProjectImageEntry<BufferedImage>>> groups = new LinkedHashMap<>();
+        // For backward compat, pick a default base entry per group
         Map<String, ProjectImageEntry<BufferedImage>> baseEntries = new LinkedHashMap<>();
 
         logger.info("=== Building image groups for propagation ===");
@@ -83,7 +86,6 @@ public class ForwardPropagationWorkflow {
             String imageName = entry.getImageName();
             String entryName = GeneralTools.stripExtension(imageName);
 
-            // Determine effective base name
             String baseName;
             if (rawBaseName != null && !rawBaseName.isEmpty()) {
                 baseName = rawBaseName;
@@ -91,36 +93,33 @@ public class ForwardPropagationWorkflow {
                 baseName = entryName;
             }
 
-            logger.info(
-                    "  Entry: '{}' -> entryName='{}', base_image='{}', effectiveBase='{}'",
-                    imageName,
-                    entryName,
-                    rawBaseName,
-                    baseName);
+            logger.info("  Entry: '{}' -> base_image='{}', effectiveBase='{}'", imageName, rawBaseName, baseName);
 
-            // Track base entries: match by stripped name or by filename prefix.
-            // PREFER flipped entries because the alignment transform was calibrated
-            // in the flipped coordinate space (Live Viewer shows flipped view).
-            if (entryName.equals(baseName) || imageName.startsWith(baseName + ".")) {
+            // Is this a base-like entry (original or flipped variant)?
+            boolean isBaseVariant = entryName.equals(baseName) || imageName.startsWith(baseName + ".");
+            if (isBaseVariant) {
+                baseVariants.computeIfAbsent(baseName, k -> new ArrayList<>()).add(entry);
+                // Default base entry: prefer flipped (alignment coordinate space)
                 boolean isFlipped = ImageMetadataManager.isFlippedX(entry) || ImageMetadataManager.isFlippedY(entry);
                 if (isFlipped || !baseEntries.containsKey(baseName)) {
                     baseEntries.put(baseName, entry);
-                    logger.info("    -> base entry for '{}' (flipped={})", baseName, isFlipped);
                 }
-            }
-
-            // Group sub-images: any entry whose effective base differs from its own name
-            // Also check that the entry name doesn't START with baseName followed by a dot
-            // (that would be the base image itself, e.g., "sample.svs")
-            boolean isSubImage = !entryName.equals(baseName) && !imageName.startsWith(baseName + ".");
-            if (isSubImage) {
+                logger.debug("    -> base variant (flipped={})", isFlipped);
+            } else {
+                // Sub-image
                 groups.computeIfAbsent(baseName, k -> new ArrayList<>()).add(entry);
-                logger.debug("    -> grouped as sub-image of '{}'", baseName);
+                logger.debug("    -> sub-image of '{}'", baseName);
             }
         }
 
         logger.info("Found {} group(s): {}", groups.size(), groups.keySet());
-        logger.info("Base entries: {}", baseEntries.keySet());
+        for (var bv : baseVariants.entrySet()) {
+            logger.info(
+                    "  Base '{}': {} variant(s): {}",
+                    bv.getKey(),
+                    bv.getValue().size(),
+                    bv.getValue().stream().map(ProjectImageEntry::getImageName).collect(Collectors.joining(", ")));
+        }
 
         // Filter to groups that actually have sub-images
         if (groups.isEmpty()) {
@@ -157,8 +156,45 @@ public class ForwardPropagationWorkflow {
         TreeItem<String> root = new TreeItem<>("Project");
         groupTree.setRoot(root);
 
+        // Base image selector: let user choose which base variant (original vs flipped)
+        // to use as the source/target for propagation
+        Map<String, ComboBox<String>> baseSelectors = new LinkedHashMap<>();
+        Map<String, Map<String, ProjectImageEntry<BufferedImage>>> baseVariantLookup = new LinkedHashMap<>();
+        VBox baseSelectorBox = new VBox(4);
+
+        for (String baseName : groups.keySet()) {
+            List<ProjectImageEntry<BufferedImage>> variants = baseVariants.getOrDefault(baseName, List.of());
+            if (variants.size() > 1) {
+                // Multiple variants (original + flipped) -- let user pick
+                ComboBox<String> combo = new ComboBox<>();
+                Map<String, ProjectImageEntry<BufferedImage>> lookup = new LinkedHashMap<>();
+                for (ProjectImageEntry<BufferedImage> v : variants) {
+                    String label = v.getImageName();
+                    combo.getItems().add(label);
+                    lookup.put(label, v);
+                }
+                baseVariantLookup.put(baseName, lookup);
+                // Default to flipped if available (matches alignment coordinate space)
+                ProjectImageEntry<BufferedImage> defaultBase = baseEntries.get(baseName);
+                if (defaultBase != null) combo.setValue(defaultBase.getImageName());
+                else combo.getSelectionModel().selectFirst();
+
+                combo.setMaxWidth(Double.MAX_VALUE);
+                combo.setStyle("-fx-font-size: 10px;");
+                Label lbl = new Label("Base image for '" + baseName + "':");
+                lbl.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
+                baseSelectorBox.getChildren().addAll(lbl, combo);
+                baseSelectors.put(baseName, combo);
+
+                // Update baseEntries when user changes selection
+                combo.setOnAction(ev -> {
+                    ProjectImageEntry<BufferedImage> selected = lookup.get(combo.getValue());
+                    if (selected != null) baseEntries.put(baseName, selected);
+                });
+            }
+        }
+
         // Map to track checkbox states
-        Map<String, CheckBoxTreeItem<String>> baseItems = new LinkedHashMap<>();
         Map<ProjectImageEntry<BufferedImage>, CheckBoxTreeItem<String>> subItems = new LinkedHashMap<>();
 
         for (var groupEntry : groups.entrySet()) {
@@ -168,7 +204,6 @@ public class ForwardPropagationWorkflow {
             CheckBoxTreeItem<String> baseItem = new CheckBoxTreeItem<>(baseName + " (" + subs.size() + " sub-images)");
             baseItem.setSelected(true);
             baseItem.setExpanded(true);
-            baseItems.put(baseName, baseItem);
 
             for (ProjectImageEntry<BufferedImage> sub : subs) {
                 CheckBoxTreeItem<String> subItem = new CheckBoxTreeItem<>(sub.getImageName());
@@ -182,7 +217,7 @@ public class ForwardPropagationWorkflow {
 
         // Use CheckBoxTreeCell for the tree
         groupTree.setCellFactory(CheckBoxTreeCell.forTreeView());
-        groupTree.setPrefHeight(250);
+        groupTree.setPrefHeight(200);
 
         // Class filter section
         Label classLabel = new Label("Object classes to propagate:");
@@ -207,8 +242,7 @@ public class ForwardPropagationWorkflow {
                 // Forward: collect classes from base images
                 for (var gEntry : groups.entrySet()) {
                     ProjectImageEntry<BufferedImage> base = baseEntries.get(gEntry.getKey());
-                    CheckBoxTreeItem<String> baseCheck = baseItems.get(gEntry.getKey());
-                    if (base == null || baseCheck == null || !baseCheck.isSelected()) continue;
+                    if (base == null) continue;
                     try {
                         var data = base.readImageData();
                         for (PathObject obj : data.getHierarchy().getAllObjects(false)) {
@@ -434,18 +468,20 @@ public class ForwardPropagationWorkflow {
         statusScroll.setFitToWidth(true);
         statusScroll.setPrefHeight(80);
 
-        VBox content = new VBox(
-                8,
-                dirBox,
-                new Separator(),
-                new Label("Image groups:"),
-                groupTree,
-                new Separator(),
-                classLabel,
-                classScroll,
-                new Separator(),
-                statusScroll,
-                buttonBar);
+        VBox content = new VBox(8, dirBox, new Separator());
+        if (!baseSelectorBox.getChildren().isEmpty()) {
+            content.getChildren().addAll(baseSelectorBox, new Separator());
+        }
+        content.getChildren()
+                .addAll(
+                        new Label("Sub-images:"),
+                        groupTree,
+                        new Separator(),
+                        classLabel,
+                        classScroll,
+                        new Separator(),
+                        statusScroll,
+                        buttonBar);
         content.setPadding(new Insets(10));
 
         dialog.setScene(new Scene(content, 550, 600));
