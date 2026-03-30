@@ -539,10 +539,40 @@ public class ForwardPropagationWorkflow {
         boolean subFlipX = "1".equals(subMeta.get(ImageMetadataManager.FLIP_X));
         boolean subFlipY = "1".equals(subMeta.get(ImageMetadataManager.FLIP_Y));
 
+        // The xy_offset in metadata is the annotation top-left in stage microns.
+        // But the tile grid starts half a FOV before the annotation edge (TilingUtilities
+        // line 99: startX = minX - frameWidth/2). Correct the offset to match the
+        // actual image origin.
+        double halfFovX = 0;
+        double halfFovY = 0;
+        try {
+            MicroscopeController mc = MicroscopeController.getInstance();
+            if (mc != null && mc.isConnected()) {
+                double[] fov = mc.getCameraFOV();
+                halfFovX = fov[0] / 2.0;
+                halfFovY = fov[1] / 2.0;
+            }
+        } catch (Exception e) {
+            logger.debug("Could not get FOV for offset correction: {}", e.getMessage());
+        }
+
+        double correctedOffsetX = xyOffset[0] - halfFovX;
+        double correctedOffsetY = xyOffset[1] - halfFovY;
+        if (halfFovX > 0) {
+            logger.info(
+                    "Offset correction: ({}, {}) -> ({}, {}) (half FOV = {}, {})",
+                    xyOffset[0],
+                    xyOffset[1],
+                    correctedOffsetX,
+                    correctedOffsetY,
+                    halfFovX,
+                    halfFovY);
+        }
+
         // Build combined transform: base_pixels -> stage_microns -> sub_pixels
         AffineTransform stageToSub = new AffineTransform();
         stageToSub.scale(1.0 / subPixelSize, 1.0 / subPixelSize);
-        stageToSub.translate(-xyOffset[0], -xyOffset[1]);
+        stageToSub.translate(-correctedOffsetX, -correctedOffsetY);
 
         AffineTransform combined = new AffineTransform(stageToSub);
         combined.concatenate(baseToStage);
@@ -594,10 +624,25 @@ public class ForwardPropagationWorkflow {
         int baseWidth = baseData.getServer().getWidth();
         int baseHeight = baseData.getServer().getHeight();
 
+        // Apply same half-FOV correction as forward propagation
+        double halfFovX = 0;
+        double halfFovY = 0;
+        try {
+            MicroscopeController mc = MicroscopeController.getInstance();
+            if (mc != null && mc.isConnected()) {
+                double[] fov = mc.getCameraFOV();
+                halfFovX = fov[0] / 2.0;
+                halfFovY = fov[1] / 2.0;
+            }
+        } catch (Exception e) {
+            logger.debug("Could not get FOV for offset correction: {}", e.getMessage());
+        }
+        double correctedOffsetX = xyOffset[0] - halfFovX;
+        double correctedOffsetY = xyOffset[1] - halfFovY;
+
         // Build inverse: sub_pixels -> stage_microns -> base_pixels
-        // First undo flip if needed
         AffineTransform subToStage = new AffineTransform();
-        subToStage.translate(xyOffset[0], xyOffset[1]);
+        subToStage.translate(correctedOffsetX, correctedOffsetY);
         subToStage.scale(subPixelSize, subPixelSize);
 
         if (subFlipX || subFlipY) {
