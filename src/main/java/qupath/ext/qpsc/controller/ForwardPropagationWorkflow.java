@@ -10,7 +10,6 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.CheckBoxTreeCell;
 import javafx.scene.layout.*;
-import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,36 +77,58 @@ public class ForwardPropagationWorkflow {
         Map<String, List<ProjectImageEntry<BufferedImage>>> groups = new LinkedHashMap<>();
         Map<String, ProjectImageEntry<BufferedImage>> baseEntries = new LinkedHashMap<>();
 
+        logger.info("=== Building image groups for propagation ===");
         for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
-            String baseName = ImageMetadataManager.getBaseImage(entry);
-            String entryName = GeneralTools.stripExtension(entry.getImageName());
+            String rawBaseName = ImageMetadataManager.getBaseImage(entry);
+            String imageName = entry.getImageName();
+            String entryName = GeneralTools.stripExtension(imageName);
 
-            if (baseName == null || baseName.isEmpty()) {
-                // This entry IS a base image (or has no metadata)
+            // Determine effective base name
+            String baseName;
+            if (rawBaseName != null && !rawBaseName.isEmpty()) {
+                baseName = rawBaseName;
+            } else {
                 baseName = entryName;
             }
 
-            // Track base entries
-            if (entryName.equals(baseName) || entry.getImageName().startsWith(baseName + ".")) {
+            logger.info(
+                    "  Entry: '{}' -> entryName='{}', base_image='{}', effectiveBase='{}'",
+                    imageName,
+                    entryName,
+                    rawBaseName,
+                    baseName);
+
+            // Track base entries: match by stripped name or by filename prefix
+            if (entryName.equals(baseName) || imageName.startsWith(baseName + ".")) {
                 baseEntries.putIfAbsent(baseName, entry);
+                logger.debug("    -> tracked as base entry for '{}'", baseName);
             }
 
-            // Group sub-images under their base
-            if (!entryName.equals(baseName)) {
+            // Group sub-images: any entry whose effective base differs from its own name
+            // Also check that the entry name doesn't START with baseName followed by a dot
+            // (that would be the base image itself, e.g., "sample.svs")
+            boolean isSubImage = !entryName.equals(baseName) && !imageName.startsWith(baseName + ".");
+            if (isSubImage) {
                 groups.computeIfAbsent(baseName, k -> new ArrayList<>()).add(entry);
+                logger.debug("    -> grouped as sub-image of '{}'", baseName);
             }
         }
 
+        logger.info("Found {} group(s): {}", groups.size(), groups.keySet());
+        logger.info("Base entries: {}", baseEntries.keySet());
+
         // Filter to groups that actually have sub-images
         if (groups.isEmpty()) {
-            Dialogs.showInfoNotification("Propagation Manager", "No image groups found. Acquire sub-images first.");
+            Dialogs.showInfoNotification(
+                    "Propagation Manager",
+                    "No image groups found. Sub-images need 'base_image' metadata (set during acquisition).");
             return;
         }
 
         // Build the dialog
         Stage dialog = new Stage();
         dialog.setTitle("Propagation Manager");
-        dialog.initModality(Modality.APPLICATION_MODAL);
+        // Non-modal so the user can still interact with QuPath while the dialog is open
         if (qupath.getStage() != null) dialog.initOwner(qupath.getStage());
 
         // Direction toggle
@@ -261,16 +282,31 @@ public class ForwardPropagationWorkflow {
             int groupCount = 0;
             StringBuilder results = new StringBuilder();
 
+            logger.info("Propagation started: direction={}, {} groups available", dir, groups.size());
+
             for (var gEntry : groups.entrySet()) {
                 String baseName = gEntry.getKey();
                 CheckBoxTreeItem<String> baseCheck = baseItems.get(baseName);
-                if (baseCheck == null || !baseCheck.isSelected()) continue;
+                if (baseCheck == null || !baseCheck.isSelected()) {
+                    logger.info(
+                            "  Skipping group '{}': baseCheck={}, selected={}",
+                            baseName,
+                            baseCheck != null,
+                            baseCheck != null && baseCheck.isSelected());
+                    continue;
+                }
 
                 ProjectImageEntry<BufferedImage> base = baseEntries.get(baseName);
                 if (base == null) {
+                    logger.warn("  Group '{}': base entry not found in project", baseName);
                     results.append(baseName).append(": base not found\n");
                     continue;
                 }
+                logger.info(
+                        "  Processing group '{}': base='{}', {} sub-images",
+                        baseName,
+                        base.getImageName(),
+                        gEntry.getValue().size());
 
                 // Get selected sub-images for this group
                 List<ProjectImageEntry<BufferedImage>> selectedSubs = gEntry.getValue().stream()
