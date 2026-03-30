@@ -371,19 +371,12 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         stackTimeLapseOption.setOnAction(e -> StackTimeLapseWorkflow.show(qupath));
 
         // Propagation tools (project utilities, no microscope needed)
-        MenuItem forwardPropagationOption = new MenuItem("Forward Propagation...");
+        MenuItem propagationManagerOption = new MenuItem("Propagation Manager...");
         setMenuItemTooltip(
-                forwardPropagationOption,
-                "Propagate annotations and detections from base images to acquired sub-images. "
-                        + "Select image groups, object classes, and direction.");
-        forwardPropagationOption.setOnAction(e -> ForwardPropagationWorkflow.run(qupath));
-
-        MenuItem backPropagationOption = new MenuItem("Back Propagation...");
-        setMenuItemTooltip(
-                backPropagationOption,
-                "Propagate annotations and detections from sub-images back to their base image. "
-                        + "Select image groups, object classes, and direction.");
-        backPropagationOption.setOnAction(e -> ForwardPropagationWorkflow.runBack(qupath));
+                propagationManagerOption,
+                "Transfer annotations and detections between base images and sub-images. "
+                        + "Supports both forward (base -> sub) and back (sub -> base) directions.");
+        propagationManagerOption.setOnAction(e -> ForwardPropagationWorkflow.run(qupath));
 
         // Stitching recovery (doesn't need microscope connection)
         MenuItem stitchingRecoveryOption = new MenuItem(res.getString("menu.stitchingRecovery"));
@@ -420,8 +413,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         new SeparatorMenuItem(),
                         stackTimeLapseOption,
                         new SeparatorMenuItem(),
-                        forwardPropagationOption,
-                        backPropagationOption,
+                        propagationManagerOption,
                         stitchingRecoveryOption,
                         new SeparatorMenuItem(),
                         setupWizardOption,

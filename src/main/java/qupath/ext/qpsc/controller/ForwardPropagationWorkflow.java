@@ -98,10 +98,15 @@ public class ForwardPropagationWorkflow {
                     rawBaseName,
                     baseName);
 
-            // Track base entries: match by stripped name or by filename prefix
+            // Track base entries: match by stripped name or by filename prefix.
+            // PREFER flipped entries because the alignment transform was calibrated
+            // in the flipped coordinate space (Live Viewer shows flipped view).
             if (entryName.equals(baseName) || imageName.startsWith(baseName + ".")) {
-                baseEntries.putIfAbsent(baseName, entry);
-                logger.debug("    -> tracked as base entry for '{}'", baseName);
+                boolean isFlipped = ImageMetadataManager.isFlippedX(entry) || ImageMetadataManager.isFlippedY(entry);
+                if (isFlipped || !baseEntries.containsKey(baseName)) {
+                    baseEntries.put(baseName, entry);
+                    logger.info("    -> base entry for '{}' (flipped={})", baseName, isFlipped);
+                }
             }
 
             // Group sub-images: any entry whose effective base differs from its own name
@@ -341,17 +346,16 @@ public class ForwardPropagationWorkflow {
                             try {
                                 int count = propagateForward(alignment, sourceObjects, sub);
                                 totalCount += count;
-                                results.append("  -> ")
-                                        .append(sub.getImageName())
-                                        .append(": ")
-                                        .append(count)
-                                        .append(" objects\n");
+                                String msg = String.format(
+                                        "  %s -> %s: %d objects\n", base.getImageName(), sub.getImageName(), count);
+                                results.append(msg);
+                                logger.info(msg.trim());
                             } catch (Exception ex) {
-                                results.append("  -> ")
-                                        .append(sub.getImageName())
-                                        .append(": FAILED (")
-                                        .append(ex.getMessage())
-                                        .append(")\n");
+                                String msg = String.format(
+                                        "  %s -> %s: FAILED (%s)\n",
+                                        base.getImageName(), sub.getImageName(), ex.getMessage());
+                                results.append(msg);
+                                logger.error(msg.trim());
                             }
                         }
                         groupCount++;
@@ -375,17 +379,16 @@ public class ForwardPropagationWorkflow {
                                 if (subObjects.isEmpty()) continue;
                                 int count = propagateBack(alignment, subObjects, sub, baseData);
                                 totalCount += count;
-                                results.append("  <- ")
-                                        .append(sub.getImageName())
-                                        .append(": ")
-                                        .append(count)
-                                        .append(" objects\n");
+                                String msg = String.format(
+                                        "  %s -> %s: %d objects\n", sub.getImageName(), base.getImageName(), count);
+                                results.append(msg);
+                                logger.info(msg.trim());
                             } catch (Exception ex) {
-                                results.append("  <- ")
-                                        .append(sub.getImageName())
-                                        .append(": FAILED (")
-                                        .append(ex.getMessage())
-                                        .append(")\n");
+                                String msg = String.format(
+                                        "  %s -> %s: FAILED (%s)\n",
+                                        sub.getImageName(), base.getImageName(), ex.getMessage());
+                                results.append(msg);
+                                logger.error(msg.trim());
                             }
                         }
 
