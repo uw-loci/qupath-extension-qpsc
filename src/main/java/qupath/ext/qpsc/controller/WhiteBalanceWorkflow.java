@@ -413,15 +413,17 @@ public class WhiteBalanceWorkflow {
      */
     private static void showSimpleResults(MicroscopeSocketClient.WhiteBalanceResult result, String outputPath) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("White Balance Complete");
+        alert.setTitle("Simple White Balance Complete");
         alert.setHeaderText(
-                result.converged ? "Calibration Converged" : "Calibration Complete (did not fully converge)");
+                result.converged
+                        ? "All angles calibrated successfully"
+                        : "Calibration complete (not all angles fully converged)");
 
-        // Check if any gains are not 1.0 (meaning gain was applied)
         boolean hasGain = result.unifiedGain != 1.0 || result.analogRed != 1.0 || result.analogBlue != 1.0;
 
         StringBuilder content = new StringBuilder();
-        content.append("Per-Channel Exposures:\n\n");
+        content.append("Calibrated at 90 deg (uncrossed), then all remaining PPM angles.\n\n");
+        content.append("Uncrossed (90 deg) Per-Channel Exposures:\n");
         content.append(String.format("  Red:   %.2f ms\n", result.exposureRed));
         content.append(String.format("  Green: %.2f ms\n", result.exposureGreen));
         content.append(String.format("  Blue:  %.2f ms\n", result.exposureBlue));
@@ -434,11 +436,12 @@ public class WhiteBalanceWorkflow {
             content.append("\n");
         }
 
-        content.append(String.format("\nConverged: %s", result.converged ? "Yes" : "No"));
+        content.append(String.format("\nAll angles converged: %s\n", result.converged ? "Yes" : "No"));
+        content.append("\nPer-angle exposures have been saved to the imaging profile.\n");
+        content.append("Run Background Collection next to update background images.");
 
         alert.setContentText(content.toString());
 
-        // Non-modal so user can reference results while continuing work
         configureResultDialog(alert, outputPath);
         alert.show();
     }
