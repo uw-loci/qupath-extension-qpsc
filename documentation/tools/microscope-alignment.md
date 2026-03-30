@@ -108,6 +108,8 @@ After the initial transform is calculated, single-tile refinement improves accur
 
 SIFT auto-alignment works best on tissue with visible structural features. It may fail on blank areas, very uniform tissue, or regions with repetitive patterns. In those cases, use manual alignment.
 
+**Trust SIFT mode** (advanced): Enable via the `trustSiftAlignment` preference (see [Preferences](../PREFERENCES.md#sift-auto-alignment)). When enabled, the refinement step runs SIFT automatically without showing the manual dialog. If the confidence (inlier ratio) exceeds the configurable threshold (default 50%), the position is auto-accepted and the workflow continues unattended. Falls back to the manual dialog if SIFT fails or confidence is too low.
+
 ### Step 5: Validation
 
 Test the calculated transform:

@@ -144,7 +144,9 @@ These tools help you monitor and control the microscope during your work session
 | **Live Viewer** | Real-time camera feed with stage controls, histogram, and noise statistics. Use to navigate, verify focus, and check exposure. | [Live Viewer](tools/live-viewer.md) |
 | **Stage Map** | Bird's-eye view of the stage insert showing slide positions and current objective location. Double-click to navigate. | [Stage Map](tools/stage-map.md) |
 | **Camera Control** | View and test camera exposure/gain settings from calibration profiles. Testing only -- changes are not saved to YAML. | [Camera Control](tools/camera-control.md) |
-| **Stitching Recovery** | Re-run stitching on previously acquired tiles if stitching failed. Menu: Extensions -> QP Scope -> Utilities -> Re-stitch Tiles... | -- |
+| **Stitching Recovery** | Re-run stitching on previously acquired tiles if stitching failed. | -- |
+| **[Propagation Manager](tools/propagation-manager.md)** | Transfer annotations/detections between base images and sub-images. Supports forward (base->sub) and back (sub->base) with base variant selection. | [Guide](tools/propagation-manager.md) |
+| **[Z-Stack / Time-Lapse](tools/z-stack-timelapse.md)** | Single-tile Z-stack or time-lapse acquisition at the current stage position. | [Guide](tools/z-stack-timelapse.md) |
 
 ---
 

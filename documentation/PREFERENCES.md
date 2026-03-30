@@ -595,6 +595,23 @@ This dropdown appears in the Bounding Box acquisition dialog, Existing Image acq
 
 ---
 
+## SIFT Auto-Alignment
+
+Preferences controlling the SIFT feature matching used for automated alignment refinement.
+
+| Preference | Type | Default | Description |
+|------------|------|---------|-------------|
+| Trust SIFT alignment | Boolean | OFF | When enabled, SIFT runs automatically during single-tile refinement without showing the manual dialog. If confidence exceeds the threshold, the refined position is accepted automatically. Falls back to manual if SIFT fails or confidence is too low. |
+| SIFT confidence threshold | Double | 0.5 | Minimum inlier ratio (0.0-1.0) required to auto-accept alignment when Trust SIFT is enabled. Higher values are stricter. 0.5 means at least 50% of matched features must be RANSAC inliers. |
+| SIFT min pixel size (um) | Double | 1.0 | Minimum resolution for SIFT matching. Both images are downsampled to at least this pixel size before feature detection. Suppresses JPEG compression artifacts and speeds up matching. Lower values for high-magnification objectives (e.g., 63x oil where 1 um/px is a large fraction of the FOV). |
+
+**When to adjust these:**
+- **Trust SIFT**: Enable when alignment is reliable and you want fully unattended acquisition
+- **Confidence threshold**: Lower (e.g., 0.3) if tissue has few features; raise (e.g., 0.7) for critical alignment
+- **Min pixel size**: Lower (e.g., 0.3) for 40x+ objectives; raise (e.g., 2.0) for 4x objectives or heavily compressed WSIs
+
+---
+
 ## Alerts (QuPath SCope Alerts)
 
 Notification settings are in a separate preference category: **QuPath SCope Alerts**.

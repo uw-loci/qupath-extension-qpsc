@@ -72,16 +72,30 @@ Saved points are stored in JSON preferences and persist across sessions.
 
 ### Stage Control - Camera Tab
 
-Shows the current hardware and provides quick access to white balance presets.
+Shows the current hardware and provides modality-dependent camera controls.
 
 | Option | Type | Description |
 |--------|------|-------------|
-| Detector / Objective | Label | Read-only display of the current detector and objective from config |
-| WB Angle Presets | Buttons | One button per calibrated angle (e.g., "Uncrossed (90 deg)"). Clicking applies the per-channel exposures, gains, and rotates the polarizer to that angle. Exposure details shown below each button. |
-| Simple WB Preset | Button | Applies the Simple WB base exposures and gains at the uncrossed angle (shown only if Simple WB has been calibrated) |
+| Detector / Objective | Label | Read-only display of the current detector and objective (auto-detected from MicroManager pixel size) |
+| Modality | Dropdown | Select the imaging modality (PPM, Brightfield, etc.). Content below changes based on selection. |
 | Full Camera Control | Button | Opens the full [Camera Control](camera-control.md) dialog for detailed exposure and gain adjustments |
 
-When a preset is applied, the live feed pauses briefly while the camera settings and rotation stage are updated, then resumes automatically.
+**PPM modality content:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| WB Angle Presets | Buttons | One button per calibrated angle (e.g., "Uncrossed (90 deg)"). Clicking applies the per-channel exposures, gains, and rotates the polarizer. Exposure and gain details shown below each button. |
+| Simple WB Preset | Button | Applies the Simple WB base exposures and gains at the uncrossed angle (blue text, shown only if Simple WB has been calibrated) |
+
+**Brightfield modality content:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| Brightfield WB | Button | Applies the single white balance preset (no rotation). |
+
+**Other modalities:** Show a placeholder message indicating presets are not yet configured.
+
+When a preset is applied, the live feed pauses briefly while the camera settings are updated, then resumes automatically.
 
 ### Noise Stats Panel
 

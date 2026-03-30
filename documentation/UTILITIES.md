@@ -28,7 +28,8 @@ This document provides an overview of all utilities available in the QPSC extens
 | [PPM Polarity Plot](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-polarity-plot.md) | Polar histogram visualization of fiber orientations | Extensions > QP Scope > PPM Polarity Plot |
 | [Surface Perpendicularity](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/surface-perpendicularity.md) | Verify surface is perpendicular to optical axis | Extensions > QP Scope > Surface Perpendicularity |
 | [Batch PPM Analysis](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/batch-ppm-analysis.md) | Batch processing of PPM image sets | Extensions > QP Scope > Batch PPM Analysis |
-| [Propagation Manager](tools/propagation-manager.md) | Transfer objects between base and sub-images (bidirectional) | Extensions > QP Scope > Utilities > Forward/Back Propagation |
+| [Propagation Manager](tools/propagation-manager.md) | Transfer objects between base and sub-images (bidirectional) | Extensions > QP Scope > Utilities > Propagation Manager |
+| [Z-Stack / Time-Lapse](tools/z-stack-timelapse.md) | Single-tile Z-stack or time-lapse acquisition | Extensions > QP Scope > Utilities > Z-Stack / Time-Lapse |
 
 ---
 
@@ -132,6 +133,7 @@ Measure camera noise statistics (mean, standard deviation, SNR) with Quick, Full
 |------|---------|----------|-----------|
 | Batch PPM Analysis | Run polarity and/or perpendicularity analysis across all annotations in a project; exports CSV | Sunburst calibration, project with annotated PPM images | [Guide](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/batch-ppm-analysis.md) |
 | [Propagation Manager](tools/propagation-manager.md) | Bidirectional transfer of annotations/detections between base images and sub-images | Multi-sample project with sub-images, alignment transform | [Guide](tools/propagation-manager.md) |
+| [Z-Stack / Time-Lapse](tools/z-stack-timelapse.md) | Single-tile Z-stack or time-lapse at current position | Microscope connection, positioned at area of interest | [Guide](tools/z-stack-timelapse.md) |
 
 ---
 
