@@ -361,6 +361,11 @@ public class StageMapWindow {
             }
         });
 
+        // Apply initial state (listener doesn't fire for the value set before it was added)
+        if ((flipX || flipY) && canvas != null) {
+            canvas.setFlipsApplied(true);
+        }
+
         topBar.getChildren()
                 .addAll(
                         insertLabel,
