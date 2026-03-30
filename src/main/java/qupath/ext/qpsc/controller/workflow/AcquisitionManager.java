@@ -647,10 +647,21 @@ public class AcquisitionManager {
                                     String.format("%.0f", distFromLast));
                         });
                     } else {
-                        logger.debug(
-                                "Z prediction not ready: {} points, dist={} um",
-                                zFocusModel.getPointCount(),
-                                String.format("%.0f", distFromLast));
+                        // No prediction available (first annotation or too far from known points).
+                        // Use current stage Z as hint so autofocus searches near where the user
+                        // was last focused, rather than from an arbitrary Z position.
+                        try {
+                            double currentZ = MicroscopeController.getInstance()
+                                    .getSocketClient()
+                                    .getStageXYZ()[2];
+                            config.commandBuilder().hintZ(currentZ);
+                            logger.info(
+                                    "Using current Z={} um as hint for {} (no prediction available)",
+                                    String.format("%.2f", currentZ),
+                                    annotation.getName());
+                        } catch (Exception zEx) {
+                            logger.debug("Could not get current Z for hint: {}", zEx.getMessage());
+                        }
                     }
                 }
 
