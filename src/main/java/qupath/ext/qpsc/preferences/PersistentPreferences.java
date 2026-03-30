@@ -1034,4 +1034,44 @@ public class PersistentPreferences {
     public static DoubleProperty siftMinPixelSizeProperty() {
         return siftMinPixelSizeProperty;
     }
+
+    private static final BooleanProperty trustSiftAlignmentProperty =
+            PathPrefs.createPersistentPreference("trustSiftAlignment", false);
+
+    /**
+     * When true, SIFT auto-alignment runs automatically during single-tile
+     * refinement without showing the manual dialog. If SIFT succeeds with
+     * confidence above the threshold, the position is accepted automatically.
+     * Falls back to the manual dialog if SIFT fails or confidence is too low.
+     */
+    public static boolean isTrustSiftAlignment() {
+        return trustSiftAlignmentProperty.get();
+    }
+
+    public static void setTrustSiftAlignment(boolean trust) {
+        trustSiftAlignmentProperty.set(trust);
+    }
+
+    public static BooleanProperty trustSiftAlignmentProperty() {
+        return trustSiftAlignmentProperty;
+    }
+
+    private static final DoubleProperty siftConfidenceThresholdProperty =
+            PathPrefs.createPersistentPreference("siftConfidenceThreshold", 0.5);
+
+    /**
+     * Minimum SIFT inlier ratio (0.0-1.0) required to auto-accept alignment
+     * when Trust SIFT is enabled. Higher = stricter. Default 0.5 (50% inliers).
+     */
+    public static double getSiftConfidenceThreshold() {
+        return siftConfidenceThresholdProperty.get();
+    }
+
+    public static void setSiftConfidenceThreshold(double threshold) {
+        siftConfidenceThresholdProperty.set(threshold);
+    }
+
+    public static DoubleProperty siftConfidenceThresholdProperty() {
+        return siftConfidenceThresholdProperty;
+    }
 }

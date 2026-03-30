@@ -80,17 +80,42 @@ public class SingleTileRefinement {
      * @param initialTransform Initial transform to refine
      * @return CompletableFuture with RefinementResult containing refined transform and selected tile
      */
+    /**
+     * Overload for backward compatibility -- reads trust SIFT preference.
+     */
     public static CompletableFuture<RefinementResult> performRefinement(
             QuPathGUI gui, List<PathObject> annotations, AffineTransform initialTransform) {
+        return performRefinement(
+                gui,
+                annotations,
+                initialTransform,
+                qupath.ext.qpsc.preferences.PersistentPreferences.isTrustSiftAlignment(),
+                qupath.ext.qpsc.preferences.PersistentPreferences.getSiftConfidenceThreshold());
+    }
+
+    /**
+     * Performs single-tile refinement with optional SIFT auto-accept.
+     *
+     * @param trustSift If true, attempt SIFT auto-alignment without manual dialog
+     * @param confidenceThreshold Minimum inlier ratio to auto-accept (0.0-1.0)
+     */
+    public static CompletableFuture<RefinementResult> performRefinement(
+            QuPathGUI gui,
+            List<PathObject> annotations,
+            AffineTransform initialTransform,
+            boolean trustSift,
+            double confidenceThreshold) {
 
         CompletableFuture<RefinementResult> future = new CompletableFuture<>();
 
-        logger.info("Starting single-tile refinement");
+        logger.info("Starting single-tile refinement (trustSift={}, threshold={})", trustSift, confidenceThreshold);
 
         // Select tile for refinement
         UIFunctions.promptTileSelectionDialogAsync("Select a tile for alignment refinement.\n"
                         + "The microscope will move to the estimated position for this tile.\n"
-                        + "You will then manually adjust the stage position to match.")
+                        + (trustSift
+                                ? "SIFT auto-alignment will attempt to match automatically."
+                                : "You will then manually adjust the stage position to match."))
                 .thenAccept(selectedTile -> {
                     if (selectedTile == null) {
                         logger.info("User cancelled tile selection");
@@ -100,7 +125,8 @@ public class SingleTileRefinement {
 
                     Platform.runLater(() -> {
                         try {
-                            performTileRefinement(gui, selectedTile, initialTransform, future);
+                            performTileRefinement(
+                                    gui, selectedTile, initialTransform, future, trustSift, confidenceThreshold);
                         } catch (Exception e) {
                             logger.error("Error during refinement", e);
                             UIFunctions.notifyUserOfError(
@@ -136,7 +162,9 @@ public class SingleTileRefinement {
             QuPathGUI gui,
             PathObject selectedTile,
             AffineTransform initialTransform,
-            CompletableFuture<RefinementResult> future)
+            CompletableFuture<RefinementResult> future,
+            boolean trustSift,
+            double confidenceThreshold)
             throws Exception {
 
         // Get tile coordinates (centroid)
@@ -220,6 +248,61 @@ public class SingleTileRefinement {
 
         // Wait for stage to settle
         Thread.sleep(500);
+
+        // If trust SIFT is enabled, try auto-alignment first
+        if (trustSift) {
+            logger.info("Trust SIFT enabled -- attempting automatic alignment");
+            new Thread(
+                            () -> {
+                                try {
+                                    double[] result = performSiftAutoAlign(gui, selectedTile);
+                                    if (result != null && result.length >= 4) {
+                                        double confidence = result[3]; // 4th element = confidence
+                                        logger.info(
+                                                "SIFT auto-align: offset=({}, {}), confidence={}",
+                                                result[0],
+                                                result[1],
+                                                confidence);
+                                        if (confidence >= confidenceThreshold) {
+                                            // Auto-accept: compute refined transform and complete
+                                            double[] refinedPos = MicroscopeController.getInstance()
+                                                    .getStagePositionXY();
+                                            AffineTransform refined =
+                                                    TransformationFunctions.addTranslationToScaledAffine(
+                                                            initialTransform, tileCoords, refinedPos);
+                                            logger.info(
+                                                    "SIFT auto-accepted: confidence {} >= threshold {}",
+                                                    confidence,
+                                                    confidenceThreshold);
+                                            Platform.runLater(() -> {
+                                                Dialogs.showInfoNotification(
+                                                        "SIFT Auto-Align",
+                                                        String.format(
+                                                                "Alignment refined automatically (confidence %.0f%%)",
+                                                                confidence * 100));
+                                                future.complete(new RefinementResult(refined, selectedTile));
+                                            });
+                                            return;
+                                        } else {
+                                            logger.info(
+                                                    "SIFT confidence {} below threshold {} -- falling back to manual",
+                                                    confidence,
+                                                    confidenceThreshold);
+                                        }
+                                    } else {
+                                        logger.info("SIFT matching failed -- falling back to manual dialog");
+                                    }
+                                } catch (Exception e) {
+                                    logger.warn("SIFT auto-align error: {} -- falling back to manual", e.getMessage());
+                                }
+                                // Fallback: show manual dialog
+                                Platform.runLater(() ->
+                                        showRefinementDialog(gui, tileCoords, initialTransform, selectedTile, future));
+                            },
+                            "SIFT-AutoRefine")
+                    .start();
+            return;
+        }
 
         // Show refinement dialog (non-modal so user can interact with QuPath)
         showRefinementDialog(gui, tileCoords, initialTransform, selectedTile, future);
@@ -371,10 +454,13 @@ public class SingleTileRefinement {
                                     double[] offset = performSiftAutoAlign(gui, selectedTile);
                                     Platform.runLater(() -> {
                                         autoAlignButton.setDisable(false);
-                                        if (offset != null) {
+                                        if (offset != null && offset.length >= 2) {
+                                            String confStr = offset.length >= 4
+                                                    ? String.format(" (%.0f%% confidence)", offset[3] * 100)
+                                                    : "";
                                             autoAlignStatus.setText(String.format(
-                                                    "Aligned! Offset: (%.1f, %.1f) um. Verify and Save.",
-                                                    offset[0], offset[1]));
+                                                    "Aligned! Offset: (%.1f, %.1f) um%s. Verify and Save.",
+                                                    offset[0], offset[1], confStr));
                                             autoAlignStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
                                         } else {
                                             autoAlignStatus.setText("SIFT matching failed. Align manually.");
@@ -511,7 +597,15 @@ public class SingleTileRefinement {
             double offsetX = Double.parseDouble(offsets[0]);
             double offsetY = Double.parseDouble(offsets[1]);
 
-            logger.info("SIFT offset: ({}, {}) um", offsetX, offsetY);
+            // Parse inliers and confidence
+            int inliers = 0;
+            double confidence = 0;
+            for (String part : parts) {
+                if (part.startsWith("inliers:")) inliers = Integer.parseInt(part.substring(8));
+                if (part.startsWith("confidence:")) confidence = Double.parseDouble(part.substring(11));
+            }
+
+            logger.info("SIFT offset: ({}, {}) um, inliers={}, confidence={}", offsetX, offsetY, inliers, confidence);
 
             // Move stage by the offset to correct alignment
             double[] currentPos = mc.getStagePositionXY();
@@ -520,7 +614,8 @@ public class SingleTileRefinement {
             logger.info("Moving stage from ({}, {}) to ({}, {})", currentPos[0], currentPos[1], newX, newY);
             mc.moveStageXY(newX, newY);
 
-            return new double[] {offsetX, offsetY};
+            // Return offset + inliers + confidence
+            return new double[] {offsetX, offsetY, inliers, confidence};
 
         } finally {
             mc.restoreLiveViewState(liveState);
