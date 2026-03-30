@@ -528,7 +528,10 @@ public class WBComparisonWorkflow {
                         configPath,
                         objective,
                         detector,
-                        modality);
+                        modality,
+                        0,
+                        0,
+                        0); // per-angle targets: 0 = use YAML/defaults
                 logger.info("[simple] Simple white balance calibration complete");
             }
             case "per_angle" -> {

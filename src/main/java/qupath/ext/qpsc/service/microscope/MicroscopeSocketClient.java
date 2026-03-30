@@ -3518,7 +3518,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String yamlPath,
             String objective,
             String detector,
-            String modality)
+            String modality,
+            double positiveTarget,
+            double negativeTarget,
+            double crossedTarget)
             throws IOException {
 
         // Build WBSIMPLE command message
@@ -3546,6 +3549,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         message.append(" --base_gain ").append(baseGain);
         message.append(" --exposure_soft_cap_ms ").append(exposureSoftCapMs);
         message.append(" --boosted_max_gain_db ").append(boostedMaxGainDb);
+        // Per-angle targets for remaining angles (Simple WB now calibrates all angles)
+        if (positiveTarget > 0) message.append(" --target_positive ").append(positiveTarget);
+        if (negativeTarget > 0) message.append(" --target_negative ").append(negativeTarget);
+        if (crossedTarget > 0) message.append(" --target_crossed ").append(crossedTarget);
         message.append(" ").append(END_MARKER);
 
         byte[] messageBytes = message.toString().getBytes(StandardCharsets.UTF_8);

@@ -233,6 +233,22 @@ public class WhiteBalanceWorkflow {
                                 params.detector(),
                                 modality);
 
+                        // Read per-angle targets from preferences (set by Simple WB dialog spinners)
+                        double posTarget = qupath.lib.gui.prefs.PathPrefs.createPersistentPreference(
+                                        "wb.ppm.positive.target", 160.0)
+                                .get();
+                        double negTarget = qupath.lib.gui.prefs.PathPrefs.createPersistentPreference(
+                                        "wb.ppm.negative.target", 160.0)
+                                .get();
+                        double crossTarget = qupath.lib.gui.prefs.PathPrefs.createPersistentPreference(
+                                        "wb.ppm.crossed.target", 125.0)
+                                .get();
+                        logger.info(
+                                "Per-angle targets: positive={}, negative={}, crossed={}",
+                                posTarget,
+                                negTarget,
+                                crossTarget);
+
                         MicroscopeSocketClient.WhiteBalanceResult result = client.runSimpleWhiteBalance(
                                 params.outputPath(),
                                 params.baseExposureMs(),
@@ -248,7 +264,10 @@ public class WhiteBalanceWorkflow {
                                 yamlPath,
                                 params.objective(),
                                 params.detector(),
-                                modality);
+                                modality,
+                                posTarget,
+                                negTarget,
+                                crossTarget);
 
                         Platform.runLater(() -> {
                             progressStage.close();
