@@ -205,22 +205,25 @@ public class SingleTileRefinement {
                 flipY);
 
         // OPTICAL FLIP correction (not stage inversion -- see CLAUDE.md terminology).
-        // When the image was optically flipped during import, the affine transform was
-        // calibrated at a point that differs from tile centroids by one frame offset:
-        //   - The calibration point (user-aligned) sits at the stage center of the tile,
-        //     but the tile centroid in flipped pixel space is shifted by one frame width/height.
-        //   - This correction compensates for that offset so the transform predicts the
-        //     correct stage position for each tile centroid.
+        // This correction is ONLY needed when viewing the ORIGINAL (unflipped) image
+        // with a transform calibrated on the flipped view. When viewing the flipped
+        // image directly, tile coordinates are already in the correct space.
         double[] correctedCoords = {tileCoords[0], tileCoords[1]};
-        if (flipX) {
-            // In flipped X: prediction is 1 frame to the right, so subtract frame width
-            correctedCoords[0] -= frameWidth;
-            logger.debug("Applied flipX correction: X {} -> {}", tileCoords[0], correctedCoords[0]);
-        }
-        if (flipY) {
-            // In flipped Y: prediction is 1 frame higher (smaller Y), so add frame height
-            correctedCoords[1] += frameHeight;
-            logger.debug("Applied flipY correction: Y {} -> {}", tileCoords[1], correctedCoords[1]);
+        boolean currentImageIsFlipped = flipX || flipY;
+        if (!currentImageIsFlipped) {
+            // Viewing unflipped original -- need flip correction for the transform
+            boolean prefFlipX = QPPreferenceDialog.getFlipMacroXProperty();
+            boolean prefFlipY = QPPreferenceDialog.getFlipMacroYProperty();
+            if (prefFlipX) {
+                correctedCoords[0] -= frameWidth;
+                logger.debug("Applied flipX correction: X {} -> {}", tileCoords[0], correctedCoords[0]);
+            }
+            if (prefFlipY) {
+                correctedCoords[1] += frameHeight;
+                logger.debug("Applied flipY correction: Y {} -> {}", tileCoords[1], correctedCoords[1]);
+            }
+        } else {
+            logger.debug("Current image is already flipped -- no flip correction needed");
         }
 
         // Transform corrected coordinates to stage position
