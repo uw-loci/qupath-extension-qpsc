@@ -364,7 +364,7 @@ public class SingleTileRefinement {
         content.setPrefWidth(500);
 
         // Instructions
-        Label headerLabel = new Label("Alignment Refinement");
+        Label headerLabel = new Label("Refine Alignment");
         headerLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
 
         Label instructionLabel =
@@ -393,6 +393,8 @@ public class SingleTileRefinement {
         // Action buttons
         Button saveButton = new Button("Save Refined Position");
         saveButton.setDefaultButton(true);
+        saveButton.setStyle(
+                "-fx-font-weight: bold; -fx-font-size: 13px; " + "-fx-base: #4CAF50; -fx-text-fill: white;");
         saveButton.setOnAction(e -> {
             try {
                 // Get refined position
@@ -406,7 +408,7 @@ public class SingleTileRefinement {
                 logger.info("Calculated refined transform");
 
                 Dialogs.showInfoNotification(
-                        "Alignment Refined", "The alignment has been refined and saved for this slide.");
+                        "Refine Alignment", "The alignment has been refined and saved for this slide.");
 
                 dialogStage.close();
                 future.complete(new RefinementResult(refinedTransform, selectedTile));
@@ -438,6 +440,12 @@ public class SingleTileRefinement {
                 new javafx.scene.control.Tooltip("Automatically align by matching the microscope view to the WSI tile\n"
                         + "using SIFT feature detection. Searches within ~160um of the\n"
                         + "predicted position. Requires tissue with visible features."));
+
+        Label siftDescription = new Label("SIFT searches a ~160um region around the predicted tile position. "
+                + "It requires visible tissue features in the microscope field of view "
+                + "to match against the WSI. It will not work on blank glass or featureless areas.");
+        siftDescription.setWrapText(true);
+        siftDescription.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
 
         Label autoAlignStatus = new Label();
         autoAlignStatus.setWrapText(true);
@@ -493,6 +501,7 @@ public class SingleTileRefinement {
                         instructionLabel,
                         tileInfoLabel,
                         autoAlignButton,
+                        siftDescription,
                         autoAlignStatus,
                         restoreBox,
                         buttonBox);
