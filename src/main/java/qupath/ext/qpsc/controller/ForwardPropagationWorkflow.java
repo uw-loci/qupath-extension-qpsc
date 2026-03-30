@@ -488,10 +488,10 @@ public class ForwardPropagationWorkflow {
         dialog.setMinWidth(400);
         dialog.setMinHeight(400);
 
-        // Initial class load
-        refreshClasses.run();
-
         dialog.show();
+
+        // Defer initial class refresh until after dialog is shown and layout is complete
+        javafx.application.Platform.runLater(refreshClasses::run);
     }
 
     // ------------------------------------------------------------------
