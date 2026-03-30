@@ -371,13 +371,27 @@ public class ExistingImageWorkflowV2 {
             state.perAngleWhiteBalance = config.perAngleWhiteBalance();
             state.wbMode = config.wbMode();
 
+            // Re-fetch annotations for the selected classes from the current image.
+            // The annotation dialog loaded them earlier but they weren't passed through
+            // the config record -- re-read them from the hierarchy using the stored classes.
+            if (state.selectedAnnotationClasses != null
+                    && !state.selectedAnnotationClasses.isEmpty()
+                    && (state.annotations == null || state.annotations.isEmpty())) {
+                state.annotations = AnnotationHelper.getCurrentValidAnnotations(gui, state.selectedAnnotationClasses);
+                logger.info(
+                        "Loaded {} annotations for selected classes: {}",
+                        state.annotations.size(),
+                        state.selectedAnnotationClasses);
+            }
+
             logger.info(
-                    "Config initialized: sample={}, modality={}, useExisting={}, refinement={}, wbMode={}",
+                    "Config initialized: sample={}, modality={}, useExisting={}, refinement={}, wbMode={}, annotations={}",
                     config.sampleName(),
                     config.modality(),
                     config.useExistingAlignment(),
                     config.refinementChoice(),
-                    config.wbMode());
+                    config.wbMode(),
+                    state.annotations != null ? state.annotations.size() : 0);
 
             return CompletableFuture.completedFuture(state);
         }
