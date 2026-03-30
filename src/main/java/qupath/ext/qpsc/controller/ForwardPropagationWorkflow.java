@@ -676,8 +676,11 @@ public class ForwardPropagationWorkflow {
     // Helpers
     // ------------------------------------------------------------------
 
-    /** Transform objects and clip to image bounds. */
-    private static List<PathObject> transformAndClip(
+    /**
+     * Transform objects using an affine transform and clip to image bounds.
+     * Public for use by modality extensions (e.g., PPM).
+     */
+    public static List<PathObject> transformAndClip(
             List<PathObject> objects, AffineTransform transform, int imgWidth, int imgHeight) {
         List<PathObject> result = new ArrayList<>();
         for (PathObject obj : objects) {
@@ -702,8 +705,37 @@ public class ForwardPropagationWorkflow {
         return result;
     }
 
-    /** Create a flip transform for the given image dimensions. */
-    private static AffineTransform createFlip(boolean flipX, boolean flipY, int width, int height) {
+    /**
+     * Build a sub-image-pixel-to-stage-microns transform, including the half-FOV
+     * correction for the tile grid offset. Public for use by modality extensions.
+     *
+     * @param subPixelSize sub-image pixel size in um/pixel
+     * @param xyOffset XY offset from metadata [x, y] in stage microns
+     * @return AffineTransform mapping sub-image pixels to stage microns
+     */
+    public static AffineTransform buildSubToStageTransform(double subPixelSize, double[] xyOffset) {
+        double halfFovX = 0;
+        double halfFovY = 0;
+        try {
+            MicroscopeController mc = MicroscopeController.getInstance();
+            if (mc != null && mc.isConnected()) {
+                double[] fov = mc.getCameraFOV();
+                halfFovX = fov[0] / 2.0;
+                halfFovY = fov[1] / 2.0;
+            }
+        } catch (Exception e) {
+            logger.debug("Could not get FOV for offset correction: {}", e.getMessage());
+        }
+        double correctedX = xyOffset[0] - halfFovX;
+        double correctedY = xyOffset[1] - halfFovY;
+        return new AffineTransform(subPixelSize, 0, 0, subPixelSize, correctedX, correctedY);
+    }
+
+    /**
+     * Create a flip transform for the given image dimensions.
+     * Public for use by modality extensions (e.g., PPM).
+     */
+    public static AffineTransform createFlip(boolean flipX, boolean flipY, int width, int height) {
         AffineTransform flip = new AffineTransform();
         if (flipX && flipY) {
             flip.translate(width, height);
