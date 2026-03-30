@@ -286,15 +286,6 @@ public class ForwardPropagationWorkflow {
 
             for (var gEntry : groups.entrySet()) {
                 String baseName = gEntry.getKey();
-                CheckBoxTreeItem<String> baseCheck = baseItems.get(baseName);
-                if (baseCheck == null || !baseCheck.isSelected()) {
-                    logger.info(
-                            "  Skipping group '{}': baseCheck={}, selected={}",
-                            baseName,
-                            baseCheck != null,
-                            baseCheck != null && baseCheck.isSelected());
-                    continue;
-                }
 
                 ProjectImageEntry<BufferedImage> base = baseEntries.get(baseName);
                 if (base == null) {
@@ -302,19 +293,22 @@ public class ForwardPropagationWorkflow {
                     results.append(baseName).append(": base not found\n");
                     continue;
                 }
-                logger.info(
-                        "  Processing group '{}': base='{}', {} sub-images",
-                        baseName,
-                        base.getImageName(),
-                        gEntry.getValue().size());
 
-                // Get selected sub-images for this group
+                // Get selected sub-images: check each child's checkbox individually
+                // (don't rely on parent CheckBoxTreeItem.isSelected which has JavaFX timing issues)
                 List<ProjectImageEntry<BufferedImage>> selectedSubs = gEntry.getValue().stream()
                         .filter(sub -> {
                             CheckBoxTreeItem<String> item = subItems.get(sub);
                             return item != null && item.isSelected();
                         })
                         .collect(Collectors.toList());
+
+                logger.info(
+                        "  Group '{}': base='{}', {}/{} sub-images selected",
+                        baseName,
+                        base.getImageName(),
+                        selectedSubs.size(),
+                        gEntry.getValue().size());
 
                 if (selectedSubs.isEmpty()) continue;
 
