@@ -125,6 +125,18 @@ public class ImageFlipHelper {
             boolean flipXMatches = !requiresFlipX || ImageMetadataManager.isFlippedX(currentEntry);
             boolean flipYMatches = !requiresFlipY || ImageMetadataManager.isFlippedY(currentEntry);
 
+            logger.info(
+                    "Flip check: entry='{}', isFlipped={}, requiresFlipX={}, requiresFlipY={}, "
+                            + "flipXMatches={}, flipYMatches={}, entryFlipX={}, entryFlipY={}",
+                    currentEntry.getImageName(),
+                    isFlipped,
+                    requiresFlipX,
+                    requiresFlipY,
+                    flipXMatches,
+                    flipYMatches,
+                    ImageMetadataManager.isFlippedX(currentEntry),
+                    ImageMetadataManager.isFlippedY(currentEntry));
+
             if (isFlipped && flipXMatches && flipYMatches) {
                 logger.info(
                         "Current image flip status matches requirements (flipX={}, flipY={})",
@@ -143,7 +155,14 @@ public class ImageFlipHelper {
             }
 
             // Image needs to be flipped - create duplicate
-            logger.info("Creating flipped duplicate of image for acquisition");
+            logger.info(
+                    "CREATING FLIPPED DUPLICATE: entry='{}' does not match flip requirements "
+                            + "(isFlipped={}, flipXMatches={}, flipYMatches={}). "
+                            + "This should NOT happen if starting from an already-flipped image.",
+                    currentEntry.getImageName(),
+                    isFlipped,
+                    flipXMatches,
+                    flipYMatches);
 
             // Show notification
             Platform.runLater(() ->
