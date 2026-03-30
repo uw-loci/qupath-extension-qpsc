@@ -204,14 +204,32 @@ public class SingleTileRefinement {
                 flipX,
                 flipY);
 
-        // OPTICAL FLIP correction (not stage inversion -- see CLAUDE.md terminology).
-        // This correction is ONLY needed when viewing the ORIGINAL (unflipped) image
-        // with a transform calibrated on the flipped view. When viewing the flipped
-        // image directly, tile coordinates are already in the correct space.
+        // FLIP CORRECTION for alignment prediction.
+        //
+        // The alignment transform maps [flipped WSI pixels] -> [stage microns].
+        // It was calibrated while viewing the flipped WSI.
+        //
+        // When to apply correction:
+        //   - Viewing the ORIGINAL unflipped WSI: tile centroids are in unflipped space,
+        //     but the transform expects flipped space. Shift by one frame to compensate.
+        //   - Viewing the flipped WSI: coordinates are already in the correct space.
+        //   - Viewing a sub-image (20x, 40x, etc.): coordinates map to stage via
+        //     xy_offset + pixel_size, NOT via the WSI alignment. No correction needed.
+        //     (Sub-images inherit flip_x/flip_y from parent but are not themselves flipped.)
+        //
+        // Decision: apply correction ONLY when the current image is the unflipped
+        // original WSI (no flip metadata, and it's a base-level image, not a sub-image).
         double[] correctedCoords = {tileCoords[0], tileCoords[1]};
         boolean currentImageIsFlipped = flipX || flipY;
-        if (!currentImageIsFlipped) {
-            // Viewing unflipped original -- need flip correction for the transform
+        String baseImageName = currentEntry != null ? ImageMetadataManager.getBaseImage(currentEntry) : null;
+        String currentName =
+                currentEntry != null ? qupath.lib.common.GeneralTools.stripExtension(currentEntry.getImageName()) : "";
+        boolean isBaseImage = baseImageName == null
+                || baseImageName.equals(currentName)
+                || (currentEntry != null && currentEntry.getImageName().startsWith(baseImageName + "."));
+
+        if (!currentImageIsFlipped && isBaseImage) {
+            // Viewing unflipped original WSI -- need flip correction for the transform
             boolean prefFlipX = QPPreferenceDialog.getFlipMacroXProperty();
             boolean prefFlipY = QPPreferenceDialog.getFlipMacroYProperty();
             if (prefFlipX) {
@@ -222,8 +240,13 @@ public class SingleTileRefinement {
                 correctedCoords[1] += frameHeight;
                 logger.debug("Applied flipY correction: Y {} -> {}", tileCoords[1], correctedCoords[1]);
             }
+            logger.info("Applied flip correction (unflipped base WSI)");
         } else {
-            logger.debug("Current image is already flipped -- no flip correction needed");
+            logger.info(
+                    "No flip correction: currentFlipped={}, isBase={}, image='{}'",
+                    currentImageIsFlipped,
+                    isBaseImage,
+                    currentName);
         }
 
         // Transform corrected coordinates to stage position
