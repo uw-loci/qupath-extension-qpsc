@@ -398,8 +398,10 @@ public class AcquisitionManager {
         // Wait for dialog setup to complete and get final reference
         final DualProgressDialog progressDialog = getDialogSafely(dialogSetup);
 
-        // If dialog creation failed, return early
+        // If dialog creation failed, restore live state and return early
         if (progressDialog == null) {
+            MicroscopeController.getInstance().restoreLiveViewState(liveState);
+            MicroscopeController.getInstance().setAcquisitionActive(false);
             return CompletableFuture.completedFuture(false);
         }
 
