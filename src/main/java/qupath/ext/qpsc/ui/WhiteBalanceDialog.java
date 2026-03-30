@@ -766,51 +766,32 @@ public class WhiteBalanceDialog {
 
         targetBox.getChildren().addAll(targetLabel, targetSpinner, targetNote);
 
-        // Per-angle targets for the remaining angles (calibrated after 90 deg)
-        Label angleTargetsLabel = new Label("Small-Angle Target Intensities:");
-        angleTargetsLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
-        Label angleTargetsNote = new Label("These targets are used when calibrating the remaining angles.\n"
-                + "Lower values reduce saturation risk on tissue.");
-        angleTargetsNote.setWrapText(true);
-        angleTargetsNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        // Single target for all small angles (positive, negative, crossed)
+        HBox smallAngleBox = new HBox(10);
+        smallAngleBox.setAlignment(Pos.CENTER_LEFT);
 
-        javafx.scene.layout.GridPane angleGrid = new javafx.scene.layout.GridPane();
-        angleGrid.setHgap(8);
-        angleGrid.setVgap(4);
+        Label smallAngleLabel = new Label("Small-Angle Target:");
+        smallAngleLabel.setPrefWidth(140);
 
-        Spinner<Double> posTargetSpinner = new Spinner<>(50.0, 255.0, ppmPositiveTargetProperty.get(), 5.0);
-        posTargetSpinner.setEditable(true);
-        posTargetSpinner.setPrefWidth(80);
-        posTargetSpinner.valueProperty().addListener((obs, o, n) -> ppmPositiveTargetProperty.set(n));
+        Spinner<Double> smallAngleSpinner = new Spinner<>(50.0, 255.0, ppmPositiveTargetProperty.get(), 5.0);
+        smallAngleSpinner.setEditable(true);
+        smallAngleSpinner.setPrefWidth(100);
+        smallAngleSpinner.setTooltip(new Tooltip("Target intensity for positive, negative, and crossed angles.\n"
+                + "Lower values reduce saturation risk on bright tissue.\n"
+                + "Typical range: 120-180. Default 160."));
+        // Sync all three angle targets to this single spinner
+        smallAngleSpinner.valueProperty().addListener((obs, o, n) -> {
+            ppmPositiveTargetProperty.set(n);
+            ppmNegativeTargetProperty.set(n);
+            ppmCrossedTargetProperty.set(n);
+        });
 
-        Spinner<Double> negTargetSpinner = new Spinner<>(50.0, 255.0, ppmNegativeTargetProperty.get(), 5.0);
-        negTargetSpinner.setEditable(true);
-        negTargetSpinner.setPrefWidth(80);
-        negTargetSpinner.valueProperty().addListener((obs, o, n) -> ppmNegativeTargetProperty.set(n));
+        Label smallAngleNote = new Label("(applies to +7, -7, and 0 deg)");
+        smallAngleNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
 
-        Spinner<Double> crossedTargetSpinner = new Spinner<>(50.0, 255.0, ppmCrossedTargetProperty.get(), 5.0);
-        crossedTargetSpinner.setEditable(true);
-        crossedTargetSpinner.setPrefWidth(80);
-        crossedTargetSpinner.valueProperty().addListener((obs, o, n) -> ppmCrossedTargetProperty.set(n));
+        smallAngleBox.getChildren().addAll(smallAngleLabel, smallAngleSpinner, smallAngleNote);
 
-        angleGrid.add(new Label("Positive:"), 0, 0);
-        angleGrid.add(posTargetSpinner, 1, 0);
-        angleGrid.add(new Label("Negative:"), 0, 1);
-        angleGrid.add(negTargetSpinner, 1, 1);
-        angleGrid.add(new Label("Crossed:"), 0, 2);
-        angleGrid.add(crossedTargetSpinner, 1, 2);
-
-        vbox.getChildren()
-                .addAll(
-                        modeLabel,
-                        descLabel,
-                        docLink,
-                        expBox,
-                        targetBox,
-                        new javafx.scene.control.Separator(),
-                        angleTargetsLabel,
-                        angleTargetsNote,
-                        angleGrid);
+        vbox.getChildren().addAll(modeLabel, descLabel, docLink, expBox, targetBox, smallAngleBox);
 
         TitledPane pane = new TitledPane("Simple White Balance", vbox);
         pane.setCollapsible(true);

@@ -361,9 +361,15 @@ public class StageMapWindow {
             }
         });
 
-        // Apply initial state (listener doesn't fire for the value set before it was added)
-        if ((flipX || flipY) && canvas != null) {
-            canvas.setFlipsApplied(true);
+        // Apply initial flip state AFTER the scene is shown and laid out.
+        // Calling setScaleX/Y during construction doesn't take effect because the
+        // StackPane hasn't been added to the scene graph yet.
+        final boolean initialFlip = flipX || flipY;
+        if (initialFlip && canvas != null) {
+            javafx.application.Platform.runLater(() -> {
+                canvas.setFlipsApplied(true);
+                logger.info("Applied initial flip state on Stage Map open");
+            });
         }
 
         topBar.getChildren()
