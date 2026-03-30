@@ -679,24 +679,83 @@ public class ForwardPropagationWorkflow {
     /**
      * Transform objects using an affine transform and clip to image bounds.
      * Public for use by modality extensions (e.g., PPM).
+     *
+     * <p>Inclusion rules:
+     * <ul>
+     *   <li>If all 4 bounding box corners are within the image: include as-is</li>
+     *   <li>If the annotation is larger than the target image (e.g., whole-tissue annotation):
+     *       clip the ROI geometry to the image bounds and include the clipped version</li>
+     *   <li>If no overlap with the image: exclude</li>
+     * </ul>
+     *
+     * <p>Note: Clipping currently uses rectangular image bounds. Future enhancement:
+     * clip to the actual tile coverage polygon from TileConfiguration.txt.
      */
     public static List<PathObject> transformAndClip(
             List<PathObject> objects, AffineTransform transform, int imgWidth, int imgHeight) {
         List<PathObject> result = new ArrayList<>();
+
+        // Image bounds as a JTS geometry for intersection
+        org.locationtech.jts.geom.GeometryFactory gf = new org.locationtech.jts.geom.GeometryFactory();
+        org.locationtech.jts.geom.Geometry imageBounds = gf.createPolygon(new org.locationtech.jts.geom.Coordinate[] {
+            new org.locationtech.jts.geom.Coordinate(0, 0),
+            new org.locationtech.jts.geom.Coordinate(imgWidth, 0),
+            new org.locationtech.jts.geom.Coordinate(imgWidth, imgHeight),
+            new org.locationtech.jts.geom.Coordinate(0, imgHeight),
+            new org.locationtech.jts.geom.Coordinate(0, 0)
+        });
+
         for (PathObject obj : objects) {
             try {
                 PathObject transformed = PathObjectTools.transformObject(obj, transform, true, true);
                 if (transformed == null || transformed.getROI() == null) continue;
 
                 ROI roi = transformed.getROI();
-                double cx = roi.getCentroidX();
-                double cy = roi.getCentroidY();
-                // Keep if centroid is within bounds (with margin for partial overlap)
-                if (cx >= -roi.getBoundsWidth()
-                        && cx <= imgWidth + roi.getBoundsWidth()
-                        && cy >= -roi.getBoundsHeight()
-                        && cy <= imgHeight + roi.getBoundsHeight()) {
+                double bx = roi.getBoundsX();
+                double by = roi.getBoundsY();
+                double bw = roi.getBoundsWidth();
+                double bh = roi.getBoundsHeight();
+
+                // Check if fully contained: all 4 corners within image
+                boolean fullyContained = bx >= 0 && by >= 0
+                        && (bx + bw) <= imgWidth && (by + bh) <= imgHeight;
+
+                if (fullyContained) {
                     result.add(transformed);
+                    continue;
+                }
+
+                // Check if there's any overlap with the image bounds
+                try {
+                    org.locationtech.jts.geom.Geometry roiGeom = roi.getGeometry();
+                    if (roiGeom == null || !roiGeom.intersects(imageBounds)) continue;
+
+                    // Clip the ROI to the image bounds
+                    org.locationtech.jts.geom.Geometry clipped = roiGeom.intersection(imageBounds);
+                    if (clipped.isEmpty()) continue;
+
+                    ROI clippedRoi = qupath.lib.roi.GeometryTools.geometryToROI(clipped, roi.getImagePlane());
+                    if (clippedRoi == null || clippedRoi.isEmpty()) continue;
+
+                    // Create a new object with the clipped ROI
+                    PathObject clippedObj;
+                    if (transformed.isAnnotation()) {
+                        clippedObj = qupath.lib.objects.PathObjects.createAnnotationObject(
+                                clippedRoi, transformed.getPathClass());
+                    } else if (transformed.isDetection()) {
+                        clippedObj = qupath.lib.objects.PathObjects.createDetectionObject(
+                                clippedRoi, transformed.getPathClass());
+                    } else {
+                        continue;
+                    }
+                    // Copy name and measurements
+                    if (transformed.getName() != null) clippedObj.setName(transformed.getName());
+                    if (transformed.isLocked()) clippedObj.setLocked(true);
+
+                    result.add(clippedObj);
+                    logger.debug("Clipped oversized annotation '{}' to image bounds", obj.getDisplayedName());
+                } catch (Exception e) {
+                    logger.debug("Could not clip annotation '{}': {}", obj.getDisplayedName(), e.getMessage());
                 }
             } catch (Exception e) {
                 logger.debug("Could not transform object: {}", e.getMessage());
