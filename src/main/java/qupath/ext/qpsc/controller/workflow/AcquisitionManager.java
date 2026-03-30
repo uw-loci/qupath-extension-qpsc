@@ -440,7 +440,7 @@ public class AcquisitionManager {
 
             acquisitionChain = acquisitionChain.thenCompose(previousSuccess -> {
                 if (!previousSuccess) {
-                    logger.info("Stopping acquisition due to previous failure");
+                    logger.debug("Skipping annotation {} -- previous acquisition failed", annotation.getName());
                     return CompletableFuture.completedFuture(false);
                 }
 

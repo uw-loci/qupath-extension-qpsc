@@ -807,6 +807,9 @@ public class DualProgressDialog {
      */
     public void showError(String message) {
         Platform.runLater(() -> {
+            // Stop the update timer so time estimates don't keep ticking
+            timeline.stop();
+
             statusLabel.setText("Error: " + message);
             statusLabel.setTextFill(Color.RED);
 
