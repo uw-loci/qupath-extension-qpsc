@@ -121,21 +121,43 @@ public class ImageFlipHelper {
                 return true;
             }
 
-            boolean isFlipped = ImageMetadataManager.isFlipped(currentEntry);
-            boolean flipXMatches = !requiresFlipX || ImageMetadataManager.isFlippedX(currentEntry);
-            boolean flipYMatches = !requiresFlipY || ImageMetadataManager.isFlippedY(currentEntry);
+            boolean metaFlipX = ImageMetadataManager.isFlippedX(currentEntry);
+            boolean metaFlipY = ImageMetadataManager.isFlippedY(currentEntry);
+            boolean metaFlipped = metaFlipX || metaFlipY;
+
+            // Fallback: check image name for "(flipped ...)" if metadata is missing.
+            // Handles images created by older QPSC versions or imported without metadata.
+            String entryName = currentEntry.getImageName();
+            if (!metaFlipped && entryName != null && entryName.contains("(flipped")) {
+                logger.info(
+                        "Image name '{}' indicates flipped but metadata missing -- using name-based detection",
+                        entryName);
+                boolean nameFlipX = entryName.contains("flipped X") || entryName.contains("flipped XY");
+                boolean nameFlipY = entryName.contains("flipped Y") || entryName.contains("flipped XY");
+                metaFlipX = nameFlipX;
+                metaFlipY = nameFlipY;
+                metaFlipped = nameFlipX || nameFlipY;
+                // Repair metadata so this fallback isn't needed next time
+                currentEntry.putMetadataValue(ImageMetadataManager.FLIP_X, nameFlipX ? "1" : "0");
+                currentEntry.putMetadataValue(ImageMetadataManager.FLIP_Y, nameFlipY ? "1" : "0");
+                logger.info("Repaired flip metadata: flip_x={}, flip_y={}", nameFlipX, nameFlipY);
+            }
+
+            boolean isFlipped = metaFlipped;
+            boolean flipXMatches = !requiresFlipX || metaFlipX;
+            boolean flipYMatches = !requiresFlipY || metaFlipY;
 
             logger.info(
                     "Flip check: entry='{}', isFlipped={}, requiresFlipX={}, requiresFlipY={}, "
-                            + "flipXMatches={}, flipYMatches={}, entryFlipX={}, entryFlipY={}",
-                    currentEntry.getImageName(),
+                            + "flipXMatches={}, flipYMatches={}, flipX={}, flipY={}",
+                    entryName,
                     isFlipped,
                     requiresFlipX,
                     requiresFlipY,
                     flipXMatches,
                     flipYMatches,
-                    ImageMetadataManager.isFlippedX(currentEntry),
-                    ImageMetadataManager.isFlippedY(currentEntry));
+                    metaFlipX,
+                    metaFlipY);
 
             if (isFlipped && flipXMatches && flipYMatches) {
                 logger.info(
