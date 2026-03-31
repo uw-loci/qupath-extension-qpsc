@@ -124,6 +124,12 @@ public class BackgroundCollectionWorkflow {
                 angleExposures.size(),
                 wbMode);
 
+        // Stop live viewer before background acquisition -- the server will snap images
+        // which stops continuous acquisition at the hardware level. Without this, the
+        // Live:ON button stays lit while the camera is actually stopped, causing desync.
+        MicroscopeController.LiveViewState liveViewState =
+                MicroscopeController.getInstance().stopAllLiveViewing();
+
         try {
             // Get socket client from MicroscopeController
             MicroscopeSocketClient socketClient =
@@ -204,6 +210,14 @@ public class BackgroundCollectionWorkflow {
                 Dialogs.showErrorMessage(
                         "Background Acquisition Failed", "Failed to acquire background images: " + e.getMessage());
             });
+        } finally {
+            // Restore live viewer state after background acquisition completes
+            try {
+                Thread.sleep(300); // Let camera settle
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+            MicroscopeController.getInstance().restoreLiveViewState(liveViewState);
         }
     }
     /**
