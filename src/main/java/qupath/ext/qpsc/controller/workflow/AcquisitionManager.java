@@ -453,6 +453,10 @@ public class AcquisitionManager {
 
                 showProgressNotification(index, total, annotation.getName());
 
+                // Reset Z-focus model for each annotation -- the tilt model from a
+                // previous annotation's region should not extrapolate to a different XY region
+                zFocusModel.reset();
+
                 return performSingleAnnotationAcquisition(annotation, angleExposures, progressDialog)
                         .thenApply(success -> {
                             if (success) {
