@@ -116,13 +116,18 @@ public class CalibrationChecker {
                 msg = "Simple WB calibrated";
             }
 
-            // Check if backgrounds are stale relative to WB
+            // Check if ALL background modes are stale (not just any)
+            // If at least one mode is valid, the user can still acquire with that mode
             String bgFolder = mgr.getBackgroundCorrectionFolder(modality);
             if (bgFolder != null) {
                 var allResults = BackgroundValidityChecker.checkAllModes(bgFolder, modality, objective, detector, mgr);
-                boolean anyStale = allResults.stream()
-                        .anyMatch(r -> r.status() == BackgroundValidityChecker.ValidityStatus.CALIBRATION_STALE);
-                if (anyStale) {
+                boolean anyValid =
+                        allResults.stream().anyMatch(r -> r.status() == BackgroundValidityChecker.ValidityStatus.VALID);
+                boolean allStale = allResults.stream()
+                        .filter(r -> r.status() != BackgroundValidityChecker.ValidityStatus.NOT_NEEDED
+                                && r.status() != BackgroundValidityChecker.ValidityStatus.NO_BACKGROUNDS)
+                        .allMatch(r -> r.status() == BackgroundValidityChecker.ValidityStatus.CALIBRATION_STALE);
+                if (allStale && !anyValid) {
                     return new StepStatus(Status.WARNING, msg + " -- re-collect backgrounds");
                 }
             }
