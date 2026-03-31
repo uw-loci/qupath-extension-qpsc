@@ -261,6 +261,7 @@ public class LiveViewerWindow {
                 Platform.runLater(() -> {
                     if (instance != null) {
                         instance.updateLiveButtonStyle(true);
+                        instance.updateRefineFocusButtonState();
                         instance.updateStatus("Live ON - streaming...");
                     }
                 });

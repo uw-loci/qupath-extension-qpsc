@@ -203,12 +203,19 @@ public class CalibrationChecker {
             }
 
             if (anyValid && anyStale) {
-                // Some modes valid, some stale -- report ready with a note
-                return new StepStatus(
-                        Status.READY,
-                        String.format(
-                                "Backgrounds valid (%d mode%s); %d stale",
-                                validCount, validCount > 1 ? "s" : "", staleCount));
+                // Some modes valid, some stale -- report ready with names
+                StringBuilder validNames = new StringBuilder();
+                StringBuilder staleNames = new StringBuilder();
+                for (var result : allModeResults) {
+                    if (result.status() == BackgroundValidityChecker.ValidityStatus.VALID) {
+                        if (validNames.length() > 0) validNames.append(", ");
+                        validNames.append(result.mode().getDisplayName());
+                    } else if (result.status() == BackgroundValidityChecker.ValidityStatus.CALIBRATION_STALE) {
+                        if (staleNames.length() > 0) staleNames.append(", ");
+                        staleNames.append(result.mode().getDisplayName());
+                    }
+                }
+                return new StepStatus(Status.READY, String.format("Valid: %s; Stale: %s", validNames, staleNames));
             }
 
             if (anyStale && !anyValid) {
