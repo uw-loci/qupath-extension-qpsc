@@ -191,14 +191,23 @@ public class CalibrationChecker {
                 }
             }
 
-            if (anyStale) {
-                return new StepStatus(Status.WARNING, "Backgrounds stale -- re-collect after WB change");
-            }
-
-            if (anyValid) {
+            if (anyValid && !anyStale) {
                 return new StepStatus(
                         Status.READY,
                         String.format("Backgrounds valid (%d mode%s)", validCount, validCount > 1 ? "s" : ""));
+            }
+
+            if (anyValid && anyStale) {
+                // Some modes valid, some stale -- report ready with a note
+                return new StepStatus(
+                        Status.READY,
+                        String.format(
+                                "Backgrounds valid (%d mode%s); %d stale",
+                                validCount, validCount > 1 ? "s" : "", staleCount));
+            }
+
+            if (anyStale && !anyValid) {
+                return new StepStatus(Status.WARNING, "Backgrounds stale -- re-collect after WB change");
             }
 
             if (anyMissing) {

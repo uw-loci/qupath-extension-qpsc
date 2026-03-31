@@ -111,6 +111,7 @@ public class StageMapWindow {
 
             if (!instance.stage.isShowing()) {
                 instance.stage.show();
+                instance.applyInitialFlipState();
                 instance.startPositionPolling();
             } else {
                 instance.stage.toFront();
@@ -361,16 +362,10 @@ public class StageMapWindow {
             }
         });
 
-        // Apply initial flip state AFTER the scene is shown and laid out.
+        // NOTE: Initial flip state is applied in show() after the stage is visible.
         // Calling setScaleX/Y during construction doesn't take effect because the
-        // StackPane hasn't been added to the scene graph yet.
-        final boolean initialFlip = flipX || flipY;
-        if (initialFlip && canvas != null) {
-            javafx.application.Platform.runLater(() -> {
-                canvas.setFlipsApplied(true);
-                logger.info("Applied initial flip state on Stage Map open");
-            });
-        }
+        // StackPane isn't in the scene graph yet, and Platform.runLater from the
+        // constructor fires before show() is called.
 
         topBar.getChildren()
                 .addAll(
@@ -515,6 +510,19 @@ public class StageMapWindow {
             logger.error("Error loading insert configurations: {}", e.getMessage(), e);
             statusLabel.setText("Config error");
             statusLabel.setStyle("-fx-text-fill: #f66;");
+        }
+    }
+
+    /**
+     * Apply the initial flip state after the stage is shown.
+     * Must be called after stage.show() so the StackPane scale transforms take effect.
+     */
+    private void applyInitialFlipState() {
+        boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
+        boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+        if ((flipX || flipY) && canvas != null) {
+            canvas.setFlipsApplied(true);
+            logger.info("Applied initial flip state: flipX={}, flipY={}", flipX, flipY);
         }
     }
 
