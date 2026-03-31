@@ -247,6 +247,15 @@ public class LiveViewerWindow {
         try {
             MicroscopeController controller = MicroscopeController.getInstance();
             if (controller != null) {
+                // Force a clean restart: stop any stale sequence, then start fresh.
+                // This handles cases where the camera mode was changed during WB/BG
+                // and the old sequence is no longer producing valid frames.
+                try {
+                    controller.stopContinuousAcquisition();
+                    Thread.sleep(200); // Let camera fully release
+                } catch (Exception e) {
+                    logger.debug("Stop before restart: {}", e.getMessage());
+                }
                 controller.startContinuousAcquisition();
                 instance.liveActive = true;
                 // Reset FPS counter, desync tracking, and recovery state
