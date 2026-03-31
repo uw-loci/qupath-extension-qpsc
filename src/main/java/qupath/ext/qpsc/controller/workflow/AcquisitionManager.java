@@ -691,6 +691,20 @@ public class AcquisitionManager {
                     }
                 }
 
+                // Score tiles from WSI to find best first AF position.
+                // The WSI already shows tissue content at each tile location --
+                // use this to avoid focusing on blank/white regions.
+                try {
+                    int preferredTile = findBestAfTileFromWSI(annotation, modalityWithIndex);
+                    if (preferredTile >= 0) {
+                        config.commandBuilder().preferredAfTile(preferredTile);
+                        logger.info("WSI tissue scoring: preferred AF tile = {} for {}",
+                                preferredTile, annotation.getName());
+                    }
+                } catch (Exception e) {
+                    logger.debug("WSI tissue scoring skipped: {}", e.getMessage());
+                }
+
                 // Start acquisition
                 MicroscopeController.getInstance().startAcquisition(config.commandBuilder());
 
@@ -1569,5 +1583,154 @@ public class AcquisitionManager {
         } catch (Exception e) {
             logger.warn("Failed to attach tile measurements: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Scores tiles from the WSI to find the best tile for initial autofocus.
+     *
+     * <p>Reads the TileConfiguration_QP.txt (QuPath pixel coordinates) and checks
+     * each tile's region in the WSI for tissue content. Returns the index of the
+     * first tile (in acquisition order) that has sufficient tissue.
+     *
+     * @param annotation The annotation being acquired
+     * @param modalityWithIndex e.g. "ppm_20x_1"
+     * @return Index of the best AF tile, or -1 if scoring fails
+     */
+    private int findBestAfTileFromWSI(PathObject annotation, String modalityWithIndex) {
+        var gui = QuPathGUI.getInstance();
+        if (gui == null || gui.getImageData() == null) return -1;
+
+        var server = gui.getImageData().getServer();
+        double pixelSize = server.getPixelCalibration().getAveragedPixelSizeMicrons();
+        if (pixelSize <= 0 || Double.isNaN(pixelSize)) return -1;
+
+        // Read tile positions from TileConfiguration_QP.txt (pixel coordinates)
+        Path tileDir = Paths.get(
+                state.projectInfo.getTempTileDirectory(),
+                annotation.getName());
+        Path tileConfigQP = tileDir.resolve("TileConfiguration_QP.txt");
+        if (!Files.exists(tileConfigQP)) {
+            logger.debug("No TileConfiguration_QP.txt for {}", annotation.getName());
+            return -1;
+        }
+
+        // Get frame size in pixels (from camera FOV)
+        double[] fovMicrons;
+        try {
+            fovMicrons = MicroscopeController.getInstance()
+                    .getCameraFOVFromConfig(state.sample.modality(),
+                            state.sample.objective(), state.sample.detector());
+        } catch (Exception e) {
+            return -1;
+        }
+        int frameW = (int) Math.round(fovMicrons[0] / pixelSize);
+        int frameH = (int) Math.round(fovMicrons[1] / pixelSize);
+
+        // Parse tile positions
+        List<double[]> tilePositions = new ArrayList<>();
+        List<Integer> tileIndices = new ArrayList<>();
+        try {
+            for (String line : Files.readAllLines(tileConfigQP)) {
+                // Format: "0.tif; ; (123.456, 789.012)"
+                if (!line.contains(".tif")) continue;
+                int parenStart = line.indexOf('(');
+                int parenEnd = line.indexOf(')');
+                if (parenStart < 0 || parenEnd < 0) continue;
+                String[] coords = line.substring(parenStart + 1, parenEnd).split(",");
+                double cx = Double.parseDouble(coords[0].trim());
+                double cy = Double.parseDouble(coords[1].trim());
+                int idx = Integer.parseInt(line.substring(0, line.indexOf('.')).trim());
+                tilePositions.add(new double[]{cx, cy});
+                tileIndices.add(idx);
+            }
+        } catch (Exception e) {
+            logger.debug("Failed to parse tile config: {}", e.getMessage());
+            return -1;
+        }
+
+        if (tilePositions.isEmpty()) return -1;
+
+        // Score tiles in acquisition order (first N, then keep going if needed)
+        double minTissueScore = 0.15; // At least 15% non-white pixels
+        int bestTile = -1;
+        double bestScore = 0;
+
+        // Use a lower-res downsample for speed (4x faster reads)
+        double downsample = Math.max(1.0, pixelSize < 0.5 ? 4.0 : 2.0);
+
+        for (int i = 0; i < tilePositions.size(); i++) {
+            double cx = tilePositions.get(i)[0];
+            double cy = tilePositions.get(i)[1];
+            int tileIdx = tileIndices.get(i);
+
+            // Convert centroid to top-left corner
+            int x = Math.max(0, (int) (cx - frameW / 2.0));
+            int y = Math.max(0, (int) (cy - frameH / 2.0));
+            int w = Math.min(frameW, server.getWidth() - x);
+            int h = Math.min(frameH, server.getHeight() - y);
+            if (w <= 0 || h <= 0) continue;
+
+            try {
+                var request = qupath.lib.regions.RegionRequest.createInstance(
+                        server.getPath(), downsample, x, y, w, h);
+                BufferedImage img = server.readRegion(request);
+                if (img == null) continue;
+
+                double tissueScore = scoreTissueContent(img);
+                if (tissueScore > bestScore) {
+                    bestScore = tissueScore;
+                    bestTile = tileIdx;
+                }
+
+                // Accept first tile that meets the threshold
+                if (tissueScore >= minTissueScore) {
+                    logger.info("WSI tissue scoring: tile {} has {}% tissue (threshold {}%)",
+                            tileIdx, String.format("%.1f", tissueScore * 100),
+                            String.format("%.0f", minTissueScore * 100));
+                    return tileIdx;
+                }
+            } catch (Exception e) {
+                logger.debug("Failed to read WSI region for tile {}: {}", tileIdx, e.getMessage());
+            }
+        }
+
+        // No tile met threshold -- return the one with most tissue (if any)
+        if (bestTile >= 0 && bestScore > 0.02) {
+            logger.info("WSI tissue scoring: no tile met {}% threshold, using best tile {} ({}%)",
+                    (int) (minTissueScore * 100), bestTile,
+                    String.format("%.1f", bestScore * 100));
+            return bestTile;
+        }
+
+        logger.info("WSI tissue scoring: insufficient tissue found in any tile");
+        return -1;
+    }
+
+    /**
+     * Scores a BufferedImage for tissue content.
+     * Returns the fraction of pixels that appear to contain tissue (0.0 to 1.0).
+     * Tissue is detected as pixels that are not near-white (mean RGB < 230).
+     */
+    private static double scoreTissueContent(BufferedImage img) {
+        int w = img.getWidth();
+        int h = img.getHeight();
+        int totalPixels = w * h;
+        if (totalPixels == 0) return 0;
+
+        int tissuePixels = 0;
+        for (int py = 0; py < h; py++) {
+            for (int px = 0; px < w; px++) {
+                int rgb = img.getRGB(px, py);
+                int r = (rgb >> 16) & 0xFF;
+                int g = (rgb >> 8) & 0xFF;
+                int b = rgb & 0xFF;
+                int mean = (r + g + b) / 3;
+                // Non-white and not too dark (avoid background/artifact)
+                if (mean < 230 && mean > 20) {
+                    tissuePixels++;
+                }
+            }
+        }
+        return (double) tissuePixels / totalPixels;
     }
 }

@@ -72,6 +72,9 @@ public class AcquisitionCommandBuilder {
     // Z-focus hint from prediction model (tilt correction)
     private Double hintZ;
 
+    // Preferred first AF tile index (from WSI tissue scoring)
+    private Integer preferredAfTile;
+
     /**
      * Private constructor - use static builder() method
      */
@@ -283,6 +286,18 @@ public class AcquisitionCommandBuilder {
     }
 
     /**
+     * Sets the preferred tile index for the first autofocus position,
+     * determined by scoring WSI tissue content at each tile location.
+     *
+     * @param tileIndex Index of the tile with best tissue for autofocus
+     * @return this builder for method chaining
+     */
+    public AcquisitionCommandBuilder preferredAfTile(int tileIndex) {
+        this.preferredAfTile = tileIndex;
+        return this;
+    }
+
+    /**
      * Gets the enhanced scan type that includes magnification from the objective.
      * If no objective is set, magnification cannot be extracted, or scan type is already enhanced,
      * returns the original scanType.
@@ -443,6 +458,11 @@ public class AcquisitionCommandBuilder {
         // Add Z-focus hint from tilt prediction model
         if (hintZ != null) {
             args.addAll(Arrays.asList("--hint-z", String.format("%.2f", hintZ)));
+        }
+
+        // Add preferred AF tile from WSI tissue scoring
+        if (preferredAfTile != null) {
+            args.addAll(Arrays.asList("--preferred-af-tile", String.valueOf(preferredAfTile)));
         }
 
         // Join with spaces, properly quoting arguments
