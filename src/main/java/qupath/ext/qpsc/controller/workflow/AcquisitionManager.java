@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -694,15 +695,32 @@ public class AcquisitionManager {
                 // Score tiles from WSI to find best first AF position.
                 // The WSI already shows tissue content at each tile location --
                 // use this to avoid focusing on blank/white regions.
-                try {
-                    int preferredTile = findBestAfTileFromWSI(annotation, modalityWithIndex);
-                    if (preferredTile >= 0) {
-                        config.commandBuilder().preferredAfTile(preferredTile);
-                        logger.info("WSI tissue scoring: preferred AF tile = {} for {}",
-                                preferredTile, annotation.getName());
+                if (!QPPreferenceDialog.getDisableAllAutofocus()) {
+                    try {
+                        // Read WSI tissue scoring thresholds from autofocus config
+                        Map<String, Object> afParams = configManager.getAutofocusParams(
+                                state.sample.objective());
+                        double wsiTissueThreshold = 0.15;
+                        int wsiWhiteThreshold = 230;
+                        int wsiDarkThreshold = 20;
+                        if (afParams != null) {
+                            if (afParams.get("wsi_tissue_threshold") instanceof Number)
+                                wsiTissueThreshold = ((Number) afParams.get("wsi_tissue_threshold")).doubleValue();
+                            if (afParams.get("wsi_tissue_white_threshold") instanceof Number)
+                                wsiWhiteThreshold = ((Number) afParams.get("wsi_tissue_white_threshold")).intValue();
+                            if (afParams.get("wsi_tissue_dark_threshold") instanceof Number)
+                                wsiDarkThreshold = ((Number) afParams.get("wsi_tissue_dark_threshold")).intValue();
+                        }
+                        int preferredTile = findBestAfTileFromWSI(annotation, modalityWithIndex,
+                                wsiTissueThreshold, wsiWhiteThreshold, wsiDarkThreshold);
+                        if (preferredTile >= 0) {
+                            config.commandBuilder().preferredAfTile(preferredTile);
+                            logger.info("WSI tissue scoring: preferred AF tile = {} for {}",
+                                    preferredTile, annotation.getName());
+                        }
+                    } catch (Exception e) {
+                        logger.debug("WSI tissue scoring skipped: {}", e.getMessage());
                     }
-                } catch (Exception e) {
-                    logger.debug("WSI tissue scoring skipped: {}", e.getMessage());
                 }
 
                 // Start acquisition
@@ -1596,7 +1614,8 @@ public class AcquisitionManager {
      * @param modalityWithIndex e.g. "ppm_20x_1"
      * @return Index of the best AF tile, or -1 if scoring fails
      */
-    private int findBestAfTileFromWSI(PathObject annotation, String modalityWithIndex) {
+    private int findBestAfTileFromWSI(PathObject annotation, String modalityWithIndex,
+            double minTissueScore, int whiteThreshold, int darkThreshold) {
         var gui = QuPathGUI.getInstance();
         if (gui == null || gui.getImageData() == null) return -1;
 
@@ -1651,7 +1670,6 @@ public class AcquisitionManager {
         if (tilePositions.isEmpty()) return -1;
 
         // Score tiles in acquisition order (first N, then keep going if needed)
-        double minTissueScore = 0.15; // At least 15% non-white pixels
         int bestTile = -1;
         double bestScore = 0;
 
@@ -1676,7 +1694,7 @@ public class AcquisitionManager {
                 BufferedImage img = server.readRegion(request);
                 if (img == null) continue;
 
-                double tissueScore = scoreTissueContent(img);
+                double tissueScore = scoreTissueContent(img, whiteThreshold, darkThreshold);
                 if (tissueScore > bestScore) {
                     bestScore = tissueScore;
                     bestTile = tileIdx;
@@ -1709,9 +1727,12 @@ public class AcquisitionManager {
     /**
      * Scores a BufferedImage for tissue content.
      * Returns the fraction of pixels that appear to contain tissue (0.0 to 1.0).
-     * Tissue is detected as pixels that are not near-white (mean RGB < 230).
+     *
+     * @param img The image to score
+     * @param whiteThreshold Pixel mean RGB above this = white/blank (from YAML)
+     * @param darkThreshold Pixel mean RGB below this = background/artifact (from YAML)
      */
-    private static double scoreTissueContent(BufferedImage img) {
+    private static double scoreTissueContent(BufferedImage img, int whiteThreshold, int darkThreshold) {
         int w = img.getWidth();
         int h = img.getHeight();
         int totalPixels = w * h;
@@ -1725,8 +1746,7 @@ public class AcquisitionManager {
                 int g = (rgb >> 8) & 0xFF;
                 int b = rgb & 0xFF;
                 int mean = (r + g + b) / 3;
-                // Non-white and not too dark (avoid background/artifact)
-                if (mean < 230 && mean > 20) {
+                if (mean < whiteThreshold && mean > darkThreshold) {
                     tissuePixels++;
                 }
             }
