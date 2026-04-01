@@ -653,33 +653,27 @@ public class AcquisitionManager {
 
                     if (zFocusModel.canPredict(distFromLast)) {
                         zFocusModel.predictZ(stageCoords[0], stageCoords[1]).ifPresent(predictedZ -> {
-                            // Sanity check: if prediction differs from current Z by more than
-                            // the AF search range (50um), the model is likely extrapolating badly.
-                            // Use current Z instead to avoid searching in the wrong Z range.
-                            double currentZ = 0;
-                            try {
-                                currentZ = MicroscopeController.getInstance()
-                                        .getSocketClient()
-                                        .getStageXYZ()[2];
-                            } catch (Exception e) {
-                                currentZ = predictedZ; // Can't check, trust model
-                            }
-                            double deviation = Math.abs(predictedZ - currentZ);
-                            if (deviation > 50.0) {
-                                config.commandBuilder().hintZ(currentZ);
+                            // Sanity check: if prediction deviates too far from the last
+                            // known good Z, the model may be extrapolating badly.
+                            // Fall back to lastAcquisitionZ which is always a safe hint.
+                            double referenceZ = lastAcquisitionZ != null ? lastAcquisitionZ : predictedZ;
+                            double deviation = Math.abs(predictedZ - referenceZ);
+                            if (deviation > 20.0) {
+                                config.commandBuilder().hintZ(referenceZ);
                                 logger.warn(
-                                        "Z prediction {} um deviates {} um from current Z {} um -- "
-                                                + "using current Z as hint (model may be extrapolating badly)",
+                                        "Z prediction {} um deviates {} um from last known Z {} um -- "
+                                                + "using last known Z as hint",
                                         String.format("%.2f", predictedZ),
                                         String.format("%.1f", deviation),
-                                        String.format("%.2f", currentZ));
+                                        String.format("%.2f", referenceZ));
                             } else {
                                 config.commandBuilder().hintZ(predictedZ);
                                 logger.info(
-                                        "Z-focus prediction for {}: {} um (from {} points, dist={} um)",
+                                        "Z-focus prediction for {}: {} um (from {} points, residual={} um, dist={} um)",
                                         annotation.getName(),
                                         String.format("%.2f", predictedZ),
                                         zFocusModel.getPointCount(),
+                                        String.format("%.1f", zFocusModel.calculateResidualError()),
                                         String.format("%.0f", distFromLast));
                             }
                         });

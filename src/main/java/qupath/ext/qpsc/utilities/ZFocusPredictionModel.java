@@ -41,14 +41,21 @@ public class ZFocusPredictionModel {
     /** Last acquired point coordinates for distance calculations */
     private double[] lastAcquiredPoint = null;
 
-    /** Minimum points required for standard prediction */
-    private static final int MIN_POINTS_STANDARD = 4;
+    /** Minimum points required for standard prediction.
+     *  6 points gives enough redundancy for a 3-parameter plane fit that
+     *  one bad AF result doesn't wildly swing the coefficients. */
+    private static final int MIN_POINTS_STANDARD = 6;
 
-    /** Minimum points required for early prediction (when distance threshold exceeded) */
-    private static final int MIN_POINTS_EARLY = 3;
+    /** Minimum points for early prediction (long jump >1mm between annotations) */
+    private static final int MIN_POINTS_EARLY = 4;
 
-    /** Distance threshold (in micrometers) for enabling early prediction with 3 points */
+    /** Distance threshold (in micrometers) for enabling early prediction */
     private static final double EARLY_PREDICTION_DISTANCE_UM = 1000.0; // 1mm
+
+    /** Maximum RMS residual error (um) to trust the model.  If the data
+     *  doesn't fit a plane within this tolerance the sample may be warped,
+     *  or a bad AF result may be corrupting the fit. */
+    private static final double MAX_RESIDUAL_ERROR_UM = 5.0;
 
     /**
      * Adds a measured Z-focus data point after successful acquisition.
@@ -78,29 +85,40 @@ public class ZFocusPredictionModel {
      * Checks if the model can make predictions for an annotation at the given distance.
      *
      * <p>Prediction is enabled when:</p>
-     * <ul>
-     *   <li>4+ points collected (standard case), OR</li>
-     *   <li>3 points collected AND distance to next annotation > 1mm</li>
-     * </ul>
+     * <p>Prediction requires enough data points AND a good plane fit
+     * (residual error below threshold).</p>
      *
      * @param distanceToNextAnnotation Distance from last acquired annotation to
      *                                  the next one (in micrometers)
      * @return true if prediction can be made
      */
     public boolean canPredict(double distanceToNextAnnotation) {
-        int numPoints = dataPoints.size();
-
-        if (numPoints >= MIN_POINTS_STANDARD) {
-            return modelFitted;
+        if (!modelFitted) {
+            return false;
         }
 
-        if (numPoints >= MIN_POINTS_EARLY && distanceToNextAnnotation > EARLY_PREDICTION_DISTANCE_UM) {
+        int numPoints = dataPoints.size();
+        boolean enoughPoints;
+
+        if (numPoints >= MIN_POINTS_STANDARD) {
+            enoughPoints = true;
+        } else if (numPoints >= MIN_POINTS_EARLY && distanceToNextAnnotation > EARLY_PREDICTION_DISTANCE_UM) {
+            enoughPoints = true;
+        } else {
+            return false;
+        }
+
+        // Check that the plane actually fits the data well.
+        // High residual error means warped sample or bad AF results in the data.
+        double residual = calculateResidualError();
+        if (Double.isNaN(residual) || residual > MAX_RESIDUAL_ERROR_UM) {
             logger.info(
-                    "Early prediction enabled: {} points, distance {}um > {}um threshold",
+                    "Z-focus model has {} points but residual error {} um > {} um -- "
+                            + "not trusting prediction (possible warp or bad AF data)",
                     numPoints,
-                    String.format("%.1f", distanceToNextAnnotation),
-                    String.format("%.1f", EARLY_PREDICTION_DISTANCE_UM));
-            return modelFitted;
+                    String.format("%.2f", residual),
+                    String.format("%.1f", MAX_RESIDUAL_ERROR_UM));
+            return false;
         }
 
         return false;
