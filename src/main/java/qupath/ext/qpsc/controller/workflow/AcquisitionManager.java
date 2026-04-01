@@ -95,6 +95,10 @@ public class AcquisitionManager {
     /** Z-focus prediction model for tilt correction across the slide */
     private final ZFocusPredictionModel zFocusModel = new ZFocusPredictionModel();
 
+    /** Last known good Z from a completed acquisition -- persists across annotation resets
+     *  so the next annotation's AF search is centered near reality, not the user's initial Z. */
+    private Double lastAcquisitionZ = null;
+
     /**
      * Creates a new acquisition manager.
      *
@@ -369,6 +373,8 @@ public class AcquisitionManager {
             logger.info("Annotations ordered by proximity for tilt model optimization");
         }
 
+        // Reset Z tracking for this acquisition session
+        lastAcquisitionZ = null;
         // Reset the Z-focus prediction model for this acquisition session
         zFocusModel.reset();
 
@@ -466,18 +472,23 @@ public class AcquisitionManager {
                                     MicroscopeSocketClient socketClient =
                                             MicroscopeController.getInstance().getSocketClient();
                                     Double finalZ = socketClient.getLastAcquisitionFinalZ();
-                                    if (finalZ != null && state.transform != null) {
-                                        double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
-                                                new double[] {
-                                                    annotation.getROI().getCentroidX(),
-                                                    annotation.getROI().getCentroidY()
-                                                },
-                                                state.transform);
-                                        zFocusModel.addDataPoint(stageCoords[0], stageCoords[1], finalZ);
-                                        logger.info(
-                                                "Updated Z-focus model: {} points, residual error: {} um",
-                                                zFocusModel.getPointCount(),
-                                                String.format("%.2f", zFocusModel.calculateResidualError()));
+                                    if (finalZ != null) {
+                                        // Persist across annotation resets for Z-hint fallback
+                                        lastAcquisitionZ = finalZ;
+
+                                        if (state.transform != null) {
+                                            double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
+                                                    new double[] {
+                                                        annotation.getROI().getCentroidX(),
+                                                        annotation.getROI().getCentroidY()
+                                                    },
+                                                    state.transform);
+                                            zFocusModel.addDataPoint(stageCoords[0], stageCoords[1], finalZ);
+                                            logger.info(
+                                                    "Updated Z-focus model: {} points, residual error: {} um",
+                                                    zFocusModel.getPointCount(),
+                                                    String.format("%.2f", zFocusModel.calculateResidualError()));
+                                        }
                                     }
                                     // Clear for next acquisition
                                     socketClient.clearLastAcquisitionFinalZ();
@@ -675,19 +686,28 @@ public class AcquisitionManager {
                         });
                     } else {
                         // No prediction available (first annotation or too far from known points).
-                        // Use current stage Z as hint so autofocus searches near where the user
-                        // was last focused, rather than from an arbitrary Z position.
-                        try {
-                            double currentZ = MicroscopeController.getInstance()
-                                    .getSocketClient()
-                                    .getStageXYZ()[2];
-                            config.commandBuilder().hintZ(currentZ);
+                        // Prefer the last acquisition's final Z (which is near the actual focal
+                        // plane) over the microscope's current Z (which may have drifted or been
+                        // reset between acquisitions).
+                        if (lastAcquisitionZ != null) {
+                            config.commandBuilder().hintZ(lastAcquisitionZ);
                             logger.info(
-                                    "Using current Z={} um as hint for {} (no prediction available)",
-                                    String.format("%.2f", currentZ),
+                                    "Using last acquisition Z={} um as hint for {} (no prediction, carried forward)",
+                                    String.format("%.2f", lastAcquisitionZ),
                                     annotation.getName());
-                        } catch (Exception zEx) {
-                            logger.debug("Could not get current Z for hint: {}", zEx.getMessage());
+                        } else {
+                            try {
+                                double currentZ = MicroscopeController.getInstance()
+                                        .getSocketClient()
+                                        .getStageXYZ()[2];
+                                config.commandBuilder().hintZ(currentZ);
+                                logger.info(
+                                        "Using current Z={} um as hint for {} (first annotation)",
+                                        String.format("%.2f", currentZ),
+                                        annotation.getName());
+                            } catch (Exception zEx) {
+                                logger.debug("Could not get current Z for hint: {}", zEx.getMessage());
+                            }
                         }
                     }
                 }

@@ -243,7 +243,7 @@ public class MicroscopeConfigManager {
                     }
                 }
 
-                logger.info(
+                logger.debug(
                         "Loaded external autofocus settings for {} objectives from: {}",
                         autofocusMap.size(),
                         autofocusFile.getAbsolutePath());
@@ -763,7 +763,7 @@ public class MicroscopeConfigManager {
         // Check external autofocus file
         if (autofocusData != null && autofocusData.containsKey(objective)) {
             Map<String, Object> params = autofocusData.get(objective);
-            logger.info("Found autofocus params for {} in external autofocus file", objective);
+            logger.debug("Found autofocus params for {} in external autofocus file", objective);
             return params;
         }
 

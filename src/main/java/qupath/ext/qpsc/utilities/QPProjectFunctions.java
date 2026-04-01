@@ -494,7 +494,7 @@ public class QPProjectFunctions {
             return null;
         }
 
-        logger.info(
+        logger.debug(
                 "Adding image with metadata: {} (parent={}, offset=({},{}), flipped={}, sample={}, modality={}, objective={}, angle={}, annotation={}, index={})",
                 imageFile.getName(),
                 parentEntry != null ? parentEntry.getImageName() : "none",

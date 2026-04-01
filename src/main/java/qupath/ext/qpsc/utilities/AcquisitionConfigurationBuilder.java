@@ -128,7 +128,7 @@ public class AcquisitionConfigurationBuilder {
                 if (afParams.get("search_range_um") instanceof Number) {
                     afRange = ((Number) afParams.get("search_range_um")).doubleValue();
                 }
-                logger.info(
+                logger.debug(
                         "Using objective-specific autofocus parameters for {}: tiles={}, steps={}, range={}um",
                         objective,
                         afTiles,

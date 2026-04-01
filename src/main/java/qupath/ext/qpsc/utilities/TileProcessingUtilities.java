@@ -113,13 +113,8 @@ public class TileProcessingUtilities {
             Map<String, Object> stitchParams)
             throws IOException {
 
-        logger.info("=== Starting stitching workflow ===");
-        logger.info(
-                "Sample: {}, Mode: {}, Annotation: {}, Matching: '{}'",
-                sampleLabel,
-                imagingModeWithIndex,
-                annotationName,
-                matchingString);
+        logger.debug("Starting stitching: {}/{}/{}, matching '{}'",
+                sampleLabel, imagingModeWithIndex, annotationName, matchingString);
 
         // Construct folder paths
         String tileFolder = projectsFolderPath
@@ -477,7 +472,7 @@ public class TileProcessingUtilities {
                 renamed = new File(orig.getParent(), baseName);
             }
 
-            logger.info(
+            logger.debug(
                     "Generated filename: {} (displayName={}, modality={}, objective={}, annotation={}, angle={}, index={})",
                     baseName,
                     displayName,
