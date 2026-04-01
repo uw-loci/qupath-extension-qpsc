@@ -373,9 +373,12 @@ public class AcquisitionManager {
             logger.info("Annotations ordered by proximity for tilt model optimization");
         }
 
-        // Reset Z tracking for this acquisition session
+        // Reset Z tracking for this acquisition session.
+        // The prediction model accumulates data across annotations (one point per
+        // annotation) and fits a tilt plane.  After 4 annotations it can predict Z
+        // for any position on the slide, handling long jumps correctly.
+        // Before enough points accumulate, lastAcquisitionZ is the fallback.
         lastAcquisitionZ = null;
-        // Reset the Z-focus prediction model for this acquisition session
         zFocusModel.reset();
 
         // Show initial progress notification
@@ -459,10 +462,6 @@ public class AcquisitionManager {
                 }
 
                 showProgressNotification(index, total, annotation.getName());
-
-                // Reset Z-focus model for each annotation -- the tilt model from a
-                // previous annotation's region should not extrapolate to a different XY region
-                zFocusModel.reset();
 
                 return performSingleAnnotationAcquisition(annotation, angleExposures, progressDialog)
                         .thenApply(success -> {
