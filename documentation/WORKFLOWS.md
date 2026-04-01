@@ -54,7 +54,7 @@ If this is your first time, complete these additional steps. The **Acquisition W
    If using a JAI 3-CCD prism camera. See [White Balance Calibration docs](tools/white-balance-calibration.md).
 
 5. **Configure autofocus (recommended).**
-   Set search range, step size, and scoring method per objective. See [Autofocus Editor docs](tools/autofocus-editor.md).
+   Set search range, step size, and scoring method per objective. See [Autofocus Editor docs](tools/autofocus-editor.md) and [Autofocus System Overview](AUTOFOCUS.md) for how the system works.
 
 ---
 
