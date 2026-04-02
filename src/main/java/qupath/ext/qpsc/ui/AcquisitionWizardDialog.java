@@ -488,7 +488,7 @@ public class AcquisitionWizardDialog {
         // Save current selection
         PersistentPreferences.setLastModality(modality);
 
-        Set<String> objectives = CalibrationChecker.getAvailableObjectives(modality);
+        Set<String> objectives = CalibrationChecker.getAvailableObjectives();
         objectiveCombo.setItems(FXCollections.observableArrayList(objectives));
         if (!objectives.isEmpty()) {
             boolean restored = false;
@@ -529,7 +529,7 @@ public class AcquisitionWizardDialog {
         // Save current selection
         PersistentPreferences.setLastObjective(objective);
 
-        Set<String> detectors = CalibrationChecker.getAvailableDetectors(modality, objective);
+        Set<String> detectors = CalibrationChecker.getAvailableDetectors();
         detectorCombo.setItems(FXCollections.observableArrayList(detectors));
         if (!detectors.isEmpty()) {
             // Try to restore last-used detector

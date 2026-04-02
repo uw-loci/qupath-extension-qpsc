@@ -527,7 +527,7 @@ public class MicroscopeConfigManager {
         }
 
         // Check objective exists in hardware
-        Set<String> availableObjectives = getAvailableObjectivesForModality(modality);
+        Set<String> availableObjectives = getAvailableObjectives();
         if (!availableObjectives.contains(objective)) {
             logger.debug("Objective {} not found in hardware objectives: {}", objective, availableObjectives);
             return false;
@@ -1827,15 +1827,13 @@ public class MicroscopeConfigManager {
     // ========== METHODS FOR UI DROPDOWNS ==========
 
     /**
-     * Get available objectives for a given modality.
+     * Get available objectives on this microscope.
      * With the simplified hardware configuration, all objectives are available for all modalities.
      *
-     * @param modalityName The base modality name (e.g., "ppm", "brightfield") - currently unused
-     *                     but kept for API compatibility and potential future restrictions
      * @return Set of objective IDs available on this microscope
      */
-    public Set<String> getAvailableObjectivesForModality(String modalityName) {
-        logger.debug("Finding available objectives for modality: {}", modalityName);
+    public Set<String> getAvailableObjectives() {
+        logger.debug("Finding available objectives");
 
         Set<String> objectives = new HashSet<>();
         List<Map<String, Object>> hardwareObjectives = getHardwareObjectives();
@@ -1853,31 +1851,24 @@ public class MicroscopeConfigManager {
             }
         }
 
-        logger.debug("Found {} objectives for modality {}: {}", objectives.size(), modalityName, objectives);
+        logger.debug("Found {} objectives: {}", objectives.size(), objectives);
         return objectives;
     }
 
     /**
-     * Get available detectors for a given modality and objective combination.
+     * Get available detectors on this microscope.
      * With the simplified hardware configuration, all detectors are available for all
      * modality+objective combinations.
      *
-     * @param modalityName The base modality name (e.g., "ppm", "brightfield") - currently unused
-     * @param objectiveId The objective ID - currently unused but kept for API compatibility
      * @return Set of detector IDs available on this microscope
      */
-    public Set<String> getAvailableDetectorsForModalityObjective(String modalityName, String objectiveId) {
-        logger.debug("Finding available detectors for modality: {}, objective: {}", modalityName, objectiveId);
+    public Set<String> getAvailableDetectors() {
+        logger.debug("Finding available detectors");
 
         // With simplified hardware config, all detectors are available for all combinations
         Set<String> detectors = getHardwareDetectors();
 
-        logger.debug(
-                "Found {} detectors for modality {} + objective {}: {}",
-                detectors.size(),
-                modalityName,
-                objectiveId,
-                detectors);
+        logger.debug("Found {} detectors: {}", detectors.size(), detectors);
         return detectors;
     }
     /**
@@ -1973,26 +1964,6 @@ public class MicroscopeConfigManager {
         }
 
         return friendlyNames;
-    }
-
-    /**
-     * Get the default detector for a modality+objective combination.
-     * Returns the first available detector if no explicit default is configured.
-     *
-     * @param modalityName The base modality name
-     * @param objectiveId The objective ID
-     * @return The default detector ID, or null if none available
-     */
-    public String getDefaultDetectorForModalityObjective(String modalityName, String objectiveId) {
-        Set<String> detectors = getAvailableDetectorsForModalityObjective(modalityName, objectiveId);
-
-        if (detectors.isEmpty()) {
-            return null;
-        }
-
-        // For now, just return the first one
-        // In the future, could add logic to check for a "default" flag in config
-        return detectors.iterator().next();
     }
 
     /**

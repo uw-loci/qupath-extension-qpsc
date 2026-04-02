@@ -205,8 +205,6 @@ public class ExistingImageAcquisitionController {
 
         // UI Components - White Balance Section (JAI camera only)
         private VBox whiteBalanceSection;
-        private CheckBox enableWhiteBalanceCheckBox;
-        private CheckBox perAngleWhiteBalanceCheckBox;
         private ComboBox<String> wbModeComboBox;
 
         // UI Components - Preview Section
@@ -456,19 +454,8 @@ public class ExistingImageAcquisitionController {
                     + "  Simple (90deg) - Use 90deg R:G:B ratios, scaled per angle\n"
                     + "  Per-angle (PPM) - Independent calibration per angle (default)"));
 
-            enableWhiteBalanceCheckBox = new CheckBox();
-            enableWhiteBalanceCheckBox.setSelected(true);
-            enableWhiteBalanceCheckBox.setVisible(false);
-            enableWhiteBalanceCheckBox.setManaged(false);
-            perAngleWhiteBalanceCheckBox = new CheckBox();
-            perAngleWhiteBalanceCheckBox.setSelected(false);
-            perAngleWhiteBalanceCheckBox.setVisible(false);
-            perAngleWhiteBalanceCheckBox.setManaged(false);
-
             wbModeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
                 if (newVal != null) {
-                    enableWhiteBalanceCheckBox.setSelected(!"Off".equals(newVal));
-                    perAngleWhiteBalanceCheckBox.setSelected("Per-angle (PPM)".equals(newVal));
                     PersistentPreferences.setLastWhiteBalanceMode(newVal);
                 }
             });
@@ -804,7 +791,7 @@ public class ExistingImageAcquisitionController {
         }
 
         private void updateObjectivesForModality(String modality) {
-            Set<String> objectiveIds = configManager.getAvailableObjectivesForModality(modality);
+            Set<String> objectiveIds = configManager.getAvailableObjectives();
             Map<String, String> objectiveNames = configManager.getObjectiveFriendlyNames(objectiveIds);
 
             List<String> objectiveDisplayItems = objectiveIds.stream()
@@ -834,7 +821,7 @@ public class ExistingImageAcquisitionController {
 
         private void updateDetectorsForObjective(String modality, String objectiveDisplay) {
             String objectiveId = extractIdFromDisplayString(objectiveDisplay);
-            Set<String> detectorIds = configManager.getAvailableDetectorsForModalityObjective(modality, objectiveId);
+            Set<String> detectorIds = configManager.getAvailableDetectors();
             Map<String, String> detectorNames = configManager.getDetectorFriendlyNames(detectorIds);
 
             List<String> detectorDisplayItems = detectorIds.stream()

@@ -162,7 +162,7 @@ public class CameraControlController {
 
         // Get available objectives and detectors from config
         // Use PPM modality to get objectives that have PPM calibration profiles
-        Set<String> objectives = mgr.getAvailableObjectivesForModality("ppm");
+        Set<String> objectives = mgr.getAvailableObjectives();
         Set<String> detectors = mgr.getHardwareDetectors();
 
         ComboBox<String> objectiveCombo = new ComboBox<>();

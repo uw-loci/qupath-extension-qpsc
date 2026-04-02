@@ -322,13 +322,13 @@ public class CalibrationChecker {
     }
 
     /**
-     * Gets the set of available objectives for a given modality.
+     * Gets the set of available objectives on this microscope.
      */
-    public static Set<String> getAvailableObjectives(String modality) {
+    public static Set<String> getAvailableObjectives() {
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
-            return mgr.getAvailableObjectivesForModality(modality);
+            return mgr.getAvailableObjectives();
         } catch (Exception e) {
             logger.debug("Error getting available objectives", e);
             return Set.of();
@@ -336,13 +336,13 @@ public class CalibrationChecker {
     }
 
     /**
-     * Gets the set of available detectors for a given modality and objective.
+     * Gets the set of available detectors on this microscope.
      */
-    public static Set<String> getAvailableDetectors(String modality, String objective) {
+    public static Set<String> getAvailableDetectors() {
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
-            return mgr.getAvailableDetectorsForModalityObjective(modality, objective);
+            return mgr.getAvailableDetectors();
         } catch (Exception e) {
             logger.debug("Error getting available detectors", e);
             return Set.of();

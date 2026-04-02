@@ -456,7 +456,7 @@ public class BackgroundCollectionController {
 
             if (baseBackgroundFolder != null) {
                 // Get detector for this modality/objective combination
-                Set<String> detectors = configManager.getAvailableDetectorsForModalityObjective(modality, objective);
+                Set<String> detectors = configManager.getAvailableDetectors();
                 if (!detectors.isEmpty()) {
                     String detector = detectors.iterator().next();
                     // Look up backgrounds for the currently selected WB mode
@@ -495,7 +495,7 @@ public class BackgroundCollectionController {
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
-            Set<String> detectors = configManager.getAvailableDetectorsForModalityObjective(modality, objective);
+            Set<String> detectors = configManager.getAvailableDetectors();
             if (!detectors.isEmpty()) {
                 detector = detectors.iterator().next();
             }
@@ -708,7 +708,7 @@ public class BackgroundCollectionController {
                 return;
             }
 
-            Set<String> detectors = configManager.getAvailableDetectorsForModalityObjective(modality, objective);
+            Set<String> detectors = configManager.getAvailableDetectors();
             if (detectors.isEmpty()) {
                 return;
             }
@@ -759,7 +759,7 @@ public class BackgroundCollectionController {
         try {
             String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
-            Set<String> availableObjectives = configManager.getAvailableObjectivesForModality(modality);
+            Set<String> availableObjectives = configManager.getAvailableObjectives();
 
             if (!availableObjectives.isEmpty()) {
                 objectiveComboBox.getItems().addAll(availableObjectives);

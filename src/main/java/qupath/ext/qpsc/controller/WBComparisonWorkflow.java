@@ -787,7 +787,7 @@ public class WBComparisonWorkflow {
     }
 
     private static String resolveObjective(MicroscopeConfigManager configManager, String modality) {
-        Set<String> objectives = configManager.getAvailableObjectivesForModality(modality);
+        Set<String> objectives = configManager.getAvailableObjectives();
         if (objectives.isEmpty()) {
             throw new RuntimeException("No objectives available for modality: " + modality);
         }
@@ -801,7 +801,7 @@ public class WBComparisonWorkflow {
     }
 
     private static String resolveDetector(MicroscopeConfigManager configManager, String modality, String objective) {
-        Set<String> detectors = configManager.getAvailableDetectorsForModalityObjective(modality, objective);
+        Set<String> detectors = configManager.getAvailableDetectors();
         if (!detectors.isEmpty()) return detectors.iterator().next();
         throw new RuntimeException("No detectors available for " + modality + "/" + objective);
     }

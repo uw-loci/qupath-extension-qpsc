@@ -149,7 +149,7 @@ public class BackgroundCollectionWorkflow {
             String detector = null;
             if (objective != null) {
                 Set<String> availableDetectors =
-                        configManager.getAvailableDetectorsForModalityObjective(modality, objective);
+                        configManager.getAvailableDetectors();
                 detector = availableDetectors.isEmpty()
                         ? null
                         : availableDetectors.iterator().next();

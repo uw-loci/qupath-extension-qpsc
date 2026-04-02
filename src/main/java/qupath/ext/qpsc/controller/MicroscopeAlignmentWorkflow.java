@@ -962,8 +962,6 @@ public class MicroscopeAlignmentWorkflow {
                                     fullResToStageTransform,
                                     detectionResultsHolder[0],
                                     macroPixelSize,
-                                    stageInvertedX,
-                                    stageInvertedY,
                                     transformManager,
                                     selectedScanner);
 
@@ -1150,8 +1148,6 @@ public class MicroscopeAlignmentWorkflow {
      * @param fullResToStageTransform The manually-aligned transform from full-res to stage coordinates
      * @param macroImageResults Detection results from the macro image analysis
      * @param macroPixelSize Physical size of macro pixels in micrometers (typically 81.0)
-     * @param stageInvertedX Whether stage X axis is inverted (unused in current implementation)
-     * @param stageInvertedY Whether stage Y axis is inverted (unused in current implementation)
      * @param transformManager Manager for saving transform presets
      * @param selectedScanner Name of the source scanner that created the macro image
      */
@@ -1161,8 +1157,6 @@ public class MicroscopeAlignmentWorkflow {
             AffineTransform fullResToStageTransform,
             MacroImageResults macroImageResults,
             double macroPixelSize,
-            boolean stageInvertedX,
-            boolean stageInvertedY,
             AffineTransformManager transformManager,
             String selectedScanner) {
 

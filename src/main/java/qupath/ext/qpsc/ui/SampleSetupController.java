@@ -205,7 +205,7 @@ public class SampleSetupController {
                     logger.debug("Modality changed to: {}", newModality);
 
                     // Get available objectives for this modality
-                    Set<String> objectiveIds = configManager.getAvailableObjectivesForModality(newModality);
+                    Set<String> objectiveIds = configManager.getAvailableObjectives();
                     Map<String, String> objectiveNames = configManager.getObjectiveFriendlyNames(objectiveIds);
 
                     // Create display strings that combine friendly name with ID for clarity
@@ -237,8 +237,7 @@ public class SampleSetupController {
                     logger.debug("Objective changed to: {} ({})", newObjective, objectiveId);
 
                     // Get available detectors for this modality+objective combo
-                    Set<String> detectorIds = configManager.getAvailableDetectorsForModalityObjective(
-                            modalityBox.getValue(), objectiveId);
+                    Set<String> detectorIds = configManager.getAvailableDetectors();
                     Map<String, String> detectorNames = configManager.getDetectorFriendlyNames(detectorIds);
 
                     // Create display strings
@@ -284,7 +283,7 @@ public class SampleSetupController {
                     logger.debug("Triggering initial population for modality: {}", initialModality);
 
                     // Get available objectives for this modality
-                    Set<String> objectiveIds = configManager.getAvailableObjectivesForModality(initialModality);
+                    Set<String> objectiveIds = configManager.getAvailableObjectives();
                     Map<String, String> objectiveNames = configManager.getObjectiveFriendlyNames(objectiveIds);
 
                     logger.debug("Initial objectives found: {}", objectiveIds);

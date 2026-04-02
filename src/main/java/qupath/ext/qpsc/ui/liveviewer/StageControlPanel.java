@@ -779,7 +779,7 @@ public class StageControlPanel extends TitledPane {
             String mod = (modalities != null && !modalities.isEmpty())
                     ? modalities.iterator().next()
                     : "ppm";
-            var objectives = mgr.getAvailableObjectivesForModality(mod);
+            var objectives = mgr.getAvailableObjectives();
             var detectors = mgr.getHardwareDetectors();
 
             boolean detected = false;
@@ -956,7 +956,7 @@ public class StageControlPanel extends TitledPane {
 
     /** Resolve the detector ID for a given modality. */
     private String resolveDetector(String modality) {
-        var dets = mgr.getAvailableDetectorsForModalityObjective(modality, currentCameraObjectiveId);
+        var dets = mgr.getAvailableDetectors();
         return (dets != null && !dets.isEmpty()) ? dets.iterator().next() : currentCameraDetectorId;
     }
 

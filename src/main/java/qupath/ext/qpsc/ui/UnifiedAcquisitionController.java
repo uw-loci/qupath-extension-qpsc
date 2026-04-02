@@ -148,8 +148,6 @@ public class UnifiedAcquisitionController {
 
         // UI Components - White Balance Section (JAI camera only)
         private VBox whiteBalanceSection;
-        private CheckBox enableWhiteBalanceCheckBox;
-        private CheckBox perAngleWhiteBalanceCheckBox;
         private ComboBox<String> wbModeComboBox;
 
         // UI Components - Advanced Section Content
@@ -373,20 +371,8 @@ public class UnifiedAcquisitionController {
                     + "  Simple (90deg) - Use 90deg R:G:B ratios, scaled per angle\n"
                     + "  Per-angle (PPM) - Independent calibration per angle (default)"));
 
-            // Legacy checkboxes (hidden, for backward compat)
-            enableWhiteBalanceCheckBox = new CheckBox();
-            enableWhiteBalanceCheckBox.setSelected(true);
-            enableWhiteBalanceCheckBox.setVisible(false);
-            enableWhiteBalanceCheckBox.setManaged(false);
-            perAngleWhiteBalanceCheckBox = new CheckBox();
-            perAngleWhiteBalanceCheckBox.setSelected(false);
-            perAngleWhiteBalanceCheckBox.setVisible(false);
-            perAngleWhiteBalanceCheckBox.setManaged(false);
-
             wbModeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
                 if (newVal != null) {
-                    enableWhiteBalanceCheckBox.setSelected(!"Off".equals(newVal));
-                    perAngleWhiteBalanceCheckBox.setSelected("Per-angle (PPM)".equals(newVal));
                     PersistentPreferences.setLastWhiteBalanceMode(newVal);
                 }
             });
@@ -847,7 +833,7 @@ public class UnifiedAcquisitionController {
         }
 
         private void updateObjectivesForModality(String modality) {
-            Set<String> objectiveIds = configManager.getAvailableObjectivesForModality(modality);
+            Set<String> objectiveIds = configManager.getAvailableObjectives();
             Map<String, String> objectiveNames = configManager.getObjectiveFriendlyNames(objectiveIds);
 
             List<String> objectiveDisplayItems = objectiveIds.stream()
@@ -878,7 +864,7 @@ public class UnifiedAcquisitionController {
 
         private void updateDetectorsForObjective(String modality, String objectiveDisplay) {
             String objectiveId = extractIdFromDisplayString(objectiveDisplay);
-            Set<String> detectorIds = configManager.getAvailableDetectorsForModalityObjective(modality, objectiveId);
+            Set<String> detectorIds = configManager.getAvailableDetectors();
             Map<String, String> detectorNames = configManager.getDetectorFriendlyNames(detectorIds);
 
             List<String> detectorDisplayItems = detectorIds.stream()

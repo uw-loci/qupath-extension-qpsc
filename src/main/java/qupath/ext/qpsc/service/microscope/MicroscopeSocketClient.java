@@ -1009,14 +1009,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throws IOException {
 
         // Build BGACQUIRE-specific command message
-        // Include new --wb-mode flag and legacy --use_per_angle_wb for backward compat
         String wbFlags = "";
         if (wbMode != null && !wbMode.isEmpty()) {
             wbFlags += " --wb-mode " + wbMode;
-        }
-        // Legacy flag for backward compat with older servers
-        if ("per_angle".equals(wbMode)) {
-            wbFlags += " --use_per_angle_wb";
         }
         // Objective and detector are required for WB calibration lookup in imageprocessing YAML
         String hwFlags = "";

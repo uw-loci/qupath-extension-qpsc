@@ -397,7 +397,7 @@ public class WhiteBalanceDialog {
                             if (cfgPath != null && !cfgPath.isEmpty()) {
                                 MicroscopeConfigManager cfgMgr = MicroscopeConfigManager.getInstance(cfgPath);
                                 Set<String> detectors =
-                                        cfgMgr.getAvailableDetectorsForModalityObjective("ppm", selectedObjective);
+                                        cfgMgr.getAvailableDetectors();
                                 if (!detectors.isEmpty()) {
                                     selectedDetector = detectors.iterator().next();
                                 }
@@ -670,7 +670,7 @@ public class WhiteBalanceDialog {
                 if (modality == null || modality.isEmpty()) {
                     modality = "ppm";
                 }
-                Set<String> objectives = configManager.getAvailableObjectivesForModality(modality);
+                Set<String> objectives = configManager.getAvailableObjectives();
                 if (!objectives.isEmpty()) {
                     objectiveCombo
                             .getItems()
