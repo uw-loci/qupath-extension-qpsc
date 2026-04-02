@@ -63,10 +63,10 @@ public class AnnotationOrderingService {
 
         // Log starting position
         logger.info(
-                "Starting annotation ordering from: {} at ({:.1f}, {:.1f})",
+                "Starting annotation ordering from: {} at ({}, {})",
                 withCoords.get(0).annotation.getName(),
-                currentPos[0],
-                currentPos[1]);
+                String.format("%.1f", currentPos[0]),
+                String.format("%.1f", currentPos[1]));
 
         // Greedy nearest-neighbor
         while (!remaining.isEmpty()) {
@@ -88,11 +88,11 @@ public class AnnotationOrderingService {
             currentPos = nearest.stageCoords;
 
             logger.debug(
-                    "  Next: {} at ({:.1f}, {:.1f}), distance: {:.1f} um",
+                    "  Next: {} at ({}, {}), distance: {} um",
                     nearest.annotation.getName(),
-                    currentPos[0],
-                    currentPos[1],
-                    nearestDist);
+                    String.format("%.1f", currentPos[0]),
+                    String.format("%.1f", currentPos[1]),
+                    String.format("%.1f", nearestDist));
         }
 
         // Log final ordering
@@ -101,7 +101,10 @@ public class AnnotationOrderingService {
 
         // Calculate and log total travel distance
         double totalDistance = calculateTotalDistance(ordered, transform);
-        logger.info("Total estimated travel distance: {:.1f} um ({:.2f} mm)", totalDistance, totalDistance / 1000.0);
+        logger.info(
+                "Total estimated travel distance: {} um ({} mm)",
+                String.format("%.1f", totalDistance),
+                String.format("%.2f", totalDistance / 1000.0));
 
         return ordered;
     }

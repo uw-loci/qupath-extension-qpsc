@@ -868,7 +868,13 @@ public class MicroscopeConfigManager {
 
         double width = dimensions[0] * pixelSize;
         double height = dimensions[1] * pixelSize;
-        logger.info("FOV for {}/{}/{}: {:.1f} x {:.1f} um", modality, objective, detector, width, height);
+        logger.info(
+                "FOV for {}/{}/{}: {} x {} um",
+                modality,
+                objective,
+                detector,
+                String.format("%.1f", width),
+                String.format("%.1f", height));
         return new double[] {width, height};
     }
 

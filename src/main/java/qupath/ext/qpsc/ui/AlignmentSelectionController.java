@@ -49,8 +49,7 @@ public class AlignmentSelectionController {
             boolean useExistingAlignment,
             AffineTransformManager.TransformPreset selectedTransform,
             double confidence,
-            boolean wasAutoSelected) {
-    }
+            boolean wasAutoSelected) {}
     /**
      * Updates the transform information display based on the selected transform.
      * Extracted to a separate method to avoid code duplication between initial display
@@ -459,9 +458,9 @@ public class AlignmentSelectionController {
                             AffineTransformManager.TransformPreset selected = transformCombo.getValue();
                             double confidence = AlignmentHelper.calculateConfidence(selected);
                             logger.info(
-                                    "Dialog result: Use existing alignment - transform: '{}', confidence: {:.2f}, auto-selected: {}",
+                                    "Dialog result: Use existing alignment - transform: '{}', confidence: {}, auto-selected: {}",
                                     selected.getName(),
-                                    confidence,
+                                    String.format("%.2f", confidence),
                                     wasAutoSelected[0]);
                             return new AlignmentChoice(true, selected, confidence, wasAutoSelected[0]);
                         } else {
