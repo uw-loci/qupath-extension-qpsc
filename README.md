@@ -46,7 +46,8 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 
 ---
 
-## Features
+<details>
+<summary><h2>Features</h2></summary>
 
 ### Core Capabilities
 
@@ -99,6 +100,8 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 - **Modality System**: Pluggable imaging modes (PPM, brightfield) with extensible plugin architecture
 
 > **Note:** Polarized (PPM) acquisitions use the `ppm_` prefix (e.g., `ppm_20x`). Modalities without this prefix perform single-pass acquisitions.
+
+</details>
 
 ---
 
@@ -209,7 +212,8 @@ Open the **QP Scope** menu in QuPath to access all features:
 
 ---
 
-## Multi-Sample Project Support
+<details>
+<summary><h2>Multi-Sample Project Support</h2></summary>
 
 QPSC supports managing multiple samples within a single QuPath project through an automatic metadata tracking system. This enables complex multi-slide studies while maintaining proper data organization and acquisition validation.
 
@@ -265,9 +269,12 @@ Each image in a project is automatically tagged with metadata to track:
 
 > This metadata system operates transparently in the background, ensuring data integrity while supporting complex multi-sample workflows.
 
+</details>
+
 ---
 
-## Image Naming and Metadata System
+<details>
+<summary><h2>Image Naming and Metadata System</h2></summary>
 
 QPSC uses a flexible, user-configurable image naming system that balances human readability with comprehensive metadata storage.
 
@@ -293,13 +300,13 @@ SampleName_002_7.0.ome.zarr
 
 ### Customizable Filename Components
 
-Users can configure which information appears in filenames via **QuPath Preferences → QPSC Extension**:
+Users can configure which information appears in filenames via **QuPath Preferences -> QPSC Extension**:
 
 **Image name includes:**
-- ☐ **Objective** - Add magnification (e.g., `SampleName_20x_001.ome.tif`)
-- ☐ **Modality** - Add imaging mode (e.g., `SampleName_ppm_001.ome.tif`)
-- ☐ **Annotation** - Add region name (e.g., `SampleName_Tissue_001.ome.tif`)
-- ☑ **Angle** - Add polarization angle (defaults to **ON** for PPM - critical for distinguishing images!)
+- [ ] **Objective** - Add magnification (e.g., `SampleName_20x_001.ome.tif`)
+- [ ] **Modality** - Add imaging mode (e.g., `SampleName_ppm_001.ome.tif`)
+- [ ] **Annotation** - Add region name (e.g., `SampleName_Tissue_001.ome.tif`)
+- [x] **Angle** - Add polarization angle (defaults to **ON** for PPM - critical for distinguishing images!)
 
 **Combining preferences:**
 ```
@@ -321,7 +328,7 @@ SampleName_ppm_20x_001_7.0.ome.zarr
 - Flip status
 - Parent image relationships
 
-Metadata can be viewed in QuPath's **Image → Image Properties** panel.
+Metadata can be viewed in QuPath's **Image -> Image Properties** panel.
 
 ### Sample Name Validation
 
@@ -342,9 +349,12 @@ Projects can now contain multiple samples with distinct names:
 - Metadata tracks which images belong to which sample
 - Essential for collaborative studies with multiple specimens
 
+</details>
+
 ---
 
-## Calibration Workflows
+<details>
+<summary><h2>Calibration Workflows</h2></summary>
 
 ### White Balance Calibration (JAI/Prism Cameras)
 
@@ -653,9 +663,12 @@ autofocus_settings:
 - Objectives from main config automatically populate
 - Save creates the file with all configured objectives
 
+</details>
+
 ---
 
-## Building from Source
+<details>
+<summary><h2>Building from Source</h2></summary>
 
 If you want to build the extension yourself (for development or to get the latest changes), follow these steps:
 
@@ -733,9 +746,12 @@ For development with hot-reload via QuPath:
 2. Open as a Gradle project in IntelliJ
 3. Run the QuPath main class to launch with the extension
 
+</details>
+
 ---
 
-## File Structure (For Developers)
+<details>
+<summary><h2>File Structure (For Developers)</h2></summary>
 
 ```text
 
@@ -852,19 +868,28 @@ sequenceDiagram
     WF->>Q: Show notifications/errors
 ```
 
-## YAML Configuration
+</details>
+
+<details>
+<summary><h2>YAML Configuration</h2></summary>
 Microscope config: Describes imaging modes, detectors, objectives, stage limits, etc. (config_PPM.yml)
 
 Shared resources: Centralized lookup for hardware IDs (cameras, objectives, stages), e.g., for multi-microscope setups (resources/resources_LOCI.yml).
 
-## Development & Testing
+</details>
+
+<details>
+<summary><h2>Development & Testing</h2></summary>
 Workflows are in controller/. GUI dialogs are in ui/.
 
 Unit tests use JUnit and Mockito. See src/test/ for examples.
 
 Extending: Add new dialogs, Python commands, or custom modalities by implementing a `ModalityHandler` and registering it via `ModalityRegistry.registerHandler`.
 
-## Future Plans
+</details>
+
+<details>
+<summary><h2>Future Plans</h2></summary>
 
 The following features and improvements are planned for upcoming releases:
 
@@ -877,9 +902,12 @@ The following features and improvements are planned for upcoming releases:
 - Pre-built JAR releases via GitHub Actions
 - Expanded troubleshooting documentation
 
+</details>
+
 ---
 
-## Troubleshooting
+<details>
+<summary><h2>Troubleshooting</h2></summary>
 
 **Common Issues:**
 
@@ -897,6 +925,8 @@ The following features and improvements are planned for upcoming releases:
 - Error message reference
 - Configuration validation tips
 - Log file interpretation guide
+
+</details>
 
 ---
 
