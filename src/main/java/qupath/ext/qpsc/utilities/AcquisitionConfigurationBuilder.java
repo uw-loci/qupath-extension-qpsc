@@ -39,31 +39,6 @@ public class AcquisitionConfigurationBuilder {
 
     /**
      * Builds a complete acquisition configuration from the provided parameters.
-     * Overload without wbMode for backward compatibility (skips WB mode mismatch validation).
-     */
-    public static AcquisitionConfiguration buildConfiguration(
-            SampleSetupResult sample,
-            String configFileLocation,
-            String modalityWithIndex,
-            String regionName,
-            List<AngleExposure> angleExposures,
-            String projectsFolder,
-            String sampleName,
-            double explicitPixelSize) {
-        return buildConfiguration(
-                sample,
-                configFileLocation,
-                modalityWithIndex,
-                regionName,
-                angleExposures,
-                projectsFolder,
-                sampleName,
-                explicitPixelSize,
-                null);
-    }
-
-    /**
-     * Builds a complete acquisition configuration from the provided parameters.
      *
      * @param sample Sample setup result containing hardware configuration
      * @param configFileLocation Path to microscope configuration file

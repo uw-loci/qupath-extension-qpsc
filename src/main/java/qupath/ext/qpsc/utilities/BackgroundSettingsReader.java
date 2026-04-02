@@ -124,13 +124,17 @@ public class BackgroundSettingsReader {
     }
 
     /**
-     * Attempt to find and read background settings for a given hardware combination and WB mode.
+     * Attempt to find and read background settings for a given hardware combination.
+     *
+     * <p>When wbMode is provided, targets that specific WB subdirectory first, then falls back
+     * to the legacy (flat) path. When wbMode is null, checks the legacy path first, then scans
+     * all WB-mode subdirectories to find any available backgrounds.</p>
      *
      * @param baseBackgroundFolder The base background correction folder from config
      * @param modality The modality name (e.g., "ppm")
-     * @param objective The objective ID
-     * @param detector The detector ID
-     * @param wbMode White balance mode for targeted lookup (e.g., "per_angle"), or null
+     * @param objective The objective ID (e.g., "LOCI_OBJECTIVE_OLYMPUS_20X_POL_001")
+     * @param detector The detector ID (e.g., "LOCI_DETECTOR_JAI_001")
+     * @param wbMode White balance mode for targeted lookup (e.g., "per_angle"), or null to scan all
      * @return BackgroundSettings if found and valid, null otherwise
      */
     public static BackgroundSettings findBackgroundSettings(
@@ -156,74 +160,34 @@ public class BackgroundSettingsReader {
                 }
             }
 
-            // Fall back to legacy path
+            // Check legacy (flat) path
             File legacySettings = new File(basePath, "background_settings.yml");
             if (legacySettings.exists()) {
                 logger.debug("Found legacy background settings at: {}", legacySettings.getAbsolutePath());
                 return readBackgroundSettings(legacySettings);
             }
 
-            logger.debug(
-                    "No background settings found for {}/{}/{} (wbMode={})", modality, objective, detector, wbMode);
-            return null;
-
-        } catch (Exception e) {
-            logger.error("Error searching for background settings", e);
-            return null;
-        }
-    }
-
-    /**
-     * Attempt to find and read background settings for a given modality/objective/detector combination.
-     * When no wbMode is specified, scans WB-mode subdirectories to find any available backgrounds.
-     *
-     * @param baseBackgroundFolder The base background correction folder from config
-     * @param modality The modality name (e.g., "ppm")
-     * @param objective The objective ID (e.g., "LOCI_OBJECTIVE_OLYMPUS_20X_POL_001")
-     * @param detector The detector ID (e.g., "LOCI_DETECTOR_JAI_001")
-     * @return BackgroundSettings if found and valid, null otherwise
-     */
-    public static BackgroundSettings findBackgroundSettings(
-            String baseBackgroundFolder, String modality, String objective, String detector) {
-
-        if (baseBackgroundFolder == null || modality == null || objective == null || detector == null) {
-            logger.debug("Cannot search for background settings - missing required parameters");
-            return null;
-        }
-
-        try {
-            // Extract magnification from objective
-            String magnification = extractMagnificationFromObjective(objective);
-
-            String basePath = new File(
-                            baseBackgroundFolder, detector + File.separator + modality + File.separator + magnification)
-                    .getPath();
-
-            // Check legacy (flat) path first for backward compatibility
-            File legacySettings = new File(basePath, "background_settings.yml");
-            if (legacySettings.exists()) {
-                logger.debug("Found legacy background settings at: {}", legacySettings.getAbsolutePath());
-                return readBackgroundSettings(legacySettings);
-            }
-
-            // Scan WB-mode subdirectories
-            File baseDir = new File(basePath);
-            if (baseDir.isDirectory()) {
-                File[] subdirs = baseDir.listFiles(File::isDirectory);
-                if (subdirs != null) {
-                    for (File subdir : subdirs) {
-                        File wbSettings = new File(subdir, "background_settings.yml");
-                        if (wbSettings.exists()) {
-                            logger.debug(
-                                    "Found WB-mode background settings in subdirectory: {}",
-                                    wbSettings.getAbsolutePath());
-                            return readBackgroundSettings(wbSettings);
+            // If no wbMode specified, scan WB-mode subdirectories
+            if (wbMode == null || wbMode.isEmpty()) {
+                File baseDir = new File(basePath);
+                if (baseDir.isDirectory()) {
+                    File[] subdirs = baseDir.listFiles(File::isDirectory);
+                    if (subdirs != null) {
+                        for (File subdir : subdirs) {
+                            File wbSettings = new File(subdir, "background_settings.yml");
+                            if (wbSettings.exists()) {
+                                logger.debug(
+                                        "Found WB-mode background settings in subdirectory: {}",
+                                        wbSettings.getAbsolutePath());
+                                return readBackgroundSettings(wbSettings);
+                            }
                         }
                     }
                 }
             }
 
-            logger.debug("No background settings found at legacy path or WB subdirectories under: {}", basePath);
+            logger.debug(
+                    "No background settings found for {}/{}/{} (wbMode={})", modality, objective, detector, wbMode);
             return null;
 
         } catch (Exception e) {

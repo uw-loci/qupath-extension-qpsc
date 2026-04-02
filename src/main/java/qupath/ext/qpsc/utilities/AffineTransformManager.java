@@ -67,17 +67,18 @@ public class AffineTransformManager {
         /** Z offset for 3D transforms (null = default 0.0). Wrapper type for Gson backward compat. */
         private final Double zOffset;
 
-        public TransformPreset(
-                String name,
-                String microscope,
-                String mountingMethod,
-                AffineTransform transform,
-                String notes,
-                GreenBoxDetector.DetectionParams greenBoxParams) {
-            this(name, microscope, mountingMethod, transform, notes, greenBoxParams, 1.0, 0.0);
-        }
-
-        /** Full constructor with Z scale and offset for 3D transform support. */
+        /**
+         * Full constructor with all parameters including Z scale and offset for 3D transform support.
+         *
+         * @param name Preset name
+         * @param microscope Microscope identifier
+         * @param mountingMethod Mounting/scanner method
+         * @param transform 2D affine transform
+         * @param notes Free-text notes
+         * @param greenBoxParams Green box detection parameters
+         * @param zScale Z scale factor (1.0 = no Z scaling)
+         * @param zOffset Z offset in micrometers (0.0 = no offset)
+         */
         public TransformPreset(
                 String name,
                 String microscope,
@@ -96,14 +97,6 @@ public class AffineTransformManager {
             this.greenBoxParams = greenBoxParams;
             this.zScale = (zScale == 1.0) ? null : zScale; // null = default 1.0 (omit from JSON)
             this.zOffset = (zOffset == 0.0) ? null : zOffset; // null = default 0.0 (omit from JSON)
-        }
-        /**
-         * Constructor without green box parameters.
-         * Uses default detection parameters.
-         */
-        public TransformPreset(
-                String name, String microscope, String mountingMethod, AffineTransform transform, String notes) {
-            this(name, microscope, mountingMethod, transform, notes, new GreenBoxDetector.DetectionParams());
         }
 
         // Getters

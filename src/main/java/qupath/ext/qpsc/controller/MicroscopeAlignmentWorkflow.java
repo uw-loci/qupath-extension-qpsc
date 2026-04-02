@@ -1301,7 +1301,9 @@ public class MicroscopeAlignmentWorkflow {
                     selectedScanner,
                     macroToStageTransform,
                     description,
-                    config.greenBoxParams());
+                    config.greenBoxParams(),
+                    1.0, // zScale default (no Z scaling)
+                    0.0); // zOffset default (no Z offset)
 
             transformManager.savePreset(preset);
             PersistentPreferences.setSavedTransformName(transformName);
