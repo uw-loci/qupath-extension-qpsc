@@ -205,7 +205,7 @@ public class BoundedAcquisitionWorkflow {
             double WSI_pixelSize_um;
             try {
                 WSI_pixelSize_um =
-                        configManager.getModalityPixelSize(result.modality(), result.objective(), result.detector());
+                        configManager.getPixelSize(result.objective(), result.detector());
             } catch (IllegalArgumentException e) {
                 UIFunctions.notifyUserOfError("Failed to get pixel size: " + e.getMessage(), "Configuration Error");
                 return;

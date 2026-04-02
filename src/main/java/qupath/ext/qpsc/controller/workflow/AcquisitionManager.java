@@ -589,8 +589,8 @@ public class AcquisitionManager {
                 // Get WSI pixel size using explicit hardware configuration
                 double WSI_pixelSize_um;
                 try {
-                    WSI_pixelSize_um = configManager.getModalityPixelSize(
-                            baseModality, state.sample.objective(), state.sample.detector());
+                    WSI_pixelSize_um = configManager.getPixelSize(
+                            state.sample.objective(), state.sample.detector());
                     logger.debug(
                             "Using explicit hardware config: obj={}, det={}, px={}",
                             state.sample.objective(),
@@ -1069,7 +1069,7 @@ public class AcquisitionManager {
 
         double WSI_pixelSize_um;
         try {
-            WSI_pixelSize_um = configManager.getModalityPixelSize(baseModality, objective, detector);
+            WSI_pixelSize_um = configManager.getPixelSize(objective, detector);
             logger.info(
                     "Using stitching WSI pixel size for {}/{}/{}: {} um",
                     baseModality,

@@ -507,39 +507,7 @@ public class MicroscopeConfigManager {
         return new HashMap<>();
     }
 
-    // ========== NEW ACQUISITION PROFILE METHODS ==========
-
-    /**
-     * Get a specific acquisition profile by modality, objective, and detector.
-     *
-     * @param modality The modality name (e.g., "ppm", "brightfield")
-     * @param objective The objective ID (e.g., "LOCI_OBJECTIVE_OLYMPUS_10X_001")
-     * @param detector The detector ID (e.g., "LOCI_DETECTOR_JAI_001")
-     * @return Map containing the profile keys, or null if combination is invalid
-     * @deprecated With simplified hardware config, all modality/objective/detector combinations
-     *             are valid. Use {@link #isValidHardwareCombination(String, String, String)} instead.
-     */
-    @Deprecated
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> getAcquisitionProfile(String modality, String objective, String detector) {
-        // With new hardware config, validate the combination exists
-        if (!isValidHardwareCombination(modality, objective, detector)) {
-            logger.warn(
-                    "Invalid hardware combination: modality={}, objective={}, detector={}",
-                    modality,
-                    objective,
-                    detector);
-            return null;
-        }
-
-        // Return a synthetic profile map for backwards compatibility
-        Map<String, Object> profile = new HashMap<>();
-        profile.put("modality", modality);
-        profile.put("objective", objective);
-        profile.put("detector", detector);
-        logger.debug("Created synthetic profile for {}/{}/{}", modality, objective, detector);
-        return profile;
-    }
+    // ========== ACQUISITION PROFILE METHODS ==========
 
     /**
      * Check if a modality/objective/detector combination is valid based on hardware configuration.
@@ -669,25 +637,24 @@ public class MicroscopeConfigManager {
      * Get pixel size for a specific modality/objective/detector combination.
      * Pixel sizes are stored in the hardware.objectives section of the main config.
      *
-     * @param modality The modality name (unused, kept for API compatibility)
      * @param objective The objective ID
      * @param detector The detector ID
      * @return Pixel size in microns
      * @throws IllegalArgumentException if pixel size cannot be determined
      */
-    public double getModalityPixelSize(String modality, String objective, String detector) {
+    public double getPixelSize(String objective, String detector) {
         Double pixelSize = getHardwarePixelSize(objective, detector);
 
         if (pixelSize != null && pixelSize > 0) {
-            logger.debug("Pixel size for {}/{}/{}: {} um", modality, objective, detector, pixelSize);
+            logger.debug("Pixel size for {}/{}: {} um", objective, detector, pixelSize);
             return pixelSize;
         }
 
-        logger.error("No valid pixel size found for {}/{}/{}", modality, objective, detector);
+        logger.error("No valid pixel size found for objective {} with detector {}", objective, detector);
         throw new IllegalArgumentException(String.format(
-                "Cannot determine pixel size for modality '%s', objective '%s', detector '%s'. "
+                "No valid pixel size found for objective '%s' with detector '%s'. "
                         + "Please check hardware configuration.",
-                modality, objective, detector));
+                objective, detector));
     }
 
     /**
@@ -727,7 +694,7 @@ public class MicroscopeConfigManager {
 
             for (String detectorId : detectors) {
                 try {
-                    double pixelSize = getModalityPixelSize(baseModality, objectiveId, detectorId);
+                    double pixelSize = getPixelSize(objectiveId, detectorId);
                     if (pixelSize > 0) {
                         logger.debug(
                                 "Found pixel size {} um for modality {} using {}/{}",
@@ -887,9 +854,9 @@ public class MicroscopeConfigManager {
             }
         }
 
-        double pixelSize = getModalityPixelSize(modality, objective, detector);
+        double pixelSize = getPixelSize(objective, detector);
         if (pixelSize <= 0) {
-            logger.error("Invalid pixel size for {}/{}/{}", modality, objective, detector);
+            logger.error("Invalid pixel size for {}/{}", objective, detector);
             return null;
         }
 

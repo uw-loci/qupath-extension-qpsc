@@ -493,7 +493,7 @@ public class UnifiedAcquisitionController {
                     // Get QPSC config pixel size for the selected objective
                     String modality = modalityBox.getValue();
                     String detector = detectorBox.getValue() != null ? detectorBox.getValue() : "";
-                    double configPixelSize = configManager.getModalityPixelSize(modality, objective, detector);
+                    double configPixelSize = configManager.getPixelSize(objective, detector);
                     if (configPixelSize <= 0) return;
 
                     // Round both to the fewer decimal places

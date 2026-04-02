@@ -435,7 +435,7 @@ public class MicroscopeController implements StagePositionProvider {
         }
 
         // Get pixel size using the explicit hardware configuration
-        double pixelSize = mgr.getModalityPixelSize(baseModality, objectiveId, detectorId);
+        double pixelSize = mgr.getPixelSize(objectiveId, detectorId);
         if (pixelSize <= 0) {
             throw new IOException(String.format(
                     "Invalid pixel size (%.4f) for modality '%s' with objective '%s' and detector '%s'",

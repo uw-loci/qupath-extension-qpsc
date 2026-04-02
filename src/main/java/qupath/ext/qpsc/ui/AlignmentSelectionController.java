@@ -50,17 +50,6 @@ public class AlignmentSelectionController {
             AffineTransformManager.TransformPreset selectedTransform,
             double confidence,
             boolean wasAutoSelected) {
-        /**
-         * Legacy constructor for backward compatibility.
-         * @deprecated Use the full constructor with confidence and wasAutoSelected
-         */
-        @Deprecated
-        public AlignmentChoice(
-                boolean useExistingAlignment,
-                AffineTransformManager.TransformPreset selectedTransform,
-                boolean refinementRequested) {
-            this(useExistingAlignment, selectedTransform, 0.7, false);
-        }
     }
     /**
      * Updates the transform information display based on the selected transform.

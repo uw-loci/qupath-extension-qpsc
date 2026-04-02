@@ -688,7 +688,7 @@ public class ExistingImageWorkflowV2 {
                 String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
                 MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
                 double configPixelSize =
-                        configManager.getModalityPixelSize(state.modality, state.objective, state.detector);
+                        configManager.getPixelSize(state.objective, state.detector);
                 if (!QPScopeChecks.validateObjectivePixelSize(
                         state.objective, state.detector, state.modality, configPixelSize)) {
                     return CompletableFuture.completedFuture(null); // user cancelled

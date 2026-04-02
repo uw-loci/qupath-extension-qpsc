@@ -98,8 +98,8 @@ public class ConfigurationTestRunner {
                 "fake_modality", "LOCI_OBJECTIVE_TEST_10X_001", "LOCI_DETECTOR_TEST_001"));
 
         // Test pixel size from hardware section
-        double pixelSize = configManager.getModalityPixelSize(
-                "test_brightfield", "LOCI_OBJECTIVE_TEST_10X_001", "LOCI_DETECTOR_TEST_001");
+        double pixelSize = configManager.getPixelSize(
+                "LOCI_OBJECTIVE_TEST_10X_001", "LOCI_DETECTOR_TEST_001");
         assertEquals(1.0, pixelSize, 0.001);
 
         // Test exposures (from imageprocessing file)
@@ -218,7 +218,7 @@ public class ConfigurationTestRunner {
 
         // Test pixel size for non-existent combination throws exception
         assertThrows(IllegalArgumentException.class, () -> {
-            configManager.getModalityPixelSize("fake", "fake", "fake");
+            configManager.getPixelSize("fake", "fake");
         });
 
         // Test invalid stage axis

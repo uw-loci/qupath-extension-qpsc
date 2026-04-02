@@ -137,7 +137,7 @@ public class ConfigurationAccessorTest {
 
             // Test pixel size
             try {
-                double pixelSize = mgr.getModalityPixelSize(modality, objectiveId, detectorId);
+                double pixelSize = mgr.getPixelSize(objectiveId, detectorId);
                 logger.info("    Pixel size: {} um", pixelSize);
             } catch (IllegalArgumentException e) {
                 logger.warn("    Pixel size not found: {}", e.getMessage());
@@ -264,7 +264,7 @@ public class ConfigurationAccessorTest {
 
         // Try to get pixel size for non-existent combination
         try {
-            double pixelSize = mgr.getModalityPixelSize("non_existent", "fake_objective", "fake_detector");
+            double pixelSize = mgr.getPixelSize("fake_objective", "fake_detector");
             logger.info("Non-existent modality pixel size (unexpected success): {}", pixelSize);
         } catch (IllegalArgumentException e) {
             logger.info("Non-existent modality pixel size threw expected exception: {}", e.getMessage());
