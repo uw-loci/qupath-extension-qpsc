@@ -138,8 +138,8 @@ public class ImageFlipHelper {
                 metaFlipY = nameFlipY;
                 metaFlipped = nameFlipX || nameFlipY;
                 // Repair metadata so this fallback isn't needed next time
-                currentEntry.putMetadataValue(ImageMetadataManager.FLIP_X, nameFlipX ? "1" : "0");
-                currentEntry.putMetadataValue(ImageMetadataManager.FLIP_Y, nameFlipY ? "1" : "0");
+                currentEntry.getMetadata().put(ImageMetadataManager.FLIP_X, nameFlipX ? "1" : "0");
+                currentEntry.getMetadata().put(ImageMetadataManager.FLIP_Y, nameFlipY ? "1" : "0");
                 logger.info("Repaired flip metadata: flip_x={}, flip_y={}", nameFlipX, nameFlipY);
             }
 
