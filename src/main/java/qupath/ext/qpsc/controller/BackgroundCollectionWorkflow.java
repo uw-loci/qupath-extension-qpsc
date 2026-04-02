@@ -148,8 +148,7 @@ public class BackgroundCollectionWorkflow {
             // Create proper folder structure
             String detector = null;
             if (objective != null) {
-                Set<String> availableDetectors =
-                        configManager.getAvailableDetectors();
+                Set<String> availableDetectors = configManager.getAvailableDetectors();
                 detector = availableDetectors.isEmpty()
                         ? null
                         : availableDetectors.iterator().next();

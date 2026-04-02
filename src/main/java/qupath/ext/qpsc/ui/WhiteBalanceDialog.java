@@ -396,8 +396,7 @@ public class WhiteBalanceDialog {
                             String cfgPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
                             if (cfgPath != null && !cfgPath.isEmpty()) {
                                 MicroscopeConfigManager cfgMgr = MicroscopeConfigManager.getInstance(cfgPath);
-                                Set<String> detectors =
-                                        cfgMgr.getAvailableDetectors();
+                                Set<String> detectors = cfgMgr.getAvailableDetectors();
                                 if (!detectors.isEmpty()) {
                                     selectedDetector = detectors.iterator().next();
                                 }
