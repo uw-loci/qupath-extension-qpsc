@@ -47,6 +47,7 @@ import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.ext.qpsc.utilities.ZFocusPredictionModel;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.classes.PathClass;
 import qupath.lib.projects.Project;
@@ -103,6 +104,10 @@ public class AcquisitionManager {
      *  Do NOT look this up from gui.getImageData() later, as the viewer state can change
      *  when stitching dialogs close or other images are opened. */
     private ProjectImageEntry<BufferedImage> parentEntry = null;
+
+    /** ImageData captured at session start -- provides stable access to the WSI server
+     *  for tile reading (e.g., WSI tissue scoring) even after the viewer loses its image. */
+    private ImageData<BufferedImage> capturedImageData = null;
 
     /**
      * Creates a new acquisition manager.
@@ -392,11 +397,13 @@ public class AcquisitionManager {
         @SuppressWarnings("unchecked")
         Project<BufferedImage> captureProject = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
         if (gui.getViewer().hasServer() && gui.getImageData() != null && captureProject != null) {
-            parentEntry = captureProject.getEntry(gui.getImageData());
+            capturedImageData = gui.getImageData();
+            parentEntry = captureProject.getEntry(capturedImageData);
             logger.info(
                     "Captured parent entry for metadata: {}",
                     parentEntry != null ? parentEntry.getImageName() : "null");
         } else {
+            capturedImageData = null;
             parentEntry = null;
             logger.warn("No parent entry available at session start -- stitched images will be unassigned");
         }
@@ -589,8 +596,7 @@ public class AcquisitionManager {
                 // Get WSI pixel size using explicit hardware configuration
                 double WSI_pixelSize_um;
                 try {
-                    WSI_pixelSize_um = configManager.getPixelSize(
-                            state.sample.objective(), state.sample.detector());
+                    WSI_pixelSize_um = configManager.getPixelSize(state.sample.objective(), state.sample.detector());
                     logger.debug(
                             "Using explicit hardware config: obj={}, det={}, px={}",
                             state.sample.objective(),
@@ -1699,10 +1705,11 @@ public class AcquisitionManager {
             double minTissueScore,
             int whiteThreshold,
             int darkThreshold) {
-        var gui = QuPathGUI.getInstance();
-        if (gui == null || gui.getImageData() == null) return -1;
+        // Use the ImageData captured at session start -- gui.getImageData() may be null
+        // after stitching dialogs close and the viewer loses its image reference.
+        if (capturedImageData == null) return -1;
 
-        var server = gui.getImageData().getServer();
+        var server = capturedImageData.getServer();
         double pixelSize = server.getPixelCalibration().getAveragedPixelSizeMicrons();
         if (pixelSize <= 0 || Double.isNaN(pixelSize)) return -1;
 
