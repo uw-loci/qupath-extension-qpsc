@@ -5,7 +5,9 @@
 
 ## Purpose
 
-View and test camera exposure and gain settings loaded from calibration profiles. This utility is particularly useful for JAI 3-CCD camera white balance troubleshooting and verifying calibration values before acquisition. Changes made here are for testing only and are not saved to the YAML calibration file.
+View and test camera exposure and gain settings loaded from calibration profiles. Changes made here are for testing only and are not saved to the YAML calibration file.
+
+> **Note:** The Camera Control dialog currently shows per-angle cards specific to **JAI 3-CCD cameras in PPM mode** (with per-channel R/G/B exposures and per-angle rotation). Other camera types and modalities (e.g., brightfield with a single exposure, or laser scanning with dwell time) need a modality-aware layout with a modality dropdown so the controls match the active hardware. This generalization is planned -- see the [TODO list](../../claude-reports/TODO_LIST.md) for status.
 
 ![Camera Control dialog](../images/Docs_CameraControl.png)
 

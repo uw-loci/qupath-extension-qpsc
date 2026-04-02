@@ -3,6 +3,8 @@
 > Menu: Extensions > QP Scope > Utilities > Autofocus Parameter Benchmark...
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
 
+![Autofocus Parameter Benchmark dialog](../images/Docs_AutofocusParameterBenchmark.png)
+
 ## Purpose
 
 Systematically find optimal autofocus settings by testing multiple parameter

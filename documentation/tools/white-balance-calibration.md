@@ -1,7 +1,9 @@
-# White Balance Calibration
+# White Balance Calibration (JAI Camera)
 
 > Menu: Extensions > QP Scope > Utilities > JAI Camera > JAI White Balance Calibration...
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
+
+**Note:** This tool is specific to **JAI 3-CCD prism cameras** and only appears in the menu when a JAI camera is detected. Other cameras may use different white balance approaches (see [Generic White Balance](../TROUBLESHOOTING.md) for future plans).
 
 ## Purpose
 

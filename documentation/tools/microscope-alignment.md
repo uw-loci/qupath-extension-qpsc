@@ -85,6 +85,8 @@ After marking points, click **Calculate Transform**. The system computes the bes
 
 ### Step 4: Refinement (Manual or Automatic)
 
+![Refine Alignment dialog](../images/Docs_MicroscopeAlignment_RefineAlignment.png)
+
 After the initial transform is calculated, single-tile refinement improves accuracy:
 
 1. Select a tile in the image

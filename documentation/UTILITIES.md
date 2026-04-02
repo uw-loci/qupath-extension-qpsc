@@ -2,6 +2,8 @@
 
 This document provides an overview of all utilities available in the QPSC extension. Click any tool name for full documentation including all options, workflow details, and troubleshooting.
 
+![QP Scope main menu](images/Docs_mainmenu.png)
+
 ---
 
 ## Quick Reference
@@ -102,6 +104,8 @@ Measure camera noise statistics (mean, standard deviation, SNR) with Quick, Full
 ---
 
 ## PPM Analysis Tools
+
+![PPM submenu](images/Docs_ppmmenu.png)
 
 > **PPM calibration and analysis workflows are provided by the [qupath-extension-ppm](https://github.com/uw-loci/qupath-extension-ppm) modality plugin.** See the [PPM README](https://github.com/uw-loci/qupath-extension-ppm#readme) for a complete overview and recommended workflow order. PPM computations use the [ppm_library](https://github.com/uw-loci/ppm_library) Python package.
 

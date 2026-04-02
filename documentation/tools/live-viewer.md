@@ -9,8 +9,6 @@ Real-time camera feed with integrated stage control, histogram, and noise statis
 
 ![Live Viewer window](../images/Docs_LiveViewer.png)
 
-![Live Viewer position controls](../images/Docs_LiveViewer_Position.png)
-
 ## Prerequisites
 
 - Connected to microscope server (see [Communication Settings](server-connection.md))
@@ -63,6 +61,8 @@ The Navigate tab combines movement controls and direct position entry in a singl
 
 ### Stage Control - Saved Points Tab
 
+![Live Viewer saved points](../images/Docs_LiveViewer_SavedPoints.png)
+
 | Option | Type | Description |
 |--------|------|-------------|
 | Save Current Position | Button | Save current XYZ position with a custom name |
@@ -71,6 +71,8 @@ The Navigate tab combines movement controls and direct position entry in a singl
 Saved points are stored in JSON preferences and persist across sessions.
 
 ### Stage Control - Camera Tab
+
+![Live Viewer camera tab](../images/Docs_LiveViewer_Camera.png)
 
 Shows the current hardware and provides modality-dependent camera controls.
 
