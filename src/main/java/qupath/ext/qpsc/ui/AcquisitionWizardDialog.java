@@ -740,13 +740,36 @@ public class AcquisitionWizardDialog {
                 + "TO CHANGE SETTINGS:\n"
                 + "  Extensions > QP Scope > Autofocus Configuration Editor\n"
                 + "  Adjust search range, step count, or score metric there."));
-        validateAfButton.setOnAction(e -> runAutofocusValidation(validateAfButton));
+        Label afWarningLabel = new Label();
+        afWarningLabel.setStyle("-fx-text-fill: #D32F2F; -fx-font-weight: bold; -fx-font-size: 11px;");
+        afWarningLabel.setVisible(false);
+        afWarningLabel.setManaged(false);
 
-        section.getChildren().addAll(disableAutofocusCheckBox, validateAfButton);
+        // Blink animation for the warning
+        javafx.animation.Timeline blinkTimeline = new javafx.animation.Timeline(
+                new javafx.animation.KeyFrame(
+                        javafx.util.Duration.millis(700), e2 -> afWarningLabel.setVisible(!afWarningLabel.isVisible())),
+                new javafx.animation.KeyFrame(
+                        javafx.util.Duration.millis(1400),
+                        e2 -> afWarningLabel.setVisible(!afWarningLabel.isVisible())));
+        blinkTimeline.setCycleCount(javafx.animation.Animation.INDEFINITE);
+
+        validateAfButton.setOnAction(e -> {
+            afWarningLabel.setText("Do not interact with the microscope stage position");
+            afWarningLabel.setVisible(true);
+            afWarningLabel.setManaged(true);
+            blinkTimeline.play();
+            runAutofocusValidation(validateAfButton, afWarningLabel, blinkTimeline);
+        });
+
+        javafx.scene.layout.HBox afButtonRow = new javafx.scene.layout.HBox(10, validateAfButton, afWarningLabel);
+        afButtonRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+
+        section.getChildren().addAll(disableAutofocusCheckBox, afButtonRow);
         return section;
     }
 
-    private void runAutofocusValidation(Button button) {
+    private void runAutofocusValidation(Button button, Label warningLabel, javafx.animation.Timeline blinkTimeline) {
         try {
             if (!MicroscopeController.getInstance().isConnected()) {
                 qupath.fx.dialogs.Dialogs.showErrorMessage(
@@ -784,6 +807,9 @@ public class AcquisitionWizardDialog {
                             var result = socketClient.testAutofocusValidation(configPath, testOutputPath, objective);
 
                             javafx.application.Platform.runLater(() -> {
+                                blinkTimeline.stop();
+                                warningLabel.setVisible(false);
+                                warningLabel.setManaged(false);
                                 button.setDisable(false);
                                 button.setText("Validate AF");
                                 qupath.ext.qpsc.controller.AutofocusEditorWorkflow.showValidationResultStatic(result);
@@ -791,6 +817,9 @@ public class AcquisitionWizardDialog {
                         } catch (Exception ex) {
                             logger.error("Autofocus validation failed", ex);
                             javafx.application.Platform.runLater(() -> {
+                                blinkTimeline.stop();
+                                warningLabel.setVisible(false);
+                                warningLabel.setManaged(false);
                                 button.setDisable(false);
                                 button.setText("Validate AF");
                                 qupath.fx.dialogs.Dialogs.showErrorMessage(
@@ -804,6 +833,9 @@ public class AcquisitionWizardDialog {
                     })
                     .exceptionally(ex -> {
                         javafx.application.Platform.runLater(() -> {
+                            blinkTimeline.stop();
+                            warningLabel.setVisible(false);
+                            warningLabel.setManaged(false);
                             button.setDisable(false);
                             button.setText("Validate AF");
                         });
