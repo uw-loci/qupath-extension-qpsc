@@ -302,6 +302,9 @@ public class BoundedAcquisitionWorkflow {
                                         angleExposures.size(),
                                         result.wbMode());
 
+                                // Let the modality handler configure builder flags (e.g., no debayer for LSM)
+                                modalityHandler.configureCommandBuilder(config.commandBuilder());
+
                                 String commandString = config.commandBuilder().buildSocketMessage();
                                 MinorFunctions.saveAcquisitionCommand(
                                         commandString,

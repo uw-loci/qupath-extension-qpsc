@@ -207,7 +207,7 @@ QPSC needs YAML configuration files that describe your microscope hardware (obje
 | 2    | Hardware            | Objectives and detectors (cameras) - select from the LOCI resource catalog or define custom entries |
 | 3    | Pixel Size          | Pixel size (um/pixel) for each objective + detector combination           |
 | 4    | Stage               | Stage ID and XYZ travel limits (min/max in micrometers)                   |
-| 5    | Modalities          | Imaging modes (brightfield, PPM, fluorescence, etc.) with modality-specific settings like rotation angles |
+| 5    | Modalities          | Imaging modes (brightfield, PPM, laser scanning/SHG, fluorescence) with modality-specific settings (rotation angles, laser/PMT/Pockels cell parameters, etc.) |
 | 6    | Server Connection   | Host and port for the Python microscope_command_server (default: localhost:5000) |
 | 7    | Review              | Summary of all settings - review and confirm before writing files         |
 

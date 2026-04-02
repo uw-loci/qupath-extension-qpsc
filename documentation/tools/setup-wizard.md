@@ -78,9 +78,38 @@ Define stage limits and select the stage hardware:
 Configure imaging modalities available on this microscope:
 
 - **Modality table**: Name, Type, and type-specific configuration
-- Supported types: Polarized (PPM), Brightfield, Fluorescence, SHG
-- **Polarized modalities**: Configure rotation stage ID and define rotation angles (name + tick value). Pre-filled with standard PPM defaults (crossed, uncrossed, positive, negative)
-- **Brightfield modalities**: Configure illumination lamp device name
+- Supported types: Polarized (PPM), Brightfield, Fluorescence, Multiphoton (SHG)
+- Each type has a dedicated configuration panel with type-specific fields
+
+#### Modality Type Reference
+
+| Type | Wizard Fields | Use Case |
+|------|--------------|----------|
+| **Polarized** | Rotation stage device, rotation angles (name + tick value table). Pre-filled with standard PPM defaults (crossed, uncrossed, positive, negative). | Polarized light microscopy (PPM) |
+| **Brightfield** | Lamp device name | Standard transmitted light imaging |
+| **Fluorescence** | Filter wheel device name | Epifluorescence imaging |
+| **Multiphoton** | Laser (device, wavelength, range), Pockels cell (device, max voltage), PMT (device, connector, max gain), zoom (device, range, default), shutter (device). See below. | SHG, two-photon, multiphoton imaging |
+
+#### Multiphoton Configuration Details
+
+The multiphoton panel collects the essential hardware settings for laser scanning microscopy. Fields are organized into sections:
+
+| Section | Field | Required? | Description |
+|---------|-------|-----------|-------------|
+| **Laser** | Device | Yes | Micro-Manager device name (e.g., Chameleon) |
+| | Wavelength (nm) | Yes | Default operating wavelength |
+| | Wavelength range | Yes | Tunable min-max range in nm |
+| **Pockels Cell** | Device | Yes | Analog output for laser power control |
+| | Max voltage | Yes | Safety limit (typically 1.0V) |
+| **PMT** | Device | Yes | PMT controller (e.g., DCC100) |
+| | Connector | Yes | Connector number on multi-channel controller |
+| | Max gain (%) | Yes | Safety limit for high-voltage percentage |
+| **Zoom** | Device | No | Scan magnifier (leave blank if none) |
+| | Range | No | Min-max zoom factors |
+| | Default | No | Default zoom factor |
+| **Shutter** | Device | No | Laser safety shutter (leave blank if none) |
+
+> **Note:** Some advanced multiphoton settings (digital shutter IO states, NI DAQ property names, mode positions, XY offsets between modalities) are not collected by the wizard. These are configured by editing the YAML file directly. See [Laser Scanning Quick Start](../QUICKSTART-LSM.md) for the complete YAML reference.
 
 ### Step 6: Server Connection (Optional)
 

@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.modality.multiphoton.MultiphotonModalityHandler;
 import qupath.ext.qpsc.modality.ppm.PPMModalityHandler;
 
 /**
@@ -79,6 +80,7 @@ public final class ModalityRegistry {
     static {
         logger.info("Initializing ModalityRegistry with default modality handlers");
         registerHandler("ppm", new PPMModalityHandler());
+        registerHandler("shg", new MultiphotonModalityHandler());
         logger.info("ModalityRegistry initialization complete. Registered {} modality handlers", HANDLERS.size());
     }
 

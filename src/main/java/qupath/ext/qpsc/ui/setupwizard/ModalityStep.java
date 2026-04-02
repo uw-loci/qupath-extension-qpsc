@@ -100,7 +100,18 @@ public class ModalityStep implements WizardStep {
             } else if ("fluorescence".equals(type)) {
                 detail = "Filter: " + mod.getOrDefault("filter_wheel", "(not set)");
             } else if ("multiphoton".equals(type)) {
-                detail = "Laser: " + mod.getOrDefault("laser", "(not set)");
+                String laserDevice = "(not set)";
+                Object laser = mod.get("laser");
+                if (laser instanceof Map) {
+                    Object dev = ((Map<?, ?>) laser).get("device");
+                    if (dev != null && !dev.toString().isEmpty()) laserDevice = dev.toString();
+                }
+                detail = "Laser: " + laserDevice;
+                Object pmt = mod.get("pmt");
+                if (pmt instanceof Map) {
+                    Object dev = ((Map<?, ?>) pmt).get("device");
+                    if (dev != null && !dev.toString().isEmpty()) detail += ", PMT: " + dev;
+                }
             }
             return new SimpleStringProperty(detail);
         });
@@ -137,7 +148,7 @@ public class ModalityStep implements WizardStep {
         Dialog<Map<String, Object>> dialog = new Dialog<>();
         dialog.setTitle(existing == null ? "Add Modality" : "Edit Modality");
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
-        dialog.getDialogPane().setPrefWidth(500);
+        dialog.getDialogPane().setPrefWidth(550);
 
         VBox dialogContent = new VBox(10);
         dialogContent.setPadding(new Insets(10));
@@ -459,37 +470,309 @@ public class ModalityStep implements WizardStep {
 
     // ---- Multiphoton panel ----
 
+    @SuppressWarnings("unchecked")
     private VBox createMultiphotonPanel(Map<String, Object> existing) {
-        VBox panel = new VBox(8);
-        Label header = new Label("Multiphoton Configuration");
+        VBox panel = new VBox(10);
+
+        Label header = new Label("Multiphoton / SHG Configuration");
         header.setStyle("-fx-font-weight: bold;");
 
-        HBox row = new HBox(8);
-        row.setAlignment(Pos.CENTER_LEFT);
-        Label laserLabel = new Label("Laser device:");
-        TextField laserField = new TextField();
-        laserField.setPromptText("e.g., MaiTaiLaser (placeholder - configure later)");
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(6);
 
+        int row = 0;
+
+        // --- Laser section ---
+        Label laserHeader = new Label("Laser");
+        laserHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: #336699;");
+        grid.add(laserHeader, 0, row++, 2, 1);
+
+        TextField laserDeviceField = new TextField();
+        laserDeviceField.setPromptText("e.g., Chameleon, MaiTai");
+        grid.add(new Label("Device:"), 0, row);
+        grid.add(laserDeviceField, 1, row++);
+
+        Spinner<Integer> wavelengthSpinner = new Spinner<>(300, 1500, 800, 10);
+        wavelengthSpinner.setEditable(true);
+        wavelengthSpinner.setPrefWidth(100);
+        grid.add(new Label("Wavelength (nm):"), 0, row);
+        grid.add(wavelengthSpinner, 1, row++);
+
+        HBox wlRangeBox = new HBox(6);
+        wlRangeBox.setAlignment(Pos.CENTER_LEFT);
+        Spinner<Integer> wlMinSpinner = new Spinner<>(300, 1500, 690, 10);
+        wlMinSpinner.setEditable(true);
+        wlMinSpinner.setPrefWidth(80);
+        Spinner<Integer> wlMaxSpinner = new Spinner<>(300, 1500, 1040, 10);
+        wlMaxSpinner.setEditable(true);
+        wlMaxSpinner.setPrefWidth(80);
+        wlRangeBox.getChildren().addAll(wlMinSpinner, new Label("-"), wlMaxSpinner);
+        grid.add(new Label("Wavelength range (nm):"), 0, row);
+        grid.add(wlRangeBox, 1, row++);
+
+        // --- Pockels cell section ---
+        Label pockelsHeader = new Label("Pockels Cell");
+        pockelsHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: #336699;");
+        grid.add(pockelsHeader, 0, row++, 2, 1);
+
+        TextField pockelsDeviceField = new TextField();
+        pockelsDeviceField.setPromptText("e.g., PockelsCell-Dev1ao1");
+        grid.add(new Label("Device:"), 0, row);
+        grid.add(pockelsDeviceField, 1, row++);
+
+        Spinner<Double> pockelsMaxVSpinner = new Spinner<>(0.1, 10.0, 1.0, 0.1);
+        pockelsMaxVSpinner.setEditable(true);
+        pockelsMaxVSpinner.setPrefWidth(100);
+        grid.add(new Label("Max voltage:"), 0, row);
+        grid.add(pockelsMaxVSpinner, 1, row++);
+
+        // --- PMT section ---
+        Label pmtHeader = new Label("PMT Detector");
+        pmtHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: #336699;");
+        grid.add(pmtHeader, 0, row++, 2, 1);
+
+        TextField pmtDeviceField = new TextField();
+        pmtDeviceField.setPromptText("e.g., DCC100");
+        grid.add(new Label("Device:"), 0, row);
+        grid.add(pmtDeviceField, 1, row++);
+
+        Spinner<Integer> pmtConnectorSpinner = new Spinner<>(1, 8, 1);
+        pmtConnectorSpinner.setPrefWidth(80);
+        grid.add(new Label("Connector:"), 0, row);
+        grid.add(pmtConnectorSpinner, 1, row++);
+
+        Spinner<Double> pmtMaxGainSpinner = new Spinner<>(0.0, 100.0, 100.0, 5.0);
+        pmtMaxGainSpinner.setEditable(true);
+        pmtMaxGainSpinner.setPrefWidth(100);
+        grid.add(new Label("Max gain (%):"), 0, row);
+        grid.add(pmtMaxGainSpinner, 1, row++);
+
+        // --- Zoom section (optional) ---
+        Label zoomHeader = new Label("Zoom / Magnifier (optional)");
+        zoomHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: #336699;");
+        grid.add(zoomHeader, 0, row++, 2, 1);
+
+        TextField zoomDeviceField = new TextField();
+        zoomDeviceField.setPromptText("e.g., OSc-Magnifier (leave blank if none)");
+        grid.add(new Label("Device:"), 0, row);
+        grid.add(zoomDeviceField, 1, row++);
+
+        HBox zoomRangeBox = new HBox(6);
+        zoomRangeBox.setAlignment(Pos.CENTER_LEFT);
+        Spinner<Double> zoomMinSpinner = new Spinner<>(0.1, 100.0, 0.5, 0.5);
+        zoomMinSpinner.setEditable(true);
+        zoomMinSpinner.setPrefWidth(80);
+        Spinner<Double> zoomMaxSpinner = new Spinner<>(0.1, 100.0, 10.0, 0.5);
+        zoomMaxSpinner.setEditable(true);
+        zoomMaxSpinner.setPrefWidth(80);
+        zoomRangeBox.getChildren().addAll(zoomMinSpinner, new Label("-"), zoomMaxSpinner);
+        grid.add(new Label("Zoom range:"), 0, row);
+        grid.add(zoomRangeBox, 1, row++);
+
+        Spinner<Double> zoomDefaultSpinner = new Spinner<>(0.1, 100.0, 1.0, 0.5);
+        zoomDefaultSpinner.setEditable(true);
+        zoomDefaultSpinner.setPrefWidth(80);
+        grid.add(new Label("Default zoom:"), 0, row);
+        grid.add(zoomDefaultSpinner, 1, row++);
+
+        // --- Shutter section (optional) ---
+        Label shutterHeader = new Label("Shutter (optional)");
+        shutterHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: #336699;");
+        grid.add(shutterHeader, 0, row++, 2, 1);
+
+        TextField shutterDeviceField = new TextField();
+        shutterDeviceField.setPromptText("e.g., UniblitzShutter (leave blank if none)");
+        grid.add(new Label("Device:"), 0, row);
+        grid.add(shutterDeviceField, 1, row++);
+
+        // Pre-fill from existing data
         if (existing != null && "multiphoton".equals(existing.get("type"))) {
-            Object laser = existing.get("laser");
-            if (laser != null) laserField.setText(laser.toString());
+            prefillMultiphotonField(existing, "laser", "device", laserDeviceField);
+            prefillMultiphotonSpinner(existing, "laser", "wavelength_nm", wavelengthSpinner);
+            prefillMultiphotonWavelengthRange(existing, wlMinSpinner, wlMaxSpinner);
+            prefillMultiphotonField(existing, "pockels_cell", "device", pockelsDeviceField);
+            prefillMultiphotonDoubleSpinner(existing, "pockels_cell", "max_voltage", pockelsMaxVSpinner);
+            prefillMultiphotonField(existing, "pmt", "device", pmtDeviceField);
+            prefillMultiphotonSpinner(existing, "pmt", "connector", pmtConnectorSpinner);
+            prefillMultiphotonDoubleSpinner(existing, "pmt", "max_gain_percent", pmtMaxGainSpinner);
+            prefillMultiphotonField(existing, "zoom", "device", zoomDeviceField);
+            prefillMultiphotonDoubleSpinner(existing, "zoom", "default", zoomDefaultSpinner);
+            prefillMultiphotonZoomRange(existing, zoomMinSpinner, zoomMaxSpinner);
+            prefillMultiphotonField(existing, "shutter", "device", shutterDeviceField);
         }
 
-        row.getChildren().addAll(laserLabel, laserField);
-        panel.setUserData(laserField);
-        panel.getChildren().addAll(header, row);
+        // Wrap in a scroll pane since the panel is tall
+        ScrollPane scroll = new ScrollPane(grid);
+        scroll.setFitToWidth(true);
+        scroll.setPrefHeight(350);
+
+        // Store all field references for data collection
+        Map<String, Control> fields = new LinkedHashMap<>();
+        fields.put("laser_device", laserDeviceField);
+        fields.put("laser_wavelength", wavelengthSpinner);
+        fields.put("laser_wl_min", wlMinSpinner);
+        fields.put("laser_wl_max", wlMaxSpinner);
+        fields.put("pockels_device", pockelsDeviceField);
+        fields.put("pockels_max_voltage", pockelsMaxVSpinner);
+        fields.put("pmt_device", pmtDeviceField);
+        fields.put("pmt_connector", pmtConnectorSpinner);
+        fields.put("pmt_max_gain", pmtMaxGainSpinner);
+        fields.put("zoom_device", zoomDeviceField);
+        fields.put("zoom_min", zoomMinSpinner);
+        fields.put("zoom_max", zoomMaxSpinner);
+        fields.put("zoom_default", zoomDefaultSpinner);
+        fields.put("shutter_device", shutterDeviceField);
+        panel.setUserData(fields);
+
+        panel.getChildren().addAll(header, scroll);
         return panel;
     }
 
+    @SuppressWarnings("unchecked")
+    private void prefillMultiphotonField(Map<String, Object> existing, String section, String key, TextField field) {
+        Object sectionObj = existing.get(section);
+        if (sectionObj instanceof Map) {
+            Object val = ((Map<String, Object>) sectionObj).get(key);
+            if (val != null && !val.toString().isEmpty()) {
+                field.setText(val.toString());
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void prefillMultiphotonSpinner(
+            Map<String, Object> existing, String section, String key, Spinner<Integer> spinner) {
+        Object sectionObj = existing.get(section);
+        if (sectionObj instanceof Map) {
+            Object val = ((Map<String, Object>) sectionObj).get(key);
+            if (val instanceof Number) {
+                spinner.getValueFactory().setValue(((Number) val).intValue());
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void prefillMultiphotonDoubleSpinner(
+            Map<String, Object> existing, String section, String key, Spinner<Double> spinner) {
+        Object sectionObj = existing.get(section);
+        if (sectionObj instanceof Map) {
+            Object val = ((Map<String, Object>) sectionObj).get(key);
+            if (val instanceof Number) {
+                spinner.getValueFactory().setValue(((Number) val).doubleValue());
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void prefillMultiphotonWavelengthRange(
+            Map<String, Object> existing, Spinner<Integer> minSpinner, Spinner<Integer> maxSpinner) {
+        Object laserObj = existing.get("laser");
+        if (laserObj instanceof Map) {
+            Object range = ((Map<String, Object>) laserObj).get("wavelength_range_nm");
+            if (range instanceof List && ((List<?>) range).size() >= 2) {
+                List<?> rangeList = (List<?>) range;
+                if (rangeList.get(0) instanceof Number)
+                    minSpinner.getValueFactory().setValue(((Number) rangeList.get(0)).intValue());
+                if (rangeList.get(1) instanceof Number)
+                    maxSpinner.getValueFactory().setValue(((Number) rangeList.get(1)).intValue());
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void prefillMultiphotonZoomRange(
+            Map<String, Object> existing, Spinner<Double> minSpinner, Spinner<Double> maxSpinner) {
+        Object zoomObj = existing.get("zoom");
+        if (zoomObj instanceof Map) {
+            Object range = ((Map<String, Object>) zoomObj).get("range");
+            if (range instanceof List && ((List<?>) range).size() >= 2) {
+                List<?> rangeList = (List<?>) range;
+                if (rangeList.get(0) instanceof Number)
+                    minSpinner.getValueFactory().setValue(((Number) rangeList.get(0)).doubleValue());
+                if (rangeList.get(1) instanceof Number)
+                    maxSpinner.getValueFactory().setValue(((Number) rangeList.get(1)).doubleValue());
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
     private void collectMultiphotonData(VBox panel, Map<String, Object> result) {
-        TextField laserField = (TextField) panel.getUserData();
-        String laser = laserField.getText().trim();
-        if (!laser.isEmpty()) {
+        Map<String, Control> fields = (Map<String, Control>) panel.getUserData();
+
+        // Laser section (always included if device is set)
+        String laserDevice = ((TextField) fields.get("laser_device")).getText().trim();
+        if (!laserDevice.isEmpty()) {
+            Map<String, Object> laser = new LinkedHashMap<>();
+            laser.put("device", laserDevice);
+            laser.put("wavelength_nm", ((Spinner<Integer>) fields.get("laser_wavelength")).getValue());
+            laser.put(
+                    "wavelength_range_nm",
+                    List.of(
+                            ((Spinner<Integer>) fields.get("laser_wl_min")).getValue(),
+                            ((Spinner<Integer>) fields.get("laser_wl_max")).getValue()));
             result.put("laser", laser);
+        }
+
+        // Pockels cell section
+        String pockelsDevice =
+                ((TextField) fields.get("pockels_device")).getText().trim();
+        if (!pockelsDevice.isEmpty()) {
+            Map<String, Object> pockels = new LinkedHashMap<>();
+            pockels.put("device", pockelsDevice);
+            pockels.put("max_voltage", ((Spinner<Double>) fields.get("pockels_max_voltage")).getValue());
+            result.put("pockels_cell", pockels);
+        }
+
+        // PMT section
+        String pmtDevice = ((TextField) fields.get("pmt_device")).getText().trim();
+        if (!pmtDevice.isEmpty()) {
+            Map<String, Object> pmt = new LinkedHashMap<>();
+            pmt.put("device", pmtDevice);
+            pmt.put("connector", ((Spinner<Integer>) fields.get("pmt_connector")).getValue());
+            pmt.put("max_gain_percent", ((Spinner<Double>) fields.get("pmt_max_gain")).getValue());
+            result.put("pmt", pmt);
+        }
+
+        // Zoom section (optional -- only if device is provided)
+        String zoomDevice = ((TextField) fields.get("zoom_device")).getText().trim();
+        if (!zoomDevice.isEmpty()) {
+            Map<String, Object> zoom = new LinkedHashMap<>();
+            zoom.put("device", zoomDevice);
+            zoom.put(
+                    "range",
+                    List.of(
+                            ((Spinner<Double>) fields.get("zoom_min")).getValue(),
+                            ((Spinner<Double>) fields.get("zoom_max")).getValue()));
+            zoom.put("default", ((Spinner<Double>) fields.get("zoom_default")).getValue());
+            result.put("zoom", zoom);
+        }
+
+        // Shutter section (optional)
+        String shutterDevice =
+                ((TextField) fields.get("shutter_device")).getText().trim();
+        if (!shutterDevice.isEmpty()) {
+            Map<String, Object> shutter = new LinkedHashMap<>();
+            shutter.put("device", shutterDevice);
+            result.put("shutter", shutter);
         }
     }
 
     // ---- Utility ----
+
+    @SuppressWarnings("unchecked")
+    private String validateMultiphotonSubMap(
+            Map<String, Object> mod, String section, String key, String modalityName, String fieldLabel) {
+        Object sectionObj = mod.get(section);
+        if (sectionObj == null || !(sectionObj instanceof Map)) {
+            return "Multiphoton modality '" + modalityName + "' requires a " + fieldLabel + ".";
+        }
+        Object val = ((Map<String, Object>) sectionObj).get(key);
+        if (val == null || val.toString().trim().isEmpty()) {
+            return "Multiphoton modality '" + modalityName + "' requires a " + fieldLabel + ".";
+        }
+        return null;
+    }
 
     private void showAlert(String title, String message) {
         Alert alert = new Alert(Alert.AlertType.WARNING, message, ButtonType.OK);
@@ -542,6 +825,15 @@ public class ModalityStep implements WizardStep {
                 if (!(angles instanceof List) || ((List<?>) angles).isEmpty()) {
                     return "Polarized modality '" + name + "' requires at least one rotation angle.";
                 }
+            }
+
+            if ("multiphoton".equals(type)) {
+                String msg = validateMultiphotonSubMap(mod, "laser", "device", name, "laser device");
+                if (msg != null) return msg;
+                msg = validateMultiphotonSubMap(mod, "pmt", "device", name, "PMT device");
+                if (msg != null) return msg;
+                msg = validateMultiphotonSubMap(mod, "pockels_cell", "device", name, "Pockels cell device");
+                if (msg != null) return msg;
             }
         }
 

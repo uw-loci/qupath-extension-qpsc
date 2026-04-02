@@ -62,7 +62,7 @@ public final class ConfigSchema {
         m.put("brightfield", new String[][] {{"type"}});
         m.put("ppm", new String[][] {{"type"}, {"rotation_stage", "device"}, {"rotation_angles"}});
         m.put("fluorescence", new String[][] {{"type"}});
-        m.put("shg", new String[][] {{"type"}});
+        m.put("shg", new String[][] {{"type"}, {"laser", "device"}, {"pmt", "device"}, {"pockels_cell", "device"}});
         MODALITY_REQUIRED_KEYS = Collections.unmodifiableMap(m);
     }
 
@@ -116,6 +116,28 @@ public final class ConfigSchema {
         exposures.put("single", 50);
         profile.put("exposures_ms", exposures);
         profile.put("gains", 1.0);
+        return profile;
+    }
+
+    /**
+     * Default imaging profile for laser scanning microscopy (SHG, multiphoton).
+     * Uses acquisition_settings instead of exposures_ms because LSM controls
+     * are fundamentally different from area cameras (dwell time, PMT gain, averaging).
+     */
+    public static Map<String, Object> getDefaultLSMImagingProfile() {
+        Map<String, Object> profile = new LinkedHashMap<>();
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("pmt_gain", 0.5);
+        settings.put("pixel_dwell_time_us", 4.0);
+        settings.put("averaging", 2);
+        settings.put("scan_mode", "unidirectional");
+        settings.put("laser_power_percent", 30);
+        settings.put("zoom_factor", 1.0);
+        Map<String, Object> resolution = new LinkedHashMap<>();
+        resolution.put("width", 512);
+        resolution.put("height", 512);
+        settings.put("scan_resolution_px", resolution);
+        profile.put("acquisition_settings", settings);
         return profile;
     }
 

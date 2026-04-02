@@ -476,12 +476,17 @@ public class AcquisitionManager {
                                         lastAcquisitionZ = finalZ;
 
                                         if (state.transform != null) {
-                                            double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
-                                                    new double[] {
-                                                        annotation.getROI().getCentroidX(),
-                                                        annotation.getROI().getCentroidY()
-                                                    },
-                                                    state.transform);
+                                            double[] stageCoords =
+                                                    TransformationFunctions.transformQuPathFullResToStage(
+                                                            new double[] {
+                                                                annotation
+                                                                        .getROI()
+                                                                        .getCentroidX(),
+                                                                annotation
+                                                                        .getROI()
+                                                                        .getCentroidY()
+                                                            },
+                                                            state.transform);
                                             zFocusModel.addDataPoint(stageCoords[0], stageCoords[1], finalZ);
                                             logger.info(
                                                     "Updated Z-focus model: {} points, residual error: {} um",
@@ -623,6 +628,9 @@ public class AcquisitionManager {
                 if (angleExposures != null && !angleExposures.isEmpty()) {
                     logger.info("  Angles: {}", angleExposures);
                 }
+                // Let the modality handler configure builder flags (e.g., no debayer for LSM)
+                ModalityRegistry.getHandler(baseModality).configureCommandBuilder(config.commandBuilder());
+
                 String commandString = config.commandBuilder().buildSocketMessage();
                 MinorFunctions.saveAcquisitionCommand(
                         commandString,
@@ -712,8 +720,7 @@ public class AcquisitionManager {
                 if (!QPPreferenceDialog.getDisableAllAutofocus()) {
                     try {
                         // Read WSI tissue scoring thresholds from autofocus config
-                        Map<String, Object> afParams = configManager.getAutofocusParams(
-                                state.sample.objective());
+                        Map<String, Object> afParams = configManager.getAutofocusParams(state.sample.objective());
                         double wsiTissueThreshold = 0.15;
                         int wsiWhiteThreshold = 230;
                         int wsiDarkThreshold = 20;
@@ -725,12 +732,14 @@ public class AcquisitionManager {
                             if (afParams.get("wsi_tissue_dark_threshold") instanceof Number)
                                 wsiDarkThreshold = ((Number) afParams.get("wsi_tissue_dark_threshold")).intValue();
                         }
-                        int preferredTile = findBestAfTileFromWSI(annotation, modalityWithIndex,
-                                wsiTissueThreshold, wsiWhiteThreshold, wsiDarkThreshold);
+                        int preferredTile = findBestAfTileFromWSI(
+                                annotation, modalityWithIndex, wsiTissueThreshold, wsiWhiteThreshold, wsiDarkThreshold);
                         if (preferredTile >= 0) {
                             config.commandBuilder().preferredAfTile(preferredTile);
-                            logger.info("WSI tissue scoring: preferred AF tile = {} for {}",
-                                    preferredTile, annotation.getName());
+                            logger.info(
+                                    "WSI tissue scoring: preferred AF tile = {} for {}",
+                                    preferredTile,
+                                    annotation.getName());
                         }
                     } catch (Exception e) {
                         logger.debug("WSI tissue scoring skipped: {}", e.getMessage());
@@ -1663,8 +1672,12 @@ public class AcquisitionManager {
      * @param modalityWithIndex e.g. "ppm_20x_1"
      * @return Index of the best AF tile, or -1 if scoring fails
      */
-    private int findBestAfTileFromWSI(PathObject annotation, String modalityWithIndex,
-            double minTissueScore, int whiteThreshold, int darkThreshold) {
+    private int findBestAfTileFromWSI(
+            PathObject annotation,
+            String modalityWithIndex,
+            double minTissueScore,
+            int whiteThreshold,
+            int darkThreshold) {
         var gui = QuPathGUI.getInstance();
         if (gui == null || gui.getImageData() == null) return -1;
 
@@ -1673,9 +1686,7 @@ public class AcquisitionManager {
         if (pixelSize <= 0 || Double.isNaN(pixelSize)) return -1;
 
         // Read tile positions from TileConfiguration_QP.txt (pixel coordinates)
-        Path tileDir = Paths.get(
-                state.projectInfo.getTempTileDirectory(),
-                annotation.getName());
+        Path tileDir = Paths.get(state.projectInfo.getTempTileDirectory(), annotation.getName());
         Path tileConfigQP = tileDir.resolve("TileConfiguration_QP.txt");
         if (!Files.exists(tileConfigQP)) {
             logger.debug("No TileConfiguration_QP.txt for {}", annotation.getName());
@@ -1686,8 +1697,7 @@ public class AcquisitionManager {
         double[] fovMicrons;
         try {
             fovMicrons = MicroscopeController.getInstance()
-                    .getCameraFOVFromConfig(state.sample.modality(),
-                            state.sample.objective(), state.sample.detector());
+                    .getCameraFOVFromConfig(state.sample.modality(), state.sample.objective(), state.sample.detector());
         } catch (Exception e) {
             return -1;
         }
@@ -1708,7 +1718,7 @@ public class AcquisitionManager {
                 double cx = Double.parseDouble(coords[0].trim());
                 double cy = Double.parseDouble(coords[1].trim());
                 int idx = Integer.parseInt(line.substring(0, line.indexOf('.')).trim());
-                tilePositions.add(new double[]{cx, cy});
+                tilePositions.add(new double[] {cx, cy});
                 tileIndices.add(idx);
             }
         } catch (Exception e) {
@@ -1738,8 +1748,7 @@ public class AcquisitionManager {
             if (w <= 0 || h <= 0) continue;
 
             try {
-                var request = qupath.lib.regions.RegionRequest.createInstance(
-                        server.getPath(), downsample, x, y, w, h);
+                var request = qupath.lib.regions.RegionRequest.createInstance(server.getPath(), downsample, x, y, w, h);
                 BufferedImage img = server.readRegion(request);
                 if (img == null) continue;
 
@@ -1751,8 +1760,10 @@ public class AcquisitionManager {
 
                 // Accept first tile that meets the threshold
                 if (tissueScore >= minTissueScore) {
-                    logger.info("WSI tissue scoring: tile {} has {}% tissue (threshold {}%)",
-                            tileIdx, String.format("%.1f", tissueScore * 100),
+                    logger.info(
+                            "WSI tissue scoring: tile {} has {}% tissue (threshold {}%)",
+                            tileIdx,
+                            String.format("%.1f", tissueScore * 100),
                             String.format("%.0f", minTissueScore * 100));
                     return tileIdx;
                 }
@@ -1763,9 +1774,9 @@ public class AcquisitionManager {
 
         // No tile met threshold -- return the one with most tissue (if any)
         if (bestTile >= 0 && bestScore > 0.02) {
-            logger.info("WSI tissue scoring: no tile met {}% threshold, using best tile {} ({}%)",
-                    (int) (minTissueScore * 100), bestTile,
-                    String.format("%.1f", bestScore * 100));
+            logger.info(
+                    "WSI tissue scoring: no tile met {}% threshold, using best tile {} ({}%)",
+                    (int) (minTissueScore * 100), bestTile, String.format("%.1f", bestScore * 100));
             return bestTile;
         }
 

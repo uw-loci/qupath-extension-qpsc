@@ -104,7 +104,9 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 
 ## Getting Started
 
-> **New user?** Start with the **[Quick Start Guide](documentation/QUICKSTART-BF.md)** -- it walks you from "QuPath is open" to "I have my first image" in 15 minutes.
+> **New user?** Choose your quick start guide:
+> - **[Brightfield / PPM Quick Start](documentation/QUICKSTART-BF.md)** -- transmitted light imaging in 15 minutes
+> - **[Laser Scanning / SHG Quick Start](documentation/QUICKSTART-LSM.md)** -- multiphoton / second harmonic generation setup
 
 ### Prerequisites
 

@@ -121,8 +121,20 @@ public class ImageMetadataManager {
             String angle,
             String annotationName,
             Integer imageIndex) {
-        applyImageMetadata(entry, parentEntry, xOffset, yOffset, flipX, flipY,
-                sampleName, modality, objective, angle, annotationName, imageIndex, null);
+        applyImageMetadata(
+                entry,
+                parentEntry,
+                xOffset,
+                yOffset,
+                flipX,
+                flipY,
+                sampleName,
+                modality,
+                objective,
+                angle,
+                annotationName,
+                imageIndex,
+                null);
     }
 
     /**

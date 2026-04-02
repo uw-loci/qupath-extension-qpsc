@@ -717,8 +717,7 @@ public class ForwardPropagationWorkflow {
                 double bh = roi.getBoundsHeight();
 
                 // Check if fully contained: all 4 corners within image
-                boolean fullyContained = bx >= 0 && by >= 0
-                        && (bx + bw) <= imgWidth && (by + bh) <= imgHeight;
+                boolean fullyContained = bx >= 0 && by >= 0 && (bx + bw) <= imgWidth && (by + bh) <= imgHeight;
 
                 if (fullyContained) {
                     result.add(transformed);

@@ -113,8 +113,12 @@ public class TileProcessingUtilities {
             Map<String, Object> stitchParams)
             throws IOException {
 
-        logger.debug("Starting stitching: {}/{}/{}, matching '{}'",
-                sampleLabel, imagingModeWithIndex, annotationName, matchingString);
+        logger.debug(
+                "Starting stitching: {}/{}/{}, matching '{}'",
+                sampleLabel,
+                imagingModeWithIndex,
+                annotationName,
+                matchingString);
 
         // Construct folder paths
         String tileFolder = projectsFolderPath

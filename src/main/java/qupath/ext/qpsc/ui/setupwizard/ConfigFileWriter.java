@@ -83,6 +83,12 @@ public final class ConfigFileWriter {
             if (mod.containsKey("lamp")) {
                 modConfig.put("lamp", mod.get("lamp"));
             }
+            // Multiphoton-specific: laser, pockels_cell, pmt, zoom, shutter
+            for (String mpKey : List.of("laser", "pockels_cell", "pmt", "zoom", "shutter")) {
+                if (mod.containsKey(mpKey)) {
+                    modConfig.put(mpKey, mod.get(mpKey));
+                }
+            }
 
             // Background correction placeholder
             Map<String, Object> bgCorrection = new LinkedHashMap<>();
@@ -205,6 +211,8 @@ public final class ConfigFileWriter {
         Map<String, Object> profiles = new LinkedHashMap<>();
         for (Map<String, Object> mod : data.modalities) {
             String modName = (String) mod.get("name");
+            String modType = (String) mod.getOrDefault("type", "");
+            boolean isLSM = "multiphoton".equals(modType);
             Map<String, Object> modProfile = new LinkedHashMap<>();
 
             for (Map<String, Object> obj : data.objectives) {
@@ -213,7 +221,11 @@ public final class ConfigFileWriter {
 
                 for (Map<String, Object> det : data.detectors) {
                     String detId = (String) det.get("id");
-                    objProfile.put(detId, ConfigSchema.getDefaultImagingProfile());
+                    objProfile.put(
+                            detId,
+                            isLSM
+                                    ? ConfigSchema.getDefaultLSMImagingProfile()
+                                    : ConfigSchema.getDefaultImagingProfile());
                 }
 
                 modProfile.put(objId, objProfile);

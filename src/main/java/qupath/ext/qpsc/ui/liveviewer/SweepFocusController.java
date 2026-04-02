@@ -177,12 +177,15 @@ public class SweepFocusController {
 
                     // Early stop: if we've passed the peak by enough steps and
                     // have covered enough of the range, stop to save time
-                    if (i >= minStepsBeforeEarlyStop
-                            && stepsSincePeak >= EARLY_STOP_DECLINE_COUNT) {
+                    if (i >= minStepsBeforeEarlyStop && stepsSincePeak >= EARLY_STOP_DECLINE_COUNT) {
                         logger.info(
                                 "Sweep Focus: early stop at step {}/{} -- {} consecutive "
                                         + "steps below peak (metric {} vs peak {})",
-                                i, NUM_STEPS, stepsSincePeak, fmt(metric), fmt(peakMetric));
+                                i,
+                                NUM_STEPS,
+                                stepsSincePeak,
+                                fmt(metric),
+                                fmt(peakMetric));
                         stoppedEarly = true;
                         break;
                     }
@@ -195,8 +198,11 @@ public class SweepFocusController {
             }
 
             long sweepMs = System.currentTimeMillis() - sweepStartTime;
-            logger.info("Sweep Focus: collected {} measurements in {}ms{}",
-                    measurements.size(), sweepMs, stoppedEarly ? " (early stop)" : "");
+            logger.info(
+                    "Sweep Focus: collected {} measurements in {}ms{}",
+                    measurements.size(),
+                    sweepMs,
+                    stoppedEarly ? " (early stop)" : "");
 
             // Phase 3: FIND PEAK
             if (cancelled) {

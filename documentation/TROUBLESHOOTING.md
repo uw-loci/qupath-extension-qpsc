@@ -25,8 +25,8 @@
 - [ ] **Micro-Manager is running** and shows live camera view
 - [ ] **Python server is running** (command window should be open with "Server started" message)
 - [ ] **QuPath is open** with QPSC extension loaded (check Extensions menu)
-- [ ] **Microscope hardware is initialized** in Micro-Manager (stage, camera, rotation stage if using PPM)
-- [ ] **Configuration files exist** in the correct location (config_ppm.yml, resources_LOCI.yml)
+- [ ] **Microscope hardware is initialized** in Micro-Manager (stage, camera, rotation stage if using PPM, laser/PMT/scan engine if using SHG)
+- [ ] **Configuration files exist** in the correct location (config_<name>.yml, resources_LOCI.yml)
 - [ ] **Project folder exists** or you have permission to create one
 
 **Quick Test:** Use Extensions > QPSC > Utilities > Communication Settings to verify communication between all components.
@@ -488,6 +488,51 @@ Output files:
 3. Check for dust, scratches, or damage on the calibration slide
 4. Verify the expected spoke count matches your slide
 5. Check the calibration plot for outlier points
+
+### SHG / Laser Scanning Issues
+
+#### Q: Live Viewer shows a completely black image with the scan engine
+
+**A:** Check these in order:
+1. **PMT is enabled** -- verify in Micro-Manager that the PMT controller (e.g., DCC100) is powered on and the gain is set above 0%
+2. **Pockels cell voltage is above 0** -- a Pockels cell at 0V blocks all laser light
+3. **Laser shutter is open** -- check both the physical shutter and any digital IO shutter state
+4. **Laser is on and at the correct wavelength** -- verify in Micro-Manager
+5. **Correct camera is selected** -- the scan engine (e.g., OSc-LSM) must be the active camera, not the brightfield camera
+
+#### Q: SHG image is very noisy or has hot pixels
+
+**A:** This is typically a signal-to-noise issue:
+- **Increase averaging** -- set averaging to 2-4 frames in the acquisition profile
+- **Reduce scan speed** -- lower the pixel rate (longer dwell time per pixel improves SNR)
+- **Reduce PMT gain** if the image is saturated; increase if too dim
+- **Check for ambient light** -- PMTs are extremely sensitive; room lights, monitor screens, or indicator LEDs can contribute noise
+
+#### Q: Image resolution or pixel size seems wrong
+
+**A:** For laser scanning microscopes, pixel size depends on scan resolution:
+- Pixel size = `base_pixel_size_um * 256 / current_resolution`
+- At 256px: base pixel size (e.g., 0.509 um)
+- At 512px: half the base (e.g., 0.255 um)
+- At 1024px: quarter of base (e.g., 0.127 um)
+- Verify the `LSM-Resolution` property in Micro-Manager matches your expectation
+- Check that the zoom factor matches `zoom.default` in your config
+
+#### Q: Autofocus fails on SHG tissue
+
+**A:** SHG signal is often sparser than brightfield -- not all tissue generates second harmonic:
+- Lower `texture_threshold` (try 0.003-0.005)
+- Lower `tissue_area_threshold` (try 0.05)
+- The `normalized_variance` and `laplacian_variance` metrics both work well for SHG
+- If the sample has very sparse SHG signal, consider using `n_tiles=1` (autofocus every tile)
+
+#### Q: PMT overload warning
+
+**A:** The PMT has been exposed to excessive light. This is a safety concern:
+1. **Immediately reduce gain** or disable the PMT
+2. Check for stray light sources (room lights, brightfield lamp still on)
+3. Verify the modality switching sequence correctly disables the PMT before turning on the brightfield lamp
+4. The DCC100 controller has a hardware overload latch -- clear it after resolving the light source
 
 ### White Balance Calibration (JAI Camera)
 
@@ -998,11 +1043,25 @@ python -m microscope_command_server.server --port 5000
 - Manually move stage via controller
 - Verify Micro-Manager can query position
 
+**Problem:** Laser scanning hardware not responding (SHG/multiphoton)
+
+**Check:**
+1. Scan engine (e.g., OSc-LSM) recognized in Micro-Manager
+2. PMT controller powered and connected
+3. Pockels cell analog output device configured
+4. Laser is on and at correct wavelength
+
+**Solution:**
+- Verify scan engine is listed as a camera device in Micro-Manager
+- Check PMT controller status -- clear overload latch if triggered
+- Test Pockels cell by setting voltage manually in Micro-Manager property browser
+- Verify NI DAQ analog output channels are correctly assigned
+
 ---
 
 ## Configuration Validation
 
-### Microscope Config File (config_ppm.yml)
+### Microscope Config File (config_<name>.yml)
 
 **Essential settings to verify:**
 

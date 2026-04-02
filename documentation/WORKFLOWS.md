@@ -2,7 +2,9 @@
 
 QPSC connects QuPath to your microscope via Pycro-Manager and Micro-Manager. You draw annotations or define coordinates in QuPath, and QPSC moves the stage, captures tiles, stitches them, and imports the result back into your project -- all without leaving QuPath. This page helps you choose the right workflow and understand how the tools fit together. For installation instructions, see the [main README](../README.md).
 
-> **First time?** See the **[Quick Start Guide](QUICKSTART-BF.md)** to get your first image in 15 minutes.
+> **First time with brightfield / PPM?** See the **[Brightfield Quick Start](QUICKSTART-BF.md)** to get your first image in 15 minutes.
+>
+> **First time with laser scanning / SHG?** See the **[Laser Scanning Quick Start](QUICKSTART-LSM.md)** for multiphoton-specific setup.
 
 ---
 
@@ -55,6 +57,9 @@ If this is your first time, complete these additional steps. The **Acquisition W
 
 5. **Configure autofocus (recommended).**
    Set search range, step size, and scoring method per objective. See [Autofocus Editor docs](tools/autofocus-editor.md) and [Autofocus System Overview](AUTOFOCUS.md) for how the system works.
+
+6. **Configure laser scanning hardware (if applicable).**
+   For SHG/multiphoton systems, configure laser, Pockels cell, PMT, and zoom settings. See [Laser Scanning Quick Start](QUICKSTART-LSM.md).
 
 ---
 
