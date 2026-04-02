@@ -99,6 +99,11 @@ public class AcquisitionManager {
      *  so the next annotation's AF search is centered near reality, not the user's initial Z. */
     private Double lastAcquisitionZ = null;
 
+    /** Parent image entry captured at session start -- stable reference for metadata inheritance.
+     *  Do NOT look this up from gui.getImageData() later, as the viewer state can change
+     *  when stitching dialogs close or other images are opened. */
+    private ProjectImageEntry<BufferedImage> parentEntry = null;
+
     /**
      * Creates a new acquisition manager.
      *
@@ -380,6 +385,21 @@ public class AcquisitionManager {
         // Before enough points accumulate, lastAcquisitionZ is the fallback.
         lastAcquisitionZ = null;
         zFocusModel.reset();
+
+        // Capture parent entry NOW while the viewer definitely has the right image.
+        // This must not be looked up later from gui.getImageData() because stitching
+        // dialogs closing can cause the viewer to lose its image reference.
+        @SuppressWarnings("unchecked")
+        Project<BufferedImage> captureProject = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
+        if (gui.getViewer().hasServer() && gui.getImageData() != null && captureProject != null) {
+            parentEntry = captureProject.getEntry(gui.getImageData());
+            logger.info(
+                    "Captured parent entry for metadata: {}",
+                    parentEntry != null ? parentEntry.getImageName() : "null");
+        } else {
+            parentEntry = null;
+            logger.warn("No parent entry available at session start -- stitched images will be unassigned");
+        }
 
         // Show initial progress notification
         showAcquisitionStartNotification(angleExposures);
@@ -1095,7 +1115,8 @@ public class AcquisitionManager {
                 MicroscopeController.getInstance().getCurrentTransform(),
                 state.projectInfo.getSampleName(),
                 projectsFolder.toString(),
-                dualProgressDialog);
+                dualProgressDialog,
+                parentEntry);
 
         state.stitchingFutures.add(stitchFuture);
         logger.info("Launched stitching for annotation: {}", annotation.getName());

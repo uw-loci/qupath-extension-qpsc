@@ -109,6 +109,7 @@ public class StitchingHelper {
                 fullResToStage,
                 sampleName,
                 projectsFolder,
+                null,
                 null);
     }
 
@@ -129,6 +130,7 @@ public class StitchingHelper {
      * @param sampleName The actual sample folder name (from ProjectInfo, may differ from sample.sampleName())
      * @param projectsFolder The actual projects folder path (from ProjectInfo, may differ from sample.projectsFolder())
      * @param dualProgressDialog Optional progress dialog for showing stitching status alongside acquisition progress (can be null)
+     * @param parentEntry Pre-captured parent image entry for metadata inheritance (can be null to fall back to gui lookup)
      * @return CompletableFuture that completes when all stitching is done
      */
     public static CompletableFuture<Void> performAnnotationStitching(
@@ -144,14 +146,16 @@ public class StitchingHelper {
             AffineTransform fullResToStage,
             String sampleName,
             String projectsFolder,
-            DualProgressDialog dualProgressDialog) {
+            DualProgressDialog dualProgressDialog,
+            ProjectImageEntry<BufferedImage> parentEntry) {
 
         // Calculate metadata for this annotation
         // Use sample.sampleName() for file naming (source image name), not sampleName (project folder name)
         // The sampleName parameter is the project folder name, used for path construction
         // sample.sampleName() is the user-entered name (defaulted to source image file name)
         String displayName = sample.sampleName();
-        StitchingMetadata metadata = calculateMetadata(annotation, displayName, gui, project, fullResToStage);
+        StitchingMetadata metadata =
+                calculateMetadata(annotation, displayName, gui, project, fullResToStage, parentEntry);
 
         // Create blocking dialog on JavaFX thread before starting stitching
         final String operationId = sampleName + " - " + annotation.getName();
@@ -855,11 +859,13 @@ public class StitchingHelper {
             String sampleName,
             QuPathGUI gui,
             Project<BufferedImage> project,
-            AffineTransform fullResToStage) {
+            AffineTransform fullResToStage,
+            ProjectImageEntry<BufferedImage> capturedParentEntry) {
 
-        // Get parent entry (the current open image)
-        ProjectImageEntry<BufferedImage> parentEntry = null;
-        if (gui.getViewer().hasServer() && gui.getImageData() != null) {
+        // Use pre-captured parent entry if available (stable across the whole session).
+        // Fall back to gui lookup only if no pre-captured entry was provided.
+        ProjectImageEntry<BufferedImage> parentEntry = capturedParentEntry;
+        if (parentEntry == null && gui.getViewer().hasServer() && gui.getImageData() != null) {
             parentEntry = project.getEntry(gui.getImageData());
         }
 

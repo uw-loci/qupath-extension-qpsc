@@ -121,7 +121,7 @@ public class ZFocusPredictionModel {
             return false;
         }
 
-        return false;
+        return true;
     }
 
     /**
