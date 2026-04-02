@@ -11,7 +11,11 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
+import javafx.scene.control.Spinner;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
@@ -468,11 +472,18 @@ public class SingleTileRefinement {
                         + "using SIFT feature detection. Searches within ~160um of the\n"
                         + "predicted position. Requires tissue with visible features."));
 
-        Label siftDescription = new Label("SIFT searches a ~160um region around the predicted tile position. "
-                + "It requires visible tissue features in the microscope field of view "
-                + "to match against the WSI. It will not work on blank glass or featureless areas.");
+        Label siftDescription = new Label(String.format(
+                "SIFT searches a ~%.0fum region around the predicted tile position. "
+                        + "It requires visible tissue features in the microscope field of view "
+                        + "to match against the WSI. Click Settings to adjust parameters if matching fails.",
+                qupath.ext.qpsc.preferences.PersistentPreferences.getSiftSearchMarginUm()));
         siftDescription.setWrapText(true);
         siftDescription.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
+
+        // SIFT Settings button
+        Button siftSettingsButton = new Button("Settings...");
+        siftSettingsButton.setStyle("-fx-font-size: 10px;");
+        siftSettingsButton.setOnAction(e -> showSiftSettingsDialog());
 
         Label autoAlignStatus = new Label();
         autoAlignStatus.setWrapText(true);
@@ -522,12 +533,15 @@ public class SingleTileRefinement {
         HBox buttonBox = new HBox(10, saveButton, skipButton, newAlignmentButton);
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
 
+        HBox siftButtonRow = new HBox(8, autoAlignButton, siftSettingsButton);
+        siftButtonRow.setAlignment(Pos.CENTER_LEFT);
+
         content.getChildren()
                 .addAll(
                         headerLabel,
                         instructionLabel,
                         tileInfoLabel,
-                        autoAlignButton,
+                        siftButtonRow,
                         siftDescription,
                         autoAlignStatus,
                         restoreBox,
@@ -555,6 +569,119 @@ public class SingleTileRefinement {
      * @param selectedTile The tile being refined
      * @return Offset in microns [x, y], or null if matching failed
      */
+    /**
+     * Shows a dialog for tuning SIFT matching parameters.
+     * Changes are saved to persistent preferences and take effect on the next SIFT run.
+     */
+    private static void showSiftSettingsDialog() {
+        var prefs = qupath.ext.qpsc.preferences.PersistentPreferences.class;
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("SIFT Matching Settings");
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        dialog.getDialogPane().setPrefWidth(400);
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(8);
+        grid.setPadding(new Insets(15));
+
+        int row = 0;
+
+        // Min pixel size
+        Spinner<Double> minPxSpinner =
+                new Spinner<>(0.1, 5.0, qupath.ext.qpsc.preferences.PersistentPreferences.getSiftMinPixelSize(), 0.1);
+        minPxSpinner.setEditable(true);
+        minPxSpinner.setPrefWidth(90);
+        grid.add(new Label("Min pixel size (um):"), 0, row);
+        grid.add(minPxSpinner, 1, row);
+        Label minPxHelp = new Label("Downsample to this resolution. Lower = more detail but slower.");
+        minPxHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        minPxHelp.setWrapText(true);
+        grid.add(minPxHelp, 0, ++row, 2, 1);
+
+        // Ratio threshold
+        Spinner<Double> ratioSpinner = new Spinner<>(
+                0.3, 0.95, qupath.ext.qpsc.preferences.PersistentPreferences.getSiftRatioThreshold(), 0.05);
+        ratioSpinner.setEditable(true);
+        ratioSpinner.setPrefWidth(90);
+        grid.add(new Label("Ratio threshold:"), 0, ++row);
+        grid.add(ratioSpinner, 1, row);
+        Label ratioHelp = new Label("Lowe's ratio test. Higher = more permissive matching (try 0.8 if failing).");
+        ratioHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        ratioHelp.setWrapText(true);
+        grid.add(ratioHelp, 0, ++row, 2, 1);
+
+        // Min matches
+        Spinner<Integer> minMatchSpinner =
+                new Spinner<>(3, 50, qupath.ext.qpsc.preferences.PersistentPreferences.getSiftMinMatchCount(), 1);
+        minMatchSpinner.setPrefWidth(90);
+        grid.add(new Label("Min match count:"), 0, ++row);
+        grid.add(minMatchSpinner, 1, row);
+        Label matchHelp = new Label("Minimum inlier matches required. Lower = accept weaker matches.");
+        matchHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        matchHelp.setWrapText(true);
+        grid.add(matchHelp, 0, ++row, 2, 1);
+
+        // Contrast threshold
+        Spinner<Double> contrastSpinner = new Spinner<>(
+                0.001, 0.2, qupath.ext.qpsc.preferences.PersistentPreferences.getSiftContrastThreshold(), 0.005);
+        contrastSpinner.setEditable(true);
+        contrastSpinner.setPrefWidth(90);
+        grid.add(new Label("Contrast threshold:"), 0, ++row);
+        grid.add(contrastSpinner, 1, row);
+        Label contrastHelp = new Label("Feature detection sensitivity. Lower = detect more features in pale tissue.");
+        contrastHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        contrastHelp.setWrapText(true);
+        grid.add(contrastHelp, 0, ++row, 2, 1);
+
+        // Search margin
+        Spinner<Double> marginSpinner = new Spinner<>(
+                50.0, 500.0, qupath.ext.qpsc.preferences.PersistentPreferences.getSiftSearchMarginUm(), 10.0);
+        marginSpinner.setEditable(true);
+        marginSpinner.setPrefWidth(90);
+        grid.add(new Label("Search margin (um):"), 0, ++row);
+        grid.add(marginSpinner, 1, row);
+        Label marginHelp = new Label("WSI region extends this far beyond the tile on each side.");
+        marginHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        marginHelp.setWrapText(true);
+        grid.add(marginHelp, 0, ++row, 2, 1);
+
+        // Confidence threshold
+        Spinner<Double> confSpinner = new Spinner<>(
+                0.1, 1.0, qupath.ext.qpsc.preferences.PersistentPreferences.getSiftConfidenceThreshold(), 0.05);
+        confSpinner.setEditable(true);
+        confSpinner.setPrefWidth(90);
+        grid.add(new Label("Auto-accept confidence:"), 0, ++row);
+        grid.add(confSpinner, 1, row);
+        Label confHelp = new Label("Min inlier ratio to auto-accept when Trust SIFT is enabled.");
+        confHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        confHelp.setWrapText(true);
+        grid.add(confHelp, 0, ++row, 2, 1);
+
+        dialog.getDialogPane().setContent(grid);
+
+        dialog.setResultConverter(bt -> {
+            if (bt == ButtonType.OK) {
+                qupath.ext.qpsc.preferences.PersistentPreferences.setSiftMinPixelSize(minPxSpinner.getValue());
+                qupath.ext.qpsc.preferences.PersistentPreferences.setSiftRatioThreshold(ratioSpinner.getValue());
+                qupath.ext.qpsc.preferences.PersistentPreferences.setSiftMinMatchCount(minMatchSpinner.getValue());
+                qupath.ext.qpsc.preferences.PersistentPreferences.setSiftContrastThreshold(contrastSpinner.getValue());
+                qupath.ext.qpsc.preferences.PersistentPreferences.setSiftSearchMarginUm(marginSpinner.getValue());
+                qupath.ext.qpsc.preferences.PersistentPreferences.setSiftConfidenceThreshold(confSpinner.getValue());
+                logger.info(
+                        "SIFT settings updated: minPx={}, ratio={}, minMatches={}, contrast={}, margin={}, confidence={}",
+                        minPxSpinner.getValue(),
+                        ratioSpinner.getValue(),
+                        minMatchSpinner.getValue(),
+                        contrastSpinner.getValue(),
+                        marginSpinner.getValue(),
+                        confSpinner.getValue());
+            }
+            return null;
+        });
+        dialog.showAndWait();
+    }
+
     private static double[] performSiftAutoAlign(QuPathGUI gui, PathObject selectedTile) throws Exception {
 
         var imageData = gui.getImageData();
@@ -570,8 +697,8 @@ public class SingleTileRefinement {
         MicroscopeController mc = MicroscopeController.getInstance();
         double microPixelSize = mc.getSocketClient().getMicroscopePixelSize();
 
-        // Calculate search region: tile bounds + 160um margin on each side
-        double marginUm = 160.0;
+        // Calculate search region: tile bounds + configurable margin on each side
+        double marginUm = qupath.ext.qpsc.preferences.PersistentPreferences.getSiftSearchMarginUm();
         double marginPx = marginUm / wsiPixelSize;
 
         double tileX = selectedTile.getROI().getBoundsX();
@@ -631,8 +758,22 @@ public class SingleTileRefinement {
         try {
             // Call SIFT matching on the Python server
             double minPx = qupath.ext.qpsc.preferences.PersistentPreferences.getSiftMinPixelSize();
+            double ratioThreshold = qupath.ext.qpsc.preferences.PersistentPreferences.getSiftRatioThreshold();
+            int minMatchCount = qupath.ext.qpsc.preferences.PersistentPreferences.getSiftMinMatchCount();
+            double contrastThreshold = qupath.ext.qpsc.preferences.PersistentPreferences.getSiftContrastThreshold();
+            int nFeatures = qupath.ext.qpsc.preferences.PersistentPreferences.getSiftNFeatures();
             String response = mc.getSocketClient()
-                    .siftAutoAlign(tempFile.getAbsolutePath(), microPixelSize, wsiPixelSize, flipX, flipY, minPx);
+                    .siftAutoAlign(
+                            tempFile.getAbsolutePath(),
+                            microPixelSize,
+                            wsiPixelSize,
+                            flipX,
+                            flipY,
+                            minPx,
+                            ratioThreshold,
+                            minMatchCount,
+                            contrastThreshold,
+                            nFeatures);
 
             // Parse response: "SUCCESS:offsetX,offsetY|inliers:N|confidence:C"
             if (!response.startsWith("SUCCESS:")) {

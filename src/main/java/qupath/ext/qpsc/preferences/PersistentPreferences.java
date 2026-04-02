@@ -1074,4 +1074,106 @@ public class PersistentPreferences {
     public static DoubleProperty siftConfidenceThresholdProperty() {
         return siftConfidenceThresholdProperty;
     }
+
+    // ---- SIFT Advanced Parameters ----
+
+    private static final DoubleProperty siftRatioThresholdProperty =
+            PathPrefs.createPersistentPreference("siftRatioThreshold", 0.7);
+
+    /**
+     * Lowe's ratio test threshold for SIFT matching (0.0-1.0).
+     * Lower = stricter (fewer but more reliable matches).
+     * Higher = more permissive (more matches but more false positives).
+     * Default 0.7 is the standard value from Lowe's paper.
+     */
+    public static double getSiftRatioThreshold() {
+        return siftRatioThresholdProperty.get();
+    }
+
+    public static void setSiftRatioThreshold(double threshold) {
+        siftRatioThresholdProperty.set(threshold);
+    }
+
+    public static DoubleProperty siftRatioThresholdProperty() {
+        return siftRatioThresholdProperty;
+    }
+
+    private static final IntegerProperty siftMinMatchCountProperty =
+            PathPrefs.createPersistentPreference("siftMinMatchCount", 10);
+
+    /**
+     * Minimum number of SIFT feature matches required for a valid alignment.
+     * Lower values accept weaker matches; higher values require more features.
+     */
+    public static int getSiftMinMatchCount() {
+        return siftMinMatchCountProperty.get();
+    }
+
+    public static void setSiftMinMatchCount(int count) {
+        siftMinMatchCountProperty.set(count);
+    }
+
+    public static IntegerProperty siftMinMatchCountProperty() {
+        return siftMinMatchCountProperty;
+    }
+
+    private static final DoubleProperty siftSearchMarginUmProperty =
+            PathPrefs.createPersistentPreference("siftSearchMarginUm", 160.0);
+
+    /**
+     * Search margin around the predicted tile position (in micrometers).
+     * The WSI region extracted for SIFT matching extends this far beyond
+     * the tile bounds on each side. Larger values handle bigger alignment
+     * errors but slow down matching.
+     */
+    public static double getSiftSearchMarginUm() {
+        return siftSearchMarginUmProperty.get();
+    }
+
+    public static void setSiftSearchMarginUm(double marginUm) {
+        siftSearchMarginUmProperty.set(marginUm);
+    }
+
+    public static DoubleProperty siftSearchMarginUmProperty() {
+        return siftSearchMarginUmProperty;
+    }
+
+    private static final DoubleProperty siftContrastThresholdProperty =
+            PathPrefs.createPersistentPreference("siftContrastThreshold", 0.04);
+
+    /**
+     * SIFT detector contrast threshold. Features with contrast below this
+     * are discarded. Lower = more features detected (good for low-contrast
+     * tissue like pale H&amp;E). Default 0.04 is OpenCV's default.
+     */
+    public static double getSiftContrastThreshold() {
+        return siftContrastThresholdProperty.get();
+    }
+
+    public static void setSiftContrastThreshold(double threshold) {
+        siftContrastThresholdProperty.set(threshold);
+    }
+
+    public static DoubleProperty siftContrastThresholdProperty() {
+        return siftContrastThresholdProperty;
+    }
+
+    private static final IntegerProperty siftNFeaturesProperty =
+            PathPrefs.createPersistentPreference("siftNFeatures", 0);
+
+    /**
+     * Maximum number of SIFT features to detect. 0 = unlimited (detect all).
+     * Limiting features can speed up matching on feature-rich images.
+     */
+    public static int getSiftNFeatures() {
+        return siftNFeaturesProperty.get();
+    }
+
+    public static void setSiftNFeatures(int n) {
+        siftNFeaturesProperty.set(n);
+    }
+
+    public static IntegerProperty siftNFeaturesProperty() {
+        return siftNFeaturesProperty;
+    }
 }

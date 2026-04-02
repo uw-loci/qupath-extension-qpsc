@@ -4814,13 +4814,21 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double wsiPixelSize,
             boolean flipX,
             boolean flipY,
-            double minPixelSizeUm)
+            double minPixelSizeUm,
+            double ratioThreshold,
+            int minMatchCount,
+            double contrastThreshold,
+            int nFeatures)
             throws IOException {
         StringBuilder msg = new StringBuilder();
         msg.append("--wsi-region ").append(wsiRegionPath);
         msg.append(" --micro-px ").append(microscopePixelSize);
         msg.append(" --wsi-px ").append(wsiPixelSize);
         msg.append(" --min-px ").append(minPixelSizeUm);
+        msg.append(" --ratio ").append(ratioThreshold);
+        msg.append(" --min-matches ").append(minMatchCount);
+        msg.append(" --contrast ").append(contrastThreshold);
+        if (nFeatures > 0) msg.append(" --nfeatures ").append(nFeatures);
         if (flipX) msg.append(" --flip-x");
         if (flipY) msg.append(" --flip-y");
         msg.append(" ENDOFSTR");
