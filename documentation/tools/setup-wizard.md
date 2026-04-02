@@ -5,6 +5,8 @@
 
 **Purpose:** Create all required microscope YAML configuration files through a guided step-by-step process. Designed for first-time setup when no valid microscope configuration exists.
 
+![Setup Wizard welcome step](../images/Docs_SetupWizard_Welcome.png)
+
 ---
 
 ## Overview

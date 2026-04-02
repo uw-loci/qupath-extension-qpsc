@@ -2,6 +2,8 @@
 > Menu: Extensions > QP Scope > Utilities > WB Comparison Test...
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
 
+![WB Comparison Test dialog](../images/Docs_WBComparisonTest.png)
+
 ## Purpose
 
 The WB Comparison Test acquires the same tissue region using multiple white

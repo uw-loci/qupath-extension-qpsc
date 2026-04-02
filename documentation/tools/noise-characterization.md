@@ -3,6 +3,8 @@
 > Menu: Extensions > QP Scope > Utilities > JAI Camera > Noise Characterization...
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
 
+![JAI Noise Characterization dialog](../images/Docs_NoiseCharacterization.png)
+
 ## Purpose
 
 Measure camera noise statistics (mean, standard deviation, SNR) with configurable

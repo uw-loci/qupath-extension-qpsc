@@ -3,6 +3,8 @@
 > Menu: Extensions > QP Scope > Utilities > Z-Stack / Time-Lapse...
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
 
+![Z-Stack / Time-Lapse dialog](../images/Docs_ZStackTimelapse.png)
+
 ## Purpose
 
 Acquire single-tile Z-stacks or time-lapse sequences at the current stage position. These are basic acquisition modes for capturing 3D depth information or temporal dynamics without the complexity of multi-tile stitching.

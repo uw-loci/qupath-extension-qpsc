@@ -3,6 +3,8 @@
 > Menu: Extensions > QP Scope > Utilities > Propagation Manager...
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
 
+![Propagation Manager dialog](../images/Docs_PropagationManager.png)
+
 ## Purpose
 
 Transfer annotations and detections between base images (whole-slide scans) and their acquired sub-images (stitched acquisitions). Supports both directions:
