@@ -23,6 +23,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -606,12 +607,24 @@ public class SingleTileRefinement {
                 wsiRegion.getWidth(),
                 wsiRegion.getHeight());
 
-        // Get flip status
+        // Get flip status from image metadata (macro/WSI flip)
         ProjectImageEntry<?> entry = gui.getProject() != null && gui.getImageData() != null
                 ? gui.getProject().getEntry(gui.getImageData())
                 : null;
         boolean flipX = entry != null && ImageMetadataManager.isFlippedX(entry);
         boolean flipY = entry != null && ImageMetadataManager.isFlippedY(entry);
+
+        // Account for detector optical flip (XOR with macro flip).
+        // If the macro is flipped AND the detector is also flipped, they cancel out
+        // and no SIFT flip is needed. If only one is flipped, SIFT must compensate.
+        String siftDetectorId = entry != null ? ImageMetadataManager.getDetectorId(entry) : null;
+        if (siftDetectorId != null) {
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr != null) {
+                flipX ^= mgr.getDetectorFlipX(siftDetectorId);
+                flipY ^= mgr.getDetectorFlipY(siftDetectorId);
+            }
+        }
 
         // Stop live streaming for clean snap
         MicroscopeController.LiveViewState liveState = mc.stopAllLiveViewing();

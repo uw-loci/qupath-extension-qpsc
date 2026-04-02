@@ -639,7 +639,8 @@ public class AcquisitionManager {
                         baseModality,
                         state.sample.objective(),
                         getParentFlipX(),
-                        getParentFlipY());
+                        getParentFlipY(),
+                        state.sample.detector());
 
                 // Apply Z-focus prediction if model is ready (tilt correction)
                 if (state.transform != null) {
@@ -1395,6 +1396,7 @@ public class AcquisitionManager {
      * @param objective   Objective used (e.g., "20x")
      * @param flipX       Whether the parent image is optically flipped on X
      * @param flipY       Whether the parent image is optically flipped on Y
+     * @param detectorId  The detector used for this acquisition (null if unknown)
      */
     private void writeAcquisitionInfo(
             String scanTypeDir,
@@ -1403,7 +1405,8 @@ public class AcquisitionManager {
             String modality,
             String objective,
             boolean flipX,
-            boolean flipY) {
+            boolean flipY,
+            String detectorId) {
         Path infoFile = Paths.get(scanTypeDir, ACQUISITION_INFO_FILENAME);
         if (Files.exists(infoFile)) {
             return;
@@ -1426,6 +1429,8 @@ public class AcquisitionManager {
                 w.write("flip_x=" + flipX);
                 w.newLine();
                 w.write("flip_y=" + flipY);
+                w.newLine();
+                w.write("detector_id=" + (detectorId != null ? detectorId : ""));
                 w.newLine();
             }
             logger.info("Wrote acquisition info to: {}", infoFile);
@@ -1458,8 +1463,19 @@ public class AcquisitionManager {
      * Gets the flip-X status of the currently-open parent image, falling back
      * to the preference value if no parent entry is available.
      */
+    /**
+     * Gets the flip-X status for the current acquisition context.
+     *
+     * <p>Fallback chain:
+     * <ol>
+     *   <li>Parent image metadata (most specific -- image was already flipped)</li>
+     *   <li>Per-detector config from resources_LOCI.yml (hardware-specific optical flip)</li>
+     *   <li>Global preference (legacy fallback for unconfigured systems)</li>
+     * </ol>
+     */
     @SuppressWarnings("unchecked")
     private boolean getParentFlipX() {
+        // 1. Try image metadata (already stores the flip state for this specific image)
         if (gui.getViewer().hasServer() && gui.getImageData() != null) {
             try {
                 Project<BufferedImage> project = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
@@ -1468,18 +1484,29 @@ public class AcquisitionManager {
                     return ImageMetadataManager.isFlippedX(entry);
                 }
             } catch (Exception e) {
-                // fall through to preference
+                // fall through
             }
         }
+        // 2. Try per-detector config (hardware optical flip)
+        String detectorId = state.sample != null ? state.sample.detector() : null;
+        if (detectorId != null) {
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr != null) {
+                return mgr.getDetectorFlipX(detectorId);
+            }
+        }
+        // 3. Fall back to global preference
         return QPPreferenceDialog.getFlipMacroXProperty();
     }
 
     /**
-     * Gets the flip-Y status of the currently-open parent image, falling back
-     * to the preference value if no parent entry is available.
+     * Gets the flip-Y status for the current acquisition context.
+     *
+     * @see #getParentFlipX()
      */
     @SuppressWarnings("unchecked")
     private boolean getParentFlipY() {
+        // 1. Try image metadata
         if (gui.getViewer().hasServer() && gui.getImageData() != null) {
             try {
                 Project<BufferedImage> project = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
@@ -1488,9 +1515,18 @@ public class AcquisitionManager {
                     return ImageMetadataManager.isFlippedY(entry);
                 }
             } catch (Exception e) {
-                // fall through to preference
+                // fall through
             }
         }
+        // 2. Try per-detector config
+        String detectorId = state.sample != null ? state.sample.detector() : null;
+        if (detectorId != null) {
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr != null) {
+                return mgr.getDetectorFlipY(detectorId);
+            }
+        }
+        // 3. Fall back to global preference
         return QPPreferenceDialog.getFlipMacroYProperty();
     }
 

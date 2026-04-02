@@ -1694,6 +1694,56 @@ public class MicroscopeConfigManager {
         return false;
     }
 
+    // --- Per-detector optical flip ---
+
+    /**
+     * Gets a boolean property from a detector's resource configuration.
+     *
+     * @param detectorId  The detector identifier (e.g., "LOCI_DETECTOR_JAI_001")
+     * @param property    The property name (e.g., "flip_x", "requires_debayering")
+     * @param defaultValue Value to return if property is missing
+     * @return The property value, or defaultValue if not found
+     */
+    @SuppressWarnings("unchecked")
+    private boolean getDetectorBooleanProperty(String detectorId, String property, boolean defaultValue) {
+        Map<String, Object> detectorSection = getResourceSection("id_detector");
+        if (detectorSection == null || !detectorSection.containsKey(detectorId)) {
+            return defaultValue;
+        }
+        Map<String, Object> detectorData = (Map<String, Object>) detectorSection.get(detectorId);
+        Object flag = detectorData != null ? detectorData.get(property) : null;
+        return (flag instanceof Boolean) ? (Boolean) flag : defaultValue;
+    }
+
+    /**
+     * Gets the optical flip-X setting for a detector.
+     * <p>
+     * Optical flip is a property of the light path between the sample and this
+     * specific detector. Different detectors on the same microscope may have
+     * different flip states (e.g., a brightfield camera may be flipped relative
+     * to a laser scanning detector because they use different optical paths).
+     * <p>
+     * This is NOT stage axis inversion (stageInvertedX/Y), which is a separate
+     * hardware property.
+     *
+     * @param detectorId The detector identifier (e.g., "LOCI_DETECTOR_JAI_001")
+     * @return true if detector requires X flip, false otherwise (default false)
+     */
+    public boolean getDetectorFlipX(String detectorId) {
+        return getDetectorBooleanProperty(detectorId, "flip_x", false);
+    }
+
+    /**
+     * Gets the optical flip-Y setting for a detector.
+     *
+     * @param detectorId The detector identifier (e.g., "LOCI_DETECTOR_JAI_001")
+     * @return true if detector requires Y flip, false otherwise (default false)
+     * @see #getDetectorFlipX(String)
+     */
+    public boolean getDetectorFlipY(String detectorId) {
+        return getDetectorBooleanProperty(detectorId, "flip_y", false);
+    }
+
     /**
      * Check if the specified detector is a JAI 3-CCD camera.
      * JAI cameras support per-channel exposure control for white balance calibration.

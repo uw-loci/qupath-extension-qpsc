@@ -52,6 +52,9 @@ public class ImageMetadataManager {
     public static final String IMAGE_INDEX = "image_index";
     public static final String BASE_IMAGE = "base_image";
 
+    // Detector that captured this image (per-detector flip, WB lookup, etc.)
+    public static final String DETECTOR_ID = "detector_id";
+
     // PPM analysis metadata
     public static final String PPM_CALIBRATION = "ppm_calibration";
 
@@ -118,6 +121,43 @@ public class ImageMetadataManager {
             String angle,
             String annotationName,
             Integer imageIndex) {
+        applyImageMetadata(entry, parentEntry, xOffset, yOffset, flipX, flipY,
+                sampleName, modality, objective, angle, annotationName, imageIndex, null);
+    }
+
+    /**
+     * Applies comprehensive metadata to a new image entry including all identification fields
+     * and the detector that captured the image.
+     *
+     * @param entry The image entry to apply metadata to
+     * @param parentEntry Optional parent entry for collection inheritance
+     * @param xOffset X offset from slide corner in microns
+     * @param yOffset Y offset from slide corner in microns
+     * @param flipX Whether the image has been flipped horizontally
+     * @param flipY Whether the image has been flipped vertically
+     * @param sampleName The sample name
+     * @param modality The imaging modality (e.g., "ppm", "bf")
+     * @param objective The objective/magnification (e.g., "20x", "10x")
+     * @param angle The angle for multi-angle acquisitions (null if not applicable)
+     * @param annotationName The annotation name (null if not applicable)
+     * @param imageIndex The image index number
+     * @param detectorId The detector that captured this image (null if unknown).
+     *                   Stored for per-detector flip lookup in future workflows.
+     */
+    public static void applyImageMetadata(
+            ProjectImageEntry<?> entry,
+            ProjectImageEntry<?> parentEntry,
+            double xOffset,
+            double yOffset,
+            boolean flipX,
+            boolean flipY,
+            String sampleName,
+            String modality,
+            String objective,
+            String angle,
+            String annotationName,
+            Integer imageIndex,
+            String detectorId) {
         if (entry == null) {
             logger.error("Cannot apply metadata to null entry");
             return;
@@ -196,6 +236,10 @@ public class ImageMetadataManager {
             metadata.put(IMAGE_INDEX, String.valueOf(imageIndex));
         }
 
+        if (detectorId != null && !detectorId.isEmpty()) {
+            metadata.put(DETECTOR_ID, detectorId);
+        }
+
         // If this is a flipped duplicate, store reference to original
         if (parentEntry != null && (flipX || flipY)) {
             metadata.put(ORIGINAL_IMAGE_ID, parentEntry.getID());
@@ -207,7 +251,7 @@ public class ImageMetadataManager {
         }
 
         logger.debug(
-                "Applied metadata to {}: collection={}, base_image={}, offset=({},{}), flipX={}, flipY={}, sample={}, modality={}, objective={}, angle={}, annotation={}, index={}",
+                "Applied metadata to {}: collection={}, base_image={}, offset=({},{}), flipX={}, flipY={}, sample={}, modality={}, objective={}, angle={}, annotation={}, index={}, detector={}",
                 entry.getImageName(),
                 collectionNumber,
                 baseImage,
@@ -220,7 +264,8 @@ public class ImageMetadataManager {
                 objective,
                 angle,
                 annotationName,
-                imageIndex);
+                imageIndex,
+                detectorId);
     }
 
     /**
@@ -529,6 +574,17 @@ public class ImageMetadataManager {
      */
     public static boolean isFlipped(ProjectImageEntry<?> entry) {
         return isFlippedX(entry) || isFlippedY(entry);
+    }
+
+    /**
+     * Gets the detector ID that captured this image.
+     *
+     * @param entry The image entry
+     * @return The detector ID (e.g., "LOCI_DETECTOR_JAI_001"), or null if not set
+     */
+    public static String getDetectorId(ProjectImageEntry<?> entry) {
+        if (entry == null) return null;
+        return entry.getMetadata().get(DETECTOR_ID);
     }
 
     /**

@@ -51,6 +51,8 @@ id_detector:
         height_px: 1040
         sensor_pixel_width_um: 6.5
         sensor_pixel_height_um: 6.5
+        flip_x: false
+        flip_y: false
         description: null
 
     LOCI_PMT_001:
@@ -60,6 +62,8 @@ id_detector:
         height_px: 512
         sensor_pixel_width_um: 'NA'
         sensor_pixel_height_um: 'NA'
+        flip_x: false
+        flip_y: false
         description: null
 
     LOCI_DETECTOR_TELEDYNE_001:
@@ -70,8 +74,10 @@ id_detector:
         sensor_pixel_width_um: 4.54
         sensor_pixel_height_um: 4.54
         requires_debayering: true
+        flip_x: false
+        flip_y: false
         description: null
-        
+
     LOCI_DETECTOR_JAI_001:
         name: 'AP-3200T-USB'
         manufacturer: 'JAI'
@@ -80,6 +86,8 @@ id_detector:
         sensor_pixel_width_um: 5.5
         sensor_pixel_height_um: 5.5
         requires_debayering: false
+        flip_x: false
+        flip_y: false
         description: 'JAI 3-CCD prism detector'
 
 id_objective_lens:
