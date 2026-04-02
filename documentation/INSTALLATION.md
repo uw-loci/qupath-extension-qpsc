@@ -194,6 +194,8 @@ You should see "QP Scope" as a top-level menu. If it does not appear, verify the
 
 QPSC needs YAML configuration files that describe your microscope hardware (objectives, cameras, stage limits, imaging modalities, etc.). The **Setup Wizard** walks you through creating these files.
 
+![Setup Wizard welcome step](images/Docs_SetupWizard_Welcome.png)
+
 ### Launch the Setup Wizard
 
 1. In QuPath, go to **Extensions -> QP Scope -> Setup Wizard**
