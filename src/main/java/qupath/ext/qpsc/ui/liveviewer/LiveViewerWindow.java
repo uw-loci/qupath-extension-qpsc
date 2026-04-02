@@ -512,7 +512,6 @@ public class LiveViewerWindow {
 
         // Stage control panel (on right side, expanded by default for visibility)
         stageControlPanel = new StageControlPanel();
-        stageControlPanel.setExpanded(true); // Start expanded so user sees controls
 
         // Wrap in ScrollPane to handle overflow when window is short
         stageScrollPane = new ScrollPane(stageControlPanel);

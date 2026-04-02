@@ -30,7 +30,6 @@ import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.control.TextInputDialog;
-import javafx.scene.control.TitledPane;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
@@ -75,7 +74,7 @@ import qupath.lib.projects.ProjectImageEntry;
  * @author Mike Nelson
  * @since 1.0
  */
-public class StageControlPanel extends TitledPane {
+public class StageControlPanel extends VBox {
 
     private static final Logger logger = LoggerFactory.getLogger(StageControlPanel.class);
 
@@ -228,9 +227,7 @@ public class StageControlPanel extends TitledPane {
      * Creates a new StageControlPanel with all stage control components.
      */
     public StageControlPanel() {
-        setText("Stage Control");
-        setExpanded(false);
-        setAnimated(false);
+        // No title bar -- visibility is controlled by the toolbar toggle in LiveViewerWindow
 
         // Get config manager for bounds checking
         String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
@@ -310,7 +307,8 @@ public class StageControlPanel extends TitledPane {
 
         // Build the UI
         VBox content = buildContent();
-        setContent(content);
+        getChildren().add(content);
+        VBox.setVgrow(content, javafx.scene.layout.Priority.ALWAYS);
 
         // Wire up event handlers
         setupEventHandlers();
@@ -2176,7 +2174,7 @@ public class StageControlPanel extends TitledPane {
      * @return true if the event was handled, false otherwise
      */
     public boolean handleKeyEvent(KeyEvent event) {
-        if (!isExpanded()) {
+        if (!isVisible() || getParent() == null) {
             return false;
         }
         if (isAcquisitionBlocked()) {
