@@ -20,6 +20,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
+import javafx.scene.control.ToggleButton;
 import javafx.scene.control.Tooltip;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.PixelFormat;
@@ -75,6 +76,8 @@ public class LiveViewerWindow {
     private TitledPane histogramPane;
     private NoiseStatsPanel noiseStatsPanel;
     private StageControlPanel stageControlPanel;
+    private ScrollPane stageScrollPane;
+    private ToggleButton stageControlToggle;
     private final ContrastSettings contrastSettings = new ContrastSettings();
 
     // Focus controllers
@@ -444,6 +447,12 @@ public class LiveViewerWindow {
             logger.info("Show tiles during acquisition: {}", newVal);
         });
 
+        // Stage control toggle button
+        stageControlToggle = new ToggleButton("Stage Control");
+        stageControlToggle.setSelected(true);
+        stageControlToggle.setStyle("-fx-font-size: 11px;");
+        stageControlToggle.setTooltip(new Tooltip("Show/hide stage control panel"));
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
@@ -457,6 +466,7 @@ public class LiveViewerWindow {
                 focusRangeCombo,
                 showTilesCheckBox,
                 spacer,
+                stageControlToggle,
                 scaleLabel,
                 scaleCombo);
         if (docHelpButton != null) toolbar.getChildren().add(docHelpButton);
@@ -505,7 +515,7 @@ public class LiveViewerWindow {
         stageControlPanel.setExpanded(true); // Start expanded so user sees controls
 
         // Wrap in ScrollPane to handle overflow when window is short
-        ScrollPane stageScrollPane = new ScrollPane(stageControlPanel);
+        stageScrollPane = new ScrollPane(stageControlPanel);
         stageScrollPane.setFitToWidth(true);
         stageScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         stageScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
@@ -538,9 +548,18 @@ public class LiveViewerWindow {
 
         BorderPane root = new BorderPane();
         root.setTop(toolbar);
-        root.setRight(stageScrollPane); // Stage control on right side
+        root.setRight(stageScrollPane); // Stage control on right side (starts visible)
         root.setCenter(scrollPane); // Live image in center
         root.setBottom(bottomPane);
+
+        // Wire toggle to show/hide the stage control panel
+        stageControlToggle.selectedProperty().addListener((obs, wasSelected, isSelected) -> {
+            if (isSelected) {
+                root.setRight(stageScrollPane);
+            } else {
+                root.setRight(null);
+            }
+        });
 
         expandedContent = root;
 
