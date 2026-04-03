@@ -190,9 +190,34 @@ public class TileProcessingUtilities {
         config.outputFilename = outputName;
         logger.info("Set outputFilename on StitchingConfig: {}", outputName);
 
-        logger.info("Starting BasicStitching workflow with {} format...", outputFormat);
-        String outPath = StitchingWorkflow.run(config);
-        logger.info("BasicStitching workflow completed. Output: {}", outPath);
+        // Run stitching with retry on pyramid writer failure.
+        // The OMEPyramidWriter can fail on certain tile grid dimensions due to
+        // Bio-Formats resolution index issues.  On failure, delete the corrupt
+        // partial output and retry once.
+        String outPath = null;
+        int maxAttempts = 2;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                logger.info(
+                        "Starting BasicStitching workflow with {} format (attempt {}/{})...",
+                        outputFormat,
+                        attempt,
+                        maxAttempts);
+                outPath = StitchingWorkflow.run(config);
+                logger.info("BasicStitching workflow completed. Output: {}", outPath);
+                break; // Success
+            } catch (Exception stitchEx) {
+                logger.warn("Stitching attempt {}/{} failed: {}", attempt, maxAttempts, stitchEx.getMessage());
+                // Clean up any corrupt partial output files created by this attempt
+                cleanupCorruptStitchingOutput(outputDir, existingFiles);
+                if (attempt >= maxAttempts) {
+                    logger.error("Stitching failed after {} attempts", maxAttempts);
+                    throw new IOException(
+                            "Stitching failed after " + maxAttempts + " attempts: " + stitchEx.getMessage(), stitchEx);
+                }
+                logger.info("Retrying stitching...");
+            }
+        }
 
         // Handle null return from stitching
         if (outPath == null) {
@@ -598,6 +623,38 @@ public class TileProcessingUtilities {
 
         logger.info("=== Stitching workflow completed ===");
         return lastProcessedPath;
+    }
+
+    /**
+     * Removes any newly-created OME-TIFF or OME-ZARR files from the output directory
+     * that were not present before stitching started. Called on stitching failure
+     * to clean up corrupt partial output before a retry.
+     */
+    private static void cleanupCorruptStitchingOutput(File outputDir, Set<String> existingFiles) {
+        File[] candidates = outputDir.listFiles((dir, name) ->
+                (name.endsWith(".ome.tif") || name.endsWith(".ome.zarr")) && !existingFiles.contains(name));
+        if (candidates == null || candidates.length == 0) {
+            return;
+        }
+        for (File f : candidates) {
+            logger.info("Cleaning up corrupt stitching output: {}", f.getName());
+            if (f.isDirectory()) {
+                // OME-ZARR is a directory tree
+                try {
+                    java.nio.file.Path zarr = f.toPath();
+                    java.nio.file.Files.walk(zarr)
+                            .sorted(java.util.Comparator.reverseOrder())
+                            .map(java.nio.file.Path::toFile)
+                            .forEach(File::delete);
+                } catch (IOException e) {
+                    logger.warn("Failed to clean up ZARR directory {}: {}", f.getName(), e.getMessage());
+                }
+            } else {
+                if (!f.delete()) {
+                    logger.warn("Failed to delete corrupt file: {}", f.getName());
+                }
+            }
+        }
     }
 
     /**

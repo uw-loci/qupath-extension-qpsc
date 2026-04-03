@@ -514,11 +514,25 @@ public class SingleTileRefinement {
                                         }
                                     });
                                 } catch (Exception ex) {
-                                    logger.error("Auto-align failed: {}", ex.getMessage());
+                                    String msg = ex.getMessage();
+                                    boolean isMatchFailure = msg != null
+                                            && (msg.contains("insufficient features")
+                                                    || msg.contains("matching failed"));
+                                    if (isMatchFailure) {
+                                        logger.info("SIFT matching did not find enough features -- "
+                                                + "the selected tile may be outside the search range or "
+                                                + "lack distinctive tissue features");
+                                    } else {
+                                        logger.error("Auto-align failed: {}", msg);
+                                    }
+                                    String userMsg = isMatchFailure
+                                            ? "SIFT could not match. Try clicking closer to "
+                                                    + "the tile, or adjust Settings."
+                                            : "Error: " + msg;
                                     Platform.runLater(() -> {
                                         autoAlignButton.setDisable(false);
-                                        autoAlignStatus.setText("Error: " + ex.getMessage());
-                                        autoAlignStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                                        autoAlignStatus.setText(userMsg);
+                                        autoAlignStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: orange;");
                                     });
                                 }
                             },

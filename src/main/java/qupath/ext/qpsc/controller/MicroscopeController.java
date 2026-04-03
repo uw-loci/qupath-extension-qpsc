@@ -197,7 +197,7 @@ public class MicroscopeController implements StagePositionProvider {
             logger.trace("Stage XY position: ({}, {})", position[0], position[1]);
             return position;
         } catch (IOException e) {
-            logger.error("Failed to get stage XY position: {}", e.getMessage());
+            logger.warn("Failed to get stage XY position: {}", e.getMessage());
             throw new IOException("Failed to get stage XY position via socket", e);
         }
     }
@@ -215,7 +215,7 @@ public class MicroscopeController implements StagePositionProvider {
             logger.trace("Stage Z position: {}", z);
             return z;
         } catch (IOException e) {
-            logger.error("Failed to get stage Z position: {}", e.getMessage());
+            logger.warn("Failed to get stage Z position: {}", e.getMessage());
             throw new IOException("Failed to get stage Z position via socket", e);
         }
     }
@@ -233,7 +233,7 @@ public class MicroscopeController implements StagePositionProvider {
             logger.debug("Stage rotation angle: {} degrees", angle);
             return angle;
         } catch (IOException e) {
-            logger.error("Failed to get stage rotation angle: {}", e.getMessage());
+            logger.warn("Failed to get stage rotation angle: {}", e.getMessage());
             throw new IOException("Failed to get stage rotation angle via socket", e);
         }
     }
