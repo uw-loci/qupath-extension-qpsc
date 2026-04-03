@@ -297,17 +297,33 @@ public class HardwareStep implements WizardStep {
         idField.setPromptText("e.g., MY_CAMERA_01");
         TextField nameField = new TextField();
         nameField.setPromptText("e.g., Hamamatsu ORCA");
+        TextField deviceField = new TextField();
+        deviceField.setPromptText("e.g., HamamatsuHam_DCAM (MM device name)");
+        deviceField.setTooltip(new javafx.scene.control.Tooltip(
+                "The Micro-Manager device name for this camera/detector"));
+        ComboBox<String> cameraTypeCombo = new ComboBox<>();
+        cameraTypeCombo.getItems().addAll("generic", "jai", "laser_scanning");
+        cameraTypeCombo.setValue("generic");
+        cameraTypeCombo.setTooltip(new javafx.scene.control.Tooltip(
+                "generic: Standard area camera (CCD, sCMOS)\n"
+                + "jai: JAI 3-CCD prism camera (per-channel exposure)\n"
+                + "laser_scanning: Galvo scan engine (e.g. OpenScan OSc-LSM)"));
         TextField widthField = new TextField("2048");
         TextField heightField = new TextField("2048");
 
-        grid.add(new Label("ID:"), 0, 0);
-        grid.add(idField, 1, 0);
-        grid.add(new Label("Name:"), 0, 1);
-        grid.add(nameField, 1, 1);
-        grid.add(new Label("Width (px):"), 0, 2);
-        grid.add(widthField, 1, 2);
-        grid.add(new Label("Height (px):"), 0, 3);
-        grid.add(heightField, 1, 3);
+        int row = 0;
+        grid.add(new Label("ID:"), 0, row);
+        grid.add(idField, 1, row++);
+        grid.add(new Label("Name:"), 0, row);
+        grid.add(nameField, 1, row++);
+        grid.add(new Label("MM Device:"), 0, row);
+        grid.add(deviceField, 1, row++);
+        grid.add(new Label("Camera type:"), 0, row);
+        grid.add(cameraTypeCombo, 1, row++);
+        grid.add(new Label("Width (px):"), 0, row);
+        grid.add(widthField, 1, row++);
+        grid.add(new Label("Height (px):"), 0, row);
+        grid.add(heightField, 1, row++);
 
         dialog.getDialogPane().setContent(grid);
 
@@ -318,6 +334,8 @@ public class HardwareStep implements WizardStep {
                 Map<String, Object> entry = new LinkedHashMap<>();
                 entry.put("id", id);
                 entry.put("name", nameField.getText().trim());
+                entry.put("device", deviceField.getText().trim());
+                entry.put("camera_type", cameraTypeCombo.getValue());
                 entry.put("manufacturer", "");
                 try {
                     entry.put("width_px", Integer.parseInt(widthField.getText().trim()));

@@ -32,7 +32,7 @@ public final class ConfigSchema {
      * The wizard writes this into generated configs as a comment for traceability.
      * Tests verify that templates match this version.
      */
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
 
     // ======================== MAIN CONFIG (config_<name>.yml) ========================
 
@@ -89,6 +89,10 @@ public final class ConfigSchema {
     public static Map<String, Object> getDefaultAutofocusParams(String objectiveId) {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("objective", objectiveId);
+        // SAFETY: calibrated=false prevents acquisition from proceeding until
+        // the user has verified these values are safe for their hardware.
+        // An incorrect search_range_um can crash the objective into the sample.
+        params.put("calibrated", false);
         params.put("n_steps", 35);
         params.put("search_range_um", 50.0);
         params.put("n_tiles", 5);
@@ -97,10 +101,8 @@ public final class ConfigSchema {
         params.put("score_metric", "laplacian_variance");
         params.put("texture_threshold", 0.010);
         params.put("tissue_area_threshold", 0.2);
-        params.put("adaptive_initial_step_um", 10.0);
-        params.put("adaptive_min_step_um", 2.0);
-        params.put("adaptive_max_steps", 25);
-        params.put("adaptive_focus_threshold", 0.95);
+        params.put("sweep_range_um", 10.0);
+        params.put("sweep_n_steps", 5);
         return params;
     }
 

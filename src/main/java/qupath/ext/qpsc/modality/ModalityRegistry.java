@@ -81,6 +81,11 @@ public final class ModalityRegistry {
         logger.info("Initializing ModalityRegistry with default modality handlers");
         registerHandler("ppm", new PPMModalityHandler());
 
+        // Brightfield modalities (transmitted light, no rotation, no WB).
+        BrightfieldModalityHandler bfHandler = new BrightfieldModalityHandler();
+        registerHandler("bf", bfHandler);
+        registerHandler("brightfield", bfHandler);
+
         // Point scanning modalities share a common handler (monochrome, no rotation, no WB).
         // Sub-type differences (laser wavelength, detector) are in YAML acquisition profiles.
         LaserScanningModalityHandler lsmHandler = new LaserScanningModalityHandler();

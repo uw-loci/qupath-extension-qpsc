@@ -351,6 +351,23 @@ public interface ModalityHandler {
     }
 
     /**
+     * Returns the default white balance mode for this modality.
+     *
+     * <p>Used by the acquisition UI to set the initial WB mode dropdown value
+     * when this modality is selected. Modalities that don't need white balance
+     * (e.g., monochrome brightfield, laser scanning) should return "off".
+     * Multi-channel color modalities (PPM) should return their preferred mode.</p>
+     *
+     * <p>The user can always override this in the UI. This only sets the default.</p>
+     *
+     * @return the default WB mode string: "off", "per_angle", "simple", or "camera_awb".
+     *         Default: "off" (no white balance).
+     */
+    default String getDefaultWbMode() {
+        return "off";
+    }
+
+    /**
      * Returns the default exposure time for a given rotation angle from
      * modality-specific persistent preferences.
      *

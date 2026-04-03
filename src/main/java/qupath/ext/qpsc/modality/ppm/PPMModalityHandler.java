@@ -195,6 +195,11 @@ public class PPMModalityHandler implements ModalityHandler {
         return 4;
     }
 
+    @Override
+    public String getDefaultWbMode() {
+        return "per_angle";
+    }
+
     /**
      * Validates background settings against the selected acquisition angles.
      *

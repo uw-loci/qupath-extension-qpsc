@@ -356,14 +356,40 @@ public class UnifiedAcquisitionController {
             projectPane.setStyle("-fx-font-weight: bold;");
         }
 
+        /**
+         * Get the default WB mode from the current modality handler.
+         * Maps handler's wire mode string (e.g. "off", "per_angle") to
+         * the display name used in the ComboBox.
+         */
+        private String getDefaultWbModeFromModality() {
+            try {
+                String modality = modalityBox != null ? modalityBox.getValue() : null;
+                if (modality != null) {
+                    var handler = qupath.ext.qpsc.modality.ModalityRegistry.getHandler(modality);
+                    String wireMode = handler.getDefaultWbMode();
+                    // Map wire mode to display name
+                    for (qupath.ext.qpsc.modality.WbMode wm : qupath.ext.qpsc.modality.WbMode.values()) {
+                        if (wm.getProtocolName().equals(wireMode)) {
+                            return wm.getDisplayName();
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // Fallback silently
+            }
+            return "Off";
+        }
+
         private void createWbModeCombo() {
             wbModeComboBox = new ComboBox<>();
             wbModeComboBox.getItems().addAll("Off", "Camera AWB", "Simple (90deg)", "Per-angle (PPM)");
             String savedWBMode = PersistentPreferences.getLastWhiteBalanceMode();
-            if (wbModeComboBox.getItems().contains(savedWBMode)) {
+            if (savedWBMode != null && wbModeComboBox.getItems().contains(savedWBMode)) {
                 wbModeComboBox.setValue(savedWBMode);
             } else {
-                wbModeComboBox.setValue("Per-angle (PPM)");
+                // Use modality handler's default WB mode
+                String defaultWbMode = getDefaultWbModeFromModality();
+                wbModeComboBox.setValue(defaultWbMode);
             }
             WbMode.applyColorCellFactory(wbModeComboBox);
             wbModeComboBox.setTooltip(new Tooltip("White balance mode:\n"

@@ -96,7 +96,13 @@ public class ModalityStep implements WizardStep {
                     detail = ((List<?>) angles).size() + " rotation angle(s)";
                 }
             } else if ("brightfield".equals(type)) {
-                detail = "Lamp: " + mod.getOrDefault("lamp", "(not set)");
+                Object illum = mod.get("illumination");
+                if (illum instanceof Map) {
+                    Object dev = ((Map<?, ?>) illum).get("device");
+                    detail = "Illumination: " + (dev != null ? dev : "(not set)");
+                } else {
+                    detail = "Illumination: " + mod.getOrDefault("lamp", "(not set)");
+                }
             } else if ("fluorescence".equals(type)) {
                 detail = "Filter: " + mod.getOrDefault("filter_wheel", "(not set)");
             } else if ("multiphoton".equals(type)) {
@@ -406,33 +412,74 @@ public class ModalityStep implements WizardStep {
 
     // ---- Brightfield panel ----
 
+    @SuppressWarnings("unchecked")
     private VBox createBrightfieldPanel(Map<String, Object> existing) {
         VBox panel = new VBox(8);
         Label header = new Label("Brightfield Configuration");
         header.setStyle("-fx-font-weight: bold;");
 
-        HBox row = new HBox(8);
-        row.setAlignment(Pos.CENTER_LEFT);
-        Label lampLabel = new Label("Lamp device:");
-        TextField lampField = new TextField();
-        lampField.setPromptText("e.g., TransmittedLamp");
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(6);
 
+        TextField deviceField = new TextField();
+        deviceField.setPromptText("e.g., DiaLamp, LED-Dev1ao0");
+        deviceField.setTooltip(new Tooltip("Micro-Manager device name for the transmitted light source"));
+
+        ComboBox<String> typeCombo = new ComboBox<>();
+        typeCombo.getItems().addAll("device_property", "analog_voltage");
+        typeCombo.setValue("device_property");
+        typeCombo.setTooltip(new Tooltip(
+                "device_property: MM device with State + Intensity (e.g. Nikon DiaLamp)\n"
+                + "analog_voltage: NI DAQ analog output (e.g. LED via voltage)"));
+
+        grid.add(new Label("Device:"), 0, 0);
+        grid.add(deviceField, 1, 0);
+        grid.add(new Label("Control type:"), 0, 1);
+        grid.add(typeCombo, 1, 1);
+
+        // Pre-fill from existing data (supports both old 'lamp' key and new 'illumination' key)
         if (existing != null && "brightfield".equals(existing.get("type"))) {
-            Object lamp = existing.get("lamp");
-            if (lamp != null) lampField.setText(lamp.toString());
+            Object illum = existing.get("illumination");
+            if (illum instanceof Map) {
+                Map<String, Object> illumMap = (Map<String, Object>) illum;
+                Object dev = illumMap.get("device");
+                if (dev != null) deviceField.setText(dev.toString());
+                Object type = illumMap.get("type");
+                if (type != null) typeCombo.setValue(type.toString());
+            } else {
+                // Legacy: 'lamp' as flat string
+                Object lamp = existing.get("lamp");
+                if (lamp != null) deviceField.setText(lamp.toString());
+            }
         }
 
-        row.getChildren().addAll(lampLabel, lampField);
-        panel.setUserData(lampField);
-        panel.getChildren().addAll(header, row);
+        Map<String, Control> fields = new LinkedHashMap<>();
+        fields.put("device", deviceField);
+        fields.put("type", typeCombo);
+        panel.setUserData(fields);
+        panel.getChildren().addAll(header, grid);
         return panel;
     }
 
+    @SuppressWarnings("unchecked")
     private void collectBrightfieldData(VBox panel, Map<String, Object> result) {
-        TextField lampField = (TextField) panel.getUserData();
-        String lamp = lampField.getText().trim();
-        if (!lamp.isEmpty()) {
-            result.put("lamp", lamp);
+        Map<String, Control> fields = (Map<String, Control>) panel.getUserData();
+        String device = ((TextField) fields.get("device")).getText().trim();
+        String type = ((ComboBox<String>) fields.get("type")).getValue();
+        if (!device.isEmpty()) {
+            Map<String, Object> illumination = new LinkedHashMap<>();
+            illumination.put("device", device);
+            illumination.put("type", type);
+            if ("device_property".equals(type)) {
+                illumination.put("state_property", "State");
+                illumination.put("intensity_property", "Intensity");
+                illumination.put("max_intensity", 2100.0);
+            } else {
+                illumination.put("max_voltage", 5.0);
+            }
+            illumination.put("label", device);
+            result.put("illumination", illumination);
         }
     }
 
@@ -517,13 +564,15 @@ public class ModalityStep implements WizardStep {
         grid.add(pockelsHeader, 0, row++, 2, 1);
 
         TextField pockelsDeviceField = new TextField();
-        pockelsDeviceField.setPromptText("e.g., PockelsCell-Dev1ao1");
+        pockelsDeviceField.setPromptText("e.g., PockelsCell-Dev1ao1, NIDAQAO-Dev2/ao1");
+        pockelsDeviceField.setTooltip(new Tooltip("NI DAQ analog output device for laser power modulation"));
         grid.add(new Label("Device:"), 0, row);
         grid.add(pockelsDeviceField, 1, row++);
 
         Spinner<Double> pockelsMaxVSpinner = new Spinner<>(0.1, 10.0, 1.0, 0.1);
         pockelsMaxVSpinner.setEditable(true);
         pockelsMaxVSpinner.setPrefWidth(100);
+        pockelsMaxVSpinner.setTooltip(new Tooltip("Maximum safe voltage for this Pockels cell"));
         grid.add(new Label("Max voltage:"), 0, row);
         grid.add(pockelsMaxVSpinner, 1, row++);
 
@@ -533,18 +582,29 @@ public class ModalityStep implements WizardStep {
         grid.add(pmtHeader, 0, row++, 2, 1);
 
         TextField pmtDeviceField = new TextField();
-        pmtDeviceField.setPromptText("e.g., DCC100");
+        pmtDeviceField.setPromptText("e.g., DCC100, DCUModule1");
         grid.add(new Label("Device:"), 0, row);
         grid.add(pmtDeviceField, 1, row++);
 
+        ComboBox<String> pmtTypeCombo = new ComboBox<>();
+        pmtTypeCombo.getItems().addAll("dcc", "dcu");
+        pmtTypeCombo.setValue("dcc");
+        pmtTypeCombo.setTooltip(new Tooltip(
+                "dcc: Becker & Hickl DCC-100 (single module on/off)\n"
+                + "dcu: Becker & Hickl DCU (per-channel enable/gain/cooling)"));
+        grid.add(new Label("Controller type:"), 0, row);
+        grid.add(pmtTypeCombo, 1, row++);
+
         Spinner<Integer> pmtConnectorSpinner = new Spinner<>(1, 8, 1);
         pmtConnectorSpinner.setPrefWidth(80);
+        pmtConnectorSpinner.setTooltip(new Tooltip("PMT connector/channel number on the controller"));
         grid.add(new Label("Connector:"), 0, row);
         grid.add(pmtConnectorSpinner, 1, row++);
 
         Spinner<Double> pmtMaxGainSpinner = new Spinner<>(0.0, 100.0, 100.0, 5.0);
         pmtMaxGainSpinner.setEditable(true);
         pmtMaxGainSpinner.setPrefWidth(100);
+        pmtMaxGainSpinner.setTooltip(new Tooltip("Maximum safe high-voltage gain percentage"));
         grid.add(new Label("Max gain (%):"), 0, row);
         grid.add(pmtMaxGainSpinner, 1, row++);
 
@@ -594,6 +654,7 @@ public class ModalityStep implements WizardStep {
             prefillMultiphotonField(existing, "pockels_cell", "device", pockelsDeviceField);
             prefillMultiphotonDoubleSpinner(existing, "pockels_cell", "max_voltage", pockelsMaxVSpinner);
             prefillMultiphotonField(existing, "pmt", "device", pmtDeviceField);
+            prefillMultiphotonCombo(existing, "pmt", "type", pmtTypeCombo);
             prefillMultiphotonSpinner(existing, "pmt", "connector", pmtConnectorSpinner);
             prefillMultiphotonDoubleSpinner(existing, "pmt", "max_gain_percent", pmtMaxGainSpinner);
             prefillMultiphotonField(existing, "zoom", "device", zoomDeviceField);
@@ -616,6 +677,7 @@ public class ModalityStep implements WizardStep {
         fields.put("pockels_device", pockelsDeviceField);
         fields.put("pockels_max_voltage", pockelsMaxVSpinner);
         fields.put("pmt_device", pmtDeviceField);
+        fields.put("pmt_type", pmtTypeCombo);
         fields.put("pmt_connector", pmtConnectorSpinner);
         fields.put("pmt_max_gain", pmtMaxGainSpinner);
         fields.put("zoom_device", zoomDeviceField);
@@ -648,6 +710,18 @@ public class ModalityStep implements WizardStep {
             Object val = ((Map<String, Object>) sectionObj).get(key);
             if (val instanceof Number) {
                 spinner.getValueFactory().setValue(((Number) val).intValue());
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void prefillMultiphotonCombo(
+            Map<String, Object> existing, String section, String key, ComboBox<String> combo) {
+        Object sectionObj = existing.get(section);
+        if (sectionObj instanceof Map) {
+            Object val = ((Map<String, Object>) sectionObj).get(key);
+            if (val != null && !val.toString().isEmpty()) {
+                combo.setValue(val.toString());
             }
         }
     }
@@ -720,7 +794,10 @@ public class ModalityStep implements WizardStep {
         if (!pockelsDevice.isEmpty()) {
             Map<String, Object> pockels = new LinkedHashMap<>();
             pockels.put("device", pockelsDevice);
+            pockels.put("type", "analog_voltage");
+            pockels.put("property", "Voltage");
             pockels.put("max_voltage", ((Spinner<Double>) fields.get("pockels_max_voltage")).getValue());
+            pockels.put("label", "Pockels Cell");
             result.put("pockels_cell", pockels);
         }
 
@@ -729,6 +806,7 @@ public class ModalityStep implements WizardStep {
         if (!pmtDevice.isEmpty()) {
             Map<String, Object> pmt = new LinkedHashMap<>();
             pmt.put("device", pmtDevice);
+            pmt.put("type", ((ComboBox<String>) fields.get("pmt_type")).getValue());
             pmt.put("connector", ((Spinner<Integer>) fields.get("pmt_connector")).getValue());
             pmt.put("max_gain_percent", ((Spinner<Double>) fields.get("pmt_max_gain")).getValue());
             result.put("pmt", pmt);

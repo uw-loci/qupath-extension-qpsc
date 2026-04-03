@@ -27,7 +27,9 @@ public class StageStep implements WizardStep {
     private final WizardData data;
     private final VBox content;
 
+    private final ResourceCatalog catalog;
     private final ComboBox<String> stageIdCombo;
+    private final javafx.scene.control.TextField zDeviceField;
     private final Spinner<Double> xLowSpinner;
     private final Spinner<Double> xHighSpinner;
     private final Spinner<Double> yLowSpinner;
@@ -35,8 +37,10 @@ public class StageStep implements WizardStep {
     private final Spinner<Double> zLowSpinner;
     private final Spinner<Double> zHighSpinner;
 
+    @SuppressWarnings("unchecked")
     public StageStep(WizardData data, ResourceCatalog catalog) {
         this.data = data;
+        this.catalog = catalog;
 
         content = new VBox(12);
         content.setPadding(new Insets(15));
@@ -52,6 +56,30 @@ public class StageStep implements WizardStep {
         for (Map.Entry<String, Map<String, Object>> entry : stages.entrySet()) {
             stageIdCombo.getItems().add(entry.getKey());
         }
+
+        // Z device field (auto-populated from catalog selection)
+        Label zDeviceLabel = new Label("Z focus device (MM):");
+        zDeviceField = new javafx.scene.control.TextField();
+        zDeviceField.setPromptText("e.g., ZDrive, ZStage:Z:32 (auto-filled from catalog)");
+        zDeviceField.setTooltip(new javafx.scene.control.Tooltip(
+                "Micro-Manager device name for the Z/focus axis.\n"
+                + "Auto-populated when selecting a stage from the catalog.\n"
+                + "Leave blank for single-Z systems (uses MM Core default)."));
+
+        // Auto-populate Z device when catalog stage is selected
+        stageIdCombo.setOnAction(e -> {
+            String selected = stageIdCombo.getValue();
+            if (selected != null && stages.containsKey(selected)) {
+                Map<String, Object> stageInfo = stages.get(selected);
+                Object devices = stageInfo.get("devices");
+                if (devices instanceof Map) {
+                    Object zDevice = ((Map<String, Object>) devices).get("z");
+                    if (zDevice != null && !zDevice.toString().isEmpty()) {
+                        zDeviceField.setText(zDevice.toString());
+                    }
+                }
+            }
+        });
 
         // Warning label
         Label warningLabel = new Label("WARNING: Set limits conservatively to prevent hardware damage. "
@@ -98,7 +126,7 @@ public class StageStep implements WizardStep {
         grid.add(zLowSpinner, 1, 3);
         grid.add(zHighSpinner, 2, 3);
 
-        content.getChildren().addAll(stageLabel, stageIdCombo, warningLabel, grid);
+        content.getChildren().addAll(stageLabel, stageIdCombo, zDeviceLabel, zDeviceField, warningLabel, grid);
     }
 
     private Spinner<Double> createLimitSpinner(double initialValue) {
@@ -191,6 +219,9 @@ public class StageStep implements WizardStep {
         if (!data.stageId.isEmpty()) {
             stageIdCombo.setValue(data.stageId);
         }
+        if (!data.zStageDevice.isEmpty()) {
+            zDeviceField.setText(data.zStageDevice);
+        }
         xLowSpinner.getValueFactory().setValue(data.stageLimitXLow);
         xHighSpinner.getValueFactory().setValue(data.stageLimitXHigh);
         yLowSpinner.getValueFactory().setValue(data.stageLimitYLow);
@@ -210,6 +241,7 @@ public class StageStep implements WizardStep {
         commitSpinnerValue(zHighSpinner);
 
         data.stageId = getStageIdText();
+        data.zStageDevice = zDeviceField.getText().trim();
         data.stageLimitXLow = xLowSpinner.getValue();
         data.stageLimitXHigh = xHighSpinner.getValue();
         data.stageLimitYLow = yLowSpinner.getValue();

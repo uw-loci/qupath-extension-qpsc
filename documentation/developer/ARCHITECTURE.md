@@ -38,6 +38,7 @@ graph TB
         MH[ModalityHandler<br/>interface]
         PPM[PPMModalityHandler]
         LSM[LaserScanningModalityHandler]
+        BFM[BrightfieldModalityHandler]
     end
 
     subgraph "utilities/"
@@ -61,7 +62,7 @@ graph TB
     BAW --> AM
     EIW --> AM
     AM --> ARS --> MR --> MH
-    MH -.-> PPM & LSM
+    MH -.-> PPM & LSM & BFM
     AM --> ACB --> MSC
     AM --> TH --> TU
     AM --> SH
@@ -134,6 +135,8 @@ sequenceDiagram
 6. Triggers stitching via `StitchingHelper`
 7. Writes metadata via `ImageMetadataManager`
 
+On the Python server side, the workflow calls `apply_mode_setup()` at the start of each acquisition. This function applies Micro-Manager ConfigGroup presets for the active modality, switches the illumination source and camera, and enforces PMT safety interlocks (e.g., shutting down PMTs before switching to brightfield illumination). The mode setup is driven by the `mode_setup` section in the microscope YAML config.
+
 ### service/ -- External System Integration
 
 ```mermaid
@@ -177,12 +180,14 @@ graph TB
     subgraph "Registration (startup)"
         SS[SetupScope] -->|"registerHandler('ppm', ...)"| MR[ModalityRegistry]
         SS -->|"registerHandler('shg', ...)"| MR
+        SS -->|"registerHandler('bf', ...)"| MR
     end
 
     subgraph "Runtime Lookup"
         MR -->|"prefix match<br/>'ppm_20x' -> 'ppm'"| MH[ModalityHandler]
         MH -.->|"PPM"| PPM[PPMModalityHandler]
         MH -.->|"SHG"| LSM[LaserScanningModalityHandler]
+        MH -.->|"Brightfield"| BFM[BrightfieldModalityHandler]
         MH -.->|"fallback"| NOP[NoOpModalityHandler]
     end
 
@@ -243,6 +248,7 @@ graph LR
 ```mermaid
 graph TB
     YAML["config_PPM.yml<br/>(microscope-specific)"] --> MCM[MicroscopeConfigManager<br/>Singleton]
+    YAML2["config_OWS3.yml<br/>(multi-modal system)"] --> MCM
     RES["resources_LOCI.yml<br/>(shared hardware catalog)"] --> MCM
     AF["autofocus_PPM.yml<br/>(AF parameters)"] --> MCM
     IP["imageprocessing_PPM.yml<br/>(exposure/WB profiles)"] --> MCM
@@ -252,6 +258,8 @@ graph TB
 ```
 
 `MicroscopeConfigManager` merges the microscope config with the shared resources file. Hardware IDs (e.g., `LOCI_DETECTOR_JAI_001`) are resolved against `resources_LOCI.yml` for dimensions, flip state, debayering requirements, etc.
+
+Multiple microscope-specific configs exist: `config_PPM.yml` for the PPM-only system, and `config_OWS3.yml` for the OWS3 multi-modal system (supporting brightfield, PPM, and laser-scanning modalities on a single microscope). The active config is selected via the QPSC preferences and determines which modalities, detectors, and objectives are available.
 
 #### Tiling
 
@@ -318,6 +326,7 @@ graph TB
 | **Async/Future** | `CompletableFuture` throughout | Non-blocking UI |
 | **Observer** | `NotificationService` | Decoupled event handling |
 | **Command** | Socket protocol | Decouples QuPath from server implementation |
+| **Config-driven Factory** | `CAMERA_TYPES`/`ROTATION_TYPES` dicts in Python server | Camera, rotation, and detector subclass selection driven by YAML config strings rather than hard-coded conditionals |
 
 ## Thread Safety
 
