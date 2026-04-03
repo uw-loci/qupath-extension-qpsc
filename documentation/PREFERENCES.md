@@ -354,6 +354,12 @@ Number of times the morphological closing operation is repeated. More iterations
 
 Settings that control image acquisition and stitching behavior.
 
+### Z-Stack Options
+
+Z-stack settings (enable, range, step, projection) are configured per-acquisition in the acquisition dialog under **Z-STACK OPTIONS**. These settings persist between sessions. See [Z-Stack / Time-Lapse](tools/z-stack-timelapse.md) for details.
+
+---
+
 ### Tile Handling Method
 
 | Property | Value |

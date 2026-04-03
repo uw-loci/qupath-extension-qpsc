@@ -2,6 +2,8 @@
 
 > Get from "everything is installed" to "I have my first calibrated, scanned image."
 
+> **Prerequisites:** Complete the [Installation Guide](INSTALLATION.md) before starting.
+
 > [Back to README](../README.md) | [Workflows Guide](WORKFLOWS.md)
 
 ---

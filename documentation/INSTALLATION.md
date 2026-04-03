@@ -460,3 +460,13 @@ For most new-hardware scenarios, you only need to update the YAML config files. 
 | microscope_control             | https://github.com/uw-loci/microscope_control                 | Hardware abstraction layer   |
 | ppm_library                    | https://github.com/uw-loci/ppm_library                       | Image processing library     |
 | qupath-extension-tiles-to-pyramid | https://github.com/uw-loci/qupath-extension-tiles-to-pyramid | Image stitching extension    |
+
+---
+
+## Next Steps
+
+Installation complete! Choose your path:
+
+- **[Brightfield / PPM Quick Start](QUICKSTART-BF.md)** -- First acquisition with a standard camera
+- **[Laser Scanning / SHG Quick Start](QUICKSTART-LSM.md)** -- First acquisition with multiphoton or confocal
+- **[Workflows Guide](WORKFLOWS.md)** -- Overview of all acquisition workflows

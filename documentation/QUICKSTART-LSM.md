@@ -2,6 +2,8 @@
 
 > Get from "everything is installed" to "I have my first SHG scan."
 
+> **Prerequisites:** Complete the [Installation Guide](INSTALLATION.md) before starting.
+
 > [Back to README](../README.md) | [Workflows Guide](WORKFLOWS.md) | [Brightfield Quick Start](QUICKSTART-BF.md)
 
 ---
@@ -225,6 +227,35 @@ See [Autofocus System](AUTOFOCUS.md) for detailed guidance.
 5. **Click Start Acquisition**
 
 The system acquires tiles, stitches them, and adds the result to your QuPath project. SHG images will appear as grayscale.
+
+---
+
+## Z-Stack Acquisition
+
+SHG and multiphoton imaging often benefit from Z-stacks to capture signal across the tissue depth.
+
+1. In the acquisition dialog, expand **Z-STACK OPTIONS**
+2. Check **Enable Z-stack acquisition**
+3. Set **Z range** (e.g., 20 um for typical tissue sections)
+4. Set **Z step** (e.g., 2 um)
+5. Select **Projection**: Max Intensity (standard for SHG/fluorescence)
+
+The system acquires multiple Z-planes at each tile, projects them to a single image, and stitches normally.
+
+See [Z-Stack / Time-Lapse](tools/z-stack-timelapse.md) for full details including all projection types.
+
+### Modality Prefixes
+
+QPSC recognizes these laser scanning modality prefixes in configuration files:
+
+| Prefix | Use for |
+|--------|---------|
+| `lsm` | General laser scanning |
+| `shg` | Second harmonic generation |
+| `2p` | Two-photon excitation |
+| `confocal` | Single-photon confocal |
+
+All map to the same `LaserScanningModalityHandler` -- the sub-type distinction is in the acquisition profile (laser wavelength, detector, resolution).
 
 ---
 

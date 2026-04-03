@@ -37,7 +37,7 @@ graph TB
         MR[ModalityRegistry]
         MH[ModalityHandler<br/>interface]
         PPM[PPMModalityHandler]
-        MPH[MultiphotonModalityHandler]
+        LSM[LaserScanningModalityHandler]
     end
 
     subgraph "utilities/"
@@ -61,7 +61,7 @@ graph TB
     BAW --> AM
     EIW --> AM
     AM --> ARS --> MR --> MH
-    MH -.-> PPM & MPH
+    MH -.-> PPM & LSM
     AM --> ACB --> MSC
     AM --> TH --> TU
     AM --> SH
@@ -182,7 +182,7 @@ graph TB
     subgraph "Runtime Lookup"
         MR -->|"prefix match<br/>'ppm_20x' -> 'ppm'"| MH[ModalityHandler]
         MH -.->|"PPM"| PPM[PPMModalityHandler]
-        MH -.->|"SHG"| MPH[MultiphotonModalityHandler]
+        MH -.->|"SHG"| LSM[LaserScanningModalityHandler]
         MH -.->|"fallback"| NOP[NoOpModalityHandler]
     end
 

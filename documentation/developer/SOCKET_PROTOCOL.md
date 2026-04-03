@@ -136,6 +136,7 @@ The ACQUIRE payload is a flag-based string:
 --z-end 5.0
 --z-step 2.0
 --z-projection max
+--save-raw true
 ENDOFSTR
 ```
 
