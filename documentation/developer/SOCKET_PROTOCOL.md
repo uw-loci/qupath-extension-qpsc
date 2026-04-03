@@ -131,6 +131,11 @@ The ACQUIRE payload is a flag-based string:
 --af-steps 20
 --af-range 10.0
 --hint-z -3245.5
+--z-stack
+--z-start -5.0
+--z-end 5.0
+--z-step 2.0
+--z-projection max
 ENDOFSTR
 ```
 

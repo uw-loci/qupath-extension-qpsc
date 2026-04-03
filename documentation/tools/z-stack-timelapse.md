@@ -51,12 +51,35 @@ Individual TIFF files named `t00000_T<elapsed>s.tif` with metadata including tim
 
 Both Z-stack and time-lapse support PPM multi-angle acquisition. When the modality is set to PPM, all configured rotation angles are acquired at each Z plane or time point. Files are suffixed with the angle: `z0000_Z10.0_angle90.tif`.
 
+## Per-Tile Z-Stacks (Multi-Tile Acquisition)
+
+The main QPSC acquisition workflow also supports Z-stacks at every tile position. This is essential for SHG and multiphoton imaging where tissue extends through multiple focal planes.
+
+When Z-stack parameters are included in an acquisition command (`--z-stack --z-start --z-end --z-step`), the system:
+
+1. Performs autofocus at each tile position to find the optimal Z
+2. Acquires multiple Z-planes centered on the autofocus result
+3. Computes a projection (e.g., max intensity) to produce a single 2D tile
+4. Saves the projected tile for stitching (same pipeline as 2D acquisition)
+
+### Projection Types
+
+| Projection | Flag | Description | Use case |
+|-----------|------|-------------|----------|
+| **Max intensity** | `--z-projection max` | Brightest value at each pixel across Z | SHG, fluorescence (default) |
+| **Min intensity** | `--z-projection min` | Darkest value at each pixel across Z | Absorption / transmitted light |
+| **Sum** | `--z-projection sum` | Total signal across Z (overflow-safe) | Thick-section fluorescence |
+| **Mean** | `--z-projection mean` | Average across Z (noise reduction) | General denoising |
+| **Std deviation** | `--z-projection std` | Variability across Z | Highlighting Z-localized structures |
+
+### Raw Z-Plane Storage
+
+Add `--save-raw` to save individual Z-planes alongside the projected tiles. Planes are stored in `z000/`, `z001/`, etc. subdirectories within each angle folder.
+
 ## Future Expansion
 
-The current implementation acquires a single tile. The architecture is designed for future multi-tile expansion:
-- Multi-tile Z-stacks: iterate an XY grid, run Z-stack at each position
-- Multi-tile time-lapse: iterate an XY grid at each time point
-- Combined: XY grid x Z-stack x time points (requires careful ordering and stitching per Z/time)
+- Per-tile time-lapse (conditional): trigger time-lapse at specific positions based on image content
+- Combined multi-tile Z-stack + time-lapse
 
 ## See Also
 
