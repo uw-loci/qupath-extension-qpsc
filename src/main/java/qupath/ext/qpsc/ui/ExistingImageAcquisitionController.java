@@ -287,6 +287,7 @@ public class ExistingImageAcquisitionController {
             createAlignmentSection();
             createRefinementSection();
             createAdvancedSection();
+            TitledPane zStackPane = createZStackSection();
             createPreviewPanel();
             createErrorSummaryPanel();
 
@@ -303,6 +304,7 @@ public class ExistingImageAcquisitionController {
                     alignmentPane,
                     refinementPane,
                     advancedPane,
+                    zStackPane,
                     createPreviewSection());
             mainContent.setPadding(new Insets(0));
 
@@ -738,6 +740,81 @@ public class ExistingImageAcquisitionController {
             advancedPane = new TitledPane("ADVANCED OPTIONS", content);
             advancedPane.setExpanded(false);
             advancedPane.setStyle("-fx-font-weight: bold;");
+        }
+
+        private TitledPane createZStackSection() {
+            CheckBox enableCheck = new CheckBox("Enable Z-stack acquisition");
+            enableCheck.setTooltip(new Tooltip(
+                    "Acquire multiple Z-planes at each tile position and compute a projection. "
+                    + "Essential for thick samples and SHG/multiphoton imaging."));
+            enableCheck.setSelected(PersistentPreferences.isZStackEnabled());
+
+            Spinner<Double> rangeSpinner = new Spinner<>(1.0, 200.0,
+                    PersistentPreferences.getZStackRange(), 5.0);
+            rangeSpinner.setEditable(true);
+            rangeSpinner.setPrefWidth(100);
+            rangeSpinner.setTooltip(new Tooltip(
+                    "Total Z range in micrometers centered on autofocus. "
+                    + "Example: 20um = +/-10um around focus."));
+
+            Spinner<Double> stepSpinner = new Spinner<>(0.1, 50.0,
+                    PersistentPreferences.getZStackStep(), 0.5);
+            stepSpinner.setEditable(true);
+            stepSpinner.setPrefWidth(100);
+            stepSpinner.setTooltip(new Tooltip(
+                    "Distance between Z-planes in micrometers. "
+                    + "Smaller steps give finer Z sampling but more planes."));
+
+            ComboBox<String> projectionCombo = new ComboBox<>();
+            projectionCombo.getItems().addAll(
+                    "Max Intensity", "Min Intensity", "Sum", "Mean", "Std Deviation");
+            projectionCombo.setValue(PersistentPreferences.getZStackProjection());
+            projectionCombo.setTooltip(new Tooltip(
+                    "How to combine Z-planes into a single 2D tile for stitching. "
+                    + "Max intensity is standard for fluorescence and SHG."));
+
+            Label infoLabel = new Label();
+            infoLabel.setStyle("-fx-font-style: italic; -fx-font-size: 11;");
+
+            Runnable updateInfo = () -> {
+                double range = rangeSpinner.getValue();
+                double step = stepSpinner.getValue();
+                int planes = (int) Math.ceil(range / step) + 1;
+                infoLabel.setText(String.format("%d planes over +/-%.1f um", planes, range / 2));
+            };
+            rangeSpinner.valueProperty().addListener((obs, o, n) -> updateInfo.run());
+            stepSpinner.valueProperty().addListener((obs, o, n) -> updateInfo.run());
+            updateInfo.run();
+
+            rangeSpinner.disableProperty().bind(enableCheck.selectedProperty().not());
+            stepSpinner.disableProperty().bind(enableCheck.selectedProperty().not());
+            projectionCombo.disableProperty().bind(enableCheck.selectedProperty().not());
+
+            enableCheck.selectedProperty().addListener((obs, o, n) -> PersistentPreferences.setZStackEnabled(n));
+            rangeSpinner.valueProperty().addListener((obs, o, n) -> { if (n != null) PersistentPreferences.setZStackRange(n); });
+            stepSpinner.valueProperty().addListener((obs, o, n) -> { if (n != null) PersistentPreferences.setZStackStep(n); });
+            projectionCombo.valueProperty().addListener((obs, o, n) -> { if (n != null) PersistentPreferences.setZStackProjection(n); });
+
+            GridPane grid = new GridPane();
+            grid.setHgap(10);
+            grid.setVgap(8);
+            grid.setPadding(new Insets(10));
+            grid.add(new Label("Z range (um):"), 0, 0);
+            grid.add(rangeSpinner, 1, 0);
+            grid.add(new Label("Z step (um):"), 0, 1);
+            grid.add(stepSpinner, 1, 1);
+            grid.add(new Label("Projection:"), 0, 2);
+            grid.add(projectionCombo, 1, 2);
+            grid.add(infoLabel, 0, 3, 2, 1);
+
+            VBox zContent = new VBox(8, enableCheck, grid);
+            zContent.setPadding(new Insets(5));
+
+            TitledPane pane = new TitledPane("Z-STACK OPTIONS", zContent);
+            pane.setExpanded(false);
+            pane.setAnimated(false);
+            pane.setStyle("-fx-font-weight: bold;");
+            return pane;
         }
 
         private void createPreviewPanel() {

@@ -10,6 +10,7 @@ import qupath.ext.qpsc.modality.BackgroundValidationResult;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.model.SampleSetupResult;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 
@@ -200,6 +201,26 @@ public class AcquisitionConfigurationBuilder {
             }
 
             acquisitionBuilder.backgroundCorrection(true, bgMethod, bgFolder, disabledAngles);
+        }
+
+        // Z-stack configuration from persistent preferences
+        if (PersistentPreferences.isZStackEnabled()) {
+            double range = PersistentPreferences.getZStackRange();
+            double step = PersistentPreferences.getZStackStep();
+            double halfRange = range / 2.0;
+            acquisitionBuilder.enableZStack(-halfRange, halfRange, step);
+
+            String displayName = PersistentPreferences.getZStackProjection();
+            String code = switch (displayName) {
+                case "Min Intensity" -> "min";
+                case "Sum" -> "sum";
+                case "Mean" -> "mean";
+                case "Std Deviation" -> "std";
+                default -> "max";
+            };
+            acquisitionBuilder.zProjection(code);
+            logger.info("Z-stack enabled: range=+/-{} um, step={} um, projection={}",
+                    halfRange, step, code);
         }
 
         return new AcquisitionConfiguration(
