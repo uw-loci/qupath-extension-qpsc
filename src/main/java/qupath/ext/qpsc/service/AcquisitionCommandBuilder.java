@@ -67,6 +67,7 @@ public class AcquisitionCommandBuilder {
     private Double zEnd;
     private Double zStep;
     private Double zPixelSize; // Z pixel size in um (for OME-TIFF metadata)
+    private String zProjection; // Projection type: "max", "min", "sum", "mean", "std"
 
     // Z-focus hint from prediction model (tilt correction)
     private Double hintZ;
@@ -260,6 +261,12 @@ public class AcquisitionCommandBuilder {
         return this;
     }
 
+    /** Set Z-stack projection type ("max", "min", "sum", "mean", "std"). Default: "max". */
+    public AcquisitionCommandBuilder zProjection(String projection) {
+        this.zProjection = projection;
+        return this;
+    }
+
     /**
      * Sets a predicted Z-focus hint from the tilt correction model.
      *
@@ -437,6 +444,9 @@ public class AcquisitionCommandBuilder {
         }
         if (zPixelSize != null) {
             args.addAll(Arrays.asList("--z-pixel-size", String.valueOf(zPixelSize)));
+        }
+        if (zStackEnabled && zProjection != null && !zProjection.isEmpty()) {
+            args.addAll(Arrays.asList("--z-projection", zProjection));
         }
 
         // Add Z-focus hint from tilt prediction model
