@@ -5,7 +5,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.modality.multiphoton.MultiphotonModalityHandler;
+import qupath.ext.qpsc.modality.laserscan.LaserScanningModalityHandler;
 import qupath.ext.qpsc.modality.ppm.PPMModalityHandler;
 
 /**
@@ -80,7 +80,15 @@ public final class ModalityRegistry {
     static {
         logger.info("Initializing ModalityRegistry with default modality handlers");
         registerHandler("ppm", new PPMModalityHandler());
-        registerHandler("shg", new MultiphotonModalityHandler());
+
+        // Point scanning modalities share a common handler (monochrome, no rotation, no WB).
+        // Sub-type differences (laser wavelength, detector) are in YAML acquisition profiles.
+        LaserScanningModalityHandler lsmHandler = new LaserScanningModalityHandler();
+        registerHandler("lsm", lsmHandler);
+        registerHandler("shg", lsmHandler);
+        registerHandler("2p", lsmHandler);
+        registerHandler("confocal", lsmHandler);
+
         logger.info("ModalityRegistry initialization complete. Registered {} modality handlers", HANDLERS.size());
     }
 
