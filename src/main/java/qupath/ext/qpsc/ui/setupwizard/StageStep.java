@@ -61,8 +61,7 @@ public class StageStep implements WizardStep {
         Label zDeviceLabel = new Label("Z focus device (MM):");
         zDeviceField = new javafx.scene.control.TextField();
         zDeviceField.setPromptText("e.g., ZDrive, ZStage:Z:32 (auto-filled from catalog)");
-        zDeviceField.setTooltip(new javafx.scene.control.Tooltip(
-                "Micro-Manager device name for the Z/focus axis.\n"
+        zDeviceField.setTooltip(new javafx.scene.control.Tooltip("Micro-Manager device name for the Z/focus axis.\n"
                 + "Auto-populated when selecting a stage from the catalog.\n"
                 + "Leave blank for single-Z systems (uses MM Core default)."));
 

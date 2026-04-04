@@ -37,7 +37,7 @@ public class WizardData {
 
     // ====== Step 5: Stage ======
     public String stageId = "";
-    public String zStageDevice = "";  // MM focus device name (e.g. "ZDrive")
+    public String zStageDevice = ""; // MM focus device name (e.g. "ZDrive")
     public double stageLimitXLow = -36000;
     public double stageLimitXHigh = 36000;
     public double stageLimitYLow = -39000;

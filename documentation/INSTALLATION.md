@@ -324,7 +324,8 @@ If you see a camera image and can move the stage, your QPSC installation is comp
 
 ---
 
-## For Developers: Building from Source
+<details>
+<summary><h2>For Developers: Building from Source</h2></summary>
 
 If you want to build the extension yourself (for development or to get the latest unreleased changes), follow these steps.
 
@@ -403,15 +404,55 @@ Or pull the latest code (`git pull` in both repos) which includes fallback repos
 
 ### Development with IntelliJ IDEA
 
-For development with hot-reload via QuPath:
+For development with hot-reload via QuPath, clone the [qupath-qpsc-dev](https://github.com/uw-loci/qupath-qpsc-dev) repository (custom QuPath build with QPSC pre-installed), open it as a Gradle project in IntelliJ IDEA, and run the QuPath main class to launch with the extension loaded.
 
-1. Clone the [qupath-qpsc-dev](https://github.com/uw-loci/qupath-qpsc-dev) repository (custom QuPath build with QPSC pre-installed).
-2. Open it as a Gradle project in IntelliJ IDEA.
-3. Run the QuPath main class to launch with the extension loaded.
+After cloning the extension, IntelliJ requires a few configuration steps to build correctly with Gradle.
+
+#### 1. Set the Gradle JVM (Critical)
+
+This is the most common source of build errors. Gradle uses its own JVM setting that is separate from the Project SDK.
+
+Go to:
+`File -> Settings -> Build, Execution, Deployment -> Build Tools -> Gradle`
+
+Set **Gradle JVM** to **Java 21** (or any JDK 17+).
+
+> **Common error if this is wrong:**
+> ```
+> Dependency requires at least JVM runtime version 11. This build uses a Java 8 JVM.
+> ```
+> This means Gradle is using an old JDK. Fix it by changing the Gradle JVM setting above -- not just the Project SDK.
+
+#### 2. Set the Project SDK
+
+Go to:
+`File -> Project Structure -> Project`
+
+Set the **SDK** to **Java 21**. This should match the Gradle JVM above.
+
+#### 3. Install a JDK if Needed
+
+If Java 21 is not listed in either dropdown, IntelliJ can download one for you:
+
+1. In either dropdown, select **"Download JDK..."**
+2. Choose **Version: 21**, **Vendor: Eclipse Temurin** (recommended) or Amazon Corretto
+3. Click **Download**
+
+Alternatively, install manually from [Adoptium Temurin](https://adoptium.net/) and point IntelliJ to the installation directory.
+
+#### 4. Sync and Build
+
+After updating JDK settings:
+
+1. Click the **Reload Gradle** button in the Gradle tool window, or go to `File -> Sync Project with Gradle Files`
+2. Run `./gradlew build` from the terminal or use the Gradle tool window in IntelliJ
+
+</details>
 
 ---
 
-## Adding New Hardware
+<details>
+<summary><h2>Adding New Hardware</h2></summary>
 
 If you need to support new microscope hardware beyond what was configured in the Setup Wizard, here is a summary of what to update.
 
@@ -448,6 +489,8 @@ You will need to modify the Python code if your new hardware requires:
 | QuPath extension (Java)          | qupath-extension-qpsc       | `utilities/MicroscopeConfigManager.java` |
 
 For most new-hardware scenarios, you only need to update the YAML config files. Python or Java changes are only necessary if the new hardware requires behavior not already supported by the existing abstractions.
+
+</details>
 
 ---
 

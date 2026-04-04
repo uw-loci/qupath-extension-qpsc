@@ -744,33 +744,27 @@ public class ExistingImageAcquisitionController {
 
         private TitledPane createZStackSection() {
             CheckBox enableCheck = new CheckBox("Enable Z-stack acquisition");
-            enableCheck.setTooltip(new Tooltip(
-                    "Acquire multiple Z-planes at each tile position and compute a projection. "
-                    + "Essential for thick samples and SHG/multiphoton imaging."));
+            enableCheck.setTooltip(
+                    new Tooltip("Acquire multiple Z-planes at each tile position and compute a projection. "
+                            + "Essential for thick samples and SHG/multiphoton imaging."));
             enableCheck.setSelected(PersistentPreferences.isZStackEnabled());
 
-            Spinner<Double> rangeSpinner = new Spinner<>(1.0, 200.0,
-                    PersistentPreferences.getZStackRange(), 5.0);
+            Spinner<Double> rangeSpinner = new Spinner<>(1.0, 200.0, PersistentPreferences.getZStackRange(), 5.0);
             rangeSpinner.setEditable(true);
             rangeSpinner.setPrefWidth(100);
             rangeSpinner.setTooltip(new Tooltip(
-                    "Total Z range in micrometers centered on autofocus. "
-                    + "Example: 20um = +/-10um around focus."));
+                    "Total Z range in micrometers centered on autofocus. " + "Example: 20um = +/-10um around focus."));
 
-            Spinner<Double> stepSpinner = new Spinner<>(0.1, 50.0,
-                    PersistentPreferences.getZStackStep(), 0.5);
+            Spinner<Double> stepSpinner = new Spinner<>(0.1, 50.0, PersistentPreferences.getZStackStep(), 0.5);
             stepSpinner.setEditable(true);
             stepSpinner.setPrefWidth(100);
-            stepSpinner.setTooltip(new Tooltip(
-                    "Distance between Z-planes in micrometers. "
+            stepSpinner.setTooltip(new Tooltip("Distance between Z-planes in micrometers. "
                     + "Smaller steps give finer Z sampling but more planes."));
 
             ComboBox<String> projectionCombo = new ComboBox<>();
-            projectionCombo.getItems().addAll(
-                    "Max Intensity", "Min Intensity", "Sum", "Mean", "Std Deviation");
+            projectionCombo.getItems().addAll("Max Intensity", "Min Intensity", "Sum", "Mean", "Std Deviation");
             projectionCombo.setValue(PersistentPreferences.getZStackProjection());
-            projectionCombo.setTooltip(new Tooltip(
-                    "How to combine Z-planes into a single 2D tile for stitching. "
+            projectionCombo.setTooltip(new Tooltip("How to combine Z-planes into a single 2D tile for stitching. "
                     + "Max intensity is standard for fluorescence and SHG."));
 
             Label infoLabel = new Label();
@@ -788,12 +782,20 @@ public class ExistingImageAcquisitionController {
 
             rangeSpinner.disableProperty().bind(enableCheck.selectedProperty().not());
             stepSpinner.disableProperty().bind(enableCheck.selectedProperty().not());
-            projectionCombo.disableProperty().bind(enableCheck.selectedProperty().not());
+            projectionCombo
+                    .disableProperty()
+                    .bind(enableCheck.selectedProperty().not());
 
             enableCheck.selectedProperty().addListener((obs, o, n) -> PersistentPreferences.setZStackEnabled(n));
-            rangeSpinner.valueProperty().addListener((obs, o, n) -> { if (n != null) PersistentPreferences.setZStackRange(n); });
-            stepSpinner.valueProperty().addListener((obs, o, n) -> { if (n != null) PersistentPreferences.setZStackStep(n); });
-            projectionCombo.valueProperty().addListener((obs, o, n) -> { if (n != null) PersistentPreferences.setZStackProjection(n); });
+            rangeSpinner.valueProperty().addListener((obs, o, n) -> {
+                if (n != null) PersistentPreferences.setZStackRange(n);
+            });
+            stepSpinner.valueProperty().addListener((obs, o, n) -> {
+                if (n != null) PersistentPreferences.setZStackStep(n);
+            });
+            projectionCombo.valueProperty().addListener((obs, o, n) -> {
+                if (n != null) PersistentPreferences.setZStackProjection(n);
+            });
 
             GridPane grid = new GridPane();
             grid.setHgap(10);

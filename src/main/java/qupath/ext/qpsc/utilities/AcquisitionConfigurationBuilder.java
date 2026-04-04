@@ -211,16 +211,16 @@ public class AcquisitionConfigurationBuilder {
             acquisitionBuilder.enableZStack(-halfRange, halfRange, step);
 
             String displayName = PersistentPreferences.getZStackProjection();
-            String code = switch (displayName) {
-                case "Min Intensity" -> "min";
-                case "Sum" -> "sum";
-                case "Mean" -> "mean";
-                case "Std Deviation" -> "std";
-                default -> "max";
-            };
+            String code =
+                    switch (displayName) {
+                        case "Min Intensity" -> "min";
+                        case "Sum" -> "sum";
+                        case "Mean" -> "mean";
+                        case "Std Deviation" -> "std";
+                        default -> "max";
+                    };
             acquisitionBuilder.zProjection(code);
-            logger.info("Z-stack enabled: range=+/-{} um, step={} um, projection={}",
-                    halfRange, step, code);
+            logger.info("Z-stack enabled: range=+/-{} um, step={} um, projection={}", halfRange, step, code);
         }
 
         return new AcquisitionConfiguration(

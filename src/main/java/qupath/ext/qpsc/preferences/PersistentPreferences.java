@@ -1188,15 +1188,35 @@ public class PersistentPreferences {
     private static final StringProperty zStackProjectionProperty =
             PathPrefs.createPersistentPreference("qpscZStackProjection", "Max Intensity");
 
-    public static boolean isZStackEnabled() { return zStackEnabledProperty.get(); }
-    public static void setZStackEnabled(boolean v) { zStackEnabledProperty.set(v); }
+    public static boolean isZStackEnabled() {
+        return zStackEnabledProperty.get();
+    }
 
-    public static double getZStackRange() { return zStackRangeProperty.get(); }
-    public static void setZStackRange(double v) { zStackRangeProperty.set(v); }
+    public static void setZStackEnabled(boolean v) {
+        zStackEnabledProperty.set(v);
+    }
 
-    public static double getZStackStep() { return zStackStepProperty.get(); }
-    public static void setZStackStep(double v) { zStackStepProperty.set(v); }
+    public static double getZStackRange() {
+        return zStackRangeProperty.get();
+    }
 
-    public static String getZStackProjection() { return zStackProjectionProperty.get(); }
-    public static void setZStackProjection(String v) { zStackProjectionProperty.set(v); }
+    public static void setZStackRange(double v) {
+        zStackRangeProperty.set(v);
+    }
+
+    public static double getZStackStep() {
+        return zStackStepProperty.get();
+    }
+
+    public static void setZStackStep(double v) {
+        zStackStepProperty.set(v);
+    }
+
+    public static String getZStackProjection() {
+        return zStackProjectionProperty.get();
+    }
+
+    public static void setZStackProjection(String v) {
+        zStackProjectionProperty.set(v);
+    }
 }

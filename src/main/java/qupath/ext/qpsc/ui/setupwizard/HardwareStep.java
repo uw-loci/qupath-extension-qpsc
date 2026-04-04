@@ -299,13 +299,12 @@ public class HardwareStep implements WizardStep {
         nameField.setPromptText("e.g., Hamamatsu ORCA");
         TextField deviceField = new TextField();
         deviceField.setPromptText("e.g., HamamatsuHam_DCAM (MM device name)");
-        deviceField.setTooltip(new javafx.scene.control.Tooltip(
-                "The Micro-Manager device name for this camera/detector"));
+        deviceField.setTooltip(
+                new javafx.scene.control.Tooltip("The Micro-Manager device name for this camera/detector"));
         ComboBox<String> cameraTypeCombo = new ComboBox<>();
         cameraTypeCombo.getItems().addAll("generic", "jai", "laser_scanning");
         cameraTypeCombo.setValue("generic");
-        cameraTypeCombo.setTooltip(new javafx.scene.control.Tooltip(
-                "generic: Standard area camera (CCD, sCMOS)\n"
+        cameraTypeCombo.setTooltip(new javafx.scene.control.Tooltip("generic: Standard area camera (CCD, sCMOS)\n"
                 + "jai: JAI 3-CCD prism camera (per-channel exposure)\n"
                 + "laser_scanning: Galvo scan engine (e.g. OpenScan OSc-LSM)"));
         TextField widthField = new TextField("2048");

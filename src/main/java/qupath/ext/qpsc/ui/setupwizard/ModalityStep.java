@@ -429,8 +429,7 @@ public class ModalityStep implements WizardStep {
         ComboBox<String> typeCombo = new ComboBox<>();
         typeCombo.getItems().addAll("device_property", "analog_voltage");
         typeCombo.setValue("device_property");
-        typeCombo.setTooltip(new Tooltip(
-                "device_property: MM device with State + Intensity (e.g. Nikon DiaLamp)\n"
+        typeCombo.setTooltip(new Tooltip("device_property: MM device with State + Intensity (e.g. Nikon DiaLamp)\n"
                 + "analog_voltage: NI DAQ analog output (e.g. LED via voltage)"));
 
         grid.add(new Label("Device:"), 0, 0);
@@ -589,8 +588,7 @@ public class ModalityStep implements WizardStep {
         ComboBox<String> pmtTypeCombo = new ComboBox<>();
         pmtTypeCombo.getItems().addAll("dcc", "dcu");
         pmtTypeCombo.setValue("dcc");
-        pmtTypeCombo.setTooltip(new Tooltip(
-                "dcc: Becker & Hickl DCC-100 (single module on/off)\n"
+        pmtTypeCombo.setTooltip(new Tooltip("dcc: Becker & Hickl DCC-100 (single module on/off)\n"
                 + "dcu: Becker & Hickl DCU (per-channel enable/gain/cooling)"));
         grid.add(new Label("Controller type:"), 0, row);
         grid.add(pmtTypeCombo, 1, row++);
