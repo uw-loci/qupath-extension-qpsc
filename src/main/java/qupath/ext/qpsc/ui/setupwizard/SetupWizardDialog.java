@@ -97,7 +97,7 @@ public class SetupWizardDialog {
         stepTitle.setFont(Font.font("System", FontWeight.BOLD, 16));
         stepDescription = new Label();
         stepDescription.setWrapText(true);
-        stepDescription.setStyle("-fx-text-fill: #666666;");
+        stepDescription.setStyle("-fx-opacity: 0.7;");
         header.getChildren().addAll(stepTitle, stepDescription, new Separator());
         header.setPadding(new Insets(0, 0, 10, 0));
         contentArea.setTop(header);
@@ -131,7 +131,8 @@ public class SetupWizardDialog {
     private VBox buildSidebar() {
         VBox sb = new VBox(2);
         sb.setPadding(new Insets(20, 15, 20, 15));
-        sb.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #cccccc; " + "-fx-border-width: 0 1 0 0;");
+        sb.setStyle("-fx-background-color: derive(-fx-base, -10%); "
+                + "-fx-border-color: derive(-fx-base, -20%); -fx-border-width: 0 1 0 0;");
         sb.setPrefWidth(180);
 
         Label title = new Label("Steps");
@@ -176,7 +177,7 @@ public class SetupWizardDialog {
         HBox buttonBox = new HBox(10, errorLabel, backButton, nextButton, cancelButton);
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
         buttonBox.setPadding(new Insets(10, 20, 15, 20));
-        buttonBox.setStyle("-fx-border-color: #cccccc; -fx-border-width: 1 0 0 0;");
+        buttonBox.setStyle("-fx-border-color: derive(-fx-base, -20%); -fx-border-width: 1 0 0 0;");
 
         return buttonBox;
     }
@@ -192,9 +193,9 @@ public class SetupWizardDialog {
             Label lbl = sidebarLabels.get(i);
             if (i == index) {
                 lbl.setStyle("-fx-font-size: 12; -fx-font-weight: bold; "
-                        + "-fx-background-color: #d0d8e8; -fx-background-radius: 3;");
+                        + "-fx-background-color: -fx-accent; -fx-background-radius: 3;");
             } else if (i < index) {
-                lbl.setStyle("-fx-font-size: 12; -fx-text-fill: #008800;");
+                lbl.setStyle("-fx-font-size: 12; -fx-opacity: 0.6;");
             } else {
                 lbl.setStyle("-fx-font-size: 12;");
             }

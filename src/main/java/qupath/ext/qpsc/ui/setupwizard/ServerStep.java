@@ -91,7 +91,7 @@ public class ServerStep implements WizardStep {
                 + "during initial setup. You can always update these settings later "
                 + "in QPSC Preferences.");
         noteLabel.setWrapText(true);
-        noteLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+        noteLabel.setStyle("-fx-font-size: 11px; -fx-opacity: 0.7;");
 
         content.getChildren().addAll(helpLabel, grid, testRow, noteLabel);
     }
@@ -126,7 +126,7 @@ public class ServerStep implements WizardStep {
         }
 
         statusLabel.setText("Testing...");
-        statusLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #666666;");
+        statusLabel.setStyle("-fx-font-style: italic; -fx-opacity: 0.7;");
         testButton.setDisable(true);
 
         Thread testThread = new Thread(
@@ -146,7 +146,7 @@ public class ServerStep implements WizardStep {
                         testButton.setDisable(false);
                         if (connected) {
                             statusLabel.setText("Connected successfully to " + host + ":" + port);
-                            statusLabel.setStyle("-fx-font-style: normal; -fx-text-fill: green;");
+                            statusLabel.setStyle("-fx-font-style: normal; -fx-text-fill: limegreen;");
                             logger.info("Server connection test succeeded: {}:{}", host, port);
                         } else {
                             statusLabel.setText("Connection failed: " + msg);

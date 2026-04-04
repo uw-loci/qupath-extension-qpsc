@@ -84,7 +84,7 @@ public class StageStep implements WizardStep {
         Label warningLabel = new Label("WARNING: Set limits conservatively to prevent hardware damage. "
                 + "All values are in micrometers (um).");
         warningLabel.setWrapText(true);
-        warningLabel.setStyle("-fx-text-fill: #cc6600; -fx-font-weight: bold;");
+        warningLabel.setStyle("-fx-text-fill: orange; -fx-font-weight: bold;");
 
         // Limits grid
         GridPane grid = new GridPane();

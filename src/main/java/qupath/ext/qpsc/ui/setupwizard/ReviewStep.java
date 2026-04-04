@@ -232,7 +232,7 @@ public class ReviewStep implements WizardStep {
             addSectionHeader("Warnings");
             for (String w : warnings) {
                 Label warnLabel = new Label("  - " + w);
-                warnLabel.setStyle("-fx-text-fill: #cc6600;");
+                warnLabel.setStyle("-fx-text-fill: orange;");
                 warnLabel.setWrapText(true);
                 summaryBox.getChildren().add(warnLabel);
             }

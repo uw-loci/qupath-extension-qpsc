@@ -531,7 +531,7 @@ public class ModalityStep implements WizardStep {
 
         // --- Laser section ---
         Label laserHeader = new Label("Laser");
-        laserHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: #336699;");
+        laserHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: -fx-accent;");
         grid.add(laserHeader, 0, row++, 2, 1);
 
         TextField laserDeviceField = new TextField();
@@ -559,7 +559,7 @@ public class ModalityStep implements WizardStep {
 
         // --- Pockels cell section ---
         Label pockelsHeader = new Label("Pockels Cell");
-        pockelsHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: #336699;");
+        pockelsHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: -fx-accent;");
         grid.add(pockelsHeader, 0, row++, 2, 1);
 
         TextField pockelsDeviceField = new TextField();
@@ -577,7 +577,7 @@ public class ModalityStep implements WizardStep {
 
         // --- PMT section ---
         Label pmtHeader = new Label("PMT Detector");
-        pmtHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: #336699;");
+        pmtHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: -fx-accent;");
         grid.add(pmtHeader, 0, row++, 2, 1);
 
         TextField pmtDeviceField = new TextField();
@@ -608,7 +608,7 @@ public class ModalityStep implements WizardStep {
 
         // --- Zoom section (optional) ---
         Label zoomHeader = new Label("Zoom / Magnifier (optional)");
-        zoomHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: #336699;");
+        zoomHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: -fx-accent;");
         grid.add(zoomHeader, 0, row++, 2, 1);
 
         TextField zoomDeviceField = new TextField();
@@ -636,7 +636,7 @@ public class ModalityStep implements WizardStep {
 
         // --- Shutter section (optional) ---
         Label shutterHeader = new Label("Shutter (optional)");
-        shutterHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: #336699;");
+        shutterHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: -fx-accent;");
         grid.add(shutterHeader, 0, row++, 2, 1);
 
         TextField shutterDeviceField = new TextField();
