@@ -150,12 +150,15 @@ graph LR
     subgraph "Python (Microscope Server)"
         QPS[qp_server.py<br/>Command dispatch]
         WF[workflow.py<br/>Tile acquisition]
-        HC[Hardware Control<br/>Camera + Stage + Rotation]
+        MIP[microscope_imageprocessing<br/>Background correction, TIFF I/O,<br/>Z-stack projections, debayering]
+        HC[microscope_control<br/>Hardware abstraction<br/>via Pycromanager]
+        PPM[ppm_library OPTIONAL<br/>PPM calibration,<br/>birefringence, hue]
     end
 
     ACB -->|"--yaml --sample<br/>--angles --exposures<br/>--detector ..."| MSC
     MSC -->|"8-byte command +<br/>ENDOFSTR message"| QPS
-    QPS --> WF --> HC
+    QPS --> WF --> MIP --> HC
+    HC -.-> PPM
     MSC <-->|"STARTED / PROGRESS /<br/>SUCCESS / FAILED"| QPS
 ```
 

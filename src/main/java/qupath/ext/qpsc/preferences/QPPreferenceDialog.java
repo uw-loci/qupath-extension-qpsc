@@ -71,12 +71,8 @@ public class QPPreferenceDialog {
 
     private static final StringProperty projectsFolderProperty =
             PathPrefs.createPersistentPreference("projectsFolderProperty", "F:/QPScopeExtension/data/slides");
-    private static final StringProperty extensionLocationProperty = PathPrefs.createPersistentPreference(
-            "extensionPathProperty", "F:\\QPScopeExtension\\qupath-extension-qpsc");
-
-    private static final StringProperty tissueDetectionScriptProperty = PathPrefs.createPersistentPreference(
-            "tissueDetectionScriptProperty",
-            extensionLocationProperty.getValue() + "/src/main/groovyScripts/DetectTissue.groovy");
+    private static final StringProperty tissueDetectionScriptProperty =
+            PathPrefs.createPersistentPreference("tissueDetectionScriptProperty", "");
 
     private static final BooleanProperty saveRawTilesProperty =
             PathPrefs.createPersistentPreference("saveRawTilesProperty", false);
@@ -230,13 +226,6 @@ public class QPPreferenceDialog {
                 "Root folder where slide projects and data are stored.",
                 true));
         items.add(new FilePropertyItem(
-                extensionLocationProperty,
-                "Extension Location",
-                CATEGORY,
-                "Directory of the extension, used to locate built-in scripts.",
-                true));
-
-        items.add(new FilePropertyItem(
                 tissueDetectionScriptProperty,
                 "Tissue Detection Script",
                 CATEGORY,
@@ -326,39 +315,31 @@ public class QPPreferenceDialog {
                         + "This is also accessible via the Acquisition Wizard checkbox.")
                 .build());
 
-        // Filename configuration section
+        // Image Name Contents -- what metadata to include in generated filenames.
+        // All metadata is always stored in QuPath regardless of these settings.
+        String filenameCategory = "Image Name Contents";
         items.add(new PropertyItemBuilder<>(includeObjectiveInFilenameProperty, Boolean.class)
-                .name("Image name includes: Objective")
-                .category(CATEGORY)
-                .description("Include objective/magnification (e.g., '20x') in image filenames.\n"
-                        + "Default: SampleName_001.ome.tif\n"
-                        + "With objective: SampleName_20x_001.ome.tif\n"
-                        + "Note: All metadata is always stored in QuPath regardless of filename settings.")
+                .name("Objective")
+                .category(filenameCategory)
+                .description("e.g. SampleName_20x_001.ome.tif")
                 .build());
 
         items.add(new PropertyItemBuilder<>(includeModalityInFilenameProperty, Boolean.class)
-                .name("Image name includes: Modality")
-                .category(CATEGORY)
-                .description("Include imaging modality (e.g., 'ppm', 'bf') in image filenames.\n"
-                        + "With modality: SampleName_ppm_001.ome.tif\n"
-                        + "Note: All metadata is always stored in QuPath regardless of filename settings.")
+                .name("Modality")
+                .category(filenameCategory)
+                .description("e.g. SampleName_ppm_001.ome.tif")
                 .build());
 
         items.add(new PropertyItemBuilder<>(includeAnnotationInFilenameProperty, Boolean.class)
-                .name("Image name includes: Annotation")
-                .category(CATEGORY)
-                .description("Include annotation name in image filenames when acquiring specific regions.\n"
-                        + "With annotation: SampleName_Tissue_001.ome.tif\n"
-                        + "Note: All metadata is always stored in QuPath regardless of filename settings.")
+                .name("Annotation")
+                .category(filenameCategory)
+                .description("e.g. SampleName_Tissue_001.ome.tif")
                 .build());
 
         items.add(new PropertyItemBuilder<>(includeAngleInFilenameProperty, Boolean.class)
-                .name("Image name includes: Angle")
-                .category(CATEGORY)
-                .description("Include angle information in image filenames for multi-angle acquisitions.\n"
-                        + "Critical for PPM and other polarized imaging modalities.\n"
-                        + "With angle: SampleName_001_7.0.ome.zarr, SampleName_001_-7.0.ome.zarr\n"
-                        + "Note: All metadata is always stored in QuPath regardless of filename settings.")
+                .name("Angle")
+                .category(filenameCategory)
+                .description("e.g. SampleName_001_7.0.ome.zarr (critical for PPM)")
                 .build());
 
         items.add(new PropertyItemBuilder<>(metadataPropagationPrefixProperty, String.class)
@@ -594,10 +575,6 @@ public class QPPreferenceDialog {
 
     public static String getProjectsFolderProperty() {
         return projectsFolderProperty.get();
-    }
-
-    public static String getExtensionLocationProperty() {
-        return extensionLocationProperty.get();
     }
 
     public static String getTissueDetectionScriptProperty() {

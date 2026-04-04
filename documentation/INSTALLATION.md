@@ -65,7 +65,7 @@ We do not cover Micro-Manager device configuration here. See the [Micro-Manager 
 
 ## Step 3: Install Python Packages
 
-QPSC requires three Python packages that handle microscope communication, hardware control, and image processing. Install them in the order shown below (the order matters because of dependencies).
+QPSC requires four Python packages that handle microscope communication, hardware control, and image processing. Install them in the order shown below (the order matters because of dependencies).
 
 ### 3.1 Create a virtual environment (recommended)
 
@@ -88,18 +88,21 @@ source venv_qpsc/bin/activate
 
 You should see `(venv_qpsc)` at the beginning of your command prompt.
 
-### 3.2 Install the three packages
+### 3.2 Install the four packages
 
 **Option A: Install from GitHub (recommended for most users)**
 
 ```bash
-# 1. ppm-library (image processing - no hardware dependencies)
+# 1. ppm-library (PPM calibration, birefringence, hue analysis - OPTIONAL, no hardware dependencies)
 pip install git+https://github.com/uw-loci/ppm_library.git
 
-# 2. microscope-control (hardware abstraction layer - depends on ppm-library)
+# 2. microscope-control (hardware abstraction layer via Pycromanager)
 pip install git+https://github.com/uw-loci/microscope_control.git
 
-# 3. microscope-command-server (socket server - depends on both above)
+# 3. microscope-imageprocessing (background correction, TIFF I/O, Z-stack projections, debayering)
+pip install git+https://github.com/uw-loci/microscope_imageprocessing.git
+
+# 4. microscope-command-server (socket server - depends on all above)
 pip install git+https://github.com/uw-loci/microscope_command_server.git
 ```
 
@@ -116,6 +119,11 @@ cd microscope_control
 pip install -e .
 cd ..
 
+git clone https://github.com/uw-loci/microscope_imageprocessing.git
+cd microscope_imageprocessing
+pip install -e .
+cd ..
+
 git clone https://github.com/uw-loci/microscope_command_server.git
 cd microscope_command_server
 pip install -e .
@@ -124,15 +132,16 @@ cd ..
 
 ### 3.3 Verify installation
 
-Run these commands to confirm all three packages installed correctly:
+Run these commands to confirm all four packages installed correctly:
 
 ```bash
 python -c "import ppm_library; print('ppm_library: OK')"
 python -c "import microscope_control; print('microscope_control: OK')"
+python -c "import microscope_imageprocessing; print('microscope_imageprocessing: OK')"
 python -c "import microscope_command_server; print('microscope_command_server: OK')"
 ```
 
-You should see three "OK" lines with no errors. If you see `ModuleNotFoundError`, check that your virtual environment is activated and re-run the pip install commands.
+You should see four "OK" lines with no errors. If you see `ModuleNotFoundError`, check that your virtual environment is activated and re-run the pip install commands.
 
 ### 3.4 Troubleshooting Python installation
 
@@ -380,6 +389,10 @@ cd microscope_control
 pip install -e .
 cd ..
 
+cd microscope_imageprocessing
+pip install -e .
+cd ..
+
 cd microscope_command_server
 pip install -e .
 cd ..
@@ -500,8 +513,9 @@ For most new-hardware scenarios, you only need to update the YAML config files. 
 |--------------------------------|---------------------------------------------------------------|------------------------------|
 | qupath-extension-qpsc          | https://github.com/uw-loci/qupath-extension-qpsc             | Main QuPath extension (Java) |
 | microscope_command_server      | https://github.com/uw-loci/microscope_command_server          | Python socket server         |
+| microscope_imageprocessing     | https://github.com/uw-loci/microscope_imageprocessing         | Image processing (background correction, TIFF I/O, Z-stack projections, debayering) |
 | microscope_control             | https://github.com/uw-loci/microscope_control                 | Hardware abstraction layer   |
-| ppm_library                    | https://github.com/uw-loci/ppm_library                       | Image processing library     |
+| ppm_library                    | https://github.com/uw-loci/ppm_library                       | PPM calibration and analysis (optional) |
 | qupath-extension-tiles-to-pyramid | https://github.com/uw-loci/qupath-extension-tiles-to-pyramid | Image stitching extension    |
 
 ---

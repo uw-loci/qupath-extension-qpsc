@@ -47,7 +47,10 @@ public class FilePropertyItem implements PropertySheet.Item {
 
     @Override
     public Class<?> getType() {
-        return File.class;
+        // Return String.class (not File.class) so ControlsFX does not override
+        // our custom DirEditor/FileEditor with its built-in file-only editor.
+        // The underlying property is a StringProperty anyway.
+        return String.class;
     }
 
     @Override
@@ -92,13 +95,26 @@ public class FilePropertyItem implements PropertySheet.Item {
         return Optional.of(directoryMode ? DirEditor.class : FileEditor.class);
     }
 
+    /**
+     * Returns the best initial directory for the file/directory chooser.
+     * Priority: (1) current value if it exists, (2) parent of config file location.
+     */
     private static File getInitialDir(PropertySheet.Item item) {
         Object val = item.getValue();
         if (val instanceof File) {
             File f = (File) val;
-            File parent = f.isDirectory() ? f : f.getParentFile();
-            if (parent != null && parent.exists()) {
-                return parent;
+            // For directories, open at the directory itself; for files, open at parent
+            File candidate = f.isDirectory() ? f : f.getParentFile();
+            if (candidate != null && candidate.exists()) {
+                return candidate;
+            }
+        }
+        // Fallback: parent of the microscope config file location
+        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        if (configPath != null && !configPath.isEmpty()) {
+            File configParent = new File(configPath).getParentFile();
+            if (configParent != null && configParent.exists()) {
+                return configParent;
             }
         }
         return null;
