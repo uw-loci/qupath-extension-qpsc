@@ -567,6 +567,19 @@ public class StageControlPanel extends VBox {
         HBox moveRRow = new HBox(4, rLabel, rField, moveRBtn);
         moveRRow.setAlignment(Pos.CENTER_LEFT);
 
+        // Hide rotation controls when no rotation stage is configured
+        boolean hasRotation = false;
+        try {
+            MicroscopeConfigManager config = MicroscopeConfigManager.getInstanceIfAvailable();
+            hasRotation = config != null && config.hasRotationStage();
+        } catch (Exception ignored) {
+            // Config not loaded yet -- default to hidden
+        }
+        moveRRow.setVisible(hasRotation);
+        moveRRow.setManaged(hasRotation);
+        rStatus.setVisible(hasRotation);
+        rStatus.setManaged(hasRotation);
+
         HBox centroidRow = new HBox(6, goToCentroidBtn, centroidStatus);
         centroidRow.setAlignment(Pos.CENTER_LEFT);
         VBox centroidSection = new VBox(4, centroidRow, availableLabel, alignmentListView);
@@ -1276,12 +1289,14 @@ public class StageControlPanel extends VBox {
                         logger.debug("Failed to retrieve current Z stage position: {}", e.getMessage());
                     }
 
-                    try {
-                        double r = MicroscopeController.getInstance().getStagePositionR();
-                        Platform.runLater(() -> rField.setText(String.format("%.2f", r)));
-                        logger.debug("Initialized R field with current position: {}", r);
-                    } catch (Exception e) {
-                        logger.debug("Failed to retrieve current R stage position: {}", e.getMessage());
+                    if (MicroscopeController.getInstance().hasRotationStage()) {
+                        try {
+                            double r = MicroscopeController.getInstance().getStagePositionR();
+                            Platform.runLater(() -> rField.setText(String.format("%.2f", r)));
+                            logger.debug("Initialized R field with current position: {}", r);
+                        } catch (Exception e) {
+                            logger.debug("Failed to retrieve current R stage position: {}", e.getMessage());
+                        }
                     }
                 },
                 "StageControl-Init");

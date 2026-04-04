@@ -65,6 +65,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
     private final Object auxSocketLock = new Object();
     private final AtomicBoolean auxConnected = new AtomicBoolean(false);
 
+    /** Cooldown after failed aux connection to prevent reconnection floods */
+    private volatile long auxReconnectCooldownUntil = 0;
+
+    /** Backoff duration for aux reconnection (doubles on each failure, resets on success) */
+    private volatile long auxReconnectBackoffMs = 1000;
+
+    private static final long AUX_RECONNECT_BACKOFF_INITIAL_MS = 1000;
+    private static final long AUX_RECONNECT_BACKOFF_MAX_MS = 30_000;
+
     // Connection state
     private final AtomicBoolean connected = new AtomicBoolean(false);
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
@@ -427,6 +436,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
                 auxConnected.set(true);
 
+                // Reset backoff on successful connection
+                auxReconnectBackoffMs = AUX_RECONNECT_BACKOFF_INITIAL_MS;
+                auxReconnectCooldownUntil = 0;
+
                 logger.info("Auxiliary connection established, sending config...");
 
                 // Send config on auxiliary connection
@@ -436,6 +449,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
             } catch (IOException e) {
                 cleanupAuxiliary();
+                // Set cooldown with exponential backoff to prevent reconnection floods
+                auxReconnectCooldownUntil = System.currentTimeMillis() + auxReconnectBackoffMs;
+                logger.debug(
+                        "Auxiliary connection failed, next retry in {}ms: {}", auxReconnectBackoffMs, e.getMessage());
+                auxReconnectBackoffMs = Math.min(auxReconnectBackoffMs * 2, AUX_RECONNECT_BACKOFF_MAX_MS);
                 throw new IOException("Failed to establish auxiliary connection: " + e.getMessage(), e);
             }
         }
@@ -526,9 +544,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if connection cannot be established
      */
     private void ensureAuxConnected() throws IOException {
-        if (!auxConnected.get()) {
-            connectAuxiliary();
+        if (auxConnected.get()) {
+            return;
         }
+        // Enforce cooldown after failed attempts to prevent reconnection floods
+        long now = System.currentTimeMillis();
+        if (now < auxReconnectCooldownUntil) {
+            throw new IOException(
+                    "Auxiliary connection cooldown active (retry in " + (auxReconnectCooldownUntil - now) + "ms)");
+        }
+        connectAuxiliary();
     }
 
     /**

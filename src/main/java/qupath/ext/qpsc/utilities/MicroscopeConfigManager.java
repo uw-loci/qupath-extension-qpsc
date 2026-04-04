@@ -1331,6 +1331,33 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * Checks whether any configured modality has a rotation stage.
+     * Used to avoid polling rotation angle on microscopes without one.
+     *
+     * @return true if at least one modality defines a rotation_stage device
+     */
+    @SuppressWarnings("unchecked")
+    public boolean hasRotationStage() {
+        Map<String, Object> modalities = getSection("modalities");
+        if (modalities == null) {
+            return false;
+        }
+        for (Map.Entry<String, Object> entry : modalities.entrySet()) {
+            if (entry.getValue() instanceof Map) {
+                Map<String, Object> mod = (Map<String, Object>) entry.getValue();
+                Object rotStage = mod.get("rotation_stage");
+                if (rotStage instanceof Map) {
+                    Object device = ((Map<String, Object>) rotStage).get("device");
+                    if (device != null && !device.toString().isEmpty()) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * Get slide dimensions.
      * Returns null array if not configured.
      */

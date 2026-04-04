@@ -11,6 +11,11 @@ public interface StagePositionProvider {
     /** Returns true if the provider is connected and can return positions. */
     boolean isConnected();
 
+    /** Returns true if the microscope has a rotation stage (e.g., PPM polarizer). */
+    default boolean hasRotationStage() {
+        return false;
+    }
+
     /** Returns current XY stage position as [x, y] in microns. */
     double[] getStagePositionXY() throws IOException;
 

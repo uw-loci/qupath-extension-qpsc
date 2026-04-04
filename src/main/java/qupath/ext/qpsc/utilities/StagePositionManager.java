@@ -246,12 +246,14 @@ public class StagePositionManager {
                 logger.trace("Failed to poll Z position: {}", e.getMessage());
             }
 
-            // Poll R position
-            try {
-                double r = provider.getStagePositionR();
-                updatePosition(PROP_POS_R, posR, r, v -> posR = v);
-            } catch (Exception e) {
-                logger.trace("Failed to poll R position: {}", e.getMessage());
+            // Poll R position (only if microscope has a rotation stage)
+            if (provider.hasRotationStage()) {
+                try {
+                    double r = provider.getStagePositionR();
+                    updatePosition(PROP_POS_R, posR, r, v -> posR = v);
+                } catch (Exception e) {
+                    logger.trace("Failed to poll R position: {}", e.getMessage());
+                }
             }
 
         } catch (Exception e) {

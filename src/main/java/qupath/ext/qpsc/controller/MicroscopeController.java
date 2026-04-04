@@ -220,6 +220,16 @@ public class MicroscopeController implements StagePositionProvider {
         }
     }
 
+    @Override
+    public boolean hasRotationStage() {
+        try {
+            MicroscopeConfigManager config = MicroscopeConfigManager.getInstanceIfAvailable();
+            return config != null && config.hasRotationStage();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     /**
      * Queries the current rotation angle (in degrees) from the stage.
      *
