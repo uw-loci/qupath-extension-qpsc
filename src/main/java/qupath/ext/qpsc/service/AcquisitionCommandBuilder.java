@@ -72,6 +72,9 @@ public class AcquisitionCommandBuilder {
     // Z-focus hint from prediction model (tilt correction)
     private Double hintZ;
 
+    // Birefringence minimum intensity threshold (dark region noise suppression)
+    private Integer birefMinIntensity;
+
     // Preferred first AF tile index (from WSI tissue scoring)
     private Integer preferredAfTile;
 
@@ -283,6 +286,20 @@ public class AcquisitionCommandBuilder {
     }
 
     /**
+     * Sets the minimum intensity threshold for birefringence dark-region noise suppression.
+     *
+     * <p>Pixels whose combined intensity (I+ + I-) falls below this threshold
+     * are zeroed in the birefringence output to suppress read-noise artifacts.</p>
+     *
+     * @param threshold minimum combined intensity value (default 10)
+     * @return this builder for method chaining
+     */
+    public AcquisitionCommandBuilder birefMinIntensity(int threshold) {
+        this.birefMinIntensity = threshold;
+        return this;
+    }
+
+    /**
      * Sets the preferred tile index for the first autofocus position,
      * determined by scoring WSI tissue content at each tile location.
      *
@@ -452,6 +469,11 @@ public class AcquisitionCommandBuilder {
         // Add Z-focus hint from tilt prediction model
         if (hintZ != null) {
             args.addAll(Arrays.asList("--hint-z", String.format("%.2f", hintZ)));
+        }
+
+        // Add birefringence minimum intensity threshold
+        if (birefMinIntensity != null) {
+            args.addAll(Arrays.asList("--biref-min-intensity", String.valueOf(birefMinIntensity)));
         }
 
         // Add preferred AF tile from WSI tissue scoring
