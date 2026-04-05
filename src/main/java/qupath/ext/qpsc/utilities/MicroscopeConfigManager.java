@@ -374,6 +374,12 @@ public class MicroscopeConfigManager {
         ResourceBundle res = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings");
         Object current = configData;
 
+        // Diagnostic: detect empty configData early
+        if (configData.isEmpty()) {
+            logger.error("configData is EMPTY when looking up {}. Config path: {}",
+                    java.util.Arrays.toString(keys), configPath);
+        }
+
         for (int i = 0; i < keys.length; i++) {
             String key = keys[i];
             // Standard descent into the Map
@@ -1115,13 +1121,13 @@ public class MicroscopeConfigManager {
         Double limit = getDouble("stage", "limits", axis + "_um", limitType);
 
         if (limit == null) {
-            logger.error("Stage {} {} limit not found in configuration", axis, limitType);
-            // Return safe defaults
-            if ("low".equals(limitType)) {
-                return axis.equals("z") ? -1000.0 : -20000.0;
-            } else {
-                return axis.equals("z") ? 1000.0 : 20000.0;
-            }
+            String msg = String.format(
+                    "Stage %s %s limit not found in configuration. "
+                    + "Check that your config file has stage.limits.%s_um.%s defined. "
+                    + "The config data may be empty -- verify the config file path in Preferences.",
+                    axis, limitType, axis, limitType);
+            logger.error(msg);
+            throw new IllegalStateException(msg);
         }
 
         return limit;
