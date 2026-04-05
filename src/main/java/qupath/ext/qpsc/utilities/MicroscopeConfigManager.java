@@ -155,9 +155,9 @@ public class MicroscopeConfigManager {
         Map<String, Object> merged = new java.util.HashMap<>();
 
         // Start with resources (shared across microscopes)
-        Map<String, Object> fromResources = getMergedDetectorSection();
-        if (fromResources != null) {
-            merged.putAll(fromResources);
+        Object resSection = resourceData.get("id_detector");
+        if (resSection instanceof Map<?, ?>) {
+            merged.putAll((Map<String, Object>) resSection);
         }
 
         // Override with config-local id_detector (from setup wizard or manual edit)
