@@ -142,6 +142,34 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * Get the merged id_detector section: config-local entries override resources.
+     *
+     * <p>The setup wizard writes detector definitions directly into the microscope
+     * config file (id_detector section), so these may not exist in resources_LOCI.yml.
+     * This method merges both sources, preferring config-local definitions.
+     *
+     * @return Merged map of detector ID to config, or empty map if none found
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getMergedDetectorSection() {
+        Map<String, Object> merged = new java.util.HashMap<>();
+
+        // Start with resources (shared across microscopes)
+        Map<String, Object> fromResources = getMergedDetectorSection();
+        if (fromResources != null) {
+            merged.putAll(fromResources);
+        }
+
+        // Override with config-local id_detector (from setup wizard or manual edit)
+        Object localSection = configData.get("id_detector");
+        if (localSection instanceof Map<?, ?>) {
+            merged.putAll((Map<String, Object>) localSection);
+        }
+
+        return merged;
+    }
+
+    /**
      * Computes the path to the shared LOCI resources file based on the microscope config path.
      * For example, transforms ".../microscopes/config_PPM.yml" -> ".../resources_LOCI.yml".
      *
@@ -788,7 +816,7 @@ public class MicroscopeConfigManager {
      */
     @SuppressWarnings("unchecked")
     public int getDetectorDimension(String detector, String dimension) {
-        Map<String, Object> detectorSection = getResourceSection("id_detector");
+        Map<String, Object> detectorSection = getMergedDetectorSection();
         if (detectorSection != null && detectorSection.containsKey(detector)) {
             Map<String, Object> detectorData = (Map<String, Object>) detectorSection.get(detector);
             if (detectorData != null && detectorData.get(dimension) instanceof Number) {
@@ -809,7 +837,7 @@ public class MicroscopeConfigManager {
     public int[] getDetectorDimensions(String detector) {
         logger.debug("Getting dimensions for detector: {}", detector);
 
-        Map<String, Object> detectorSection = getResourceSection("id_detector");
+        Map<String, Object> detectorSection = getMergedDetectorSection();
         if (detectorSection != null && detectorSection.containsKey(detector)) {
             Map<String, Object> detectorData = (Map<String, Object>) detectorSection.get(detector);
 
@@ -1568,10 +1596,11 @@ public class MicroscopeConfigManager {
         }
 
         // Validate each detector exists in resources
-        Map<String, Object> detectorSection = getResourceSection("id_detector");
+        Map<String, Object> detectorSection = getMergedDetectorSection();
         for (String detectorId : detectors) {
             if (detectorSection == null || !detectorSection.containsKey(detectorId)) {
-                errors.add(String.format("Detector %s not found in resources_LOCI.yml", detectorId));
+                errors.add(
+                        String.format("Detector %s not found in config id_detector or resources_LOCI.yml", detectorId));
                 continue;
             }
 
@@ -1670,7 +1699,7 @@ public class MicroscopeConfigManager {
     public boolean detectorRequiresDebayering(String detectorId) {
         logger.debug("Checking debayering requirement for detector: {}", detectorId);
 
-        Map<String, Object> detectorSection = getResourceSection("id_detector");
+        Map<String, Object> detectorSection = getMergedDetectorSection();
         if (detectorSection == null || !detectorSection.containsKey(detectorId)) {
             logger.warn("Detector {} not found in resources, defaulting to requires debayering", detectorId);
             return true;
@@ -1706,7 +1735,7 @@ public class MicroscopeConfigManager {
      */
     @SuppressWarnings("unchecked")
     private boolean getDetectorBooleanProperty(String detectorId, String property, boolean defaultValue) {
-        Map<String, Object> detectorSection = getResourceSection("id_detector");
+        Map<String, Object> detectorSection = getMergedDetectorSection();
         if (detectorSection == null || !detectorSection.containsKey(detectorId)) {
             return defaultValue;
         }
@@ -1764,7 +1793,7 @@ public class MicroscopeConfigManager {
 
         // Alternative: check manufacturer field in resources_LOCI.yml
         try {
-            Map<String, Object> detectorSection = getResourceSection("id_detector");
+            Map<String, Object> detectorSection = getMergedDetectorSection();
             if (detectorSection != null && detectorSection.containsKey(detectorId)) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> detectorData = (Map<String, Object>) detectorSection.get(detectorId);
@@ -1979,7 +2008,7 @@ public class MicroscopeConfigManager {
      */
     public Map<String, String> getDetectorFriendlyNames(Set<String> detectorIds) {
         Map<String, String> friendlyNames = new HashMap<>();
-        Map<String, Object> detectorSection = getResourceSection("id_detector");
+        Map<String, Object> detectorSection = getMergedDetectorSection();
 
         if (detectorSection != null) {
             for (String detectorId : detectorIds) {
