@@ -1009,6 +1009,8 @@ public class AutofocusEditorWorkflow {
         for (AutofocusSettings setting : settings.values()) {
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("objective", setting.objective);
+            // User explicitly reviewed values in the editor -- mark as calibrated
+            entry.put("calibrated", true);
             entry.put("n_steps", setting.nSteps);
             entry.put("search_range_um", setting.searchRangeUm);
             entry.put("n_tiles", setting.nTiles);
@@ -1060,6 +1062,24 @@ public class AutofocusEditorWorkflow {
 
         logger.info(
                 "Saved autofocus settings for {} objectives to: {}", settings.size(), autofocusFile.getAbsolutePath());
+
+        // Reload config so acquisition uses the updated autofocus parameters.
+        // The config manager is a singleton keyed by config path -- we use
+        // getInstanceIfAvailable() which returns null if not yet initialized.
+        try {
+            var mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr != null) {
+                // Derive main config path from the autofocus file:
+                // autofocus_PPM.yml -> config_PPM.yml (same directory)
+                String afName = autofocusFile.getName(); // "autofocus_PPM.yml"
+                String configName = afName.replace("autofocus_", "config_");
+                String configPath = new File(autofocusFile.getParent(), configName).getAbsolutePath();
+                mgr.reload(configPath);
+                logger.info("Reloaded config after autofocus settings save");
+            }
+        } catch (Exception reloadEx) {
+            logger.warn("Could not reload config after AF save: {}", reloadEx.getMessage());
+        }
     }
 
     /**

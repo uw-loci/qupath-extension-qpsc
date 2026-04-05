@@ -194,6 +194,15 @@ public class BackgroundCollectionWorkflow {
             saveBackgroundDefaults(
                     finalOutputPath, modality, objective, detector, angleExposures, finalExposures, wbMode);
 
+            // Reload config -- Python server may have written background exposure
+            // data to imageprocessing_*.yml during background collection
+            try {
+                MicroscopeConfigManager.getInstance(configFileLocation).reload(configFileLocation);
+                logger.info("Reloaded config after background collection");
+            } catch (Exception reloadEx) {
+                logger.warn("Could not reload config after background collection: {}", reloadEx.getMessage());
+            }
+
             // Show success notification on UI thread
             Platform.runLater(() -> {
                 Dialogs.showInfoNotification(

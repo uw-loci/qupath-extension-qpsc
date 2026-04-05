@@ -44,6 +44,17 @@ public final class ConfigFileWriter {
         copyResourcesIfNeeded(data);
 
         logger.info("All configuration files written to {}", data.configDirectory);
+
+        // Reload config if the manager is already active (wizard re-run while connected)
+        try {
+            var mgr = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr != null) {
+                mgr.reload(data.getMainConfigPath().toString());
+                logger.info("Reloaded config after Setup Wizard write");
+            }
+        } catch (Exception e) {
+            logger.debug("Config reload after wizard not needed (not yet initialized): {}", e.getMessage());
+        }
     }
 
     /**
