@@ -1086,7 +1086,9 @@ public class UnifiedAcquisitionController {
                     List<WbMode> validModes = BackgroundValidityChecker.getValidModes(
                             baseFolder, baseModality, objective, detector, configManager);
                     for (WbMode mode : validModes) {
-                        wbModeComboBox.getItems().add(mode.getDisplayName());
+                        if (isPPM || !isPpmOnlyMode(mode)) {
+                            wbModeComboBox.getItems().add(mode.getDisplayName());
+                        }
                     }
                     logger.debug("Filtered WB modes to {} valid options (BG correction enabled)", validModes.size());
                 } else {

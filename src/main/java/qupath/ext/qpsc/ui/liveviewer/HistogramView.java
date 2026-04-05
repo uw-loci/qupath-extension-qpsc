@@ -29,8 +29,9 @@ import javafx.scene.paint.Color;
 public class HistogramView extends VBox {
 
     private static final int HIST_HEIGHT = 80;
-    // Label column width -- keeps histogram and sliders aligned
-    private static final double LABEL_WIDTH = 50;
+    // Label column width -- keeps histogram and sliders aligned.
+    // Must fit "Max: 65535" for 16-bit images.
+    private static final double LABEL_WIDTH = 80;
 
     private final Canvas canvas;
     private final Slider minSlider;
