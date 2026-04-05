@@ -269,6 +269,17 @@ public class WhiteBalanceWorkflow {
                                 negTarget,
                                 crossTarget);
 
+                        // Reload config so the Java side picks up the new
+                        // calibration values written by the Python server
+                        try {
+                            qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(yamlPath)
+                                    .reload(yamlPath);
+                            logger.info("Reloaded config after simple WB calibration");
+                        } catch (Exception reloadEx) {
+                            logger.warn("Could not reload config after calibration: {}",
+                                    reloadEx.getMessage());
+                        }
+
                         Platform.runLater(() -> {
                             progressStage.close();
                             showSimpleResults(result, params.outputPath());
@@ -375,6 +386,17 @@ public class WhiteBalanceWorkflow {
                                 yamlPath,
                                 params.objective(),
                                 params.detector());
+
+                        // Reload config so the Java side picks up the new
+                        // calibration values written by the Python server
+                        try {
+                            qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(yamlPath)
+                                    .reload(yamlPath);
+                            logger.info("Reloaded config after PPM WB calibration");
+                        } catch (Exception reloadEx) {
+                            logger.warn("Could not reload config after calibration: {}",
+                                    reloadEx.getMessage());
+                        }
 
                         Platform.runLater(() -> {
                             progressStage.close();
