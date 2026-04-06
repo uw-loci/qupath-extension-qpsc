@@ -623,8 +623,11 @@ public class MicroscopeController implements StagePositionProvider {
             throws IOException {
         logger.info("Applying camera settings for angle '{}' at {} degrees", angleName, rotationDegrees);
 
-        // Set camera exposure mode. Gain is always unified (R/B analog adjusted separately).
+        // Length 1 = true unified exposure mode (single exposure for all channels).
+        // Length 3 = per-channel individual exposure mode.
+        // The caller is responsible for passing the correct length.
         boolean exposureIndividual = (exposures.length == 3);
+
         try {
             socketClient.setCameraMode(exposureIndividual);
             logger.info("Set camera mode: exposure_individual={}, gain=unified", exposureIndividual);
