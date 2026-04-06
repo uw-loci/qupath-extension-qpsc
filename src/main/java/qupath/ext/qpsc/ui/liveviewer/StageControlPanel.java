@@ -899,33 +899,29 @@ public class StageControlPanel extends VBox {
                 }
             }
 
-            // Simple WB preset (uncrossed angle) -- uses true unified exposure mode
+            // Simple WB preset: uncrossed uses per-channel exposures (R, G, B)
+            // for accurate white balance. Other angles use the per-angle presets
+            // above (from PPM WB) or the acquisition workflow switches to unified
+            // exposure mode with the analog gains from uncrossed.
             Object simpleWb = mgr.getProfileSetting(modality, currentCameraObjectiveId, det, "simple_wb");
             if (simpleWb instanceof java.util.Map<?, ?> simpleMap) {
                 Object baseExp = simpleMap.get("base_exposures_ms");
                 Object baseGains = simpleMap.get("base_gains");
                 if (baseExp instanceof java.util.Map<?, ?> baseExpMap) {
-                    // Prefer unified_exposure_ms (single value = true unified mode).
-                    // Fall back to green channel if not present.
-                    float[] sExp;
-                    Object unifiedExp = baseExpMap.get("unified_exposure_ms");
-                    if (unifiedExp != null) {
-                        sExp = new float[] {toFloat(unifiedExp)};
-                    } else {
-                        // Legacy: use green as the unified exposure
-                        sExp = new float[] {toFloat(baseExpMap.get("g"))};
-                    }
+                    // Per-channel exposures for uncrossed white balance
+                    float[] sExp = {
+                        toFloat(baseExpMap.get("r")), toFloat(baseExpMap.get("g")), toFloat(baseExpMap.get("b"))
+                    };
                     float[] sGain = parseGainsFromMap(
                             baseGains instanceof java.util.Map<?, ?>
                                     ? (java.util.Map<String, Object>) baseGains
                                     : null);
                     double uncrossedDeg = ppmAngles.getOrDefault("uncrossed", 90.0);
 
-                    String expLabel = String.format("%.2f ms (unified)", sExp[0]);
-                    Button btn = createPresetButton("Uncrossed (Simple WB)", expLabel);
+                    Button btn = createPresetButton("Uncrossed (Simple WB)", formatExpDetail(sExp));
                     btn.setStyle(btn.getStyle() + " -fx-text-fill: -fx-accent;");
                     btn.setOnAction(e -> applyWbPreset("uncrossed", uncrossedDeg, sExp, sGain));
-                    cameraModContent.getChildren().addAll(btn, createDetailLabel(expLabel));
+                    cameraModContent.getChildren().addAll(btn, createDetailLabel(formatExpDetail(sExp)));
                     anyPresets = true;
                 }
             }
