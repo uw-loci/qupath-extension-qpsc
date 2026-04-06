@@ -1586,15 +1586,15 @@ public class StageControlPanel extends VBox {
             double currentX = Double.parseDouble(xField.getText().replace(",", ""));
             double currentY = Double.parseDouble(yField.getText().replace(",", ""));
 
-            // Default (unchecked): Match MicroManager stage controls exactly.
-            //   - Right decreases X, Left increases X
-            //   - Up decreases Y, Down increases Y
-            // Sample Movement (checked): Invert X axis only so sample appears to move with controls.
-            //   - Right increases X, Left decreases X
-            //   - Up decreases Y, Down increases Y (unchanged)
+            // Movement direction is determined by the stage inversion preferences.
+            // stageInvertedX/Y indicate whether positive stage commands move opposite
+            // to the expected direction. The "Sample Movement" checkbox adds an extra
+            // inversion on X so the sample appears to move with the control direction.
             boolean sampleMode = sampleMovementCheckbox.isSelected();
-            double xMult = sampleMode ? 1 : -1; // Sample: right increases X; Default: right decreases X
-            double yMult = -1; // Always: up decreases Y (matches MicroManager)
+            boolean invertX = qupath.ext.qpsc.preferences.QPPreferenceDialog.getStageInvertedXProperty();
+            boolean invertY = qupath.ext.qpsc.preferences.QPPreferenceDialog.getStageInvertedYProperty();
+            double xMult = (invertX ? -1 : 1) * (sampleMode ? -1 : 1);
+            double yMult = invertY ? -1 : 1;
 
             double newX = currentX + (step * xDir * xMult);
             double newY = currentY + (step * yDir * yMult);
@@ -1642,16 +1642,12 @@ public class StageControlPanel extends VBox {
             double currentX = current[0];
             double currentY = current[1];
 
-            // Joystick uses screen coordinates: deltaY negative = up, deltaX positive = right.
-            // Default (unchecked): Match MicroManager stage controls exactly.
-            //   - Right (deltaX > 0) -> X decreases
-            //   - Up (deltaY < 0) -> Y decreases
-            // Sample Movement (checked): Invert X axis only.
-            //   - Right (deltaX > 0) -> X increases
-            //   - Up (deltaY < 0) -> Y decreases (unchanged)
+            // Movement direction from stage inversion preferences + sample mode toggle.
             boolean sampleMode = sampleMovementMode.get();
-            double xMult = sampleMode ? 1 : -1; // Sample: right increases X; Default: right decreases X
-            double yMult = 1; // Always: up decreases Y (matches MicroManager)
+            boolean invertX = qupath.ext.qpsc.preferences.QPPreferenceDialog.getStageInvertedXProperty();
+            boolean invertY = qupath.ext.qpsc.preferences.QPPreferenceDialog.getStageInvertedYProperty();
+            double xMult = (invertX ? -1 : 1) * (sampleMode ? -1 : 1);
+            double yMult = invertY ? -1 : 1;
             double targetX = currentX + (deltaX * xMult);
             double targetY = currentY + (deltaY * yMult);
 
