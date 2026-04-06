@@ -623,33 +623,41 @@ public class MicroscopeController implements StagePositionProvider {
             throws IOException {
         logger.info("Applying camera settings for angle '{}' at {} degrees", angleName, rotationDegrees);
 
-        // Length 1 = true unified exposure mode (single exposure for all channels).
-        // Length 3 = per-channel individual exposure mode.
         boolean exposureIndividual = (exposures.length == 3);
 
-        // Move rotation stage (physical movement, can't be batched with camera)
-        try {
-            socketClient.moveStageR(rotationDegrees);
-            logger.info("Moved rotation stage to {} degrees", rotationDegrees);
-        } catch (IOException e) {
-            logger.error("Failed to move rotation stage: {}", e.getMessage());
-            throw new IOException("Failed to move rotation stage to " + rotationDegrees + " degrees", e);
-        }
+        // Run rotation and camera settings in parallel -- they are independent
+        // hardware components. Camera settings use the aux socket, rotation
+        // uses the main socket, so they don't contend.
+        var rotationFuture = java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                socketClient.moveStageR(rotationDegrees);
+                logger.info("Moved rotation stage to {} degrees", rotationDegrees);
+            } catch (IOException e) {
+                throw new java.util.concurrent.CompletionException(e);
+            }
+        });
 
-        // Set mode + exposures + gains atomically in one round-trip.
-        // This prevents partial-state flashes (e.g., new exposures with old gains)
-        // and eliminates 3 sequential socket round-trips.
+        var cameraFuture = java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                socketClient.setCameraSettings(exposureIndividual, exposures, gains);
+                logger.info(
+                        "Camera settings applied for '{}': mode={}, exp={}, gains={}",
+                        angleName,
+                        exposureIndividual ? "individual" : "unified",
+                        java.util.Arrays.toString(exposures),
+                        java.util.Arrays.toString(gains));
+            } catch (IOException e) {
+                throw new java.util.concurrent.CompletionException(e);
+            }
+        });
+
+        // Wait for both to complete
         try {
-            socketClient.setCameraSettings(exposureIndividual, exposures, gains);
-            logger.info(
-                    "Camera settings applied for '{}': mode={}, exp={}, gains={}",
-                    angleName,
-                    exposureIndividual ? "individual" : "unified",
-                    java.util.Arrays.toString(exposures),
-                    java.util.Arrays.toString(gains));
-        } catch (IOException e) {
-            logger.error("Failed to set camera settings: {}", e.getMessage());
-            throw new IOException("Failed to set camera settings for " + angleName, e);
+            java.util.concurrent.CompletableFuture.allOf(rotationFuture, cameraFuture)
+                    .join();
+        } catch (java.util.concurrent.CompletionException e) {
+            Throwable cause = e.getCause();
+            throw new IOException("Failed to apply settings for " + angleName + ": " + cause.getMessage(), cause);
         }
     }
 
