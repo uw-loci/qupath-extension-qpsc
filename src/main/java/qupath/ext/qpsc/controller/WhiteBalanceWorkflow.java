@@ -204,9 +204,10 @@ public class WhiteBalanceWorkflow {
         // Run calibration in background thread
         Thread calibrationThread = new Thread(
                 () -> {
-                    // Stop all live viewing before starting calibration
+                    // Stop live viewing and lock the Live Viewer controls
                     MicroscopeController.LiveViewState liveViewState =
                             MicroscopeController.getInstance().stopAllLiveViewing();
+                    qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.lockControls("White Balance Calibration");
 
                     try {
                         var advanced = params.advanced();
@@ -276,8 +277,7 @@ public class WhiteBalanceWorkflow {
                                     .reload(yamlPath);
                             logger.info("Reloaded config after simple WB calibration");
                         } catch (Exception reloadEx) {
-                            logger.warn("Could not reload config after calibration: {}",
-                                    reloadEx.getMessage());
+                            logger.warn("Could not reload config after calibration: {}", reloadEx.getMessage());
                         }
 
                         Platform.runLater(() -> {
@@ -302,6 +302,7 @@ public class WhiteBalanceWorkflow {
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                     }
+                    qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.unlockControls();
                     MicroscopeController.getInstance().restoreLiveViewState(liveViewState);
                     // Don't close client - it's the singleton's shared connection
                 },
@@ -349,9 +350,10 @@ public class WhiteBalanceWorkflow {
         // Run calibration in background thread
         Thread calibrationThread = new Thread(
                 () -> {
-                    // Stop all live viewing before starting calibration
+                    // Stop live viewing and lock the Live Viewer controls
                     MicroscopeController.LiveViewState liveViewState =
                             MicroscopeController.getInstance().stopAllLiveViewing();
+                    qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.lockControls("White Balance Calibration");
 
                     try {
                         var advanced = params.advanced();
@@ -394,8 +396,7 @@ public class WhiteBalanceWorkflow {
                                     .reload(yamlPath);
                             logger.info("Reloaded config after PPM WB calibration");
                         } catch (Exception reloadEx) {
-                            logger.warn("Could not reload config after calibration: {}",
-                                    reloadEx.getMessage());
+                            logger.warn("Could not reload config after calibration: {}", reloadEx.getMessage());
                         }
 
                         Platform.runLater(() -> {
@@ -418,6 +419,7 @@ public class WhiteBalanceWorkflow {
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                     }
+                    qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.unlockControls();
                     MicroscopeController.getInstance().restoreLiveViewState(liveViewState);
                     // Don't close client - it's the singleton's shared connection
                 },

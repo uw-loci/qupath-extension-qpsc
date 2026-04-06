@@ -144,6 +144,9 @@ public class LiveViewerWindow {
     // Root content pane
     private BorderPane expandedContent;
 
+    // Lock manager for disabling controls during operations
+    private LiveViewerLockManager lockManager;
+
     // Configuration
     private static final long POLL_INTERVAL_MS = 100; // ~10 FPS max
     private static final double WINDOW_WIDTH = 900; // Wider to accommodate side panel
@@ -151,6 +154,70 @@ public class LiveViewerWindow {
 
     private LiveViewerWindow() {
         buildUI();
+        lockManager = new LiveViewerLockManager(this::applyLock, this::releaseLock);
+    }
+
+    /**
+     * Gets the lock manager for disabling Live Viewer controls during operations.
+     *
+     * @return The lock manager instance
+     */
+    public LiveViewerLockManager getLockManager() {
+        return lockManager;
+    }
+
+    /** Disable interactive controls (called on FX thread by lock manager). */
+    private void applyLock() {
+        String reason = lockManager.getLockHolder();
+        liveToggleButton.setDisable(true);
+        refineFocusButton.setDisable(true);
+        sweepFocusButton.setDisable(true);
+        if (stageControlToggle != null) stageControlToggle.setDisable(true);
+        if (stageControlPanel != null) stageControlPanel.setDisable(true);
+        updateStatus("LOCKED: " + (reason != null ? reason : "operation in progress"));
+    }
+
+    /** Re-enable interactive controls (called on FX thread by lock manager). */
+    private void releaseLock() {
+        liveToggleButton.setDisable(false);
+        // Refine/sweep depend on live state
+        updateRefineFocusButtonState();
+        if (stageControlToggle != null) stageControlToggle.setDisable(false);
+        if (stageControlPanel != null) stageControlPanel.setDisable(false);
+        updateStatus(liveActive ? "Live ON" : "Live OFF");
+    }
+
+    /**
+     * Acquires the Live Viewer lock, disabling interactive controls.
+     * Safe to call even if the Live Viewer has not been created yet.
+     *
+     * @param reason Human-readable reason (shown in status bar)
+     * @return true if lock was acquired
+     */
+    public static boolean lockControls(String reason) {
+        if (instance != null && instance.lockManager != null) {
+            return instance.lockManager.acquire(reason);
+        }
+        return false;
+    }
+
+    /**
+     * Releases the Live Viewer lock, re-enabling interactive controls.
+     * Safe to call even if the Live Viewer has not been created yet.
+     */
+    public static void unlockControls() {
+        if (instance != null && instance.lockManager != null) {
+            instance.lockManager.release();
+        }
+    }
+
+    /**
+     * Checks if the Live Viewer controls are currently locked.
+     *
+     * @return true if locked
+     */
+    public static boolean isLocked() {
+        return instance != null && instance.lockManager != null && instance.lockManager.isLocked();
     }
 
     /**
@@ -591,6 +658,10 @@ public class LiveViewerWindow {
      * when socket lock is held by another operation (e.g., birefringence optimization).
      */
     private void toggleLiveMode() {
+        if (lockManager != null && lockManager.isLocked()) {
+            updateStatus("LOCKED: " + lockManager.getLockHolder());
+            return;
+        }
         MicroscopeController controller = MicroscopeController.getInstance();
         if (controller == null) {
             updateStatus("Not connected to microscope");
