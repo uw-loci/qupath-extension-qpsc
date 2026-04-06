@@ -81,11 +81,12 @@ public class QPPreferenceDialog {
             PathPrefs.createPersistentPreference("tileHandlingProperty", "None");
     private static final DoubleProperty tileOverlapPercentProperty =
             PathPrefs.createPersistentPreference("tileOverlapPercentProperty", 10.0);
+    // LZW default: J2K (DEFAULT) produces corrupt codestreams at lower pyramid
+    // levels with certain tile grid dimensions (Bio-Formats OMEPyramidWriter bug).
+    // LZW is lossless, universally readable, and slightly larger files.
     private static final ObjectProperty<OMEPyramidWriter.CompressionType> compressionTypeProperty =
             PathPrefs.createPersistentPreference(
-                    "compressionType",
-                    OMEPyramidWriter.CompressionType.DEFAULT,
-                    OMEPyramidWriter.CompressionType.class);
+                    "compressionType", OMEPyramidWriter.CompressionType.LZW, OMEPyramidWriter.CompressionType.class);
 
     // Lazy-init to avoid NoClassDefFoundError if tiles-to-pyramid extension is missing.
     // The StitchingConfig.OutputFormat class comes from qupath-extension-tiles-to-pyramid,
