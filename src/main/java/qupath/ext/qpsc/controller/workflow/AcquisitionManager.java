@@ -1601,26 +1601,27 @@ public class AcquisitionManager {
                 }
             }
 
-            // Get detection objects that are children of this annotation
-            // (QuPath resolves containment spatially, so child detections are
-            // those whose ROI falls inside the annotation ROI)
-            java.util.List<PathObject> detections;
+            // Find detection objects that belong to this annotation.
+            // Tile detections are named "{index}_{annotationName}" where
+            // annotationName contains the XY stage coordinates (e.g., "58394_50846").
+            // They spatially intersect the annotation but are NOT hierarchical children.
+            String annotationName = annotation.getName();
             QuPathGUI guiInstance = QuPathGUI.getInstance();
-            if (guiInstance != null && guiInstance.getImageData() != null) {
-                detections = guiInstance.getImageData().getHierarchy().getDetectionObjects().stream()
-                        .filter(d -> {
-                            PathObject parent = d.getParent();
-                            return parent != null && parent.equals(annotation);
-                        })
-                        .collect(Collectors.toList());
-            } else {
-                detections = QP.getCurrentHierarchy().getDetectionObjects().stream()
-                        .filter(d -> {
-                            PathObject parent = d.getParent();
-                            return parent != null && parent.equals(annotation);
-                        })
-                        .collect(Collectors.toList());
-            }
+            var hierarchy = (guiInstance != null && guiInstance.getImageData() != null)
+                    ? guiInstance.getImageData().getHierarchy()
+                    : QP.getCurrentHierarchy();
+
+            java.util.List<PathObject> detections = hierarchy.getDetectionObjects().stream()
+                    .filter(d -> {
+                        String name = d.getName();
+                        return name != null && name.contains(annotationName);
+                    })
+                    .collect(Collectors.toList());
+
+            logger.debug(
+                    "Found {} detections matching annotation '{}' (by name containment)",
+                    detections.size(),
+                    annotationName);
 
             int matched = 0;
             for (PathObject detection : detections) {
