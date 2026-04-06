@@ -971,6 +971,34 @@ public class StageControlPanel extends VBox {
             logger.debug("Could not load brightfield presets: {}", e.getMessage());
         }
 
+        // Always show basic exposure control for brightfield (no calibration needed)
+        Label expLabel = new Label("Exposure (ms):");
+        expLabel.setStyle("-fx-font-size: 10px;");
+        TextField expField = new TextField();
+        expField.setPrefWidth(80);
+        expField.setPromptText("e.g., 33");
+        // Pre-fill with current exposure from server
+        try {
+            var expResult = MicroscopeController.getInstance().getSocketClient().getExposures();
+            expField.setText(String.format("%.1f", expResult.unified()));
+        } catch (Exception ex) {
+            expField.setText("33");
+        }
+        Button applyExpBtn = new Button("Set");
+        applyExpBtn.setStyle("-fx-font-size: 10px;");
+        applyExpBtn.setOnAction(e -> {
+            try {
+                float exp = Float.parseFloat(expField.getText().trim());
+                MicroscopeController.getInstance().getSocketClient().setExposures(new float[]{exp});
+                logger.info("Set brightfield exposure to {} ms", exp);
+            } catch (Exception ex) {
+                logger.warn("Failed to set exposure: {}", ex.getMessage());
+            }
+        });
+        HBox expRow = new HBox(4, expLabel, expField, applyExpBtn);
+        expRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        cameraModContent.getChildren().addAll(new Separator(), expRow);
+
         if (!anyPresets) addNoPresetsLabel();
     }
 

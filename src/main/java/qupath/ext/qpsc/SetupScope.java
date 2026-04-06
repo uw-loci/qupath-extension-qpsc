@@ -494,8 +494,24 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         extensionMenu.getItems().addAll(liveViewerOption, cameraControlOption, stageMapOption);
 
         // 3. Modality extensions (dynamic submenus from registered handlers)
+        // Only show menu items for modalities that exist in the microscope config.
+        java.util.Set<String> configModalities = configValid
+                ? MicroscopeConfigManager.getInstanceIfAvailable() != null
+                    ? MicroscopeConfigManager.getInstanceIfAvailable().getAvailableModalities()
+                    : java.util.Set.of()
+                : java.util.Set.of();
+
         for (var entry : ModalityRegistry.getAllHandlers().entrySet()) {
+            String prefix = entry.getKey();
             var handler = entry.getValue();
+
+            // Skip modalities not present in the microscope config
+            boolean modalityInConfig = configModalities.stream()
+                    .anyMatch(m -> m.toLowerCase().startsWith(prefix));
+            if (!modalityInConfig && configValid) {
+                continue;
+            }
+
             var contributions = handler.getMenuContributions();
             if (!contributions.isEmpty()) {
                 String name = handler.getDisplayName();

@@ -319,7 +319,20 @@ public class CameraControlController {
             content.getChildren().add(wbModeBox);
         }
 
-        // --- Per-Angle Settings Section (Flat Layout) ---
+        // --- Per-Angle Settings Section (only for PPM/rotation modalities) ---
+        // Check if any modality in config has rotation (PPM-style per-angle settings)
+        boolean hasRotationModality = false;
+        try {
+            var configMgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (configMgr != null) {
+                hasRotationModality = configMgr.getAvailableModalities().stream()
+                        .anyMatch(m -> m.toLowerCase().startsWith("ppm") || m.toLowerCase().startsWith("polarized"));
+            }
+        } catch (Exception ex) {
+            // Fallback: show if JAI camera is present (legacy behavior)
+            hasRotationModality = isJAI;
+        }
+
         Label settingsHeader = new Label(res.getString("camera.label.perAngleSettings"));
         settingsHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
         Label settingsNote = new Label(res.getString("camera.label.settingsNote"));
@@ -337,7 +350,13 @@ public class CameraControlController {
         wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
         wbMethodLabel.setWrapText(true);
 
-        content.getChildren().addAll(new Separator(), settingsHeader, settingsNote, rotationNote, wbMethodLabel);
+        // Wrap per-angle section so it can be hidden for non-rotation modalities
+        VBox perAngleSection = new VBox(4, new Separator(), settingsHeader, settingsNote, rotationNote, wbMethodLabel);
+        if (!hasRotationModality) {
+            perAngleSection.setVisible(false);
+            perAngleSection.setManaged(false);
+        }
+        content.getChildren().add(perAngleSection);
 
         // Global status label
         Label statusLabel = new Label();
@@ -498,6 +517,10 @@ public class CameraControlController {
             anglesContainer.getChildren().add(angleCard);
         }
 
+        if (!hasRotationModality) {
+            anglesContainer.setVisible(false);
+            anglesContainer.setManaged(false);
+        }
         content.getChildren().add(anglesContainer);
 
         // Status label
