@@ -199,6 +199,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         GETGAIN("getgain_"),
         /** Set gain values */
         SETGAIN("setgain_"),
+        /** Compound: set mode + exposures + gains atomically */
+        SETCAM("setcam__"),
 
         // NOTE: SETWBMD was removed -- JAI hardware AWB cannot be reliably
         // controlled through Pycromanager. Set AWB manually in MicroManager.
@@ -4504,6 +4506,49 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
 
         logger.info("Gain set successfully: {}", java.util.Arrays.toString(gains));
+    }
+
+    /**
+     * Sets camera mode, exposures, and gains in a single atomic command.
+     * Replaces the sequential setCameraMode -> setExposures -> setGains calls
+     * with one round-trip, preventing partial-state flashes and reducing latency.
+     *
+     * @param exposureIndividual true for per-channel exposure mode
+     * @param exposures Exposure values (length 1 = unified, length 3 = R,G,B)
+     * @param gains Gain values (length 1 = unified, length 3 = unified, analog_red, analog_blue)
+     * @throws IOException if communication fails
+     */
+    public void setCameraSettings(boolean exposureIndividual, float[] exposures, float[] gains) throws IOException {
+        // Build payload: exp_mode(1) + exp_count(1) + exposures(N*4) + gain_count(1) + gains(N*4)
+        int payloadSize = 1 + 1 + (exposures.length * 4) + 1 + (gains.length * 4);
+        ByteBuffer buffer = ByteBuffer.allocate(payloadSize);
+        buffer.order(ByteOrder.BIG_ENDIAN);
+
+        buffer.put((byte) (exposureIndividual ? 1 : 0));
+        buffer.put((byte) exposures.length);
+        for (float exp : exposures) {
+            buffer.putFloat(exp);
+        }
+        buffer.put((byte) gains.length);
+        for (float gain : gains) {
+            buffer.putFloat(gain);
+        }
+
+        byte[] response = executeCommand(Command.SETCAM, buffer.array(), 8);
+        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+
+        if (!responseStr.startsWith("ACK")) {
+            if (responseStr.startsWith("ERR_NSUP")) {
+                throw new MicroscopeHardwareException("Individual exposure mode not supported by this camera.");
+            }
+            throw new IOException("Failed to set camera settings: " + responseStr);
+        }
+
+        logger.info(
+                "Camera settings set atomically: mode={}, exposures={}, gains={}",
+                exposureIndividual ? "individual" : "unified",
+                java.util.Arrays.toString(exposures),
+                java.util.Arrays.toString(gains));
     }
 
     // ==================== White Balance Mode Control ====================
