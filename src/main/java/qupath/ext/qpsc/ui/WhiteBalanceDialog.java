@@ -266,11 +266,17 @@ public class WhiteBalanceDialog {
                 content.getChildren().addAll(cameraPane, sharedPane, simplePane, ppmPane, cameraAWBPane, advancedPane);
 
                 // ========== DIALOG BUTTONS ==========
-                ButtonType runSimpleButton = new ButtonType("Run Simple WB", ButtonBar.ButtonData.OK_DONE);
-                ButtonType runPPMButton = new ButtonType("Run PPM WB", ButtonBar.ButtonData.APPLY);
-                ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+                // Run buttons are inside the TitledPanes. Dialog bar only has Close.
+                ButtonType runSimpleButton = new ButtonType("_SimpleWB", ButtonBar.ButtonData.OK_DONE);
+                ButtonType runPPMButton = new ButtonType("_PPMWB", ButtonBar.ButtonData.APPLY);
+                ButtonType cancelButton = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
 
                 dialog.getDialogPane().getButtonTypes().addAll(runSimpleButton, runPPMButton, cancelButton);
+                // Hide the dialog-bar run buttons (they're triggered by inline buttons)
+                dialog.getDialogPane().lookupButton(runSimpleButton).setVisible(false);
+                dialog.getDialogPane().lookupButton(runSimpleButton).setManaged(false);
+                dialog.getDialogPane().lookupButton(runPPMButton).setVisible(false);
+                dialog.getDialogPane().lookupButton(runPPMButton).setManaged(false);
                 dialog.getDialogPane().setContent(scrollPane);
 
                 // Get references to UI elements for result conversion
@@ -321,32 +327,37 @@ public class WhiteBalanceDialog {
                 Spinner<?> boostedMaxGainSpinner =
                         (Spinner<?>) advancedPane.getContent().lookup("#boostedMaxGainDb");
 
+                // Lookup hidden dialog buttons and inline buttons
+                Button ppmDialogBtn = (Button) dialog.getDialogPane().lookupButton(runPPMButton);
+                Button simpleDialogBtn = (Button) dialog.getDialogPane().lookupButton(runSimpleButton);
+                Button inlineSimpleBtn = (Button) simplePane.getContent().lookup("#runSimpleBtn");
+                Button inlinePpmBtn = (Button) ppmPane.getContent().lookup("#runPpmBtn");
+
+                // Wire inline buttons to fire the hidden dialog buttons
+                inlineSimpleBtn.setOnAction(e -> simpleDialogBtn.fire());
+                inlinePpmBtn.setOnAction(e -> ppmDialogBtn.fire());
+
                 // Validation for PPM button
-                Button ppmBtn = (Button) dialog.getDialogPane().lookupButton(runPPMButton);
                 Runnable validatePPM = () -> {
                     boolean valid = outputField.getText() != null
                             && !outputField.getText().isEmpty();
-                    // Check that objective is selected
                     valid = valid && objectiveCombo.getValue() != null;
-                    // Check that all PPM exposures are set
                     valid = valid && posExpSpinner.getValue() != null && ((Double) posExpSpinner.getValue()) > 0;
                     valid = valid && negExpSpinner.getValue() != null && ((Double) negExpSpinner.getValue()) > 0;
                     valid = valid && crossExpSpinner.getValue() != null && ((Double) crossExpSpinner.getValue()) > 0;
                     valid = valid
                             && uncrossExpSpinner.getValue() != null
                             && ((Double) uncrossExpSpinner.getValue()) > 0;
-                    ppmBtn.setDisable(!valid);
+                    inlinePpmBtn.setDisable(!valid);
                 };
 
                 // Validation for Simple button
-                Button simpleBtn = (Button) dialog.getDialogPane().lookupButton(runSimpleButton);
                 Runnable validateSimple = () -> {
                     boolean valid = outputField.getText() != null
                             && !outputField.getText().isEmpty();
-                    // Check that objective is selected
                     valid = valid && objectiveCombo.getValue() != null;
                     valid = valid && simpleExpSpinner.getValue() != null && ((Double) simpleExpSpinner.getValue()) > 0;
-                    simpleBtn.setDisable(!valid);
+                    inlineSimpleBtn.setDisable(!valid);
                 };
 
                 // Set up validation listeners
@@ -790,7 +801,14 @@ public class WhiteBalanceDialog {
 
         smallAngleBox.getChildren().addAll(smallAngleLabel, smallAngleSpinner, smallAngleNote);
 
-        vbox.getChildren().addAll(modeLabel, descLabel, docLink, expBox, targetBox, smallAngleBox);
+        // Run button (wired by dialog setup code)
+        Button runSimpleBtn = new Button("Run Simple WB");
+        runSimpleBtn.setId("runSimpleBtn");
+        runSimpleBtn.setStyle("-fx-font-weight: bold; -fx-font-size: 12px;");
+        runSimpleBtn.setMaxWidth(Double.MAX_VALUE);
+        runSimpleBtn.setDisable(true); // Enabled by validation
+
+        vbox.getChildren().addAll(modeLabel, descLabel, docLink, expBox, targetBox, smallAngleBox, runSimpleBtn);
 
         TitledPane pane = new TitledPane("Simple White Balance", vbox);
         pane.setCollapsible(true);
@@ -995,7 +1013,14 @@ public class WhiteBalanceDialog {
                 new Label("(Angle values loaded from config and are editable. Targets match optical properties.)");
         noteLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
 
-        vbox.getChildren().addAll(ppmModeLabel, descLabel, ppmDocLink, grid, noteLabel);
+        // Run button (wired by dialog setup code)
+        Button runPpmBtn = new Button("Run PPM WB");
+        runPpmBtn.setId("runPpmBtn");
+        runPpmBtn.setStyle("-fx-font-weight: bold; -fx-font-size: 12px;");
+        runPpmBtn.setMaxWidth(Double.MAX_VALUE);
+        runPpmBtn.setDisable(true); // Enabled by validation
+
+        vbox.getChildren().addAll(ppmModeLabel, descLabel, ppmDocLink, grid, noteLabel, runPpmBtn);
 
         TitledPane pane = new TitledPane("PPM White Balance (4 Angles)", vbox);
         pane.setCollapsible(true);
