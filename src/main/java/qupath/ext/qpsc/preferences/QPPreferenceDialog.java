@@ -252,27 +252,12 @@ public class QPPreferenceDialog {
                 .category(CATEGORY)
                 .description("Overlap percentage between adjacent tiles in acquisition.")
                 .build());
-        // Exclude J2K/J2K_LOSSY/DEFAULT -- Bio-Formats OMEPyramidWriter produces
-        // corrupt JPEG 2000 codestreams at lower pyramid levels, making the stitched
-        // images unreadable. Safe options: LZW, ZLIB, UNCOMPRESSED, JPEG.
-        var safeCompressionTypes = Arrays.stream(OMEPyramidWriter.CompressionType.values())
-                .filter(ct -> ct != OMEPyramidWriter.CompressionType.J2K
-                        && ct != OMEPyramidWriter.CompressionType.J2K_LOSSY
-                        && ct != OMEPyramidWriter.CompressionType.DEFAULT)
-                .toList();
-        // Migrate existing J2K/DEFAULT preferences to LZW
-        var currentCompression = compressionTypeProperty.get();
-        if (currentCompression == OMEPyramidWriter.CompressionType.J2K
-                || currentCompression == OMEPyramidWriter.CompressionType.J2K_LOSSY
-                || currentCompression == OMEPyramidWriter.CompressionType.DEFAULT) {
-            compressionTypeProperty.set(OMEPyramidWriter.CompressionType.LZW);
-        }
         items.add(new PropertyItemBuilder<>(compressionTypeProperty, OMEPyramidWriter.CompressionType.class)
                 .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
-                .choices(safeCompressionTypes)
+                .choices(Arrays.asList(OMEPyramidWriter.CompressionType.values()))
                 .name("Compression type")
                 .category(CATEGORY)
-                .description("Compression for OME Pyramid output. LZW recommended.")
+                .description("Compression for OME Pyramid output. LZW recommended for reliability.")
                 .build());
         try {
             items.add(new PropertyItemBuilder<>(getOutputFormatPropertyInternal(), StitchingConfig.OutputFormat.class)
