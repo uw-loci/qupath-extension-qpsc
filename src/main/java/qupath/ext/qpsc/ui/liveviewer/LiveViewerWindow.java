@@ -221,6 +221,17 @@ public class LiveViewerWindow {
     }
 
     /**
+     * Refreshes the camera preset buttons in the Stage Control panel.
+     * Call after white balance calibration updates the imageprocessing YAML.
+     * Safe to call from any thread; runs on FX thread.
+     */
+    public static void refreshCameraPresets() {
+        if (instance != null && instance.stageControlPanel != null) {
+            Platform.runLater(() -> instance.stageControlPanel.refreshCameraPresets());
+        }
+    }
+
+    /**
      * Shows the Live Viewer window, creating it if necessary.
      * Starts live mode and begins frame polling.
      */

@@ -687,6 +687,7 @@ public class StageControlPanel extends VBox {
 
     private Label cameraStatusLabel;
     private VBox cameraModContent; // Swapped when modality changes
+    private volatile String currentCameraModality; // Current modality for preset refresh
     private String currentCameraObjectiveId;
     private String currentCameraDetectorId;
 
@@ -771,10 +772,12 @@ public class StageControlPanel extends VBox {
                         fullControlBtn);
 
         // Populate initial content and wire dropdown
-        rebuildCameraModContent(modalityCombo.getValue());
+        currentCameraModality = modalityCombo.getValue();
+        rebuildCameraModContent(currentCameraModality);
         modalityCombo.setOnAction(e -> {
             cameraStatusLabel.setText("");
-            rebuildCameraModContent(modalityCombo.getValue());
+            currentCameraModality = modalityCombo.getValue();
+            rebuildCameraModContent(currentCameraModality);
         });
 
         tab.setContent(cameraContent);
@@ -832,6 +835,17 @@ public class StageControlPanel extends VBox {
     }
 
     /** Rebuild the modality-specific camera content area. */
+    /**
+     * Refreshes camera preset buttons from the current config/YAML values.
+     * Call after white balance calibration updates the imageprocessing YAML.
+     */
+    public void refreshCameraPresets() {
+        if (currentCameraModality != null) {
+            logger.info("Refreshing camera presets after calibration");
+            rebuildCameraModContent(currentCameraModality);
+        }
+    }
+
     private void rebuildCameraModContent(String modality) {
         cameraModContent.getChildren().clear();
         if (modality == null || modality.isEmpty()) return;

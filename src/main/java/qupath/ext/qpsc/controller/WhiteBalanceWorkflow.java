@@ -276,6 +276,7 @@ public class WhiteBalanceWorkflow {
                             qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(yamlPath)
                                     .reload(yamlPath);
                             logger.info("Reloaded config after simple WB calibration");
+                            qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.refreshCameraPresets();
                         } catch (Exception reloadEx) {
                             logger.warn("Could not reload config after calibration: {}", reloadEx.getMessage());
                         }
@@ -395,6 +396,7 @@ public class WhiteBalanceWorkflow {
                             qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(yamlPath)
                                     .reload(yamlPath);
                             logger.info("Reloaded config after PPM WB calibration");
+                            qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.refreshCameraPresets();
                         } catch (Exception reloadEx) {
                             logger.warn("Could not reload config after calibration: {}", reloadEx.getMessage());
                         }
