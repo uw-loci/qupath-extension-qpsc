@@ -85,14 +85,17 @@ public class ContrastSettings {
             }
         }
 
-        // Map 256-bin indices back to actual pixel value range
+        // Map 256-bin indices back to actual pixel value range.
+        // Use lower edge of lowBin and upper edge of highBin to avoid
+        // truncation when 16-bit data spans a narrow intensity range.
         int maxVal = frame.maxValue();
-        int newMin = lowBin * maxVal / 255;
-        int newMax = highBin * maxVal / 255;
+        int newMin = (int) ((long) lowBin * maxVal / 255);
+        int newMax = (int) ((long) (highBin + 1) * maxVal / 255);
+        newMax = Math.min(newMax, maxVal);
 
         // Ensure at least some range
         if (newMax <= newMin) {
-            newMax = newMin + 1;
+            newMax = newMin + Math.max(1, maxVal / 255);
         }
 
         displayMin.set(newMin);

@@ -225,7 +225,7 @@ public class HistogramView extends VBox {
             if (channels == 1) {
                 double satPct = 100.0 * satR / pixelCount;
                 meanLabel.setText(String.format("Mean: %.1f  |  Sat: %.1f%%", (double) sumR / pixelCount, satPct));
-                meanLabel.setTextFill(satPct > 1.0 ? Color.RED : Color.BLACK);
+                meanLabel.setTextFill(satPct > 1.0 ? Color.RED : Color.GRAY);
             } else {
                 double satPctR = 100.0 * satR / pixelCount;
                 double satPctG = 100.0 * satG / pixelCount;
@@ -239,7 +239,7 @@ public class HistogramView extends VBox {
                         satPctR,
                         satPctG,
                         satPctB));
-                meanLabel.setTextFill(anySaturated ? Color.RED : Color.BLACK);
+                meanLabel.setTextFill(anySaturated ? Color.RED : Color.GRAY);
             }
         }
 
