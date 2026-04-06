@@ -28,21 +28,22 @@ public class MicroscopeConfigManager {
     // Singleton instance
     private static MicroscopeConfigManager instance;
 
-    // Primary config data loaded from the chosen microscope YAML
-    private final Map<String, Object> configData;
+    // Primary config data loaded from the chosen microscope YAML.
+    // Volatile for thread-safe atomic swap during reload().
+    private volatile Map<String, Object> configData;
 
     // Shared LOCI resource data loaded from resources_LOCI.yml
-    private final Map<String, Object> resourceData;
-    private final Map<String, String> lociSectionMap;
-    private final String configPath;
+    private volatile Map<String, Object> resourceData;
+    private volatile Map<String, String> lociSectionMap;
+    private volatile String configPath;
 
     // External autofocus settings loaded from autofocus_{microscope}.yml
     // Maps objective ID -> autofocus parameters map
-    private final Map<String, Map<String, Object>> autofocusData;
+    private volatile Map<String, Map<String, Object>> autofocusData;
 
     // External imageprocessing settings loaded from imageprocessing_{microscope}.yml
     // Contains imaging_profiles and background_correction settings
-    private final Map<String, Object> imageprocessingData;
+    private volatile Map<String, Object> imageprocessingData;
 
     /**
      * Private constructor: loads microscope YAML, shared LOCI resources, external autofocus settings, and imageprocessing settings.
@@ -117,15 +118,32 @@ public class MicroscopeConfigManager {
      * @param configPath Path to the microscope YAML file.
      */
     public synchronized void reload(String configPath) {
-        configData.clear();
-        configData.putAll(loadConfig(configPath));
+        // Atomic swap: build new maps first, then assign all at once.
+        // This prevents a race where a reader sees an empty map between
+        // clear() and putAll() on a concurrent thread.
+        Map<String, Object> newConfig = loadConfig(configPath);
         String resPath = computeResourcePath(configPath);
-        resourceData.clear();
-        resourceData.putAll(loadConfig(resPath));
-        autofocusData.clear();
-        autofocusData.putAll(loadAutofocusConfig(configPath));
-        imageprocessingData.clear();
-        imageprocessingData.putAll(loadImageprocessingConfig(configPath));
+        Map<String, Object> newResources = loadConfig(resPath);
+        Map<String, Map<String, Object>> newAutofocus = loadAutofocusConfig(configPath);
+        Map<String, Object> newImgproc = loadImageprocessingConfig(configPath);
+
+        this.configData = newConfig;
+        this.resourceData = newResources;
+        this.autofocusData = newAutofocus;
+        this.imageprocessingData = newImgproc;
+        this.configPath = configPath;
+
+        // Rebuild lociSectionMap from new resources
+        Map<String, String> newSectionMap = new HashMap<>();
+        for (String section : newResources.keySet()) {
+            if (section.startsWith("ID_") || section.startsWith("id_")) {
+                String field = section.substring(3).replaceAll("_", "").toLowerCase();
+                newSectionMap.put(field, section);
+            }
+        }
+        this.lociSectionMap = newSectionMap;
+
+        logger.info("Reloaded all config data from: {}", configPath);
     }
 
     /**
@@ -372,10 +390,13 @@ public class MicroscopeConfigManager {
     @SuppressWarnings("unchecked")
     public Object getConfigItem(String... keys) {
         ResourceBundle res = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings");
-        Object current = configData;
+        // Capture volatile references once for consistent snapshot
+        Map<String, Object> config = this.configData;
+        Map<String, Object> resources = this.resourceData;
+        Object current = config;
 
         // Diagnostic: detect empty configData early
-        if (configData.isEmpty()) {
+        if (config.isEmpty()) {
             logger.error("configData is EMPTY when looking up {}. Config path: {}",
                     java.util.Arrays.toString(keys), configPath);
         }
@@ -386,17 +407,17 @@ public class MicroscopeConfigManager {
             if (current instanceof Map<?, ?> map && map.containsKey(key)) {
                 current = map.get(key);
 
-                // If this is a LOCI reference and more keys remain, switch to resourceData and continue
+                // If this is a LOCI reference and more keys remain, switch to resources and continue
                 if (current instanceof String id && id.startsWith("LOCI") && i + 1 < keys.length) {
                     logger.info(res.getString("configManager.switchingToResource"), id, Arrays.toString(keys), i, key);
-                    String section = findResourceSectionForID(key, resourceData, res);
+                    String section = findResourceSectionForID(key, resources, res);
                     if (section == null) {
                         logger.warn(
                                 res.getString("configManager.resourceSectionNotFound"), key, id, Arrays.toString(keys));
                         return null;
                     }
                     String normalized = id.replace('-', '_');
-                    Object sectionObj = resourceData.get(section);
+                    Object sectionObj = resources.get(section);
                     if (sectionObj instanceof Map<?, ?> secMap && secMap.containsKey(normalized)) {
                         current = ((Map<?, ?>) secMap).get(normalized);
                         logger.info(res.getString("configManager.foundResourceEntry"), section, normalized, current);
