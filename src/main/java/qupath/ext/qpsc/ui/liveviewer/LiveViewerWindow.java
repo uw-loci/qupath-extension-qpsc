@@ -519,9 +519,11 @@ public class LiveViewerWindow {
         showTilesCheckBox.setTooltip(new Tooltip("During acquisition, display each acquired tile in this viewer.\n"
                 + "Useful for checking focus drift without waiting for stitching.\n"
                 + "Updates at most once every 8 seconds to avoid I/O overhead."));
-        showTilesCheckBox.setSelected(false);
+        showTilesCheckBox.setSelected(PersistentPreferences.getShowTilesDuringAcquisition());
+        showTilesEnabled = showTilesCheckBox.isSelected();
         showTilesCheckBox.selectedProperty().addListener((obs, oldVal, newVal) -> {
             showTilesEnabled = newVal;
+            PersistentPreferences.setShowTilesDuringAcquisition(newVal);
             logger.info("Show tiles during acquisition: {}", newVal);
         });
 

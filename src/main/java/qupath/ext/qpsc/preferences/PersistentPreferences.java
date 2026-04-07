@@ -872,6 +872,9 @@ public class PersistentPreferences {
 
     // ================== STAGE CONTROL SETTINGS ==================
 
+    private static final StringProperty showTilesDuringAcquisitionSaved =
+            PathPrefs.createPersistentPreference("showTilesDuringAcquisition", "true");
+
     private static final StringProperty stageControlSampleMovementSaved =
             PathPrefs.createPersistentPreference("stageControlSampleMovement", "false");
 
@@ -883,6 +886,16 @@ public class PersistentPreferences {
 
     private static final StringProperty stageControlFovSelectionSaved =
             PathPrefs.createPersistentPreference("stageControlFovSelection", "Value");
+
+    /** Gets the saved Show Tiles checkbox state. Default: true. */
+    public static boolean getShowTilesDuringAcquisition() {
+        return Boolean.parseBoolean(showTilesDuringAcquisitionSaved.getValue());
+    }
+
+    /** Sets the Show Tiles checkbox state. */
+    public static void setShowTilesDuringAcquisition(boolean enabled) {
+        showTilesDuringAcquisitionSaved.setValue(String.valueOf(enabled));
+    }
 
     /**
      * Gets the saved sample movement checkbox state.
@@ -1224,8 +1237,9 @@ public class PersistentPreferences {
     // For preferences with dynamic keys (e.g., camera presets keyed by modality+objective).
     // Uses Java Preferences API directly since PathPrefs requires compile-time key names.
 
-    private static final java.util.prefs.Preferences DYNAMIC_PREFS =
-            java.util.prefs.Preferences.userNodeForPackage(PersistentPreferences.class).node("dynamic");
+    private static final java.util.prefs.Preferences DYNAMIC_PREFS = java.util.prefs.Preferences.userNodeForPackage(
+                    PersistentPreferences.class)
+            .node("dynamic");
 
     /**
      * Get a string preference by dynamic key.
