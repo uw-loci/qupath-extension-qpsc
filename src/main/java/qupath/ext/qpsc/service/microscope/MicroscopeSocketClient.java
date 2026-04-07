@@ -231,7 +231,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
         /** Time-lapse acquisition at current position */
         TLAPSE("tlapse__"),
         /** SIFT auto-alignment: snap + match against WSI region */
-        SIFTAL("siftal__");
+        SIFTAL("siftal__"),
+
+        // Illumination & Profile Commands
+        /** Get illumination state (power, range, on/off) */
+        GETILLM("getillm_"),
+        /** Set illumination power (4-byte float) */
+        SETILLM("setillm_"),
+        /** Apply acquisition profile (calls apply_mode_setup on server) */
+        APPLYPR("applypr_");
 
         private final byte[] value;
 
@@ -4216,6 +4224,17 @@ public class MicroscopeSocketClient implements AutoCloseable {
     public record GainsResult(double unifiedGain, double analogRed, double analogBlue) {}
 
     /**
+     * Result of getIllumination() containing illumination state.
+     *
+     * @param available True if an illumination source is configured
+     * @param power Current power level (source-specific units)
+     * @param minPower Minimum power level
+     * @param maxPower Maximum power level
+     * @param isOn Whether the source is currently emitting
+     */
+    public record IlluminationResult(boolean available, float power, float minPower, float maxPower, boolean isOn) {}
+
+    /**
      * Result of getNoise() containing per-channel noise statistics.
      *
      * @param redMean Red channel mean intensity
@@ -4549,6 +4568,83 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 exposureIndividual ? "individual" : "unified",
                 java.util.Arrays.toString(exposures),
                 java.util.Arrays.toString(gains));
+    }
+
+    // ==================== Illumination Control ====================
+
+    /**
+     * Gets current illumination state (power, range, on/off).
+     *
+     * <p>Response protocol:
+     * <ul>
+     *   <li>If no illumination: 1 byte 0x00</li>
+     *   <li>If available: 1 byte 0x01 + 3 floats (power, min, max) + 1 byte is_on = 14 bytes</li>
+     * </ul>
+     *
+     * @return IlluminationResult with current state
+     * @throws IOException if communication fails
+     */
+    public IlluminationResult getIllumination() throws IOException {
+        byte[] response = executeCommand(Command.GETILLM, null, 14);
+        if (response[0] == 0x00) {
+            return new IlluminationResult(false, 0, 0, 0, false);
+        }
+        ByteBuffer buf = ByteBuffer.wrap(response, 1, 13);
+        buf.order(ByteOrder.BIG_ENDIAN);
+        float power = buf.getFloat();
+        float minPower = buf.getFloat();
+        float maxPower = buf.getFloat();
+        boolean isOn = buf.get() == 1;
+        logger.debug("Illumination state: power={}, range=({}, {}), on={}", power, minPower, maxPower, isOn);
+        return new IlluminationResult(true, power, minPower, maxPower, isOn);
+    }
+
+    /**
+     * Sets illumination power level.
+     *
+     * <p>Power of 0 turns the source off. Power > 0 sets the intensity
+     * (and auto-enables the source if it was off).
+     *
+     * @param power Desired power level (source-specific units)
+     * @throws IOException if communication fails or no illumination configured
+     */
+    public void setIllumination(float power) throws IOException {
+        ByteBuffer buf = ByteBuffer.allocate(4);
+        buf.order(ByteOrder.BIG_ENDIAN);
+        buf.putFloat(power);
+
+        byte[] response = executeCommand(Command.SETILLM, buf.array(), 8);
+        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+
+        if (!responseStr.startsWith("ACK")) {
+            throw new IOException("Failed to set illumination: " + responseStr);
+        }
+
+        logger.info("Illumination power set to {}", power);
+    }
+
+    /**
+     * Applies an acquisition profile on the server.
+     *
+     * <p>Calls hardware.apply_mode_setup() which executes the full mode switch sequence:
+     * PMT safety interlock, illumination off, MM ConfigGroup presets, detector switch,
+     * illumination source switch, intensity set, mode positions.
+     *
+     * @param profileName Profile key from acquisition_profiles config (e.g., "bf_20x", "fl_20x")
+     * @throws IOException if communication fails or profile not found
+     */
+    public void applyProfile(String profileName) throws IOException {
+        byte[] nameBytes = java.util.Arrays.copyOf(
+                profileName.getBytes(StandardCharsets.UTF_8), 32);
+
+        byte[] response = executeCommand(Command.APPLYPR, nameBytes, 8);
+        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+
+        if (!responseStr.startsWith("ACK")) {
+            throw new IOException("Failed to apply profile '" + profileName + "': " + responseStr);
+        }
+
+        logger.info("Applied acquisition profile: {}", profileName);
     }
 
     // ==================== White Balance Mode Control ====================

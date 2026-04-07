@@ -397,8 +397,10 @@ public class MicroscopeConfigManager {
 
         // Diagnostic: detect empty configData early
         if (config.isEmpty()) {
-            logger.error("configData is EMPTY when looking up {}. Config path: {}",
-                    java.util.Arrays.toString(keys), configPath);
+            logger.error(
+                    "configData is EMPTY when looking up {}. Config path: {}",
+                    java.util.Arrays.toString(keys),
+                    configPath);
         }
 
         for (int i = 0; i < keys.length; i++) {
@@ -1144,8 +1146,8 @@ public class MicroscopeConfigManager {
         if (limit == null) {
             String msg = String.format(
                     "Stage %s %s limit not found in configuration. "
-                    + "Check that your config file has stage.limits.%s_um.%s defined. "
-                    + "The config data may be empty -- verify the config file path in Preferences.",
+                            + "Check that your config file has stage.limits.%s_um.%s defined. "
+                            + "The config data may be empty -- verify the config file path in Preferences.",
                     axis, limitType, axis, limitType);
             logger.error(msg);
             throw new IllegalStateException(msg);

@@ -326,7 +326,8 @@ public class CameraControlController {
             var configMgr = MicroscopeConfigManager.getInstanceIfAvailable();
             if (configMgr != null) {
                 hasRotationModality = configMgr.getAvailableModalities().stream()
-                        .anyMatch(m -> m.toLowerCase().startsWith("ppm") || m.toLowerCase().startsWith("polarized"));
+                        .anyMatch(m -> m.toLowerCase().startsWith("ppm")
+                                || m.toLowerCase().startsWith("polarized"));
             }
         } catch (Exception ex) {
             // Fallback: show if JAI camera is present (legacy behavior)
@@ -597,6 +598,118 @@ public class CameraControlController {
                     expIndividualRb,
                     expUnifiedRb,
                     wbMethodLabel);
+        }
+
+        // --- Illumination Display Section ---
+        VBox illumSection = new VBox(4);
+        try {
+            var illumResult = controller.getSocketClient().getIllumination();
+            if (illumResult.available()) {
+                Label illumHeader = new Label("Illumination");
+                illumHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
+
+                String illumLabel = "Lamp";
+                try {
+                    var modalities = mgr.getConfigItem("modalities");
+                    if (modalities instanceof Map<?, ?> modMap) {
+                        for (Object modCfg : modMap.values()) {
+                            if (modCfg instanceof Map<?, ?> cfg) {
+                                Object illum = cfg.get("illumination");
+                                if (illum instanceof Map<?, ?> illumMap) {
+                                    Object lbl = illumMap.get("label");
+                                    if (lbl instanceof String s && !s.isEmpty()) {
+                                        illumLabel = s;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    // Keep default
+                }
+
+                Label illumInfo = new Label(String.format("%s: %.0f (range: %.0f - %.0f) [%s]",
+                        illumLabel, illumResult.power(), illumResult.minPower(), illumResult.maxPower(),
+                        illumResult.isOn() ? "ON" : "OFF"));
+                illumInfo.setStyle("-fx-font-size: 12px;");
+
+                TextField illumField = new TextField(String.format("%.0f", illumResult.power()));
+                illumField.setPrefWidth(80);
+                Button illumSetBtn = new Button("Set");
+                illumSetBtn.setOnAction(e -> {
+                    try {
+                        float power = Float.parseFloat(illumField.getText().trim());
+                        controller.getSocketClient().setIllumination(power);
+                        illumInfo.setText(String.format("%s: %.0f [%s]",
+                                "Lamp", power, power > 0 ? "ON" : "OFF"));
+                        statusLabel.setText("Illumination set to " + power);
+                        statusLabel.setStyle("-fx-text-fill: green;");
+                    } catch (Exception ex) {
+                        statusLabel.setText("Failed: " + ex.getMessage());
+                        statusLabel.setStyle("-fx-text-fill: red;");
+                    }
+                });
+                HBox illumRow = new HBox(8, new Label("Set intensity:"), illumField, illumSetBtn);
+                illumRow.setAlignment(Pos.CENTER_LEFT);
+
+                illumSection.getChildren().addAll(new Separator(), illumHeader, illumInfo, illumRow);
+            }
+        } catch (Exception ex) {
+            logger.debug("Could not load illumination info: {}", ex.getMessage());
+        }
+        content.getChildren().add(illumSection);
+
+        // --- Acquisition Profile Selector ---
+        try {
+            var profiles = mgr.getConfigItem("acquisition_profiles");
+            if (profiles instanceof Map<?, ?> profileMap && !profileMap.isEmpty()) {
+                Label profileHeader = new Label("Acquisition Profiles");
+                profileHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
+
+                ComboBox<String> profileCombo = new ComboBox<>();
+                for (Object key : profileMap.keySet()) {
+                    profileCombo.getItems().add(String.valueOf(key));
+                }
+                if (!profileCombo.getItems().isEmpty()) {
+                    profileCombo.setValue(profileCombo.getItems().get(0));
+                }
+                profileCombo.setMaxWidth(Double.MAX_VALUE);
+
+                Button applyProfileBtn = new Button("Apply Profile");
+                applyProfileBtn.setOnAction(e -> {
+                    String selected = profileCombo.getValue();
+                    if (selected == null) return;
+                    statusLabel.setText("Applying profile: " + selected + "...");
+                    statusLabel.setStyle("-fx-text-fill: black;");
+
+                    Thread t = new Thread(() -> {
+                        try {
+                            controller.withLiveModeHandling(() ->
+                                    controller.getSocketClient().applyProfile(selected));
+                            Platform.runLater(() -> {
+                                statusLabel.setText("Profile applied: " + selected);
+                                statusLabel.setStyle("-fx-text-fill: green;");
+                            });
+                        } catch (Exception ex) {
+                            Platform.runLater(() -> {
+                                statusLabel.setText("Failed: " + ex.getMessage());
+                                statusLabel.setStyle("-fx-text-fill: red;");
+                            });
+                        }
+                    }, "CCC-Profile-Apply");
+                    t.setDaemon(true);
+                    t.start();
+                });
+
+                HBox profileRow = new HBox(8, profileCombo, applyProfileBtn);
+                profileRow.setAlignment(Pos.CENTER_LEFT);
+                HBox.setHgrow(profileCombo, Priority.ALWAYS);
+
+                content.getChildren().addAll(new Separator(), profileHeader, profileRow);
+            }
+        } catch (Exception ex) {
+            logger.debug("Could not load acquisition profiles: {}", ex.getMessage());
         }
 
         // Finalize dialog

@@ -94,6 +94,14 @@ public final class ModalityRegistry {
         registerHandler("2p", lsmHandler);
         registerHandler("confocal", lsmHandler);
 
+        // Widefield epi-fluorescence (single snap, monochrome sCMOS, no rotation).
+        // Channel differences (DAPI, GFP, etc.) are in YAML acquisition profiles.
+        WidefieldFluorescenceModalityHandler wfHandler = new WidefieldFluorescenceModalityHandler();
+        registerHandler("fl", wfHandler);
+        registerHandler("fluorescence", wfHandler);
+        registerHandler("widefield", wfHandler);
+        registerHandler("epi", wfHandler);
+
         logger.info("ModalityRegistry initialization complete. Registered {} modality handlers", HANDLERS.size());
     }
 

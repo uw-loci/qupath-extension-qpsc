@@ -1219,4 +1219,36 @@ public class PersistentPreferences {
     public static void setZStackProjection(String v) {
         zStackProjectionProperty.set(v);
     }
+
+    // ================== GENERIC DYNAMIC PREFERENCES ==================
+    // For preferences with dynamic keys (e.g., camera presets keyed by modality+objective).
+    // Uses Java Preferences API directly since PathPrefs requires compile-time key names.
+
+    private static final java.util.prefs.Preferences DYNAMIC_PREFS =
+            java.util.prefs.Preferences.userNodeForPackage(PersistentPreferences.class).node("dynamic");
+
+    /**
+     * Get a string preference by dynamic key.
+     *
+     * @param key Preference key
+     * @param defaultValue Default if not set
+     * @return Stored value or default
+     */
+    public static String getStringPreference(String key, String defaultValue) {
+        return DYNAMIC_PREFS.get(key, defaultValue);
+    }
+
+    /**
+     * Set a string preference by dynamic key.
+     *
+     * @param key Preference key
+     * @param value Value to store
+     */
+    public static void setStringPreference(String key, String value) {
+        if (value == null) {
+            DYNAMIC_PREFS.remove(key);
+        } else {
+            DYNAMIC_PREFS.put(key, value);
+        }
+    }
 }

@@ -497,8 +497,8 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         // Only show menu items for modalities that exist in the microscope config.
         java.util.Set<String> configModalities = configValid
                 ? MicroscopeConfigManager.getInstanceIfAvailable() != null
-                    ? MicroscopeConfigManager.getInstanceIfAvailable().getAvailableModalities()
-                    : java.util.Set.of()
+                        ? MicroscopeConfigManager.getInstanceIfAvailable().getAvailableModalities()
+                        : java.util.Set.of()
                 : java.util.Set.of();
 
         for (var entry : ModalityRegistry.getAllHandlers().entrySet()) {
@@ -506,8 +506,8 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             var handler = entry.getValue();
 
             // Skip modalities not present in the microscope config
-            boolean modalityInConfig = configModalities.stream()
-                    .anyMatch(m -> m.toLowerCase().startsWith(prefix));
+            boolean modalityInConfig =
+                    configModalities.stream().anyMatch(m -> m.toLowerCase().startsWith(prefix));
             if (!modalityInConfig && configValid) {
                 continue;
             }

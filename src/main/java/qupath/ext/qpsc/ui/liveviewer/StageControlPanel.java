@@ -17,6 +17,7 @@ import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.VPos;
+import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
@@ -25,11 +26,13 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.Separator;
+import javafx.scene.control.Slider;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.control.TextInputDialog;
+import javafx.scene.control.ToggleButton;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
@@ -855,6 +858,9 @@ public class StageControlPanel extends VBox {
             buildPpmCameraContent(modality);
         } else if (norm.startsWith("brightfield") || norm.startsWith("bf")) {
             buildBrightfieldCameraContent(modality);
+        } else if (norm.startsWith("fl") || norm.startsWith("fluorescence")
+                || norm.startsWith("widefield") || norm.startsWith("epi")) {
+            buildFluorescenceCameraContent(modality);
         } else {
             buildGenericCameraContent(modality);
         }
@@ -929,41 +935,59 @@ public class StageControlPanel extends VBox {
             logger.debug("Could not load PPM presets: {}", e.getMessage());
         }
 
+        // Illumination control (for brightfield component of PPM systems)
+        Node illumControl = buildIlluminationControl();
+        if (illumControl != null) {
+            cameraModContent.getChildren().addAll(new Separator(), illumControl);
+        }
+
+        // Save/Load preset buttons
+        cameraModContent.getChildren().addAll(new Separator(), buildPresetButtons(modality));
+
         if (!anyPresets) addNoPresetsLabel();
     }
 
-    /** Brightfield modality: single WB preset, no rotation. */
+    /** Brightfield modality: exposure + illumination + WB preset + presets. */
     @SuppressWarnings("unchecked")
     private void buildBrightfieldCameraContent(String modality) {
-        Label header = new Label("Apply WB Preset (Brightfield)");
-        header.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
-        cameraModContent.getChildren().add(header);
+        // Profile selector (if acquisition profiles exist)
+        Node profileSelector = buildProfileSelector(modality);
+        if (profileSelector != null) {
+            cameraModContent.getChildren().addAll(profileSelector, new Separator());
+        }
 
+        // Exposure control
+        cameraModContent.getChildren().add(buildExposureControl());
+
+        // Illumination control
+        Node illumControl = buildIlluminationControl();
+        if (illumControl != null) {
+            cameraModContent.getChildren().addAll(new Separator(), illumControl);
+        }
+
+        // WB preset (if calibrated)
         boolean anyPresets = false;
         try {
             String det = resolveDetector(modality);
             var exposures = mgr.getModalityExposures(modality, currentCameraObjectiveId, det);
             var gainsObj = mgr.getModalityGains(modality, currentCameraObjectiveId, det);
 
-            // Brightfield uses a "single" key for exposures/gains
             Object singleExp = (exposures != null) ? exposures.get("single") : null;
             if (singleExp != null) {
                 float[] expArray = parseExposures(singleExp);
                 if (expArray != null) {
-                    // Parse gains
                     float[] gainArray = {1.0f};
                     if (gainsObj instanceof java.util.Map<?, ?> gainsMap) {
                         gainArray = parseGainsFromMap((java.util.Map<String, Object>) gainsMap);
                     } else if (gainsObj instanceof Number n) {
                         gainArray = new float[] {n.floatValue()};
                     }
-
                     String detail = formatExpDetail(expArray) + formatGainDetail(gainArray);
-                    Button btn = createPresetButton("Brightfield WB", detail);
+                    Button btn = createPresetButton("Apply WB Preset", detail);
                     final float[] fExp = expArray;
                     final float[] fGain = gainArray;
-                    btn.setOnAction(e -> applyPresetNoRotation("Brightfield", fExp, fGain));
-                    cameraModContent.getChildren().addAll(btn, createDetailLabel(detail));
+                    btn.setOnAction(e -> applyPresetNoRotation("Brightfield WB", fExp, fGain));
+                    cameraModContent.getChildren().addAll(new Separator(), btn, createDetailLabel(detail));
                     anyPresets = true;
                 }
             }
@@ -971,50 +995,474 @@ public class StageControlPanel extends VBox {
             logger.debug("Could not load brightfield presets: {}", e.getMessage());
         }
 
-        // Always show basic exposure control for brightfield (no calibration needed)
-        Label expLabel = new Label("Exposure (ms):");
-        expLabel.setStyle("-fx-font-size: 10px;");
-        TextField expField = new TextField();
-        expField.setPrefWidth(80);
-        expField.setPromptText("e.g., 33");
-        // Pre-fill with current exposure from server
-        try {
-            var expResult = MicroscopeController.getInstance().getSocketClient().getExposures();
-            expField.setText(String.format("%.1f", expResult.unified()));
-        } catch (Exception ex) {
-            expField.setText("33");
-        }
-        Button applyExpBtn = new Button("Set");
-        applyExpBtn.setStyle("-fx-font-size: 10px;");
-        applyExpBtn.setOnAction(e -> {
-            try {
-                float exp = Float.parseFloat(expField.getText().trim());
-                MicroscopeController.getInstance().getSocketClient().setExposures(new float[]{exp});
-                logger.info("Set brightfield exposure to {} ms", exp);
-            } catch (Exception ex) {
-                logger.warn("Failed to set exposure: {}", ex.getMessage());
-            }
-        });
-        HBox expRow = new HBox(4, expLabel, expField, applyExpBtn);
-        expRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-        cameraModContent.getChildren().addAll(new Separator(), expRow);
+        // Save/Load preset buttons
+        cameraModContent.getChildren().addAll(new Separator(), buildPresetButtons(modality));
 
         if (!anyPresets) addNoPresetsLabel();
     }
 
-    /** Generic fallback for unknown/future modalities. */
+    /** Widefield fluorescence modality: exposure + illumination + profile selector + presets. */
+    private void buildFluorescenceCameraContent(String modality) {
+        // Profile selector (for channel switching: bf_20x -> fl_20x, etc.)
+        Node profileSelector = buildProfileSelector(modality);
+        if (profileSelector != null) {
+            cameraModContent.getChildren().addAll(profileSelector, new Separator());
+        }
+
+        // Exposure control
+        cameraModContent.getChildren().add(buildExposureControl());
+
+        // Illumination control (epi-LED)
+        Node illumControl = buildIlluminationControl();
+        if (illumControl != null) {
+            cameraModContent.getChildren().addAll(new Separator(), illumControl);
+        }
+
+        // Save/Load preset buttons
+        cameraModContent.getChildren().addAll(new Separator(), buildPresetButtons(modality));
+    }
+
+    /** Generic fallback for unknown/future modalities -- basic exposure + illumination + presets. */
     private void buildGenericCameraContent(String modality) {
-        Label info = new Label("Camera presets for '" + modality + "' are not yet configured.\n"
-                + "Use Full Camera Control for manual settings.");
-        info.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
-        info.setWrapText(true);
-        cameraModContent.getChildren().add(info);
+        // Profile selector (if any)
+        Node profileSelector = buildProfileSelector(modality);
+        if (profileSelector != null) {
+            cameraModContent.getChildren().addAll(profileSelector, new Separator());
+        }
+
+        // Exposure control
+        cameraModContent.getChildren().add(buildExposureControl());
+
+        // Illumination control
+        Node illumControl = buildIlluminationControl();
+        if (illumControl != null) {
+            cameraModContent.getChildren().addAll(new Separator(), illumControl);
+        }
+
+        // Save/Load preset buttons
+        cameraModContent.getChildren().addAll(new Separator(), buildPresetButtons(modality));
     }
 
     /** Resolve the detector ID for a given modality. */
     private String resolveDetector(String modality) {
         var dets = mgr.getAvailableDetectors();
         return (dets != null && !dets.isEmpty()) ? dets.iterator().next() : currentCameraDetectorId;
+    }
+
+    // --- Shared Camera Tab builders ---
+
+    /** Build an exposure control row (label + text field + Set button). */
+    private Node buildExposureControl() {
+        Label expLabel = new Label("Exposure (ms):");
+        expLabel.setStyle("-fx-font-size: 10px;");
+        TextField expField = new TextField();
+        expField.setPrefWidth(80);
+        expField.setPromptText("e.g., 33");
+        try {
+            var expResult = MicroscopeController.getInstance().getSocketClient().getExposures();
+            expField.setText(String.format("%.1f", expResult.unified()));
+        } catch (Exception ex) {
+            expField.setText("");
+        }
+        Button applyBtn = new Button("Set");
+        applyBtn.setStyle("-fx-font-size: 10px;");
+        applyBtn.setOnAction(e -> {
+            try {
+                float exp = Float.parseFloat(expField.getText().trim());
+                MicroscopeController.getInstance().getSocketClient().setExposures(new float[] {exp});
+                cameraStatusLabel.setText("Exposure: " + exp + " ms");
+                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                logger.info("Set exposure to {} ms", exp);
+            } catch (Exception ex) {
+                cameraStatusLabel.setText("Failed: " + ex.getMessage());
+                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                logger.warn("Failed to set exposure: {}", ex.getMessage());
+            }
+        });
+        // Also allow Enter key to apply
+        expField.setOnAction(e -> applyBtn.fire());
+
+        HBox row = new HBox(4, expLabel, expField, applyBtn);
+        row.setAlignment(Pos.CENTER_LEFT);
+        return row;
+    }
+
+    /**
+     * Build illumination control (slider + text field + on/off toggle).
+     * Returns null if no illumination is available on the server.
+     */
+    private Node buildIlluminationControl() {
+        try {
+            MicroscopeController mc = MicroscopeController.getInstance();
+            if (mc == null || !mc.isConnected()) return null;
+            var illumResult = mc.getSocketClient().getIllumination();
+            if (!illumResult.available()) return null;
+
+            float min = illumResult.minPower();
+            float max = illumResult.maxPower();
+            float current = illumResult.power();
+
+            // Try to get the illumination label from config
+            String illumLabel = "Lamp";
+            try {
+                var modalities = mgr.getConfigItem("modalities");
+                if (modalities instanceof java.util.Map<?, ?> modMap) {
+                    // Find first modality with illumination.label
+                    for (Object modCfg : modMap.values()) {
+                        if (modCfg instanceof java.util.Map<?, ?> cfg) {
+                            Object illum = cfg.get("illumination");
+                            if (illum instanceof java.util.Map<?, ?> illumMap) {
+                                Object label = illumMap.get("label");
+                                if (label instanceof String s && !s.isEmpty()) {
+                                    illumLabel = s;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // Keep default "Lamp"
+            }
+
+            Label label = new Label(illumLabel + ":");
+            label.setStyle("-fx-font-size: 10px;");
+
+            Slider slider = new Slider(min, max, current);
+            slider.setPrefWidth(120);
+            slider.setShowTickLabels(false);
+            slider.setShowTickMarks(false);
+
+            TextField valueField = new TextField(String.format("%.0f", current));
+            valueField.setPrefWidth(60);
+            valueField.setStyle("-fx-font-size: 10px;");
+
+            ToggleButton onOffBtn = new ToggleButton(illumResult.isOn() ? "ON" : "OFF");
+            onOffBtn.setSelected(illumResult.isOn());
+            onOffBtn.setStyle("-fx-font-size: 9px; -fx-padding: 2 6;");
+            onOffBtn.selectedProperty().addListener((obs, oldVal, newVal) -> {
+                onOffBtn.setText(newVal ? "ON" : "OFF");
+                float power = newVal ? (float) slider.getValue() : 0f;
+                if (!newVal || power <= 0) power = newVal ? (float) Math.max(1, max / 2) : 0f;
+                sendIlluminationPower(power);
+                if (newVal && power > 0) {
+                    slider.setValue(power);
+                    valueField.setText(String.format("%.0f", power));
+                }
+            });
+
+            // Slider change -> send power (debounced by only sending on release)
+            slider.valueChangingProperty().addListener((obs, wasChanging, isChanging) -> {
+                if (!isChanging) {
+                    float power = (float) slider.getValue();
+                    valueField.setText(String.format("%.0f", power));
+                    sendIlluminationPower(power);
+                }
+            });
+            // Also update text field while dragging
+            slider.valueProperty().addListener((obs, oldVal, newVal) -> {
+                if (slider.isValueChanging()) {
+                    valueField.setText(String.format("%.0f", newVal.floatValue()));
+                }
+            });
+
+            // Text field -> send power on Enter
+            valueField.setOnAction(e -> {
+                try {
+                    float power = Float.parseFloat(valueField.getText().trim());
+                    slider.setValue(power);
+                    sendIlluminationPower(power);
+                } catch (NumberFormatException ex) {
+                    // ignore
+                }
+            });
+
+            VBox illumBox = new VBox(2);
+            HBox topRow = new HBox(4, label, slider, onOffBtn);
+            topRow.setAlignment(Pos.CENTER_LEFT);
+            HBox bottomRow = new HBox(4);
+            Label valLabel = new Label("Intensity:");
+            valLabel.setStyle("-fx-font-size: 9px;");
+            Button setBtn = new Button("Set");
+            setBtn.setStyle("-fx-font-size: 9px;");
+            setBtn.setOnAction(e -> {
+                try {
+                    float power = Float.parseFloat(valueField.getText().trim());
+                    slider.setValue(power);
+                    sendIlluminationPower(power);
+                } catch (NumberFormatException ex) {
+                    // ignore
+                }
+            });
+            bottomRow.getChildren().addAll(valLabel, valueField, setBtn);
+            bottomRow.setAlignment(Pos.CENTER_LEFT);
+            illumBox.getChildren().addAll(topRow, bottomRow);
+            return illumBox;
+        } catch (Exception e) {
+            logger.debug("Could not build illumination control: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /** Send illumination power to the server in a background thread. */
+    private void sendIlluminationPower(float power) {
+        Thread t = new Thread(() -> {
+            try {
+                MicroscopeController mc = MicroscopeController.getInstance();
+                if (mc != null && mc.isConnected()) {
+                    mc.getSocketClient().setIllumination(power);
+                    logger.debug("Set illumination power to {}", power);
+                }
+            } catch (Exception ex) {
+                logger.warn("Failed to set illumination: {}", ex.getMessage());
+            }
+        }, "Illum-Set");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * Build profile selector dropdown for acquisition profile switching.
+     * Returns null if no acquisition profiles match the modality.
+     */
+    @SuppressWarnings("unchecked")
+    private Node buildProfileSelector(String modality) {
+        try {
+            var profiles = mgr.getConfigItem("acquisition_profiles");
+            if (!(profiles instanceof java.util.Map<?, ?> profileMap) || profileMap.isEmpty()) return null;
+
+            // Filter profiles matching this modality
+            java.util.List<String> matchingProfiles = new java.util.ArrayList<>();
+            String modalityLower = modality.toLowerCase();
+            for (var entry : profileMap.entrySet()) {
+                String profileName = String.valueOf(entry.getKey());
+                if (entry.getValue() instanceof java.util.Map<?, ?> profileCfg) {
+                    Object profModality = profileCfg.get("modality");
+                    if (profModality != null) {
+                        String profModStr = profModality.toString().toLowerCase();
+                        // Match if profile modality starts with same prefix as current modality
+                        if (profModStr.startsWith(modalityLower.substring(0, Math.min(2, modalityLower.length())))
+                                || modalityLower.startsWith(profModStr.substring(0, Math.min(2, profModStr.length())))) {
+                            matchingProfiles.add(profileName);
+                        }
+                    }
+                }
+            }
+
+            // Also add ALL profiles so user can switch modalities from here
+            for (var entry : profileMap.entrySet()) {
+                String profileName = String.valueOf(entry.getKey());
+                if (!matchingProfiles.contains(profileName)) {
+                    matchingProfiles.add(profileName);
+                }
+            }
+
+            if (matchingProfiles.isEmpty()) return null;
+
+            Label label = new Label("Profile:");
+            label.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
+            ComboBox<String> profileCombo = new ComboBox<>();
+            profileCombo.getItems().addAll(matchingProfiles);
+            profileCombo.setValue(matchingProfiles.get(0));
+            profileCombo.setMaxWidth(Double.MAX_VALUE);
+            profileCombo.setStyle("-fx-font-size: 10px;");
+            HBox.setHgrow(profileCombo, javafx.scene.layout.Priority.ALWAYS);
+
+            Button applyBtn = new Button("Apply");
+            applyBtn.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
+            applyBtn.setOnAction(e -> {
+                String selectedProfile = profileCombo.getValue();
+                if (selectedProfile == null) return;
+                cameraStatusLabel.setText("Applying profile: " + selectedProfile + "...");
+                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+                Thread t = new Thread(() -> {
+                    try {
+                        MicroscopeController mc = MicroscopeController.getInstance();
+                        if (mc == null || !mc.isConnected()) throw new Exception("Not connected");
+                        mc.withLiveModeHandling(() -> mc.getSocketClient().applyProfile(selectedProfile));
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Profile applied: " + selectedProfile);
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                        });
+                    } catch (Exception ex) {
+                        logger.error("Failed to apply profile '{}': {}", selectedProfile, ex.getMessage());
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Failed: " + ex.getMessage());
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                        });
+                    }
+                }, "Profile-Apply");
+                t.setDaemon(true);
+                t.start();
+            });
+
+            HBox row = new HBox(4, label, profileCombo, applyBtn);
+            row.setAlignment(Pos.CENTER_LEFT);
+            return row;
+        } catch (Exception e) {
+            logger.debug("Could not build profile selector: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Build Save/Load preset buttons.
+     * Presets are stored in PersistentPreferences keyed by modality + objective + detector.
+     */
+    private Node buildPresetButtons(String modality) {
+        Button saveBtn = new Button("Save Preset");
+        saveBtn.setStyle("-fx-font-size: 10px;");
+        saveBtn.setOnAction(e -> saveCurrentPreset(modality));
+
+        Button loadBtn = new Button("Load Preset");
+        loadBtn.setStyle("-fx-font-size: 10px;");
+        loadBtn.setOnAction(e -> loadAndApplyPreset(modality));
+
+        // Check if a preset exists
+        String presetKey = getPresetKey(modality);
+        String existing = PersistentPreferences.getStringPreference(presetKey, null);
+        if (existing == null) {
+            loadBtn.setDisable(true);
+            loadBtn.setTooltip(new Tooltip("No saved preset for this configuration"));
+        } else {
+            loadBtn.setTooltip(new Tooltip("Load saved preset"));
+        }
+
+        HBox row = new HBox(8, saveBtn, loadBtn);
+        row.setAlignment(Pos.CENTER);
+        return row;
+    }
+
+    private String getPresetKey(String modality) {
+        return "camera.preset."
+                + modality.toLowerCase().replaceAll("[^a-z0-9]", "")
+                + "." + currentCameraObjectiveId
+                + "." + currentCameraDetectorId;
+    }
+
+    /** Save current camera state (exposure + gain + illumination) as a preset. */
+    private void saveCurrentPreset(String modality) {
+        Thread t = new Thread(() -> {
+            try {
+                MicroscopeController mc = MicroscopeController.getInstance();
+                if (mc == null || !mc.isConnected()) throw new Exception("Not connected");
+
+                var expResult = mc.getSocketClient().getExposures();
+                var gainResult = mc.getSocketClient().getGains();
+                var illumResult = mc.getSocketClient().getIllumination();
+
+                // Build simple JSON-like string: exp|gain|illum
+                StringBuilder sb = new StringBuilder();
+                sb.append(String.format("%.2f", expResult.unified()));
+                if (expResult.isPerChannel()) {
+                    sb.append(String.format(",%.2f,%.2f,%.2f", expResult.red(), expResult.green(), expResult.blue()));
+                }
+                sb.append("|");
+                sb.append(String.format("%.2f,%.2f,%.2f", gainResult.unifiedGain(), gainResult.analogRed(), gainResult.analogBlue()));
+                sb.append("|");
+                if (illumResult.available()) {
+                    sb.append(String.format("%.1f", illumResult.power()));
+                } else {
+                    sb.append("0");
+                }
+
+                String presetKey = getPresetKey(modality);
+                PersistentPreferences.setStringPreference(presetKey, sb.toString());
+
+                Platform.runLater(() -> {
+                    cameraStatusLabel.setText("Preset saved");
+                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                    // Re-enable load button
+                    rebuildCameraModContent(modality);
+                });
+                logger.info("Saved camera preset: {} -> {}", presetKey, sb);
+            } catch (Exception ex) {
+                logger.error("Failed to save preset: {}", ex.getMessage());
+                Platform.runLater(() -> {
+                    cameraStatusLabel.setText("Save failed: " + ex.getMessage());
+                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                });
+            }
+        }, "Preset-Save");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** Load and apply a saved camera preset. */
+    private void loadAndApplyPreset(String modality) {
+        String presetKey = getPresetKey(modality);
+        String presetStr = PersistentPreferences.getStringPreference(presetKey, null);
+        if (presetStr == null || presetStr.isEmpty()) {
+            cameraStatusLabel.setText("No saved preset");
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
+            return;
+        }
+
+        cameraStatusLabel.setText("Applying preset...");
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        Thread t = new Thread(() -> {
+            try {
+                MicroscopeController mc = MicroscopeController.getInstance();
+                if (mc == null || !mc.isConnected()) throw new Exception("Not connected");
+
+                // Parse: exp[,r,g,b]|gain,aR,aB|illum
+                String[] parts = presetStr.split("\\|");
+                if (parts.length < 2) throw new Exception("Invalid preset format");
+
+                // Parse exposures
+                String[] expParts = parts[0].split(",");
+                float[] exposures;
+                boolean individual;
+                if (expParts.length >= 4) {
+                    exposures = new float[] {
+                            Float.parseFloat(expParts[1]),
+                            Float.parseFloat(expParts[2]),
+                            Float.parseFloat(expParts[3])
+                    };
+                    individual = true;
+                } else {
+                    exposures = new float[] {Float.parseFloat(expParts[0])};
+                    individual = false;
+                }
+
+                // Parse gains
+                String[] gainParts = parts[1].split(",");
+                float[] gains = new float[] {
+                        Float.parseFloat(gainParts[0]),
+                        gainParts.length >= 2 ? Float.parseFloat(gainParts[1]) : 1.0f,
+                        gainParts.length >= 3 ? Float.parseFloat(gainParts[2]) : 1.0f
+                };
+
+                // Apply atomically via SETCAM
+                mc.withLiveModeHandling(() ->
+                        mc.getSocketClient().setCameraSettings(individual, exposures, gains));
+
+                // Apply illumination if present
+                if (parts.length >= 3) {
+                    float illumPower = Float.parseFloat(parts[2]);
+                    if (illumPower > 0) {
+                        mc.getSocketClient().setIllumination(illumPower);
+                    }
+                }
+
+                Platform.runLater(() -> {
+                    cameraStatusLabel.setText("Preset applied");
+                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                    rebuildCameraModContent(modality);
+                });
+                logger.info("Applied camera preset: {}", presetStr);
+            } catch (Exception ex) {
+                logger.error("Failed to apply preset: {}", ex.getMessage());
+                Platform.runLater(() -> {
+                    cameraStatusLabel.setText("Load failed: " + ex.getMessage());
+                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                });
+            }
+        }, "Preset-Load");
+        t.setDaemon(true);
+        t.start();
     }
 
     // --- Shared UI helpers for camera presets ---
@@ -1052,6 +1500,7 @@ public class StageControlPanel extends VBox {
 
     /**
      * Apply a WB preset WITHOUT rotation (for brightfield and other non-PPM modalities).
+     * Uses atomic SETCAM command for single round-trip.
      */
     private void applyPresetNoRotation(String name, float[] exposures, float[] gains) {
         cameraStatusLabel.setText("Applying " + name + "...");
@@ -1068,11 +1517,10 @@ public class StageControlPanel extends VBox {
                             });
                             return;
                         }
-                        controller.withLiveModeHandling(() -> {
-                            controller.setCameraMode(exposures.length == 3);
-                            controller.setExposures(exposures);
-                            controller.setGains(gains);
-                        });
+                        // Use atomic SETCAM instead of sequential mode/exp/gain calls
+                        boolean individual = exposures.length == 3;
+                        controller.withLiveModeHandling(() ->
+                                controller.getSocketClient().setCameraSettings(individual, exposures, gains));
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Applied: " + name);
                             cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
