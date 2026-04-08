@@ -1664,6 +1664,23 @@ public class AcquisitionManager {
                     detection.getMeasurements().put("tile_time_ms", tileTime.doubleValue());
                 }
 
+                Number satR = (Number) entry.get("saturation_R_pct");
+                if (satR != null) {
+                    detection.getMeasurements().put("saturation_R_pct", satR.doubleValue());
+                }
+                Number satG = (Number) entry.get("saturation_G_pct");
+                if (satG != null) {
+                    detection.getMeasurements().put("saturation_G_pct", satG.doubleValue());
+                }
+                Number satB = (Number) entry.get("saturation_B_pct");
+                if (satB != null) {
+                    detection.getMeasurements().put("saturation_B_pct", satB.doubleValue());
+                }
+                Number satWorst = (Number) entry.get("saturation_worst_pct");
+                if (satWorst != null) {
+                    detection.getMeasurements().put("saturation_worst_pct", satWorst.doubleValue());
+                }
+
                 matched++;
             }
 
