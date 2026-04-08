@@ -204,6 +204,9 @@ public class BackgroundCollectionController {
                     BackgroundCollectionResult result = createResult();
                     if (result == null) return;
 
+                    // Remember the output path for next time
+                    saveOutputPath(result.outputPath());
+
                     // Save exposure changes to YAML config
                     saveExposureChangesToConfig(result.modality(), result.angleExposures());
 
@@ -807,15 +810,20 @@ public class BackgroundCollectionController {
     }
 
     private void setDefaultOutputPath() {
-        // Try to get default background folder from config or preferences
+        // Priority 1: Last-used path from preferences
+        String lastUsed = PersistentPreferences.getStringPreference("background.lastOutputPath", null);
+        if (lastUsed != null && !lastUsed.isEmpty() && new java.io.File(lastUsed).exists()) {
+            outputPathField.setText(lastUsed);
+            return;
+        }
+
+        // Priority 2: Config-derived default
         try {
             String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
             var configManager = MicroscopeConfigManager.getInstance(configPath);
 
-            // Look for default background folder in modality configuration
-            // Use the first available modality to get a default base folder
             Set<String> modalities = configManager.getAvailableModalities();
-            String defaultPath = "C:/qpsc_data/background_tiles"; // fallback
+            String defaultPath = "C:/qpsc_data/background_tiles";
 
             if (!modalities.isEmpty()) {
                 String firstModality = modalities.iterator().next();
@@ -830,6 +838,13 @@ public class BackgroundCollectionController {
         } catch (Exception e) {
             logger.warn("Could not determine default background path", e);
             outputPathField.setText("C:/qpsc_data/background_tiles");
+        }
+    }
+
+    /** Save the last-used output path so it persists across dialog invocations. */
+    private void saveOutputPath(String path) {
+        if (path != null && !path.isEmpty()) {
+            PersistentPreferences.setStringPreference("background.lastOutputPath", path);
         }
     }
 
