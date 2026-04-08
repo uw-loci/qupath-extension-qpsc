@@ -1040,7 +1040,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String exposures,
             String wbMode,
             String objective,
-            String detector)
+            String detector,
+            double targetIntensity)
             throws IOException {
 
         // Build BGACQUIRE-specific command message
@@ -1056,9 +1057,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if (detector != null && !detector.isEmpty()) {
             hwFlags += " --detector " + detector;
         }
+        // Target intensity for adaptive exposure (0 = use server default)
+        String targetFlag = "";
+        if (targetIntensity > 0) {
+            targetFlag = " --target-intensity " + String.format("%.0f", targetIntensity);
+        }
         String message = String.format(
-                "--yaml %s --output %s --modality %s --angles %s --exposures %s%s%s %s",
-                yamlPath, outputPath, modality, angles, exposures, wbFlags, hwFlags, END_MARKER);
+                "--yaml %s --output %s --modality %s --angles %s --exposures %s%s%s%s %s",
+                yamlPath, outputPath, modality, angles, exposures, wbFlags, hwFlags, targetFlag, END_MARKER);
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
 
         logger.info("Sending background acquisition command:");
@@ -4634,8 +4640,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if communication fails or profile not found
      */
     public void applyProfile(String profileName) throws IOException {
-        byte[] nameBytes = java.util.Arrays.copyOf(
-                profileName.getBytes(StandardCharsets.UTF_8), 32);
+        byte[] nameBytes = java.util.Arrays.copyOf(profileName.getBytes(StandardCharsets.UTF_8), 32);
 
         byte[] response = executeCommand(Command.APPLYPR, nameBytes, 8);
         String responseStr = new String(response, StandardCharsets.UTF_8).trim();

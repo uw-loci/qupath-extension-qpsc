@@ -74,7 +74,8 @@ public class BackgroundCollectionWorkflow {
                                             result.objective(),
                                             result.angleExposures(),
                                             result.outputPath(),
-                                            result.wbMode());
+                                            result.wbMode(),
+                                            result.targetIntensity());
                                 })
                                 .exceptionally(ex -> {
                                     logger.error("Background acquisition failed", ex);
@@ -103,8 +104,9 @@ public class BackgroundCollectionWorkflow {
      * when the dialog stays open during acquisition).
      */
     public static void executeBackgroundAcquisitionDirect(
-            String modality, String objective, List<AngleExposure> angleExposures, String outputPath, String wbMode) {
-        executeBackgroundAcquisition(modality, objective, angleExposures, outputPath, wbMode);
+            String modality, String objective, List<AngleExposure> angleExposures,
+            String outputPath, String wbMode, double targetIntensity) {
+        executeBackgroundAcquisition(modality, objective, angleExposures, outputPath, wbMode, targetIntensity);
     }
 
     /**
@@ -115,9 +117,11 @@ public class BackgroundCollectionWorkflow {
      * @param angleExposures List of angle-exposure pairs
      * @param outputPath Base output path for background images
      * @param wbMode White balance mode: "camera_awb", "simple", "per_angle", or "off"
+     * @param targetIntensity Target median intensity for adaptive exposure (0 = use server default)
      */
     private static void executeBackgroundAcquisition(
-            String modality, String objective, List<AngleExposure> angleExposures, String outputPath, String wbMode) {
+            String modality, String objective, List<AngleExposure> angleExposures,
+            String outputPath, String wbMode, double targetIntensity) {
         logger.info(
                 "Executing background acquisition for modality '{}' with {} angles, wbMode={}",
                 modality,
@@ -186,7 +190,8 @@ public class BackgroundCollectionWorkflow {
             // Call the synchronous background acquisition method
             // Returns map of final exposures actually used by Python (with adaptive exposure)
             Map<Double, Double> finalExposures = socketClient.startBackgroundAcquisition(
-                    configFileLocation, finalOutputPath, modality, angles, exposures, wbMode, objective, detector);
+                    configFileLocation, finalOutputPath, modality, angles, exposures, wbMode, objective, detector,
+                    targetIntensity);
 
             logger.info("Background acquisition completed successfully with {} final exposures", finalExposures.size());
 
@@ -237,7 +242,8 @@ public class BackgroundCollectionWorkflow {
             List<AngleExposure> angleExposures,
             String outputPath,
             boolean usePerAngleWhiteBalance,
-            String wbMode) {}
+            String wbMode,
+            double targetIntensity) {}
 
     /**
      * Save background collection defaults to a YAML file for future reference.

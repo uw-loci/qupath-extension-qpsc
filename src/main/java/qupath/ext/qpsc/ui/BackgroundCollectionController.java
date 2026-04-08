@@ -54,6 +54,8 @@ public class BackgroundCollectionController {
     private List<AngleExposure> currentAngleExposures = new ArrayList<>();
     private List<TextField> exposureFields = new ArrayList<>();
     private List<TextField> angleFields = new ArrayList<>(); // Track angle fields for PPM
+    private TextField targetIntensityField;
+    private HBox targetIntensityRow;
     private BackgroundSettingsReader.BackgroundSettings existingBackgroundSettings;
     private Label backgroundValidationLabel;
     private VBox wbValidityPanel;
@@ -225,7 +227,8 @@ public class BackgroundCollectionController {
                                                 result.objective(),
                                                 result.angleExposures(),
                                                 result.outputPath(),
-                                                result.wbMode());
+                                                result.wbMode(),
+                                                result.targetIntensity());
                             })
                             .thenRun(() -> {
                                 Platform.runLater(() -> {
@@ -389,6 +392,23 @@ public class BackgroundCollectionController {
             }
         });
 
+        // Target intensity field (for monochrome cameras only -- RGB cameras use WB calibration)
+        Label targetLabel = new Label("Target Intensity:");
+        targetLabel.setTooltip(new Tooltip(
+                "Target median pixel value for adaptive background exposure.\n"
+                + "For 16-bit cameras: typical range 30000-55000.\n"
+                + "For 8-bit cameras: typical range 150-240.\n"
+                + "Set to 0 to use server default."));
+        targetIntensityField = new TextField();
+        targetIntensityField.setPrefWidth(100);
+        targetIntensityField.setPromptText("e.g., 51200");
+        targetIntensityRow = new HBox(10, targetLabel, targetIntensityField);
+        targetIntensityRow.setAlignment(Pos.CENTER_LEFT);
+        // Pre-fill from detector config
+        loadTargetIntensityFromConfig();
+        // Initially hidden until we know the camera type
+        updateTargetIntensityVisibility();
+
         // Exposure controls (will be populated when modality AND objective are selected)
         Label exposureLabel = new Label("Exposure Times (ms):");
         exposureControlsPane = new VBox(10);
@@ -409,6 +429,7 @@ public class BackgroundCollectionController {
                         modalityPane,
                         wbModeRow,
                         wbValidityPanel,
+                        targetIntensityRow,
                         new Separator(),
                         exposureLabel,
                         backgroundValidationLabel,
@@ -841,6 +862,63 @@ public class BackgroundCollectionController {
         }
     }
 
+    /** Load target intensity from detector config (background_target_intensity field). */
+    @SuppressWarnings("unchecked")
+    private void loadTargetIntensityFromConfig() {
+        try {
+            String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            var configManager = MicroscopeConfigManager.getInstance(configPath);
+            Set<String> detectors = configManager.getHardwareDetectors();
+            if (detectors == null || detectors.isEmpty()) return;
+
+            String detId = detectors.iterator().next();
+            var merged = configManager.getMergedDetectorSection();
+            if (merged instanceof java.util.Map<?, ?> detMap) {
+                Object detCfg = detMap.get(detId);
+                if (detCfg instanceof java.util.Map<?, ?> cfg) {
+                    Object target = cfg.get("background_target_intensity");
+                    if (target instanceof Number n && n.doubleValue() > 0) {
+                        targetIntensityField.setText(String.valueOf(n.intValue()));
+                        logger.debug("Loaded background_target_intensity={} for {}", n, detId);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not load background target intensity: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Show target intensity field only for non-RGB cameras.
+     * RGB cameras (JAI) use WB calibration to determine background exposure.
+     */
+    @SuppressWarnings("unchecked")
+    private void updateTargetIntensityVisibility() {
+        boolean isRgbCamera = false;
+        try {
+            String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            var configManager = MicroscopeConfigManager.getInstance(configPath);
+            Set<String> detectors = configManager.getHardwareDetectors();
+            if (detectors != null && !detectors.isEmpty()) {
+                String detId = detectors.iterator().next();
+                var merged = configManager.getMergedDetectorSection();
+                if (merged instanceof java.util.Map<?, ?> detMap) {
+                    Object detCfg = detMap.get(detId);
+                    if (detCfg instanceof java.util.Map<?, ?> cfg) {
+                        Object cameraTypeObj = cfg.get("camera_type");
+                        String cameraType = cameraTypeObj != null ? cameraTypeObj.toString() : "generic";
+                        isRgbCamera = "jai".equalsIgnoreCase(cameraType);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not determine camera type: {}", e.getMessage());
+        }
+        // Hide for RGB cameras (WB calibration determines background exposure)
+        targetIntensityRow.setVisible(!isRgbCamera);
+        targetIntensityRow.setManaged(!isRgbCamera);
+    }
+
     /** Save the last-used output path so it persists across dialog invocations. */
     private void saveOutputPath(String path) {
         if (path != null && !path.isEmpty()) {
@@ -886,8 +964,19 @@ public class BackgroundCollectionController {
 
             logger.info("Background collection wbMode: {}", wbMode);
 
+            // Parse target intensity (0 = use server default)
+            double targetIntensity = 0;
+            String targetStr = targetIntensityField.getText().trim();
+            if (!targetStr.isEmpty()) {
+                try {
+                    targetIntensity = Double.parseDouble(targetStr);
+                } catch (NumberFormatException e) {
+                    logger.warn("Invalid target intensity '{}', using server default", targetStr);
+                }
+            }
+
             return new BackgroundCollectionResult(
-                    modality, objective, finalExposures, outputPath, usePerAngleWB, wbMode);
+                    modality, objective, finalExposures, outputPath, usePerAngleWB, wbMode, targetIntensity);
 
         } catch (Exception e) {
             logger.error("Error creating result", e);
