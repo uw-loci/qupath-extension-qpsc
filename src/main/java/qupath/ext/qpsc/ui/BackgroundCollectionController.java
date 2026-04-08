@@ -832,7 +832,7 @@ public class BackgroundCollectionController {
 
     private void setDefaultOutputPath() {
         // Priority 1: Last-used path from preferences
-        String lastUsed = PersistentPreferences.getStringPreference("background.lastOutputPath", null);
+        String lastUsed = PersistentPreferences.getLastBackgroundOutputPath();
         if (lastUsed != null && !lastUsed.isEmpty() && new java.io.File(lastUsed).exists()) {
             outputPathField.setText(lastUsed);
             return;
@@ -922,7 +922,8 @@ public class BackgroundCollectionController {
     /** Save the last-used output path so it persists across dialog invocations. */
     private void saveOutputPath(String path) {
         if (path != null && !path.isEmpty()) {
-            PersistentPreferences.setStringPreference("background.lastOutputPath", path);
+            PersistentPreferences.setLastBackgroundOutputPath(path);
+            logger.info("Saved background output path to preferences: {}", path);
         }
     }
 
@@ -1025,13 +1026,11 @@ public class BackgroundCollectionController {
                             return null;
                         });
             } else {
-                // Single-angle modality: use handler's normal angle retrieval
-                handler.getRotationAngles(modality, objective, detector)
-                        .thenAccept(future::complete)
-                        .exceptionally(ex -> {
-                            future.completeExceptionally(ex);
-                            return null;
-                        });
+                // Single-angle modality (brightfield, fluorescence, etc.):
+                // getRotationAngles() returns empty list, so create a single
+                // entry with angle=0 and a default exposure.
+                double defaultExp = getBackgroundExposureDefault(0.0, modality, objective, detector);
+                future.complete(List.of(new AngleExposure(0.0, defaultExp)));
             }
         } catch (Exception e) {
             future.completeExceptionally(e);

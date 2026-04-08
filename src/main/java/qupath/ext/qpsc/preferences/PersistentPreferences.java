@@ -1233,6 +1233,18 @@ public class PersistentPreferences {
         zStackProjectionProperty.set(v);
     }
 
+    // ================== BACKGROUND COLLECTION ==================
+    private static final StringProperty lastBackgroundOutputPath =
+            PathPrefs.createPersistentPreference("LastBackgroundOutputPath", "");
+
+    public static String getLastBackgroundOutputPath() {
+        return lastBackgroundOutputPath.get();
+    }
+
+    public static void setLastBackgroundOutputPath(String path) {
+        lastBackgroundOutputPath.set(path != null ? path : "");
+    }
+
     // ================== GENERIC DYNAMIC PREFERENCES ==================
     // For preferences with dynamic keys (e.g., camera presets keyed by modality+objective).
     // Uses Java Preferences API directly since PathPrefs requires compile-time key names.
