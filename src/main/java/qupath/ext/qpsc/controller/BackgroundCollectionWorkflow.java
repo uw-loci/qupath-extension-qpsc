@@ -215,6 +215,15 @@ public class BackgroundCollectionWorkflow {
             saveBackgroundDefaults(
                     finalOutputPath, modality, objective, detector, angleExposures, finalExposures, wbMode);
 
+            // Update the modality's background_correction config to enabled=true
+            // and base_folder set to the user's output path. This ensures the
+            // acquisition workflow will find and use the backgrounds.
+            try {
+                updateBackgroundCorrectionConfig(configFileLocation, modality, outputPath);
+            } catch (Exception cfgEx) {
+                logger.warn("Could not update background_correction config: {}", cfgEx.getMessage());
+            }
+
             // Reload config -- Python server may have written background exposure
             // data to imageprocessing_*.yml during background collection
             try {
@@ -268,6 +277,66 @@ public class BackgroundCollectionWorkflow {
      *
      * @param outputPath The directory where background images were saved
      * @param modality The modality used (e.g., "ppm")
+     * Updates the microscope config YAML to enable background correction for
+     * the given modality and set the base_folder path. This ensures that subsequent
+     * acquisitions will find and use the collected backgrounds.
+     *
+     * @param configPath Path to the microscope config YAML
+     * @param modality The modality name (e.g., "Brightfield")
+     * @param baseFolder The base output folder for background tiles
+     */
+    @SuppressWarnings("unchecked")
+    private static void updateBackgroundCorrectionConfig(String configPath, String modality, String baseFolder) {
+        try {
+            java.io.File configFile = new java.io.File(configPath);
+            if (!configFile.exists()) {
+                logger.warn("Config file not found for BG correction update: {}", configPath);
+                return;
+            }
+
+            Yaml yaml = new Yaml();
+            Map<String, Object> config;
+            try (FileReader reader = new FileReader(configFile, java.nio.charset.StandardCharsets.UTF_8)) {
+                config = yaml.load(reader);
+            }
+            if (config == null) return;
+
+            Map<String, Object> modalities = (Map<String, Object>) config.get("modalities");
+            if (modalities == null) return;
+
+            Map<String, Object> modalityCfg = (Map<String, Object>) modalities.get(modality);
+            if (modalityCfg == null) return;
+
+            Map<String, Object> bgCfg = (Map<String, Object>) modalityCfg.get("background_correction");
+            if (bgCfg == null) {
+                bgCfg = new LinkedHashMap<>();
+                modalityCfg.put("background_correction", bgCfg);
+            }
+
+            // Normalize path separators to forward slashes for cross-platform YAML
+            String normalizedFolder = baseFolder.replace('\\', '/');
+            bgCfg.put("enabled", true);
+            bgCfg.put("base_folder", normalizedFolder);
+            if (!bgCfg.containsKey("method")) {
+                bgCfg.put("method", "divide");
+            }
+
+            DumperOptions options = new DumperOptions();
+            options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+            options.setPrettyFlow(true);
+            Yaml dumper = new Yaml(options);
+            try (FileWriter writer = new FileWriter(configFile, java.nio.charset.StandardCharsets.UTF_8)) {
+                dumper.dump(config, writer);
+            }
+
+            logger.info("Updated background_correction for '{}': enabled=true, base_folder={}",
+                    modality, normalizedFolder);
+        } catch (Exception e) {
+            logger.error("Failed to update background_correction config: {}", e.getMessage());
+        }
+    }
+
+    /**
      * @param objective The objective ID used
      * @param detector The detector ID used
      * @param angleExposures The angle-exposure pairs originally requested (may differ from actual)
