@@ -18,6 +18,8 @@ import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.modality.ModalityHandler;
+import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.BackgroundCollectionController;
@@ -177,13 +179,27 @@ public class BackgroundCollectionWorkflow {
                 throw new IOException("Failed to create output directory: " + finalOutputPath);
             }
 
-            // Format angles and exposures
-            String angles = angleExposures.stream()
-                    .map(ae -> String.valueOf(ae.ticks()))
-                    .collect(java.util.stream.Collectors.joining(",", "(", ")"));
-            String exposures = angleExposures.stream()
-                    .map(ae -> String.valueOf(ae.exposureMs()))
-                    .collect(java.util.stream.Collectors.joining(",", "(", ")"));
+            // Format angles and exposures.
+            // Non-rotation modalities send empty angles -- the server will collect
+            // a single background at the current position. The exposure is still
+            // sent as a starting point for adaptive exposure.
+            ModalityHandler handler = ModalityRegistry.getHandler(modality);
+            boolean isRotation = handler.getDefaultAngleCount() > 1;
+            String angles;
+            String exposures;
+            if (isRotation) {
+                angles = angleExposures.stream()
+                        .map(ae -> String.valueOf(ae.ticks()))
+                        .collect(java.util.stream.Collectors.joining(",", "(", ")"));
+                exposures = angleExposures.stream()
+                        .map(ae -> String.valueOf(ae.exposureMs()))
+                        .collect(java.util.stream.Collectors.joining(",", "(", ")"));
+            } else {
+                // No rotation angles -- just send the starting exposure
+                angles = "()";
+                exposures = angleExposures.isEmpty() ? "(50.0)"
+                        : "(" + angleExposures.get(0).exposureMs() + ")";
+            }
 
             logger.info("Starting background acquisition with angles: {}, exposures: {}", angles, exposures);
 

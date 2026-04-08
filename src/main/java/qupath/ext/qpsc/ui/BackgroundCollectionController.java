@@ -577,6 +577,39 @@ public class BackgroundCollectionController {
                         currentAngleExposures.clear();
                         currentAngleExposures.addAll(exposuresToUse);
 
+                        // Non-rotation modalities (brightfield, fluorescence):
+                        // Show a simple exposure field with no angle controls.
+                        // The server collects a single background at current position.
+                        if (exposuresToUse.isEmpty()) {
+                            double defaultExp = 50.0; // Starting point for adaptive exposure
+                            try {
+                                String cfgPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                                var cfgMgr = MicroscopeConfigManager.getInstance(cfgPath);
+                                var exps = cfgMgr.getModalityExposures(modality, objective, finalDetector);
+                                if (exps != null) {
+                                    Object single = exps.get("single");
+                                    if (single instanceof Number n) defaultExp = n.doubleValue();
+                                }
+                            } catch (Exception ex) {
+                                logger.debug("Could not load default exposure from config: {}", ex.getMessage());
+                            }
+
+                            Label expLabel = new Label("Starting Exposure (ms):");
+                            TextField expField = new TextField(String.format("%.1f", defaultExp));
+                            expField.setPrefWidth(100);
+                            exposureFields.add(expField);
+                            HBox expRow = new HBox(10, expLabel, expField, new Label("ms"));
+                            expRow.setAlignment(Pos.CENTER_LEFT);
+
+                            Label note = new Label("Adaptive exposure will converge to the target intensity.");
+                            note.setStyle("-fx-text-fill: gray; -fx-font-style: italic; -fx-font-size: 11px;");
+                            note.setWrapText(true);
+
+                            exposureControlsPane.getChildren().addAll(expRow, note);
+                            logger.debug("Single-exposure control added for non-rotation modality");
+                            return;
+                        }
+
                         // Create exposure controls with angle editing for multi-angle modalities
                         boolean isMultiAngle = exposuresToUse.size() > 1;
                         GridPane exposureGrid = new GridPane();
@@ -939,23 +972,37 @@ public class BackgroundCollectionController {
 
             // Validate exposure values and angles
             List<AngleExposure> finalExposures = new ArrayList<>();
-            for (int i = 0; i < exposureFields.size(); i++) {
+            if (currentAngleExposures.isEmpty() && !exposureFields.isEmpty()) {
+                // Non-rotation modality (BF, fluorescence): just the starting exposure, no angles
                 try {
-                    double exposure = Double.parseDouble(exposureFields.get(i).getText());
-                    double angle;
-
-                    // For multi-angle modalities, read angle from editable field; for others, use stored angle
-                    if (!angleFields.isEmpty() && i < angleFields.size()) {
-                        angle = Double.parseDouble(angleFields.get(i).getText());
-                    } else {
-                        angle = currentAngleExposures.get(i).ticks();
-                    }
-
-                    finalExposures.add(new AngleExposure(angle, exposure));
+                    double exposure = Double.parseDouble(exposureFields.get(0).getText());
+                    // Empty finalExposures list signals "no angles" to the workflow
+                    // The exposure is passed via the exposures string to the server
+                    finalExposures.add(new AngleExposure(0, exposure));
                 } catch (NumberFormatException e) {
                     Dialogs.showErrorMessage(
-                            "Invalid Exposure", "Please enter valid numeric values for all exposure times.");
+                            "Invalid Exposure", "Please enter a valid numeric exposure value.");
                     return null;
+                }
+            } else {
+                for (int i = 0; i < exposureFields.size(); i++) {
+                    try {
+                        double exposure = Double.parseDouble(exposureFields.get(i).getText());
+                        double angle;
+
+                        // For multi-angle modalities, read angle from editable field
+                        if (!angleFields.isEmpty() && i < angleFields.size()) {
+                            angle = Double.parseDouble(angleFields.get(i).getText());
+                        } else {
+                            angle = currentAngleExposures.get(i).ticks();
+                        }
+
+                        finalExposures.add(new AngleExposure(angle, exposure));
+                    } catch (NumberFormatException e) {
+                        Dialogs.showErrorMessage(
+                                "Invalid Exposure", "Please enter valid numeric values for all exposure times.");
+                        return null;
+                    }
                 }
             }
 
@@ -1027,10 +1074,10 @@ public class BackgroundCollectionController {
                         });
             } else {
                 // Single-angle modality (brightfield, fluorescence, etc.):
-                // getRotationAngles() returns empty list, so create a single
-                // entry with angle=0 and a default exposure.
-                double defaultExp = getBackgroundExposureDefault(0.0, modality, objective, detector);
-                future.complete(List.of(new AngleExposure(0.0, defaultExp)));
+                // No rotation angles. Return empty list -- the dialog will show
+                // a single exposure field without angle controls, and the server
+                // handles the no-angles case by collecting one background image.
+                future.complete(List.of());
             }
         } catch (Exception e) {
             future.completeExceptionally(e);
