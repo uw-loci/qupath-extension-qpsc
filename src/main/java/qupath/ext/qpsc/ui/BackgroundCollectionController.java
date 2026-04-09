@@ -56,6 +56,7 @@ public class BackgroundCollectionController {
     private List<TextField> angleFields = new ArrayList<>(); // Track angle fields for PPM
     private TextField targetIntensityField;
     private HBox targetIntensityRow;
+    private HBox wbModeRow;
     private BackgroundSettingsReader.BackgroundSettings existingBackgroundSettings;
     private Label backgroundValidationLabel;
     private VBox wbValidityPanel;
@@ -376,7 +377,7 @@ public class BackgroundCollectionController {
                         + "  Per-angle (PPM) - Independent calibration per angle (default)\n\n"
                         + "Backgrounds must be collected with the SAME mode used for acquisition."));
 
-        HBox wbModeRow = new HBox(10, wbModeLabel, wbModeComboBox);
+        wbModeRow = new HBox(10, wbModeLabel, wbModeComboBox);
         wbModeRow.setAlignment(Pos.CENTER_LEFT);
 
         // Listener to reload exposure values when WB mode changes and persist selection
@@ -408,6 +409,8 @@ public class BackgroundCollectionController {
         loadTargetIntensityFromConfig();
         // Initially hidden until we know the camera type
         updateTargetIntensityVisibility();
+        // Hide WB mode selector and per-mode validity panel for monochrome cameras
+        updateWbControlsVisibility();
 
         // Exposure controls (will be populated when modality AND objective are selected)
         Label exposureLabel = new Label("Exposure Times (ms):");
@@ -754,6 +757,13 @@ public class BackgroundCollectionController {
             return;
         }
 
+        // Skip entirely for monochrome cameras -- WB modes don't apply.
+        if (!isRgbCamera()) {
+            wbValidityPanel.setVisible(false);
+            wbValidityPanel.setManaged(false);
+            return;
+        }
+
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
@@ -922,12 +932,12 @@ public class BackgroundCollectionController {
     }
 
     /**
-     * Show target intensity field only for non-RGB cameras.
-     * RGB cameras (JAI) use WB calibration to determine background exposure.
+     * Returns true if the active microscope's detector is an RGB camera (JAI).
+     * Monochrome cameras have no per-channel exposures, no AWB, and no per-angle
+     * white balance concepts -- UI elements related to those should be hidden.
      */
     @SuppressWarnings("unchecked")
-    private void updateTargetIntensityVisibility() {
-        boolean isRgbCamera = false;
+    private boolean isRgbCamera() {
         try {
             String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
             var configManager = MicroscopeConfigManager.getInstance(configPath);
@@ -940,16 +950,49 @@ public class BackgroundCollectionController {
                     if (detCfg instanceof java.util.Map<?, ?> cfg) {
                         Object cameraTypeObj = cfg.get("camera_type");
                         String cameraType = cameraTypeObj != null ? cameraTypeObj.toString() : "generic";
-                        isRgbCamera = "jai".equalsIgnoreCase(cameraType);
+                        return "jai".equalsIgnoreCase(cameraType);
                     }
                 }
             }
         } catch (Exception e) {
             logger.debug("Could not determine camera type: {}", e.getMessage());
         }
+        return false;
+    }
+
+    /**
+     * Show target intensity field only for non-RGB cameras.
+     * RGB cameras (JAI) use WB calibration to determine background exposure.
+     */
+    private void updateTargetIntensityVisibility() {
+        boolean isRgb = isRgbCamera();
         // Hide for RGB cameras (WB calibration determines background exposure)
-        targetIntensityRow.setVisible(!isRgbCamera);
-        targetIntensityRow.setManaged(!isRgbCamera);
+        targetIntensityRow.setVisible(!isRgb);
+        targetIntensityRow.setManaged(!isRgb);
+    }
+
+    /**
+     * Hide WB mode selector and per-mode validity panel for monochrome cameras.
+     * Monochrome cameras have no color channels, so "Camera AWB", "Simple (90deg)",
+     * and "Per-angle (PPM)" modes are all meaningless -- only "Off" applies. We force
+     * the stored mode to "Off" and hide the controls entirely so the user isn't
+     * presented with inapplicable color-coded options.
+     */
+    private void updateWbControlsVisibility() {
+        boolean isRgb = isRgbCamera();
+        if (wbModeRow != null) {
+            wbModeRow.setVisible(isRgb);
+            wbModeRow.setManaged(isRgb);
+        }
+        if (wbValidityPanel != null) {
+            wbValidityPanel.setVisible(isRgb);
+            wbValidityPanel.setManaged(isRgb);
+        }
+        // For monochrome cameras, force WB mode to "Off" so downstream code sees a
+        // consistent value regardless of whatever was saved in preferences.
+        if (!isRgb && wbModeComboBox != null && !"Off".equals(wbModeComboBox.getValue())) {
+            wbModeComboBox.setValue("Off");
+        }
     }
 
     /** Save the last-used output path so it persists across dialog invocations. */

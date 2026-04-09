@@ -168,6 +168,19 @@ public class CalibrationChecker {
                 return new StepStatus(Status.WARNING, "No background correction folder configured for " + modality);
             }
 
+            // Monochrome cameras have no WB modes -- background correction is a simple
+            // "files exist or they don't" check. BackgroundValidityChecker returns
+            // NOT_NEEDED for the OFF mode regardless of whether files exist on disk,
+            // so for monochrome cameras we check disk directly instead of iterating modes.
+            if (!mgr.isJAICamera(detector)) {
+                var allBgs = qupath.ext.qpsc.utilities.BackgroundSettingsReader.findAllBackgroundSettings(
+                        bgFolder, modality, objective, detector);
+                if (allBgs.isEmpty()) {
+                    return new StepStatus(Status.WARNING, "No backgrounds -- recommended before acquisition");
+                }
+                return new StepStatus(Status.READY, "Backgrounds collected");
+            }
+
             // Use BackgroundValidityChecker to cross-validate WB vs backgrounds
             var allModeResults = BackgroundValidityChecker.checkAllModes(bgFolder, modality, objective, detector, mgr);
 

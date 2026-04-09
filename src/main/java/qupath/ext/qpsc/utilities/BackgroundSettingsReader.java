@@ -95,7 +95,13 @@ public class BackgroundSettingsReader {
                         baseBackgroundFolder, detector + File.separator + modality + File.separator + magnification)
                 .getPath();
 
-        if (wbMode != null && !wbMode.isEmpty()) {
+        // "off" is the default WB state and applies to all monochrome cameras;
+        // it does not need its own subdirectory (a /off/ folder just adds
+        // clutter for users whose camera has no color channels). Only append
+        // a WB-mode subdirectory for genuine color-WB modes.
+        boolean useWbSubdir = wbMode != null && !wbMode.isEmpty() && !"off".equalsIgnoreCase(wbMode);
+
+        if (useWbSubdir) {
             // Check WB-mode subfolder first
             File wbSettings = new File(basePath + File.separator + wbMode, "background_settings.yml");
             if (wbSettings.exists()) {
@@ -112,14 +118,15 @@ public class BackgroundSettingsReader {
             return basePath;
         }
 
-        // Neither exists -- return WB subfolder for new collections, or basePath if no wbMode
-        if (wbMode != null && !wbMode.isEmpty()) {
+        // Neither exists -- return WB subfolder for new color collections,
+        // or the flat basePath for "off" mode / new monochrome collections.
+        if (useWbSubdir) {
             String newPath = new File(basePath, wbMode).getPath();
             logger.debug("No existing backgrounds found; returning WB subfolder for new collection: {}", newPath);
             return newPath;
         }
 
-        logger.debug("No existing backgrounds found; returning legacy path: {}", basePath);
+        logger.debug("No existing backgrounds found; returning flat path for off/monochrome: {}", basePath);
         return basePath;
     }
 
