@@ -838,9 +838,12 @@ public class MicroscopeAlignmentWorkflow {
                 runTissueDetectionScript(gui);
             }
 
-            // Get stage axis inversion settings (not optical flip -- see CLAUDE.md)
-            boolean stageInvertedX = QPPreferenceDialog.getStageInvertedXProperty();
-            boolean stageInvertedY = QPPreferenceDialog.getStageInvertedYProperty();
+            // Get stage axis inversion settings (not optical flip -- see CLAUDE.md).
+            // Read via the composite StagePolarity enum so all call sites agree.
+            qupath.ext.qpsc.utilities.StagePolarity stagePolarity =
+                    QPPreferenceDialog.getStagePolarityProperty();
+            boolean stageInvertedX = stagePolarity.invertX;
+            boolean stageInvertedY = stagePolarity.invertY;
 
             // Get macro pixel size using the SELECTED SCANNER config
             double macroPixelSize;

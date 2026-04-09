@@ -187,9 +187,13 @@ public class ManualAlignmentPath {
                 state.projectInfo.getImagingModeWithIndex(),
                 state.pixelSize);
 
-        // Get stage inversion settings from preferences for the alignment UI
-        boolean stageInvertedX = QPPreferenceDialog.getStageInvertedXProperty();
-        boolean stageInvertedY = QPPreferenceDialog.getStageInvertedYProperty();
+        // Get stage inversion settings from preferences for the alignment UI.
+        // The UI uses these to interpret the operator's click direction; the
+        // transform class is the canonical reader so all call sites agree.
+        qupath.ext.qpsc.utilities.StagePolarity stagePolarity =
+                QPPreferenceDialog.getStagePolarityProperty();
+        boolean stageInvertedX = stagePolarity.invertX;
+        boolean stageInvertedY = stagePolarity.invertY;
 
         // Show manual alignment UI
         return AffineTransformationController.setupAffineTransformationAndValidationGUI(

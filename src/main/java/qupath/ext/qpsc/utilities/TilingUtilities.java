@@ -404,10 +404,19 @@ public class TilingUtilities {
         double frameWidthPixels = frameWidthMicrons / imagePixelSize;
         double frameHeightPixels = frameHeightMicrons / imagePixelSize;
 
-        // Get tiling parameters from preferences
+        // Get tiling parameters from preferences.
+        //
+        // Stage polarity here is used ONLY to decide the serpentine scan
+        // iteration order (i.e. which physical tile becomes "0.tif" vs
+        // "N.tif"). It is correctness-neutral for the stitched output
+        // because the set of tile positions is geometrically determined
+        // by the bounding box alone. Go through the transform rather
+        // than reading the booleans directly so the preferred access
+        // pattern stays consistent across the codebase.
         double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
-        boolean stageInvertedX = QPPreferenceDialog.getStageInvertedXProperty();
-        boolean stageInvertedY = QPPreferenceDialog.getStageInvertedYProperty();
+        StagePolarity stagePolarity = QPPreferenceDialog.getStagePolarityProperty();
+        boolean stageInvertedX = stagePolarity.invertX;
+        boolean stageInvertedY = stagePolarity.invertY;
 
         logger.info(
                 "Frame size in QuPath pixels: {} x {} ({}% overlap)",

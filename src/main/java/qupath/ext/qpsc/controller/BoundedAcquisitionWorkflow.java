@@ -101,8 +101,12 @@ public class BoundedAcquisitionWorkflow {
             // Read persistent prefs
             String prefProjectsFolder = QPPreferenceDialog.getProjectsFolderProperty();
             double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
-            boolean stageInvertedX = QPPreferenceDialog.getStageInvertedXProperty();
-            boolean stageInvertedY = QPPreferenceDialog.getStageInvertedYProperty();
+            // Stage polarity is read via the composite StagePolarity enum
+            // so it matches what the rest of the refactored pipeline sees.
+            qupath.ext.qpsc.utilities.StagePolarity stagePolarity =
+                    QPPreferenceDialog.getStagePolarityProperty();
+            boolean stageInvertedX = stagePolarity.invertX;
+            boolean stageInvertedY = stagePolarity.invertY;
 
             // Create/open the QuPath project
             QuPathGUI qupathGUI = QPEx.getQuPath();

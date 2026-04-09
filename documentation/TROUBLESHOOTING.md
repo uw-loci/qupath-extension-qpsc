@@ -226,20 +226,61 @@ taskkill /PID <process_id> /F
 - Mark reference points in QuPath and on microscope stage
 - System will calculate the correct transformation automatically
 
-#### Q: What does "Invert X" and "Invert Y" mean?
+#### Q: What does "Inverted X stage" / "Inverted Y stage" mean?
 
-**A:** These flip the coordinate system between QuPath and the microscope stage:
+**A:** These describe the hardware wiring polarity of the stage — whether a positive MicroManager stage command moves the physical stage in the lab's positive or negative direction on each axis.
 
-- **Invert X:** Flips left/right (QuPath left = stage right)
-- **Invert Y:** Flips up/down (QuPath up = stage down)
+- **Inverted X stage = ON:** MM `+X` command moves the stage in lab `-X` (i.e. the stage encoder / device adapter is wired backwards on the X axis).
+- **Inverted Y stage = ON:** Same for the Y axis.
 
-Most microscopes need **Invert Y = ON** because stage coordinates increase downward while QuPath coordinates increase upward.
+These are NOT the same as macro image flip (which is about how the loaded macro image looks on screen) or camera orientation (which is about how the live image is oriented).
 
-**How to find the right settings:**
-1. Mark a point in QuPath (note its X,Y position)
-2. Start a tiny test acquisition at that point
-3. If the acquired region is in the wrong place, try different flip settings
-4. Save the working settings - they'll be remembered
+**To diagnose:** run this in a MicroManager script:
+
+```java
+core.setXYPosition(core.getXPosition() + 100, core.getYPosition());
+```
+
+Observe which direction the physical stage actually moves. If it moves in the lab `-X` direction (from the operator's neutral viewpoint), enable "Inverted X stage". Same procedure for Y.
+
+#### Q: Arrow buttons, joystick, or double-click-to-center move the wrong way
+
+**A:** This is the "stage-vs-image sign math" problem. Starting with commit `e3cb133` (2026-04-09), all three of these — plus the stitcher's tile placement — go through a single `StageImageTransform` that composes two independent settings:
+
+1. **Stage polarity** (Inverted X / Y stage) — hardware wiring
+2. **Camera orientation** — how the camera mounts / optical path flips the image
+
+**Diagnosis procedure:**
+
+1. Open the QuPath log (Help → Show Log) and find the startup line:
+   ```
+   Live-view coordinate transform at startup:
+     StageImageTransform[stage=..., camera=...]
+       Arrow right (pan right) -> mmDelta (..., ...)
+       Arrow up    (pan up)    -> mmDelta (..., ...)
+       ...
+   ```
+   This tells you exactly what the extension thinks your scope is configured as.
+
+2. In the Live Viewer, test the four gestures:
+   - Arrow right button (with "Sample Movement" checked)
+   - Arrow up button
+   - Joystick drag upward
+   - Double-click on a feature that's currently visible but off-centre
+
+3. Each should produce the "obvious" visual direction. If they don't:
+   - **Only X is wrong** → toggle "Inverted X stage" in preferences
+   - **Only Y is wrong** → toggle "Inverted Y stage"
+   - **Both are wrong** → toggle both
+   - **One works but the other looks "rotated" or "mirrored"** → change "Camera orientation" from `NORMAL` to one of `FLIP_H`, `FLIP_V`, or `ROT_180`
+
+4. Acquire a small 2×2 bounding box test and verify that the stitched tiles are in the correct corners.
+
+**Note on Camera orientation:**
+- `NORMAL`, `FLIP_H`, `FLIP_V`, `ROT_180` are the four axis-aligned values. These work everywhere.
+- `ROT_90_CW`, `ROT_90_CCW`, `TRANSPOSE`, `ANTI_TRANSPOSE` are the rotation/transpose cases. These work for arrow / joystick / click but the stitcher does NOT fully support them — stitched output will be mis-oriented. If you actually have a rotated camera, file an issue and request full rotation support.
+
+**Design doc:** `claude-reports/2026-04-09_stage-image-transform-refactor.md`
 
 #### Q: Coordinate transformation fails - "No valid transformation found"
 
