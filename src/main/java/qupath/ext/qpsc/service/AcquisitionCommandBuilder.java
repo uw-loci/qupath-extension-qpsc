@@ -31,6 +31,12 @@ public class AcquisitionCommandBuilder {
     // Optional parameters for repeated acquisitions (e.g., rotation angles)
     private List<AngleExposure> angleExposures;
 
+    // Marks this as a non-rotation modality (brightfield, fluorescence, laser
+    // scanning without angles). When true, the builder omits --angles entirely
+    // and sends --exposures from the first entry in angleExposures so the
+    // Python single-image path can apply it. Rotation angles are not sent.
+    private boolean nonRotation = false;
+
     // Background correction parameters
     private boolean backgroundCorrectionEnabled = false;
     private String backgroundCorrectionMethod;
@@ -132,6 +138,22 @@ public class AcquisitionCommandBuilder {
      */
     public AcquisitionCommandBuilder angleExposures(List<AngleExposure> angleExposures) {
         this.angleExposures = angleExposures;
+        return this;
+    }
+
+    /**
+     * Marks the acquisition as non-rotation (brightfield, fluorescence, etc.).
+     *
+     * <p>When set, the builder emits only {@code --exposures} using the first
+     * entry in the {@code angleExposures} list and omits {@code --angles}
+     * entirely. The Python single-image path takes the tile at the current
+     * stage position without any rotation stage movement.
+     *
+     * @param nonRotation {@code true} if this is a single-snap modality
+     * @return this builder instance for method chaining
+     */
+    public AcquisitionCommandBuilder nonRotation(boolean nonRotation) {
+        this.nonRotation = nonRotation;
         return this;
     }
 
@@ -378,19 +400,28 @@ public class AcquisitionCommandBuilder {
 
         // Add angle/exposure parameters
         if (angleExposures != null && !angleExposures.isEmpty()) {
-            // Format angles as parenthesized comma-separated list
-            String anglesStr = angleExposures.stream()
-                    .map(ae -> String.valueOf(ae.ticks()))
-                    .collect(Collectors.joining(",", "(", ")"));
-            args.add("--angles");
-            args.add(anglesStr);
+            if (nonRotation) {
+                // Non-rotation modality (BF, fluorescence): send only the
+                // exposure from the first entry, omit --angles. Python side
+                // treats empty --angles as single-image-per-tile.
+                double exposureMs = angleExposures.get(0).exposureMs();
+                args.add("--exposures");
+                args.add("(" + exposureMs + ")");
+                logger.debug("Non-rotation acquisition: sending exposure {} ms without --angles", exposureMs);
+            } else {
+                // Rotation modality (PPM, etc.): send both lists in lockstep.
+                String anglesStr = angleExposures.stream()
+                        .map(ae -> String.valueOf(ae.ticks()))
+                        .collect(Collectors.joining(",", "(", ")"));
+                args.add("--angles");
+                args.add(anglesStr);
 
-            // Format exposures as parenthesized comma-separated list
-            String exposuresStr = angleExposures.stream()
-                    .map(ae -> String.valueOf(ae.exposureMs()))
-                    .collect(Collectors.joining(",", "(", ")"));
-            args.add("--exposures");
-            args.add(exposuresStr);
+                String exposuresStr = angleExposures.stream()
+                        .map(ae -> String.valueOf(ae.exposureMs()))
+                        .collect(Collectors.joining(",", "(", ")"));
+                args.add("--exposures");
+                args.add(exposuresStr);
+            }
         }
 
         // Add background correction parameters

@@ -3,6 +3,7 @@ package qupath.ext.qpsc.modality;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.lib.images.ImageData;
 
@@ -25,8 +26,12 @@ public class BrightfieldModalityHandler implements ModalityHandler {
     @Override
     public CompletableFuture<List<AngleExposure>> getRotationAngles(
             String modalityName, String objective, String detector) {
-        // Brightfield: single image per tile, no rotation
-        return CompletableFuture.completedFuture(List.of());
+        // Brightfield: single image per tile, no rotation. We still return a
+        // single AngleExposure with angle=0 so downstream code has an exposure
+        // value to use; the AcquisitionCommandBuilder's nonRotation flag
+        // prevents --angles from being sent, while --exposures uses this value.
+        double exposureMs = PersistentPreferences.getLastUnifiedExposureMs();
+        return CompletableFuture.completedFuture(List.of(new AngleExposure(0.0, exposureMs)));
     }
 
     @Override

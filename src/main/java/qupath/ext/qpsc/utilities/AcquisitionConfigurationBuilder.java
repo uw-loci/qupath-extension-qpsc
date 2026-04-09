@@ -133,6 +133,12 @@ public class AcquisitionConfigurationBuilder {
             processingSteps.add("background_correction");
         }
 
+        // Determine whether this modality is non-rotation (BF, fluorescence,
+        // etc.) so the command builder can omit --angles and send only the
+        // unified exposure via --exposures.
+        ModalityHandler modalityHandler = ModalityRegistry.getHandler(baseModality);
+        boolean isNonRotation = modalityHandler != null && modalityHandler.getDefaultAngleCount() <= 1;
+
         // Build enhanced acquisition command
         // White balance mode is set later by the caller via .wbMode() from the dialog selection.
         // Use the sampleName parameter (from ProjectInfo) - NOT sample.sampleName() which may differ
@@ -143,6 +149,7 @@ public class AcquisitionConfigurationBuilder {
                 .scanType(modalityWithIndex)
                 .regionName(regionName)
                 .angleExposures(angleExposures)
+                .nonRotation(isNonRotation)
                 .hardware(objective, detector, explicitPixelSize)
                 .processingPipeline(processingSteps);
 

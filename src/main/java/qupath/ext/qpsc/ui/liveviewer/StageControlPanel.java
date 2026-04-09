@@ -858,8 +858,10 @@ public class StageControlPanel extends VBox {
             buildPpmCameraContent(modality);
         } else if (norm.startsWith("brightfield") || norm.startsWith("bf")) {
             buildBrightfieldCameraContent(modality);
-        } else if (norm.startsWith("fl") || norm.startsWith("fluorescence")
-                || norm.startsWith("widefield") || norm.startsWith("epi")) {
+        } else if (norm.startsWith("fl")
+                || norm.startsWith("fluorescence")
+                || norm.startsWith("widefield")
+                || norm.startsWith("epi")) {
             buildFluorescenceCameraContent(modality);
         } else {
             buildGenericCameraContent(modality);
@@ -1070,6 +1072,9 @@ public class StageControlPanel extends VBox {
             try {
                 float exp = Float.parseFloat(expField.getText().trim());
                 MicroscopeController.getInstance().getSocketClient().setExposures(new float[] {exp});
+                // Persist so the Bounded Acquisition workflow inherits this
+                // value when building the command for non-rotation modalities.
+                qupath.ext.qpsc.preferences.PersistentPreferences.setLastUnifiedExposureMs(exp);
                 cameraStatusLabel.setText("Exposure: " + exp + " ms");
                 cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
                 logger.info("Set exposure to {} ms", exp);
@@ -1206,17 +1211,19 @@ public class StageControlPanel extends VBox {
 
     /** Send illumination power to the server in a background thread. */
     private void sendIlluminationPower(float power) {
-        Thread t = new Thread(() -> {
-            try {
-                MicroscopeController mc = MicroscopeController.getInstance();
-                if (mc != null && mc.isConnected()) {
-                    mc.getSocketClient().setIllumination(power);
-                    logger.debug("Set illumination power to {}", power);
-                }
-            } catch (Exception ex) {
-                logger.warn("Failed to set illumination: {}", ex.getMessage());
-            }
-        }, "Illum-Set");
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        MicroscopeController mc = MicroscopeController.getInstance();
+                        if (mc != null && mc.isConnected()) {
+                            mc.getSocketClient().setIllumination(power);
+                            logger.debug("Set illumination power to {}", power);
+                        }
+                    } catch (Exception ex) {
+                        logger.warn("Failed to set illumination: {}", ex.getMessage());
+                    }
+                },
+                "Illum-Set");
         t.setDaemon(true);
         t.start();
     }
@@ -1242,7 +1249,8 @@ public class StageControlPanel extends VBox {
                         String profModStr = profModality.toString().toLowerCase();
                         // Match if profile modality starts with same prefix as current modality
                         if (profModStr.startsWith(modalityLower.substring(0, Math.min(2, modalityLower.length())))
-                                || modalityLower.startsWith(profModStr.substring(0, Math.min(2, profModStr.length())))) {
+                                || modalityLower.startsWith(
+                                        profModStr.substring(0, Math.min(2, profModStr.length())))) {
                             matchingProfiles.add(profileName);
                         }
                     }
@@ -1276,23 +1284,26 @@ public class StageControlPanel extends VBox {
                 cameraStatusLabel.setText("Applying profile: " + selectedProfile + "...");
                 cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
 
-                Thread t = new Thread(() -> {
-                    try {
-                        MicroscopeController mc = MicroscopeController.getInstance();
-                        if (mc == null || !mc.isConnected()) throw new Exception("Not connected");
-                        mc.withLiveModeHandling(() -> mc.getSocketClient().applyProfile(selectedProfile));
-                        Platform.runLater(() -> {
-                            cameraStatusLabel.setText("Profile applied: " + selectedProfile);
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
-                        });
-                    } catch (Exception ex) {
-                        logger.error("Failed to apply profile '{}': {}", selectedProfile, ex.getMessage());
-                        Platform.runLater(() -> {
-                            cameraStatusLabel.setText("Failed: " + ex.getMessage());
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
-                        });
-                    }
-                }, "Profile-Apply");
+                Thread t = new Thread(
+                        () -> {
+                            try {
+                                MicroscopeController mc = MicroscopeController.getInstance();
+                                if (mc == null || !mc.isConnected()) throw new Exception("Not connected");
+                                mc.withLiveModeHandling(
+                                        () -> mc.getSocketClient().applyProfile(selectedProfile));
+                                Platform.runLater(() -> {
+                                    cameraStatusLabel.setText("Profile applied: " + selectedProfile);
+                                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                                });
+                            } catch (Exception ex) {
+                                logger.error("Failed to apply profile '{}': {}", selectedProfile, ex.getMessage());
+                                Platform.runLater(() -> {
+                                    cameraStatusLabel.setText("Failed: " + ex.getMessage());
+                                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                                });
+                            }
+                        },
+                        "Profile-Apply");
                 t.setDaemon(true);
                 t.start();
             });
@@ -1343,48 +1354,53 @@ public class StageControlPanel extends VBox {
 
     /** Save current camera state (exposure + gain + illumination) as a preset. */
     private void saveCurrentPreset(String modality) {
-        Thread t = new Thread(() -> {
-            try {
-                MicroscopeController mc = MicroscopeController.getInstance();
-                if (mc == null || !mc.isConnected()) throw new Exception("Not connected");
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        MicroscopeController mc = MicroscopeController.getInstance();
+                        if (mc == null || !mc.isConnected()) throw new Exception("Not connected");
 
-                var expResult = mc.getSocketClient().getExposures();
-                var gainResult = mc.getSocketClient().getGains();
-                var illumResult = mc.getSocketClient().getIllumination();
+                        var expResult = mc.getSocketClient().getExposures();
+                        var gainResult = mc.getSocketClient().getGains();
+                        var illumResult = mc.getSocketClient().getIllumination();
 
-                // Build simple JSON-like string: exp|gain|illum
-                StringBuilder sb = new StringBuilder();
-                sb.append(String.format("%.2f", expResult.unified()));
-                if (expResult.isPerChannel()) {
-                    sb.append(String.format(",%.2f,%.2f,%.2f", expResult.red(), expResult.green(), expResult.blue()));
-                }
-                sb.append("|");
-                sb.append(String.format("%.2f,%.2f,%.2f", gainResult.unifiedGain(), gainResult.analogRed(), gainResult.analogBlue()));
-                sb.append("|");
-                if (illumResult.available()) {
-                    sb.append(String.format("%.1f", illumResult.power()));
-                } else {
-                    sb.append("0");
-                }
+                        // Build simple JSON-like string: exp|gain|illum
+                        StringBuilder sb = new StringBuilder();
+                        sb.append(String.format("%.2f", expResult.unified()));
+                        if (expResult.isPerChannel()) {
+                            sb.append(String.format(
+                                    ",%.2f,%.2f,%.2f", expResult.red(), expResult.green(), expResult.blue()));
+                        }
+                        sb.append("|");
+                        sb.append(String.format(
+                                "%.2f,%.2f,%.2f",
+                                gainResult.unifiedGain(), gainResult.analogRed(), gainResult.analogBlue()));
+                        sb.append("|");
+                        if (illumResult.available()) {
+                            sb.append(String.format("%.1f", illumResult.power()));
+                        } else {
+                            sb.append("0");
+                        }
 
-                String presetKey = getPresetKey(modality);
-                PersistentPreferences.setStringPreference(presetKey, sb.toString());
+                        String presetKey = getPresetKey(modality);
+                        PersistentPreferences.setStringPreference(presetKey, sb.toString());
 
-                Platform.runLater(() -> {
-                    cameraStatusLabel.setText("Preset saved");
-                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
-                    // Re-enable load button
-                    rebuildCameraModContent(modality);
-                });
-                logger.info("Saved camera preset: {} -> {}", presetKey, sb);
-            } catch (Exception ex) {
-                logger.error("Failed to save preset: {}", ex.getMessage());
-                Platform.runLater(() -> {
-                    cameraStatusLabel.setText("Save failed: " + ex.getMessage());
-                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
-                });
-            }
-        }, "Preset-Save");
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Preset saved");
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                            // Re-enable load button
+                            rebuildCameraModContent(modality);
+                        });
+                        logger.info("Saved camera preset: {} -> {}", presetKey, sb);
+                    } catch (Exception ex) {
+                        logger.error("Failed to save preset: {}", ex.getMessage());
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Save failed: " + ex.getMessage());
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                        });
+                    }
+                },
+                "Preset-Save");
         t.setDaemon(true);
         t.start();
     }
@@ -1402,65 +1418,67 @@ public class StageControlPanel extends VBox {
         cameraStatusLabel.setText("Applying preset...");
         cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
 
-        Thread t = new Thread(() -> {
-            try {
-                MicroscopeController mc = MicroscopeController.getInstance();
-                if (mc == null || !mc.isConnected()) throw new Exception("Not connected");
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        MicroscopeController mc = MicroscopeController.getInstance();
+                        if (mc == null || !mc.isConnected()) throw new Exception("Not connected");
 
-                // Parse: exp[,r,g,b]|gain,aR,aB|illum
-                String[] parts = presetStr.split("\\|");
-                if (parts.length < 2) throw new Exception("Invalid preset format");
+                        // Parse: exp[,r,g,b]|gain,aR,aB|illum
+                        String[] parts = presetStr.split("\\|");
+                        if (parts.length < 2) throw new Exception("Invalid preset format");
 
-                // Parse exposures
-                String[] expParts = parts[0].split(",");
-                float[] exposures;
-                boolean individual;
-                if (expParts.length >= 4) {
-                    exposures = new float[] {
-                            Float.parseFloat(expParts[1]),
-                            Float.parseFloat(expParts[2]),
-                            Float.parseFloat(expParts[3])
-                    };
-                    individual = true;
-                } else {
-                    exposures = new float[] {Float.parseFloat(expParts[0])};
-                    individual = false;
-                }
+                        // Parse exposures
+                        String[] expParts = parts[0].split(",");
+                        float[] exposures;
+                        boolean individual;
+                        if (expParts.length >= 4) {
+                            exposures = new float[] {
+                                Float.parseFloat(expParts[1]),
+                                Float.parseFloat(expParts[2]),
+                                Float.parseFloat(expParts[3])
+                            };
+                            individual = true;
+                        } else {
+                            exposures = new float[] {Float.parseFloat(expParts[0])};
+                            individual = false;
+                        }
 
-                // Parse gains
-                String[] gainParts = parts[1].split(",");
-                float[] gains = new float[] {
-                        Float.parseFloat(gainParts[0]),
-                        gainParts.length >= 2 ? Float.parseFloat(gainParts[1]) : 1.0f,
-                        gainParts.length >= 3 ? Float.parseFloat(gainParts[2]) : 1.0f
-                };
+                        // Parse gains
+                        String[] gainParts = parts[1].split(",");
+                        float[] gains = new float[] {
+                            Float.parseFloat(gainParts[0]),
+                            gainParts.length >= 2 ? Float.parseFloat(gainParts[1]) : 1.0f,
+                            gainParts.length >= 3 ? Float.parseFloat(gainParts[2]) : 1.0f
+                        };
 
-                // Apply atomically via SETCAM
-                mc.withLiveModeHandling(() ->
-                        mc.getSocketClient().setCameraSettings(individual, exposures, gains));
+                        // Apply atomically via SETCAM
+                        mc.withLiveModeHandling(
+                                () -> mc.getSocketClient().setCameraSettings(individual, exposures, gains));
 
-                // Apply illumination if present
-                if (parts.length >= 3) {
-                    float illumPower = Float.parseFloat(parts[2]);
-                    if (illumPower > 0) {
-                        mc.getSocketClient().setIllumination(illumPower);
+                        // Apply illumination if present
+                        if (parts.length >= 3) {
+                            float illumPower = Float.parseFloat(parts[2]);
+                            if (illumPower > 0) {
+                                mc.getSocketClient().setIllumination(illumPower);
+                            }
+                        }
+
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Preset applied");
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                            rebuildCameraModContent(modality);
+                        });
+                        logger.info("Applied camera preset: {}", presetStr);
+                    } catch (Exception ex) {
+                        logger.error("Failed to apply preset: {}", ex.getMessage());
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Load failed: " + ex.getMessage());
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                        });
                     }
-                }
-
-                Platform.runLater(() -> {
-                    cameraStatusLabel.setText("Preset applied");
-                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
-                    rebuildCameraModContent(modality);
-                });
-                logger.info("Applied camera preset: {}", presetStr);
-            } catch (Exception ex) {
-                logger.error("Failed to apply preset: {}", ex.getMessage());
-                Platform.runLater(() -> {
-                    cameraStatusLabel.setText("Load failed: " + ex.getMessage());
-                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
-                });
-            }
-        }, "Preset-Load");
+                },
+                "Preset-Load");
         t.setDaemon(true);
         t.start();
     }
@@ -1519,8 +1537,8 @@ public class StageControlPanel extends VBox {
                         }
                         // Use atomic SETCAM instead of sequential mode/exp/gain calls
                         boolean individual = exposures.length == 3;
-                        controller.withLiveModeHandling(() ->
-                                controller.getSocketClient().setCameraSettings(individual, exposures, gains));
+                        controller.withLiveModeHandling(
+                                () -> controller.getSocketClient().setCameraSettings(individual, exposures, gains));
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Applied: " + name);
                             cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");

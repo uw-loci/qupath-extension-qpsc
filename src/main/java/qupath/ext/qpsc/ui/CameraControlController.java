@@ -629,8 +629,12 @@ public class CameraControlController {
                     // Keep default
                 }
 
-                Label illumInfo = new Label(String.format("%s: %.0f (range: %.0f - %.0f) [%s]",
-                        illumLabel, illumResult.power(), illumResult.minPower(), illumResult.maxPower(),
+                Label illumInfo = new Label(String.format(
+                        "%s: %.0f (range: %.0f - %.0f) [%s]",
+                        illumLabel,
+                        illumResult.power(),
+                        illumResult.minPower(),
+                        illumResult.maxPower(),
                         illumResult.isOn() ? "ON" : "OFF"));
                 illumInfo.setStyle("-fx-font-size: 12px;");
 
@@ -641,8 +645,7 @@ public class CameraControlController {
                     try {
                         float power = Float.parseFloat(illumField.getText().trim());
                         controller.getSocketClient().setIllumination(power);
-                        illumInfo.setText(String.format("%s: %.0f [%s]",
-                                "Lamp", power, power > 0 ? "ON" : "OFF"));
+                        illumInfo.setText(String.format("%s: %.0f [%s]", "Lamp", power, power > 0 ? "ON" : "OFF"));
                         statusLabel.setText("Illumination set to " + power);
                         statusLabel.setStyle("-fx-text-fill: green;");
                     } catch (Exception ex) {
@@ -683,21 +686,23 @@ public class CameraControlController {
                     statusLabel.setText("Applying profile: " + selected + "...");
                     statusLabel.setStyle("-fx-text-fill: black;");
 
-                    Thread t = new Thread(() -> {
-                        try {
-                            controller.withLiveModeHandling(() ->
-                                    controller.getSocketClient().applyProfile(selected));
-                            Platform.runLater(() -> {
-                                statusLabel.setText("Profile applied: " + selected);
-                                statusLabel.setStyle("-fx-text-fill: green;");
-                            });
-                        } catch (Exception ex) {
-                            Platform.runLater(() -> {
-                                statusLabel.setText("Failed: " + ex.getMessage());
-                                statusLabel.setStyle("-fx-text-fill: red;");
-                            });
-                        }
-                    }, "CCC-Profile-Apply");
+                    Thread t = new Thread(
+                            () -> {
+                                try {
+                                    controller.withLiveModeHandling(
+                                            () -> controller.getSocketClient().applyProfile(selected));
+                                    Platform.runLater(() -> {
+                                        statusLabel.setText("Profile applied: " + selected);
+                                        statusLabel.setStyle("-fx-text-fill: green;");
+                                    });
+                                } catch (Exception ex) {
+                                    Platform.runLater(() -> {
+                                        statusLabel.setText("Failed: " + ex.getMessage());
+                                        statusLabel.setStyle("-fx-text-fill: red;");
+                                    });
+                                }
+                            },
+                            "CCC-Profile-Apply");
                     t.setDaemon(true);
                     t.start();
                 });

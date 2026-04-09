@@ -1245,6 +1245,42 @@ public class PersistentPreferences {
         lastBackgroundOutputPath.set(path != null ? path : "");
     }
 
+    // ================== SINGLE-SNAP MODALITY EXPOSURE ==================
+    // Persisted unified exposure (ms) used by non-rotation modalities
+    // (brightfield, widefield fluorescence) when building acquisition
+    // commands. The Live Viewer Camera tab's exposure field updates this
+    // so the Bounded Acquisition workflow inherits the user's current value.
+    private static final StringProperty lastUnifiedExposureMs =
+            PathPrefs.createPersistentPreference("LastUnifiedExposureMs", "50.0");
+
+    public static double getLastUnifiedExposureMs() {
+        try {
+            return Double.parseDouble(lastUnifiedExposureMs.get());
+        } catch (NumberFormatException e) {
+            return 50.0;
+        }
+    }
+
+    public static void setLastUnifiedExposureMs(double exposureMs) {
+        lastUnifiedExposureMs.set(String.valueOf(exposureMs));
+    }
+
+    // ================== BACKGROUND CORRECTION (non-PPM) ==================
+    // Whether the user wants background correction applied to non-PPM
+    // (monochrome) acquisitions. JAI/PPM uses a WB-mode selector that
+    // implicitly controls background correction; monochrome needs an
+    // independent toggle.
+    private static final javafx.beans.property.BooleanProperty useBackgroundCorrectionMono =
+            PathPrefs.createPersistentPreference("UseBackgroundCorrectionMono", true);
+
+    public static boolean getUseBackgroundCorrectionMono() {
+        return useBackgroundCorrectionMono.get();
+    }
+
+    public static void setUseBackgroundCorrectionMono(boolean use) {
+        useBackgroundCorrectionMono.set(use);
+    }
+
     // ================== GENERIC DYNAMIC PREFERENCES ==================
     // For preferences with dynamic keys (e.g., camera presets keyed by modality+objective).
     // Uses Java Preferences API directly since PathPrefs requires compile-time key names.

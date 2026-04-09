@@ -3,6 +3,7 @@ package qupath.ext.qpsc.modality;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.lib.images.ImageData;
 
@@ -30,8 +31,12 @@ public class WidefieldFluorescenceModalityHandler implements ModalityHandler {
     @Override
     public CompletableFuture<List<AngleExposure>> getRotationAngles(
             String modalityName, String objective, String detector) {
-        // Widefield fluorescence: single image per tile, no rotation
-        return CompletableFuture.completedFuture(List.of());
+        // Widefield fluorescence: single image per tile, no rotation. Return
+        // a single AngleExposure with angle=0 so the command builder has an
+        // exposure to emit via --exposures; the nonRotation flag suppresses
+        // --angles.
+        double exposureMs = PersistentPreferences.getLastUnifiedExposureMs();
+        return CompletableFuture.completedFuture(List.of(new AngleExposure(0.0, exposureMs)));
     }
 
     @Override
