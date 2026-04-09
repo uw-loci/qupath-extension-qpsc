@@ -10,6 +10,8 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.utilities.CameraOrientation;
+import qupath.ext.qpsc.utilities.StagePolarity;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.modality.ppm.PPMPreferences;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
@@ -58,6 +60,14 @@ public class QPPreferenceDialog {
             PathPrefs.createPersistentPreference("isInvertedXProperty", false);
     private static final BooleanProperty stageInvertedYProperty =
             PathPrefs.createPersistentPreference("isInvertedYProperty", true);
+    // Camera orientation: 8-element dihedral group describing how the displayed
+    // image is oriented relative to the sample frame. Distinct from stage polarity
+    // (which is hardware wiring) and distinct from macro-image flip (which is a
+    // property of loaded overview images). Stored as a string to persist the enum
+    // name across sessions; parsed into a {@link qupath.ext.qpsc.utilities.CameraOrientation}
+    // in {@link #getCameraOrientationProperty()}.
+    private static final StringProperty cameraOrientationProperty =
+            PathPrefs.createPersistentPreference("cameraOrientationProperty", "NORMAL");
     private static final StringProperty microscopeServerHostProperty =
             PathPrefs.createPersistentPreference("microscope.server.host", "127.0.0.1");
 
@@ -206,6 +216,31 @@ public class QPPreferenceDialog {
                 .description("Stage Y axis is inverted: positive Y commands move down instead of up.\n"
                         + "This controls tile traversal order and coordinate transform sign.\n"
                         + "NOT the same as optical flip (Flip macro image Y).")
+                .build());
+
+        // Camera orientation enum (8-element dihedral group). Combines with the
+        // stage inversion booleans above via StageImageTransform to produce a
+        // single consistent relationship between user gestures and stage commands.
+        List<String> cameraOrientationChoices = new ArrayList<>();
+        for (CameraOrientation o : CameraOrientation.values()) {
+            cameraOrientationChoices.add(o.name());
+        }
+        items.add(new PropertyItemBuilder<>(cameraOrientationProperty, String.class)
+                .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
+                .name("Camera orientation")
+                .category(CATEGORY)
+                .choices(cameraOrientationChoices)
+                .description("How the displayed image is oriented relative to the sample frame.\n"
+                        + "Combines with the stage inversion booleans to form the full stage <-> image transform.\n"
+                        + "\n"
+                        + "  NORMAL: sample +X -> display right, sample +Y -> display down (most scopes)\n"
+                        + "  FLIP_H / FLIP_V: horizontal or vertical mirror in the optical path\n"
+                        + "  ROT_180: camera mounted upside down\n"
+                        + "  ROT_90_CW / ROT_90_CCW / TRANSPOSE / ANTI_TRANSPOSE: 90-degree camera rotations\n"
+                        + "\n"
+                        + "Diagnostic: pick the value that makes arrow buttons, joystick, and double-click-to-center "
+                        + "all move in the correct visual direction on your scope. The stitcher only supports "
+                        + "the axis-aligned values (NORMAL/FLIP_H/FLIP_V/ROT_180); rotation cases log a warning.")
                 .build());
 
         // File/directory preferences use custom FilePropertyItem to open the
@@ -500,6 +535,43 @@ public class QPPreferenceDialog {
     /** Returns true if the stage Y axis is inverted (stage inversion, not optical flip). */
     public static boolean getStageInvertedYProperty() {
         return stageInvertedYProperty.get();
+    }
+
+    /**
+     * Returns the composite {@link StagePolarity} derived from the per-axis
+     * boolean preferences. This is the preferred way to access stage polarity
+     * in new code — the two individual boolean prefs are retained for UI
+     * editing and backwards compatibility.
+     */
+    public static StagePolarity getStagePolarityProperty() {
+        return StagePolarity.fromBooleans(
+                stageInvertedXProperty.get(),
+                stageInvertedYProperty.get());
+    }
+
+    /**
+     * Returns the persisted {@link CameraOrientation}. Falls back to
+     * {@link CameraOrientation#NORMAL} if the stored value is missing or
+     * unrecognised (e.g. after a rollback or enum rename), so no upgrade
+     * path can leave the preference in an invalid state.
+     */
+    public static CameraOrientation getCameraOrientationProperty() {
+        String stored = cameraOrientationProperty.get();
+        if (stored == null || stored.isEmpty()) {
+            return CameraOrientation.NORMAL;
+        }
+        try {
+            return CameraOrientation.valueOf(stored);
+        } catch (IllegalArgumentException e) {
+            return CameraOrientation.NORMAL;
+        }
+    }
+
+    /** Setter used by the preferences dialog UI. */
+    public static void setCameraOrientationProperty(CameraOrientation orientation) {
+        if (orientation != null) {
+            cameraOrientationProperty.set(orientation.name());
+        }
     }
 
     public static String getMicroscopeServerHost() {

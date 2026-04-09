@@ -203,21 +203,23 @@ public class TileProcessingUtilities {
                         outputFormat,
                         attempt,
                         maxAttempts);
-                // Pass stage X/Y inversion to the tile-config stitching
-                // strategy. Scopes whose stage convention is inverted relative
-                // to the pixel-down convention (OWS3 etc.) need the matching
-                // axis negated so tiles land correctly in the stitched output.
-                // CAMM and similar scopes leave these at false and are
-                // unaffected.
-                boolean stageInvertedX = QPPreferenceDialog.getStageInvertedXProperty();
-                boolean stageInvertedY = QPPreferenceDialog.getStageInvertedYProperty();
+                // Pass the composite stage/camera transform to the
+                // tile-config stitching strategy via the legacy flip
+                // flags. StageImageTransform folds stage polarity and
+                // camera orientation into two booleans when possible;
+                // rotation cases (ROT_90_CW/CCW/TRANSPOSE/ANTI_TRANSPOSE)
+                // fall back to an approximation and log a warning.
+                qupath.ext.qpsc.utilities.StageImageTransform siTransform =
+                        qupath.ext.qpsc.utilities.StageImageTransform.current();
+                boolean[] stitcherFlags = siTransform.stitcherFlipFlags();
                 qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX =
-                        stageInvertedX;
+                        stitcherFlags[0];
                 qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY =
-                        stageInvertedY;
+                        stitcherFlags[1];
                 logger.info(
-                        "Set TileConfigurationTxtStrategy flipStitchingX={}, flipStitchingY={}",
-                        stageInvertedX, stageInvertedY);
+                        "Set TileConfigurationTxtStrategy flipStitchingX={}, flipStitchingY={} "
+                                + "(from transform {})",
+                        stitcherFlags[0], stitcherFlags[1], siTransform);
                 try {
                     outPath = StitchingWorkflow.run(config);
                 } finally {

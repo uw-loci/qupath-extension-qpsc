@@ -1201,14 +1201,13 @@ public class LiveViewerWindow {
         double offsetPixelsX = sourceClickX - (srcW / 2.0);
         double offsetPixelsY = sourceClickY - (srcH / 2.0);
 
-        // Capture stage inversion preferences. Double-click-to-center is
+        // Capture the stage/image transform. Double-click-to-center is
         // semantically unambiguous ("put the clicked point at the new
-        // center"), so unlike the arrow/joystick controls it does NOT
-        // apply a sample-movement inversion -- the sample must always
-        // move toward the clicked point. Only the microscope's physical
-        // stage-axis inversion matters here.
-        boolean invertX = qupath.ext.qpsc.preferences.QPPreferenceDialog.getStageInvertedXProperty();
-        boolean invertY = qupath.ext.qpsc.preferences.QPPreferenceDialog.getStageInvertedYProperty();
+        // centre"), so unlike the arrow/joystick controls it does NOT
+        // apply the sample-movement inversion -- the sample must always
+        // move toward the clicked point.
+        qupath.ext.qpsc.utilities.StageImageTransform transform =
+                qupath.ext.qpsc.utilities.StageImageTransform.current();
 
         // Final variables for use in background thread
         final int finalSrcW = srcW;
@@ -1227,39 +1226,31 @@ public class LiveViewerWindow {
                             return;
                         }
 
-                        // Convert to microns using pixel size
+                        // Compute per-axis pixel size from the camera FOV,
+                        // then ask the transform to turn the pixel offset
+                        // into a new MM target.
                         double pixelSizeX_um = fov[0] / finalSrcW;
                         double pixelSizeY_um = fov[1] / finalSrcH;
-                        double offsetUm_X = offsetPixelsX * pixelSizeX_um;
-                        double offsetUm_Y = offsetPixelsY * pixelSizeY_um;
 
                         // Get current stage position
                         double[] currentPos = controller.getStagePositionXY();
 
-                        // Click-to-center: the clicked point must become the new
-                        // field-of-view center. The sign relationship depends
-                        // on the scope's hardware (stage inversion + any
-                        // image flip in the optical path). On OWS3 (Hamamatsu
-                        // sCMOS, no camera flip) the correct direction is
-                        // opposite of the previous `invertX ? -1 : 1` formula.
-                        // X now matches the working arrow/joystick sample-mode
-                        // direction; Y keeps its current formula.
-                        double xMult = invertX ? 1.0 : -1.0;
-                        double yMult = invertY ? -1.0 : 1.0;
-
-                        double newX = currentPos[0] + (offsetUm_X * xMult);
-                        double newY = currentPos[1] + (offsetUm_Y * yMult);
+                        double[] target = transform.clickOffsetToMmTarget(
+                                currentPos[0], currentPos[1],
+                                offsetPixelsX, offsetPixelsY,
+                                pixelSizeX_um, pixelSizeY_um);
+                        double newX = target[0];
+                        double newY = target[1];
 
                         // Move stage (bounds checking handled by controller)
                         controller.moveStageXY(newX, newY);
 
                         Platform.runLater(() -> updateStatus(String.format("Centered on (%.0f, %.0f)", newX, newY)));
                         logger.info(
-                                "Double-click-to-center: invertX={}, invertY={}, offset=({}, {}) um -> newStage=({}, {})",
-                                invertX,
-                                invertY,
-                                String.format("%.1f", offsetUm_X),
-                                String.format("%.1f", offsetUm_Y),
+                                "Double-click-to-center: transform={}, offsetPx=({}, {}) -> newStage=({}, {})",
+                                transform,
+                                String.format("%.1f", offsetPixelsX),
+                                String.format("%.1f", offsetPixelsY),
                                 String.format("%.1f", newX),
                                 String.format("%.1f", newY));
 

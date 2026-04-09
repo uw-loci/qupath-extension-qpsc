@@ -2080,23 +2080,24 @@ public class StageControlPanel extends VBox {
             double currentX = Double.parseDouble(xField.getText().replace(",", ""));
             double currentY = Double.parseDouble(yField.getText().replace(",", ""));
 
-            // Movement direction is determined by the stage inversion preferences.
-            // stageInvertedX/Y indicate whether positive stage commands move opposite
-            // to the expected direction. The "Sample Movement" checkbox adds an extra
-            // inversion on X so the sample appears to move with the control direction.
+            // Compute the MM command delta via StageImageTransform. The transform
+            // expects a "screen pan" delta in screen-frame coordinates (positive
+            // Y = down). The button wiring passes yDir=+1 for up, so we negate
+            // it here to reach the screen convention.
             //
-            // NOTE: yDir here uses "up = +1" (human convention from button wiring),
-            // while the joystick and click handlers use screen coordinates where
-            // "up = negative Y delta". Normalise yDir to the screen convention
-            // before applying yMult so all three paths share the same formula.
+            // The "Sample Movement" checkbox inverts X on top of the transform
+            // to reproduce the historical MicroManager default ("non-sample"
+            // mode inverts X relative to pan intent).
             boolean sampleMode = sampleMovementCheckbox.isSelected();
-            boolean invertX = qupath.ext.qpsc.preferences.QPPreferenceDialog.getStageInvertedXProperty();
-            boolean invertY = qupath.ext.qpsc.preferences.QPPreferenceDialog.getStageInvertedYProperty();
-            double xMult = (invertX ? -1 : 1) * (sampleMode ? -1 : 1);
-            double yMult = invertY ? -1 : 1;
-
-            double newX = currentX + (step * xDir * xMult);
-            double newY = currentY + (step * (-yDir) * yMult);
+            double screenDx = step * xDir;
+            double screenDy = step * (-yDir);
+            double[] mmDelta = qupath.ext.qpsc.utilities.StageImageTransform.current()
+                    .screenPanDeltaToMmDelta(screenDx, screenDy);
+            if (!sampleMode) {
+                mmDelta[0] = -mmDelta[0];
+            }
+            double newX = currentX + mmDelta[0];
+            double newY = currentY + mmDelta[1];
 
             if (!mgr.isWithinStageBounds(newX, newY)) {
                 xyStatus.setText("Move out of bounds");
@@ -2141,14 +2142,18 @@ public class StageControlPanel extends VBox {
             double currentX = current[0];
             double currentY = current[1];
 
-            // Movement direction from stage inversion preferences + sample mode toggle.
+            // The joystick already produces a delta in the screen-frame
+            // convention (deltaY < 0 when knob is pulled upward, because
+            // knobOffsetY uses mouse coordinates). Feed it directly into
+            // StageImageTransform. Sample mode inverts X on top.
             boolean sampleMode = sampleMovementMode.get();
-            boolean invertX = qupath.ext.qpsc.preferences.QPPreferenceDialog.getStageInvertedXProperty();
-            boolean invertY = qupath.ext.qpsc.preferences.QPPreferenceDialog.getStageInvertedYProperty();
-            double xMult = (invertX ? -1 : 1) * (sampleMode ? -1 : 1);
-            double yMult = invertY ? -1 : 1;
-            double targetX = currentX + (deltaX * xMult);
-            double targetY = currentY + (deltaY * yMult);
+            double[] mmDelta = qupath.ext.qpsc.utilities.StageImageTransform.current()
+                    .screenPanDeltaToMmDelta(deltaX, deltaY);
+            if (!sampleMode) {
+                mmDelta[0] = -mmDelta[0];
+            }
+            double targetX = currentX + mmDelta[0];
+            double targetY = currentY + mmDelta[1];
 
             if (!mgr.isWithinStageBounds(targetX, targetY)) {
                 Platform.runLater(() -> xyStatus.setText(res.getString("stageMovement.joystick.boundary")));
