@@ -203,7 +203,24 @@ public class TileProcessingUtilities {
                         outputFormat,
                         attempt,
                         maxAttempts);
-                outPath = StitchingWorkflow.run(config);
+                // Pass stage Y inversion to the tile-config stitching strategy.
+                // Scopes whose stage Y convention is inverted relative to the
+                // pixel-down convention (OWS3 etc.) need Y negated so tiles
+                // land in the correct vertical order in the stitched output.
+                // CAMM and similar scopes leave stageInvertedY=false and are
+                // unaffected.
+                boolean stageInvertedY = QPPreferenceDialog.getStageInvertedYProperty();
+                qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY =
+                        stageInvertedY;
+                logger.info("Set TileConfigurationTxtStrategy.flipStitchingY = {}", stageInvertedY);
+                try {
+                    outPath = StitchingWorkflow.run(config);
+                } finally {
+                    // Always clear the flag so it doesn't leak into a later
+                    // unrelated stitching invocation.
+                    qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY =
+                            false;
+                }
                 logger.info("BasicStitching workflow completed. Output: {}", outPath);
                 break; // Success
             } catch (Exception stitchEx) {
