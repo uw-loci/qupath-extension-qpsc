@@ -75,6 +75,29 @@ public class AcquisitionConfigurationBuilder {
         String bgMethod = configManager.getBackgroundCorrectionMethod(baseModality);
         String bgBaseFolder = configManager.getBackgroundCorrectionFolder(baseModality);
 
+        // For monochrome (non-JAI) detectors, the user's
+        // "Use background correction" checkbox in the acquisition dialog
+        // overrides the YAML enabled flag. JAI cameras continue to use the
+        // WB mode selector which bundles background correction.
+        boolean isJai = configManager.isJAICamera(detector);
+        if (!isJai) {
+            boolean monoPref = qupath.ext.qpsc.preferences.PersistentPreferences.getUseBackgroundCorrectionMono();
+            if (bgEnabled && !monoPref) {
+                logger.info("Monochrome BG correction disabled by user preference for {}", detector);
+                bgEnabled = false;
+            } else if (!bgEnabled && monoPref && bgBaseFolder != null) {
+                // Treat the checkbox as an opt-in even when the YAML flag
+                // hasn't been flipped yet (e.g. prior to the first successful
+                // background collection through the updated workflow).
+                logger.info(
+                        "Monochrome BG correction enabled by user preference even though YAML enabled=false");
+                bgEnabled = true;
+                if (bgMethod == null) {
+                    bgMethod = "divide";
+                }
+            }
+        }
+
         // Resolve detector-specific background folder path (WB-mode aware)
         String bgFolder = null;
         if (bgEnabled && bgBaseFolder != null) {

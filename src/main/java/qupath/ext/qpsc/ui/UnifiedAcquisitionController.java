@@ -149,6 +149,8 @@ public class UnifiedAcquisitionController {
         // UI Components - White Balance Section (JAI camera only)
         private VBox whiteBalanceSection;
         private ComboBox<String> wbModeComboBox;
+        private Label wbModeLabel;
+        private CheckBox monoBgCorrectionCheck;
 
         // UI Components - Advanced Section Content
         private VBox advancedContent;
@@ -471,9 +473,26 @@ public class UnifiedAcquisitionController {
             row++;
 
             // WB Mode - moved here from Advanced Options for visibility
-            Label wbLabel = new Label("WB Mode:");
-            grid.add(wbLabel, 0, row);
+            wbModeLabel = new Label("WB Mode:");
+            grid.add(wbModeLabel, 0, row);
             grid.add(wbModeComboBox, 1, row);
+            row++;
+
+            // Background correction toggle for monochrome (non-JAI) detectors.
+            // JAI cameras bundle background correction into the WB mode
+            // selector; monochrome detectors need an independent toggle so
+            // that brightfield / fluorescence acquisitions can apply flat-field
+            // correction when a matching background image exists on disk.
+            monoBgCorrectionCheck = new CheckBox("Use background correction");
+            monoBgCorrectionCheck.setSelected(PersistentPreferences.getUseBackgroundCorrectionMono());
+            monoBgCorrectionCheck.setTooltip(new Tooltip(
+                    "Apply flat-field background correction to monochrome acquisitions.\n"
+                            + "Requires a matching background image collected at the same\n"
+                            + "objective/detector (and ideally the same exposure)."));
+            monoBgCorrectionCheck
+                    .selectedProperty()
+                    .addListener((obs, o, n) -> PersistentPreferences.setUseBackgroundCorrectionMono(n));
+            grid.add(monoBgCorrectionCheck, 0, row, 2, 1);
             row++;
 
             // Pixel size mismatch warning
@@ -1044,31 +1063,35 @@ public class UnifiedAcquisitionController {
          * Per-angle checkbox is only shown for PPM modality.
          */
         private void updateWhiteBalanceVisibility() {
-            if (whiteBalanceSection == null) {
-                return; // Not yet initialized
-            }
-
             String detectorDisplay = detectorBox.getValue();
             String detector = detectorDisplay != null ? extractIdFromDisplayString(detectorDisplay) : null;
             boolean isJAI = configManager.isJAICamera(detector);
 
-            // Show white balance section only for JAI cameras
-            whiteBalanceSection.setVisible(isJAI);
-            whiteBalanceSection.setManaged(isJAI);
+            // JAI cameras use the WB mode selector (which also controls bg
+            // correction mode). Monochrome detectors use the standalone
+            // "Use background correction" checkbox instead.
+            if (wbModeComboBox != null) {
+                wbModeComboBox.setVisible(isJAI);
+                wbModeComboBox.setManaged(isJAI);
+            }
+            if (wbModeLabel != null) {
+                wbModeLabel.setVisible(isJAI);
+                wbModeLabel.setManaged(isJAI);
+            }
+            if (monoBgCorrectionCheck != null) {
+                monoBgCorrectionCheck.setVisible(!isJAI);
+                monoBgCorrectionCheck.setManaged(!isJAI);
+            }
 
             String modality = modalityBox.getValue();
             boolean isPPM = modality != null && modality.toLowerCase().startsWith("ppm");
 
-            // Filter WB modes based on background validity
-            if (wbModeComboBox != null && modality != null && detector != null) {
+            // Filter WB modes based on background validity (JAI only)
+            if (isJAI && wbModeComboBox != null && modality != null && detector != null) {
                 filterWbModesByBackgroundValidity(modality, detector, isPPM);
             }
 
-            logger.debug(
-                    "White balance visibility updated: JAI={}, PPM={}, section visible={}",
-                    isJAI,
-                    isPPM,
-                    whiteBalanceSection.isVisible());
+            logger.debug("WB/BG visibility updated: JAI={}, PPM={}", isJAI, isPPM);
         }
 
         /**
