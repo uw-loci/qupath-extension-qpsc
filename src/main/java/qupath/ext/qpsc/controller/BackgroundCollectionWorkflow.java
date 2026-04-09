@@ -271,66 +271,87 @@ public class BackgroundCollectionWorkflow {
             double targetIntensity) {}
 
     /**
-     * Save background collection defaults to a YAML file for future reference.
-     * This file contains all the settings used for background acquisition, which is important
-     * for ensuring consistent background correction parameters.
-     *
-     * @param outputPath The directory where background images were saved
-     * @param modality The modality used (e.g., "ppm")
-     * Updates the microscope config YAML to enable background correction for
-     * the given modality and set the base_folder path. This ensures that subsequent
+     * Updates the imageprocessing YAML to enable background correction for the
+     * given modality and set the base_folder path. This ensures that subsequent
      * acquisitions will find and use the collected backgrounds.
      *
-     * @param configPath Path to the microscope config YAML
+     * <p>The reader (MicroscopeConfigManager.getBackgroundCorrectionFolder) looks
+     * in {@code imageprocessing_{microscope}.yml -> background_correction ->
+     * {modality} -> base_folder}, so this writer must target that same file and
+     * path structure -- NOT the modalities section of the main config.
+     *
+     * @param configPath Path to the main microscope config YAML (used to derive
+     *                   the imageprocessing file path)
      * @param modality The modality name (e.g., "Brightfield")
      * @param baseFolder The base output folder for background tiles
      */
     @SuppressWarnings("unchecked")
     private static void updateBackgroundCorrectionConfig(String configPath, String modality, String baseFolder) {
         try {
-            java.io.File configFile = new java.io.File(configPath);
-            if (!configFile.exists()) {
+            java.io.File mainConfigFile = new java.io.File(configPath);
+            if (!mainConfigFile.exists()) {
                 logger.warn("Config file not found for BG correction update: {}", configPath);
                 return;
             }
 
-            Yaml yaml = new Yaml();
-            Map<String, Object> config;
-            try (FileReader reader = new FileReader(configFile, java.nio.charset.StandardCharsets.UTF_8)) {
-                config = yaml.load(reader);
+            // Derive imageprocessing_{microscope}.yml in the same directory.
+            // Filename pattern: config_OWS3.yml -> OWS3 -> imageprocessing_OWS3.yml
+            String mainName = mainConfigFile.getName();
+            String microscopeName;
+            if (mainName.startsWith("config_") && mainName.endsWith(".yml")) {
+                microscopeName = mainName.substring("config_".length(), mainName.length() - ".yml".length());
+            } else if (mainName.endsWith(".yml")) {
+                microscopeName = mainName.substring(0, mainName.length() - ".yml".length());
+            } else {
+                microscopeName = mainName;
             }
-            if (config == null) return;
+            java.io.File imgprocFile =
+                    new java.io.File(mainConfigFile.getParentFile(), "imageprocessing_" + microscopeName + ".yml");
 
-            Map<String, Object> modalities = (Map<String, Object>) config.get("modalities");
-            if (modalities == null) return;
+            Yaml yaml = new Yaml();
+            Map<String, Object> imgproc;
+            if (imgprocFile.exists()) {
+                try (FileReader reader = new FileReader(imgprocFile, java.nio.charset.StandardCharsets.UTF_8)) {
+                    imgproc = yaml.load(reader);
+                }
+                if (imgproc == null) {
+                    imgproc = new LinkedHashMap<>();
+                }
+            } else {
+                imgproc = new LinkedHashMap<>();
+            }
 
-            Map<String, Object> modalityCfg = (Map<String, Object>) modalities.get(modality);
-            if (modalityCfg == null) return;
+            Map<String, Object> bgCorrection = (Map<String, Object>) imgproc.get("background_correction");
+            if (bgCorrection == null) {
+                bgCorrection = new LinkedHashMap<>();
+                imgproc.put("background_correction", bgCorrection);
+            }
 
-            Map<String, Object> bgCfg = (Map<String, Object>) modalityCfg.get("background_correction");
-            if (bgCfg == null) {
-                bgCfg = new LinkedHashMap<>();
-                modalityCfg.put("background_correction", bgCfg);
+            Map<String, Object> modalityBg = (Map<String, Object>) bgCorrection.get(modality);
+            if (modalityBg == null) {
+                modalityBg = new LinkedHashMap<>();
+                bgCorrection.put(modality, modalityBg);
             }
 
             // Normalize path separators to forward slashes for cross-platform YAML
             String normalizedFolder = baseFolder.replace('\\', '/');
-            bgCfg.put("enabled", true);
-            bgCfg.put("base_folder", normalizedFolder);
-            if (!bgCfg.containsKey("method")) {
-                bgCfg.put("method", "divide");
+            modalityBg.put("enabled", true);
+            modalityBg.put("base_folder", normalizedFolder);
+            if (!modalityBg.containsKey("method")) {
+                modalityBg.put("method", "divide");
             }
 
             DumperOptions options = new DumperOptions();
             options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
             options.setPrettyFlow(true);
             Yaml dumper = new Yaml(options);
-            try (FileWriter writer = new FileWriter(configFile, java.nio.charset.StandardCharsets.UTF_8)) {
-                dumper.dump(config, writer);
+            try (FileWriter writer = new FileWriter(imgprocFile, java.nio.charset.StandardCharsets.UTF_8)) {
+                dumper.dump(imgproc, writer);
             }
 
-            logger.info("Updated background_correction for '{}': enabled=true, base_folder={}",
-                    modality, normalizedFolder);
+            logger.info(
+                    "Updated background_correction in {} for modality '{}': enabled=true, base_folder={}",
+                    imgprocFile.getName(), modality, normalizedFolder);
         } catch (Exception e) {
             logger.error("Failed to update background_correction config: {}", e.getMessage());
         }

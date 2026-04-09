@@ -494,12 +494,18 @@ public class UnifiedAcquisitionController {
             hardwarePane.setStyle("-fx-font-weight: bold;");
         }
 
-        private void checkPixelSizeMismatch(String objective, Label warningLabel) {
-            if (objective == null || objective.isEmpty()) {
+        private void checkPixelSizeMismatch(String objectiveDisplay, Label warningLabel) {
+            if (objectiveDisplay == null || objectiveDisplay.isEmpty()) {
                 warningLabel.setVisible(false);
                 warningLabel.setManaged(false);
                 return;
             }
+
+            // The combo boxes hold "friendlyName (id)" display strings;
+            // getPixelSize expects raw IDs.
+            final String objective = extractIdFromDisplayString(objectiveDisplay);
+            final String detectorDisplay = detectorBox.getValue();
+            final String detector = detectorDisplay != null ? extractIdFromDisplayString(detectorDisplay) : "";
 
             // Run in background to avoid blocking UI with socket call
             java.util.concurrent.CompletableFuture.runAsync(() -> {
@@ -511,8 +517,6 @@ public class UnifiedAcquisitionController {
                     if (mmPixelSize <= 0) return;
 
                     // Get QPSC config pixel size for the selected objective
-                    String modality = modalityBox.getValue();
-                    String detector = detectorBox.getValue() != null ? detectorBox.getValue() : "";
                     double configPixelSize = configManager.getPixelSize(objective, detector);
                     if (configPixelSize <= 0) return;
 
@@ -951,7 +955,10 @@ public class UnifiedAcquisitionController {
             Map<String, String> objectiveNames = configManager.getObjectiveFriendlyNames(objectiveIds);
 
             List<String> objectiveDisplayItems = objectiveIds.stream()
-                    .map(id -> objectiveNames.get(id) + " (" + id + ")")
+                    .map(id -> {
+                        String name = objectiveNames.get(id);
+                        return (name != null && !name.isEmpty()) ? (name + " (" + id + ")") : id;
+                    })
                     .sorted()
                     .collect(Collectors.toList());
 
@@ -982,7 +989,10 @@ public class UnifiedAcquisitionController {
             Map<String, String> detectorNames = configManager.getDetectorFriendlyNames(detectorIds);
 
             List<String> detectorDisplayItems = detectorIds.stream()
-                    .map(id -> detectorNames.get(id) + " (" + id + ")")
+                    .map(id -> {
+                        String name = detectorNames.get(id);
+                        return (name != null && !name.isEmpty()) ? (name + " (" + id + ")") : id;
+                    })
                     .sorted()
                     .collect(Collectors.toList());
 
