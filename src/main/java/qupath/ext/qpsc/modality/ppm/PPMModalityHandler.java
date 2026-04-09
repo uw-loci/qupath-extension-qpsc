@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.BackgroundValidationResult;
 import qupath.ext.qpsc.modality.ModalityHandler;
+import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.modality.ModalityMenuItem;
 import qupath.ext.qpsc.modality.ppm.ui.PPMAngleSelectionController;
 import qupath.ext.qpsc.modality.ppm.ui.PPMBoundingBoxUI;
@@ -198,6 +199,13 @@ public class PPMModalityHandler implements ModalityHandler {
     @Override
     public String getDefaultWbMode() {
         return "per_angle";
+    }
+
+    @Override
+    public void configureCommandBuilder(AcquisitionCommandBuilder builder) {
+        // JAI 3-CCD uses prism color splitting, not Bayer mosaic.
+        // Debayering must be disabled to prevent corrupting the image.
+        builder.enableDebayer(false);
     }
 
     /**
