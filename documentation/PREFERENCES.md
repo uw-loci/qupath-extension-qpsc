@@ -12,8 +12,9 @@ This document provides comprehensive documentation for all QPSC preferences avai
 |------------|------|---------|-------------|
 | [Flip macro image X](#flip-macro-image-x) | Boolean | OFF | Flip image horizontally |
 | [Flip macro image Y](#flip-macro-image-y) | Boolean | OFF | Flip image vertically |
-| [Inverted X stage](#inverted-x-stage) | Boolean | OFF | Stage X axis is inverted |
-| [Inverted Y stage](#inverted-y-stage) | Boolean | ON | Stage Y axis is inverted |
+| [Inverted X stage](#inverted-x-stage) | Boolean | OFF | Stage X wiring is inverted |
+| [Inverted Y stage](#inverted-y-stage) | Boolean | ON | Stage Y wiring is inverted |
+| [Camera orientation](#camera-orientation) | Enum | NORMAL | How the displayed image is oriented relative to the sample frame |
 | [Microscope Config File](#microscope-config-file) | File | - | Path to microscope YAML config |
 | [Projects Folder](#projects-folder) | Directory | - | Root folder for slide projects |
 | [Extension Location](#extension-location) | Directory | - | QPSC extension installation directory |
@@ -88,12 +89,16 @@ Flips the image vertically for coordinate alignment. Enable when the optical lig
 | Requires Restart | No |
 
 **Description:**
-Indicates the stage X axis moves in the opposite direction from standard convention. When enabled, positive X commands move the stage left instead of right.
+Hardware stage wiring polarity for the X axis. When enabled, MicroManager's `+X` command moves the physical stage in the lab `-X` direction (i.e. the encoder or device adapter is wired backwards relative to the lab frame).
+
+This is a pure hardware property — it does NOT describe how the image appears on screen. For image orientation, use [Camera orientation](#camera-orientation) instead.
+
+**How to diagnose:**
+Issue `core.setXYPosition(core.getXPosition() + 100, core.getYPosition())` from a MicroManager script and observe which direction the physical stage actually moves. If it moves in the lab `-X` direction (i.e. "left" from the operator's neutral viewpoint), enable this setting.
 
 **When to Enable:**
-- Your microscope's X axis convention is inverted
-- Stage control shows correct position but moves wrong direction in X
-- Typically determined during microscope alignment
+- You've verified via the test above that positive X commands move the stage the wrong way.
+- Do NOT enable this as a workaround for arrow buttons or stitched tiles looking flipped — that's a camera orientation issue; use the [Camera orientation](#camera-orientation) setting instead.
 
 ---
 
@@ -106,12 +111,57 @@ Indicates the stage X axis moves in the opposite direction from standard convent
 | Requires Restart | No |
 
 **Description:**
-Indicates the stage Y axis moves in the opposite direction from standard convention. Most microscopes have inverted Y because stage coordinates increase downward while image coordinates increase upward.
+Hardware stage wiring polarity for the Y axis. When enabled, MicroManager's `+Y` command moves the physical stage in the lab `-Y` direction.
+
+As with the X polarity, this describes the stage wiring, NOT the image orientation on screen. For image orientation, use [Camera orientation](#camera-orientation) instead.
+
+**How to diagnose:**
+Same procedure as X: set a new Y position via MM script and observe which direction the stage actually moves.
 
 **When to Enable:**
-- Default is ON for most microscope configurations
-- Stage moves down when you expect up
-- Typically required for standard microscope setups
+- You've verified that positive Y commands move the stage the wrong way.
+- Default is ON because many common stages (e.g. Nikon Ti2) ship with this wiring convention.
+
+---
+
+### Camera orientation
+
+| Property | Value |
+|----------|-------|
+| Type | Enum (choice) |
+| Default | NORMAL |
+| Requires Restart | No |
+
+**Description:**
+How the displayed image is oriented relative to the sample frame. Composes with the two stage-polarity preferences above via `StageImageTransform` to form the complete stage ⇔ image relationship used by arrow buttons, the virtual joystick, double-click-to-center, and the stitcher's tile placement.
+
+This is a property of the optical path + camera mounting, distinct from the stage wiring. Reasons you might need a non-NORMAL value:
+- The camera is physically rotated on its mount (90°, 180°, or 270°).
+- There's a prism or mirror in the optical path that horizontally or vertically mirrors the image.
+- The sensor readout order and the mount orientation don't agree.
+
+**Values:**
+
+Axis-aligned (fully supported by all subsystems including the stitcher):
+- `NORMAL` — identity. Sample `+X` appears at display right; sample `+Y` appears at display down. Use this on most microscopes.
+- `FLIP_H` — horizontal mirror. Sample `+X` appears at display left.
+- `FLIP_V` — vertical mirror. Sample `+Y` appears at display up.
+- `ROT_180` — upside down. Equivalent to `FLIP_H` composed with `FLIP_V`.
+
+Rotation / transpose cases (supported by Live Viewer controls but NOT by the stitcher — rotated-camera acquisitions will log an error and the stitched output will be mis-oriented until full support lands):
+- `ROT_90_CW` — camera rotated 90° clockwise.
+- `ROT_90_CCW` — camera rotated 90° counter-clockwise (= 270° CW).
+- `TRANSPOSE` — diagonal transpose (swap X and Y axes).
+- `ANTI_TRANSPOSE` — anti-diagonal transpose.
+
+**How to Configure:**
+Cycle through the axis-aligned values until all four of these gestures produce the correct visual direction on your scope:
+1. Arrow buttons (Sample Movement checked)
+2. Virtual joystick
+3. Double-click-to-center on a feature — the feature should jump to the centre of the view.
+4. A small stitched acquisition — corners should be laid out correctly in the output image.
+
+If all four agree with `NORMAL`, no change needed. If only `FLIP_H` / `FLIP_V` / `ROT_180` gives consistent behaviour, use that.
 
 ---
 

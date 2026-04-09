@@ -20,6 +20,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.StageImageTransform;
 import qupath.ext.qpsc.utilities.ProjectLogger;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.common.Version;
@@ -82,6 +83,17 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
         // 1) Register all our persistent preferences
         QPPreferenceDialog.installPreferences(qupath);
+
+        // Log the current stage / camera transform so any later "arrows move
+        // the wrong way" report can be correlated with what the user had
+        // configured at startup without needing them to re-inspect the prefs.
+        try {
+            logger.info(
+                    "Live-view coordinate transform at startup:\n{}",
+                    StageImageTransform.current().describe());
+        } catch (Exception e) {
+            logger.debug("Could not log StageImageTransform at startup: {}", e.getMessage());
+        }
 
         // Check if tiles-to-pyramid extension is installed (required for stitching)
         if (!QPPreferenceDialog.isStitchingAvailable()) {

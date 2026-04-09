@@ -216,4 +216,36 @@ public class StageImageTransform {
                 "StageImageTransform[stage=%s, camera=%s]",
                 stagePolarity, cameraOrientation);
     }
+
+    /**
+     * Produce a longer, human-readable description of what this transform
+     * actually does, for logging during debugging. Shows the effective sign
+     * behaviour of the four compass directions plus the stitcher flags.
+     *
+     * <p>Example output:
+     * <pre>
+     *   StageImageTransform[stage=INVERT_Y, camera=NORMAL]:
+     *     Arrow right (pan right) -> mmDelta (+1.00, +0.00)
+     *     Arrow up    (pan up)    -> mmDelta (+0.00, +1.00)
+     *     Click below center      -> mmDelta (+0.00, -1.00)
+     *     Stitcher flip flags     -> flipX=false, flipY=true
+     * </pre>
+     */
+    public String describe() {
+        double[] right = screenPanDeltaToMmDelta(1, 0);
+        double[] up = screenPanDeltaToMmDelta(0, -1);
+        double[] below = screenPanDeltaToMmDelta(0, 1);
+        boolean[] flags = stitcherFlipFlags();
+        return String.format(
+                "StageImageTransform[stage=%s, camera=%s]:%n"
+                        + "  Arrow right (pan right) -> mmDelta (%+.2f, %+.2f)%n"
+                        + "  Arrow up    (pan up)    -> mmDelta (%+.2f, %+.2f)%n"
+                        + "  Click below center      -> mmDelta (%+.2f, %+.2f)%n"
+                        + "  Stitcher flip flags     -> flipX=%s, flipY=%s",
+                stagePolarity, cameraOrientation,
+                right[0], right[1],
+                up[0], up[1],
+                below[0], below[1],
+                flags[0], flags[1]);
+    }
 }

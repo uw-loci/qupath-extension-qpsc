@@ -83,17 +83,11 @@ public class TilingUtilities {
         double minY = bb.getMinY();
         double maxY = bb.getMaxY();
 
-        //        // Apply axis inversions if needed
-        //        if (request.isStageInvertedX()) {
-        //            double temp = minX;
-        //            minX = maxX;
-        //            maxX = temp;
-        //        }
-        //        if (request.isStageInvertedY()) {
-        //            double temp = minY;
-        //            minY = maxY;
-        //            maxY = temp;
-        //        }
+        // Note: axis inversion is NOT applied to the bounding box here.
+        // The set of tile positions is geometrically determined by the
+        // bounding box alone; only the serpentine iteration order depends
+        // on StagePolarity (see processTileGridRequest). Reversing minX/maxX
+        // would double-count the inversion and produce incorrect positions.
 
         // Expand bounds by half frame to ensure full coverage
         double startX = minX - request.getFrameWidth() / 2.0;
