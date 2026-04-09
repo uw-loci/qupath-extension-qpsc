@@ -1237,11 +1237,14 @@ public class LiveViewerWindow {
                         double[] currentPos = controller.getStagePositionXY();
 
                         // Click-to-center: the clicked point must become the new
-                        // field-of-view center. For a non-inverted stage axis,
-                        // the clicked point's stage coordinate is
-                        // currentPos + offset (pixel offset scaled to microns).
-                        // For an inverted axis the sign flips.
-                        double xMult = invertX ? -1.0 : 1.0;
+                        // field-of-view center. The sign relationship depends
+                        // on the scope's hardware (stage inversion + any
+                        // image flip in the optical path). On OWS3 (Hamamatsu
+                        // sCMOS, no camera flip) the correct direction is
+                        // opposite of the previous `invertX ? -1 : 1` formula.
+                        // X now matches the working arrow/joystick sample-mode
+                        // direction; Y keeps its current formula.
+                        double xMult = invertX ? 1.0 : -1.0;
                         double yMult = invertY ? -1.0 : 1.0;
 
                         double newX = currentPos[0] + (offsetUm_X * xMult);
@@ -1252,7 +1255,9 @@ public class LiveViewerWindow {
 
                         Platform.runLater(() -> updateStatus(String.format("Centered on (%.0f, %.0f)", newX, newY)));
                         logger.info(
-                                "Double-click-to-center: offset ({}, {}) um -> ({}, {})",
+                                "Double-click-to-center: invertX={}, invertY={}, offset=({}, {}) um -> newStage=({}, {})",
+                                invertX,
+                                invertY,
                                 String.format("%.1f", offsetUm_X),
                                 String.format("%.1f", offsetUm_Y),
                                 String.format("%.1f", newX),
