@@ -1200,32 +1200,54 @@ public class AcquisitionManager {
     }
 
     /**
-     * Finds the most recently modified TIFF in any angle subdirectory under tileDirPath
-     * and sends it to the Live Viewer for display.
-     * Scans all subdirectories (e.g., 90/, 7/, -7/) since PPM and other modalities
-     * save tiles to multiple angle directories.
+     * Finds the most recently modified TIFF under tileDirPath and sends it to
+     * the Live Viewer for display. Handles both layouts:
+     * <ul>
+     *   <li>Rotation modalities (PPM, etc.) save tiles into angle subdirectories
+     *       (e.g. {@code 90/}, {@code 7/}, {@code -7/}).</li>
+     *   <li>Non-rotation modalities (brightfield, widefield fluorescence) save
+     *       tiles directly in the annotation folder with no angle subdirectory.</li>
+     * </ul>
+     * We scan both locations so Show Tiles works regardless of modality.
      */
     private void findAndDisplayLatestTile(String tileDirPath) {
         try {
             Path tileDir = Paths.get(tileDirPath);
             if (!Files.exists(tileDir)) return;
 
-            // Find the most recently modified .tif in any subdirectory
+            // Find the most recently modified .tif in either tileDir itself
+            // (non-rotation) or any direct subdirectory (rotation).
             java.io.File bestFile = null;
             long bestTime = 0;
 
-            java.io.File[] subdirs = tileDir.toFile().listFiles(java.io.File::isDirectory);
-            if (subdirs == null) return;
+            java.io.File rootDir = tileDir.toFile();
 
-            for (java.io.File subdir : subdirs) {
-                java.io.File[] tiffs =
-                        subdir.listFiles(f -> f.isFile() && f.getName().endsWith(".tif"));
-                if (tiffs == null) continue;
-                for (java.io.File tif : tiffs) {
+            // Non-rotation layout: tiles live directly in tileDir.
+            java.io.File[] rootTiffs =
+                    rootDir.listFiles(f -> f.isFile() && f.getName().endsWith(".tif"));
+            if (rootTiffs != null) {
+                for (java.io.File tif : rootTiffs) {
                     long mod = tif.lastModified();
                     if (mod > bestTime) {
                         bestTime = mod;
                         bestFile = tif;
+                    }
+                }
+            }
+
+            // Rotation layout: tiles live in angle subdirectories.
+            java.io.File[] subdirs = rootDir.listFiles(java.io.File::isDirectory);
+            if (subdirs != null) {
+                for (java.io.File subdir : subdirs) {
+                    java.io.File[] tiffs =
+                            subdir.listFiles(f -> f.isFile() && f.getName().endsWith(".tif"));
+                    if (tiffs == null) continue;
+                    for (java.io.File tif : tiffs) {
+                        long mod = tif.lastModified();
+                        if (mod > bestTime) {
+                            bestTime = mod;
+                            bestFile = tif;
+                        }
                     }
                 }
             }
