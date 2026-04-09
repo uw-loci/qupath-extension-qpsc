@@ -2084,6 +2084,11 @@ public class StageControlPanel extends VBox {
             // stageInvertedX/Y indicate whether positive stage commands move opposite
             // to the expected direction. The "Sample Movement" checkbox adds an extra
             // inversion on X so the sample appears to move with the control direction.
+            //
+            // NOTE: yDir here uses "up = +1" (human convention from button wiring),
+            // while the joystick and click handlers use screen coordinates where
+            // "up = negative Y delta". Normalise yDir to the screen convention
+            // before applying yMult so all three paths share the same formula.
             boolean sampleMode = sampleMovementCheckbox.isSelected();
             boolean invertX = qupath.ext.qpsc.preferences.QPPreferenceDialog.getStageInvertedXProperty();
             boolean invertY = qupath.ext.qpsc.preferences.QPPreferenceDialog.getStageInvertedYProperty();
@@ -2091,7 +2096,7 @@ public class StageControlPanel extends VBox {
             double yMult = invertY ? -1 : 1;
 
             double newX = currentX + (step * xDir * xMult);
-            double newY = currentY + (step * yDir * yMult);
+            double newY = currentY + (step * (-yDir) * yMult);
 
             if (!mgr.isWithinStageBounds(newX, newY)) {
                 xyStatus.setText("Move out of bounds");
