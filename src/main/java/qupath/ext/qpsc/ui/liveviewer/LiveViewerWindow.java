@@ -1201,8 +1201,14 @@ public class LiveViewerWindow {
         double offsetPixelsX = sourceClickX - (srcW / 2.0);
         double offsetPixelsY = sourceClickY - (srcH / 2.0);
 
-        // Capture sample movement mode setting
-        boolean sampleMode = PersistentPreferences.getStageControlSampleMovement();
+        // Capture stage inversion preferences. Double-click-to-center is
+        // semantically unambiguous ("put the clicked point at the new
+        // center"), so unlike the arrow/joystick controls it does NOT
+        // apply a sample-movement inversion -- the sample must always
+        // move toward the clicked point. Only the microscope's physical
+        // stage-axis inversion matters here.
+        boolean invertX = qupath.ext.qpsc.preferences.QPPreferenceDialog.getStageInvertedXProperty();
+        boolean invertY = qupath.ext.qpsc.preferences.QPPreferenceDialog.getStageInvertedYProperty();
 
         // Final variables for use in background thread
         final int finalSrcW = srcW;
@@ -1230,11 +1236,13 @@ public class LiveViewerWindow {
                         // Get current stage position
                         double[] currentPos = controller.getStagePositionXY();
 
-                        // Apply sample movement mode (same logic as StageControlPanel)
-                        // Default: Match MicroManager - clicking right of center should decrease X
-                        // Sample mode: Invert X axis only
-                        double xMult = sampleMode ? 1.0 : -1.0; // Sample: X increases; Default: X decreases
-                        double yMult = 1.0; // Always: clicking below center increases Y (matches MicroManager)
+                        // Click-to-center: the clicked point must become the new
+                        // field-of-view center. For a non-inverted stage axis,
+                        // the clicked point's stage coordinate is
+                        // currentPos + offset (pixel offset scaled to microns).
+                        // For an inverted axis the sign flips.
+                        double xMult = invertX ? -1.0 : 1.0;
+                        double yMult = invertY ? -1.0 : 1.0;
 
                         double newX = currentPos[0] + (offsetUm_X * xMult);
                         double newY = currentPos[1] + (offsetUm_Y * yMult);
