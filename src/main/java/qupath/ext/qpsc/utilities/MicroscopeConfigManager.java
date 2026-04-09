@@ -691,6 +691,115 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * Get the final exposures saved by the most recent background collection,
+     * if and only if that collection targeted the same modality/objective/detector.
+     *
+     * <p>The Python server writes these values to
+     * {@code calibration_targets.background_exposures} in the imageprocessing YAML
+     * after each successful background collection. The adaptive-exposure loop
+     * tunes exposure time to hit the user's target intensity (e.g. 30000 counts
+     * in 16-bit), so these values represent the camera settings that will
+     * produce a well-exposed image under the same illumination conditions.
+     *
+     * <p>Acquisition should prefer these exposures over ModalityHandler defaults
+     * whenever available and matching -- otherwise the tiled acquisition will
+     * use a different exposure than the background was collected at, breaking
+     * flat-field correction consistency.
+     *
+     * <p>The YAML structure written by
+     * {@code save_background_exposures_to_yaml} is:
+     * <pre>
+     * calibration_targets:
+     *   background_exposures:
+     *     last_calibrated: 2026-04-09T15:30:00
+     *     modality: Brightfield_10x
+     *     objective: LOCI_OBJECTIVE_OLYMPUS_10X_001
+     *     detector: HAMAMATSU_DCAM_01
+     *     angles:
+     *       &lt;angle_name&gt;:
+     *         angle_degrees: 0.0
+     *         exposure_ms: 12.3
+     *         achieved_intensity: 29500
+     * </pre>
+     *
+     * @param modality  modality name to match (e.g. {@code "Brightfield_10x"})
+     * @param objective objective ID to match
+     * @param detector  detector ID to match
+     * @return map of angle degrees to exposure_ms, or {@code null} if no stored
+     *         background exposures exist OR they were collected for a different
+     *         modality/objective/detector combination
+     */
+    @SuppressWarnings("unchecked")
+    public Map<Double, Double> getBackgroundExposures(String modality, String objective, String detector) {
+        if (imageprocessingData == null) {
+            return null;
+        }
+        Object calibTargets = imageprocessingData.get("calibration_targets");
+        if (!(calibTargets instanceof Map<?, ?>)) {
+            return null;
+        }
+        Object bgExp = ((Map<String, Object>) calibTargets).get("background_exposures");
+        if (!(bgExp instanceof Map<?, ?>)) {
+            return null;
+        }
+        Map<String, Object> bg = (Map<String, Object>) bgExp;
+
+        // Only use these exposures if the stored collection matches the
+        // current modality/objective/detector -- background_exposures is a
+        // single-entry section that gets overwritten by each new collection,
+        // so using a mismatched set would be worse than falling back to
+        // defaults.
+        Object storedModality = bg.get("modality");
+        Object storedObjective = bg.get("objective");
+        Object storedDetector = bg.get("detector");
+        if (modality != null && storedModality != null && !modality.equals(storedModality.toString())) {
+            logger.debug(
+                    "Background exposures stored for modality '{}' but requested '{}' -- ignoring",
+                    storedModality, modality);
+            return null;
+        }
+        if (objective != null && storedObjective != null && !objective.equals(storedObjective.toString())) {
+            logger.debug(
+                    "Background exposures stored for objective '{}' but requested '{}' -- ignoring",
+                    storedObjective, objective);
+            return null;
+        }
+        if (detector != null && storedDetector != null && !detector.equals(storedDetector.toString())) {
+            logger.debug(
+                    "Background exposures stored for detector '{}' but requested '{}' -- ignoring",
+                    storedDetector, detector);
+            return null;
+        }
+
+        Object anglesObj = bg.get("angles");
+        if (!(anglesObj instanceof Map<?, ?>)) {
+            return null;
+        }
+        Map<String, Object> angles = (Map<String, Object>) anglesObj;
+        if (angles.isEmpty()) {
+            return null;
+        }
+
+        Map<Double, Double> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : angles.entrySet()) {
+            if (entry.getValue() instanceof Map<?, ?> angleData) {
+                Object degObj = angleData.get("angle_degrees");
+                Object expObj = angleData.get("exposure_ms");
+                if (degObj instanceof Number deg && expObj instanceof Number exp) {
+                    result.put(deg.doubleValue(), exp.doubleValue());
+                }
+            }
+        }
+        if (result.isEmpty()) {
+            return null;
+        }
+        logger.debug(
+                "Loaded {} background exposure(s) from calibration_targets for {}/{}/{}",
+                result.size(), modality, objective, detector);
+        return result;
+    }
+
+    /**
      * Get pixel size for a specific modality/objective/detector combination.
      * Pixel sizes are stored in the hardware.objectives section of the main config.
      *

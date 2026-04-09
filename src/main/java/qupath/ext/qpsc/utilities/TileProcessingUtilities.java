@@ -203,21 +203,28 @@ public class TileProcessingUtilities {
                         outputFormat,
                         attempt,
                         maxAttempts);
-                // Pass stage Y inversion to the tile-config stitching strategy.
-                // Scopes whose stage Y convention is inverted relative to the
-                // pixel-down convention (OWS3 etc.) need Y negated so tiles
-                // land in the correct vertical order in the stitched output.
-                // CAMM and similar scopes leave stageInvertedY=false and are
+                // Pass stage X/Y inversion to the tile-config stitching
+                // strategy. Scopes whose stage convention is inverted relative
+                // to the pixel-down convention (OWS3 etc.) need the matching
+                // axis negated so tiles land correctly in the stitched output.
+                // CAMM and similar scopes leave these at false and are
                 // unaffected.
+                boolean stageInvertedX = QPPreferenceDialog.getStageInvertedXProperty();
                 boolean stageInvertedY = QPPreferenceDialog.getStageInvertedYProperty();
+                qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX =
+                        stageInvertedX;
                 qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY =
                         stageInvertedY;
-                logger.info("Set TileConfigurationTxtStrategy.flipStitchingY = {}", stageInvertedY);
+                logger.info(
+                        "Set TileConfigurationTxtStrategy flipStitchingX={}, flipStitchingY={}",
+                        stageInvertedX, stageInvertedY);
                 try {
                     outPath = StitchingWorkflow.run(config);
                 } finally {
-                    // Always clear the flag so it doesn't leak into a later
+                    // Always clear the flags so they don't leak into a later
                     // unrelated stitching invocation.
+                    qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX =
+                            false;
                     qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY =
                             false;
                 }
