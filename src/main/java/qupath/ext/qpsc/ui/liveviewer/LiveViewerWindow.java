@@ -405,53 +405,28 @@ public class LiveViewerWindow {
                     return;
                 }
 
-                // Convert BufferedImage to FrameData (RGB 8-bit).
-                // For 16-bit grayscale tiles (Hamamatsu sCMOS brightfield), we
-                // auto-scale to the observed min/max so the preview is visible
-                // even when the 16-bit values occupy only a fraction of the
-                // full range. For 8-bit RGB (JAI 3-CCD PPM), we use getRGB()
-                // which already returns the correct sRGB values.
-                int w = img.getWidth();
-                int h = img.getHeight();
-                byte[] rgb = new byte[w * h * 3];
-
-                if (img.getType() == BufferedImage.TYPE_USHORT_GRAY
-                        || img.getRaster().getTransferType() == java.awt.image.DataBuffer.TYPE_USHORT) {
-                    // 16-bit grayscale -- pull raw samples and auto-scale to 8-bit
-                    java.awt.image.Raster raster = img.getRaster();
-                    int[] samples = new int[w * h];
-                    raster.getSamples(0, 0, w, h, 0, samples);
-                    int minVal = Integer.MAX_VALUE;
-                    int maxVal = Integer.MIN_VALUE;
-                    for (int s : samples) {
-                        if (s < minVal) minVal = s;
-                        if (s > maxVal) maxVal = s;
-                    }
-                    int range = Math.max(1, maxVal - minVal);
-                    for (int i = 0; i < samples.length; i++) {
-                        int scaled = (int) (((long) (samples[i] - minVal) * 255L) / range);
-                        if (scaled < 0) scaled = 0;
-                        else if (scaled > 255) scaled = 255;
-                        byte g = (byte) scaled;
-                        int idx = i * 3;
-                        rgb[idx] = g;
-                        rgb[idx + 1] = g;
-                        rgb[idx + 2] = g;
-                    }
-                } else {
-                    // 8-bit RGB (or anything the default sRGB ColorModel handles)
-                    for (int y = 0; y < h; y++) {
-                        for (int x = 0; x < w; x++) {
-                            int pixel = img.getRGB(x, y);
-                            int idx = (y * w + x) * 3;
-                            rgb[idx] = (byte) ((pixel >> 16) & 0xFF); // R
-                            rgb[idx + 1] = (byte) ((pixel >> 8) & 0xFF); // G
-                            rgb[idx + 2] = (byte) (pixel & 0xFF); // B
-                        }
-                    }
+                // Convert the BufferedImage to a FrameData in the SAME FORMAT
+                // the live feed uses for this camera -- this way the user's
+                // current contrast slider settings apply naturally to the tile
+                // preview. If we gave the renderer an 8-bit RGB frame while
+                // contrast was set to a 16-bit range (e.g. min=5000, max=30000
+                // for Hamamatsu), every pixel in 0..255 would be clipped to
+                // black and the Live Viewer would "never change" even though
+                // renderFrame was being called correctly.
+                //
+                // 16-bit grayscale (Hamamatsu sCMOS): raw samples in big-endian
+                //   2-byte order, channels=1, bpp=2 -- matches renderFrame's
+                //   grayscale branch at line ~1195.
+                //
+                // 8-bit RGB (JAI 3-CCD): interleaved RGB bytes, channels=3,
+                //   bpp=1 -- matches renderFrame's RGB branch at line ~1199.
+                FrameData frame = bufferedImageToFrameData(img);
+                if (frame == null) {
+                    logger.debug("Unsupported tile image format for {}: type={}, bands={}",
+                            tileFile.getName(), img.getType(),
+                            img.getRaster().getNumBands());
+                    return;
                 }
-
-                FrameData frame = new FrameData(w, h, 3, 1, rgb, System.currentTimeMillis());
 
                 String fileName = tileFile.getName();
                 Platform.runLater(() -> {
@@ -465,6 +440,73 @@ public class LiveViewerWindow {
                 logger.debug("Error displaying acquired tile: {}", e.getMessage());
             }
         });
+    }
+
+    /**
+     * Convert a BufferedImage to a FrameData in the native format of the
+     * source pixels, so the live-mode contrast settings apply correctly.
+     *
+     * <ul>
+     *   <li>16-bit grayscale -> channels=1, bpp=2, big-endian sample bytes</li>
+     *   <li>8-bit grayscale  -> channels=1, bpp=1</li>
+     *   <li>8-bit RGB        -> channels=3, bpp=1, interleaved R,G,B</li>
+     * </ul>
+     *
+     * Returns null for unsupported formats.
+     */
+    private static FrameData bufferedImageToFrameData(BufferedImage img) {
+        int w = img.getWidth();
+        int h = img.getHeight();
+        java.awt.image.Raster raster = img.getRaster();
+        int transferType = raster.getTransferType();
+        int numBands = raster.getNumBands();
+
+        // Single-band (grayscale)
+        if (numBands == 1) {
+            int[] samples = new int[w * h];
+            raster.getSamples(0, 0, w, h, 0, samples);
+
+            if (transferType == java.awt.image.DataBuffer.TYPE_USHORT) {
+                // 16-bit grayscale: big-endian 2 bytes per sample, matches
+                // renderFrame's grayscale-16 branch.
+                byte[] bytes = new byte[w * h * 2];
+                for (int i = 0; i < samples.length; i++) {
+                    int v = samples[i] & 0xFFFF;
+                    bytes[i * 2] = (byte) ((v >> 8) & 0xFF);     // high byte first
+                    bytes[i * 2 + 1] = (byte) (v & 0xFF);
+                }
+                return new FrameData(w, h, 1, 2, bytes, System.currentTimeMillis());
+            } else {
+                // 8-bit grayscale
+                byte[] bytes = new byte[w * h];
+                for (int i = 0; i < samples.length; i++) {
+                    int v = samples[i];
+                    if (v < 0) v = 0;
+                    else if (v > 255) v = 255;
+                    bytes[i] = (byte) v;
+                }
+                return new FrameData(w, h, 1, 1, bytes, System.currentTimeMillis());
+            }
+        }
+
+        // Three-band (RGB). Use getRGB to normalize arbitrary ColorModels
+        // (TYPE_INT_RGB, TYPE_3BYTE_BGR, TYPE_INT_ARGB, etc.) into a plain
+        // interleaved 8-bit RGB byte stream.
+        if (numBands >= 3) {
+            byte[] rgb = new byte[w * h * 3];
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    int pixel = img.getRGB(x, y);
+                    int idx = (y * w + x) * 3;
+                    rgb[idx] = (byte) ((pixel >> 16) & 0xFF); // R
+                    rgb[idx + 1] = (byte) ((pixel >> 8) & 0xFF); // G
+                    rgb[idx + 2] = (byte) (pixel & 0xFF); // B
+                }
+            }
+            return new FrameData(w, h, 3, 1, rgb, System.currentTimeMillis());
+        }
+
+        return null;
     }
 
     /**
