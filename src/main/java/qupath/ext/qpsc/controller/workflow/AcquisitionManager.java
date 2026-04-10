@@ -1200,64 +1200,12 @@ public class AcquisitionManager {
     }
 
     /**
-     * Finds the most recently modified TIFF under tileDirPath and sends it to
-     * the Live Viewer for display. Handles both layouts:
-     * <ul>
-     *   <li>Rotation modalities (PPM, etc.) save tiles into angle subdirectories
-     *       (e.g. {@code 90/}, {@code 7/}, {@code -7/}).</li>
-     *   <li>Non-rotation modalities (brightfield, widefield fluorescence) save
-     *       tiles directly in the annotation folder with no angle subdirectory.</li>
-     * </ul>
-     * We scan both locations so Show Tiles works regardless of modality.
+     * Delegates to {@link qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow#scanAndShowLatestTile(String)}
+     * which handles both rotation (angle subdirectory) and non-rotation
+     * (tiles directly in the annotation folder) layouts.
      */
     private void findAndDisplayLatestTile(String tileDirPath) {
-        try {
-            Path tileDir = Paths.get(tileDirPath);
-            if (!Files.exists(tileDir)) return;
-
-            // Find the most recently modified .tif in either tileDir itself
-            // (non-rotation) or any direct subdirectory (rotation).
-            java.io.File bestFile = null;
-            long bestTime = 0;
-
-            java.io.File rootDir = tileDir.toFile();
-
-            // Non-rotation layout: tiles live directly in tileDir.
-            java.io.File[] rootTiffs =
-                    rootDir.listFiles(f -> f.isFile() && f.getName().endsWith(".tif"));
-            if (rootTiffs != null) {
-                for (java.io.File tif : rootTiffs) {
-                    long mod = tif.lastModified();
-                    if (mod > bestTime) {
-                        bestTime = mod;
-                        bestFile = tif;
-                    }
-                }
-            }
-
-            // Rotation layout: tiles live in angle subdirectories.
-            java.io.File[] subdirs = rootDir.listFiles(java.io.File::isDirectory);
-            if (subdirs != null) {
-                for (java.io.File subdir : subdirs) {
-                    java.io.File[] tiffs =
-                            subdir.listFiles(f -> f.isFile() && f.getName().endsWith(".tif"));
-                    if (tiffs == null) continue;
-                    for (java.io.File tif : tiffs) {
-                        long mod = tif.lastModified();
-                        if (mod > bestTime) {
-                            bestTime = mod;
-                            bestFile = tif;
-                        }
-                    }
-                }
-            }
-
-            if (bestFile != null) {
-                qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.showAcquiredTile(bestFile.getAbsolutePath());
-            }
-        } catch (Exception e) {
-            logger.debug("Error finding latest tile for viewer: {}", e.getMessage());
-        }
+        qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.scanAndShowLatestTile(tileDirPath);
     }
 
     private int estimateTileCount(PathObject annotation) {

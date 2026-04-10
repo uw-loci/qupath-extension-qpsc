@@ -348,8 +348,24 @@ public class BoundedAcquisitionWorkflow {
 
                                 Thread.sleep(1000);
 
+                                // Show Tiles support: display each new tile in the Live Viewer
+                                // as it is acquired. The tile directory layout is
+                                // tempTileDir/<annotationName>/... where annotationName is
+                                // boundsMode for this workflow (e.g. "bounds").
+                                final String tileDirPath = Paths.get(tempTileDir, boundsMode).toString();
+                                final AtomicInteger lastTileProgress = new AtomicInteger(0);
+
                                 MicroscopeSocketClient.AcquisitionState finalState = socketClient.monitorAcquisition(
-                                        progress -> progressCounter.set(progress.current),
+                                        progress -> {
+                                            progressCounter.set(progress.current);
+                                            // Show acquired tile in Live Viewer (if enabled)
+                                            if (qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.isShowTilesEnabled()
+                                                    && progress.current > lastTileProgress.get()) {
+                                                lastTileProgress.set(progress.current);
+                                                qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow
+                                                        .scanAndShowLatestTile(tileDirPath);
+                                            }
+                                        },
                                         retriesRemaining -> ManualFocusHandler.handle(
                                                 socketClient,
                                                 retriesRemaining,

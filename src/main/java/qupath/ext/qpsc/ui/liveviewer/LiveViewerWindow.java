@@ -510,6 +510,71 @@ public class LiveViewerWindow {
     }
 
     /**
+     * Scan the given tile directory for the most recently modified TIFF
+     * and display it in the Live Viewer via {@link #showAcquiredTile(String)}.
+     * <p>
+     * Handles both layouts:
+     * <ul>
+     *   <li>Non-rotation modalities (brightfield, fluorescence): tiles live
+     *       directly in {@code tileDirPath}.</li>
+     *   <li>Rotation modalities (PPM): tiles live in angle subdirectories
+     *       like {@code 90/}, {@code 7/}, {@code -7/} under {@code tileDirPath}.</li>
+     * </ul>
+     * Both layouts are scanned in one pass; the newest modification time wins.
+     * <p>
+     * Safe no-op if Show Tiles is disabled or the Live Viewer is not open --
+     * {@link #showAcquiredTile(String)} handles those early-exit cases.
+     *
+     * @param tileDirPath the annotation-level tile directory
+     *                    (e.g. {@code .../Brightfield_10x_7/bounds})
+     */
+    public static void scanAndShowLatestTile(String tileDirPath) {
+        try {
+            java.nio.file.Path tileDir = java.nio.file.Paths.get(tileDirPath);
+            if (!java.nio.file.Files.exists(tileDir)) return;
+
+            File bestFile = null;
+            long bestTime = 0;
+
+            File rootDir = tileDir.toFile();
+
+            // Non-rotation layout: tiles directly in tileDirPath
+            File[] rootTiffs = rootDir.listFiles(f -> f.isFile() && f.getName().endsWith(".tif"));
+            if (rootTiffs != null) {
+                for (File tif : rootTiffs) {
+                    long mod = tif.lastModified();
+                    if (mod > bestTime) {
+                        bestTime = mod;
+                        bestFile = tif;
+                    }
+                }
+            }
+
+            // Rotation layout: tiles in angle subdirectories
+            File[] subdirs = rootDir.listFiles(File::isDirectory);
+            if (subdirs != null) {
+                for (File subdir : subdirs) {
+                    File[] tiffs = subdir.listFiles(f -> f.isFile() && f.getName().endsWith(".tif"));
+                    if (tiffs == null) continue;
+                    for (File tif : tiffs) {
+                        long mod = tif.lastModified();
+                        if (mod > bestTime) {
+                            bestTime = mod;
+                            bestFile = tif;
+                        }
+                    }
+                }
+            }
+
+            if (bestFile != null) {
+                showAcquiredTile(bestFile.getAbsolutePath());
+            }
+        } catch (Exception e) {
+            logger.debug("scanAndShowLatestTile failed for {}: {}", tileDirPath, e.getMessage());
+        }
+    }
+
+    /**
      * Load a tile image into a BufferedImage, trying multiple readers.
      * <p>
      * Order:
