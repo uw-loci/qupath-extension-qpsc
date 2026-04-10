@@ -133,35 +133,56 @@ Same procedure as X: set a new Y position via MM script and observe which direct
 | Requires Restart | No |
 
 **Description:**
-How the displayed image is oriented relative to the sample frame. Composes with the two stage-polarity preferences above via `StageImageTransform` to form the complete stage ⇔ image relationship used by arrow buttons, the virtual joystick, double-click-to-center, and the stitcher's tile placement.
 
-This is a property of the optical path + camera mounting, distinct from the stage wiring. Reasons you might need a non-NORMAL value:
-- The camera is physically rotated on its mount (90°, 180°, or 270°).
-- There's a prism or mirror in the optical path that horizontally or vertically mirrors the image.
-- The sensor readout order and the mount orientation don't agree.
+`Camera orientation` describes the **net optical relationship** between your sample and your displayed image. It composes with the two stage-polarity preferences above via `StageImageTransform` to form the complete stage ⇔ image relationship used by arrow buttons, the virtual joystick, double-click-to-center, and the stitcher's tile placement.
+
+**⚠️ IMPORTANT — what this preference is NOT:**
+
+- It is **not** a command to rotate or flip your displayed image.
+- It does **not** change anything about what the Live Viewer shows. The Live Viewer keeps displaying exactly the same pixels regardless of this setting.
+- It is **not** about whether you physically rotated your camera hardware.
+
+**What it IS:**
+
+A label describing how the displayed image is *already* related to the sample frame, so the software can do correct sign math for stage commands and tile placement. Your scope may have an image flip inherent to its optics (a dichroic, a mirror, a prism in the adapter, or just the way the sensor is wired) that you never installed — and this preference tells the software about that existing flip so it can compensate.
+
+**Concrete example (OWS3, 2026-04-09):** The Nikon Ti2 body on OWS3 produces a horizontally-flipped image path even though the camera itself is mounted normally and nothing was physically rotated. The correct setting on OWS3 is `FLIP_H`. Changing from `NORMAL` to `FLIP_H` does not alter the Live Viewer image at all — but it fixes the X axis of the stitched output, which was previously mirrored.
 
 **Values:**
 
 Axis-aligned (fully supported by all subsystems including the stitcher):
-- `NORMAL` — identity. Sample `+X` appears at display right; sample `+Y` appears at display down. Use this on most microscopes.
-- `FLIP_H` — horizontal mirror. Sample `+X` appears at display left.
-- `FLIP_V` — vertical mirror. Sample `+Y` appears at display up.
-- `ROT_180` — upside down. Equivalent to `FLIP_H` composed with `FLIP_V`.
+- `NORMAL` — the simplest case. Sample `+X` appears at display right; sample `+Y` appears at display down. Start here for any new scope.
+- `FLIP_H` — there's a *net* horizontal flip somewhere in the optical path. Sample `+X` appears at display **left**. This is the setting OWS3 turned out to need.
+- `FLIP_V` — net vertical flip in the optical path. Sample `+Y` appears at display **up**.
+- `ROT_180` — the image is upside-down relative to the stage frame. Equivalent to `FLIP_H` composed with `FLIP_V`.
 
-Rotation / transpose cases (supported by Live Viewer controls but NOT by the stitcher — rotated-camera acquisitions will log an error and the stitched output will be mis-oriented until full support lands):
-- `ROT_90_CW` — camera rotated 90° clockwise.
-- `ROT_90_CCW` — camera rotated 90° counter-clockwise (= 270° CW).
+Rotation / transpose cases (supported by Live Viewer controls but **not** by the stitcher — acquisitions will log an error and the stitched output will be mis-oriented until full rotation support lands):
+- `ROT_90_CW` — image is rotated 90° clockwise relative to stage frame.
+- `ROT_90_CCW` — image is rotated 90° counter-clockwise (= 270° CW).
 - `TRANSPOSE` — diagonal transpose (swap X and Y axes).
 - `ANTI_TRANSPOSE` — anti-diagonal transpose.
 
 **How to Configure:**
-Cycle through the axis-aligned values until all four of these gestures produce the correct visual direction on your scope:
-1. Arrow buttons (Sample Movement checked)
-2. Virtual joystick
-3. Double-click-to-center on a feature — the feature should jump to the centre of the view.
-4. A small stitched acquisition — corners should be laid out correctly in the output image.
 
-If all four agree with `NORMAL`, no change needed. If only `FLIP_H` / `FLIP_V` / `ROT_180` gives consistent behaviour, use that.
+The goal is to pick whichever combination of `Inverted X/Y stage` + `Camera orientation` makes **all four of these** produce the correct visual result on your scope:
+
+1. Arrow buttons (Sample Movement checked) — direction matches the button you press
+2. Virtual joystick — direction matches the drag
+3. Double-click-to-center — the clicked feature jumps to the centre of the view
+4. A small stitched 2×2 acquisition — the corners are laid out as expected
+
+Procedure:
+1. Start with the `Inverted X/Y stage` settings you already had, and `Camera orientation = NORMAL`.
+2. Test the four live gestures. If all four work, you may still need to verify stitching (step 4) — it's possible for gestures to appear correct but stitching to be wrong, as we found on OWS3.
+3. Run a small 2×2 stitched acquisition.
+4. If only the stitched X axis is wrong, try `FLIP_H`.
+5. If only the stitched Y axis is wrong, try `FLIP_V`.
+6. If both stitched axes are wrong, try `ROT_180`.
+7. Only if none of the axis-aligned values work, and you genuinely have a physically rotated camera sensor, pick one of the rotation values — but be aware the stitcher won't fully support it yet.
+
+Remember: changing `Camera orientation` will **not** make your Live Viewer image appear flipped or rotated. It only changes the software's interpretation of direction signs. If the Live Viewer looks correct with `NORMAL` but stitching is wrong, that's a legitimate reason to try `FLIP_H` or `FLIP_V` even though "nothing looks flipped".
+
+**Debugging:** When QuPath starts, QPSC logs a `Live-view coordinate transform at startup` block to the log file (Help → Show Log). It shows the current stage/camera settings and the resulting mmDelta signs for each canonical gesture. If anything looks wrong, paste that block into a bug report.
 
 ---
 

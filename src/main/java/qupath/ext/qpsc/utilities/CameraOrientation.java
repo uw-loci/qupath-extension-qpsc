@@ -1,14 +1,39 @@
 package qupath.ext.qpsc.utilities;
 
 /**
- * Represents the physical orientation of the camera / optical image relative
- * to the "canonical" orientation where sample +X appears at display +X (right)
- * and sample +Y appears at display +Y (down).
+ * Describes the <strong>net optical relationship</strong> between the sample
+ * frame and the displayed image on a given microscope. Composed with
+ * {@link StagePolarity} by {@link StageImageTransform} to form the complete
+ * stage ⇔ display sign math used by the Live Viewer arrow buttons, virtual
+ * joystick, double-click-to-centre, and the stitcher.
  *
- * <p>This captures how the camera sensor is mounted and any optical flips
- * (horizontal or vertical mirrors, rotated prisms) in the imaging path
- * between the sample and the displayed image. It does NOT describe stage
- * wiring polarity (see {@link StagePolarity}).
+ * <h2>What this enum is NOT</h2>
+ *
+ * <p>This enum is <em>not</em> a command to flip or rotate the displayed
+ * image. Selecting {@link #FLIP_H} does not alter a single pixel that the
+ * Live Viewer shows. It also does not describe whether anyone has physically
+ * rotated or re-mounted the camera hardware.
+ *
+ * <h2>What this enum IS</h2>
+ *
+ * <p>A label describing how the displayed image is <em>already</em> oriented
+ * relative to the sample frame. A scope can have a horizontal or vertical
+ * image flip inherent to its optics — a dichroic, a mirror, an adapter, or
+ * simply the sensor readout wiring — that no user ever installed. Software
+ * needs to know about that flip in order to interpret stage commands and
+ * tile positions correctly, but it cannot undo or cause a physical flip; it
+ * can only match its own sign math to the reality.
+ *
+ * <p>Example: OWS3 (Nikon Ti2 + Hamamatsu Orca) needs {@link #FLIP_H},
+ * because the Ti2 body's optical path produces a horizontally-flipped image
+ * relative to the stage frame. Nobody touched the camera mount; the flip is
+ * built into the scope. Before {@link #FLIP_H} was set, Live-view gestures
+ * appeared to work (because the {@link StagePolarity} alone happened to
+ * compensate) but the stitched output had its tiles laid out with X
+ * mirrored. Setting {@link #FLIP_H} did not change the Live Viewer image —
+ * it fixed the stitched output.
+ *
+ * <h2>Math</h2>
  *
  * <p>Each enum value corresponds to a 2x2 orthogonal matrix {@code M} that
  * maps a sample-frame delta {@code (dsx, dsy)} to the displayed-pixel-frame
@@ -19,23 +44,29 @@ package qupath.ext.qpsc.utilities;
  * </pre>
  *
  * <p>The 8 values form the dihedral group D4 (four rotations times two
- * reflections), which is the complete set of rigid transformations that
- * preserve distances and the sign of determinants are all {@code ±1}.
+ * reflections), which is the complete set of rigid transformations
+ * preserving distances with determinant ±1.
  *
  * <p>For a rigid orthogonal matrix, the inverse equals the transpose, so
  * {@link #displayToSample(double, double)} applies the transpose of the
  * stored matrix directly without a separate lookup.
  *
- * <p><strong>Which value should I pick for my scope?</strong> Empirically:
- * configure {@link StagePolarity} first based on MM stage diagnostics, then
- * cycle through this enum until the Live Viewer arrows, joystick, and
- * double-click-to-center all produce the correct visual direction on your
- * scope. Most scopes are {@link #NORMAL}, {@link #FLIP_H}, {@link #FLIP_V},
+ * <h2>Which value should I pick for my scope?</h2>
+ *
+ * <p>Empirically: start with {@link #NORMAL}. Test arrow buttons, joystick,
+ * double-click-to-centre, AND a small 2×2 stitched acquisition. If only the
+ * stitched output is wrong while live gestures look right, that is a strong
+ * signal you need a {@link #FLIP_H}, {@link #FLIP_V}, or {@link #ROT_180}
+ * value — and it does <em>not</em> mean your live image is wrong. Cycle
+ * through the four axis-aligned values until both gestures and stitching
+ * agree.
+ *
+ * <p>Most scopes end up at {@link #NORMAL}, {@link #FLIP_H}, {@link #FLIP_V},
  * or {@link #ROT_180}. The rotation cases ({@link #ROT_90_CW},
  * {@link #ROT_90_CCW}, {@link #TRANSPOSE}, {@link #ANTI_TRANSPOSE}) are
  * supported for arrow / joystick / click but are NOT yet handled by the
- * stitcher — acquisitions that need them will produce correct tiles at
- * correct stage positions but the stitched output will be mis-rotated and
+ * stitcher — acquisitions that need them will produce correct tile
+ * positions on the sample but the stitched image will be mis-rotated and
  * log a warning.
  */
 public enum CameraOrientation {

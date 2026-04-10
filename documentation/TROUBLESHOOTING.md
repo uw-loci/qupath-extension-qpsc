@@ -268,17 +268,26 @@ Observe which direction the physical stage actually moves. If it moves in the la
    - Joystick drag upward
    - Double-click on a feature that's currently visible but off-centre
 
-3. Each should produce the "obvious" visual direction. If they don't:
-   - **Only X is wrong** → toggle "Inverted X stage" in preferences
-   - **Only Y is wrong** → toggle "Inverted Y stage"
-   - **Both are wrong** → toggle both
-   - **One works but the other looks "rotated" or "mirrored"** → change "Camera orientation" from `NORMAL` to one of `FLIP_H`, `FLIP_V`, or `ROT_180`
+3. Each gesture should produce the "obvious" visual direction. If they don't:
+   - **Only Live Viewer X gesture is wrong** → toggle "Inverted X stage" in preferences
+   - **Only Live Viewer Y gesture is wrong** → toggle "Inverted Y stage"
+   - **Both Live Viewer axes are wrong** → toggle both
+   - **Live Viewer gestures all work, BUT the stitched output has wrong corners** → change "Camera orientation", see below
 
-4. Acquire a small 2×2 bounding box test and verify that the stitched tiles are in the correct corners.
+4. Acquire a small 2×2 bounding box test. Place it on a recognizable feature, run the acquisition, and look at the stitched output. Compare corner-by-corner against what you see in the live view at each stage position. **Do this step even if the Live Viewer gestures all look correct** — it's possible for gestures to look right while stitching is wrong (OWS3 showed exactly this during the 2026-04-09 refactor test).
 
-**Note on Camera orientation:**
-- `NORMAL`, `FLIP_H`, `FLIP_V`, `ROT_180` are the four axis-aligned values. These work everywhere.
-- `ROT_90_CW`, `ROT_90_CCW`, `TRANSPOSE`, `ANTI_TRANSPOSE` are the rotation/transpose cases. These work for arrow / joystick / click but the stitcher does NOT fully support them — stitched output will be mis-oriented. If you actually have a rotated camera, file an issue and request full rotation support.
+5. If the stitched output is wrong, the fix is in `Camera orientation`:
+   - **Only stitched X mirrored** → set `Camera orientation` to `FLIP_H`
+   - **Only stitched Y mirrored** → set `Camera orientation` to `FLIP_V`
+   - **Both axes mirrored (180° rotation)** → set `Camera orientation` to `ROT_180`
+
+**CRITICAL misconception to avoid:** Setting `Camera orientation` to `FLIP_H` does **not** change what the Live Viewer shows. It does not flip your camera image on screen. It only tells the software that your scope's optical path already produces a horizontally-flipped relationship between stage coordinates and displayed pixels — and the software should do sign math accordingly. If your live image looks correct but your stitched output has mirrored corners, that's a legitimate reason to pick `FLIP_H` even though "nothing looks flipped" in the live view.
+
+**Real example from OWS3 (Nikon Ti2 + Hamamatsu Orca):** Live Viewer arrows, joystick, and double-click all worked correctly with `Inverted Y stage` = ON and `Camera orientation` = NORMAL. But a 2×2 stitched acquisition showed tiles with their X corners mirrored. The correct setting turned out to be `Camera orientation` = `FLIP_H`, because the Ti2 body's optical path produces a horizontally-flipped image. Nobody physically modified the camera; the flip is inherent to the scope. Setting `FLIP_H` did not alter the Live Viewer image at all — but it fixed the stitched output.
+
+**Axis-aligned vs rotation values:**
+- `NORMAL`, `FLIP_H`, `FLIP_V`, `ROT_180` are the four axis-aligned values. These work everywhere, including the stitcher.
+- `ROT_90_CW`, `ROT_90_CCW`, `TRANSPOSE`, `ANTI_TRANSPOSE` are the rotation/transpose cases for scopes whose camera sensor is physically rotated 90°. The Live Viewer gestures work with them, but the stitcher does NOT fully support them — stitched output will be mis-oriented and a warning will be logged. If you actually have a rotated camera, file an issue and request full rotation support.
 
 **Design doc:** `claude-reports/2026-04-09_stage-image-transform-refactor.md`
 
