@@ -83,6 +83,14 @@ dependencies {
     // CompileOnly - QuPath provides bioformats at runtime, we just compile against it
     // This avoids trying to resolve OME transitive dependencies during build
     compileOnly("io.github.qupath:qupath-extension-bioformats:0.6.0-rc4")
+    // LiveViewerWindow.showAcquiredTile uses loci.formats.gui.BufferedImageReader
+    // to read 16-bit mono OME-TIFFs that ImageIO can't handle. BufferedImageReader
+    // lives in formats-bsd, which is a transitive runtime dep of the BioFormats
+    // extension above but not present on the compile classpath. Pull it in as
+    // compileOnly so the compiler sees the symbol; at runtime QuPath's bioformats
+    // extension supplies it.
+    compileOnly("ome:formats-bsd:8.2.0")
+    compileOnly("ome:formats-api:8.2.0")
     // If you aren't using Groovy, this can be removed
     shadow(libs.bundles.groovy)
 

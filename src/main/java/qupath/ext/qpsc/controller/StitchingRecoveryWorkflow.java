@@ -538,7 +538,30 @@ public class StitchingRecoveryWorkflow {
                     // Strip extension since StitchingWorkflow appends it
                     config.outputFilename = GeneralTools.stripExtension(generatedName);
 
-                    String outPath = StitchingWorkflow.run(config);
+                    // Pass the composite stage/camera transform to the
+                    // tile-config stitching strategy. Must match the
+                    // TileProcessingUtilities main-acquisition path so
+                    // re-stitching a folder produces the same layout as
+                    // the original acquisition.
+                    qupath.ext.qpsc.utilities.StageImageTransform siTransform =
+                            qupath.ext.qpsc.utilities.StageImageTransform.current();
+                    boolean[] stitcherFlags = siTransform.stitcherFlipFlags();
+                    qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX =
+                            stitcherFlags[0];
+                    qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY =
+                            stitcherFlags[1];
+                    logger.info(
+                            "Recovery stitching for angle '{}': set flipStitchingX={}, flipStitchingY={} (from {})",
+                            angleName, stitcherFlags[0], stitcherFlags[1], siTransform);
+                    String outPath;
+                    try {
+                        outPath = StitchingWorkflow.run(config);
+                    } finally {
+                        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX =
+                                false;
+                        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY =
+                                false;
+                    }
 
                     if (outPath == null) {
                         logger.error("Stitching returned null for angle '{}'", angleName);
