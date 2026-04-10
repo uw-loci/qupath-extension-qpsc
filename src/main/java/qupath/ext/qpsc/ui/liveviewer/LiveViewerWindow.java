@@ -399,23 +399,55 @@ public class LiveViewerWindow {
                     return;
                 }
 
-                BufferedImage img = ImageIO.read(tileFile);
+                BufferedImage img = loadTileImage(tileFile);
                 if (img == null) {
-                    logger.debug("Failed to read tile image: {}", tilePath);
+                    logger.warn("Failed to read tile image (ImageIO + BioFormats both returned null): {}", tilePath);
                     return;
                 }
 
-                // Convert BufferedImage to FrameData (RGB 8-bit)
+                // Convert BufferedImage to FrameData (RGB 8-bit).
+                // For 16-bit grayscale tiles (Hamamatsu sCMOS brightfield), we
+                // auto-scale to the observed min/max so the preview is visible
+                // even when the 16-bit values occupy only a fraction of the
+                // full range. For 8-bit RGB (JAI 3-CCD PPM), we use getRGB()
+                // which already returns the correct sRGB values.
                 int w = img.getWidth();
                 int h = img.getHeight();
                 byte[] rgb = new byte[w * h * 3];
-                for (int y = 0; y < h; y++) {
-                    for (int x = 0; x < w; x++) {
-                        int pixel = img.getRGB(x, y);
-                        int idx = (y * w + x) * 3;
-                        rgb[idx] = (byte) ((pixel >> 16) & 0xFF); // R
-                        rgb[idx + 1] = (byte) ((pixel >> 8) & 0xFF); // G
-                        rgb[idx + 2] = (byte) (pixel & 0xFF); // B
+
+                if (img.getType() == BufferedImage.TYPE_USHORT_GRAY
+                        || img.getRaster().getTransferType() == java.awt.image.DataBuffer.TYPE_USHORT) {
+                    // 16-bit grayscale -- pull raw samples and auto-scale to 8-bit
+                    java.awt.image.Raster raster = img.getRaster();
+                    int[] samples = new int[w * h];
+                    raster.getSamples(0, 0, w, h, 0, samples);
+                    int minVal = Integer.MAX_VALUE;
+                    int maxVal = Integer.MIN_VALUE;
+                    for (int s : samples) {
+                        if (s < minVal) minVal = s;
+                        if (s > maxVal) maxVal = s;
+                    }
+                    int range = Math.max(1, maxVal - minVal);
+                    for (int i = 0; i < samples.length; i++) {
+                        int scaled = (int) (((long) (samples[i] - minVal) * 255L) / range);
+                        if (scaled < 0) scaled = 0;
+                        else if (scaled > 255) scaled = 255;
+                        byte g = (byte) scaled;
+                        int idx = i * 3;
+                        rgb[idx] = g;
+                        rgb[idx + 1] = g;
+                        rgb[idx + 2] = g;
+                    }
+                } else {
+                    // 8-bit RGB (or anything the default sRGB ColorModel handles)
+                    for (int y = 0; y < h; y++) {
+                        for (int x = 0; x < w; x++) {
+                            int pixel = img.getRGB(x, y);
+                            int idx = (y * w + x) * 3;
+                            rgb[idx] = (byte) ((pixel >> 16) & 0xFF); // R
+                            rgb[idx + 1] = (byte) ((pixel >> 8) & 0xFF); // G
+                            rgb[idx + 2] = (byte) (pixel & 0xFF); // B
+                        }
                     }
                 }
 
@@ -433,6 +465,45 @@ public class LiveViewerWindow {
                 logger.debug("Error displaying acquired tile: {}", e.getMessage());
             }
         });
+    }
+
+    /**
+     * Load a tile image into a BufferedImage, trying multiple readers.
+     * <p>
+     * Order:
+     * <ol>
+     *   <li>Standard {@code ImageIO.read()} -- fast, works for 8-bit RGB TIFFs
+     *       (e.g. JAI 3-CCD PPM output).</li>
+     *   <li>BioFormats {@code BufferedImageReader} fallback -- required for
+     *       16-bit monochrome OME-TIFFs (e.g. Hamamatsu sCMOS brightfield
+     *       output), which the stock JRE ImageIO cannot decode.</li>
+     * </ol>
+     * Returns {@code null} only if both paths fail.
+     */
+    private static BufferedImage loadTileImage(File tileFile) {
+        // Fast path: standard ImageIO
+        try {
+            BufferedImage img = ImageIO.read(tileFile);
+            if (img != null) {
+                return img;
+            }
+        } catch (IOException e) {
+            logger.debug("ImageIO could not read {}: {}", tileFile.getName(), e.getMessage());
+        }
+
+        // Fallback: BioFormats (handles 16-bit mono, OME-TIFF, and anything else
+        // the stock ImageIO decoder chokes on). Provided at runtime by QuPath's
+        // bioformats extension (build.gradle.kts compileOnly dependency).
+        try (loci.formats.gui.BufferedImageReader reader =
+                     new loci.formats.gui.BufferedImageReader(new loci.formats.ImageReader())) {
+            reader.setId(tileFile.getAbsolutePath());
+            return reader.openImage(0);
+        } catch (Throwable t) {
+            // Catch Throwable so a missing BioFormats at runtime downgrades to a
+            // warning instead of crashing the preview thread.
+            logger.debug("BioFormats could not read {}: {}", tileFile.getName(), t.getMessage());
+            return null;
+        }
     }
 
     private void buildUI() {
