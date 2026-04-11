@@ -550,8 +550,13 @@ public class LiveViewerWindow {
                 }
             }
 
-            // Rotation layout: tiles in angle subdirectories
-            File[] subdirs = rootDir.listFiles(File::isDirectory);
+            // Rotation layout: tiles in angle subdirectories (90/, 7/, -7/, 0/).
+            // Only scan dirs whose name parses as a number -- this excludes
+            // post-processing output directories like 7.0.biref/ and 7.0.sum/
+            // whose biref TIFFs are computed last (newest timestamp) but are
+            // 16-bit grayscale and render poorly with the 8-bit RGB contrast
+            // settings of the Live Viewer.
+            File[] subdirs = rootDir.listFiles(f -> f.isDirectory() && isAngleDirectory(f.getName()));
             if (subdirs != null) {
                 for (File subdir : subdirs) {
                     File[] tiffs = subdir.listFiles(f -> f.isFile() && f.getName().endsWith(".tif"));
@@ -571,6 +576,20 @@ public class LiveViewerWindow {
             }
         } catch (Exception e) {
             logger.debug("scanAndShowLatestTile failed for {}: {}", tileDirPath, e.getMessage());
+        }
+    }
+
+    /**
+     * Returns true if the directory name looks like an angle value (e.g. "90",
+     * "7.0", "-7.0"). Post-processing directories like "7.0.biref" or "7.0.sum"
+     * fail to parse and are excluded.
+     */
+    private static boolean isAngleDirectory(String name) {
+        try {
+            Double.parseDouble(name);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
         }
     }
 
