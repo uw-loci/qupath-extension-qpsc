@@ -40,6 +40,7 @@ import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.animation.PauseTransition;
 import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -130,6 +131,16 @@ public class StageControlPanel extends VBox {
 
     // Position synchronization listener
     private PropertyChangeListener positionListener;
+
+    // Z scroll debouncing state
+    /** Accumulated target Z during a scroll gesture. NaN when idle. */
+    private double pendingZTarget = Double.NaN;
+    /** Debounce timer: fires 100ms after the last scroll tick. */
+    private final PauseTransition zScrollDebounce = new PauseTransition(Duration.millis(100));
+    /** True while a scroll-initiated Z move is in-flight or debouncing. Suppresses poller overwrites. */
+    private volatile boolean zScrollInFlight = false;
+    /** Standard JavaFX deltaY units per mouse wheel notch on Windows. */
+    private static final double SCROLL_UNITS_PER_NOTCH = 40.0;
 
     // Saved Points tab components
     private ListView<SavedPoint> savedPointsListView;
@@ -382,7 +393,8 @@ public class StageControlPanel extends VBox {
 
         zStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
 
-        // Z scroll handler
+        // Z scroll handler (debounced -- accumulates rapid ticks, sends one move)
+        zScrollDebounce.setOnFinished(e -> executeZScroll());
         javafx.event.EventHandler<ScrollEvent> zScrollHandler = event -> handleZScroll(event, zStepField);
         zField.setOnScroll(zScrollHandler);
         moveZBtn.setOnScroll(zScrollHandler);
@@ -1848,7 +1860,14 @@ public class StageControlPanel extends VBox {
                 double[] current = joystickPosition.get();
                 joystickPosition.set(new double[] {current[0], newVal});
             }
-            case StagePositionManager.PROP_POS_Z -> zField.setText(String.format("%.2f", newVal));
+            case StagePositionManager.PROP_POS_Z -> {
+                // Suppress poller updates while a scroll gesture is in-flight
+                // to prevent the stale hardware position from rolling back
+                // the user's accumulated scroll target.
+                if (!zScrollInFlight) {
+                    zField.setText(String.format("%.2f", newVal));
+                }
+            }
             case StagePositionManager.PROP_POS_R -> rField.setText(String.format("%.2f", newVal));
         }
     }
@@ -2031,6 +2050,19 @@ public class StageControlPanel extends VBox {
         }
     }
 
+    /**
+     * Accumulates scroll ticks into {@link #pendingZTarget} and resets the
+     * debounce timer. The actual MOVEZ command fires once from
+     * {@link #executeZScroll()} after 100ms of silence. This prevents
+     * rapid scroll events from spawning overlapping move threads and
+     * eliminates the race between optimistic UI updates and the position
+     * poller.
+     *
+     * <p>Proportional: each mouse-wheel notch (~40 deltaY units) adds one
+     * step. Trackpads and high-resolution wheels produce fractional notches
+     * for finer control; fast flicks produce multiple notches for larger
+     * movement.
+     */
     private void handleZScroll(ScrollEvent event, TextField zStepField) {
         if (isAcquisitionBlocked()) {
             event.consume();
@@ -2038,39 +2070,71 @@ public class StageControlPanel extends VBox {
         }
         try {
             double step = Double.parseDouble(zStepField.getText().replace(",", ""));
-            double currentZ = Double.parseDouble(zField.getText().replace(",", ""));
-            double direction = event.getDeltaY() > 0 ? 1 : -1;
-            double newZ = currentZ + (step * direction);
+            double deltaY = event.getDeltaY();
 
-            if (!mgr.isWithinStageBounds(newZ)) {
+            // Proportional: each notch (~40 units on Windows) = one step
+            double notches = deltaY / SCROLL_UNITS_PER_NOTCH;
+            double movement = step * notches;
+
+            // Seed from the current field value only on the first tick of a
+            // new gesture. Subsequent ticks accumulate from the pending target
+            // so the poller cannot roll back the accumulation.
+            if (Double.isNaN(pendingZTarget)) {
+                pendingZTarget = Double.parseDouble(zField.getText().replace(",", ""));
+            }
+            pendingZTarget += movement;
+
+            if (!mgr.isWithinStageBounds(pendingZTarget)) {
                 zStatus.setText("Z move out of bounds");
+                // Clamp to prevent drift past limits
+                pendingZTarget -= movement;
                 event.consume();
                 return;
             }
 
-            zField.setText(String.format("%.2f", newZ));
+            // Optimistic UI update and suppress poller overwrites
+            zField.setText(String.format("%.2f", pendingZTarget));
             zStatus.setText("Moving...");
-            logger.debug("Scroll Z movement to: {}", newZ);
+            zScrollInFlight = true;
 
-            // Run socket operation on background thread to avoid blocking FX thread
-            Thread moveThread = new Thread(
-                    () -> {
-                        try {
-                            MicroscopeController.getInstance().moveStageZ(newZ);
-                            Platform.runLater(() -> zStatus.setText(String.format("Scrolled Z to %.2f", newZ)));
-                        } catch (Exception ex) {
-                            logger.warn("Z scroll movement failed: {}", ex.getMessage());
-                            Platform.runLater(() -> zStatus.setText("Z scroll failed"));
-                        }
-                    },
-                    "StageControl-ZScroll");
-            moveThread.setDaemon(true);
-            moveThread.start();
+            // Reset debounce timer (fires executeZScroll 100ms after last tick)
+            zScrollDebounce.playFromStart();
         } catch (Exception ex) {
             logger.warn("Scroll Z movement failed: {}", ex.getMessage());
             zStatus.setText("Z scroll failed");
         }
         event.consume();
+    }
+
+    /**
+     * Sends a single MOVEZ command to the accumulated {@link #pendingZTarget}.
+     * Called by the debounce timer after scroll events stop arriving.
+     */
+    private void executeZScroll() {
+        double target = pendingZTarget;
+        pendingZTarget = Double.NaN;
+
+        logger.debug("Debounced scroll Z movement to: {}", target);
+
+        Thread moveThread = new Thread(
+                () -> {
+                    try {
+                        MicroscopeController.getInstance().moveStageZ(target);
+                        Platform.runLater(() -> {
+                            zStatus.setText(String.format("Scrolled Z to %.2f", target));
+                            zScrollInFlight = false;
+                        });
+                    } catch (Exception ex) {
+                        logger.warn("Z scroll movement failed: {}", ex.getMessage());
+                        Platform.runLater(() -> {
+                            zStatus.setText("Z scroll failed");
+                            zScrollInFlight = false;
+                        });
+                    }
+                },
+                "StageControl-ZScroll");
+        moveThread.setDaemon(true);
+        moveThread.start();
     }
 
     private void handleArrowMove(int xDir, int yDir) {
