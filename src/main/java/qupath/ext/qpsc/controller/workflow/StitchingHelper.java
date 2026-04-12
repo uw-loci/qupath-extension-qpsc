@@ -30,6 +30,7 @@ import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.ext.qpsc.utilities.TileProcessingUtilities;
+import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
@@ -259,66 +260,103 @@ public class StitchingHelper {
                                 logger.warn("Could not list initial tile base directory: {}", e.getMessage());
                             }
 
-                            // Stitch all angles SEQUENTIALLY. BioFormats'
-                            // OMEPyramidWriter is not safe for concurrent use --
-                            // parallel stitching causes NPE in TiffWriter at high
-                            // pyramid levels (downsample=64).
-                            logger.info("Starting sequential stitching for {} angles", angleExposures.size());
+                            // OME-ZARR: parallel angle stitching (each chunk is
+                            // independent, no shared writer state).
+                            // OME-TIFF: sequential (BioFormats TiffWriter NPEs when
+                            // multiple writers run concurrently; a global semaphore
+                            // in PyramidImageWriter serializes writes as defense).
+                            boolean useParallel =
+                                    stitchingConfig.outputFormat() == StitchingConfig.OutputFormat.OME_ZARR;
+
+                            String mode = useParallel ? "parallel" : "sequential";
+                            logger.info("Starting {} stitching for {} angles (format={})",
+                                    mode, angleExposures.size(), stitchingConfig.outputFormat());
 
                             if (blockingDialog != null) {
                                 blockingDialog.updateStatus(
                                         operationId,
-                                        "Stitching " + angleExposures.size() + " angles for "
-                                                + annotationName + "...");
+                                        "Stitching " + angleExposures.size() + " angles ("
+                                                + mode + ") for " + annotationName + "...");
                             }
 
-                            for (int i = 0; i < angleExposures.size(); i++) {
-                                AngleExposure angleExposure = angleExposures.get(i);
-                                String angleStr = String.valueOf(angleExposure.ticks());
+                            if (useParallel) {
+                                // ZARR: dispatch all angles concurrently
+                                List<CompletableFuture<String>> angleFutures = new ArrayList<>();
 
-                                logger.info(
-                                        "Stitching angle {} ({}/{})",
-                                        angleStr,
-                                        i + 1,
-                                        angleExposures.size());
+                                for (int i = 0; i < angleExposures.size(); i++) {
+                                    AngleExposure angleExposure = angleExposures.get(i);
+                                    String angleStr = String.valueOf(angleExposure.ticks());
+                                    final int angleIndex = i;
 
-                                try {
-                                    String outPath = processAngleWithIsolation(
-                                            tileBaseDir,
-                                            angleStr,
-                                            projectsFolder,
-                                            sampleName,
-                                            modeWithIndex,
-                                            annotationName,
-                                            compression,
-                                            pixelSize,
-                                            stitchingConfig.downsampleFactor(),
-                                            gui,
-                                            project,
-                                            handler,
-                                            stitchParams);
-                                    if (outPath != null) {
-                                        stitchedImages.add(outPath);
-                                        logger.info(
-                                                "Stitch completed for angle {}: {}",
-                                                angleExposure.ticks(),
-                                                outPath);
+                                    logger.info("Launching parallel stitch for angle {} ({}/{})",
+                                            angleStr, i + 1, angleExposures.size());
+
+                                    angleFutures.add(CompletableFuture.supplyAsync(() -> {
+                                        try {
+                                            return processAngleWithIsolation(
+                                                    tileBaseDir, angleStr,
+                                                    projectsFolder, sampleName,
+                                                    modeWithIndex, annotationName,
+                                                    compression, pixelSize,
+                                                    stitchingConfig.downsampleFactor(),
+                                                    gui, project, handler, stitchParams);
+                                        } catch (Exception e) {
+                                            logger.error("Failed to stitch angle {} ({}/{}): {}",
+                                                    angleStr, angleIndex + 1,
+                                                    angleExposures.size(), e.getMessage(), e);
+                                            return null;
+                                        }
+                                    }));
+                                }
+
+                                CompletableFuture.allOf(
+                                        angleFutures.toArray(new CompletableFuture[0])).join();
+
+                                for (int i = 0; i < angleFutures.size(); i++) {
+                                    try {
+                                        String outPath = angleFutures.get(i).get();
+                                        if (outPath != null) {
+                                            stitchedImages.add(outPath);
+                                            logger.info("Parallel stitch completed for angle {}: {}",
+                                                    angleExposures.get(i).ticks(), outPath);
+                                        }
+                                    } catch (Exception e) {
+                                        logger.error("Failed to get result for angle {}: {}",
+                                                angleExposures.get(i).ticks(), e.getMessage());
                                     }
-                                } catch (Exception e) {
-                                    logger.error(
-                                            "Failed to stitch angle {} ({}/{}): {}",
-                                            angleStr,
-                                            i + 1,
-                                            angleExposures.size(),
-                                            e.getMessage(),
-                                            e);
+                                }
+                            } else {
+                                // TIFF: sequential to avoid BioFormats concurrency bug
+                                for (int i = 0; i < angleExposures.size(); i++) {
+                                    AngleExposure angleExposure = angleExposures.get(i);
+                                    String angleStr = String.valueOf(angleExposure.ticks());
+
+                                    logger.info("Stitching angle {} ({}/{})",
+                                            angleStr, i + 1, angleExposures.size());
+
+                                    try {
+                                        String outPath = processAngleWithIsolation(
+                                                tileBaseDir, angleStr,
+                                                projectsFolder, sampleName,
+                                                modeWithIndex, annotationName,
+                                                compression, pixelSize,
+                                                stitchingConfig.downsampleFactor(),
+                                                gui, project, handler, stitchParams);
+                                        if (outPath != null) {
+                                            stitchedImages.add(outPath);
+                                            logger.info("Stitch completed for angle {}: {}",
+                                                    angleExposure.ticks(), outPath);
+                                        }
+                                    } catch (Exception e) {
+                                        logger.error("Failed to stitch angle {} ({}/{}): {}",
+                                                angleStr, i + 1, angleExposures.size(),
+                                                e.getMessage(), e);
+                                    }
                                 }
                             }
 
-                            logger.info(
-                                    "Completed sequential stitching of {} angles. Successfully stitched {} images.",
-                                    angleExposures.size(),
-                                    stitchedImages.size());
+                            logger.info("Completed {} stitching of {} angles. Successfully stitched {} images.",
+                                    mode, angleExposures.size(), stitchedImages.size());
 
                             // Process modality-specific post-processing directories (e.g., biref, sum)
                             processPostProcessingDirectories(
