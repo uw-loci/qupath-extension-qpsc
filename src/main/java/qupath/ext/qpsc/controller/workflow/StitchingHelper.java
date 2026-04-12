@@ -259,89 +259,64 @@ public class StitchingHelper {
                                 logger.warn("Could not list initial tile base directory: {}", e.getMessage());
                             }
 
-                            // Stitch all angles in PARALLEL. Each angle is in its own
-                            // subdirectory with its own TileConfiguration.txt, and
-                            // processAngleWithIsolation creates a unique temp directory
-                            // per angle (_temp_7_0, _temp_neg7_0, etc.), so parallel
-                            // invocations don't interfere.
-                            logger.info("Starting parallel stitching for {} angles", angleExposures.size());
+                            // Stitch all angles SEQUENTIALLY. BioFormats'
+                            // OMEPyramidWriter is not safe for concurrent use --
+                            // parallel stitching causes NPE in TiffWriter at high
+                            // pyramid levels (downsample=64).
+                            logger.info("Starting sequential stitching for {} angles", angleExposures.size());
 
                             if (blockingDialog != null) {
                                 blockingDialog.updateStatus(
                                         operationId,
-                                        "Stitching " + angleExposures.size() + " angles in parallel for "
+                                        "Stitching " + angleExposures.size() + " angles for "
                                                 + annotationName + "...");
                             }
-
-                            java.util.List<java.util.concurrent.CompletableFuture<String>> angleFutures =
-                                    new java.util.ArrayList<>();
 
                             for (int i = 0; i < angleExposures.size(); i++) {
                                 AngleExposure angleExposure = angleExposures.get(i);
                                 String angleStr = String.valueOf(angleExposure.ticks());
-                                final int angleIndex = i;
 
                                 logger.info(
-                                        "Launching parallel stitch for angle {} ({}/{})",
+                                        "Stitching angle {} ({}/{})",
                                         angleStr,
                                         i + 1,
                                         angleExposures.size());
 
-                                angleFutures.add(java.util.concurrent.CompletableFuture.supplyAsync(() -> {
-                                    try {
-                                        return processAngleWithIsolation(
-                                                tileBaseDir,
-                                                angleStr,
-                                                projectsFolder,
-                                                sampleName,
-                                                modeWithIndex,
-                                                annotationName,
-                                                compression,
-                                                pixelSize,
-                                                stitchingConfig.downsampleFactor(),
-                                                gui,
-                                                project,
-                                                handler,
-                                                stitchParams);
-                                    } catch (Exception e) {
-                                        logger.error(
-                                                "Failed to stitch angle {} ({}/{}): {}",
-                                                angleStr,
-                                                angleIndex + 1,
-                                                angleExposures.size(),
-                                                e.getMessage(),
-                                                e);
-                                        return null;
-                                    }
-                                }));
-                            }
-
-                            // Wait for all angles to complete
-                            java.util.concurrent.CompletableFuture.allOf(
-                                            angleFutures.toArray(new java.util.concurrent.CompletableFuture[0]))
-                                    .join();
-
-                            // Collect results
-                            for (int i = 0; i < angleFutures.size(); i++) {
                                 try {
-                                    String outPath = angleFutures.get(i).get();
+                                    String outPath = processAngleWithIsolation(
+                                            tileBaseDir,
+                                            angleStr,
+                                            projectsFolder,
+                                            sampleName,
+                                            modeWithIndex,
+                                            annotationName,
+                                            compression,
+                                            pixelSize,
+                                            stitchingConfig.downsampleFactor(),
+                                            gui,
+                                            project,
+                                            handler,
+                                            stitchParams);
                                     if (outPath != null) {
                                         stitchedImages.add(outPath);
                                         logger.info(
-                                                "Parallel stitch completed for angle {}: {}",
-                                                angleExposures.get(i).ticks(),
+                                                "Stitch completed for angle {}: {}",
+                                                angleExposure.ticks(),
                                                 outPath);
                                     }
                                 } catch (Exception e) {
                                     logger.error(
-                                            "Failed to get result for angle {}: {}",
-                                            angleExposures.get(i).ticks(),
-                                            e.getMessage());
+                                            "Failed to stitch angle {} ({}/{}): {}",
+                                            angleStr,
+                                            i + 1,
+                                            angleExposures.size(),
+                                            e.getMessage(),
+                                            e);
                                 }
                             }
 
                             logger.info(
-                                    "Completed parallel processing of {} angles. Successfully stitched {} images.",
+                                    "Completed sequential stitching of {} angles. Successfully stitched {} images.",
                                     angleExposures.size(),
                                     stitchedImages.size());
 
