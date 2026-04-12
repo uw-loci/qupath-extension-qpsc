@@ -22,10 +22,12 @@ import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.RefinementChoice;
 import qupath.ext.qpsc.utilities.*;
 import qupath.ext.qpsc.utilities.AnnotationPreservationService;
 import qupath.fx.dialogs.Dialogs;
+import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.Project;
+import qupath.lib.projects.ProjectImageEntry;
 
 /**
  * ExistingImageWorkflowV2 - Existing Image acquisition workflow.
@@ -454,6 +456,14 @@ public class ExistingImageWorkflowV2 {
                 return processSlideSpecificAlignment(state);
             }
 
+            // Check if this is a sub-acquisition with offset metadata.
+            // Sub-acquisitions can compute their pixel-to-stage transform directly
+            // from xy_offset + pixel size, without needing macro/green box detection.
+            if (isSubAcquisition()) {
+                logger.info("Routing to sub-acquisition offset-based targeting path");
+                return processSubAcquisitionPath(state);
+            }
+
             // Route based on alignment choice - both delegate to working implementations
             if (state.alignmentChoice != null && state.alignmentChoice.useExistingAlignment()) {
                 logger.info("Routing to existing alignment path");
@@ -580,6 +590,206 @@ public class ExistingImageWorkflowV2 {
                 state.pixelSize = legacyState.pixelSize;
                 return state;
             });
+        }
+
+        /**
+         * Checks whether the current image is a sub-acquisition (derived from a parent
+         * image with known stage coordinates). Sub-acquisitions have xy_offset metadata
+         * and a base_image that differs from their own name.
+         */
+        @SuppressWarnings("unchecked")
+        private boolean isSubAcquisition() {
+            if (gui.getProject() == null || gui.getImageData() == null) {
+                return false;
+            }
+
+            Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+            ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+            if (entry == null) {
+                return false;
+            }
+
+            // Must have non-zero xy_offset
+            double[] offset = ImageMetadataManager.getXYOffset(entry);
+            if (offset[0] == 0 && offset[1] == 0) {
+                return false;
+            }
+
+            // base_image must differ from own name (i.e., this is derived, not the root)
+            String baseImage = ImageMetadataManager.getBaseImage(entry);
+            if (baseImage == null || baseImage.isEmpty()) {
+                return false;
+            }
+
+            String ownName = GeneralTools.stripExtension(entry.getImageName());
+            return !baseImage.equals(ownName);
+        }
+
+        /**
+         * Processes a sub-acquisition image using offset-based targeting.
+         *
+         * <p>Sub-acquisitions already know their physical stage position (stored as
+         * xy_offset metadata). The pixel-to-stage transform is computed directly from:
+         * <ul>
+         *   <li>xy_offset (annotation top-left in stage micrometers)</li>
+         *   <li>pixel size (from image calibration)</li>
+         *   <li>half-FOV correction (tile grid starts half a FOV before annotation edge)</li>
+         *   <li>flip correction (if image is displayed flipped via TransformedServer)</li>
+         * </ul>
+         *
+         * <p>This bypasses the macro image / green box detection pipeline entirely,
+         * enabling acquisition from any depth of sub-acquisition chain (A -> B -> C -> D).
+         */
+        private CompletableFuture<WorkflowState> processSubAcquisitionPath(WorkflowState state) {
+            if (state == null) return CompletableFuture.completedFuture(null);
+
+            logger.info("Processing sub-acquisition with offset-based targeting");
+
+            // Read metadata from current entry BEFORE project setup / flip validation,
+            // since those steps may switch to a different entry (TransformedServer).
+            @SuppressWarnings("unchecked")
+            Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+            ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+
+            double[] xyOffset = ImageMetadataManager.getXYOffset(entry);
+            boolean flipX = ImageMetadataManager.isFlippedX(entry);
+            boolean flipY = ImageMetadataManager.isFlippedY(entry);
+            String entryModality = entry.getMetadata().get(ImageMetadataManager.MODALITY);
+            String entryObjective = entry.getMetadata().get(ImageMetadataManager.OBJECTIVE);
+            String entryDetector = ImageMetadataManager.getDetectorId(entry);
+
+            logger.info("Sub-acquisition metadata: offset=({}, {}), flip=({}, {}), modality={}, objective={}, detector={}",
+                    xyOffset[0], xyOffset[1], flipX, flipY, entryModality, entryObjective, entryDetector);
+
+            // Delegate to ProjectHelper for proper project setup
+            return ProjectHelper.setupProject(gui, state.sample)
+                    .thenCompose(projectInfo -> {
+                        if (projectInfo == null) {
+                            throw new RuntimeException("Project setup failed");
+                        }
+                        state.projectInfo = projectInfo;
+
+                        // Validate and flip image if needed
+                        @SuppressWarnings("unchecked")
+                        Project<BufferedImage> proj = (Project<BufferedImage>) projectInfo.getCurrentProject();
+                        return ImageFlipHelper.validateAndFlipIfNeeded(gui, proj, state.sample);
+                    })
+                    .thenCompose(validated -> {
+                        if (!validated) {
+                            throw new RuntimeException("Image validation failed");
+                        }
+
+                        // Build transform from offset metadata.
+                        // This must happen AFTER flip validation since the image dimensions
+                        // and pixel coordinates are from the (possibly flipped) server.
+                        AffineTransform transform = buildOffsetBasedTransform(
+                                xyOffset, flipX, flipY,
+                                entryModality, entryObjective, entryDetector);
+
+                        state.transform = transform;
+                        MicroscopeController.getInstance().setCurrentTransform(transform);
+                        logger.info("Offset-based transform created for sub-acquisition");
+
+                        state.pixelSize = getPixelSizeFromPreferences();
+
+                        // Use selected classes or preferences
+                        state.selectedAnnotationClasses =
+                                (state.selectedAnnotationClasses != null && !state.selectedAnnotationClasses.isEmpty())
+                                        ? state.selectedAnnotationClasses
+                                        : PersistentPreferences.getSelectedAnnotationClasses();
+
+                        return ensureAnnotationsExist(state);
+                    })
+                    .thenApply(finalState -> {
+                        logger.info("Sub-acquisition path ready with {} annotations",
+                                finalState.annotations.size());
+                        return finalState;
+                    });
+        }
+
+        /**
+         * Builds an AffineTransform that maps the current image's pixel coordinates
+         * to stage micrometers, using the sub-acquisition's offset metadata.
+         *
+         * <p>The transform accounts for:
+         * <ul>
+         *   <li>Image origin = xy_offset - half_FOV (tile grid starts half a FOV before annotation edge)</li>
+         *   <li>Pixel scaling from image calibration</li>
+         *   <li>Flip correction when the image is displayed via TransformedServer</li>
+         * </ul>
+         */
+        private AffineTransform buildOffsetBasedTransform(
+                double[] xyOffset, boolean flipX, boolean flipY,
+                String modality, String objective, String detector) {
+
+            double pixelSize = gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
+            int width = gui.getImageData().getServer().getWidth();
+            int height = gui.getImageData().getServer().getHeight();
+
+            if (Double.isNaN(pixelSize) || pixelSize <= 0) {
+                throw new IllegalStateException("Image has no valid pixel calibration");
+            }
+
+            logger.info("Building offset-based transform: pixelSize={} um, image={}x{}", pixelSize, width, height);
+
+            // Get half-FOV correction.
+            // xy_offset is the annotation top-left in stage microns, but the tile grid
+            // (and thus the stitched image origin) starts half a FOV before the annotation edge.
+            // Prefer config-based FOV (uses the metadata's objective/detector) over live socket
+            // query (which returns the CURRENT hardware state, which may differ).
+            double halfFovX = 0;
+            double halfFovY = 0;
+            try {
+                MicroscopeController mc = MicroscopeController.getInstance();
+                if (mc != null && modality != null && objective != null && detector != null) {
+                    double[] fov = mc.getCameraFOVFromConfig(modality, objective, detector);
+                    halfFovX = fov[0] / 2.0;
+                    halfFovY = fov[1] / 2.0;
+                    logger.info("Half-FOV correction from config: ({}, {}) um", halfFovX, halfFovY);
+                } else if (mc != null && mc.isConnected()) {
+                    double[] fov = mc.getCameraFOV();
+                    halfFovX = fov[0] / 2.0;
+                    halfFovY = fov[1] / 2.0;
+                    logger.info("Half-FOV correction from socket: ({}, {}) um", halfFovX, halfFovY);
+                }
+            } catch (Exception e) {
+                logger.warn("Could not get FOV for half-FOV correction: {}", e.getMessage());
+                logger.warn("Offset-based transform will use raw xy_offset without half-FOV adjustment");
+            }
+
+            double imageOriginX = xyOffset[0] - halfFovX;
+            double imageOriginY = xyOffset[1] - halfFovY;
+
+            logger.info("Image origin in stage coords: ({}, {}) um  [offset ({}, {}) - halfFOV ({}, {})]",
+                    imageOriginX, imageOriginY, xyOffset[0], xyOffset[1], halfFovX, halfFovY);
+
+            // Build transform: pixel -> stage
+            // translate(imageOrigin) * scale(pixelSize) maps unflipped pixels to stage
+            AffineTransform pixelToStage = new AffineTransform();
+            pixelToStage.translate(imageOriginX, imageOriginY);
+            pixelToStage.scale(pixelSize, pixelSize);
+
+            // If the image is flipped (displayed via TransformedServer after validateAndFlipImage),
+            // pixel coordinates are in flipped space. Concatenate unflip to map back to original
+            // pixel space before applying the scale + translate.
+            if (flipX || flipY) {
+                AffineTransform unflip = ForwardPropagationWorkflow.createFlip(flipX, flipY, width, height);
+                pixelToStage.concatenate(unflip);
+                logger.info("Applied flip correction: flipX={}, flipY={}", flipX, flipY);
+            }
+
+            // Validate: transform image corners and log for debugging
+            double[] topLeft = {0, 0};
+            double[] bottomRight = {width, height};
+            double[] stageTopLeft = new double[2];
+            double[] stageBottomRight = new double[2];
+            pixelToStage.transform(topLeft, 0, stageTopLeft, 0, 1);
+            pixelToStage.transform(bottomRight, 0, stageBottomRight, 0, 1);
+            logger.info("Transform validation: pixel(0,0) -> stage({}, {})", stageTopLeft[0], stageTopLeft[1]);
+            logger.info("Transform validation: pixel({},{}) -> stage({}, {})",
+                    width, height, stageBottomRight[0], stageBottomRight[1]);
+
+            return pixelToStage;
         }
 
         /**
