@@ -440,6 +440,13 @@ public class MacroImageUtility {
                 logger.info("Successfully loaded saved macro image for image: {}", imageName);
             } else {
                 logger.debug("No saved macro image found for image: {}", imageName);
+                // Final fallback: trace project metadata chain (base_image, original_image_id)
+                // This handles sub-acquisitions (e.g. biref images) that have a base_image
+                // pointing to the parent entry which contains the macro.
+                macroImage = retrieveMacroImageFromProject(gui, (Project<BufferedImage>) gui.getProject());
+                if (macroImage != null) {
+                    logger.info("Found macro image via project metadata chain for image: {}", imageName);
+                }
             }
         }
 

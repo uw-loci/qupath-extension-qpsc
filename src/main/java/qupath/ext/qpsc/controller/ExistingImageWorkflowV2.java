@@ -549,6 +549,10 @@ public class ExistingImageWorkflowV2 {
 
             // Delegate to the existing working implementation
             return new ExistingAlignmentPath(gui, state).execute().thenApply(legacyState -> {
+                if (legacyState == null) {
+                    // ExistingAlignmentPath returned null (e.g. no macro image, user cancelled)
+                    return null;
+                }
                 // Copy back relevant state from the working implementation
                 state.transform = legacyState.transform;
                 state.annotations = legacyState.annotations;
