@@ -670,14 +670,77 @@ public class CameraControlController {
                 Label profileHeader = new Label("Acquisition Profiles");
                 profileHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
+                // Gather unique modality names from each profile's `modality:` field
+                // so the user can narrow the profile list (e.g. only show Fluorescence
+                // profiles when working in Fluorescence mode). "All" keeps the legacy
+                // behavior of showing every profile.
+                java.util.LinkedHashSet<String> profileModalities = new java.util.LinkedHashSet<>();
+                profileModalities.add("All modalities");
+                for (Object value : profileMap.values()) {
+                    if (value instanceof Map<?, ?> profCfg) {
+                        Object mod = profCfg.get("modality");
+                        if (mod instanceof String modStr && !modStr.isEmpty()) {
+                            profileModalities.add(modStr);
+                        }
+                    }
+                }
+
+                ComboBox<String> modalityFilterCombo = new ComboBox<>();
+                modalityFilterCombo.getItems().addAll(profileModalities);
+                modalityFilterCombo.setMaxWidth(Double.MAX_VALUE);
+
                 ComboBox<String> profileCombo = new ComboBox<>();
-                for (Object key : profileMap.keySet()) {
-                    profileCombo.getItems().add(String.valueOf(key));
-                }
-                if (!profileCombo.getItems().isEmpty()) {
-                    profileCombo.setValue(profileCombo.getItems().get(0));
-                }
                 profileCombo.setMaxWidth(Double.MAX_VALUE);
+
+                // Refresh profile list whenever the modality filter changes.
+                Runnable refreshProfiles = () -> {
+                    String prev = profileCombo.getValue();
+                    profileCombo.getItems().clear();
+                    String selectedModality = modalityFilterCombo.getValue();
+                    boolean showAll = selectedModality == null || "All modalities".equals(selectedModality);
+                    for (Map.Entry<?, ?> entry : profileMap.entrySet()) {
+                        if (!showAll && entry.getValue() instanceof Map<?, ?> profCfg) {
+                            Object mod = profCfg.get("modality");
+                            if (!(mod instanceof String modStr) || !modStr.equals(selectedModality)) {
+                                continue;
+                            }
+                        }
+                        profileCombo.getItems().add(String.valueOf(entry.getKey()));
+                    }
+                    if (prev != null && profileCombo.getItems().contains(prev)) {
+                        profileCombo.setValue(prev);
+                    } else if (!profileCombo.getItems().isEmpty()) {
+                        profileCombo.setValue(profileCombo.getItems().get(0));
+                    } else {
+                        profileCombo.setValue(null);
+                    }
+                };
+
+                // Default filter: match the profile modality of the first profile that
+                // references the currently-selected objective's magnification, so the
+                // dropdown lands on something relevant for the user's current hardware.
+                // Fallback to "All modalities" if no match.
+                String initialModality = "All modalities";
+                String currentObjective = objectiveCombo.getValue();
+                if (currentObjective != null) {
+                    String mag = qupath.ext.qpsc.utilities.ObjectiveUtils
+                            .extractMagnification(currentObjective);
+                    if (mag != null) {
+                        for (Map.Entry<?, ?> entry : profileMap.entrySet()) {
+                            String key = String.valueOf(entry.getKey());
+                            if (key.endsWith("_" + mag) && entry.getValue() instanceof Map<?, ?> profCfg) {
+                                Object mod = profCfg.get("modality");
+                                if (mod instanceof String modStr && profileModalities.contains(modStr)) {
+                                    initialModality = modStr;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                modalityFilterCombo.setValue(initialModality);
+                refreshProfiles.run();
+                modalityFilterCombo.valueProperty().addListener((obs, oldVal, newVal) -> refreshProfiles.run());
 
                 Button applyProfileBtn = new Button("Apply Profile");
                 applyProfileBtn.setOnAction(e -> {
@@ -707,11 +770,15 @@ public class CameraControlController {
                     t.start();
                 });
 
+                HBox filterRow = new HBox(8, new Label("Modality:"), modalityFilterCombo);
+                filterRow.setAlignment(Pos.CENTER_LEFT);
+                HBox.setHgrow(modalityFilterCombo, Priority.ALWAYS);
+
                 HBox profileRow = new HBox(8, profileCombo, applyProfileBtn);
                 profileRow.setAlignment(Pos.CENTER_LEFT);
                 HBox.setHgrow(profileCombo, Priority.ALWAYS);
 
-                content.getChildren().addAll(new Separator(), profileHeader, profileRow);
+                content.getChildren().addAll(new Separator(), profileHeader, filterRow, profileRow);
             }
         } catch (Exception ex) {
             logger.debug("Could not load acquisition profiles: {}", ex.getMessage());

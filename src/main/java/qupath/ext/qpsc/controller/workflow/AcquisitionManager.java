@@ -265,8 +265,14 @@ public class AcquisitionManager {
      * @return CompletableFuture containing list of rotation angles with exposure settings
      */
     private CompletableFuture<List<AngleExposure>> getRotationAngles() {
+        // Resolution keys off the enhanced profile name (e.g. "Fluorescence_10x")
+        // so acquisition_profiles[] lookups and per-profile channel-library reads
+        // land on the right entry. state.sample.modality() is the base name
+        // ("Fluorescence") and won't match.
+        String profileKey = qupath.ext.qpsc.utilities.ObjectiveUtils.createEnhancedFolderName(
+                state.sample.modality(), state.sample.objective());
         return AngleResolutionService.resolve(
-                state.sample.modality(), state.sample.objective(), state.sample.detector(), state.angleOverrides);
+                profileKey, state.sample.objective(), state.sample.detector(), state.angleOverrides);
     }
 
     /**
@@ -661,12 +667,18 @@ public class AcquisitionManager {
                 // This ensures the path matches where tiles were written
                 String actualSampleName = state.projectInfo.getSampleName();
 
+                // Resolution keys off the enhanced profile name (e.g. "Fluorescence_10x"),
+                // NOT the base modality name ("Fluorescence"). Profiles are indexed by the
+                // enhanced key and so is the per-profile channel library lookup.
+                String profileKey = qupath.ext.qpsc.utilities.ObjectiveUtils.createEnhancedFolderName(
+                        state.sample.modality(), state.sample.objective());
+
                 // Refuse to start if the user actively deselected every channel on a
                 // channel-based modality -- surfacing this as a clear error beats silently
                 // falling back to library defaults (which is what the same empty map means
                 // when it comes from a non-channel UI).
                 if (ChannelResolutionService.isEmptySelectionForChannelBasedModality(
-                        state.sample.modality(),
+                        profileKey,
                         state.sample.objective(),
                         state.sample.detector(),
                         state.angleOverrides)) {
@@ -680,7 +692,7 @@ public class AcquisitionManager {
                 // Returns empty list for angle-based modalities, in which case
                 // the builder falls through to the standard angle path.
                 List<ChannelExposure> channelExposures = ChannelResolutionService.resolve(
-                        state.sample.modality(),
+                        profileKey,
                         state.sample.objective(),
                         state.sample.detector(),
                         state.angleOverrides);

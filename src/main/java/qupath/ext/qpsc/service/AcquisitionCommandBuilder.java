@@ -422,9 +422,25 @@ public class AcquisitionCommandBuilder {
                     "--pixel-size", String.valueOf(pixelSize)));
         }
 
+        // Defensive: catch upstream regressions where both resolution paths return
+        // empty. A channel-based modality whose channel library failed to load would
+        // otherwise silently fall through to the angle branch, emit a bogus single
+        // "(0.0)" exposure, and the server would run the legacy single-snap path.
+        // That's how the OWS3 LappMainBranch1 failure got reached before the
+        // resolution plumbing was fixed. Surface it as a clear build failure.
+        boolean hasChannels = channelExposures != null && !channelExposures.isEmpty();
+        boolean hasAngles = angleExposures != null && !angleExposures.isEmpty();
+        if (!hasChannels && !hasAngles) {
+            logger.warn(
+                    "Building acquisition command with NO channels and NO angles -- "
+                            + "upstream resolution returned both empty. Server will run the legacy "
+                            + "single-snap path. scanType='{}'",
+                    scanType);
+        }
+
         // Channel-based modalities (widefield IF) take precedence over angles:
         // emit --channels and --channel-exposures, skip the angle block entirely.
-        boolean channelBased = channelExposures != null && !channelExposures.isEmpty();
+        boolean channelBased = hasChannels;
         if (channelBased) {
             String channelsStr = channelExposures.stream()
                     .map(ChannelExposure::channelId)

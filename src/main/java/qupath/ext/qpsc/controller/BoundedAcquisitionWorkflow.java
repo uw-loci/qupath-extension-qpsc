@@ -109,6 +109,16 @@ public class BoundedAcquisitionWorkflow {
             boolean stageInvertedX = stagePolarity.invertX;
             boolean stageInvertedY = stagePolarity.invertY;
 
+            // Derive the profile key (enhanced modality with objective suffix, e.g.
+            // "Fluorescence_10x"). This is the key that acquisition_profiles[] is
+            // indexed by in the YAML, and therefore the key that must be passed to
+            // angle/channel resolution services and the per-profile channel library
+            // lookup. The base modality name (result.modality(), e.g. "Fluorescence")
+            // is only for user display and handler registry prefix matching.
+            final String enhancedModality =
+                    ObjectiveUtils.createEnhancedFolderName(result.modality(), result.objective());
+            logger.info("Using enhanced modality for project: {} -> {}", result.modality(), enhancedModality);
+
             // Create/open the QuPath project
             QuPathGUI qupathGUI = QPEx.getQuPath();
             Map<String, Object> pd;
@@ -117,10 +127,6 @@ public class BoundedAcquisitionWorkflow {
             // correct for creating brand-new projects).
             String projectsFolder;
             try {
-                // Use enhanced scan type for consistent folder structure
-                String enhancedModality =
-                        ObjectiveUtils.createEnhancedFolderName(result.modality(), result.objective());
-                logger.info("Using enhanced modality for project: {} -> {}", result.modality(), enhancedModality);
 
                 // Check if a project is already open
                 Project<BufferedImage> existingProject = qupathGUI.getProject();
@@ -244,25 +250,66 @@ public class BoundedAcquisitionWorkflow {
                 return;
             }
 
-            ModalityHandler modalityHandler = ModalityRegistry.getHandler(result.modality());
+            ModalityHandler modalityHandler = ModalityRegistry.getHandler(enhancedModality);
 
             double finalWSI_pixelSize_um = WSI_pixelSize_um;
 
-            // Resolve angles via shared service (prepares handler + applies overrides)
+            // Refuse early if the user deselected every channel on a channel-based
+            // modality. Same error surface as the one inside runAsync below, but
+            // checked here so the workflow never enters the async chain.
+            if (ChannelResolutionService.isEmptySelectionForChannelBasedModality(
+                    enhancedModality,
+                    result.objective(),
+                    result.detector(),
+                    result.angleOverrides())) {
+                MicroscopeController.getInstance().setAcquisitionActive(false);
+                UIFunctions.notifyUserOfError(
+                        "No fluorescence channels selected. Enable at least one channel, "
+                                + "or uncheck 'Customize channel selection' to use the library defaults.",
+                        "No Channels Selected");
+                return;
+            }
+
+            // Resolve the channel sequence up front (synchronous). For angle-based
+            // modalities this returns an empty list, so the workflow falls through
+            // to the legacy angle path.
+            final List<qupath.ext.qpsc.modality.ChannelExposure> channelExposures =
+                    ChannelResolutionService.resolve(
+                            enhancedModality,
+                            result.objective(),
+                            result.detector(),
+                            result.angleOverrides());
+
+            // Resolve angles via shared service. For channel-based modalities the
+            // service short-circuits to an empty list (no rotation axis).
             CompletableFuture<List<qupath.ext.qpsc.modality.AngleExposure>> anglesFuture =
                     AngleResolutionService.resolve(
-                            result.modality(), result.objective(), result.detector(), result.angleOverrides());
+                            enhancedModality, result.objective(), result.detector(), result.angleOverrides());
 
             anglesFuture
                     .thenAccept(angleExposures -> {
                         List<Double> rotationAngles =
                                 angleExposures.stream().map(ae -> ae.ticks()).collect(Collectors.toList());
                         logger.info("Rotation angles: {}", rotationAngles);
+                        if (!channelExposures.isEmpty()) {
+                            logger.info(
+                                    "Channels: {}",
+                                    channelExposures.stream()
+                                            .map(qupath.ext.qpsc.modality.ChannelExposure::channelId)
+                                            .collect(Collectors.toList()));
+                        }
 
                         String boundsMode = "bounds";
 
+                        // Sequence-step count: channels and angles are mutually exclusive
+                        // axes, so the multiplier is whichever is populated. Fallback of 1
+                        // for legacy single-snap modalities.
+                        int sequenceSteps = !channelExposures.isEmpty()
+                                ? channelExposures.size()
+                                : Math.max(1, angleExposures.size());
+
                         // Disk space pre-check -- warn if estimated output exceeds free space at save location.
-                        // The estimate is approximate (detector dims x 3 bytes x tiles x angles x headroom);
+                        // The estimate is approximate (detector dims x 3 bytes x tiles x sequence-steps x headroom);
                         // actual size varies with modality, compression, and stitched output.
                         long tileCount = MinorFunctions.countTifEntriesInTileConfig(
                                 List.of(Paths.get(tempTileDir, boundsMode).toString()));
@@ -270,7 +317,7 @@ public class BoundedAcquisitionWorkflow {
                             long bytesPerTile =
                                     AcquisitionSpaceCheck.estimateBytesPerTilePerAngle(configManager, result.detector());
                             AcquisitionSpaceCheck.Result spaceResult = AcquisitionSpaceCheck.checkAndWarn(
-                                    Paths.get(tempTileDir), tileCount, angleExposures.size(), bytesPerTile);
+                                    Paths.get(tempTileDir), tileCount, sequenceSteps, bytesPerTile);
                             if (!spaceResult.proceed()) {
                                 logger.warn("Acquisition cancelled by user after low-disk-space warning");
                                 return;
@@ -298,27 +345,8 @@ public class BoundedAcquisitionWorkflow {
                                         result.objective(),
                                         result.detector());
 
-                                // Refuse to start if the user actively deselected every channel
-                                // on a channel-based modality -- surface as an error instead of
-                                // silently falling back to library defaults.
-                                if (ChannelResolutionService.isEmptySelectionForChannelBasedModality(
-                                        result.modality(),
-                                        result.objective(),
-                                        result.detector(),
-                                        result.angleOverrides())) {
-                                    throw new IllegalStateException(
-                                            "No fluorescence channels selected. Enable at least one "
-                                                    + "channel, or uncheck 'Customize channel selection' "
-                                                    + "to use the library defaults.");
-                                }
-
-                                // Resolve channel sequence for widefield IF; empty list for angle-based modalities.
-                                List<qupath.ext.qpsc.modality.ChannelExposure> channelExposures =
-                                        ChannelResolutionService.resolve(
-                                                result.modality(),
-                                                result.objective(),
-                                                result.detector(),
-                                                result.angleOverrides());
+                                // Channel/angle resolution happened up front (outside the async
+                                // block). The captured lists are used directly below.
 
                                 // For new projects, sample name from dialog is correct
                                 AcquisitionConfigurationBuilder.AcquisitionConfiguration config =
@@ -366,11 +394,15 @@ public class BoundedAcquisitionWorkflow {
                                 MicroscopeSocketClient socketClient =
                                         MicroscopeController.getInstance().getSocketClient();
 
-                                int angleCount = Math.max(1, angleExposures.size());
+                                // Progress expectation: channels and angles are mutually exclusive,
+                                // so use whichever axis is populated.
+                                int expectedFilesPerTile = !channelExposures.isEmpty()
+                                        ? channelExposures.size()
+                                        : Math.max(1, angleExposures.size());
                                 int expectedFiles = MinorFunctions.countTifEntriesInTileConfig(
                                                 List.of(Paths.get(tempTileDir, boundsMode)
                                                         .toString()))
-                                        * angleCount;
+                                        * expectedFilesPerTile;
 
                                 AtomicInteger progressCounter = new AtomicInteger(0);
 
