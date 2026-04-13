@@ -141,6 +141,10 @@ public class QPPreferenceDialog {
     private static final BooleanProperty disableAllAutofocusProperty =
             PathPrefs.createPersistentPreference("disableAllAutofocus", false);
 
+    // Warn the user when estimated acquisition size exceeds free disk space at the save location
+    private static final BooleanProperty warnOnLowDiskSpaceProperty =
+            PathPrefs.createPersistentPreference("warnOnLowDiskSpace", true);
+
     // --- Notification / Alert preferences ---
     private static final String ALERTS_CATEGORY = "QuPath SCope Alerts";
     private static final String PPM_CATEGORY = "PPM (Polarized Light Microscopy)";
@@ -373,6 +377,17 @@ public class QPPreferenceDialog {
                         + "(both standard and sweep). Only use when you know the sample "
                         + "is flat and already in focus.\n\n"
                         + "This is also accessible via the Acquisition Wizard checkbox.")
+                .build());
+
+        items.add(new PropertyItemBuilder<>(warnOnLowDiskSpaceProperty, Boolean.class)
+                .name("Warn On Low Disk Space")
+                .category(CATEGORY)
+                .description("Before an acquisition starts, compare the estimated output size "
+                        + "against free space at the save location and warn if there may not "
+                        + "be enough room. The estimate is approximate -- actual size varies "
+                        + "with modality, compression, and per-tile metadata.\n\n"
+                        + "Disable only for unattended workflows where you have manually "
+                        + "verified that disk space is sufficient.")
                 .build());
 
         // Image Name Contents -- what metadata to include in generated filenames.
@@ -648,6 +663,18 @@ public class QPPreferenceDialog {
 
     public static void setDisableAllAutofocus(boolean disable) {
         disableAllAutofocusProperty.set(disable);
+    }
+
+    /**
+     * Returns true if the user should be warned when estimated acquisition
+     * output size exceeds free space at the save location.
+     */
+    public static boolean getWarnOnLowDiskSpace() {
+        return warnOnLowDiskSpaceProperty.get();
+    }
+
+    public static void setWarnOnLowDiskSpace(boolean warn) {
+        warnOnLowDiskSpaceProperty.set(warn);
     }
 
     public static String getMicroscopeConfigFileProperty() {

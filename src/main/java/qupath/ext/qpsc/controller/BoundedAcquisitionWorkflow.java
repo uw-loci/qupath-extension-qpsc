@@ -260,6 +260,26 @@ public class BoundedAcquisitionWorkflow {
 
                         String boundsMode = "bounds";
 
+                        // Disk space pre-check -- warn if estimated output exceeds free space at save location.
+                        // The estimate is approximate (detector dims x 3 bytes x tiles x angles x headroom);
+                        // actual size varies with modality, compression, and stitched output.
+                        long tileCount = MinorFunctions.countTifEntriesInTileConfig(
+                                List.of(Paths.get(tempTileDir, boundsMode).toString()));
+                        if (tileCount > 0) {
+                            long bytesPerTile =
+                                    AcquisitionSpaceCheck.estimateBytesPerTilePerAngle(configManager, result.detector());
+                            AcquisitionSpaceCheck.Result spaceResult = AcquisitionSpaceCheck.checkAndWarn(
+                                    Paths.get(tempTileDir), tileCount, angleExposures.size(), bytesPerTile);
+                            if (!spaceResult.proceed()) {
+                                logger.warn("Acquisition cancelled by user after low-disk-space warning");
+                                return;
+                            }
+                        } else {
+                            logger.warn(
+                                    "Skipping disk space check -- tile count is 0 (TileConfiguration not readable at {})",
+                                    tempTileDir);
+                        }
+
                         // Lock stage movements and stop live viewing before acquisition starts
                         MicroscopeController.getInstance().setAcquisitionActive(true);
                         MicroscopeController.LiveViewState liveState =

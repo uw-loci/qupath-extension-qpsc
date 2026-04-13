@@ -39,6 +39,7 @@ import qupath.ext.qpsc.ui.DualProgressDialog;
 import qupath.ext.qpsc.ui.SaturationSummaryDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
+import qupath.ext.qpsc.utilities.AcquisitionSpaceCheck;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
@@ -152,6 +153,7 @@ public class AcquisitionManager {
                     return getRotationAngles();
                 })
                 .thenCompose(this::prepareForAcquisition)
+                .thenCompose(this::checkDiskSpace)
                 .thenCompose(this::processAnnotations)
                 .thenApply(success -> {
                     if (success) {
@@ -336,6 +338,51 @@ public class AcquisitionManager {
             }
 
             state.annotations = currentAnnotations;
+            return angleExposures;
+        });
+    }
+
+    /**
+     * Pre-flight disk space check. Sums tile counts across all annotations,
+     * estimates bytes using detector dimensions, and warns the user if the
+     * estimate exceeds free space at the save location. Honors the
+     * "Warn On Low Disk Space" preference and the in-dialog opt-out checkbox.
+     *
+     * <p>Cancellation short-circuits the rest of the chain by returning a null
+     * angle list, matching the existing null-propagation pattern used by
+     * {@link #processAnnotations(List)}.
+     */
+    private CompletableFuture<List<AngleExposure>> checkDiskSpace(List<AngleExposure> angleExposures) {
+        if (angleExposures == null || state.annotations == null || state.annotations.isEmpty()) {
+            return CompletableFuture.completedFuture(angleExposures);
+        }
+
+        return CompletableFuture.supplyAsync(() -> {
+            String tempTileDir = state.projectInfo.getTempTileDirectory();
+            long totalTiles = 0;
+            for (PathObject ann : state.annotations) {
+                String tileDirPath =
+                        Paths.get(tempTileDir, ann.getName()).toString();
+                totalTiles += MinorFunctions.countTifEntriesInTileConfig(List.of(tileDirPath));
+            }
+
+            if (totalTiles <= 0) {
+                logger.warn("Skipping disk space check -- tile count is 0 across {} annotations", state.annotations.size());
+                return angleExposures;
+            }
+
+            MicroscopeConfigManager configManager =
+                    MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
+            long bytesPerTile =
+                    AcquisitionSpaceCheck.estimateBytesPerTilePerAngle(configManager, state.sample.detector());
+
+            AcquisitionSpaceCheck.Result result = AcquisitionSpaceCheck.checkAndWarn(
+                    Paths.get(tempTileDir), totalTiles, angleExposures.size(), bytesPerTile);
+
+            if (!result.proceed()) {
+                logger.warn("Acquisition cancelled by user after low-disk-space warning");
+                return null;
+            }
             return angleExposures;
         });
     }
