@@ -15,6 +15,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -41,6 +42,7 @@ import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.utilities.AcquisitionSpaceCheck;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.ext.qpsc.utilities.LiveTileMeasurementPoller;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
@@ -86,6 +88,13 @@ public class AcquisitionManager {
     /** Single-threaded executor for stitching operations to prevent overwhelming system resources */
     private static final ExecutorService STITCH_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "stitching-queue");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /** Shared scheduled executor for live NDJSON tile-measurement polling. */
+    private static final ScheduledExecutorService LIVE_POLL_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "tile-measurement-live-poller");
         t.setDaemon(true);
         return t;
     });
@@ -895,6 +904,13 @@ public class AcquisitionManager {
         // For tile viewer: track previous progress to detect new tiles
         final AtomicInteger lastTileProgress = new AtomicInteger(0);
 
+        // Start live NDJSON poller so per-tile autofocus/saturation measurements appear
+        // on the open slide's detections as acquisition progresses. The batch attachment
+        // at the end still runs and catches anything the poller missed.
+        java.nio.file.Path ndjsonPath = Paths.get(tileDirPath, "tile_measurements.ndjson");
+        LiveTileMeasurementPoller livePoller =
+                LiveTileMeasurementPoller.start(ndjsonPath, annotation.getName(), LIVE_POLL_EXECUTOR);
+
         try {
             // Monitor acquisition with regular status updates
             MicroscopeSocketClient.AcquisitionState finalState = socketClient.monitorAcquisition(
@@ -1092,7 +1108,9 @@ public class AcquisitionManager {
             logger.error("Acquisition monitoring interrupted", e);
             throw new RuntimeException(e);
         } finally {
-            // No individual progress handle to close - dual dialog manages its own lifecycle
+            // Stop the live NDJSON poller -- runs one final synchronous tick
+            // to catch any tail entries before the batch attachment runs.
+            LiveTileMeasurementPoller.stop(livePoller);
         }
     }
 
@@ -1649,55 +1667,7 @@ public class AcquisitionManager {
                 java.util.Map<String, Object> entry = measurementsByIndex.get(tileNum.intValue());
                 if (entry == null) continue;
 
-                // Attach numeric measurements to the detection
-                Number zUm = (Number) entry.get("z_um");
-                if (zUm != null) {
-                    detection.getMeasurements().put("z_position_um", zUm.doubleValue());
-                }
-
-                Boolean afPerformed = (Boolean) entry.get("af_performed");
-                detection.getMeasurements().put("af_performed", (afPerformed != null && afPerformed) ? 1.0 : 0.0);
-
-                // Encode af_type as numeric: 0=none, 1=sweep, 2=standard
-                String afType = (String) entry.get("af_type");
-                double afTypeVal = 0.0;
-                if ("sweep".equals(afType)) {
-                    afTypeVal = 1.0;
-                } else if ("standard".equals(afType)) {
-                    afTypeVal = 2.0;
-                }
-                detection.getMeasurements().put("af_type", afTypeVal);
-
-                Number afDrift = (Number) entry.get("af_drift_um");
-                if (afDrift != null) {
-                    detection.getMeasurements().put("af_drift_um", afDrift.doubleValue());
-                }
-
-                Boolean afFailed = (Boolean) entry.get("af_failed");
-                detection.getMeasurements().put("af_failed", (afFailed != null && afFailed) ? 1.0 : 0.0);
-
-                Number tileTime = (Number) entry.get("tile_time_ms");
-                if (tileTime != null) {
-                    detection.getMeasurements().put("tile_time_ms", tileTime.doubleValue());
-                }
-
-                Number satR = (Number) entry.get("saturation_R_pct");
-                if (satR != null) {
-                    detection.getMeasurements().put("saturation_R_pct", satR.doubleValue());
-                }
-                Number satG = (Number) entry.get("saturation_G_pct");
-                if (satG != null) {
-                    detection.getMeasurements().put("saturation_G_pct", satG.doubleValue());
-                }
-                Number satB = (Number) entry.get("saturation_B_pct");
-                if (satB != null) {
-                    detection.getMeasurements().put("saturation_B_pct", satB.doubleValue());
-                }
-                Number satWorst = (Number) entry.get("saturation_worst_pct");
-                if (satWorst != null) {
-                    detection.getMeasurements().put("saturation_worst_pct", satWorst.doubleValue());
-                }
-
+                applyMeasurementEntry(detection, entry);
                 matched++;
             }
 
@@ -1720,6 +1690,64 @@ public class AcquisitionManager {
 
         } catch (Exception e) {
             logger.warn("Failed to attach tile measurements: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Applies a single tile measurement record to a detection. Shared by the
+     * batch post-acquisition path ({@link #attachTileMeasurements}) and the
+     * live NDJSON tail poller used during acquisition.
+     *
+     * <p>The entry is expected to be a parsed JSON object with the same fields
+     * the Python server writes to tile_measurements.json / tile_measurements.ndjson.
+     */
+    public static void applyMeasurementEntry(PathObject detection, java.util.Map<String, Object> entry) {
+        Number zUm = (Number) entry.get("z_um");
+        if (zUm != null) {
+            detection.getMeasurements().put("z_position_um", zUm.doubleValue());
+        }
+
+        Boolean afPerformed = (Boolean) entry.get("af_performed");
+        detection.getMeasurements().put("af_performed", (afPerformed != null && afPerformed) ? 1.0 : 0.0);
+
+        // Encode af_type as numeric: 0=none, 1=sweep, 2=standard
+        String afType = (String) entry.get("af_type");
+        double afTypeVal = 0.0;
+        if ("sweep".equals(afType)) {
+            afTypeVal = 1.0;
+        } else if ("standard".equals(afType)) {
+            afTypeVal = 2.0;
+        }
+        detection.getMeasurements().put("af_type", afTypeVal);
+
+        Number afDrift = (Number) entry.get("af_drift_um");
+        if (afDrift != null) {
+            detection.getMeasurements().put("af_drift_um", afDrift.doubleValue());
+        }
+
+        Boolean afFailed = (Boolean) entry.get("af_failed");
+        detection.getMeasurements().put("af_failed", (afFailed != null && afFailed) ? 1.0 : 0.0);
+
+        Number tileTime = (Number) entry.get("tile_time_ms");
+        if (tileTime != null) {
+            detection.getMeasurements().put("tile_time_ms", tileTime.doubleValue());
+        }
+
+        Number satR = (Number) entry.get("saturation_R_pct");
+        if (satR != null) {
+            detection.getMeasurements().put("saturation_R_pct", satR.doubleValue());
+        }
+        Number satG = (Number) entry.get("saturation_G_pct");
+        if (satG != null) {
+            detection.getMeasurements().put("saturation_G_pct", satG.doubleValue());
+        }
+        Number satB = (Number) entry.get("saturation_B_pct");
+        if (satB != null) {
+            detection.getMeasurements().put("saturation_B_pct", satB.doubleValue());
+        }
+        Number satWorst = (Number) entry.get("saturation_worst_pct");
+        if (satWorst != null) {
+            detection.getMeasurements().put("saturation_worst_pct", satWorst.doubleValue());
         }
     }
 
