@@ -1326,30 +1326,12 @@ public class ExistingImageAcquisitionController {
                     previewTilesLabel.setText(String.format("Tiles: %,d", totalTiles));
                 }
 
-                // Time estimate using persistent timing data if available
+                // Time estimate using persistent per-file mean from previous acquisitions.
+                // The stored mean already bakes in autofocus overhead at its actual
+                // occurrence frequency, so the estimate is a simple product.
                 String timeEstimate;
                 if (PersistentPreferences.hasTimingData()) {
-                    // Use stored timing data from previous acquisitions
-                    // Default to 5 AF positions per annotation if not configured
-                    int afPositionsPerAnnotation = 5;
-                    try {
-                        // Try to get AF positions from autofocus config
-                        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-                        MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
-                        Map<String, Object> afParams = configManager.getAutofocusParams(objective);
-                        if (afParams != null && afParams.get("n_tiles") instanceof Number) {
-                            afPositionsPerAnnotation = ((Number) afParams.get("n_tiles")).intValue();
-                        }
-                    } catch (Exception e) {
-                        logger.debug("Could not get AF positions from config, using default: {}", e.getMessage());
-                    }
-
-                    int numAnnotations = annotations.size();
-                    // Pass totalImages (positions x angles), NOT totalTiles.
-                    // baseTileTimeMs is measured per-file by DualProgressDialog, so
-                    // multi-angle modalities need the image count, not position count.
-                    long estimatedMs = PersistentPreferences.estimateAcquisitionTime(
-                            totalImages, afPositionsPerAnnotation, numAnnotations);
+                    long estimatedMs = PersistentPreferences.estimateAcquisitionTime(totalImages);
                     double estimatedSeconds = estimatedMs / 1000.0;
                     timeEstimate = formatTime(estimatedSeconds) + " (based on previous acquisitions)";
                 } else {

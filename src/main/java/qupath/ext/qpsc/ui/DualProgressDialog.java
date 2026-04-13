@@ -80,7 +80,6 @@ public class DualProgressDialog {
     // Separates tile-only time from autofocus time using statistical detection
     private final AtomicInteger afNTiles = new AtomicInteger(5); // Number of AF positions per annotation
     private final AtomicInteger totalTilesPerAnnotation = new AtomicInteger(0); // Total tiles in current annotation
-    private volatile long detectedFullAfTime = 0; // Time for full autofocus (detected from first spike)
     private final java.util.concurrent.ConcurrentLinkedDeque<Long> allTileTimes =
             new java.util.concurrent.ConcurrentLinkedDeque<>();
     private final AtomicBoolean firstTileProcessed = new AtomicBoolean(false);
@@ -280,20 +279,19 @@ public class DualProgressDialog {
                     recentTileTimes.removeFirst();
                 }
 
-                // Detect full autofocus time from first tile spike
-                // The first tile with tissue will have a much longer time due to full AF
+                // Exclude the first tile from the timing sample: it includes
+                // the one-time full-AF + hardware-settling spike that never
+                // recurs, and a mean of the remaining deltas is a better
+                // predictor of steady-state throughput.
                 if (!firstTileProcessed.get() && filesCompleted == 1) {
-                    // First tile - likely includes full autofocus
-                    detectedFullAfTime = tileTime;
                     firstTileProcessed.set(true);
                     logger.info(
-                            "First tile time (likely includes full AF): {} ms -- excluded from estimates", tileTime);
-                    // Do NOT add first tile to allTileTimes -- it includes full AF
-                    // setup overhead that skews early estimates
+                            "First tile time (includes full AF + settling): {} ms -- excluded from mean",
+                            tileTime);
                 } else {
-                    // Track in allTileTimes for statistical analysis (skip first tile)
                     allTileTimes.addLast(tileTime);
-                    // Keep a larger window for statistical detection (3x timing window)
+                    // Cap the history at 3x the live-window size to bound memory
+                    // while still retaining enough samples for a stable mean.
                     int maxAllTimes = windowSize * 3;
                     while (allTileTimes.size() > maxAllTimes) {
                         allTileTimes.removeFirst();
@@ -586,99 +584,50 @@ public class DualProgressDialog {
     }
 
     /**
-     * Calculates timing components by statistically separating tile-only times from autofocus times.
+     * Computes the per-file mean wall time across all collected tile deltas.
      *
-     * The approach:
-     * 1. Use the lower quartile (25th percentile) of tile times as base tile time
-     *    (most tiles don't have autofocus, so lower quartile captures typical tile-only time)
-     * 2. Identify tiles with autofocus as those significantly above the median
-     * 3. Calculate adaptive AF added time from the difference between AF tiles and base time
-     * 4. Use detected first tile time for full AF estimate
-     */
-    private TimingComponents calculateTimingComponents() {
-        // Copy times to a list for sorting
-        List<Long> sortedTimes = new ArrayList<>(allTileTimes);
-        Collections.sort(sortedTimes);
-
-        int n = sortedTimes.size();
-
-        // Base tile time: use 25th percentile (lower quartile)
-        // This captures tiles without autofocus
-        int q1Index = Math.max(0, n / 4);
-        long baseTileTime = sortedTimes.get(q1Index);
-
-        // Median for threshold detection
-        long median = sortedTimes.get(n / 2);
-
-        // Threshold for detecting autofocus tiles: 2x the base time or median + 50%, whichever is larger
-        long afThreshold = Math.max(baseTileTime * 2, median + median / 2);
-
-        // Calculate adaptive AF added time from tiles above threshold (excluding the max which may be full AF)
-        long adaptiveAfAddedTime = 0;
-        int adaptiveAfCount = 0;
-
-        for (int i = 0; i < n - 1; i++) { // Exclude max (likely full AF)
-            long time = sortedTimes.get(i);
-            if (time > afThreshold) {
-                adaptiveAfAddedTime += (time - baseTileTime);
-                adaptiveAfCount++;
-            }
-        }
-
-        if (adaptiveAfCount > 0) {
-            adaptiveAfAddedTime /= adaptiveAfCount; // Average
-        } else {
-            // No adaptive AF detected yet - estimate based on difference between median and base
-            adaptiveAfAddedTime = Math.max(0, median - baseTileTime) * 2;
-        }
-
-        // Full AF time: use detected first tile time or max observed time
-        long fullAfAddedTime;
-        if (detectedFullAfTime > 0) {
-            fullAfAddedTime = Math.max(0, detectedFullAfTime - baseTileTime);
-        } else {
-            // Fallback: use max time minus base
-            long maxTime = sortedTimes.get(n - 1);
-            fullAfAddedTime = Math.max(0, maxTime - baseTileTime);
-        }
-
-        // Ensure reasonable minimums
-        baseTileTime = Math.max(baseTileTime, 500); // At least 0.5s per tile
-        adaptiveAfAddedTime = Math.max(adaptiveAfAddedTime, 1000); // At least 1s added for adaptive AF
-        fullAfAddedTime = Math.max(fullAfAddedTime, adaptiveAfAddedTime * 2); // Full AF at least 2x adaptive
-
-        return new TimingComponents(baseTileTime, adaptiveAfAddedTime, fullAfAddedTime);
-    }
-
-    /**
-     * Holds the separated timing components for estimation.
-     */
-    private static class TimingComponents {
-        final long baseTileTimeMs; // Time for tile acquisition only (no autofocus)
-        final long adaptiveAfAddedTimeMs; // Additional time when adaptive autofocus runs
-        final long fullAfAddedTimeMs; // Additional time for full autofocus (first tile per annotation)
-
-        TimingComponents(long baseTileTimeMs, long adaptiveAfAddedTimeMs, long fullAfAddedTimeMs) {
-            this.baseTileTimeMs = baseTileTimeMs;
-            this.adaptiveAfAddedTimeMs = adaptiveAfAddedTimeMs;
-            this.fullAfAddedTimeMs = fullAfAddedTimeMs;
-        }
-    }
-
-    /**
-     * Gets the final timing data for saving to persistent preferences.
-     * Call this after acquisition completes to update the stored timing averages.
+     * <p>The first file delta is already excluded upstream (it includes the
+     * one-time full-autofocus setup spike and would bias early runs). Every
+     * other delta is included -- including adaptive and periodic autofocus
+     * tiles -- so the mean naturally reflects AF's contribution to total
+     * time at the frequency it actually occurs over the run. No statistical
+     * decomposition is needed: if AF runs on 1 in N tiles, it shows up in
+     * 1/N of the samples and pulls the mean by exactly that much.
      *
-     * @return Array of [baseTileTimeMs, adaptiveAfTimeMs, fullAfTimeMs], or null if insufficient data
+     * <p>This matches the live mid-run estimator
+     * ({@code elapsedMs / totalCompleted}) so the initial "based on previous
+     * acquisitions" estimate and the rolling estimate agree on methodology.
+     *
+     * @return mean per-file time in milliseconds, or -1 if insufficient data
      */
-    public long[] getFinalTimingData() {
+    private long calculateMeanTileTimeMs() {
         if (allTileTimes.size() < 5) {
-            logger.warn("Insufficient timing data to save ({} tiles)", allTileTimes.size());
-            return null;
+            return -1;
         }
+        long sum = 0;
+        for (long t : allTileTimes) {
+            sum += t;
+        }
+        return sum / allTileTimes.size();
+    }
 
-        TimingComponents timing = calculateTimingComponents();
-        return new long[] {timing.baseTileTimeMs, timing.adaptiveAfAddedTimeMs, timing.fullAfAddedTimeMs};
+    /**
+     * Gets the final per-file timing value for saving to persistent preferences.
+     * Call this after acquisition completes to update the stored timing average.
+     *
+     * @return mean per-file time in ms, or -1 if insufficient data to save
+     */
+    public long getFinalTimingData() {
+        long mean = calculateMeanTileTimeMs();
+        if (mean < 0) {
+            logger.warn("Insufficient timing data to save ({} tiles)", allTileTimes.size());
+            return -1;
+        }
+        logger.info(
+                "Final timing for save: {} ms/file (mean across {} tiles, first tile excluded)",
+                mean,
+                allTileTimes.size());
+        return mean;
     }
 
     /**

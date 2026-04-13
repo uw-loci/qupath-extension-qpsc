@@ -693,64 +693,40 @@ public class PersistentPreferences {
     // Format: milliseconds as long values, stored per modality/objective combination.
     // These values are updated after each acquisition with rolling averages.
 
-    // Base tile time (acquisition without autofocus)
-    private static final StringProperty baseTileTimeMsSaved =
-            PathPrefs.createPersistentPreference("AcquisitionBaseTileTimeMs", "3000");
+    // Mean per-file acquisition wall time (includes AF at its actual frequency).
+    // Keyed on a versioned preference name so stale values from the previous
+    // Q1-based statistical decomposition are ignored and the new formula
+    // starts learning from scratch.
+    private static final StringProperty meanTileTimeMsSaved =
+            PathPrefs.createPersistentPreference("AcquisitionMeanTileTimeMsV2", "0");
 
-    // Adaptive autofocus added time (additional time when adaptive AF runs)
-    private static final StringProperty adaptiveAfTimeMsSaved =
-            PathPrefs.createPersistentPreference("AcquisitionAdaptiveAfTimeMs", "8000");
-
-    // Full autofocus time (time for full AF at start of annotation)
-    private static final StringProperty fullAfTimeMsSaved =
-            PathPrefs.createPersistentPreference("AcquisitionFullAfTimeMs", "25000");
-
-    // Number of acquisitions used to calculate the averages (for weighted updates)
+    // Number of acquisitions used to calculate the mean (for weighted updates)
     private static final StringProperty timingSampleCountSaved =
-            PathPrefs.createPersistentPreference("AcquisitionTimingSampleCount", "0");
+            PathPrefs.createPersistentPreference("AcquisitionTimingSampleCountV2", "0");
 
     // Last objective/modality used (to detect changes that should reset timing data)
     private static final StringProperty lastTimingConfigSaved =
-            PathPrefs.createPersistentPreference("AcquisitionLastTimingConfig", "");
+            PathPrefs.createPersistentPreference("AcquisitionLastTimingConfigV2", "");
 
     /**
-     * Gets the stored base tile time in milliseconds.
-     * This is the average time to acquire a single tile without autofocus.
+     * Gets the stored mean per-file acquisition time in milliseconds.
+     *
+     * <p>This is the mean wall-clock delta between consecutive TIFF writes on
+     * the server, averaged across all tiles except the one-time full-AF setup
+     * spike. Autofocus tiles are included at their actual occurrence frequency
+     * so the mean already reflects AF overhead -- no separate AF correction is
+     * needed in the estimate formula.
      */
     public static long getBaseTileTimeMs() {
         try {
-            return Long.parseLong(baseTileTimeMsSaved.getValue());
+            return Long.parseLong(meanTileTimeMsSaved.getValue());
         } catch (NumberFormatException e) {
-            return 3000; // Default 3 seconds
+            return 0;
         }
     }
 
     /**
-     * Gets the stored adaptive autofocus added time in milliseconds.
-     * This is the additional time when adaptive autofocus runs on a tile.
-     */
-    public static long getAdaptiveAfTimeMs() {
-        try {
-            return Long.parseLong(adaptiveAfTimeMsSaved.getValue());
-        } catch (NumberFormatException e) {
-            return 8000; // Default 8 seconds
-        }
-    }
-
-    /**
-     * Gets the stored full autofocus time in milliseconds.
-     * This is the time for the initial full autofocus at the start of each annotation.
-     */
-    public static long getFullAfTimeMs() {
-        try {
-            return Long.parseLong(fullAfTimeMsSaved.getValue());
-        } catch (NumberFormatException e) {
-            return 25000; // Default 25 seconds
-        }
-    }
-
-    /**
-     * Gets the number of acquisition samples used for the current timing averages.
+     * Gets the number of acquisition samples used for the current timing mean.
      */
     public static int getTimingSampleCount() {
         try {
@@ -769,80 +745,58 @@ public class PersistentPreferences {
     }
 
     /**
-     * Updates the stored timing data with new measurements.
-     * Uses exponential moving average with higher weight for newer data.
+     * Updates the stored per-file mean time with the latest measurement.
+     * Uses an exponential moving average (alpha = 0.3) so stable periods
+     * converge while an anomalous run only gently shifts the estimate.
      *
-     * @param baseTileTimeMs New base tile time measurement
-     * @param adaptiveAfTimeMs New adaptive autofocus time measurement
-     * @param fullAfTimeMs New full autofocus time measurement
-     * @param modality Current modality
+     * <p>On a modality/objective change the sample count resets and alpha
+     * becomes 1.0, so the new mean completely replaces the old value
+     * instead of being averaged with stale cross-configuration data.
+     *
+     * @param meanTileTimeMs New per-file mean (ms) from the completed run
+     * @param modality Current modality (including index, e.g. "ppm_20x_1")
      * @param objective Current objective
      */
-    public static void updateTimingData(
-            long baseTileTimeMs, long adaptiveAfTimeMs, long fullAfTimeMs, String modality, String objective) {
+    public static void updateTimingData(long meanTileTimeMs, String modality, String objective) {
         String currentConfig = modality + ":" + objective;
         String lastConfig = getLastTimingConfig();
 
-        // If configuration changed, reset sample count (start fresh for new hardware)
         int sampleCount = getTimingSampleCount();
         if (!currentConfig.equals(lastConfig)) {
             sampleCount = 0;
             lastTimingConfigSaved.setValue(currentConfig);
         }
 
-        // Calculate new averages using exponential moving average
-        // Weight newer data more heavily (alpha = 0.3 for new data)
         double alpha = sampleCount == 0 ? 1.0 : 0.3;
+        long oldMean = getBaseTileTimeMs();
+        long newMean = oldMean == 0
+                ? meanTileTimeMs
+                : (long) (alpha * meanTileTimeMs + (1 - alpha) * oldMean);
 
-        long oldBaseTile = getBaseTileTimeMs();
-        long oldAdaptiveAf = getAdaptiveAfTimeMs();
-        long oldFullAf = getFullAfTimeMs();
-
-        long newBaseTile = (long) (alpha * baseTileTimeMs + (1 - alpha) * oldBaseTile);
-        long newAdaptiveAf = (long) (alpha * adaptiveAfTimeMs + (1 - alpha) * oldAdaptiveAf);
-        long newFullAf = (long) (alpha * fullAfTimeMs + (1 - alpha) * oldFullAf);
-
-        // Store updated values
-        baseTileTimeMsSaved.setValue(String.valueOf(newBaseTile));
-        adaptiveAfTimeMsSaved.setValue(String.valueOf(newAdaptiveAf));
-        fullAfTimeMsSaved.setValue(String.valueOf(newFullAf));
+        meanTileTimeMsSaved.setValue(String.valueOf(newMean));
         timingSampleCountSaved.setValue(String.valueOf(sampleCount + 1));
     }
 
     /**
-     * Calculates estimated acquisition time based on stored timing data.
+     * Calculates estimated acquisition time from stored per-file mean time.
      *
-     * <p>IMPORTANT: {@code totalImages} must be the total number of TIFF files
-     * that will be written, i.e. spatial tile positions multiplied by the
-     * modality's angle count. {@link #getBaseTileTimeMs()} is measured by
-     * {@code DualProgressDialog} as the wall-clock delta between consecutive
-     * file writes on the server, so a caller passing spatial positions
-     * instead of files underestimates multi-angle modalities by a factor
-     * equal to the angle count.
+     * <p>{@code totalImages} must be the total number of TIFF files that will
+     * be written, i.e. spatial tile positions multiplied by the modality's
+     * angle count. The stored mean is a per-file value measured from progress
+     * callbacks on the server, so the estimate is simply the product.
+     *
+     * <p>AF overhead is already baked into the mean at its actual occurrence
+     * frequency across the previous run(s) -- there are no separate AF terms.
      *
      * @param totalImages Total number of TIFF files to acquire (positions x angles)
-     * @param afPositionsPerAnnotation Number of autofocus positions per annotation
-     * @param numAnnotations Total number of annotations
-     * @return Estimated time in milliseconds
+     * @return Estimated acquisition time in milliseconds
      */
-    public static long estimateAcquisitionTime(int totalImages, int afPositionsPerAnnotation, int numAnnotations) {
-        long baseTileTime = getBaseTileTimeMs();
-        long adaptiveAfTime = getAdaptiveAfTimeMs();
-        long fullAfTime = getFullAfTimeMs();
-
-        // All image writes take base time (baseTileTime is per-file, not per-position)
-        long tileTime = baseTileTime * totalImages;
-
-        // Each annotation has one full autofocus
-        long fullAfTotal = fullAfTime * numAnnotations;
-
-        // Adaptive AF happens at (afPositionsPerAnnotation - 1) positions per annotation
-        // (first position is full AF, not adaptive)
-        int adaptiveAfPerAnnotation = Math.max(0, afPositionsPerAnnotation - 1);
-        int totalAdaptiveAf = adaptiveAfPerAnnotation * numAnnotations;
-        long adaptiveAfTotal = adaptiveAfTime * totalAdaptiveAf;
-
-        return tileTime + fullAfTotal + adaptiveAfTotal;
+    public static long estimateAcquisitionTime(int totalImages) {
+        long meanTileTime = getBaseTileTimeMs();
+        if (meanTileTime <= 0) {
+            return 0;
+        }
+        return meanTileTime * (long) Math.max(0, totalImages);
     }
 
     /**
@@ -851,17 +805,16 @@ public class PersistentPreferences {
      * @return true if timing data has been collected from previous acquisitions
      */
     public static boolean hasTimingData() {
-        return getTimingSampleCount() > 0;
+        return getTimingSampleCount() > 0 && getBaseTileTimeMs() > 0;
     }
 
     /**
-     * Resets all timing data to defaults.
-     * Call this if timing data appears to be corrupted or invalid.
+     * Resets timing data so the next acquisition starts learning from scratch.
+     * Call this if stored values appear corrupted or reflect an obsolete
+     * hardware configuration.
      */
     public static void resetTimingData() {
-        baseTileTimeMsSaved.setValue("3000");
-        adaptiveAfTimeMsSaved.setValue("8000");
-        fullAfTimeMsSaved.setValue("25000");
+        meanTileTimeMsSaved.setValue("0");
         timingSampleCountSaved.setValue("0");
         lastTimingConfigSaved.setValue("");
     }

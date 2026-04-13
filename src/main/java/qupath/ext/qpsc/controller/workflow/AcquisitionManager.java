@@ -177,8 +177,10 @@ public class AcquisitionManager {
     }
 
     /**
-     * Saves timing data from the current acquisition to persistent preferences.
-     * This data will be used to improve time estimates in future acquisitions.
+     * Saves the mean per-file time from the current acquisition to persistent
+     * preferences so future runs get a more accurate initial estimate. The
+     * mean naturally includes autofocus overhead at its actual occurrence
+     * frequency, so a single scalar is sufficient -- no AF decomposition.
      */
     private void saveTimingDataToPreferences() {
         if (dualProgressDialog == null) {
@@ -186,8 +188,8 @@ public class AcquisitionManager {
             return;
         }
 
-        long[] timingData = dualProgressDialog.getFinalTimingData();
-        if (timingData == null) {
+        long meanTileTimeMs = dualProgressDialog.getFinalTimingData();
+        if (meanTileTimeMs <= 0) {
             logger.debug("Insufficient timing data to save");
             return;
         }
@@ -195,20 +197,9 @@ public class AcquisitionManager {
         String modality = state.sample.modality();
         String objective = state.sample.objective();
 
-        PersistentPreferences.updateTimingData(
-                timingData[0], // baseTileTimeMs
-                timingData[1], // adaptiveAfTimeMs
-                timingData[2], // fullAfTimeMs
-                modality,
-                objective);
+        PersistentPreferences.updateTimingData(meanTileTimeMs, modality, objective);
 
-        logger.info(
-                "Saved timing data for {}/{}: base={}ms, adaptive={}ms, full={}ms",
-                modality,
-                objective,
-                timingData[0],
-                timingData[1],
-                timingData[2]);
+        logger.info("Saved timing data for {}/{}: {} ms/file", modality, objective, meanTileTimeMs);
     }
 
     /**
