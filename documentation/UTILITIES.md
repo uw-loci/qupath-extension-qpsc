@@ -49,6 +49,8 @@ View and test camera exposure and gain settings loaded from calibration profiles
 
 Visual representation of the microscope stage insert showing slide positions and current stage location. Supports configurable macro image overlay for navigation context.
 
+If the microscope config has no `stage.inserts` block, the Stage Map synthesizes a single-slide insert at the center of `stage.limits` using `slide_size_um` for the slide footprint. This lets scopes with only basic stage-limits calibration get a working Stage Map without an explicit per-instrument insert block.
+
 ---
 
 ## Connection & Configuration

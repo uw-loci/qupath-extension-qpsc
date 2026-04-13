@@ -672,6 +672,38 @@ This dropdown appears in the Bounding Box acquisition dialog, Existing Image acq
 
 ---
 
+## Channel Picker (Persistent Preferences)
+
+Preferences persisted by the multi-channel acquisition UI (`WidefieldChannelBoundingBoxUI`). These keys do **not** appear in QuPath's Preferences panel -- they are stored as dynamic string preferences under the QPSC extension's `dynamic` Java Preferences node and are written whenever the user ticks a checkbox or edits an exposure spinner in the channel picker. They are listed here for developers, for debugging, and for users who want to reset the picker to a clean state.
+
+See [CHANNELS.md](CHANNELS.md) for how channels are configured in YAML, and [WORKFLOWS.md](WORKFLOWS.md#multi-channel-acquisition-widefield-if-bfif) for what the picker looks like.
+
+### Key layout
+
+All keys live under the prefix `widefield.channel.`:
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `widefield.channel.master_override_enabled` | String ("true" / "false") | `false` | State of the master **"Customize channel selection for this acquisition"** checkbox. When `false`, every library channel is acquired at its YAML default exposure and the per-channel rows below are ignored. When `true`, only checked channel rows are acquired and their per-channel spinner values are used. |
+| `widefield.channel.<id>.selected` | String ("true" / "false") | `false` | Whether channel `<id>` is checked in the picker. Only consulted when `master_override_enabled` is `true`. |
+| `widefield.channel.<id>.exposure_ms` | String (double) | Channel's library `exposure_ms` (from YAML, with profile overrides applied) | Per-channel exposure in milliseconds, as edited in the picker spinner. Only consulted when `master_override_enabled` is `true` and the channel is selected. |
+
+`<id>` is the channel id declared in the YAML library (e.g. `DAPI`, `FITC`, `BF`). One pair of `.selected` / `.exposure_ms` keys is written per channel the user has interacted with.
+
+### Resetting
+
+There is currently no in-app "reset channel picker" button. To wipe channel picker state cleanly, delete the `widefield.channel.*` entries from the QPSC extension's Java Preferences store:
+
+- **Windows:** `HKEY_CURRENT_USER\Software\JavaSoft\Prefs\qupath\ext\qpsc\preferences\dynamic`
+- **Linux / WSL:** `~/.java/.userPrefs/qupath/ext/qpsc/preferences/dynamic/prefs.xml`
+- **macOS:** `~/Library/Preferences/qupath.ext.qpsc.preferences.plist`
+
+Delete the entries whose names start with `widefield.channel.` (or delete the whole `dynamic` node to reset every dynamic QPSC preference at once). Restart QuPath afterwards.
+
+Alternatively, simply un-tick the master "Customize channel selection" checkbox before running an acquisition -- the per-channel keys stay on disk but are ignored, and the acquisition uses library defaults as if the picker had never been touched.
+
+---
+
 ## SIFT Auto-Alignment
 
 Preferences controlling the SIFT feature matching used for automated alignment refinement.

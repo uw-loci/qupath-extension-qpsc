@@ -754,6 +754,58 @@ If `base_gain` is set higher than 4.0, the R/B channels are clamped to 4.0x whil
 
 **Best practice:** Keep same project open to add multiple samples, or close/reopen between completely different experiments
 
+### Multi-Channel Acquisition (Widefield IF, BF+IF)
+
+Quick fixes for the most common multi-channel failure modes. For the full reference on how channels are configured in YAML, how profile-level overrides work, and more exotic failures, see [CHANNELS.md](CHANNELS.md).
+
+#### Q: The channel picker is empty
+
+**A:** The acquisition dialog's Fluorescence Channels panel shows "No fluorescence channels configured for this microscope" instead of a channel grid.
+
+**Possible causes:**
+1. The selected profile's modality has no `channels:` library in YAML. The channel path only activates for widefield (`type: widefield`) and BF+IF (`type: bf_if`) modalities that declare a non-empty library.
+2. The YAML parsed but every entry was rejected (e.g. missing or non-numeric `exposure_ms`). Check the log for `Skipping channel '<id>' in modalities.<modality>.channels` warnings on startup.
+3. The Microscope Config File preference is pointing at the wrong YAML, or the config failed to load.
+
+**Fix:** Add a `channels:` block under the intended modality, fix any parse warnings, and verify `Edit > Preferences > QuPath SCope > Microscope Config File` points at the right YAML. See [CHANNELS.md](CHANNELS.md#2-channel-library-schema) for the schema.
+
+#### Q: "Acquisition refused -- no channels selected"
+
+**A:** The picker's master "Customize channel selection" checkbox is on, but every individual channel checkbox is off. The workflow blocks the acquisition rather than silently falling back to the full library.
+
+**Fix:** Either check at least one channel row, or un-tick the master checkbox to acquire every library channel at its default exposure.
+
+#### Q: One channel is missing from the merged OME-TIFF
+
+**A:** The per-channel stitch for that channel failed, so its single-channel pyramid never existed when `ChannelMerger` ran.
+
+**Fix:** Open the acquisition log and search for warnings around `stitchChannelDirectories` that mention the missing channel id. Common root causes: no tiles were written for that channel (filter wheel timed out, server dropped the channel mid-acquisition), the `TileConfiguration.txt` references a missing tile, or the channel subdirectory is empty. The raw per-tile TIFFs under `{projectsFolder}/{sample}/<profile>/{annotation}/{channel_id}/` survive stitch failures, so you can re-run stitching with [Stitching Recovery](WORKFLOWS.md#utility-tools) once the underlying issue is fixed.
+
+#### Q: BF channel is washed out or too dark on BF+IF
+
+**A:** Transmitted-lamp intensity is wrong for the objective. The BF library entry has a `DiaLamp Intensity` (or equivalent) set for a different objective and has not been overridden for this profile.
+
+**Fix:** Add a `channel_overrides.BF.device_properties` entry to the profile, tuning the right property for this objective. The extended merge rule replaces the matching `(device, property)` in the library entry and leaves everything else alone -- you do not have to redeclare the BF channel. Example for a low-magnification profile:
+
+```yaml
+BF_IF_10x:
+  modality: BF_IF
+  channels: [BF, DAPI, FITC, TRITC, Cy5]
+  channel_overrides:
+    BF:
+      exposure_ms: 20
+      device_properties:
+        - { device: DiaLamp, property: Intensity, value: 70 }
+```
+
+See [CHANNELS.md](CHANNELS.md#3-profile-level-selection-and-overrides) for the full extended override schema.
+
+#### Q: Channel transitions race the snap (first tile of a channel looks dim or wrong)
+
+**A:** Some hardware (filter wheels, reflector turrets, certain light paths) reports `isBusy() = false` before the LED intensity or filter position has actually settled. Micro-Manager's `waitForDevice` cannot detect the remaining settling time, so the camera snaps too early.
+
+**Fix:** Add `settle_ms: <N>` to the offending channel in its YAML library entry. Start with 50-100 ms and tune down. This is a dumb sleep applied after all presets and property writes have been issued and `waitForDevice` has returned, immediately before the exposure is set and the image is snapped.
+
 ### Performance & Optimization
 
 #### Q: Acquisition is very slow - how can I speed it up?

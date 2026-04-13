@@ -59,6 +59,8 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 | **Acquisition Wizard** | Guided setup wizard that checks prerequisites and walks new users through first-time configuration |
 | **Automated Stage Control** | Move XY, Z, and rotation stages with safety bounds checking |
 | **Multi-angle Imaging (PPM)** | Polarized light microscopy with automatic rotation sequences |
+| **[Multi-channel widefield immunofluorescence](documentation/CHANNELS.md)** | Vendor-agnostic channel library: driven entirely by YAML presets and device property writes, works with any Micro-Manager-driven illuminator |
+| **[BF + IF](documentation/WORKFLOWS.md#multi-channel-acquisition-widefield-if-bfif)** | Combined brightfield + immunofluorescence in a single acquisition pass on single-camera scopes |
 
 ### Live Imaging & Stage Control
 
@@ -97,7 +99,7 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 - **Project Integration**: Acquired images automatically added to your QuPath project
 - **Real-time Progress**: Live feedback during acquisition via socket communication with CONFIG handshake validation
 - **Push Notifications**: Get alerts on your phone via [ntfy.sh](https://ntfy.sh) when acquisitions complete or fail (configurable in Preferences)
-- **Modality System**: Pluggable imaging modes (PPM, brightfield, laser scanning / SHG) with extensible plugin architecture
+- **Modality System**: Pluggable imaging modes (PPM, brightfield, widefield immunofluorescence, BF+IF, laser scanning / SHG) with extensible plugin architecture
 
 > **Note:** Polarized (PPM) acquisitions use the `ppm_` prefix (e.g., `ppm_20x`). Modalities without this prefix perform single-pass acquisitions.
 

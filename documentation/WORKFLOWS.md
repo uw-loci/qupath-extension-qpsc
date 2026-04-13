@@ -14,8 +14,11 @@ QPSC connects QuPath to your microscope via Pycro-Manager and Micro-Manager. You
 |--------------|----------|-----------|
 | Scan a rectangular region by stage coordinates | [Bounded Acquisition](#workflow-1-bounded-acquisition) | Extensions -> QP Scope -> Bounded Acquisition |
 | Acquire high-res images of annotated regions on an overview slide | [Acquire from Existing Image](#workflow-2-acquire-from-existing-image) | Extensions -> QP Scope -> Acquire from Existing Image |
+| Acquire multi-channel widefield immunofluorescence (IF or BF+IF) | [Multi-Channel Acquisition](#multi-channel-acquisition-widefield-if-bfif) | Same menu entries as Bounded / Existing Image |
 | Calibrate the coordinate link between a scanner image and the microscope | [Microscope Alignment](#workflow-3-microscope-alignment) | Extensions -> QP Scope -> Utilities -> Microscope Alignment |
 | Get guided help through the full setup-to-acquisition process | [Acquisition Wizard](#acquisition-wizard) | Extensions -> QP Scope -> Acquisition Wizard... |
+
+> **Multi-channel note:** Widefield immunofluorescence and combined Brightfield + IF are **not** separate menu items. They dispatch through the regular Bounded Acquisition and Acquire from Existing Image workflows whenever the selected acquisition profile's modality declares a `channels:` library in YAML. See [Multi-Channel Acquisition](#multi-channel-acquisition-widefield-if-bfif) below for what the picker looks like and how files land on disk.
 
 ---
 
@@ -122,6 +125,57 @@ You do *not* need to re-run alignment every time you load a new slide from the s
 During refinement, an **Auto-Align (SIFT)** button can automatically match the microscope view to the WSI tile using feature detection, eliminating the need for manual stage adjustment. This works best on tissue with visible structural features and handles different pixel sizes between the WSI and microscope automatically. Falls back to manual alignment if SIFT cannot find enough matching features.
 
 See [full documentation](tools/microscope-alignment.md) for step-by-step instructions, point distribution guidelines, flip/invert settings, and troubleshooting.
+
+---
+
+## Multi-Channel Acquisition (Widefield IF, BF+IF)
+
+### When It Applies
+
+There is no new menu entry for multi-channel acquisition. Any acquisition profile whose modality declares a `channels:` library in the microscope YAML automatically takes the channel path when you run it through either [Bounded Acquisition](#workflow-1-bounded-acquisition) or [Acquire from Existing Image](#workflow-2-acquire-from-existing-image). Pure-IF profiles use a modality of type `widefield` and combined BF+IF profiles use type `bf_if`; both flow through the same UI and the same acquisition code path.
+
+Angle-based modalities (PPM) and channel-based modalities are mutually exclusive per acquisition. If a profile has a channel library, the angle axis is suppressed; if it does not, the workflow falls back to the existing single-snap / multi-angle path unchanged.
+
+### What You See in the UI
+
+When a channel-based profile is selected, the acquisition dialog grows a **Fluorescence Channels** panel below the main settings. The panel shows:
+
+- A **"Customize channel selection for this acquisition"** master checkbox.
+- One row per channel from the library, each with a checkbox (Use), the channel's display name, and a per-channel **Exposure (ms)** spinner.
+
+Default behavior (master checkbox OFF): the acquisition uses every channel in the library at its YAML-declared exposure. The individual rows are greyed out.
+
+Customized behavior (master checkbox ON): the individual row checkboxes and exposure spinners are enabled. Only checked channels are acquired, in library order, at the exposure values shown in their spinners. Per-channel selections and exposures are persisted between sessions (see [PREFERENCES.md](PREFERENCES.md#channel-picker-persistent-preferences) for the exact keys).
+
+If the master checkbox is on and you uncheck every channel row, the workflow refuses to start the acquisition with a clear error -- zero-channel acquisitions are blocked rather than silently falling back to the full library.
+
+### What Lands on Disk
+
+Each channel gets its own per-tile directory, mirroring the PPM per-angle layout:
+
+```
+{projectsFolder}/{sample}/{profile}_{n}/{annotation}/
+    BF/tile_0_0.tif
+    BF/tile_0_1.tif
+    DAPI/tile_0_0.tif
+    DAPI/tile_0_1.tif
+    FITC/...
+    TRITC/...
+    Cy5/...
+    TileConfiguration.txt
+```
+
+After the tile loop finishes, each channel subdirectory is stitched independently into its own single-channel pyramidal OME-TIFF (via `StitchingHelper.stitchChannelDirectories`, which reuses the same helper that PPM uses per angle). The per-channel pyramids are then merged into a single multichannel output `{annotation}_merged.ome.tif` with `ChannelMerger` / `ChannelMergeImageServer` from the [qupath-extension-tiles-to-pyramid](https://github.com/uw-loci/qupath-extension-tiles-to-pyramid) extension. The merged file is what gets added to your QuPath project.
+
+### BF+IF on Single-Camera Scopes
+
+On instruments with one camera that can be switched between a transmitted port and an epi port (e.g. OWS3), combined brightfield + IF acquisition is available as its own `bf_if` modality. There is nothing special about the BF step in the code path -- it is just the first entry in the channel library, and its `mm_setup_presets` switch the light path back to transmitted before the snap. Everything downstream (per-tile layout, per-channel stitching, multichannel merge) is identical to pure IF.
+
+### Learn More / Troubleshooting
+
+- [CHANNELS.md](CHANNELS.md) -- YAML schema, profile-level overrides, the extended `device_properties` merge rule, and channel-specific troubleshooting.
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md#multi-channel-acquisition) -- quick fixes for the most common multi-channel failures.
+- `../../QPSC/docs/multichannel-if-overview.md` -- cross-repo design overview and the end-to-end OWS3 example.
 
 ---
 
