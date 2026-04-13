@@ -370,6 +370,11 @@ public class BoundedAcquisitionWorkflow {
                                             + "The acquisition dialog should always provide a wbMode value.");
                                 }
 
+                                // Per-channel intensity overrides (widefield IF). Empty/null map
+                                // means "use YAML defaults" and produces no CLI flag.
+                                config.commandBuilder()
+                                        .channelIntensityOverrides(result.channelIntensityOverrides());
+
                                 logger.info(
                                         "Starting acquisition - Sample: {}, Mode: {}, Angles: {}, wbMode: {}",
                                         result.sampleName(),

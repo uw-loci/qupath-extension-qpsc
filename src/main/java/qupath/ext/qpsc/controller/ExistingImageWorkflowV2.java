@@ -362,8 +362,11 @@ public class ExistingImageWorkflowV2 {
 
             // Note: Green box params are handled by ExistingAlignmentPath, not stored here
 
-            // Store angle overrides
+            // Store angle + channel-intensity overrides
             state.angleOverrides = config.angleOverrides();
+            state.channelIntensityOverrides = config.channelIntensityOverrides() == null
+                    ? Map.of()
+                    : config.channelIntensityOverrides();
 
             // Store whether this is an existing project
             state.isExistingProject = config.isExistingProject();
@@ -1013,6 +1016,7 @@ public class ExistingImageWorkflowV2 {
         public List<CompletableFuture<Void>> stitchingFutures = new ArrayList<>();
         public double pixelSize;
         public Map<String, Double> angleOverrides;
+        public Map<String, Double> channelIntensityOverrides = Map.of();
         public PathObject refinementTile;
 
         // V2-specific fields

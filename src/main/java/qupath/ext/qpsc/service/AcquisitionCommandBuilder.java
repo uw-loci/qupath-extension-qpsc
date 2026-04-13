@@ -38,6 +38,12 @@ public class AcquisitionCommandBuilder {
     // Channel-based and angle-based modalities are mutually exclusive.
     private List<ChannelExposure> channelExposures;
 
+    // Optional per-channel intensity overrides. Keys are channel ids, values
+    // are the runtime intensity for that channel's declared intensity_property.
+    // Only present channels are overridden; absent channels keep their YAML
+    // defaults. Emitted as the --channel-intensities CLI flag.
+    private Map<String, Double> channelIntensityOverrides = Map.of();
+
     // Marks this as a non-rotation modality (brightfield, fluorescence, laser
     // scanning without angles). When true, the builder omits --angles entirely
     // and sends --exposures from the first entry in angleExposures so the
@@ -162,6 +168,24 @@ public class AcquisitionCommandBuilder {
      */
     public AcquisitionCommandBuilder channelExposures(List<ChannelExposure> channelExposures) {
         this.channelExposures = channelExposures;
+        return this;
+    }
+
+    /**
+     * Sets per-channel intensity overrides for a channel-based acquisition.
+     *
+     * <p>Each entry maps a channel id to the runtime intensity for that
+     * channel's declared {@code intensity_property}. The Python server reads
+     * the {@code intensity_property} pointer from the YAML and writes the
+     * override value there before snapping, replacing the library default for
+     * that channel only. Channels not present in the map keep their YAML
+     * defaults, so an empty or null map is equivalent to "no overrides".
+     *
+     * @param overrides channel-id to intensity-value map, may be null or empty
+     * @return this builder instance for method chaining
+     */
+    public AcquisitionCommandBuilder channelIntensityOverrides(Map<String, Double> overrides) {
+        this.channelIntensityOverrides = overrides == null ? Map.of() : overrides;
         return this;
     }
 
@@ -456,6 +480,25 @@ public class AcquisitionCommandBuilder {
                     "Channel-based acquisition: {} channels, exposures {}",
                     channelExposures.size(),
                     channelExposuresStr);
+
+            // Per-channel intensity overrides. Emit only channels that actually
+            // appear in the selected acquisition sequence, so the flag stays
+            // tight and order-aligned with --channels.
+            if (channelIntensityOverrides != null && !channelIntensityOverrides.isEmpty()) {
+                List<String> intensityEntries = new ArrayList<>();
+                for (ChannelExposure ce : channelExposures) {
+                    Double override = channelIntensityOverrides.get(ce.channelId());
+                    if (override != null) {
+                        intensityEntries.add(ce.channelId() + "=" + override);
+                    }
+                }
+                if (!intensityEntries.isEmpty()) {
+                    String intensityStr = "(" + String.join(",", intensityEntries) + ")";
+                    args.add("--channel-intensities");
+                    args.add(intensityStr);
+                    logger.debug("Channel intensity overrides: {}", intensityStr);
+                }
+            }
         }
 
         // Add angle/exposure parameters (skipped when channel-based)

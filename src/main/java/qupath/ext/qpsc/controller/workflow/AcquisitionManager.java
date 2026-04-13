@@ -719,6 +719,12 @@ public class AcquisitionManager {
                             + "The acquisition dialog should always provide a wbMode value.");
                 }
 
+                // Per-channel intensity overrides (widefield IF / BF+IF). Empty map
+                // means "use YAML defaults" and produces no CLI flag.
+                if (state.channelIntensityOverrides != null) {
+                    config.commandBuilder().channelIntensityOverrides(state.channelIntensityOverrides);
+                }
+
                 logger.info("Acquisition parameters for {}:", annotation.getName());
                 logger.info("  Config: {}", configFileLocation);
                 logger.info("  Sample: {}", actualSampleName);

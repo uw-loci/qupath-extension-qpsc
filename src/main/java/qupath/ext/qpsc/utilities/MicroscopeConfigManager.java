@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.PresetRef;
+import qupath.ext.qpsc.modality.PropertyRef;
 import qupath.ext.qpsc.modality.PropertyWrite;
 
 /**
@@ -1816,8 +1817,29 @@ public class MicroscopeConfigManager {
             settleMs = ((Number) settleObj).doubleValue();
         }
 
+        // Optional pointer into `device_properties` marking the primary intensity knob.
+        // When present, the channel-picker UI exposes that entry as a per-channel
+        // intensity spinner. Missing or malformed => no intensity control (null).
+        PropertyRef intensityProperty = null;
+        Object intensityObj = channelMap.get("intensity_property");
+        if (intensityObj instanceof Map<?, ?> intensityMap) {
+            Object dev = intensityMap.get("device");
+            Object prop = intensityMap.get("property");
+            if (dev != null && prop != null) {
+                try {
+                    intensityProperty = new PropertyRef(dev.toString(), prop.toString());
+                } catch (IllegalArgumentException e) {
+                    logger.warn(
+                            "Ignoring malformed intensity_property on channel '{}' in modalities.{}: {}",
+                            id,
+                            modalityForLog,
+                            e.getMessage());
+                }
+            }
+        }
+
         try {
-            return new Channel(id, displayName, exposureMs, presets, properties, settleMs);
+            return new Channel(id, displayName, exposureMs, presets, properties, intensityProperty, settleMs);
         } catch (IllegalArgumentException e) {
             logger.warn(
                     "Skipping invalid channel '{}' in modalities.{}.channels: {}",

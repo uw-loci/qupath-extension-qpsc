@@ -24,6 +24,11 @@ import java.util.List;
  * @param defaultExposureMs  default exposure in milliseconds if the user provides no override
  * @param presets            ConfigGroup presets to apply for this channel, in order. May be empty
  * @param properties         device property writes to apply for this channel, in order. May be empty
+ * @param intensityProperty  optional pointer into {@code properties} marking the "primary
+ *                           intensity knob" that a generic UI should expose as a spinner.
+ *                           When non-null, the UI looks up the matching (device, property)
+ *                           entry in {@code properties} to seed the spinner's default value.
+ *                           Null means "no intensity control for this channel"
  * @param settleMs           optional dumb-sleep fallback (ms) after preset/property application.
  *                           Use for hardware whose isBusy() reports complete too early
  *                           (filter wheels, reflector turrets). 0 to skip
@@ -34,6 +39,7 @@ public record Channel(
         double defaultExposureMs,
         List<PresetRef> presets,
         List<PropertyWrite> properties,
+        PropertyRef intensityProperty,
         double settleMs) {
 
     public Channel {
@@ -52,10 +58,11 @@ public record Channel(
         }
         presets = presets == null ? List.of() : List.copyOf(presets);
         properties = properties == null ? List.of() : List.copyOf(properties);
+        // intensityProperty is allowed to be null (no intensity knob declared).
     }
 
     /**
-     * Convenience constructor omitting settleMs (defaults to 0).
+     * Convenience constructor omitting intensityProperty and settleMs.
      */
     public Channel(
             String id,
@@ -63,7 +70,46 @@ public record Channel(
             double defaultExposureMs,
             List<PresetRef> presets,
             List<PropertyWrite> properties) {
-        this(id, displayName, defaultExposureMs, presets, properties, 0);
+        this(id, displayName, defaultExposureMs, presets, properties, null, 0);
+    }
+
+    /**
+     * Convenience constructor omitting intensityProperty (settleMs explicit).
+     */
+    public Channel(
+            String id,
+            String displayName,
+            double defaultExposureMs,
+            List<PresetRef> presets,
+            List<PropertyWrite> properties,
+            double settleMs) {
+        this(id, displayName, defaultExposureMs, presets, properties, null, settleMs);
+    }
+
+    /**
+     * Returns the current value of the intensity property, if one is declared AND
+     * there is a matching (device, property) entry in {@code properties}. Used by
+     * the channel picker UI to seed the per-channel intensity spinner.
+     *
+     * @return the parsed intensity value, or {@code Double.NaN} if no intensity
+     *         property is declared or no matching entry exists (or its value is
+     *         not parseable as a number)
+     */
+    public double currentIntensityValue() {
+        if (intensityProperty == null) {
+            return Double.NaN;
+        }
+        for (PropertyWrite p : properties) {
+            if (p.device().equals(intensityProperty.device())
+                    && p.property().equals(intensityProperty.property())) {
+                try {
+                    return Double.parseDouble(p.value());
+                } catch (NumberFormatException e) {
+                    return Double.NaN;
+                }
+            }
+        }
+        return Double.NaN;
     }
 
     @Override

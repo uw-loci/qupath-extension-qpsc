@@ -61,6 +61,10 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     private final CheckBox masterOverride;
     private final LinkedHashMap<String, CheckBox> channelCheckboxes = new LinkedHashMap<>();
     private final LinkedHashMap<String, Spinner<Double>> channelExposures = new LinkedHashMap<>();
+    // Seeded only for channels whose library entry declares an intensity_property.
+    // Channels without intensity control have no spinner here.
+    private final LinkedHashMap<String, Spinner<Double>> channelIntensities = new LinkedHashMap<>();
+    private final LinkedHashMap<String, Double> defaultIntensities = new LinkedHashMap<>();
 
     public WidefieldChannelBoundingBoxUI() {
         root = new VBox(5);
@@ -95,7 +99,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         grid.setHgap(10);
         grid.setVgap(5);
 
-        // Column 0: checkbox (fixed), column 1: name (grow), column 2: spinner (right-aligned)
+        // Columns: checkbox | name (grow) | exposure | intensity
         ColumnConstraints col0 = new ColumnConstraints();
         col0.setHalignment(HPos.CENTER);
         ColumnConstraints col1 = new ColumnConstraints();
@@ -103,17 +107,21 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         col1.setFillWidth(true);
         ColumnConstraints col2 = new ColumnConstraints();
         col2.setHalignment(HPos.RIGHT);
-        grid.getColumnConstraints().addAll(col0, col1, col2);
+        ColumnConstraints col3 = new ColumnConstraints();
+        col3.setHalignment(HPos.RIGHT);
+        grid.getColumnConstraints().addAll(col0, col1, col2, col3);
 
         grid.add(boldLabel("Use"), 0, 0);
         grid.add(boldLabel("Channel"), 1, 0);
         grid.add(boldLabel("Exposure (ms)"), 2, 0);
+        grid.add(boldLabel("Intensity"), 3, 0);
 
         int row = 1;
         for (Channel channel : library) {
             String id = channel.id();
             String selectedPrefKey = PREF_KEY_PREFIX + id + ".selected";
             String exposurePrefKey = PREF_KEY_PREFIX + id + ".exposure_ms";
+            String intensityPrefKey = PREF_KEY_PREFIX + id + ".intensity";
 
             boolean selected = Boolean.parseBoolean(
                     PersistentPreferences.getStringPreference(selectedPrefKey, "false"));
@@ -132,22 +140,23 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
             Label nameLabel = new Label(channel.displayName());
             nameLabel.setMaxWidth(Double.MAX_VALUE);
 
-            Spinner<Double> spinner = new Spinner<>();
-            spinner.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(0.1, 60000.0, exposure, 10.0));
-            spinner.setEditable(true);
-            spinner.setPrefWidth(110);
-            spinner.setTooltip(new Tooltip("Camera exposure for this channel.\n"
+            Spinner<Double> expSpinner = new Spinner<>();
+            expSpinner.setValueFactory(
+                    new SpinnerValueFactory.DoubleSpinnerValueFactory(0.1, 60000.0, exposure, 10.0));
+            expSpinner.setEditable(true);
+            expSpinner.setPrefWidth(110);
+            expSpinner.setTooltip(new Tooltip("Camera exposure for this channel.\n"
                     + "Default from YAML (with profile overrides): " + channel.defaultExposureMs() + " ms"));
-            commitOnFocusLost(spinner);
+            commitOnFocusLost(expSpinner);
 
-            // Spinner is enabled only when master override is on AND the channel row is selected.
-            spinner.disableProperty().bind(
+            // Spinner enabled only when master override is on AND the channel row is selected.
+            expSpinner.disableProperty().bind(
                     masterOverride.selectedProperty().not().or(cb.selectedProperty().not()));
             cb.disableProperty().bind(masterOverride.selectedProperty().not());
 
             cb.selectedProperty().addListener((obs, oldVal, newVal) ->
                     PersistentPreferences.setStringPreference(selectedPrefKey, String.valueOf(newVal)));
-            spinner.valueProperty().addListener((obs, oldVal, newVal) -> {
+            expSpinner.valueProperty().addListener((obs, oldVal, newVal) -> {
                 if (newVal != null) {
                     PersistentPreferences.setStringPreference(exposurePrefKey, String.valueOf(newVal));
                 }
@@ -155,10 +164,59 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
 
             grid.add(cb, 0, row);
             grid.add(nameLabel, 1, row);
-            grid.add(spinner, 2, row);
+            grid.add(expSpinner, 2, row);
+
+            // Intensity spinner: only created for channels that declared an
+            // intensity_property in YAML. For channels without one (e.g. legacy
+            // modalities), insert a placeholder label so column alignment is
+            // preserved without leaking null spinners into the override map.
+            double defaultIntensity = channel.currentIntensityValue();
+            if (channel.intensityProperty() != null && !Double.isNaN(defaultIntensity)) {
+                double intensity;
+                try {
+                    intensity = Double.parseDouble(PersistentPreferences.getStringPreference(
+                            intensityPrefKey, String.valueOf(defaultIntensity)));
+                } catch (NumberFormatException e) {
+                    intensity = defaultIntensity;
+                }
+
+                Spinner<Double> intensitySpinner = new Spinner<>();
+                // LED / lamp intensities vary wildly across vendors -- span 0..65535
+                // to cover 8-bit DACs, 16-bit DACs, and normalized-float controllers
+                // at 1% granularity. UI clamping is soft; real validation lives in
+                // the hardware layer.
+                intensitySpinner.setValueFactory(
+                        new SpinnerValueFactory.DoubleSpinnerValueFactory(0.0, 65535.0, intensity, 1.0));
+                intensitySpinner.setEditable(true);
+                intensitySpinner.setPrefWidth(100);
+                intensitySpinner.setTooltip(new Tooltip(String.format(
+                        "Override for %s (default: %s)",
+                        channel.intensityProperty(), defaultIntensity)));
+                commitOnFocusLost(intensitySpinner);
+
+                intensitySpinner.disableProperty().bind(
+                        masterOverride.selectedProperty().not().or(cb.selectedProperty().not()));
+
+                intensitySpinner.valueProperty().addListener((obs, oldVal, newVal) -> {
+                    if (newVal != null) {
+                        PersistentPreferences.setStringPreference(intensityPrefKey, String.valueOf(newVal));
+                    }
+                });
+
+                grid.add(intensitySpinner, 3, row);
+                channelIntensities.put(id, intensitySpinner);
+                defaultIntensities.put(id, defaultIntensity);
+            } else {
+                Label placeholder = new Label("-");
+                placeholder.setStyle("-fx-text-fill: gray;");
+                placeholder.setTooltip(new Tooltip(
+                        "This channel has no intensity_property declared in the YAML, "
+                                + "so there is no runtime intensity knob for it."));
+                grid.add(placeholder, 3, row);
+            }
 
             channelCheckboxes.put(id, cb);
-            channelExposures.put(id, spinner);
+            channelExposures.put(id, expSpinner);
             row++;
         }
 
@@ -258,6 +316,42 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         }
         // Empty result here means "user actively selected nothing" -- return it as-is so
         // the workflow can block the acquisition with a clear error. Do NOT fall through.
+        return result;
+    }
+
+    /**
+     * Returns per-channel intensity overrides for the currently-selected
+     * channels. Only channels whose YAML entry declared an
+     * {@code intensity_property} appear here, and only if the user changed the
+     * spinner away from its library default (to keep the command line compact
+     * and make "no override" legible at a glance).
+     */
+    @Override
+    public Map<String, Double> getChannelIntensityOverrides() {
+        if (masterOverride == null || !masterOverride.isSelected()) {
+            return Map.of();
+        }
+        LinkedHashMap<String, Double> result = new LinkedHashMap<>();
+        for (Map.Entry<String, CheckBox> entry : channelCheckboxes.entrySet()) {
+            if (!entry.getValue().isSelected()) {
+                continue;
+            }
+            String id = entry.getKey();
+            Spinner<Double> spinner = channelIntensities.get(id);
+            if (spinner == null) {
+                continue; // Channel has no intensity_property -> no knob to override.
+            }
+            Double value = spinner.getValue();
+            if (value == null) {
+                continue;
+            }
+            // Emit the override only if it differs from the YAML default, so
+            // unchanged values don't clutter the CLI flag. Epsilon = 1e-6.
+            Double libraryDefault = defaultIntensities.get(id);
+            if (libraryDefault == null || Math.abs(value - libraryDefault) > 1e-6) {
+                result.put(id, value);
+            }
+        }
         return result;
     }
 

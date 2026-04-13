@@ -486,5 +486,26 @@ public interface ModalityHandler {
          * @see #applyAngleOverrides(List, Map)
          */
         Map<String, Double> getAngleOverrides();
+
+        /**
+         * Returns the user's per-channel intensity overrides.
+         *
+         * <p>Only meaningful for channel-based modalities whose UI exposes a
+         * per-channel intensity spinner. The map keys are channel ids, and the
+         * values are the user-selected intensity for the channel's declared
+         * {@code intensity_property}. An empty map means "use the YAML-declared
+         * defaults for every channel"; this is also the default for angle-based
+         * modalities.
+         *
+         * <p>The workflow threads these values through
+         * {@code AcquisitionCommandBuilder.channelIntensityOverrides()} and
+         * emits them to the Python server as the {@code --channel-intensities}
+         * CLI flag.
+         *
+         * @return channel-id to intensity-value map, empty if no overrides
+         */
+        default Map<String, Double> getChannelIntensityOverrides() {
+            return Map.of();
+        }
     }
 }

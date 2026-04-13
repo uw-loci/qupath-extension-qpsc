@@ -69,6 +69,7 @@ public class UnifiedAcquisitionController {
             double x2,
             double y2,
             Map<String, Double> angleOverrides,
+            Map<String, Double> channelIntensityOverrides,
             boolean enableWhiteBalance,
             boolean perAngleWhiteBalance,
             String wbMode) {}
@@ -1486,12 +1487,20 @@ public class UnifiedAcquisitionController {
                 PersistentPreferences.setLastDetector(detector);
                 PersistentPreferences.setBoundingBoxString(String.format("%.2f,%.2f,%.2f,%.2f", x1, y1, x2, y2));
 
-                // Get angle overrides if available
+                // Get angle / channel overrides if available
                 Map<String, Double> angleOverrides = null;
+                Map<String, Double> channelIntensityOverrides = Map.of();
                 if (modalityUI != null) {
                     angleOverrides = modalityUI.getAngleOverrides();
                     if (angleOverrides != null) {
                         logger.info("User specified angle overrides: {}", angleOverrides);
+                    }
+                    channelIntensityOverrides = modalityUI.getChannelIntensityOverrides();
+                    if (channelIntensityOverrides == null) {
+                        channelIntensityOverrides = Map.of();
+                    }
+                    if (!channelIntensityOverrides.isEmpty()) {
+                        logger.info("User specified channel intensity overrides: {}", channelIntensityOverrides);
                     }
                 }
 
@@ -1528,6 +1537,7 @@ public class UnifiedAcquisitionController {
                         x2,
                         y2,
                         angleOverrides,
+                        channelIntensityOverrides,
                         enableWhiteBalance,
                         perAngleWhiteBalance,
                         wbMode);

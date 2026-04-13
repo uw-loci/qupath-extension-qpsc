@@ -62,6 +62,7 @@ class ExistingImageAcquisitionControllerTest {
                 0.85,
                 RefinementChoice.NONE,
                 null,
+                Map.of(),
                 false,
                 false,
                 null);
@@ -86,6 +87,7 @@ class ExistingImageAcquisitionControllerTest {
                 0.0,
                 RefinementChoice.FULL_MANUAL,
                 null,
+                Map.of(),
                 false,
                 false,
                 null);
@@ -110,6 +112,7 @@ class ExistingImageAcquisitionControllerTest {
                 0.92,
                 RefinementChoice.SINGLE_TILE,
                 null,
+                Map.of(),
                 false,
                 false,
                 null);
@@ -139,6 +142,7 @@ class ExistingImageAcquisitionControllerTest {
                 0.85,
                 RefinementChoice.NONE,
                 overrides,
+                Map.of(),
                 false,
                 false,
                 null);
@@ -164,6 +168,7 @@ class ExistingImageAcquisitionControllerTest {
                 0.85,
                 RefinementChoice.NONE,
                 null,
+                Map.of(),
                 false,
                 false,
                 null);
@@ -186,6 +191,7 @@ class ExistingImageAcquisitionControllerTest {
                 0.0,
                 RefinementChoice.FULL_MANUAL,
                 null,
+                Map.of(),
                 false,
                 false,
                 null);
@@ -214,6 +220,7 @@ class ExistingImageAcquisitionControllerTest {
                 0.85,
                 RefinementChoice.NONE,
                 null,
+                Map.of(),
                 false,
                 false,
                 null);
@@ -239,6 +246,7 @@ class ExistingImageAcquisitionControllerTest {
                 0.65,
                 RefinementChoice.SINGLE_TILE,
                 null,
+                Map.of(),
                 false,
                 false,
                 null);
@@ -264,6 +272,7 @@ class ExistingImageAcquisitionControllerTest {
                 0.35,
                 RefinementChoice.FULL_MANUAL,
                 null,
+                Map.of(),
                 false,
                 false,
                 null);
@@ -288,6 +297,7 @@ class ExistingImageAcquisitionControllerTest {
                 0.0,
                 RefinementChoice.FULL_MANUAL,
                 null,
+                Map.of(),
                 false,
                 false,
                 null);
@@ -314,6 +324,7 @@ class ExistingImageAcquisitionControllerTest {
                 0.85,
                 RefinementChoice.NONE,
                 null,
+                Map.of(),
                 true,
                 true,
                 "per_angle");
