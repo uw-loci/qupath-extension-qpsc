@@ -933,13 +933,25 @@ public class StitchingHelper {
      * channel ids to stitch. Returns an empty list for angle-based modalities. The
      * channel ids double as subdirectory names under the annotation folder (mirroring
      * how PPM uses angle-tick strings as subdirectory names).
+     *
+     * <p>Channel library lookup is keyed by the enhanced profile name (e.g.
+     * {@code "Fluorescence_10x"}), NOT the base modality name
+     * ({@code "Fluorescence"}), because {@code acquisition_profiles[]} and the
+     * per-profile channel library are indexed by the enhanced key. Passing the
+     * base modality here was the second instance of the bug we fixed in
+     * {@code AngleResolutionService} / {@code BoundedAcquisitionWorkflow}; the
+     * stitcher would silently fall through to the angle-based path on an empty
+     * {@code bounds/} folder (because the tiles were in {@code bounds/FITC/}
+     * etc.) and the user would see only one channel in the final image.
      */
     private static List<String> resolveChannelIdsForStitching(ModalityHandler handler, SampleSetupResult sample) {
         if (handler == null || sample == null) {
             return List.of();
         }
+        String profileKey = qupath.ext.qpsc.utilities.ObjectiveUtils.createEnhancedFolderName(
+                sample.modality(), sample.objective());
         try {
-            List<Channel> channels = handler.getChannels(sample.modality(), sample.objective(), sample.detector())
+            List<Channel> channels = handler.getChannels(profileKey, sample.objective(), sample.detector())
                     .join();
             if (channels == null || channels.isEmpty()) {
                 return List.of();
@@ -951,8 +963,8 @@ public class StitchingHelper {
             return ids;
         } catch (Exception e) {
             logger.warn(
-                    "Failed to resolve channel library for stitching (modality={}): {}",
-                    sample.modality(),
+                    "Failed to resolve channel library for stitching (profile={}): {}",
+                    profileKey,
                     e.getMessage());
             return List.of();
         }
