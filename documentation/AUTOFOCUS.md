@@ -150,12 +150,26 @@ Autofocus parameters are configured **per objective** in the autofocus YAML file
 |-----------|-------------|---------------|
 | `n_steps` | Z positions to sample during standard AF | 15-40 |
 | `search_range_um` | Total Z search range in micrometers | 12-50 |
-| `n_tiles` | AF runs every N tiles | 3-7 |
+| `n_tiles` | Spatial grid spacing for AF positions (every ~N tiles in each axis) | 3-7 |
 | `score_metric` | Focus quality algorithm | `normalized_variance` |
 | `texture_threshold` | Min texture for tissue detection | 0.005-0.030 |
 | `tissue_area_threshold` | Min tissue coverage fraction | 0.05-0.30 |
 | `sweep_range_um` | Z range for drift check | 6-10 |
 | `sweep_n_steps` | Steps in drift check | 6-10 |
+| `gap_index_multiplier` | Force AF after this x `n_tiles` without AF (safety net) | 2-5 (default 3) |
+| `gap_spatial_multiplier` | Force AF when nearest AF exceeds this x grid spacing (fragment safety net) | 1.5-3.0 (default 2.0) |
+
+### How AF Position Selection Works
+
+Autofocus positions are selected in three layers:
+
+1. **Spatial grid (primary):** A uniform 2D lattice is laid over the scan area with spacing of `((fov_x + fov_y) / 2) * n_tiles` micrometers. Each lattice point is mapped to its nearest tile. This produces evenly-distributed AF positions independent of scan order, avoiding the "vertical pillar" pattern that scan-order-based selection produces in serpentine scans.
+
+2. **Index gap safety net:** If more than `gap_index_multiplier x n_tiles` tiles pass in scan order without any AF (because the spatial grid happens to skip a region), force AF on the next tile. The `3x` default is loose enough to avoid recreating the pillar pattern but tight enough that focus cannot drift catastrophically between grid AF points. Set to a smaller multiplier for warped slides; larger for very flat samples.
+
+3. **Spatial gap safety net:** If the current tile is more than `gap_spatial_multiplier x af_min_distance` from any completed AF position, force AF. This catches **disconnected tissue fragments** within a single annotation -- two tiles can be adjacent in the positions list but physically far apart if tile generation skipped blank space between fragments. The default `2.0x` ensures this only fires for true fragments, not for normal inter-row transitions (which sit at roughly 1x distance).
+
+For non-AF tiles, the Z value is inherited from the **spatially nearest** completed AF position (not the most recently applied AF), preventing horizontal Z bands across serpentine rows.
 
 ### Magnification Guidelines
 
