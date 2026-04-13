@@ -22,12 +22,23 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
  * Estimates the disk space required for an acquisition and warns the user if
  * the free space at the save location is insufficient.
  *
- * <p>The estimate is intentionally approximate. The byte count per tile is
- * derived from detector pixel dimensions and an assumed 3-byte RGB format,
- * multiplied by the angle count. Actual output size varies with modality,
- * TIFF compression, metadata, OME-XML, and any stitched results written after
- * acquisition. A headroom multiplier is applied so the check errs on the side
- * of warning when in doubt.
+ * <p>Bytes-per-tile is derived from detector width/height plus a
+ * bytes-per-pixel choice made from {@code camera_type} and
+ * {@code requires_debayering} in the detector resource YAML:
+ *
+ * <pre>
+ *   jai (3-CCD)              -> 3 bytes/pixel (RGB8)
+ *   generic + debayered      -> 3 bytes/pixel (debayered RGB8)
+ *   generic + not debayered  -> 2 bytes/pixel (16-bit mono sCMOS)
+ *   laser_scanning (PMT)     -> 2 bytes/pixel (16-bit mono)
+ *   unknown                  -> 10 MB/tile fallback
+ * </pre>
+ *
+ * <p>The estimate is still approximate. Modalities may write additional
+ * per-position derived files (e.g. PPM writes a single-channel derived image
+ * alongside the raw RGB), TIFF compression varies, OME-XML adds overhead, and
+ * the post-acquisition stitched output is not included here. A 1.25x headroom
+ * multiplier covers those sources of slop.
  *
  * <p>Users can disable the warning via the "Warn On Low Disk Space" preference
  * or via the "Don't warn me again" checkbox in the warning dialog itself.
@@ -36,11 +47,8 @@ public class AcquisitionSpaceCheck {
 
     private static final Logger logger = LoggerFactory.getLogger(AcquisitionSpaceCheck.class);
 
-    /** Conservative multiplier applied to the raw estimate (accounts for metadata, retries, stitching output). */
+    /** Conservative multiplier applied to the raw estimate (covers metadata, modality extras, stitching output). */
     private static final double HEADROOM = 1.25;
-
-    /** Assumed bytes per pixel when detector bit depth is unknown (3-channel 8-bit RGB). */
-    private static final int DEFAULT_BYTES_PER_PIXEL = 3;
 
     /** Fallback bytes per tile per angle when detector dimensions are unavailable. */
     private static final long FALLBACK_BYTES_PER_TILE = 10L * 1024 * 1024;
@@ -48,11 +56,38 @@ public class AcquisitionSpaceCheck {
     private AcquisitionSpaceCheck() {}
 
     /**
-     * Estimates bytes per tile per angle from detector dimensions. Uses a
-     * 10 MB fallback when dimensions cannot be read from configuration.
+     * Picks bytes-per-pixel from detector metadata in the config YAML.
+     * Returns -1 if the detector is not found or has no camera_type set,
+     * so callers can decide whether to fall back.
+     */
+    static int bytesPerPixelFor(MicroscopeConfigManager configManager, String detector) {
+        if (configManager == null || detector == null) return -1;
+        String cameraType = configManager.getDetectorCameraType(detector);
+        if (cameraType == null) {
+            // Fall back to JAI name-based detection used elsewhere in the codebase
+            return configManager.isJAICamera(detector) ? 3 : -1;
+        }
+        switch (cameraType) {
+            case "jai":
+                return 3; // 3-CCD prism RGB8
+            case "laser_scanning":
+                return 2; // 16-bit mono PMT
+            case "generic":
+                // Bayer sensors debayer to RGB8; non-debayered generics are mono sCMOS (16-bit)
+                return configManager.detectorRequiresDebayering(detector) ? 3 : 2;
+            default:
+                logger.debug("Unknown camera_type '{}' for detector {} -- falling back", cameraType, detector);
+                return -1;
+        }
+    }
+
+    /**
+     * Estimates bytes per tile per angle from detector width, height, and the
+     * bytes/pixel inferred from camera_type + requires_debayering. Uses a
+     * 10 MB fallback when any of those are unavailable.
      *
      * @param configManager shared config manager
-     * @param detector detector identifier (e.g. "JAI_GO5000")
+     * @param detector detector identifier (e.g. "LOCI_DETECTOR_JAI_001")
      * @return estimated bytes written per tile per angle
      */
     public static long estimateBytesPerTilePerAngle(MicroscopeConfigManager configManager, String detector) {
@@ -62,11 +97,22 @@ public class AcquisitionSpaceCheck {
         try {
             int[] dims = configManager.getDetectorDimensions(detector);
             if (dims == null || dims.length < 2 || dims[0] <= 0 || dims[1] <= 0) {
+                logger.debug("Detector {} has no usable dimensions -- using {} MB fallback",
+                        detector, FALLBACK_BYTES_PER_TILE / (1024 * 1024));
                 return FALLBACK_BYTES_PER_TILE;
             }
-            return (long) dims[0] * dims[1] * DEFAULT_BYTES_PER_PIXEL;
+            int bpp = bytesPerPixelFor(configManager, detector);
+            if (bpp <= 0) {
+                logger.debug("Detector {} bytes-per-pixel unknown -- using {} MB fallback",
+                        detector, FALLBACK_BYTES_PER_TILE / (1024 * 1024));
+                return FALLBACK_BYTES_PER_TILE;
+            }
+            long bytesPerTile = (long) dims[0] * dims[1] * bpp;
+            logger.info("Detector {} estimate: {}x{} pixels x {} bytes/pixel = {}/tile/angle",
+                    detector, dims[0], dims[1], bpp, formatBytes(bytesPerTile));
+            return bytesPerTile;
         } catch (Exception e) {
-            logger.debug("Could not read detector dimensions for {}: {}", detector, e.getMessage());
+            logger.debug("Could not estimate bytes/tile for {}: {}", detector, e.getMessage());
             return FALLBACK_BYTES_PER_TILE;
         }
     }

@@ -1829,6 +1829,31 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * Gets the camera_type field from the detector's resource entry.
+     * Known values today: "jai" (3-CCD prism RGB), "generic" (typically mono
+     * sCMOS or debayered Bayer), "laser_scanning" (PMT).
+     *
+     * @param detectorId The detector identifier (e.g., "LOCI_DETECTOR_JAI_001")
+     * @return the lowercase camera_type string, or null if unset/unknown
+     */
+    @SuppressWarnings("unchecked")
+    public String getDetectorCameraType(String detectorId) {
+        if (detectorId == null || detectorId.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> detectorSection = getMergedDetectorSection();
+        if (detectorSection == null || !detectorSection.containsKey(detectorId)) {
+            return null;
+        }
+        Map<String, Object> detectorData = (Map<String, Object>) detectorSection.get(detectorId);
+        if (detectorData == null) {
+            return null;
+        }
+        Object type = detectorData.get("camera_type");
+        return (type instanceof String) ? ((String) type).toLowerCase() : null;
+    }
+
+    /**
      * Determines if a detector requires debayering based on configuration or detector properties.
      *
      * @param detectorId The detector identifier (e.g., "LOCI_DETECTOR_JAI_001")
