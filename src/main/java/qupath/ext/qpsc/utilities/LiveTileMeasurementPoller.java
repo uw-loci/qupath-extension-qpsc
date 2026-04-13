@@ -194,29 +194,34 @@ public class LiveTileMeasurementPoller {
                 })
                 .collect(Collectors.toList());
 
-        int applied = 0;
+        List<PathObject> updated = new ArrayList<>();
         for (PathObject detection : detections) {
             Number tileNum = detection.getMeasurements().get("TileNumber");
             if (tileNum == null) continue;
             Map<String, Object> entry = byIndex.get(tileNum.intValue());
             if (entry == null) continue;
             AcquisitionManager.applyMeasurementEntry(detection, entry);
-            applied++;
+            updated.add(detection);
         }
 
-        if (applied > 0) {
-            totalApplied += applied;
+        if (!updated.isEmpty()) {
+            totalApplied += updated.size();
             logger.debug(
                     "Live poller applied {} entries to annotation '{}' ({} total so far)",
-                    applied,
+                    updated.size(),
                     annotationName,
                     totalApplied);
-            // Fire hierarchy update so the measurement panel refreshes.
-            // The batch path does this from the acquisition thread too -- matching that pattern.
+            // Fire a measurement-only change on just the touched detections.
+            // fireHierarchyChangedEvent(root) forces QuPath's viewer to invalidate
+            // the detection spatial cache and repaint the entire tile overlay,
+            // which produced a visible "all tiles disappear then reappear" flicker
+            // every poll tick. fireObjectMeasurementsChangedEvent only notifies the
+            // measurement panel / measurement-dependent overlays of a value change
+            // and leaves detection geometry untouched.
             try {
-                hierarchy.fireHierarchyChangedEvent(hierarchy.getRootObject());
+                hierarchy.fireObjectMeasurementsChangedEvent(hierarchy, updated);
             } catch (Exception e) {
-                logger.debug("Hierarchy refresh failed: {}", e.getMessage());
+                logger.debug("Measurement change event failed: {}", e.getMessage());
             }
         }
     }
