@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.BackgroundValidationResult;
+import qupath.ext.qpsc.modality.ChannelExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.model.SampleSetupResult;
@@ -58,6 +59,37 @@ public class AcquisitionConfigurationBuilder {
             String modalityWithIndex,
             String regionName,
             List<AngleExposure> angleExposures,
+            String projectsFolder,
+            String sampleName,
+            double explicitPixelSize,
+            String wbMode) {
+        return buildConfiguration(
+                sample,
+                configFileLocation,
+                modalityWithIndex,
+                regionName,
+                angleExposures,
+                null,
+                projectsFolder,
+                sampleName,
+                explicitPixelSize,
+                wbMode);
+    }
+
+    /**
+     * Channel-aware overload. When {@code channelExposures} is non-null and
+     * non-empty, the resulting command builder will emit {@code --channels}
+     * and {@code --channel-exposures} in place of {@code --angles}/{@code --exposures}.
+     *
+     * @param channelExposures per-channel acquisition sequence, or null for angle-based acquisition
+     */
+    public static AcquisitionConfiguration buildConfiguration(
+            SampleSetupResult sample,
+            String configFileLocation,
+            String modalityWithIndex,
+            String regionName,
+            List<AngleExposure> angleExposures,
+            List<ChannelExposure> channelExposures,
             String projectsFolder,
             String sampleName,
             double explicitPixelSize,
@@ -162,6 +194,16 @@ public class AcquisitionConfigurationBuilder {
         ModalityHandler modalityHandler = ModalityRegistry.getHandler(baseModality);
         boolean isNonRotation = modalityHandler != null && modalityHandler.getDefaultAngleCount() <= 1;
 
+        boolean channelBased = channelExposures != null && !channelExposures.isEmpty();
+
+        // Defensive: when channel-based, force angleExposures to an empty list so any
+        // stale angle data from upstream cannot be emitted alongside --channels. Mutual
+        // exclusion is enforced in the command builder already, but this guarantees a
+        // single source of truth even if a caller resolution path drifts.
+        if (channelBased) {
+            angleExposures = List.of();
+        }
+
         // Build enhanced acquisition command
         // White balance mode is set later by the caller via .wbMode() from the dialog selection.
         // Use the sampleName parameter (from ProjectInfo) - NOT sample.sampleName() which may differ
@@ -176,6 +218,10 @@ public class AcquisitionConfigurationBuilder {
                 .hardware(objective, detector, explicitPixelSize)
                 .processingPipeline(processingSteps);
 
+        if (channelBased) {
+            acquisitionBuilder.channelExposures(channelExposures);
+        }
+
         // Only add autofocus parameters if autofocus is enabled
         if (!autofocusDisabled) {
             acquisitionBuilder.autofocus(afTiles, afSteps, afRange);
@@ -183,11 +229,14 @@ public class AcquisitionConfigurationBuilder {
 
         // Only add background correction if enabled and configured
         if (bgEnabled && bgMethod != null && bgFolder != null) {
-            // Perform background validation to determine which angles should have correction disabled
+            // Perform background validation to determine which angles should have correction disabled.
+            // Skipped entirely for channel-based acquisitions -- the per-angle disable concept
+            // doesn't apply when there are no rotation angles.
             List<Double> disabledAngles = new ArrayList<>();
             try {
-                BackgroundSettingsReader.BackgroundSettings backgroundSettings =
-                        BackgroundSettingsReader.findBackgroundSettings(
+                BackgroundSettingsReader.BackgroundSettings backgroundSettings = channelBased
+                        ? null
+                        : BackgroundSettingsReader.findBackgroundSettings(
                                 bgBaseFolder, baseModality, objective, detector, wbMode);
 
                 if (backgroundSettings != null) {

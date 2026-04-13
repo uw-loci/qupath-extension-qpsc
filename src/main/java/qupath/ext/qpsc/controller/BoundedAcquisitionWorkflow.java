@@ -18,6 +18,7 @@ import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AngleResolutionService;
+import qupath.ext.qpsc.service.ChannelResolutionService;
 import qupath.ext.qpsc.service.ManualFocusHandler;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
@@ -297,6 +298,28 @@ public class BoundedAcquisitionWorkflow {
                                         result.objective(),
                                         result.detector());
 
+                                // Refuse to start if the user actively deselected every channel
+                                // on a channel-based modality -- surface as an error instead of
+                                // silently falling back to library defaults.
+                                if (ChannelResolutionService.isEmptySelectionForChannelBasedModality(
+                                        result.modality(),
+                                        result.objective(),
+                                        result.detector(),
+                                        result.angleOverrides())) {
+                                    throw new IllegalStateException(
+                                            "No fluorescence channels selected. Enable at least one "
+                                                    + "channel, or uncheck 'Customize channel selection' "
+                                                    + "to use the library defaults.");
+                                }
+
+                                // Resolve channel sequence for widefield IF; empty list for angle-based modalities.
+                                List<qupath.ext.qpsc.modality.ChannelExposure> channelExposures =
+                                        ChannelResolutionService.resolve(
+                                                result.modality(),
+                                                result.objective(),
+                                                result.detector(),
+                                                result.angleOverrides());
+
                                 // For new projects, sample name from dialog is correct
                                 AcquisitionConfigurationBuilder.AcquisitionConfiguration config =
                                         AcquisitionConfigurationBuilder.buildConfiguration(
@@ -305,6 +328,7 @@ public class BoundedAcquisitionWorkflow {
                                                 modeWithIndex,
                                                 boundsMode,
                                                 angleExposures,
+                                                channelExposures,
                                                 actualProjectsFolder,
                                                 actualSampleName,
                                                 finalWSI_pixelSize_um,

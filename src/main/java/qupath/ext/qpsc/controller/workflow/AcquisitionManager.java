@@ -27,11 +27,13 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.ExistingImageWorkflowV2.WorkflowState;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.modality.ChannelExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AngleResolutionService;
+import qupath.ext.qpsc.service.ChannelResolutionService;
 import qupath.ext.qpsc.service.AnnotationOrderingService;
 import qupath.ext.qpsc.service.ManualFocusHandler;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
@@ -659,6 +661,30 @@ public class AcquisitionManager {
                 // This ensures the path matches where tiles were written
                 String actualSampleName = state.projectInfo.getSampleName();
 
+                // Refuse to start if the user actively deselected every channel on a
+                // channel-based modality -- surfacing this as a clear error beats silently
+                // falling back to library defaults (which is what the same empty map means
+                // when it comes from a non-channel UI).
+                if (ChannelResolutionService.isEmptySelectionForChannelBasedModality(
+                        state.sample.modality(),
+                        state.sample.objective(),
+                        state.sample.detector(),
+                        state.angleOverrides)) {
+                    throw new RuntimeException(
+                            "No fluorescence channels selected. Enable at least one channel "
+                                    + "in the acquisition dialog, or uncheck 'Customize channel selection' "
+                                    + "to use the library defaults.");
+                }
+
+                // Resolve per-channel sequence for channel-based modalities (widefield IF).
+                // Returns empty list for angle-based modalities, in which case
+                // the builder falls through to the standard angle path.
+                List<ChannelExposure> channelExposures = ChannelResolutionService.resolve(
+                        state.sample.modality(),
+                        state.sample.objective(),
+                        state.sample.detector(),
+                        state.angleOverrides);
+
                 // Build acquisition configuration using shared builder
                 AcquisitionConfigurationBuilder.AcquisitionConfiguration config =
                         AcquisitionConfigurationBuilder.buildConfiguration(
@@ -667,6 +693,7 @@ public class AcquisitionManager {
                                 modalityWithIndex,
                                 annotation.getName(),
                                 angleExposures,
+                                channelExposures,
                                 state.sample.projectsFolder().getAbsolutePath(),
                                 actualSampleName, // Use actual sample name from project folder
                                 WSI_pixelSize_um,

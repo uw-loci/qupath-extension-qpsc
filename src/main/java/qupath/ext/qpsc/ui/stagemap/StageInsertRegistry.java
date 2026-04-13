@@ -92,7 +92,19 @@ public class StageInsertRegistry {
             Map<String, Object> insertsConfig = configManager.getSection("stage", "inserts");
 
             if (insertsConfig == null || insertsConfig.isEmpty()) {
-                logger.info("No stage.inserts configuration found, using defaults");
+                // Try to synthesize a single-slide insert from stage.limits + slide_size_um
+                // before falling back to hardcoded defaults. This lets scopes with only
+                // basic limits information get a working Stage Map without per-instrument
+                // insert calibration.
+                StageInsert synthesized = synthesizeFromStageLimits(configManager);
+                if (synthesized != null) {
+                    inserts.put(synthesized.getId(), synthesized);
+                    defaultInsertId = synthesized.getId();
+                    logger.info("Synthesized stage insert from stage.limits + slide_size_um");
+                    initialized = true;
+                    return;
+                }
+                logger.info("No stage.inserts configuration found, using hardcoded defaults");
                 loadDefaultConfigurations();
                 initialized = true;
                 return;
@@ -138,6 +150,82 @@ public class StageInsertRegistry {
         }
 
         initialized = true;
+    }
+
+    /**
+     * Synthesizes a single-slide insert from stage.limits + slide_size_um.
+     * <p>
+     * Used as a fallback when the YAML provides basic stage bounds but no
+     * full stage.inserts calibration block. The aperture is taken as the
+     * full stage limits box; the slide is placed centered within it, sized
+     * by slide_size_um. Stage axes are assumed non-inverted for this
+     * fallback -- instruments with inverted stage axes that want an accurate
+     * Stage Map should define an explicit stage.inserts block.
+     *
+     * @return a synthetic StageInsert, or null if stage.limits or slide_size_um is missing
+     */
+    private static StageInsert synthesizeFromStageLimits(MicroscopeConfigManager configManager) {
+        try {
+            Double xLow = configManager.getDouble("stage", "limits", "x_um", "low");
+            Double xHigh = configManager.getDouble("stage", "limits", "x_um", "high");
+            Double yLow = configManager.getDouble("stage", "limits", "y_um", "low");
+            Double yHigh = configManager.getDouble("stage", "limits", "y_um", "high");
+            int[] slideSize = configManager.getSlideSize();
+
+            if (xLow == null || xHigh == null || yLow == null || yHigh == null || slideSize == null) {
+                logger.debug(
+                        "Cannot synthesize stage insert: missing stage.limits or slide_size_um "
+                                + "(xLow={}, xHigh={}, yLow={}, yHigh={}, slideSize={})",
+                        xLow,
+                        xHigh,
+                        yLow,
+                        yHigh,
+                        slideSize);
+                return null;
+            }
+
+            double apertureWidthUm = Math.abs(xHigh - xLow);
+            double apertureHeightUm = Math.abs(yHigh - yLow);
+            double slideWidthUm = slideSize[0];
+            double slideHeightUm = slideSize[1];
+
+            // Center the slide in the aperture (offsets are in insert-relative coordinates)
+            double slideXOffsetMm = (apertureWidthUm - slideWidthUm) / 2.0 / 1000.0;
+            double slideYOffsetMm = (apertureHeightUm - slideHeightUm) / 2.0 / 1000.0;
+
+            StageInsert.SlidePosition slide = new StageInsert.SlidePosition(
+                    "Slide 1",
+                    slideXOffsetMm,
+                    slideYOffsetMm,
+                    slideWidthUm / 1000.0,
+                    slideHeightUm / 1000.0,
+                    0);
+
+            StageInsert synth = new StageInsert(
+                    "single_h",
+                    "Single Slide (from stage limits)",
+                    apertureWidthUm / 1000.0,
+                    apertureHeightUm / 1000.0,
+                    Math.min(xLow, xHigh),
+                    Math.min(yLow, yHigh),
+                    DEFAULT_SLIDE_MARGIN_UM,
+                    List.of(slide));
+
+            logger.info(
+                    "Synthesized insert: aperture={}x{} mm, origin=({}, {}) um, "
+                            + "slide={}x{} mm centered",
+                    String.format("%.1f", apertureWidthUm / 1000.0),
+                    String.format("%.1f", apertureHeightUm / 1000.0),
+                    String.format("%.0f", Math.min(xLow, xHigh)),
+                    String.format("%.0f", Math.min(yLow, yHigh)),
+                    String.format("%.1f", slideWidthUm / 1000.0),
+                    String.format("%.1f", slideHeightUm / 1000.0));
+
+            return synth;
+        } catch (Exception e) {
+            logger.warn("Failed to synthesize insert from stage limits: {}", e.getMessage(), e);
+            return null;
+        }
     }
 
     /**

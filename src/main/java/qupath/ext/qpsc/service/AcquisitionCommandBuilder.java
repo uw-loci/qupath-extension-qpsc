@@ -5,6 +5,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.modality.ChannelExposure;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.ObjectiveUtils;
 
@@ -30,6 +31,12 @@ public class AcquisitionCommandBuilder {
 
     // Optional parameters for repeated acquisitions (e.g., rotation angles)
     private List<AngleExposure> angleExposures;
+
+    // Optional per-channel acquisition sequence (widefield immunofluorescence).
+    // When set, takes precedence over angleExposures: the builder emits
+    // --channels and --channel-exposures instead of --angles/--exposures.
+    // Channel-based and angle-based modalities are mutually exclusive.
+    private List<ChannelExposure> channelExposures;
 
     // Marks this as a non-rotation modality (brightfield, fluorescence, laser
     // scanning without angles). When true, the builder omits --angles entirely
@@ -138,6 +145,23 @@ public class AcquisitionCommandBuilder {
      */
     public AcquisitionCommandBuilder angleExposures(List<AngleExposure> angleExposures) {
         this.angleExposures = angleExposures;
+        return this;
+    }
+
+    /**
+     * Sets the per-channel acquisition sequence for multi-channel widefield
+     * modalities (e.g. immunofluorescence). When set, the builder emits
+     * {@code --channels} and {@code --channel-exposures} in place of
+     * {@code --angles}/{@code --exposures}. Channel-based and angle-based
+     * acquisition are mutually exclusive; if both are provided, the channel
+     * path takes precedence and angles are silently ignored.
+     *
+     * @param channelExposures ordered list of channel-id/exposure pairs
+     * @return this builder instance for method chaining
+     * @see ChannelExposure
+     */
+    public AcquisitionCommandBuilder channelExposures(List<ChannelExposure> channelExposures) {
+        this.channelExposures = channelExposures;
         return this;
     }
 
@@ -398,8 +422,28 @@ public class AcquisitionCommandBuilder {
                     "--pixel-size", String.valueOf(pixelSize)));
         }
 
-        // Add angle/exposure parameters
-        if (angleExposures != null && !angleExposures.isEmpty()) {
+        // Channel-based modalities (widefield IF) take precedence over angles:
+        // emit --channels and --channel-exposures, skip the angle block entirely.
+        boolean channelBased = channelExposures != null && !channelExposures.isEmpty();
+        if (channelBased) {
+            String channelsStr = channelExposures.stream()
+                    .map(ChannelExposure::channelId)
+                    .collect(Collectors.joining(",", "(", ")"));
+            String channelExposuresStr = channelExposures.stream()
+                    .map(ce -> String.valueOf(ce.exposureMs()))
+                    .collect(Collectors.joining(",", "(", ")"));
+            args.add("--channels");
+            args.add(channelsStr);
+            args.add("--channel-exposures");
+            args.add(channelExposuresStr);
+            logger.debug(
+                    "Channel-based acquisition: {} channels, exposures {}",
+                    channelExposures.size(),
+                    channelExposuresStr);
+        }
+
+        // Add angle/exposure parameters (skipped when channel-based)
+        if (!channelBased && angleExposures != null && !angleExposures.isEmpty()) {
             if (nonRotation) {
                 // Non-rotation modality (BF, fluorescence): send only the
                 // exposure from the first entry, omit --angles. Python side

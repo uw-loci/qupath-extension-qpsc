@@ -102,6 +102,12 @@ public final class ModalityRegistry {
         registerHandler("widefield", wfHandler);
         registerHandler("epi", wfHandler);
 
+        // Combined brightfield + immunofluorescence for single-camera scopes
+        // (e.g. OWS3). Shares all acquisition behavior with widefield IF --
+        // the BF step is a regular entry in the channel library whose presets
+        // switch the light path and transmitted lamp before the snap.
+        registerHandler("bf_if", new BfIfModalityHandler());
+
         logger.info("ModalityRegistry initialization complete. Registered {} modality handlers", HANDLERS.size());
     }
 

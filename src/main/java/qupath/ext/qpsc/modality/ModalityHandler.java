@@ -368,6 +368,30 @@ public interface ModalityHandler {
     }
 
     /**
+     * Returns the channel library available for this modality, or an empty
+     * list if this modality is not channel-based.
+     *
+     * <p>Channel-based modalities (such as widefield immunofluorescence) use
+     * channels instead of rotation angles as their acquisition sequence axis.
+     * When this method returns a non-empty list, the acquisition workflow
+     * should ignore {@link #getRotationAngles(String, String, String)} and
+     * route through the channel path instead: present a channel picker UI,
+     * collect per-channel exposures, and emit channels (not angles) to the
+     * command builder.
+     *
+     * <p>The default implementation returns an empty list, so existing
+     * angle-based and single-snap modalities are unaffected.
+     *
+     * @param modality  the full modality identifier (e.g. {@code "widefield_20x"})
+     * @param objective objective id for hardware-specific lookup (may be null)
+     * @param detector  detector id for hardware-specific lookup (may be null)
+     * @return future with the channel library for this modality; empty list means "not channel-based"
+     */
+    default CompletableFuture<List<Channel>> getChannels(String modality, String objective, String detector) {
+        return CompletableFuture.completedFuture(List.of());
+    }
+
+    /**
      * Returns the default exposure time for a given rotation angle from
      * modality-specific persistent preferences.
      *

@@ -12,6 +12,9 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
+import qupath.ext.qpsc.modality.Channel;
+import qupath.ext.qpsc.modality.PresetRef;
+import qupath.ext.qpsc.modality.PropertyWrite;
 
 /**
  * MicroscopeConfigManager
@@ -1521,6 +1524,308 @@ public class MicroscopeConfigManager {
             }
         }
         return false;
+    }
+
+    // ========== CHANNEL LIBRARY METHODS (multi-channel modalities, e.g. widefield IF) ==========
+
+    /**
+     * Returns the channel library defined under {@code modalities.<modality>.channels}
+     * as immutable {@link Channel} records.
+     *
+     * <p>Each channel entry in YAML must provide {@code id} and {@code exposure_ms}, and
+     * may provide {@code display_name}, {@code mm_setup_presets} (list of group/preset
+     * maps), and {@code device_properties} (list of device/property/value maps).
+     *
+     * @param modality the modality name as keyed in the {@code modalities} block
+     *                 (e.g. {@code "Fluorescence"})
+     * @return ordered list of channels, or empty list if none declared
+     */
+    @SuppressWarnings("unchecked")
+    public List<Channel> getModalityChannels(String modality) {
+        Map<String, Object> modalityConfig = getSection("modalities", modality);
+        if (modalityConfig == null) {
+            return List.of();
+        }
+        Object channelsObj = modalityConfig.get("channels");
+        if (!(channelsObj instanceof List<?> channelList)) {
+            return List.of();
+        }
+        List<Channel> result = new ArrayList<>(channelList.size());
+        for (Object entry : channelList) {
+            if (!(entry instanceof Map<?, ?> channelMap)) {
+                continue;
+            }
+            Channel channel = parseChannel((Map<String, Object>) channelMap, modality);
+            if (channel != null) {
+                result.add(channel);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    /**
+     * Returns the list of channel ids declared under
+     * {@code acquisition_profiles.<profile>.channels} (optional filter list).
+     * If absent, the caller should use all channels from the modality library.
+     */
+    @SuppressWarnings("unchecked")
+    public List<String> getProfileChannelIds(String profileKey) {
+        Map<String, Object> profile = getSection("acquisition_profiles", profileKey);
+        if (profile == null) {
+            return List.of();
+        }
+        Object idsObj = profile.get("channels");
+        if (!(idsObj instanceof List<?> idList)) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>(idList.size());
+        for (Object id : idList) {
+            if (id != null) {
+                result.add(id.toString());
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    /**
+     * Returns per-channel overrides declared under
+     * {@code acquisition_profiles.<profile>.channel_overrides} as a map keyed by
+     * channel id. Values are the raw sub-maps so callers can pull whichever keys
+     * (exposure_ms, etc.) they support.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Map<String, Object>> getProfileChannelOverrides(String profileKey) {
+        Map<String, Object> profile = getSection("acquisition_profiles", profileKey);
+        if (profile == null) {
+            return Map.of();
+        }
+        Object overridesObj = profile.get("channel_overrides");
+        if (!(overridesObj instanceof Map<?, ?> overridesMap)) {
+            return Map.of();
+        }
+        Map<String, Map<String, Object>> result = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> e : overridesMap.entrySet()) {
+            if (e.getKey() != null && e.getValue() instanceof Map<?, ?> sub) {
+                result.put(e.getKey().toString(), (Map<String, Object>) sub);
+            }
+        }
+        return Collections.unmodifiableMap(result);
+    }
+
+    /**
+     * Resolves the effective channel list for an acquisition profile.
+     *
+     * <p>Looks up the profile's modality, pulls the modality-level channel library,
+     * filters it by the profile's optional {@code channels:} list (if present), and
+     * applies per-channel {@code channel_overrides} (currently {@code exposure_ms}).
+     * Returns an empty list if the profile is not channel-based (no library or no
+     * effective channels after filtering).
+     *
+     * @param profileKey acquisition profile key (e.g. {@code "Fluorescence_20x"})
+     * @return ordered, resolved channel list ready for the workflow to use
+     */
+    public List<Channel> getChannelsForProfile(String profileKey) {
+        Map<String, Object> profile = getSection("acquisition_profiles", profileKey);
+        if (profile == null) {
+            return List.of();
+        }
+        Object modalityObj = profile.get("modality");
+        if (modalityObj == null) {
+            return List.of();
+        }
+        String modalityName = modalityObj.toString();
+        List<Channel> library = getModalityChannels(modalityName);
+        if (library.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> profileIds = getProfileChannelIds(profileKey);
+        Map<String, Map<String, Object>> overrides = getProfileChannelOverrides(profileKey);
+
+        // Filter by profile subset if declared; otherwise use full library order.
+        List<Channel> selected;
+        if (profileIds.isEmpty()) {
+            selected = library;
+        } else {
+            Map<String, Channel> byId = new LinkedHashMap<>();
+            for (Channel c : library) {
+                byId.put(c.id(), c);
+            }
+            selected = new ArrayList<>(profileIds.size());
+            for (String id : profileIds) {
+                Channel c = byId.get(id);
+                if (c == null) {
+                    logger.warn(
+                            "Profile '{}' references unknown channel id '{}' (not in modalities.{}.channels); skipping",
+                            profileKey,
+                            id,
+                            modalityName);
+                    continue;
+                }
+                selected.add(c);
+            }
+        }
+
+        if (overrides.isEmpty()) {
+            return List.copyOf(selected);
+        }
+
+        // Apply overrides (exposure_ms and device_properties). Each override yields a new Channel.
+        List<Channel> result = new ArrayList<>(selected.size());
+        for (Channel c : selected) {
+            Map<String, Object> override = overrides.get(c.id());
+            if (override == null) {
+                result.add(c);
+                continue;
+            }
+            double exposure = c.defaultExposureMs();
+            Object expObj = override.get("exposure_ms");
+            if (expObj instanceof Number n) {
+                exposure = n.doubleValue();
+            }
+            List<PropertyWrite> mergedProperties = mergeDevicePropertyOverrides(
+                    c.properties(), override.get("device_properties"), c.id(), profileKey);
+            result.add(new Channel(
+                    c.id(), c.displayName(), exposure, c.presets(), mergedProperties, c.settleMs()));
+        }
+        return List.copyOf(result);
+    }
+
+    /**
+     * Merges profile-level {@code device_properties} overrides into a channel's
+     * library-level device property list. Matching semantics (by (device, property)):
+     *
+     * <ul>
+     *   <li>If the override matches an existing library entry, replace its value
+     *       in place (preserving list order).</li>
+     *   <li>If the override does not match any existing entry, append it at the
+     *       end of the list.</li>
+     * </ul>
+     *
+     * <p>This lets a profile like {@code BF_IF_10x} tune the BF channel's
+     * transmitted-lamp intensity without having to redeclare the entire channel.
+     *
+     * @param libraryProperties immutable list of PropertyWrites from the modality channel library
+     * @param overrideObj       raw YAML object from {@code channel_overrides.<id>.device_properties}
+     *                          (expected to be a List of Maps); may be null / absent
+     * @param channelIdForLog   channel id, for warning messages
+     * @param profileKeyForLog  profile key, for warning messages
+     * @return merged list (a new mutable ArrayList if overrides were applied, otherwise the original)
+     */
+    @SuppressWarnings("unchecked")
+    private List<PropertyWrite> mergeDevicePropertyOverrides(
+            List<PropertyWrite> libraryProperties,
+            Object overrideObj,
+            String channelIdForLog,
+            String profileKeyForLog) {
+        if (!(overrideObj instanceof List<?> overrideList) || overrideList.isEmpty()) {
+            return libraryProperties;
+        }
+        List<PropertyWrite> merged = new ArrayList<>(libraryProperties);
+        for (Object entry : overrideList) {
+            if (!(entry instanceof Map<?, ?> pm)) {
+                continue;
+            }
+            Object device = pm.get("device");
+            Object property = pm.get("property");
+            Object value = pm.get("value");
+            if (device == null || property == null || value == null) {
+                logger.warn(
+                        "Profile '{}' channel '{}' device_properties override has missing "
+                                + "device/property/value; skipping: {}",
+                        profileKeyForLog,
+                        channelIdForLog,
+                        pm);
+                continue;
+            }
+            String deviceStr = device.toString();
+            String propertyStr = property.toString();
+            String valueStr = value.toString();
+            int matchIdx = -1;
+            for (int i = 0; i < merged.size(); i++) {
+                PropertyWrite existing = merged.get(i);
+                if (existing.device().equals(deviceStr) && existing.property().equals(propertyStr)) {
+                    matchIdx = i;
+                    break;
+                }
+            }
+            if (matchIdx >= 0) {
+                merged.set(matchIdx, new PropertyWrite(deviceStr, propertyStr, valueStr));
+            } else {
+                merged.add(new PropertyWrite(deviceStr, propertyStr, valueStr));
+            }
+        }
+        return merged;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Channel parseChannel(Map<String, Object> channelMap, String modalityForLog) {
+        Object idObj = channelMap.get("id");
+        if (idObj == null || idObj.toString().isBlank()) {
+            logger.warn("Skipping channel in modalities.{}.channels with missing 'id'", modalityForLog);
+            return null;
+        }
+        String id = idObj.toString();
+        String displayName = channelMap.containsKey("display_name")
+                ? String.valueOf(channelMap.get("display_name"))
+                : id;
+
+        Object exposureObj = channelMap.get("exposure_ms");
+        if (!(exposureObj instanceof Number)) {
+            logger.warn(
+                    "Skipping channel '{}' in modalities.{}.channels: missing or non-numeric 'exposure_ms'",
+                    id,
+                    modalityForLog);
+            return null;
+        }
+        double exposureMs = ((Number) exposureObj).doubleValue();
+
+        List<PresetRef> presets = new ArrayList<>();
+        Object presetsObj = channelMap.get("mm_setup_presets");
+        if (presetsObj instanceof List<?> presetList) {
+            for (Object p : presetList) {
+                if (p instanceof Map<?, ?> pm) {
+                    Object group = pm.get("group");
+                    Object preset = pm.get("preset");
+                    if (group != null && preset != null) {
+                        presets.add(new PresetRef(group.toString(), preset.toString()));
+                    }
+                }
+            }
+        }
+
+        List<PropertyWrite> properties = new ArrayList<>();
+        Object propsObj = channelMap.get("device_properties");
+        if (propsObj instanceof List<?> propList) {
+            for (Object p : propList) {
+                if (p instanceof Map<?, ?> pm) {
+                    Object device = pm.get("device");
+                    Object property = pm.get("property");
+                    Object value = pm.get("value");
+                    if (device != null && property != null && value != null) {
+                        properties.add(
+                                new PropertyWrite(device.toString(), property.toString(), value.toString()));
+                    }
+                }
+            }
+        }
+
+        double settleMs = 0;
+        Object settleObj = channelMap.get("settle_ms");
+        if (settleObj instanceof Number) {
+            settleMs = ((Number) settleObj).doubleValue();
+        }
+
+        try {
+            return new Channel(id, displayName, exposureMs, presets, properties, settleMs);
+        } catch (IllegalArgumentException e) {
+            logger.warn(
+                    "Skipping invalid channel '{}' in modalities.{}.channels: {}",
+                    id,
+                    modalityForLog,
+                    e.getMessage());
+            return null;
+        }
     }
 
     /**

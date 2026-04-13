@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.model.StitchingMetadata;
@@ -30,6 +31,7 @@ import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.ext.qpsc.utilities.TileProcessingUtilities;
+import qupath.ext.basicstitching.assembly.ChannelMerger;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
@@ -182,6 +184,30 @@ public class StitchingHelper {
             logger.warn("Failed to create stitching blocking dialog", e);
         }
         final StitchingBlockingDialog blockingDialog = dialogRef[0];
+
+        // Channel-based modalities (widefield IF, BF+IF) write per-channel tiles into
+        // per-channel subdirectories named after the channel id. Detect this by asking
+        // the handler for its channel library; if non-empty, take the channel branch
+        // which mirrors the multi-angle isolation flow but using channel ids as the
+        // subdirectory names.
+        List<String> channelIdsForStitching = resolveChannelIdsForStitching(handler, sample);
+        if (!channelIdsForStitching.isEmpty()) {
+            return stitchChannelDirectories(
+                    annotation,
+                    channelIdsForStitching,
+                    metadata,
+                    operationId,
+                    blockingDialog,
+                    dualProgressDialog,
+                    sampleName,
+                    projectsFolder,
+                    modeWithIndex,
+                    pixelSize,
+                    gui,
+                    project,
+                    executor,
+                    handler);
+        }
 
         if (angleExposures != null && angleExposures.size() > 1) {
             logger.info("Stitching {} angles for annotation: {}", angleExposures.size(), annotation.getName());
@@ -903,8 +929,224 @@ public class StitchingHelper {
     }
 
     /**
+     * Queries the modality handler for its channel library and returns the list of
+     * channel ids to stitch. Returns an empty list for angle-based modalities. The
+     * channel ids double as subdirectory names under the annotation folder (mirroring
+     * how PPM uses angle-tick strings as subdirectory names).
+     */
+    private static List<String> resolveChannelIdsForStitching(ModalityHandler handler, SampleSetupResult sample) {
+        if (handler == null || sample == null) {
+            return List.of();
+        }
+        try {
+            List<Channel> channels = handler.getChannels(sample.modality(), sample.objective(), sample.detector())
+                    .join();
+            if (channels == null || channels.isEmpty()) {
+                return List.of();
+            }
+            List<String> ids = new ArrayList<>(channels.size());
+            for (Channel c : channels) {
+                ids.add(c.id());
+            }
+            return ids;
+        } catch (Exception e) {
+            logger.warn(
+                    "Failed to resolve channel library for stitching (modality={}): {}",
+                    sample.modality(),
+                    e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Stitches each channel subdirectory sequentially, mirroring the multi-angle
+     * flow but keyed by channel id instead of angle tick. Produces one
+     * single-channel pyramidal OME-TIFF per channel; a downstream combine step
+     * (future work) is expected to merge these into a single multichannel image.
+     */
+    private static CompletableFuture<Void> stitchChannelDirectories(
+            PathObject annotation,
+            List<String> channelIds,
+            StitchingMetadata metadata,
+            String operationId,
+            StitchingBlockingDialog blockingDialog,
+            DualProgressDialog dualProgressDialog,
+            String sampleName,
+            String projectsFolder,
+            String modeWithIndex,
+            double pixelSize,
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            ExecutorService executor,
+            ModalityHandler handler) {
+
+        logger.info(
+                "Stitching {} channels for annotation: {}", channelIds.size(), annotation.getName());
+
+        return CompletableFuture.runAsync(
+                () -> {
+                    try {
+                        String annotationName = annotation.getName();
+                        if (blockingDialog != null) {
+                            blockingDialog.updateStatus(
+                                    operationId,
+                                    "Initializing multi-channel stitching for " + annotationName + "...");
+                        }
+
+                        StitchingConfiguration.StitchingParams stitchingConfig =
+                                StitchingConfiguration.getStandardConfiguration();
+                        String compression = stitchingConfig.compressionType();
+
+                        Map<String, Object> stitchParams = new HashMap<>();
+                        stitchParams.put("metadata", metadata);
+
+                        List<String> stitchedImages = new ArrayList<>();
+                        Path tileBaseDir =
+                                Paths.get(projectsFolder, sampleName, modeWithIndex, annotationName);
+
+                        logger.info(
+                                "Starting channel processing for {} channels in directory: {}",
+                                channelIds.size(),
+                                tileBaseDir);
+
+                        // Channels are stitched sequentially. BioFormats TIFF writer concurrency
+                        // is the constraint (the global semaphore in PyramidImageWriter already
+                        // serializes writes, so parallel dispatch would just queue). Sequential
+                        // is simpler and keeps file I/O pressure manageable for IF with ~4 channels.
+                        for (int i = 0; i < channelIds.size(); i++) {
+                            String channelId = channelIds.get(i);
+                            if (blockingDialog != null) {
+                                blockingDialog.updateStatus(
+                                        operationId,
+                                        String.format(
+                                                "Stitching channel %s (%d/%d) for %s...",
+                                                channelId, i + 1, channelIds.size(), annotationName));
+                            }
+                            logger.info(
+                                    "Stitching channel {} ({}/{})",
+                                    channelId, i + 1, channelIds.size());
+                            try {
+                                String outPath = processAngleWithIsolation(
+                                        tileBaseDir,
+                                        channelId, // channel id doubles as the subdir name
+                                        projectsFolder,
+                                        sampleName,
+                                        modeWithIndex,
+                                        annotationName,
+                                        compression,
+                                        pixelSize,
+                                        stitchingConfig.downsampleFactor(),
+                                        gui,
+                                        project,
+                                        handler,
+                                        stitchParams);
+                                if (outPath != null) {
+                                    stitchedImages.add(outPath);
+                                    logger.info(
+                                            "Stitch completed for channel {}: {}", channelId, outPath);
+                                }
+                            } catch (Exception e) {
+                                logger.error(
+                                        "Failed to stitch channel {} ({}/{}): {}",
+                                        channelId, i + 1, channelIds.size(), e.getMessage(), e);
+                            }
+                        }
+
+                        logger.info(
+                                "Completed multi-channel stitching: {} of {} channels succeeded",
+                                stitchedImages.size(), channelIds.size());
+
+                        // Merge per-channel pyramids into a single multichannel pyramid.
+                        // The merged image becomes the canonical output for the annotation;
+                        // individual per-channel files are left in place so the user can
+                        // still inspect them, but they should not be added to the project.
+                        if (stitchedImages.size() >= 2) {
+                            if (blockingDialog != null) {
+                                blockingDialog.updateStatus(
+                                        operationId,
+                                        "Merging " + stitchedImages.size() + " channels into multichannel pyramid...");
+                            }
+                            try {
+                                Path firstStitch = Paths.get(stitchedImages.get(0));
+                                String mergedDir = firstStitch.getParent().toString();
+                                String mergedStem = annotationName + "_merged";
+
+                                // Channel ids that actually produced a stitched output, in the
+                                // same order as stitchedImages (they're built in the same loop).
+                                List<String> mergedChannelNames = new ArrayList<>();
+                                for (int i = 0; i < stitchedImages.size(); i++) {
+                                    mergedChannelNames.add(channelIds.get(i));
+                                }
+
+                                String mergedPath = ChannelMerger.merge(
+                                        stitchedImages,
+                                        mergedChannelNames,
+                                        mergedDir,
+                                        mergedStem,
+                                        compression,
+                                        stitchingConfig.outputFormat());
+
+                                if (mergedPath != null) {
+                                    logger.info(
+                                            "Multichannel merge succeeded for {}: {}",
+                                            annotationName, mergedPath);
+                                    // TODO: add the merged file to the QuPath project as a
+                                    // single entry (parallel to how the per-channel entries
+                                    // were added by processAngleWithIsolation). For now the
+                                    // per-channel entries are still in the project and the
+                                    // merged file lives on disk alongside them -- user can
+                                    // File > Import to bring it in manually. Follow-up work.
+                                } else {
+                                    logger.warn(
+                                            "Multichannel merge returned null for {} -- per-channel files remain as the output",
+                                            annotationName);
+                                }
+                            } catch (Exception mergeEx) {
+                                logger.error(
+                                        "Multichannel merge failed for {}: {}",
+                                        annotationName, mergeEx.getMessage(), mergeEx);
+                            }
+                        } else {
+                            logger.debug(
+                                    "Skipping multichannel merge: only {} channel(s) stitched successfully",
+                                    stitchedImages.size());
+                        }
+
+                        if (blockingDialog != null) {
+                            blockingDialog.completeOperation(operationId);
+                        }
+                        if (dualProgressDialog != null) {
+                            dualProgressDialog.completeStitchingOperation(operationId);
+                        }
+                    } catch (Exception e) {
+                        logger.error("Channel stitching failed for {}", annotation.getName(), e);
+                        if (blockingDialog != null) {
+                            blockingDialog.failOperation(operationId, e.getMessage());
+                        }
+                        if (dualProgressDialog != null) {
+                            dualProgressDialog.failStitchingOperation(operationId, e.getMessage());
+                        }
+                        if (blockingDialog == null) {
+                            Platform.runLater(() -> UIFunctions.notifyUserOfError(
+                                    String.format(
+                                            "Channel stitching failed for %s: %s",
+                                            annotation.getName(),
+                                            e.getMessage()),
+                                    "Stitching Error"));
+                        }
+                    }
+                },
+                executor);
+    }
+
+    /**
      * Processes a single angle directory in isolation to prevent cross-matching issues
      * with the TileConfigurationTxtStrategy contains() logic.
+     *
+     * <p>Note: despite the "Angle" name, this method is used for any named step
+     * directory -- the {@code angleStr} parameter is the subdirectory name and is
+     * opaque to the method. The channel-based path calls it with channel ids in
+     * place of angle-tick strings.
      *
      * @param projectsFolder The root projects folder path
      * @param sampleName The actual sample folder name (from ProjectInfo)

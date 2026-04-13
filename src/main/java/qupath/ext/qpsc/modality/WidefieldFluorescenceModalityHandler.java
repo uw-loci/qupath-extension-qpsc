@@ -3,8 +3,13 @@ package qupath.ext.qpsc.modality;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.modality.widefield.ui.WidefieldChannelBoundingBoxUI;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.images.ImageData;
 
 /**
@@ -28,15 +33,53 @@ import qupath.lib.images.ImageData;
  */
 public class WidefieldFluorescenceModalityHandler implements ModalityHandler {
 
+    private static final Logger logger = LoggerFactory.getLogger(WidefieldFluorescenceModalityHandler.class);
+
     @Override
     public CompletableFuture<List<AngleExposure>> getRotationAngles(
             String modalityName, String objective, String detector) {
-        // Widefield fluorescence: single image per tile, no rotation. Return
-        // a single AngleExposure with angle=0 so the command builder has an
-        // exposure to emit via --exposures; the nonRotation flag suppresses
-        // --angles.
+        // If a channel library is declared for this profile, the workflow will
+        // take the channel path and ignore angles. Return an empty list so the
+        // command builder doesn't also emit a bogus single exposure.
+        if (!resolveChannels(modalityName).isEmpty()) {
+            return CompletableFuture.completedFuture(List.of());
+        }
+        // Legacy single-channel fallback: one snap with last-used exposure.
         double exposureMs = PersistentPreferences.getLastUnifiedExposureMs();
         return CompletableFuture.completedFuture(List.of(new AngleExposure(0.0, exposureMs)));
+    }
+
+    @Override
+    public CompletableFuture<List<Channel>> getChannels(String modalityName, String objective, String detector) {
+        return CompletableFuture.completedFuture(resolveChannels(modalityName));
+    }
+
+    @Override
+    public Optional<BoundingBoxUI> createBoundingBoxUI() {
+        WidefieldChannelBoundingBoxUI ui = new WidefieldChannelBoundingBoxUI();
+        // Only return the UI if a channel library is actually configured;
+        // otherwise fall through to the angle-based default (null UI, single snap).
+        return ui.hasChannels() ? Optional.of(ui) : Optional.empty();
+    }
+
+    private List<Channel> resolveChannels(String profileKey) {
+        if (profileKey == null || profileKey.isBlank()) {
+            return List.of();
+        }
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        if (mgr == null) {
+            String path = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (path == null || path.isBlank()) {
+                return List.of();
+            }
+            mgr = MicroscopeConfigManager.getInstance(path);
+        }
+        try {
+            return mgr.getChannelsForProfile(profileKey);
+        } catch (Exception e) {
+            logger.warn("Failed to resolve channels for profile '{}': {}", profileKey, e.getMessage());
+            return List.of();
+        }
     }
 
     @Override
