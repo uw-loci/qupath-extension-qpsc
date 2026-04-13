@@ -1345,8 +1345,11 @@ public class ExistingImageAcquisitionController {
                     }
 
                     int numAnnotations = annotations.size();
+                    // Pass totalImages (positions x angles), NOT totalTiles.
+                    // baseTileTimeMs is measured per-file by DualProgressDialog, so
+                    // multi-angle modalities need the image count, not position count.
                     long estimatedMs = PersistentPreferences.estimateAcquisitionTime(
-                            totalTiles, afPositionsPerAnnotation, numAnnotations);
+                            totalImages, afPositionsPerAnnotation, numAnnotations);
                     double estimatedSeconds = estimatedMs / 1000.0;
                     timeEstimate = formatTime(estimatedSeconds) + " (based on previous acquisitions)";
                 } else {

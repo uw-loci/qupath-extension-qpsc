@@ -812,18 +812,26 @@ public class PersistentPreferences {
     /**
      * Calculates estimated acquisition time based on stored timing data.
      *
-     * @param totalTiles Total number of tiles to acquire
+     * <p>IMPORTANT: {@code totalImages} must be the total number of TIFF files
+     * that will be written, i.e. spatial tile positions multiplied by the
+     * modality's angle count. {@link #getBaseTileTimeMs()} is measured by
+     * {@code DualProgressDialog} as the wall-clock delta between consecutive
+     * file writes on the server, so a caller passing spatial positions
+     * instead of files underestimates multi-angle modalities by a factor
+     * equal to the angle count.
+     *
+     * @param totalImages Total number of TIFF files to acquire (positions x angles)
      * @param afPositionsPerAnnotation Number of autofocus positions per annotation
      * @param numAnnotations Total number of annotations
      * @return Estimated time in milliseconds
      */
-    public static long estimateAcquisitionTime(int totalTiles, int afPositionsPerAnnotation, int numAnnotations) {
+    public static long estimateAcquisitionTime(int totalImages, int afPositionsPerAnnotation, int numAnnotations) {
         long baseTileTime = getBaseTileTimeMs();
         long adaptiveAfTime = getAdaptiveAfTimeMs();
         long fullAfTime = getFullAfTimeMs();
 
-        // All tiles take base time
-        long tileTime = baseTileTime * totalTiles;
+        // All image writes take base time (baseTileTime is per-file, not per-position)
+        long tileTime = baseTileTime * totalImages;
 
         // Each annotation has one full autofocus
         long fullAfTotal = fullAfTime * numAnnotations;
