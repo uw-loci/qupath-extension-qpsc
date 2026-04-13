@@ -103,6 +103,11 @@ public final class ConfigSchema {
         params.put("tissue_area_threshold", 0.2);
         params.put("sweep_range_um", 10.0);
         params.put("sweep_n_steps", 5);
+        // Safety-net force-AF thresholds (matches Python defaults in workflow.py).
+        // gap_index_multiplier x n_tiles  = max tile positions without an AF
+        // gap_spatial_multiplier x af_min_distance = max spatial distance from nearest AF
+        params.put("gap_index_multiplier", 3);
+        params.put("gap_spatial_multiplier", 2.0);
         return params;
     }
 

@@ -32,6 +32,8 @@ import qupath.fx.dialogs.Dialogs;
  *   <li>n_steps: Number of Z positions to sample during autofocus</li>
  *   <li>search_range_um: Total Z range to search in micrometers</li>
  *   <li>n_tiles: Spatial frequency - autofocus runs every N tiles during acquisition</li>
+ *   <li>gap_index_multiplier: Safety-net force-AF after N x n_tiles positions with no AF</li>
+ *   <li>gap_spatial_multiplier: Safety-net force-AF when spatial distance > M x af_min_distance</li>
  * </ul>
  *
  * <p>Key features:
@@ -69,6 +71,10 @@ public class AutofocusEditorWorkflow {
         double sweepRangeUm;
         int sweepNSteps;
 
+        // AF safety-net gap multipliers (drive force-AF when scheduled AF is sparse)
+        int gapIndexMultiplier;
+        double gapSpatialMultiplier;
+
         AutofocusSettings(
                 String objective,
                 int nSteps,
@@ -80,7 +86,9 @@ public class AutofocusEditorWorkflow {
                 double textureThreshold,
                 double tissueAreaThreshold,
                 double sweepRangeUm,
-                int sweepNSteps) {
+                int sweepNSteps,
+                int gapIndexMultiplier,
+                double gapSpatialMultiplier) {
             this.objective = objective;
             this.nSteps = nSteps;
             this.searchRangeUm = searchRangeUm;
@@ -92,6 +100,8 @@ public class AutofocusEditorWorkflow {
             this.tissueAreaThreshold = tissueAreaThreshold;
             this.sweepRangeUm = sweepRangeUm;
             this.sweepNSteps = sweepNSteps;
+            this.gapIndexMultiplier = gapIndexMultiplier;
+            this.gapSpatialMultiplier = gapSpatialMultiplier;
         }
 
         // Validation with detailed feedback
@@ -153,6 +163,19 @@ public class AutofocusEditorWorkflow {
                 warnings.add("sweep_n_steps must be at least 3 for peak detection");
             } else if (sweepNSteps > 20) {
                 warnings.add("sweep_n_steps > 20 may be unnecessarily slow (typical range: 4-8)");
+            }
+
+            // AF safety-net gap multipliers
+            if (gapIndexMultiplier < 1) {
+                warnings.add("gap_index_multiplier must be >= 1");
+            } else if (gapIndexMultiplier > 10) {
+                warnings.add("gap_index_multiplier > 10 disables the index safety net (typical range: 1-5)");
+            }
+
+            if (gapSpatialMultiplier <= 0) {
+                warnings.add("gap_spatial_multiplier must be positive");
+            } else if (gapSpatialMultiplier > 5.0) {
+                warnings.add("gap_spatial_multiplier > 5.0 effectively disables the spatial safety net (typical range: 1.0-3.0)");
             }
 
             return warnings;
@@ -240,17 +263,20 @@ public class AutofocusEditorWorkflow {
                                 existing.textureThreshold,
                                 existing.tissueAreaThreshold,
                                 existing.sweepRangeUm,
-                                existing.sweepNSteps));
+                                existing.sweepNSteps,
+                                existing.gapIndexMultiplier,
+                                existing.gapSpatialMultiplier));
             } else {
                 logger.info("  NOT FOUND in existingSettings - using defaults");
                 // Use defaults: n_steps=9, search_range=15um, n_tiles=5, interp_strength=100,
                 // interp_kind=quadratic, score_metric=normalized_variance,
                 // texture_threshold=0.005, tissue_area_threshold=0.2
                 // Sweep defaults: range=10.0um, n_steps=6
+                // Safety-net defaults: gap_index_multiplier=3, gap_spatial_multiplier=2.0
                 workingSettings.put(
                         obj,
                         new AutofocusSettings(
-                                obj, 9, 15.0, 5, 100, "quadratic", "normalized_variance", 0.005, 0.2, 10.0, 6));
+                                obj, 9, 15.0, 5, 100, "quadratic", "normalized_variance", 0.005, 0.2, 10.0, 6, 3, 2.0));
             }
         }
 
@@ -296,16 +322,89 @@ public class AutofocusEditorWorkflow {
                         + "  + Faster acquisition\n"
                         + "  + Less mechanical wear\n"
                         + "  - May lose focus on tilted samples\n\n"
+                        + "Also sets the AF grid spacing:\n"
+                        + "  af_min_distance = n_tiles x mean(camera FOV)\n"
+                        + "  -- the minimum spacing between planned AF positions.\n\n"
                         + "Typical: 5 tiles (good balance)\n"
                         + "Use 1-3 for tilted or curved samples"));
-        Label nTilesDesc = new Label("(Autofocus every N tiles during acquisition)");
+        Label nTilesDesc = new Label("(Autofocus every N tiles; also sets af_min_distance)");
         nTilesDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
+        // Gap index multiplier: safety-net force-AF threshold in scan-order space
+        Label gapIndexLabel = new Label("gap_index_multiplier:");
+        Spinner<Integer> gapIndexSpinner = new Spinner<>(1, 10, 3, 1);
+        gapIndexSpinner.setEditable(true);
+        gapIndexSpinner.setPrefWidth(100);
+        gapIndexSpinner.setTooltip(new Tooltip("Safety net: forces an extra autofocus when the scan has gone\n"
+                + "gap_index_multiplier x n_tiles tile positions without one.\n\n"
+                + "This catches long stretches of blank/low-tissue tiles where the\n"
+                + "planned AF grid skipped all candidates. Effective threshold with\n"
+                + "the current n_tiles is shown below.\n\n"
+                + "Lower values (1-2):\n"
+                + "  + Aggressive safety net, AF fires often in sparse regions\n"
+                + "  + Better on tilted or thermally drifting samples\n"
+                + "  - More acquisition time\n"
+                + "  - Can recreate 'AF pillar' artifacts in serpentine scans\n\n"
+                + "Higher values (4-5):\n"
+                + "  + Rare intrusive AF, relies on planned grid\n"
+                + "  - Risk of Z drift between AF points on non-flat samples\n\n"
+                + "Typical: 3 (threshold ~= 3 x n_tiles)\n"
+                + "Reduce if long gaps between tissue cause defocus; increase\n"
+                + "if you see regular vertical focus bands in serpentine scans."));
+        Label gapIndexDesc = new Label();
+        gapIndexDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
+        // Gap spatial multiplier: safety-net force-AF threshold in physical distance
+        Label gapSpatialLabel = new Label("gap_spatial_multiplier:");
+        TextField gapSpatialField = new TextField("2.0");
+        gapSpatialField.setPrefWidth(100);
+        gapSpatialField.setTooltip(new Tooltip("Safety net: forces an extra autofocus when the current tile is\n"
+                + "more than gap_spatial_multiplier x af_min_distance away from the\n"
+                + "nearest committed AF position.\n\n"
+                + "This catches disconnected tissue fragments or large jumps between\n"
+                + "annotations where the index-based safety net is not enough.\n\n"
+                + "Lower values (1.0-1.5):\n"
+                + "  + Aggressive: fires on every normal inter-row transition too\n"
+                + "  - Extra AF time, not usually needed on contiguous tissue\n\n"
+                + "Higher values (2.5-4.0):\n"
+                + "  + Only fires on truly isolated fragments\n"
+                + "  - Isolated regions may drift out of focus before being caught\n\n"
+                + "Typical: 2.0 (threshold = 2 x af_min_distance)\n"
+                + "Decrease if scattered tissue fragments go out of focus;\n"
+                + "increase if the safety net fires on every serpentine turn."));
+        Label gapSpatialDesc = new Label();
+        gapSpatialDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
+        // Read-only derived display: af_min_distance and effective gap thresholds
+        // Values update live as n_tiles / multipliers change.
+        Label derivedLabel = new Label("af_min_distance (derived):");
+        Label derivedValue = new Label();
+        derivedValue.setStyle("-fx-font-size: 11px; -fx-text-fill: #444; -fx-font-style: italic;");
+        derivedValue.setTooltip(new Tooltip("af_min_distance is not a user setting; it is computed at runtime by Python:\n"
+                + "  af_min_distance = ((fov_x + fov_y) / 2) x n_tiles\n\n"
+                + "where fov_x / fov_y come from the active modality + objective + detector.\n"
+                + "The value shown here is an editor estimate using the objective's camera FOV\n"
+                + "from the microscope config. To change af_min_distance, adjust n_tiles.\n\n"
+                + "This value controls the minimum spacing between planned AF grid points\n"
+                + "and also feeds into the gap_spatial_multiplier safety net."));
 
         acquisitionGrid.add(nTilesLabel, 0, 0);
         acquisitionGrid.add(nTilesSpinner, 1, 0);
         acquisitionGrid.add(nTilesDesc, 2, 0);
 
-        TitledPane acquisitionPane = new TitledPane("Acquisition Frequency", acquisitionGrid);
+        acquisitionGrid.add(gapIndexLabel, 0, 1);
+        acquisitionGrid.add(gapIndexSpinner, 1, 1);
+        acquisitionGrid.add(gapIndexDesc, 2, 1);
+
+        acquisitionGrid.add(gapSpatialLabel, 0, 2);
+        acquisitionGrid.add(gapSpatialField, 1, 2);
+        acquisitionGrid.add(gapSpatialDesc, 2, 2);
+
+        acquisitionGrid.add(derivedLabel, 0, 3);
+        acquisitionGrid.add(derivedValue, 1, 3, 2, 1);
+
+        TitledPane acquisitionPane =
+                new TitledPane("Acquisition Frequency & Safety Nets", acquisitionGrid);
         acquisitionPane.setCollapsible(false);
 
         // ===== TISSUE DETECTION SECTION =====
@@ -558,6 +657,8 @@ public class AutofocusEditorWorkflow {
                 double tissueAreaThreshold = Double.parseDouble(tissueAreaThresholdField.getText());
                 double sweepRange = Double.parseDouble(sweepRangeField.getText());
                 int sweepNSteps = sweepNStepsSpinner.getValue();
+                int gapIndexMult = gapIndexSpinner.getValue();
+                double gapSpatialMult = Double.parseDouble(gapSpatialField.getText());
 
                 workingSettings.put(
                         currentObjective[0],
@@ -572,9 +673,47 @@ public class AutofocusEditorWorkflow {
                                 textureThreshold,
                                 tissueAreaThreshold,
                                 sweepRange,
-                                sweepNSteps));
+                                sweepNSteps,
+                                gapIndexMult,
+                                gapSpatialMult));
             } catch (NumberFormatException ex) {
                 logger.warn("Invalid numeric input when saving settings");
+            }
+        };
+
+        // Refresh the read-only derived display (af_min_distance + effective thresholds).
+        // Uses estimateMeanFovUmForObjective() which consults the microscope config for
+        // the first modality/detector combo that exposes this objective; if none is
+        // available the display falls back to a formula-only message.
+        Runnable refreshDerivedDisplay = () -> {
+            try {
+                int nTiles = nTilesSpinner.getValue();
+                int gapIdx = gapIndexSpinner.getValue();
+                double gapSp = Double.parseDouble(gapSpatialField.getText());
+                String objectiveId = objectiveCombo.getValue();
+
+                Double meanFov = estimateMeanFovUmForObjective(configManager, objectiveId);
+                if (meanFov != null) {
+                    double afMinDist = meanFov * nTiles;
+                    int indexThreshold = gapIdx * nTiles;
+                    double spatialThreshold = gapSp * afMinDist;
+                    derivedValue.setText(String.format(
+                            "%.0f um  (= %d x %.0f um FOV).  Force-AF thresholds: index >= %d tiles, spatial > %.0f um",
+                            afMinDist, nTiles, meanFov, indexThreshold, spatialThreshold));
+                    gapIndexDesc.setText(String.format("(force AF after %d tiles without one)", indexThreshold));
+                    gapSpatialDesc.setText(String.format("(force AF beyond %.0f um from nearest AF)", spatialThreshold));
+                } else {
+                    derivedValue.setText(String.format(
+                            "~ %d x mean(FOV) um  (FOV unavailable for this objective -- value is computed at runtime)",
+                            nTiles));
+                    gapIndexDesc.setText(String.format("(force AF after %d tiles without one)", gapIdx * nTiles));
+                    gapSpatialDesc.setText(String.format("(force AF beyond %.1f x af_min_distance)", gapSp));
+                }
+            } catch (NumberFormatException nfe) {
+                derivedValue.setText("(enter a valid gap_spatial_multiplier to update)");
+            } catch (Exception ex) {
+                logger.debug("Failed to refresh derived AF display: {}", ex.getMessage());
+                derivedValue.setText("");
             }
         };
 
@@ -617,6 +756,9 @@ public class AutofocusEditorWorkflow {
                 tissueAreaThresholdField.setText(String.valueOf(settings.tissueAreaThreshold));
                 sweepRangeField.setText(String.valueOf(settings.sweepRangeUm));
                 sweepNStepsSpinner.getValueFactory().setValue(settings.sweepNSteps);
+                gapIndexSpinner.getValueFactory().setValue(settings.gapIndexMultiplier);
+                gapSpatialField.setText(String.valueOf(settings.gapSpatialMultiplier));
+                refreshDerivedDisplay.run();
                 if (existingSettings.containsKey(selectedObjective)) {
                     statusLabel.setText("Loaded existing settings for " + selectedObjective);
                     logger.info("UI populated with existing settings for {}", selectedObjective);
@@ -630,6 +772,11 @@ public class AutofocusEditorWorkflow {
         };
 
         objectiveCombo.setOnAction(e -> loadSettingsForObjective.run());
+        // Live-refresh the derived af_min_distance / force-AF threshold display
+        // as the user edits the inputs that feed into it.
+        nTilesSpinner.valueProperty().addListener((obs, oldV, newV) -> refreshDerivedDisplay.run());
+        gapIndexSpinner.valueProperty().addListener((obs, oldV, newV) -> refreshDerivedDisplay.run());
+        gapSpatialField.textProperty().addListener((obs, oldV, newV) -> refreshDerivedDisplay.run());
         loadSettingsForObjective.run(); // Load initial settings
 
         // "Write to file" button
@@ -888,6 +1035,46 @@ public class AutofocusEditorWorkflow {
     }
 
     /**
+     * Estimate the mean camera FOV (in micrometers) for the given objective
+     * by searching the available (modality, detector) combinations for one
+     * that resolves a valid FOV.
+     *
+     * <p>Used only for the read-only "af_min_distance" display in the editor --
+     * the authoritative value is computed at runtime by the Python acquisition
+     * workflow using the active modality/detector, so this estimate may differ
+     * from the runtime value if the objective is used under multiple modalities
+     * with different camera geometries.
+     *
+     * @return mean((fov_x + fov_y) / 2) for the first working combo, or null
+     *         if no combo resolves.
+     */
+    private static Double estimateMeanFovUmForObjective(MicroscopeConfigManager mgr, String objectiveId) {
+        if (mgr == null || objectiveId == null) return null;
+        try {
+            Set<String> modalities = mgr.getAvailableModalities();
+            Set<String> detectors = mgr.getHardwareDetectors();
+            if (modalities == null || modalities.isEmpty() || detectors == null || detectors.isEmpty()) {
+                return null;
+            }
+            for (String modality : modalities) {
+                for (String detector : detectors) {
+                    try {
+                        double[] fov = mgr.getModalityFOV(modality, objectiveId, detector);
+                        if (fov != null && fov.length >= 2 && fov[0] > 0 && fov[1] > 0) {
+                            return (fov[0] + fov[1]) / 2.0;
+                        }
+                    } catch (Exception ignored) {
+                        // Try next combination
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("estimateMeanFovUmForObjective failed: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
      * Load list of objectives from hardware configuration section.
      */
     private static List<String> loadObjectivesFromConfig(MicroscopeConfigManager configManager) {
@@ -964,13 +1151,23 @@ public class AutofocusEditorWorkflow {
                             sweepRangeUm = ((Number) entry.get("adaptive_initial_step_um")).doubleValue() * 2;
                         }
 
+                        // Safety-net gap multipliers with defaults matching the Python side.
+                        int gapIndexMultiplier = entry.containsKey("gap_index_multiplier")
+                                ? ((Number) entry.get("gap_index_multiplier")).intValue()
+                                : 3;
+                        double gapSpatialMultiplier = entry.containsKey("gap_spatial_multiplier")
+                                ? ((Number) entry.get("gap_spatial_multiplier")).doubleValue()
+                                : 2.0;
+
                         logger.info(
-                                "Loaded from YAML - objective='{}', n_steps={}, search_range={}, sweep_range={}, sweep_n_steps={}",
+                                "Loaded from YAML - objective='{}', n_steps={}, search_range={}, sweep_range={}, sweep_n_steps={}, gap_index={}, gap_spatial={}",
                                 objective,
                                 nSteps,
                                 searchRange,
                                 sweepRangeUm,
-                                sweepNSteps);
+                                sweepNSteps,
+                                gapIndexMultiplier,
+                                gapSpatialMultiplier);
 
                         settings.put(
                                 objective,
@@ -985,7 +1182,9 @@ public class AutofocusEditorWorkflow {
                                         textureThreshold,
                                         tissueAreaThreshold,
                                         sweepRangeUm,
-                                        sweepNSteps));
+                                        sweepNSteps,
+                                        gapIndexMultiplier,
+                                        gapSpatialMultiplier));
                     }
                 }
             }
@@ -1021,6 +1220,8 @@ public class AutofocusEditorWorkflow {
             entry.put("tissue_area_threshold", setting.tissueAreaThreshold);
             entry.put("sweep_range_um", setting.sweepRangeUm);
             entry.put("sweep_n_steps", setting.sweepNSteps);
+            entry.put("gap_index_multiplier", setting.gapIndexMultiplier);
+            entry.put("gap_spatial_multiplier", setting.gapSpatialMultiplier);
             afSettingsList.add(entry);
         }
 
@@ -1052,10 +1253,17 @@ public class AutofocusEditorWorkflow {
             writer.write("#\n");
             writer.write("# SHARED:\n");
             writer.write("#   n_tiles: Autofocus runs every N tiles (lower = more frequent)\n");
+            writer.write("#            Also sets af_min_distance = n_tiles x mean(camera FOV)\n");
             writer.write("#   score_metric: 'normalized_variance' (recommended), 'laplacian_variance',\n");
             writer.write("#                 'sobel', 'brenner_gradient', or 'p98_p2'\n");
             writer.write("#   texture_threshold: Min texture variance for tissue detection (0.005-0.030)\n");
-            writer.write("#   tissue_area_threshold: Min tissue coverage fraction (0.05-0.30)\n\n");
+            writer.write("#   tissue_area_threshold: Min tissue coverage fraction (0.05-0.30)\n");
+            writer.write("#\n");
+            writer.write("# AF SAFETY NETS (force an extra autofocus when the planned grid is sparse):\n");
+            writer.write("#   gap_index_multiplier: force AF after (this x n_tiles) positions without one\n");
+            writer.write("#                         Default 3, typical 1-5. Lower = more aggressive safety net.\n");
+            writer.write("#   gap_spatial_multiplier: force AF beyond (this x af_min_distance) from nearest AF\n");
+            writer.write("#                           Default 2.0, typical 1.0-3.0. Catches disconnected fragments.\n\n");
 
             yaml.dump(root, writer);
         }
