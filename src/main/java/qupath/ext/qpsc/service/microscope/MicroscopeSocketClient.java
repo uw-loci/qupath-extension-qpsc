@@ -239,7 +239,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         /** Set illumination power (4-byte float) */
         SETILLM("setillm_"),
         /** Apply acquisition profile (calls apply_mode_setup on server) */
-        APPLYPR("applypr_");
+        APPLYPR("applypr_"),
+
+        /** Smooth (streaming) focus -- continuous-Z autofocus via streamed frames */
+        SMOOTHZ("smoothz_");
 
         private final byte[] value;
 
@@ -1324,6 +1327,181 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         logger.debug("Restored socket timeout to {}ms", originalTimeout);
                     } catch (IOException e) {
                         logger.warn("Failed to restore original socket timeout", e);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Outcome of a {@link #smoothFocus} call.
+     *
+     * <p>Three distinct states:
+     * <ul>
+     *   <li>{@code SUCCESS} -- scan committed, stage is at the new focus</li>
+     *   <li>{@code UNAVAILABLE} -- a pre-flight check refused to run (exposure
+     *       too long, saturated, no speed property, too few samples for a fit).
+     *       Caller should fall back to stepped Sweep Focus. {@code reason}
+     *       explains why.</li>
+     *   <li>{@code FAILED} -- mid-scan error; stage state has been restored but
+     *       no new focus was committed. {@code reason} explains the error.</li>
+     * </ul>
+     *
+     * <p>On SUCCESS, {@code initialZ}, {@code finalZ}, {@code zShift},
+     * {@code nSamples}, and {@code zSpan} are populated. The other fields are
+     * zero on UNAVAILABLE / FAILED.
+     */
+    public static final class SmoothFocusResult {
+        public enum Status { SUCCESS, UNAVAILABLE, FAILED }
+
+        public final Status status;
+        public final double initialZ;
+        public final double finalZ;
+        public final double zShift;
+        public final int nSamples;
+        public final double zSpan;
+        public final String reason;
+
+        public SmoothFocusResult(Status status, double initialZ, double finalZ,
+                                  double zShift, int nSamples, double zSpan,
+                                  String reason) {
+            this.status = status;
+            this.initialZ = initialZ;
+            this.finalZ = finalZ;
+            this.zShift = zShift;
+            this.nSamples = nSamples;
+            this.zSpan = zSpan;
+            this.reason = reason;
+        }
+    }
+
+    /**
+     * Run a Smooth (streaming) focus scan at the current XY position.
+     *
+     * <p>Runs fully server-side via the SMOOTHZ command. The server:
+     * <ol>
+     *   <li>Resolves the objective (prefers client-provided id, else
+     *       pixel-size auto-match, else yaml first entry)</li>
+     *   <li>Reads {@code sweep_range_um} for that objective from
+     *       {@code autofocus_<scope>.yml}</li>
+     *   <li>Runs pre-flight feasibility checks (blur budget, saturation)</li>
+     *   <li>Seeds to z_start at full speed, drops stage speed property to the
+     *       slow value, starts continuous sequence acquisition, fires a non-
+     *       blocking move to z_end, pops every frame + Z reading during motion,
+     *       parabolic-fits the peak, commits the final Z</li>
+     *   <li>Restores the speed property before returning</li>
+     * </ol>
+     *
+     * <p>On UNAVAILABLE, the stage is returned to its initial Z and the caller
+     * should fall back to the existing stepped Sweep Focus. Log the {@code reason}
+     * for user visibility but do not raise an error dialog -- this is an
+     * informational gate, not a failure.
+     *
+     * @param yamlPath  Absolute path to the active microscope YAML
+     *                  ({@code config_<scope>.yml}). Required.
+     * @param objective Objective identifier (e.g. {@code LOCI_OBJECTIVE_OLYMPUS_20X_POL_001})
+     *                  or null to let the server auto-detect via pixel-size match.
+     * @param rangeOverrideUm Optional override of the yaml's {@code sweep_range_um};
+     *                         pass NaN or a non-positive value to use the yaml.
+     * @return {@link SmoothFocusResult} describing the outcome; never null.
+     * @throws IOException if the socket communication itself fails (not a
+     *                     smooth-focus rejection -- those return UNAVAILABLE).
+     */
+    public SmoothFocusResult smoothFocus(String yamlPath, String objective,
+                                          double rangeOverrideUm) throws IOException {
+        if (yamlPath == null || yamlPath.isEmpty()) {
+            throw new IllegalArgumentException("yamlPath is required for smoothFocus");
+        }
+
+        StringBuilder msgBuilder = new StringBuilder();
+        msgBuilder.append("--yaml ").append(yamlPath);
+        if (objective != null && !objective.isEmpty()) {
+            msgBuilder.append(" --objective ").append(objective);
+        }
+        if (!Double.isNaN(rangeOverrideUm) && rangeOverrideUm > 0) {
+            msgBuilder.append(" --range ").append(rangeOverrideUm);
+        }
+        msgBuilder.append(" ").append(END_MARKER);
+        String message = msgBuilder.toString();
+        byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
+
+        logger.info("Sending SMOOTHZ command: {}", message);
+
+        synchronized (socketLock) {
+            ensureConnected();
+
+            int originalTimeout = readTimeout;
+            try {
+                if (socket != null) {
+                    // Smooth scan is fast (<2s on PPM) but give it headroom
+                    // for slow hardware and serial overhead.
+                    socket.setSoTimeout(30000);
+                }
+
+                output.write(Command.SMOOTHZ.getValue());
+                output.flush();
+                Thread.sleep(50);
+                output.write(messageBytes);
+                output.flush();
+                lastActivityTime.set(System.currentTimeMillis());
+
+                byte[] buffer = new byte[1024];
+                int bytesRead = input.read(buffer);
+                if (bytesRead <= 0) {
+                    throw new IOException("SMOOTHZ: no response from server");
+                }
+                String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8).trim();
+                logger.info("SMOOTHZ response: {}", response);
+                lastActivityTime.set(System.currentTimeMillis());
+
+                if (response.startsWith("SUCCESS:")) {
+                    // SUCCESS:<initial>:<final>:<shift>:<n_samples>:<span>
+                    String body = response.substring("SUCCESS:".length());
+                    String[] parts = body.split(":");
+                    if (parts.length < 5) {
+                        throw new IOException("SMOOTHZ: malformed SUCCESS payload: " + response);
+                    }
+                    try {
+                        double initialZ = Double.parseDouble(parts[0].trim());
+                        double finalZ = Double.parseDouble(parts[1].trim());
+                        String shiftStr = parts[2].trim();
+                        if (shiftStr.startsWith("+")) {
+                            shiftStr = shiftStr.substring(1);
+                        }
+                        double zShift = Double.parseDouble(shiftStr);
+                        int nSamples = Integer.parseInt(parts[3].trim());
+                        double zSpan = Double.parseDouble(parts[4].trim());
+                        return new SmoothFocusResult(
+                                SmoothFocusResult.Status.SUCCESS,
+                                initialZ, finalZ, zShift, nSamples, zSpan, null);
+                    } catch (NumberFormatException e) {
+                        throw new IOException("SMOOTHZ: could not parse SUCCESS payload: "
+                                + response, e);
+                    }
+                } else if (response.startsWith("UNAVAILABLE:")) {
+                    String reason = response.substring("UNAVAILABLE:".length());
+                    logger.info("SMOOTHZ UNAVAILABLE: {}", reason);
+                    return new SmoothFocusResult(
+                            SmoothFocusResult.Status.UNAVAILABLE,
+                            0, 0, 0, 0, 0, reason);
+                } else if (response.startsWith("FAILED:")) {
+                    String reason = response.substring("FAILED:".length());
+                    logger.warn("SMOOTHZ FAILED: {}", reason);
+                    return new SmoothFocusResult(
+                            SmoothFocusResult.Status.FAILED,
+                            0, 0, 0, 0, 0, reason);
+                } else {
+                    throw new IOException("SMOOTHZ: unknown response prefix: " + response);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("SMOOTHZ interrupted", e);
+            } finally {
+                if (socket != null) {
+                    try {
+                        socket.setSoTimeout(originalTimeout);
+                    } catch (IOException e) {
+                        logger.warn("Failed to restore socket timeout after SMOOTHZ", e);
                     }
                 }
             }
