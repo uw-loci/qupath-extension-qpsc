@@ -963,13 +963,28 @@ public class StitchingHelper {
      */
     private static List<String> resolveChannelIdsForStitching(ModalityHandler handler, SampleSetupResult sample) {
         if (handler == null || sample == null) {
+            logger.info(
+                    "resolveChannelIdsForStitching: early exit -- handler={} sample={}",
+                    handler,
+                    sample);
             return List.of();
         }
         String profileKey = qupath.ext.qpsc.utilities.ObjectiveUtils.createEnhancedFolderName(
                 sample.modality(), sample.objective());
+        logger.info(
+                "resolveChannelIdsForStitching: handler={} modality='{}' objective='{}' -> profileKey='{}'",
+                handler.getClass().getSimpleName(),
+                sample.modality(),
+                sample.objective(),
+                profileKey);
         try {
             List<Channel> channels = handler.getChannels(profileKey, sample.objective(), sample.detector())
                     .join();
+            int count = channels == null ? 0 : channels.size();
+            logger.info(
+                    "resolveChannelIdsForStitching: handler.getChannels('{}') returned {} channel(s)",
+                    profileKey,
+                    count);
             if (channels == null || channels.isEmpty()) {
                 return List.of();
             }
@@ -977,12 +992,14 @@ public class StitchingHelper {
             for (Channel c : channels) {
                 ids.add(c.id());
             }
+            logger.info("resolveChannelIdsForStitching: resolved ids={}", ids);
             return ids;
         } catch (Exception e) {
             logger.warn(
                     "Failed to resolve channel library for stitching (profile={}): {}",
                     profileKey,
-                    e.getMessage());
+                    e.getMessage(),
+                    e);
             return List.of();
         }
     }
