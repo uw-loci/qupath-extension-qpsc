@@ -29,6 +29,7 @@ import qupath.ext.qpsc.ui.DualProgressDialog;
 import qupath.ext.qpsc.ui.StitchingBlockingDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.ext.qpsc.utilities.TileProcessingUtilities;
 import qupath.ext.basicstitching.assembly.ChannelMerger;
@@ -1078,31 +1079,71 @@ public class StitchingHelper {
                         Map<String, Object> stitchParams = new HashMap<>();
                         stitchParams.put("metadata", metadata);
 
-                        List<String> stitchedImages = new ArrayList<>();
                         Path tileBaseDir =
                                 Paths.get(projectsFolder, sampleName, modeWithIndex, annotationName);
 
+                        // Filter to only channels that were actually acquired. The library
+                        // may list DAPI/FITC/TRITC/Cy5 but the user may have picked only a
+                        // subset -- the Python side creates per-channel subdirs on demand,
+                        // so any missing subdir means "not acquired for this run". Trying
+                        // to stitch a non-existent subdir just logs a warning and wastes
+                        // time, so drop them before the loop.
+                        List<String> acquiredChannelIds = new ArrayList<>();
+                        for (String cid : channelIds) {
+                            Path channelSubdir = tileBaseDir.resolve(cid);
+                            if (Files.isDirectory(channelSubdir)) {
+                                acquiredChannelIds.add(cid);
+                            } else {
+                                logger.debug(
+                                        "Skipping channel '{}' -- subdirectory does not exist: {}",
+                                        cid,
+                                        channelSubdir);
+                            }
+                        }
+                        logger.info(
+                                "Library declared {} channel(s); found {} on disk: {}",
+                                channelIds.size(),
+                                acquiredChannelIds.size(),
+                                acquiredChannelIds);
+
+                        if (acquiredChannelIds.isEmpty()) {
+                            logger.error(
+                                    "No channel subdirectories found in {}; nothing to stitch",
+                                    tileBaseDir);
+                            if (blockingDialog != null) {
+                                blockingDialog.failOperation(operationId, "No channel tiles found");
+                            }
+                            if (dualProgressDialog != null) {
+                                dualProgressDialog.failStitchingOperation(
+                                        operationId, "No channel tiles found");
+                            }
+                            return;
+                        }
+
+                        List<String> stitchedImages = new ArrayList<>();
+
                         logger.info(
                                 "Starting channel processing for {} channels in directory: {}",
-                                channelIds.size(),
+                                acquiredChannelIds.size(),
                                 tileBaseDir);
 
                         // Channels are stitched sequentially. BioFormats TIFF writer concurrency
                         // is the constraint (the global semaphore in PyramidImageWriter already
                         // serializes writes, so parallel dispatch would just queue). Sequential
                         // is simpler and keeps file I/O pressure manageable for IF with ~4 channels.
-                        for (int i = 0; i < channelIds.size(); i++) {
-                            String channelId = channelIds.get(i);
+                        List<String> successfullyStitchedChannelIds = new ArrayList<>();
+                        for (int i = 0; i < acquiredChannelIds.size(); i++) {
+                            String channelId = acquiredChannelIds.get(i);
                             if (blockingDialog != null) {
                                 blockingDialog.updateStatus(
                                         operationId,
                                         String.format(
                                                 "Stitching channel %s (%d/%d) for %s...",
-                                                channelId, i + 1, channelIds.size(), annotationName));
+                                                channelId, i + 1, acquiredChannelIds.size(), annotationName));
                             }
                             logger.info(
                                     "Stitching channel {} ({}/{})",
-                                    channelId, i + 1, channelIds.size());
+                                    channelId, i + 1, acquiredChannelIds.size());
                             try {
                                 String outPath = processAngleWithIsolation(
                                         tileBaseDir,
@@ -1120,26 +1161,28 @@ public class StitchingHelper {
                                         stitchParams);
                                 if (outPath != null) {
                                     stitchedImages.add(outPath);
+                                    successfullyStitchedChannelIds.add(channelId);
                                     logger.info(
                                             "Stitch completed for channel {}: {}", channelId, outPath);
                                 }
                             } catch (Exception e) {
                                 logger.error(
                                         "Failed to stitch channel {} ({}/{}): {}",
-                                        channelId, i + 1, channelIds.size(), e.getMessage(), e);
+                                        channelId, i + 1, acquiredChannelIds.size(), e.getMessage(), e);
                             }
                         }
 
                         logger.info(
                                 "Completed multi-channel stitching: {} of {} channels succeeded",
-                                stitchedImages.size(), channelIds.size());
+                                stitchedImages.size(), acquiredChannelIds.size());
 
-                        // Merge per-channel pyramids into a single multichannel pyramid.
-                        // The merged image becomes the canonical output for the annotation;
-                        // individual per-channel files are left in place so the user can
-                        // still inspect them, but they should not be added to the project.
-                        if (stitchedImages.size() >= 2) {
-                            if (blockingDialog != null) {
+                        // Merge per-channel pyramids into a single multichannel pyramid,
+                        // which becomes THE output of a channel-based acquisition: imported
+                        // to the project as one entry, with the intermediate per-channel
+                        // files removed from the project view (they stay on disk for
+                        // debugging but should not clutter the project tree).
+                        if (stitchedImages.size() >= 1) {
+                            if (stitchedImages.size() >= 2 && blockingDialog != null) {
                                 blockingDialog.updateStatus(
                                         operationId,
                                         "Merging " + stitchedImages.size() + " channels into multichannel pyramid...");
@@ -1147,18 +1190,19 @@ public class StitchingHelper {
                             try {
                                 Path firstStitch = Paths.get(stitchedImages.get(0));
                                 String mergedDir = firstStitch.getParent().toString();
-                                String mergedStem = annotationName + "_merged";
 
-                                // Channel ids that actually produced a stitched output, in the
-                                // same order as stitchedImages (they're built in the same loop).
-                                List<String> mergedChannelNames = new ArrayList<>();
-                                for (int i = 0; i < stitchedImages.size(); i++) {
-                                    mergedChannelNames.add(channelIds.get(i));
-                                }
+                                // Target filename: PollenIF_Fluorescence_001.ome.tif style,
+                                // matching the per-channel naming convention but without a
+                                // channel suffix. Derive it by stripping the trailing channel
+                                // segment from the first per-channel output.
+                                String mergedStem = deriveMergedStem(
+                                        firstStitch.getFileName().toString(),
+                                        successfullyStitchedChannelIds.get(0),
+                                        annotationName);
 
                                 String mergedPath = ChannelMerger.merge(
                                         stitchedImages,
-                                        mergedChannelNames,
+                                        successfullyStitchedChannelIds,
                                         mergedDir,
                                         mergedStem,
                                         compression,
@@ -1168,12 +1212,18 @@ public class StitchingHelper {
                                     logger.info(
                                             "Multichannel merge succeeded for {}: {}",
                                             annotationName, mergedPath);
-                                    // TODO: add the merged file to the QuPath project as a
-                                    // single entry (parallel to how the per-channel entries
-                                    // were added by processAngleWithIsolation). For now the
-                                    // per-channel entries are still in the project and the
-                                    // merged file lives on disk alongside them -- user can
-                                    // File > Import to bring it in manually. Follow-up work.
+
+                                    // Import the merged file into the project as a single entry,
+                                    // then remove the per-channel intermediate entries so the
+                                    // user only sees ONE "PollenIF_Fluorescence_001" entry
+                                    // instead of three.
+                                    importMergedImageAndRemoveIntermediates(
+                                            mergedPath,
+                                            stitchedImages,
+                                            metadata,
+                                            gui,
+                                            project,
+                                            handler);
                                 } else {
                                     logger.warn(
                                             "Multichannel merge returned null for {} -- per-channel files remain as the output",
@@ -1215,6 +1265,142 @@ public class StitchingHelper {
                     }
                 },
                 executor);
+    }
+
+    /**
+     * Derives the merged-file stem by stripping the trailing channel segment from
+     * the first per-channel filename. For example:
+     *   {@code PollenIF_Fluorescence_FITC_001.ome.tif} + channel {@code FITC}
+     *   -> {@code PollenIF_Fluorescence_001}
+     * so the final file lands as {@code PollenIF_Fluorescence_001.ome.tif}, matching
+     * the per-channel naming convention but without the channel token.
+     *
+     * <p>Falls back to {@code <annotationName>_merged} if the filename doesn't
+     * contain the channel id (e.g. custom naming scheme) so we never produce a
+     * garbage stem.
+     */
+    private static String deriveMergedStem(
+            String firstPerChannelFilename, String firstChannelId, String annotationName) {
+        // Strip file extension (.ome.tif, .ome.zarr, .tif, ...)
+        String stem = firstPerChannelFilename;
+        int dotIdx = stem.indexOf('.');
+        if (dotIdx > 0) {
+            stem = stem.substring(0, dotIdx);
+        }
+        // Look for "_<channelId>_" and remove the "_<channelId>" segment.
+        String token = "_" + firstChannelId + "_";
+        int tokenIdx = stem.indexOf(token);
+        if (tokenIdx >= 0) {
+            return stem.substring(0, tokenIdx) + "_" + stem.substring(tokenIdx + token.length());
+        }
+        // Handle "_<channelId>" at the end with no trailing counter.
+        String tailToken = "_" + firstChannelId;
+        if (stem.endsWith(tailToken)) {
+            return stem.substring(0, stem.length() - tailToken.length());
+        }
+        return annotationName + "_merged";
+    }
+
+    /**
+     * Imports the merged multichannel file into the QuPath project and removes the
+     * intermediate per-channel project entries so the user sees exactly one entry per
+     * channel-based acquisition (not one per channel + one merged).
+     *
+     * <p>Per-channel files remain on disk so they can be inspected directly if
+     * needed, but they are unlinked from the project tree after successful import.
+     */
+    private static void importMergedImageAndRemoveIntermediates(
+            String mergedPath,
+            List<String> perChannelPaths,
+            StitchingMetadata metadata,
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            ModalityHandler handler) {
+        final File mergedFile = new File(mergedPath);
+        // Build a set of absolute paths to the per-channel intermediates for comparison.
+        java.util.Set<String> intermediateAbsPaths = new java.util.HashSet<>();
+        for (String p : perChannelPaths) {
+            intermediateAbsPaths.add(new File(p).getAbsolutePath());
+        }
+
+        Platform.runLater(() -> {
+            try {
+                logger.info("Importing merged multichannel file to project: {}", mergedFile.getName());
+
+                if (metadata != null) {
+                    QPProjectFunctions.addImageToProjectWithMetadata(
+                            project,
+                            mergedFile,
+                            metadata.parentEntry,
+                            metadata.xOffset,
+                            metadata.yOffset,
+                            false, // already correctly oriented
+                            false,
+                            metadata.sampleName,
+                            handler);
+                } else {
+                    QPProjectFunctions.addImageToProject(
+                            mergedFile, project, false, false, handler);
+                }
+                logger.info("Merged multichannel file imported to project: {}", mergedFile.getName());
+
+                // Remove the per-channel intermediate entries so the project tree
+                // shows only the merged file. Entries are matched by absolute path.
+                List<ProjectImageEntry<BufferedImage>> toRemove = new ArrayList<>();
+                for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
+                    try {
+                        java.net.URI uri = entry.getURIs().iterator().hasNext()
+                                ? entry.getURIs().iterator().next()
+                                : null;
+                        if (uri == null) continue;
+                        File entryFile = new File(uri);
+                        if (intermediateAbsPaths.contains(entryFile.getAbsolutePath())) {
+                            toRemove.add(entry);
+                        }
+                    } catch (Exception ex) {
+                        logger.debug("Could not resolve URI for entry {}: {}", entry.getImageName(), ex.getMessage());
+                    }
+                }
+                if (!toRemove.isEmpty()) {
+                    logger.info(
+                            "Removing {} intermediate per-channel project entries (files kept on disk)",
+                            toRemove.size());
+                    project.removeAllImages(toRemove, false);
+                }
+
+                // Refresh the project view and open the merged entry.
+                gui.setProject(project);
+                gui.refreshProject();
+
+                project.getImageList().stream()
+                        .filter(e -> {
+                            try {
+                                java.net.URI u = e.getURIs().iterator().hasNext()
+                                        ? e.getURIs().iterator().next()
+                                        : null;
+                                return u != null
+                                        && new File(u).getAbsolutePath().equals(mergedFile.getAbsolutePath());
+                            } catch (Exception ex) {
+                                return false;
+                            }
+                        })
+                        .findFirst()
+                        .ifPresent(entry -> {
+                            logger.info("Opening merged image entry: {}", entry.getImageName());
+                            try {
+                                gui.openImageEntry(entry);
+                            } catch (Exception openEx) {
+                                logger.warn("Failed to open merged entry: {}", openEx.getMessage());
+                            }
+                        });
+            } catch (Exception e) {
+                logger.error(
+                        "Failed to import merged multichannel file {}: {}",
+                        mergedFile.getName(),
+                        e.getMessage(),
+                        e);
+            }
+        });
     }
 
     /**
