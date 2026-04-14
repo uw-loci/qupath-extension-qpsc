@@ -56,6 +56,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
 
     private static final String PREF_KEY_PREFIX = "widefield.channel.";
     private static final String PREF_KEY_MASTER = PREF_KEY_PREFIX + "master_override_enabled";
+    private static final String PREF_KEY_FOCUS_CHANNEL = PREF_KEY_PREFIX + "focus_channel";
 
     private final VBox root;
     private final CheckBox masterOverride;
@@ -65,6 +66,14 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     // Channels without intensity control have no spinner here.
     private final LinkedHashMap<String, Spinner<Double>> channelIntensities = new LinkedHashMap<>();
     private final LinkedHashMap<String, Double> defaultIntensities = new LinkedHashMap<>();
+    // Focus-channel radio buttons (one per row, mutually exclusive via ToggleGroup).
+    // Only enabled when 2+ channels are selected -- with one channel there's no
+    // choice to make. The selected channel is collected first per tile so its
+    // hardware state is the same one autofocus runs against.
+    private final LinkedHashMap<String, javafx.scene.control.RadioButton> channelFocusRadios =
+            new LinkedHashMap<>();
+    private final javafx.scene.control.ToggleGroup focusToggleGroup =
+            new javafx.scene.control.ToggleGroup();
 
     public WidefieldChannelBoundingBoxUI() {
         root = new VBox(5);
@@ -99,7 +108,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         grid.setHgap(10);
         grid.setVgap(5);
 
-        // Columns: checkbox | name (grow) | exposure | intensity
+        // Columns: checkbox | name (grow) | exposure | intensity | focus radio
         ColumnConstraints col0 = new ColumnConstraints();
         col0.setHalignment(HPos.CENTER);
         ColumnConstraints col1 = new ColumnConstraints();
@@ -109,12 +118,19 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         col2.setHalignment(HPos.RIGHT);
         ColumnConstraints col3 = new ColumnConstraints();
         col3.setHalignment(HPos.RIGHT);
-        grid.getColumnConstraints().addAll(col0, col1, col2, col3);
+        ColumnConstraints col4 = new ColumnConstraints();
+        col4.setHalignment(HPos.CENTER);
+        grid.getColumnConstraints().addAll(col0, col1, col2, col3, col4);
 
         grid.add(boldLabel("Use"), 0, 0);
         grid.add(boldLabel("Channel"), 1, 0);
         grid.add(boldLabel("Exposure (ms)"), 2, 0);
         grid.add(boldLabel("Intensity"), 3, 0);
+        grid.add(boldLabel("Focus"), 4, 0);
+
+        // Persisted last focus-channel selection from a previous run.
+        String savedFocusChannel =
+                PersistentPreferences.getStringPreference(PREF_KEY_FOCUS_CHANNEL, "");
 
         int row = 1;
         for (Channel channel : library) {
@@ -215,9 +231,42 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                 grid.add(placeholder, 3, row);
             }
 
+            // Focus-channel radio button. Disabled until 2+ channels are
+            // selected (with 1 channel there's no choice). Restored from
+            // last-run preference if present, otherwise the first channel
+            // wins by default after the loop ends.
+            javafx.scene.control.RadioButton focusRadio = new javafx.scene.control.RadioButton();
+            focusRadio.setToggleGroup(focusToggleGroup);
+            focusRadio.setTooltip(new Tooltip(
+                    "Use " + channel.displayName() + " as the autofocus reference channel.\n"
+                            + "The focus channel is collected first per tile so its hardware state\n"
+                            + "matches the autofocus snap, avoiding a second hardware switch."));
+            // Focus radio is enabled only when this channel row is selected
+            // AND at least one OTHER channel is also selected (so there's
+            // an actual choice to make). Single-channel runs hide the
+            // focus selection entirely.
+            focusRadio.disableProperty().bind(
+                    masterOverride.selectedProperty().not().or(cb.selectedProperty().not()));
+            if (savedFocusChannel != null && savedFocusChannel.equals(id)) {
+                focusRadio.setSelected(true);
+            }
+            focusRadio.selectedProperty().addListener((obs, oldVal, newVal) -> {
+                if (Boolean.TRUE.equals(newVal)) {
+                    PersistentPreferences.setStringPreference(PREF_KEY_FOCUS_CHANNEL, id);
+                }
+            });
+            grid.add(focusRadio, 4, row);
+            channelFocusRadios.put(id, focusRadio);
+
             channelCheckboxes.put(id, cb);
             channelExposures.put(id, expSpinner);
             row++;
+        }
+
+        // After all rows are built, ensure exactly one focus radio is selected
+        // (the first one in library order if the user hasn't picked anything).
+        if (focusToggleGroup.getSelectedToggle() == null && !channelFocusRadios.isEmpty()) {
+            channelFocusRadios.values().iterator().next().setSelected(true);
         }
 
         Label hint = new Label(String.format(
@@ -317,6 +366,31 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         // Empty result here means "user actively selected nothing" -- return it as-is so
         // the workflow can block the acquisition with a clear error. Do NOT fall through.
         return result;
+    }
+
+    /**
+     * Returns the channel id the user picked as the autofocus reference, or
+     * {@code null} if no library is loaded. The picked channel is always one
+     * of the currently-selected channels (the radio button is disabled when
+     * the row is unselected); when only one channel is selected, that channel
+     * implicitly becomes the focus channel and the radios are effectively
+     * a no-op. The downstream workflow moves this channel to position 0 in
+     * the per-tile acquisition sequence so the autofocus snap and the first
+     * acquired image share hardware state.
+     */
+    @Override
+    public String getFocusChannelId() {
+        if (channelFocusRadios.isEmpty()) {
+            return null;
+        }
+        for (Map.Entry<String, javafx.scene.control.RadioButton> entry : channelFocusRadios.entrySet()) {
+            if (entry.getValue().isSelected()) {
+                return entry.getKey();
+            }
+        }
+        // No radio selected (shouldn't happen because we set one in the
+        // constructor): fall back to the first channel in library order.
+        return channelFocusRadios.keySet().iterator().next();
     }
 
     /**

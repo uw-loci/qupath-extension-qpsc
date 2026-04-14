@@ -272,13 +272,16 @@ public class BoundedAcquisitionWorkflow {
 
             // Resolve the channel sequence up front (synchronous). For angle-based
             // modalities this returns an empty list, so the workflow falls through
-            // to the legacy angle path.
+            // to the legacy angle path. The focus channel (if any) is moved to
+            // position 0 so it's collected first per tile and the autofocus snap
+            // shares hardware state with the first acquired image.
             final List<qupath.ext.qpsc.modality.ChannelExposure> channelExposures =
                     ChannelResolutionService.resolve(
                             enhancedModality,
                             result.objective(),
                             result.detector(),
-                            result.angleOverrides());
+                            result.angleOverrides(),
+                            result.focusChannelId());
 
             // Resolve angles via shared service. For channel-based modalities the
             // service short-circuits to an empty list (no rotation axis).
@@ -374,6 +377,10 @@ public class BoundedAcquisitionWorkflow {
                                 // means "use YAML defaults" and produces no CLI flag.
                                 config.commandBuilder()
                                         .channelIntensityOverrides(result.channelIntensityOverrides());
+
+                                // Focus channel for AF / first-collection ordering. Null means
+                                // "no preference" and produces no CLI flag.
+                                config.commandBuilder().focusChannel(result.focusChannelId());
 
                                 logger.info(
                                         "Starting acquisition - Sample: {}, Mode: {}, Angles: {}, wbMode: {}",

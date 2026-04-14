@@ -690,12 +690,15 @@ public class AcquisitionManager {
 
                 // Resolve per-channel sequence for channel-based modalities (widefield IF).
                 // Returns empty list for angle-based modalities, in which case
-                // the builder falls through to the standard angle path.
+                // the builder falls through to the standard angle path. The focus
+                // channel (if any) is moved to position 0 so it's collected first
+                // per tile and AF runs against the same hardware state.
                 List<ChannelExposure> channelExposures = ChannelResolutionService.resolve(
                         profileKey,
                         state.sample.objective(),
                         state.sample.detector(),
-                        state.angleOverrides);
+                        state.angleOverrides,
+                        state.focusChannelId);
 
                 // Build acquisition configuration using shared builder
                 AcquisitionConfigurationBuilder.AcquisitionConfiguration config =
@@ -724,6 +727,10 @@ public class AcquisitionManager {
                 if (state.channelIntensityOverrides != null) {
                     config.commandBuilder().channelIntensityOverrides(state.channelIntensityOverrides);
                 }
+
+                // Focus channel for AF / first-collection ordering. Null means
+                // "no preference" and produces no CLI flag.
+                config.commandBuilder().focusChannel(state.focusChannelId);
 
                 logger.info("Acquisition parameters for {}:", annotation.getName());
                 logger.info("  Config: {}", configFileLocation);

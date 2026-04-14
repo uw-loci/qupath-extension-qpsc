@@ -44,6 +44,14 @@ public class AcquisitionCommandBuilder {
     // defaults. Emitted as the --channel-intensities CLI flag.
     private Map<String, Double> channelIntensityOverrides = Map.of();
 
+    // Optional focus channel id. When set, the Python server applies that
+    // channel's hardware state before the autofocus snap so AF runs against
+    // a representative frame. The Java side has already moved this channel
+    // to position 0 in channelExposures, so the first acquired image is
+    // also the AF reference -- avoiding a hardware switch between AF and
+    // the first capture. Emitted as the --focus-channel CLI flag.
+    private String focusChannelId;
+
     // Marks this as a non-rotation modality (brightfield, fluorescence, laser
     // scanning without angles). When true, the builder omits --angles entirely
     // and sends --exposures from the first entry in angleExposures so the
@@ -186,6 +194,25 @@ public class AcquisitionCommandBuilder {
      */
     public AcquisitionCommandBuilder channelIntensityOverrides(Map<String, Double> overrides) {
         this.channelIntensityOverrides = overrides == null ? Map.of() : overrides;
+        return this;
+    }
+
+    /**
+     * Sets the focus channel id for a multi-channel widefield acquisition.
+     *
+     * <p>The Python server uses this to apply the named channel's hardware
+     * state ({@code mm_setup_presets} + {@code device_properties}) before
+     * the autofocus snap, so AF runs against a representative frame instead
+     * of whatever hardware state the previous tile's last channel left
+     * behind. The Java side has already moved this channel to position 0
+     * in {@code channelExposures} so the first acquired image is also the
+     * AF reference -- no hardware switch between AF and capture.
+     *
+     * @param channelId focus-channel id, or {@code null} to skip the flag
+     * @return this builder instance for method chaining
+     */
+    public AcquisitionCommandBuilder focusChannel(String channelId) {
+        this.focusChannelId = channelId;
         return this;
     }
 
@@ -480,6 +507,24 @@ public class AcquisitionCommandBuilder {
                     "Channel-based acquisition: {} channels, exposures {}",
                     channelExposures.size(),
                     channelExposuresStr);
+
+            // Focus channel: emit only when set AND the named channel is one
+            // of the acquired channels (defensive). Python uses this to apply
+            // the channel's hardware state before the AF snap.
+            if (focusChannelId != null && !focusChannelId.isBlank()) {
+                boolean focusInList = channelExposures.stream()
+                        .anyMatch(ce -> focusChannelId.equals(ce.channelId()));
+                if (focusInList) {
+                    args.add("--focus-channel");
+                    args.add(focusChannelId);
+                    logger.debug("Focus channel: {}", focusChannelId);
+                } else {
+                    logger.warn(
+                            "Focus channel '{}' not in acquired channels {}; omitting --focus-channel flag",
+                            focusChannelId,
+                            channelExposures.stream().map(ChannelExposure::channelId).toList());
+                }
+            }
 
             // Per-channel intensity overrides. Emit only channels that actually
             // appear in the selected acquisition sequence, so the flag stays

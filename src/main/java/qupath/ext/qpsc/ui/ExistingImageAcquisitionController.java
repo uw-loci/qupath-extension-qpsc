@@ -117,6 +117,9 @@ public class ExistingImageAcquisitionController {
             // Per-channel intensity overrides for channel-based widefield modalities
             Map<String, Double> channelIntensityOverrides,
 
+            // Focus channel id for channel-based widefield modalities; null = library order
+            String focusChannelId,
+
             // White balance settings (JAI camera only)
             boolean enableWhiteBalance,
             boolean perAngleWhiteBalance,
@@ -1517,14 +1520,16 @@ public class ExistingImageAcquisitionController {
                     refinement = RefinementChoice.FULL_MANUAL;
                 }
 
-                // Angle / channel-intensity overrides from modality UI
+                // Angle / channel-intensity overrides + focus channel from modality UI
                 // (green box params handled by ExistingAlignmentPath)
                 Map<String, Double> angleOverrides = null;
                 Map<String, Double> channelIntensityOverrides = Map.of();
+                String focusChannelId = null;
                 if (modalityUI != null) {
                     angleOverrides = modalityUI.getAngleOverrides();
                     Map<String, Double> intensityMap = modalityUI.getChannelIntensityOverrides();
                     channelIntensityOverrides = intensityMap == null ? Map.of() : intensityMap;
+                    focusChannelId = modalityUI.getFocusChannelId();
                 }
 
                 // Get white balance settings from ComboBox
@@ -1563,6 +1568,7 @@ public class ExistingImageAcquisitionController {
                         refinement,
                         angleOverrides,
                         channelIntensityOverrides,
+                        focusChannelId,
                         enableWhiteBalance,
                         perAngleWhiteBalance,
                         wbMode);

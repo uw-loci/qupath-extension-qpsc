@@ -42,6 +42,31 @@ public final class ChannelResolutionService {
      */
     public static List<ChannelExposure> resolve(
             String modality, String objective, String detector, Map<String, Double> overrides) {
+        return resolve(modality, objective, detector, overrides, null);
+    }
+
+    /**
+     * Channel-aware resolve overload that also reorders the resulting list so
+     * the caller-specified focus channel is at position 0. The focus channel
+     * is the one autofocus runs against -- by collecting it first per tile we
+     * avoid a second hardware switch between the AF snap and the first
+     * acquired image, and the AF result is always evaluated against a
+     * representative frame for the acquisition.
+     *
+     * <p>If {@code focusChannelId} is {@code null}, blank, or not present in
+     * the resolved channel list, the list is returned in library order
+     * (current behavior). Reordering is non-destructive: it pulls the focus
+     * channel out and inserts it at index 0, preserving the relative order of
+     * the remaining channels.
+     *
+     * @param focusChannelId channel id to move to position 0, or {@code null} for library order
+     */
+    public static List<ChannelExposure> resolve(
+            String modality,
+            String objective,
+            String detector,
+            Map<String, Double> overrides,
+            String focusChannelId) {
         ModalityHandler handler = ModalityRegistry.getHandler(modality);
         if (handler == null) {
             return List.of();
@@ -97,6 +122,33 @@ public final class ChannelResolutionService {
                 }
             }
         }
+
+        // Focus-channel reorder: move the focus channel (if present in the
+        // resolved list) to position 0. Single-channel runs are a no-op
+        // because the focus channel is already at position 0 trivially.
+        if (focusChannelId != null && !focusChannelId.isBlank() && result.size() > 1) {
+            int focusIdx = -1;
+            for (int i = 0; i < result.size(); i++) {
+                if (focusChannelId.equals(result.get(i).channelId())) {
+                    focusIdx = i;
+                    break;
+                }
+            }
+            if (focusIdx > 0) {
+                ChannelExposure focusEntry = result.remove(focusIdx);
+                result.add(0, focusEntry);
+                logger.info(
+                        "Reordered channels so focus channel '{}' is collected first: {}",
+                        focusChannelId,
+                        result.stream().map(ChannelExposure::channelId).toList());
+            } else if (focusIdx < 0) {
+                logger.warn(
+                        "Focus channel '{}' not present in resolved channel list {}; using library order",
+                        focusChannelId,
+                        result.stream().map(ChannelExposure::channelId).toList());
+            }
+        }
+
         logger.debug("Resolved {} channels for modality '{}'", result.size(), modality);
         return List.copyOf(result);
     }

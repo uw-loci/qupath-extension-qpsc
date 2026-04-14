@@ -70,6 +70,7 @@ public class UnifiedAcquisitionController {
             double y2,
             Map<String, Double> angleOverrides,
             Map<String, Double> channelIntensityOverrides,
+            String focusChannelId,
             boolean enableWhiteBalance,
             boolean perAngleWhiteBalance,
             String wbMode) {}
@@ -1490,6 +1491,7 @@ public class UnifiedAcquisitionController {
                 // Get angle / channel overrides if available
                 Map<String, Double> angleOverrides = null;
                 Map<String, Double> channelIntensityOverrides = Map.of();
+                String focusChannelId = null;
                 if (modalityUI != null) {
                     angleOverrides = modalityUI.getAngleOverrides();
                     if (angleOverrides != null) {
@@ -1501,6 +1503,10 @@ public class UnifiedAcquisitionController {
                     }
                     if (!channelIntensityOverrides.isEmpty()) {
                         logger.info("User specified channel intensity overrides: {}", channelIntensityOverrides);
+                    }
+                    focusChannelId = modalityUI.getFocusChannelId();
+                    if (focusChannelId != null) {
+                        logger.info("User specified focus channel: {}", focusChannelId);
                     }
                 }
 
@@ -1538,6 +1544,7 @@ public class UnifiedAcquisitionController {
                         y2,
                         angleOverrides,
                         channelIntensityOverrides,
+                        focusChannelId,
                         enableWhiteBalance,
                         perAngleWhiteBalance,
                         wbMode);

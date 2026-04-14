@@ -507,5 +507,22 @@ public interface ModalityHandler {
         default Map<String, Double> getChannelIntensityOverrides() {
             return Map.of();
         }
+
+        /**
+         * Returns the channel id the user picked as the autofocus reference,
+         * or {@code null} if no per-channel focus selection is meaningful for
+         * this modality. The downstream workflow moves this channel to
+         * position 0 in the per-tile acquisition sequence so the autofocus
+         * snap and the first acquired image share hardware state, avoiding a
+         * second hardware switch between AF and the first acquired image.
+         *
+         * <p>Default returns {@code null} -- single-channel and angle-based
+         * modalities have no choice to make.
+         *
+         * @return focus-channel id, or {@code null} if not channel-based
+         */
+        default String getFocusChannelId() {
+            return null;
+        }
     }
 }

@@ -362,11 +362,12 @@ public class ExistingImageWorkflowV2 {
 
             // Note: Green box params are handled by ExistingAlignmentPath, not stored here
 
-            // Store angle + channel-intensity overrides
+            // Store angle + channel-intensity overrides + focus channel
             state.angleOverrides = config.angleOverrides();
             state.channelIntensityOverrides = config.channelIntensityOverrides() == null
                     ? Map.of()
                     : config.channelIntensityOverrides();
+            state.focusChannelId = config.focusChannelId();
 
             // Store whether this is an existing project
             state.isExistingProject = config.isExistingProject();
@@ -1017,6 +1018,7 @@ public class ExistingImageWorkflowV2 {
         public double pixelSize;
         public Map<String, Double> angleOverrides;
         public Map<String, Double> channelIntensityOverrides = Map.of();
+        public String focusChannelId;
         public PathObject refinementTile;
 
         // V2-specific fields
