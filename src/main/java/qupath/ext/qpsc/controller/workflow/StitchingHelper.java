@@ -191,6 +191,13 @@ public class StitchingHelper {
         // which mirrors the multi-angle isolation flow but using channel ids as the
         // subdirectory names.
         List<String> channelIdsForStitching = resolveChannelIdsForStitching(handler, sample);
+        logger.info(
+                "Stitcher branch selector: modality='{}' objective='{}' -> resolved {} channel(s): {}, angleExposures.size={}",
+                sample.modality(),
+                sample.objective(),
+                channelIdsForStitching.size(),
+                channelIdsForStitching,
+                angleExposures != null ? angleExposures.size() : 0);
         if (!channelIdsForStitching.isEmpty()) {
             return stitchChannelDirectories(
                     annotation,
@@ -785,8 +792,15 @@ public class StitchingHelper {
                     executor);
 
         } else {
-            // Single angle or no rotation angles - simpler case
-            logger.info("Stitching region: {} (single angle)", regionName);
+            // Single pass: one image per tile position. This covers both the
+            // non-rotation modalities (brightfield, fluorescence with no channel
+            // library, laser scanning) AND the degenerate single-angle PPM case.
+            // Channel-based modalities (widefield IF, BF+IF) are already handled
+            // by the stitchChannelDirectories() early-return above, so reaching
+            // this branch with channels declared on the modality means the
+            // channel-library lookup failed -- that's the bug we fixed in
+            // b40c98e, log enough context to catch a regression quickly.
+            logger.info("Stitching region: {} (single pass, no rotation or channel axis)", regionName);
 
             return CompletableFuture.runAsync(
                     () -> {
@@ -832,7 +846,10 @@ public class StitchingHelper {
                                     stitchParams // Pass metadata in parameters
                                     );
 
-                            logger.info("Single-angle stitching completed for {}, output: {}", regionName, outPath);
+                            logger.info(
+                                    "Single-pass stitching completed for {} (no rotation / no channel axis), output: {}",
+                                    regionName,
+                                    outPath);
 
                             // Note: Dialog completion is handled in TileProcessingUtilities after project import
 
