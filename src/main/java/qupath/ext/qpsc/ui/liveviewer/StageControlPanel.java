@@ -25,9 +25,12 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
+import javafx.scene.control.RadioButton;
 import javafx.scene.control.Separator;
 import javafx.scene.control.Slider;
+import javafx.scene.control.Spinner;
 import javafx.scene.control.Tab;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
@@ -1015,7 +1018,24 @@ public class StageControlPanel extends VBox {
         if (!anyPresets) addNoPresetsLabel();
     }
 
-    /** Widefield fluorescence modality: exposure + illumination + profile selector + presets. */
+    /**
+     * Widefield fluorescence (and BF+IF combined) modality: one row per
+     * channel from the YAML channel library, each row exposing a radio to
+     * mark the live-preview channel, an exposure spinner, and an intensity
+     * spinner bound to the channel's {@code intensityProperty}. Falls back
+     * to the single-exposure layout when the modality has no channel
+     * library declared.
+     *
+     * <p>Live preview note: real-time per-channel hardware state changes
+     * (set_config + set_property while live view is streaming) require a
+     * SETPROP / APPLYCHANNEL socket command that does not exist yet in
+     * {@code MicroscopeSocketClient}. Exposure changes DO round-trip
+     * through {@code setExposures}. Intensity changes are persisted
+     * locally via {@code PersistentPreferences.setLastChannelIntensity}
+     * and feed into the next BoundedAcquisition command's
+     * {@code --channel-intensities} flag. This is the Phase D1 scope
+     * compromise; full live control is tracked as a follow-up.
+     */
     private void buildFluorescenceCameraContent(String modality) {
         // Profile selector (for channel switching: bf_20x -> fl_20x, etc.)
         Node profileSelector = buildProfileSelector(modality);
@@ -1023,17 +1043,158 @@ public class StageControlPanel extends VBox {
             cameraModContent.getChildren().addAll(profileSelector, new Separator());
         }
 
-        // Exposure control
-        cameraModContent.getChildren().add(buildExposureControl());
-
-        // Illumination control (epi-LED)
-        Node illumControl = buildIlluminationControl();
-        if (illumControl != null) {
-            cameraModContent.getChildren().addAll(new Separator(), illumControl);
+        // Try the channel library first. If the modality has declared
+        // channels, render one row per channel. Otherwise fall back to
+        // the old single-exposure layout.
+        java.util.List<qupath.ext.qpsc.modality.Channel> channels = java.util.List.of();
+        try {
+            channels = mgr.getModalityChannels(modality);
+        } catch (Exception e) {
+            logger.debug("Could not load channel library for '{}': {}", modality, e.getMessage());
         }
 
-        // Save/Load preset buttons
+        if (!channels.isEmpty()) {
+            Label header = new Label("Per-channel controls");
+            header.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
+            cameraModContent.getChildren().add(header);
+
+            ToggleGroup previewGroup = new ToggleGroup();
+            GridPane grid = new GridPane();
+            grid.setHgap(6);
+            grid.setVgap(4);
+            // Column headers
+            Label prevCol = new Label("Preview");
+            Label idCol = new Label("Channel");
+            Label expCol = new Label("Exp (ms)");
+            Label intCol = new Label("Intensity");
+            for (Label l : new Label[] {prevCol, idCol, expCol, intCol}) {
+                l.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
+            }
+            grid.add(prevCol, 0, 0);
+            grid.add(idCol, 1, 0);
+            grid.add(expCol, 2, 0);
+            grid.add(intCol, 3, 0);
+
+            int row = 1;
+            for (qupath.ext.qpsc.modality.Channel ch : channels) {
+                RadioButton previewRadio = new RadioButton();
+                previewRadio.setToggleGroup(previewGroup);
+                previewRadio.setTooltip(new Tooltip(
+                        "Mark " + ch.displayName() + " as the active preview channel. "
+                                + "Full live preview pending a SETPROP socket command; "
+                                + "today this persists the choice for the next acquisition."));
+
+                Label channelLabel = new Label(ch.displayName() != null ? ch.displayName() : ch.id());
+                channelLabel.setStyle("-fx-font-size: 10px;");
+
+                Spinner<Double> expSpinner = new Spinner<>(0.1, 10000.0, ch.defaultExposureMs(), 1.0);
+                expSpinner.setPrefWidth(80);
+                expSpinner.setEditable(true);
+                expSpinner.getStyleClass().add("split-arrows-horizontal");
+
+                Spinner<Double> intSpinner = new Spinner<>(0.0, 100000.0, resolveChannelIntensity(ch), 1.0);
+                intSpinner.setPrefWidth(80);
+                intSpinner.setEditable(true);
+                intSpinner.getStyleClass().add("split-arrows-horizontal");
+                // Disable intensity spinner if the channel has no intensityProperty.
+                // There's nothing for the spinner to write to in that case.
+                if (ch.intensityProperty() == null) {
+                    intSpinner.setDisable(true);
+                    intSpinner.setTooltip(new Tooltip(
+                            "No intensity_property declared for this channel in the YAML."));
+                }
+
+                // Persist exposure to PersistentPreferences on change; the next
+                // acquisition picks it up via channel_overrides.
+                expSpinner.valueProperty().addListener((obs, oldV, newV) -> {
+                    if (newV == null) return;
+                    try {
+                        // Apply to live view too via setExposures (single-axis).
+                        MicroscopeController.getInstance()
+                                .getSocketClient()
+                                .setExposures(new float[] {newV.floatValue()});
+                        cameraStatusLabel.setText("Channel " + ch.id() + " exposure -> " + newV + " ms");
+                        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                    } catch (Exception ex) {
+                        cameraStatusLabel.setText("Exposure update failed: " + ex.getMessage());
+                        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                    }
+                });
+
+                intSpinner.valueProperty().addListener((obs, oldV, newV) -> {
+                    if (newV == null || ch.intensityProperty() == null) return;
+                    qupath.ext.qpsc.preferences.PersistentPreferences.setLastChannelIntensity(
+                            modality, ch.id(), newV);
+                    cameraStatusLabel.setText("Channel " + ch.id() + " intensity -> " + newV
+                            + " (saved; applied on next acquisition)");
+                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #555555;");
+                });
+
+                previewRadio.setOnAction(e -> {
+                    qupath.ext.qpsc.preferences.PersistentPreferences.setLastFocusChannelId(ch.id());
+                    try {
+                        MicroscopeController.getInstance()
+                                .getSocketClient()
+                                .setExposures(new float[] {expSpinner.getValue().floatValue()});
+                    } catch (Exception ex) {
+                        logger.debug("Could not push exposure for preview channel {}: {}", ch.id(), ex.getMessage());
+                    }
+                    cameraStatusLabel.setText("Preview channel set to " + ch.id());
+                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                });
+
+                grid.add(previewRadio, 0, row);
+                grid.add(channelLabel, 1, row);
+                grid.add(expSpinner, 2, row);
+                grid.add(intSpinner, 3, row);
+                row++;
+            }
+
+            cameraModContent.getChildren().add(grid);
+
+            Label liveNote = new Label(
+                    "Note: intensity changes save to preferences and apply on "
+                            + "the next acquisition. Full live-preview intensity "
+                            + "control needs a SETPROP socket command (pending).");
+            liveNote.setWrapText(true);
+            liveNote.setStyle("-fx-font-size: 9px; -fx-text-fill: gray; -fx-font-style: italic;");
+            cameraModContent.getChildren().addAll(new Separator(), liveNote);
+        } else {
+            // Fallback for profiles without a channel library.
+            cameraModContent.getChildren().add(buildExposureControl());
+
+            Node illumControl = buildIlluminationControl();
+            if (illumControl != null) {
+                cameraModContent.getChildren().addAll(new Separator(), illumControl);
+            }
+        }
+
+        // Save/Load preset buttons (shared across both paths)
         cameraModContent.getChildren().addAll(new Separator(), buildPresetButtons(modality));
+    }
+
+    /**
+     * Resolves the intensity spinner's initial value for a channel: first
+     * try the saved PersistentPreferences entry, then the default value
+     * from the channel's intensityProperty in the YAML, then 0.
+     */
+    private double resolveChannelIntensity(qupath.ext.qpsc.modality.Channel channel) {
+        Double saved = qupath.ext.qpsc.preferences.PersistentPreferences.getLastChannelIntensity(
+                currentCameraModality, channel.id());
+        if (saved != null) return saved;
+        if (channel.intensityProperty() != null) {
+            for (qupath.ext.qpsc.modality.PropertyWrite pw : channel.properties()) {
+                if (pw.device().equals(channel.intensityProperty().device())
+                        && pw.property().equals(channel.intensityProperty().property())) {
+                    try {
+                        return Double.parseDouble(pw.value());
+                    } catch (NumberFormatException ex) {
+                        return 0.0;
+                    }
+                }
+            }
+        }
+        return 0.0;
     }
 
     /** Generic fallback for unknown/future modalities -- basic exposure + illumination + presets. */

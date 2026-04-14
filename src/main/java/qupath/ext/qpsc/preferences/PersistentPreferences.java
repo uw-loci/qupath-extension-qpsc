@@ -471,6 +471,66 @@ public class PersistentPreferences {
         lastAfStrategySaved.setValue(strategyName == null ? "" : strategyName);
     }
 
+    // Per-channel intensity override persisted from the Live Viewer Camera tab.
+    // Stored as a single delimited preference key so we can key by
+    // (modality, channelId) without pre-declaring every combination. The
+    // format is "modality1:channel1=value1;modality1:channel2=value2;..."
+    // which keeps the preference system happy with one StringProperty.
+    private static final StringProperty lastChannelIntensitiesSaved =
+            PathPrefs.createPersistentPreference("LastChannelIntensities", "");
+
+    public static Double getLastChannelIntensity(String modality, String channelId) {
+        if (modality == null || channelId == null) return null;
+        String blob = lastChannelIntensitiesSaved.getValue();
+        if (blob == null || blob.isEmpty()) return null;
+        String needle = modality + ":" + channelId + "=";
+        for (String entry : blob.split(";")) {
+            if (entry.startsWith(needle)) {
+                try {
+                    return Double.parseDouble(entry.substring(needle.length()));
+                } catch (NumberFormatException ex) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    public static void setLastChannelIntensity(String modality, String channelId, double value) {
+        if (modality == null || channelId == null) return;
+        String blob = lastChannelIntensitiesSaved.getValue();
+        if (blob == null) blob = "";
+        String key = modality + ":" + channelId + "=";
+        java.util.List<String> rebuilt = new java.util.ArrayList<>();
+        boolean replaced = false;
+        for (String entry : blob.split(";")) {
+            if (entry.isEmpty()) continue;
+            if (entry.startsWith(key)) {
+                rebuilt.add(key + value);
+                replaced = true;
+            } else {
+                rebuilt.add(entry);
+            }
+        }
+        if (!replaced) rebuilt.add(key + value);
+        lastChannelIntensitiesSaved.setValue(String.join(";", rebuilt));
+    }
+
+    // Last focus channel id (no modality scoping -- single value, the
+    // BoundingBox workflow picks it up via this one key). Used by the
+    // Live Viewer Camera tab's per-channel preview radio.
+    private static final StringProperty lastFocusChannelIdSaved =
+            PathPrefs.createPersistentPreference("LastFocusChannelId", "");
+
+    public static String getLastFocusChannelId() {
+        String v = lastFocusChannelIdSaved.getValue();
+        return (v == null || v.isEmpty()) ? null : v;
+    }
+
+    public static void setLastFocusChannelId(String channelId) {
+        lastFocusChannelIdSaved.setValue(channelId == null ? "" : channelId);
+    }
+
     public static String getLastSampleName() {
         return lastSampleNameSaved.getValue();
     }
