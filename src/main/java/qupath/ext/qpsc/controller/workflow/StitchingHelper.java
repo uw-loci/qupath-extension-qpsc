@@ -200,7 +200,7 @@ public class StitchingHelper {
                 angleExposures != null ? angleExposures.size() : 0);
         if (!channelIdsForStitching.isEmpty()) {
             return stitchChannelDirectories(
-                    annotation,
+                    annotation.getName(),
                     channelIdsForStitching,
                     metadata,
                     operationId,
@@ -593,6 +593,39 @@ public class StitchingHelper {
             logger.warn("Failed to create stitching blocking dialog", e);
         }
         final StitchingBlockingDialog blockingDialog = dialogRef[0];
+
+        // Channel-based modalities (widefield IF, BF+IF) write per-channel tiles
+        // into per-channel subdirectories named after the channel id. Detect this
+        // by asking the handler for its channel library; if non-empty, take the
+        // channel branch which mirrors the multi-angle isolation flow but using
+        // channel ids as the subdirectory names. This is the SAME detection that
+        // performAnnotationStitching does -- both bounded-region and annotation
+        // workflows converge here once their tiles are on disk.
+        List<String> channelIdsForStitching = resolveChannelIdsForStitching(handler, sample);
+        logger.info(
+                "Stitcher branch selector (region): modality='{}' objective='{}' -> resolved {} channel(s): {}, angleExposures.size={}",
+                sample != null ? sample.modality() : null,
+                sample != null ? sample.objective() : null,
+                channelIdsForStitching.size(),
+                channelIdsForStitching,
+                angleExposures != null ? angleExposures.size() : 0);
+        if (!channelIdsForStitching.isEmpty()) {
+            return stitchChannelDirectories(
+                    regionName,
+                    channelIdsForStitching,
+                    metadata,
+                    operationId,
+                    blockingDialog,
+                    null, // performRegionStitching has no DualProgressDialog
+                    sampleName,
+                    projectsFolder,
+                    modeWithIndex,
+                    pixelSize,
+                    gui,
+                    project,
+                    executor,
+                    handler);
+        }
 
         if (angleExposures != null && angleExposures.size() > 1) {
             logger.info("Stitching {} angles for region: {}", angleExposures.size(), regionName);
@@ -1011,7 +1044,7 @@ public class StitchingHelper {
      * (future work) is expected to merge these into a single multichannel image.
      */
     private static CompletableFuture<Void> stitchChannelDirectories(
-            PathObject annotation,
+            String annotationName,
             List<String> channelIds,
             StitchingMetadata metadata,
             String operationId,
@@ -1027,12 +1060,11 @@ public class StitchingHelper {
             ModalityHandler handler) {
 
         logger.info(
-                "Stitching {} channels for annotation: {}", channelIds.size(), annotation.getName());
+                "Stitching {} channels for: {}", channelIds.size(), annotationName);
 
         return CompletableFuture.runAsync(
                 () -> {
                     try {
-                        String annotationName = annotation.getName();
                         if (blockingDialog != null) {
                             blockingDialog.updateStatus(
                                     operationId,
@@ -1165,7 +1197,7 @@ public class StitchingHelper {
                             dualProgressDialog.completeStitchingOperation(operationId);
                         }
                     } catch (Exception e) {
-                        logger.error("Channel stitching failed for {}", annotation.getName(), e);
+                        logger.error("Channel stitching failed for {}", annotationName, e);
                         if (blockingDialog != null) {
                             blockingDialog.failOperation(operationId, e.getMessage());
                         }
@@ -1176,7 +1208,7 @@ public class StitchingHelper {
                             Platform.runLater(() -> UIFunctions.notifyUserOfError(
                                     String.format(
                                             "Channel stitching failed for %s: %s",
-                                            annotation.getName(),
+                                            annotationName,
                                             e.getMessage()),
                                     "Stitching Error"));
                         }
