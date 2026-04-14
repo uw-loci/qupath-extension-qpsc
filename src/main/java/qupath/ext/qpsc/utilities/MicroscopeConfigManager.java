@@ -2541,6 +2541,65 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * Returns the autofocus strategy bound to a given modality in the v2
+     * {@code autofocus_<scope>.yml} schema, or {@code null} if the YAML is v1,
+     * the file is missing, or the modality has no binding. Used by the
+     * acquisition dialog's Advanced panel to pre-select the AF strategy
+     * dropdown to whatever the YAML says for the selected modality.
+     *
+     * <p>Modality lookup uses the same longest-prefix-wins, case-insensitive
+     * matching as the Python-side v2 loader, so {@code Fluorescence_10x} maps
+     * to the {@code fluorescence} binding (or {@code fl} if that prefix is
+     * the longer match).
+     *
+     * @param modality the modality key (profile name or base modality name)
+     * @return strategy name from the binding (e.g. {@code sparse_signal}),
+     *         or {@code null} when unavailable
+     */
+    @SuppressWarnings("unchecked")
+    public String getAutofocusStrategyForModality(String modality) {
+        if (modality == null || modality.isBlank() || configPath == null) return null;
+        File configFile = new File(configPath);
+        if (!configFile.exists()) return null;
+        File configDir = configFile.getParentFile();
+        String microscopeName = extractMicroscopeName(configFile.getName());
+        File autofocusFile = new File(configDir, "autofocus_" + microscopeName + ".yml");
+        if (!autofocusFile.exists()) return null;
+        try {
+            Yaml yaml = new Yaml();
+            Map<String, Object> data = yaml.load(Files.newInputStream(autofocusFile.toPath()));
+            if (data == null) return null;
+            Object schemaVersionObj = data.get("schema_version");
+            int schemaVersion = (schemaVersionObj instanceof Number)
+                    ? ((Number) schemaVersionObj).intValue()
+                    : 1;
+            if (schemaVersion < 2) return null;
+            Object modalitiesObj = data.get("modalities");
+            if (!(modalitiesObj instanceof Map)) return null;
+            Map<String, Object> modalityBindings = (Map<String, Object>) modalitiesObj;
+            String modalityLower = modality.toLowerCase();
+            String bestMatchKey = null;
+            int bestLen = 0;
+            for (String key : modalityBindings.keySet()) {
+                String keyLower = key.toLowerCase();
+                if (modalityLower.startsWith(keyLower) && keyLower.length() > bestLen) {
+                    bestMatchKey = key;
+                    bestLen = keyLower.length();
+                }
+            }
+            if (bestMatchKey == null) return null;
+            Object bindingObj = modalityBindings.get(bestMatchKey);
+            if (!(bindingObj instanceof Map)) return null;
+            Map<String, Object> binding = (Map<String, Object>) bindingObj;
+            Object strategy = binding.get("strategy");
+            return strategy == null ? null : strategy.toString();
+        } catch (Exception e) {
+            logger.debug("Could not read AF strategy binding for modality '{}': {}", modality, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Copies all loaded microscope configuration files into a
      * {@code microscope_configurations/} subdirectory of the given project directory.
      * <p>

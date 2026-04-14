@@ -457,6 +457,20 @@ public class PersistentPreferences {
 
     private static final StringProperty lastDetectorSaved = PathPrefs.createPersistentPreference("LastDetector", "");
 
+    // Autofocus strategy override dropdown. Empty string = "use YAML default".
+    // Saved values are the protocol strategy names (dense_texture, sparse_signal,
+    // dark_field, manual_only); the dropdown display strings are translated
+    // separately in the dialog.
+    private static final StringProperty lastAfStrategySaved = PathPrefs.createPersistentPreference("LastAfStrategy", "");
+
+    public static String getLastAfStrategy() {
+        return lastAfStrategySaved.getValue();
+    }
+
+    public static void setLastAfStrategy(final String strategyName) {
+        lastAfStrategySaved.setValue(strategyName == null ? "" : strategyName);
+    }
+
     public static String getLastSampleName() {
         return lastSampleNameSaved.getValue();
     }

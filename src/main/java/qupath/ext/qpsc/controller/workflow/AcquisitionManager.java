@@ -732,6 +732,10 @@ public class AcquisitionManager {
                 // "no preference" and produces no CLI flag.
                 config.commandBuilder().focusChannel(state.focusChannelId);
 
+                // Autofocus strategy override (from Advanced panel dropdown).
+                // Null means "use YAML default" and produces no CLI flag.
+                config.commandBuilder().afStrategy(state.afStrategy);
+
                 logger.info("Acquisition parameters for {}:", annotation.getName());
                 logger.info("  Config: {}", configFileLocation);
                 logger.info("  Sample: {}", actualSampleName);

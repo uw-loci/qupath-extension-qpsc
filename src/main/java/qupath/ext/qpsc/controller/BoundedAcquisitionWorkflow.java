@@ -382,6 +382,10 @@ public class BoundedAcquisitionWorkflow {
                                 // "no preference" and produces no CLI flag.
                                 config.commandBuilder().focusChannel(result.focusChannelId());
 
+                                // Autofocus strategy override (from Advanced panel dropdown).
+                                // Null means "use YAML default" and produces no CLI flag.
+                                config.commandBuilder().afStrategy(result.afStrategy());
+
                                 logger.info(
                                         "Starting acquisition - Sample: {}, Mode: {}, Angles: {}, wbMode: {}",
                                         result.sampleName(),

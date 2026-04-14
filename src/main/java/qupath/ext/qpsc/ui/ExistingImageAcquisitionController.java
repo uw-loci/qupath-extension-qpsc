@@ -120,6 +120,10 @@ public class ExistingImageAcquisitionController {
             // Focus channel id for channel-based widefield modalities; null = library order
             String focusChannelId,
 
+            // Autofocus strategy override (dense_texture / sparse_signal / dark_field /
+            // manual_only); null = use autofocus_<scope>.yml per-modality binding
+            String afStrategy,
+
             // White balance settings (JAI camera only)
             boolean enableWhiteBalance,
             boolean perAngleWhiteBalance,
@@ -208,6 +212,7 @@ public class ExistingImageAcquisitionController {
         private ModalityHandler.BoundingBoxUI modalityUI;
         private TitledPane modalityPane;
         private VBox modalityContent;
+        private ComboBox<String> afStrategyCombo;
 
         // UI Components - White Balance Section (JAI camera only)
         private VBox whiteBalanceSection;
@@ -491,6 +496,7 @@ public class ExistingImageAcquisitionController {
                 if (newVal != null) {
                     updateObjectivesForModality(newVal);
                     updateModalityUI(newVal);
+                    updateAfStrategyDefaultForModality(newVal);
                 }
             });
 
@@ -732,6 +738,20 @@ public class ExistingImageAcquisitionController {
 
             // WB combo already created in createWbModeCombo()
 
+            // Autofocus strategy override dropdown (Mike's decision #2: give
+            // users a GUI entry point to pick the strategy without editing YAML).
+            afStrategyCombo = new ComboBox<>();
+            afStrategyCombo.getItems().addAll(AfStrategyChoice.displayOrder());
+            afStrategyCombo.setValue(
+                    AfStrategyChoice.protocolToDisplay(PersistentPreferences.getLastAfStrategy()));
+            afStrategyCombo.setTooltip(new Tooltip(AfStrategyChoice.TOOLTIP));
+            GridPane afGrid = new GridPane();
+            afGrid.setHgap(10);
+            afGrid.setVgap(5);
+            afGrid.setPadding(new Insets(5));
+            afGrid.add(new Label("Autofocus:"), 0, 0);
+            afGrid.add(afStrategyCombo, 1, 0);
+
             // Modality-specific options (will be populated by updateModalityUI)
             modalityContent = new VBox(5);
             Label modalityPlaceholder = new Label("Select a modality to see specific options.");
@@ -741,7 +761,7 @@ public class ExistingImageAcquisitionController {
             modalityPane = new TitledPane("Modality Options", modalityContent);
             modalityPane.setExpanded(false);
 
-            content.getChildren().addAll(modalityPane);
+            content.getChildren().addAll(afGrid, new Separator(), modalityPane);
 
             advancedPane = new TitledPane("ADVANCED OPTIONS", content);
             advancedPane.setExpanded(false);
@@ -931,6 +951,35 @@ public class ExistingImageAcquisitionController {
 
             if (!restored && !detectorDisplayItems.isEmpty()) {
                 detectorBox.setValue(detectorDisplayItems.get(0));
+            }
+        }
+
+        /**
+         * Mirrors UnifiedAcquisitionController.updateAfStrategyDefaultForModality:
+         * rewrites the "Default (from config)" item label to show the resolved
+         * strategy binding for the current modality. See that method's docstring.
+         */
+        private void updateAfStrategyDefaultForModality(String modality) {
+            if (afStrategyCombo == null) return;
+            String boundStrategy = configManager.getAutofocusStrategyForModality(modality);
+            String defaultLabel = boundStrategy != null && !boundStrategy.isBlank()
+                    ? AfStrategyChoice.DEFAULT_DISPLAY + " -> " + boundStrategy
+                    : AfStrategyChoice.DEFAULT_DISPLAY;
+            int defaultIdx = -1;
+            for (int i = 0; i < afStrategyCombo.getItems().size(); i++) {
+                String item = afStrategyCombo.getItems().get(i);
+                if (item != null && item.startsWith(AfStrategyChoice.DEFAULT_DISPLAY)) {
+                    defaultIdx = i;
+                    break;
+                }
+            }
+            if (defaultIdx < 0) return;
+            String currentValue = afStrategyCombo.getValue();
+            boolean wasOnDefault = currentValue != null
+                    && currentValue.startsWith(AfStrategyChoice.DEFAULT_DISPLAY);
+            afStrategyCombo.getItems().set(defaultIdx, defaultLabel);
+            if (wasOnDefault) {
+                afStrategyCombo.setValue(defaultLabel);
             }
         }
 
@@ -1532,6 +1581,15 @@ public class ExistingImageAcquisitionController {
                     focusChannelId = modalityUI.getFocusChannelId();
                 }
 
+                // Autofocus strategy override: display -> protocol name.
+                // Null means "use YAML per-modality binding".
+                String afStrategyProtocol = AfStrategyChoice.displayToProtocol(
+                        afStrategyCombo != null ? afStrategyCombo.getValue() : AfStrategyChoice.DEFAULT_DISPLAY);
+                PersistentPreferences.setLastAfStrategy(afStrategyProtocol);
+                if (afStrategyProtocol != null) {
+                    logger.info("User selected AF strategy override: {}", afStrategyProtocol);
+                }
+
                 // Get white balance settings from ComboBox
                 String wbModeDisplay = wbModeComboBox != null ? wbModeComboBox.getValue() : "Per-angle (PPM)";
                 String wbMode = WbMode.fromDisplayName(wbModeDisplay).getProtocolName();
@@ -1569,6 +1627,7 @@ public class ExistingImageAcquisitionController {
                         angleOverrides,
                         channelIntensityOverrides,
                         focusChannelId,
+                        afStrategyProtocol,
                         enableWhiteBalance,
                         perAngleWhiteBalance,
                         wbMode);

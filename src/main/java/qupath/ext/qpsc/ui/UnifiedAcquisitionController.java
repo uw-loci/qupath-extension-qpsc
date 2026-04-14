@@ -71,6 +71,7 @@ public class UnifiedAcquisitionController {
             Map<String, Double> angleOverrides,
             Map<String, Double> channelIntensityOverrides,
             String focusChannelId,
+            String afStrategy,
             boolean enableWhiteBalance,
             boolean perAngleWhiteBalance,
             String wbMode) {}
@@ -157,6 +158,7 @@ public class UnifiedAcquisitionController {
         // UI Components - Advanced Section Content
         private VBox advancedContent;
         private VBox modalityContentBox;
+        private ComboBox<String> afStrategyCombo;
 
         // UI Components - Validation
         private VBox errorSummaryPanel;
@@ -439,6 +441,7 @@ public class UnifiedAcquisitionController {
                 if (newVal != null) {
                     updateObjectivesForModality(newVal);
                     updateModalityUI(newVal);
+                    updateAfStrategyDefaultForModality(newVal);
                 }
             });
 
@@ -851,13 +854,31 @@ public class UnifiedAcquisitionController {
 
             // WB combo already created in createWbModeCombo()
 
+            // === AUTOFOCUS STRATEGY OVERRIDE ===
+            // Lets the user override the per-modality strategy declared in
+            // autofocus_<scope>.yml for this one acquisition. "Default" uses
+            // the YAML binding (the C2 per-modality preselect will set the
+            // initial value to match the YAML binding). The other values emit
+            // the --af-strategy CLI flag which the Python v2 loader respects.
+            afStrategyCombo = new ComboBox<>();
+            afStrategyCombo.getItems().addAll(AfStrategyChoice.displayOrder());
+            afStrategyCombo.setValue(
+                    AfStrategyChoice.protocolToDisplay(PersistentPreferences.getLastAfStrategy()));
+            afStrategyCombo.setTooltip(new Tooltip(AfStrategyChoice.TOOLTIP));
+            GridPane afGrid = new GridPane();
+            afGrid.setHgap(10);
+            afGrid.setVgap(5);
+            afGrid.setPadding(new Insets(5));
+            afGrid.add(new Label("Autofocus:"), 0, 0);
+            afGrid.add(afStrategyCombo, 1, 0);
+
             // === MODALITY-SPECIFIC SECTION ===
             modalityContentBox = new VBox(5);
             Label placeholder = new Label("Modality-specific options will appear here when a modality is selected.");
             placeholder.setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
             modalityContentBox.getChildren().add(placeholder);
 
-            advancedContent.getChildren().addAll(modalityContentBox);
+            advancedContent.getChildren().addAll(afGrid, new Separator(), modalityContentBox);
 
             advancedPane = new TitledPane("ADVANCED OPTIONS", advancedContent);
             advancedPane.setExpanded(false); // Collapsed by default
@@ -1057,6 +1078,37 @@ public class UnifiedAcquisitionController {
 
             // Update white balance visibility based on current detector and modality
             updateWhiteBalanceVisibility();
+        }
+
+        /**
+         * Updates the "Default (from config)" item's label to show which
+         * strategy the v2 YAML binding picks for the current modality. The
+         * item still maps to {@code null} so the CLI emits no --af-strategy
+         * flag; the label is a hint to the user, nothing more. Called when
+         * the modality dropdown changes.
+         */
+        private void updateAfStrategyDefaultForModality(String modality) {
+            if (afStrategyCombo == null) return;
+            String boundStrategy = configManager.getAutofocusStrategyForModality(modality);
+            String defaultLabel = boundStrategy != null && !boundStrategy.isBlank()
+                    ? AfStrategyChoice.DEFAULT_DISPLAY + " -> " + boundStrategy
+                    : AfStrategyChoice.DEFAULT_DISPLAY;
+            int defaultIdx = -1;
+            for (int i = 0; i < afStrategyCombo.getItems().size(); i++) {
+                String item = afStrategyCombo.getItems().get(i);
+                if (item != null && item.startsWith(AfStrategyChoice.DEFAULT_DISPLAY)) {
+                    defaultIdx = i;
+                    break;
+                }
+            }
+            if (defaultIdx < 0) return;
+            String currentValue = afStrategyCombo.getValue();
+            boolean wasOnDefault = currentValue != null
+                    && currentValue.startsWith(AfStrategyChoice.DEFAULT_DISPLAY);
+            afStrategyCombo.getItems().set(defaultIdx, defaultLabel);
+            if (wasOnDefault) {
+                afStrategyCombo.setValue(defaultLabel);
+            }
         }
 
         /**
@@ -1488,6 +1540,16 @@ public class UnifiedAcquisitionController {
                 PersistentPreferences.setLastDetector(detector);
                 PersistentPreferences.setBoundingBoxString(String.format("%.2f,%.2f,%.2f,%.2f", x1, y1, x2, y2));
 
+                // Autofocus strategy override: display -> protocol name.
+                // Default (null) means "use YAML per-modality binding" and
+                // produces no --af-strategy CLI flag.
+                String afStrategyProtocol = AfStrategyChoice.displayToProtocol(
+                        afStrategyCombo != null ? afStrategyCombo.getValue() : AfStrategyChoice.DEFAULT_DISPLAY);
+                PersistentPreferences.setLastAfStrategy(afStrategyProtocol);
+                if (afStrategyProtocol != null) {
+                    logger.info("User selected AF strategy override: {}", afStrategyProtocol);
+                }
+
                 // Get angle / channel overrides if available
                 Map<String, Double> angleOverrides = null;
                 Map<String, Double> channelIntensityOverrides = Map.of();
@@ -1545,6 +1607,7 @@ public class UnifiedAcquisitionController {
                         angleOverrides,
                         channelIntensityOverrides,
                         focusChannelId,
+                        afStrategyProtocol,
                         enableWhiteBalance,
                         perAngleWhiteBalance,
                         wbMode);

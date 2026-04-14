@@ -58,6 +58,12 @@ public class AcquisitionCommandBuilder {
     // Python single-image path can apply it. Rotation angles are not sent.
     private boolean nonRotation = false;
 
+    // Optional autofocus strategy override. When set, the Python server's v2
+    // YAML loader picks this strategy name instead of whatever the per-modality
+    // binding in autofocus_<scope>.yml declared. Emitted as --af-strategy. Null
+    // means "use the YAML default" (the on-dialog "Default (from config)" option).
+    private String afStrategy;
+
     // Background correction parameters
     private boolean backgroundCorrectionEnabled = false;
     private String backgroundCorrectionMethod;
@@ -213,6 +219,25 @@ public class AcquisitionCommandBuilder {
      */
     public AcquisitionCommandBuilder focusChannel(String channelId) {
         this.focusChannelId = channelId;
+        return this;
+    }
+
+    /**
+     * Sets the autofocus strategy override for this acquisition. When non-null,
+     * the Python server's v2 YAML loader uses this strategy name instead of
+     * the per-modality binding from {@code autofocus_<scope>.yml}.
+     *
+     * <p>Valid values match the keys in the YAML {@code strategies:} library
+     * (typically {@code dense_texture}, {@code sparse_signal}, {@code dark_field},
+     * {@code manual_only}) or any custom strategy declared in the library.
+     * Unknown strategies fall back to {@code dense_texture} with a warning
+     * in the server log.
+     *
+     * @param strategyName strategy library key, or {@code null} to use the YAML default
+     * @return this builder instance for method chaining
+     */
+    public AcquisitionCommandBuilder afStrategy(String strategyName) {
+        this.afStrategy = strategyName;
         return this;
     }
 
@@ -544,6 +569,14 @@ public class AcquisitionCommandBuilder {
                     logger.debug("Channel intensity overrides: {}", intensityStr);
                 }
             }
+        }
+
+        // Autofocus strategy override. Emitted regardless of channel vs angle
+        // path so the Python v2 loader picks it up on both modality kinds.
+        if (afStrategy != null && !afStrategy.isBlank()) {
+            args.add("--af-strategy");
+            args.add(afStrategy);
+            logger.debug("Autofocus strategy override: {}", afStrategy);
         }
 
         // Add angle/exposure parameters (skipped when channel-based)
