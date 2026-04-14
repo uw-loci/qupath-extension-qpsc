@@ -86,7 +86,7 @@ public class SaturationSummaryDialog {
 
         Label summary = new Label(summaryText != null ? summaryText : "");
         summary.setWrapText(true);
-        summary.setMaxWidth(550);
+        summary.setMaxWidth(Double.MAX_VALUE);
         summary.setStyle("-fx-font-size: 12px;");
 
         Label instruction =
