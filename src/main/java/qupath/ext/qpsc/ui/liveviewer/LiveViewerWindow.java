@@ -1231,7 +1231,7 @@ public class LiveViewerWindow {
                         // user can't miss it -- the old tooltip-only path
                         // was invisible unless the user hovered, and users
                         // reported missing the explanation entirely.
-                        smoothFocusButton.setText("Unavailable");
+                        smoothFocusButton.setText("NO FOCUS");
                         smoothFocusButton.setStyle("-fx-font-size: 11; -fx-base: #FF9800;");
                         smoothFocusButton.setTooltip(new Tooltip(msg + "\nFall back to Sweep Focus."));
                         smoothFocusButton.setDisable(!liveActive);
@@ -1241,7 +1241,7 @@ public class LiveViewerWindow {
                         if (reason.startsWith("Smooth Focus unavailable: ")) {
                             reason = reason.substring("Smooth Focus unavailable: ".length());
                         }
-                        Dialogs.showInfoNotification("Smooth Focus unavailable", reason);
+                        Dialogs.showInfoNotification("Smooth Focus: no focus found", reason);
                     } else if (outcome == RefineFocusController.Outcome.ERROR) {
                         smoothFocusButton.setText("FAILED");
                         smoothFocusButton.setStyle("-fx-font-size: 11; -fx-base: #F44336;");
