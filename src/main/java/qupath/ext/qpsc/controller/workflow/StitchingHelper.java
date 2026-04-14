@@ -154,16 +154,115 @@ public class StitchingHelper {
             DualProgressDialog dualProgressDialog,
             ProjectImageEntry<BufferedImage> parentEntry) {
 
-        // Calculate metadata for this annotation
         // Use sample.sampleName() for file naming (source image name), not sampleName (project folder name)
-        // The sampleName parameter is the project folder name, used for path construction
-        // sample.sampleName() is the user-entered name (defaulted to source image file name)
         String displayName = sample.sampleName();
         StitchingMetadata metadata =
                 calculateMetadata(annotation, displayName, gui, project, fullResToStage, parentEntry);
+        return performStitchingInternal(
+                annotation.getName(),
+                sample,
+                metadata,
+                modeWithIndex,
+                angleExposures,
+                pixelSize,
+                gui,
+                project,
+                executor,
+                handler,
+                sampleName,
+                projectsFolder,
+                dualProgressDialog);
+    }
+
+    /**
+     * Performs stitching for a region identified by name (for BoundedAcquisitionWorkflow).
+     * This is used when there's no actual PathObject annotation, just a region name like "bounds".
+     *
+     * @param regionName The name of the region (e.g., "bounds" for BoundedAcquisitionWorkflow)
+     * @param sample Sample setup information
+     * @param modeWithIndex Imaging mode with index suffix
+     * @param angleExposures Rotation angles with exposure settings (empty for single acquisition)
+     * @param pixelSize Pixel size in micrometers
+     * @param gui QuPath GUI instance
+     * @param project QuPath project to update
+     * @param executor Executor service for async execution
+     * @param handler Modality handler for file naming
+     * @param sampleName The actual sample folder name (from ProjectInfo, may differ from sample.sampleName())
+     * @param projectsFolder The actual projects folder path (from ProjectInfo, may differ from sample.projectsFolder())
+     * @return CompletableFuture that completes when all stitching is done
+     */
+    public static CompletableFuture<Void> performRegionStitching(
+            String regionName,
+            SampleSetupResult sample,
+            String modeWithIndex,
+            List<AngleExposure> angleExposures,
+            double pixelSize,
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            ExecutorService executor,
+            ModalityHandler handler,
+            String sampleName,
+            String projectsFolder) {
+
+        // Use user-entered sample name for display/naming, not the project folder name.
+        String displayName = (sample != null
+                        && sample.sampleName() != null
+                        && !sample.sampleName().isEmpty())
+                ? sample.sampleName()
+                : sampleName;
+        StitchingMetadata metadata = calculateMetadataForRegion(regionName, displayName, gui, project);
+        return performStitchingInternal(
+                regionName,
+                sample,
+                metadata,
+                modeWithIndex,
+                angleExposures,
+                pixelSize,
+                gui,
+                project,
+                executor,
+                handler,
+                sampleName,
+                projectsFolder,
+                null);
+    }
+
+    /**
+     * Shared implementation backing both {@link #performAnnotationStitching} and
+     * {@link #performRegionStitching}. Dispatches between three branches based on
+     * the modality's axis shape:
+     *
+     * <ol>
+     *   <li>channel-based (widefield IF, BF+IF) -> {@link #stitchChannelDirectories}</li>
+     *   <li>multi-angle (PPM and similar) -> per-angle directory isolation loop,
+     *       parallel for OME-ZARR (independent chunks) and sequential for OME-TIFF
+     *       (BioFormats TiffWriter concurrency bug)</li>
+     *   <li>single-pass (brightfield, fluorescence without channel library, single-angle
+     *       PPM degenerate case) -> direct call to {@link TileProcessingUtilities#stitchImagesAndUpdateProject}</li>
+     * </ol>
+     *
+     * <p>Callers pre-compute {@link StitchingMetadata} and pass it in along with an
+     * opaque {@code targetName} (annotation name for the annotation path, region name
+     * for the bounded-region path). The rest of the pipeline is identical across
+     * both callers.
+     */
+    private static CompletableFuture<Void> performStitchingInternal(
+            String targetName,
+            SampleSetupResult sample,
+            StitchingMetadata metadata,
+            String modeWithIndex,
+            List<AngleExposure> angleExposures,
+            double pixelSize,
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            ExecutorService executor,
+            ModalityHandler handler,
+            String sampleName,
+            String projectsFolder,
+            DualProgressDialog dualProgressDialog) {
 
         // Create blocking dialog on JavaFX thread before starting stitching
-        final String operationId = sampleName + " - " + annotation.getName();
+        final String operationId = sampleName + " - " + targetName;
         final StitchingBlockingDialog[] dialogRef = {null};
         final CountDownLatch dialogLatch = new CountDownLatch(1);
         try {
@@ -195,14 +294,14 @@ public class StitchingHelper {
         List<String> channelIdsForStitching = resolveChannelIdsForStitching(handler, sample);
         logger.info(
                 "Stitcher branch selector: modality='{}' objective='{}' -> resolved {} channel(s): {}, angleExposures.size={}",
-                sample.modality(),
-                sample.objective(),
+                sample != null ? sample.modality() : null,
+                sample != null ? sample.objective() : null,
                 channelIdsForStitching.size(),
                 channelIdsForStitching,
                 angleExposures != null ? angleExposures.size() : 0);
         if (!channelIdsForStitching.isEmpty()) {
             return stitchChannelDirectories(
-                    annotation.getName(),
+                    targetName,
                     channelIdsForStitching,
                     metadata,
                     operationId,
@@ -220,13 +319,13 @@ public class StitchingHelper {
         }
 
         if (angleExposures != null && angleExposures.size() > 1) {
-            logger.info("Stitching {} angles for annotation: {}", angleExposures.size(), annotation.getName());
+            logger.info("Stitching {} angles for target: {}", angleExposures.size(), targetName);
 
             // For multi-angle acquisitions, do ONE batch stitch with "." as matching string
             return CompletableFuture.runAsync(
                     () -> {
                         try {
-                            String annotationName = annotation.getName();
+                            String annotationName = targetName;
 
                             if (blockingDialog != null) {
                                 blockingDialog.updateStatus(
@@ -429,7 +528,7 @@ public class StitchingHelper {
                             }
 
                         } catch (Exception e) {
-                            logger.error("Stitching failed for {}", annotation.getName(), e);
+                            logger.error("Stitching failed for {}", targetName, e);
 
                             // Mark operation as failed
                             if (blockingDialog != null) {
@@ -442,7 +541,7 @@ public class StitchingHelper {
                             if (blockingDialog == null) {
                                 Platform.runLater(() -> UIFunctions.notifyUserOfError(
                                         String.format(
-                                                "Stitching failed for %s: %s", annotation.getName(), e.getMessage()),
+                                                "Stitching failed for %s: %s", targetName, e.getMessage()),
                                         "Stitching Error"));
                             }
                         }
@@ -453,7 +552,7 @@ public class StitchingHelper {
             return CompletableFuture.runAsync(
                     () -> {
                         try {
-                            String annotationName = annotation.getName();
+                            String annotationName = targetName;
 
                             if (blockingDialog != null) {
                                 blockingDialog.updateStatus(
@@ -471,9 +570,15 @@ public class StitchingHelper {
 
                             String compression = String.valueOf(QPPreferenceDialog.getCompressionTypeProperty());
 
-                            // Create enhanced parameters map
+                            // Create enhanced parameters map. Pass blockingDialog/operationId so
+                            // TileProcessingUtilities can complete the dialog itself after project
+                            // import, which is the correct point to close it -- otherwise the
+                            // dialog stays up through the async import and the user sees a stale
+                            // "processing..." message.
                             Map<String, Object> stitchParams = new HashMap<>();
                             stitchParams.put("metadata", metadata);
+                            stitchParams.put("blockingDialog", blockingDialog);
+                            stitchParams.put("operationId", operationId);
 
                             if (blockingDialog != null) {
                                 blockingDialog.updateStatus(
@@ -515,7 +620,7 @@ public class StitchingHelper {
                             }
 
                         } catch (Exception e) {
-                            logger.error("Stitching failed for {}", annotation.getName(), e);
+                            logger.error("Stitching failed for {}", targetName, e);
 
                             // Mark operation as failed
                             if (blockingDialog != null) {
@@ -528,7 +633,7 @@ public class StitchingHelper {
                             if (blockingDialog == null) {
                                 Platform.runLater(() -> UIFunctions.notifyUserOfError(
                                         String.format(
-                                                "Stitching failed for %s: %s", annotation.getName(), e.getMessage()),
+                                                "Stitching failed for %s: %s", targetName, e.getMessage()),
                                         "Stitching Error"));
                             }
                         }
@@ -537,370 +642,6 @@ public class StitchingHelper {
         }
     }
 
-    /**
-     * Performs stitching for a region identified by name (for BoundedAcquisitionWorkflow).
-     * This is used when there's no actual PathObject annotation, just a region name like "bounds".
-     *
-     * @param regionName The name of the region (e.g., "bounds" for BoundedAcquisitionWorkflow)
-     * @param sample Sample setup information
-     * @param modeWithIndex Imaging mode with index suffix
-     * @param angleExposures Rotation angles with exposure settings (empty for single acquisition)
-     * @param pixelSize Pixel size in micrometers
-     * @param gui QuPath GUI instance
-     * @param project QuPath project to update
-     * @param executor Executor service for async execution
-     * @param handler Modality handler for file naming
-     * @param sampleName The actual sample folder name (from ProjectInfo, may differ from sample.sampleName())
-     * @param projectsFolder The actual projects folder path (from ProjectInfo, may differ from sample.projectsFolder())
-     * @return CompletableFuture that completes when all stitching is done
-     */
-    public static CompletableFuture<Void> performRegionStitching(
-            String regionName,
-            SampleSetupResult sample,
-            String modeWithIndex,
-            List<AngleExposure> angleExposures,
-            double pixelSize,
-            QuPathGUI gui,
-            Project<BufferedImage> project,
-            ExecutorService executor,
-            ModalityHandler handler,
-            String sampleName,
-            String projectsFolder) {
-
-        // Use user-entered sample name for display/naming, not the project folder name.
-        // sampleName = project folder (for paths), sample.sampleName() = user-entered (for display).
-        String displayName = (sample != null
-                        && sample.sampleName() != null
-                        && !sample.sampleName().isEmpty())
-                ? sample.sampleName()
-                : sampleName;
-        StitchingMetadata metadata = calculateMetadataForRegion(regionName, displayName, gui, project);
-
-        // Create blocking dialog on JavaFX thread before starting stitching
-        final String operationId = sampleName + " - " + regionName;
-        final StitchingBlockingDialog[] dialogRef = {null};
-        final CountDownLatch dialogLatch = new CountDownLatch(1);
-        try {
-            Platform.runLater(() -> {
-                try {
-                    dialogRef[0] = StitchingBlockingDialog.show(operationId, operationId);
-                } finally {
-                    dialogLatch.countDown();
-                }
-            });
-            // Wait for dialog creation to complete (max 5 seconds)
-            if (!dialogLatch.await(5, TimeUnit.SECONDS)) {
-                logger.warn("Timeout waiting for stitching blocking dialog creation");
-            }
-        } catch (Exception e) {
-            logger.warn("Failed to create stitching blocking dialog", e);
-        }
-        final StitchingBlockingDialog blockingDialog = dialogRef[0];
-
-        // Channel-based modalities (widefield IF, BF+IF) write per-channel tiles
-        // into per-channel subdirectories named after the channel id. Detect this
-        // by asking the handler for its channel library; if non-empty, take the
-        // channel branch which mirrors the multi-angle isolation flow but using
-        // channel ids as the subdirectory names. This is the SAME detection that
-        // performAnnotationStitching does -- both bounded-region and annotation
-        // workflows converge here once their tiles are on disk.
-        List<String> channelIdsForStitching = resolveChannelIdsForStitching(handler, sample);
-        logger.info(
-                "Stitcher branch selector (region): modality='{}' objective='{}' -> resolved {} channel(s): {}, angleExposures.size={}",
-                sample != null ? sample.modality() : null,
-                sample != null ? sample.objective() : null,
-                channelIdsForStitching.size(),
-                channelIdsForStitching,
-                angleExposures != null ? angleExposures.size() : 0);
-        if (!channelIdsForStitching.isEmpty()) {
-            return stitchChannelDirectories(
-                    regionName,
-                    channelIdsForStitching,
-                    metadata,
-                    operationId,
-                    blockingDialog,
-                    null, // performRegionStitching has no DualProgressDialog
-                    sampleName,
-                    projectsFolder,
-                    modeWithIndex,
-                    pixelSize,
-                    gui,
-                    project,
-                    executor,
-                    handler,
-                    sample != null ? sample.modality() : null);
-        }
-
-        if (angleExposures != null && angleExposures.size() > 1) {
-            logger.info("Stitching {} angles for region: {}", angleExposures.size(), regionName);
-
-            // For multi-angle acquisitions, do ONE batch stitch with "." as matching string
-            return CompletableFuture.runAsync(
-                    () -> {
-                        try {
-                            if (blockingDialog != null) {
-                                blockingDialog.updateStatus(
-                                        operationId, "Initializing multi-angle stitching for " + regionName + "...");
-                            }
-
-                            logger.info(
-                                    "Performing batch stitching for {} with {} angles",
-                                    regionName,
-                                    angleExposures.size());
-                            logger.info(
-                                    "Metadata - offset: ({}, {}) um, flipX: {}, flipY: {}, parent: {}",
-                                    metadata.xOffset,
-                                    metadata.yOffset,
-                                    metadata.flipX,
-                                    metadata.flipY,
-                                    metadata.parentEntry != null ? metadata.parentEntry.getImageName() : "none");
-
-                            // Get standard stitching configuration
-                            StitchingConfiguration.StitchingParams stitchingConfig =
-                                    StitchingConfiguration.getStandardConfiguration();
-                            String compression = stitchingConfig.compressionType();
-
-                            // Create enhanced parameters map for UtilityFunctions
-                            // NOTE: For multi-angle acquisitions, do NOT pass blockingDialog to individual angle
-                            // processing calls to prevent premature dialog closure. Dialog will be completed
-                            // manually after all angles/biref/sum are processed.
-                            Map<String, Object> stitchParams = new HashMap<>();
-                            stitchParams.put("metadata", metadata);
-                            // Do NOT include blockingDialog or operationId for multi-angle case
-
-                            if (blockingDialog != null) {
-                                blockingDialog.updateStatus(
-                                        operationId,
-                                        "Processing " + angleExposures.size() + " angles for " + regionName + "...");
-                            }
-
-                            // Process each angle individually using directory isolation to prevent cross-matching
-                            logger.info(
-                                    "Processing {} angle directories using isolation approach", angleExposures.size());
-
-                            List<String> stitchedImages = new ArrayList<>();
-                            Path tileBaseDir = Paths.get(projectsFolder, sampleName, modeWithIndex, regionName);
-
-                            logger.info(
-                                    "Starting multi-angle processing for {} angles in directory: {}",
-                                    angleExposures.size(),
-                                    tileBaseDir);
-
-                            // Log initial directory state
-                            try {
-                                if (Files.exists(tileBaseDir)) {
-                                    long dirCount = Files.list(tileBaseDir)
-                                            .filter(Files::isDirectory)
-                                            .count();
-                                    logger.info("Initial tile base directory contains {} subdirectories", dirCount);
-                                    logger.debug("Subdirectories:");
-                                    Files.list(tileBaseDir)
-                                            .filter(Files::isDirectory)
-                                            .forEach(path -> logger.debug("  - {}", path.getFileName()));
-                                } else {
-                                    logger.warn("Tile base directory does not exist: {}", tileBaseDir);
-                                }
-                            } catch (IOException e) {
-                                logger.warn("Could not list initial tile base directory: {}", e.getMessage());
-                            }
-
-                            for (int i = 0; i < angleExposures.size(); i++) {
-                                AngleExposure angleExposure = angleExposures.get(i);
-                                String angleStr = String.valueOf(angleExposure.ticks());
-                                logger.info(
-                                        "Processing angle {} of {} - angle directory: {}",
-                                        i + 1,
-                                        angleExposures.size(),
-                                        angleStr);
-
-                                if (blockingDialog != null) {
-                                    blockingDialog.updateStatus(
-                                            operationId,
-                                            "Processing angle " + angleStr + " (" + (i + 1) + "/"
-                                                    + angleExposures.size() + ") for " + regionName + "...");
-                                }
-
-                                try {
-                                    // Temporarily isolate this angle directory for processing
-                                    logger.info("Starting isolation processing for angle: {}", angleStr);
-                                    String outPath = processAngleWithIsolation(
-                                            tileBaseDir,
-                                            angleStr,
-                                            projectsFolder,
-                                            sampleName,
-                                            modeWithIndex,
-                                            regionName,
-                                            compression,
-                                            pixelSize,
-                                            stitchingConfig.downsampleFactor(),
-                                            gui,
-                                            project,
-                                            handler,
-                                            stitchParams);
-
-                                    if (outPath != null) {
-                                        stitchedImages.add(outPath);
-                                        logger.info(
-                                                "Successfully processed angle {} ({}/{}) - output: {}",
-                                                angleStr,
-                                                i + 1,
-                                                angleExposures.size(),
-                                                outPath);
-                                    } else {
-                                        logger.error(
-                                                "Angle processing returned null output path for angle: {}", angleStr);
-                                    }
-                                } catch (Exception e) {
-                                    logger.error(
-                                            "Failed to stitch angle {} ({}/{}): {}",
-                                            angleStr,
-                                            i + 1,
-                                            angleExposures.size(),
-                                            e.getMessage(),
-                                            e);
-                                    // Continue with next angle rather than failing completely
-                                }
-
-                                // Log directory state after each angle
-                                try {
-                                    if (Files.exists(tileBaseDir)) {
-                                        long dirCount = Files.list(tileBaseDir)
-                                                .filter(Files::isDirectory)
-                                                .count();
-                                        logger.debug(
-                                                "Directory contains {} subdirectories after processing angle {}",
-                                                dirCount,
-                                                angleStr);
-                                        Files.list(tileBaseDir)
-                                                .filter(Files::isDirectory)
-                                                .forEach(path -> logger.debug("  - {}", path.getFileName()));
-                                    }
-                                } catch (IOException e) {
-                                    logger.warn(
-                                            "Could not list directory after processing angle {}: {}",
-                                            angleStr,
-                                            e.getMessage());
-                                }
-                            }
-
-                            logger.info(
-                                    "Completed processing {} angles. Successfully stitched {} images.",
-                                    angleExposures.size(),
-                                    stitchedImages.size());
-
-                            // Process modality-specific post-processing directories (e.g., biref, sum)
-                            processPostProcessingDirectories(
-                                    handler,
-                                    tileBaseDir,
-                                    regionName,
-                                    projectsFolder,
-                                    sampleName,
-                                    modeWithIndex,
-                                    compression,
-                                    pixelSize,
-                                    stitchingConfig.downsampleFactor(),
-                                    gui,
-                                    project,
-                                    stitchParams,
-                                    blockingDialog,
-                                    operationId,
-                                    stitchedImages);
-
-                            // Return path of last successfully processed image
-                            String outPath =
-                                    stitchedImages.isEmpty() ? null : stitchedImages.get(stitchedImages.size() - 1);
-
-                            logger.info("Batch stitching completed for {}, output: {}", regionName, outPath);
-
-                            // Complete the blocking dialog now that ALL angles/post-processing are done
-                            if (blockingDialog != null) {
-                                logger.info("Completing stitching dialog operation after all images processed");
-                                blockingDialog.completeOperation(operationId);
-                            }
-
-                        } catch (Exception e) {
-                            logger.error("Multi-angle stitching failed for region {}", regionName, e);
-                            if (blockingDialog != null) {
-                                blockingDialog.failOperation(operationId, e.getMessage());
-                            }
-                            throw new RuntimeException(e);
-                        }
-                    },
-                    executor);
-
-        } else {
-            // Single pass: one image per tile position. This covers both the
-            // non-rotation modalities (brightfield, fluorescence with no channel
-            // library, laser scanning) AND the degenerate single-angle PPM case.
-            // Channel-based modalities (widefield IF, BF+IF) are already handled
-            // by the stitchChannelDirectories() early-return above, so reaching
-            // this branch with channels declared on the modality means the
-            // channel-library lookup failed -- that's the bug we fixed in
-            // b40c98e, log enough context to catch a regression quickly.
-            logger.info("Stitching region: {} (single pass, no rotation or channel axis)", regionName);
-
-            return CompletableFuture.runAsync(
-                    () -> {
-                        try {
-                            if (blockingDialog != null) {
-                                blockingDialog.updateStatus(operationId, "Stitching " + regionName + "...");
-                            }
-
-                            logger.info(
-                                    "Metadata - offset: ({}, {}) um, flipX: {}, flipY: {}, parent: {}",
-                                    metadata.xOffset,
-                                    metadata.yOffset,
-                                    metadata.flipX,
-                                    metadata.flipY,
-                                    metadata.parentEntry != null ? metadata.parentEntry.getImageName() : "none");
-
-                            // Get standard stitching configuration
-                            StitchingConfiguration.StitchingParams stitchingConfig =
-                                    StitchingConfiguration.getStandardConfiguration();
-                            String compression = stitchingConfig.compressionType();
-
-                            // Create enhanced parameters map for UtilityFunctions
-                            Map<String, Object> stitchParams = new HashMap<>();
-                            stitchParams.put("metadata", metadata);
-                            stitchParams.put("blockingDialog", blockingDialog);
-                            stitchParams.put("operationId", operationId);
-
-                            // For single angle, use the region name as the matching pattern
-                            String matchingPattern = regionName;
-
-                            String outPath = TileProcessingUtilities.stitchImagesAndUpdateProject(
-                                    projectsFolder,
-                                    sampleName,
-                                    modeWithIndex,
-                                    regionName,
-                                    matchingPattern,
-                                    gui,
-                                    project,
-                                    compression,
-                                    pixelSize,
-                                    stitchingConfig.downsampleFactor(),
-                                    handler,
-                                    stitchParams // Pass metadata in parameters
-                                    );
-
-                            logger.info(
-                                    "Single-pass stitching completed for {} (no rotation / no channel axis), output: {}",
-                                    regionName,
-                                    outPath);
-
-                            // Note: Dialog completion is handled in TileProcessingUtilities after project import
-
-                        } catch (Exception e) {
-                            logger.error("Single-angle stitching failed for region {}", regionName, e);
-                            if (blockingDialog != null) {
-                                blockingDialog.failOperation(operationId, e.getMessage());
-                            }
-                            throw new RuntimeException(e);
-                        }
-                    },
-                    executor);
-        }
-    }
 
     /**
      * Calculates metadata for a region-based acquisition (BoundedAcquisitionWorkflow).
