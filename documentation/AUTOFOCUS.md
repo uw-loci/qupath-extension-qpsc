@@ -2,6 +2,8 @@
 
 QPSC uses a multi-layer autofocus system that keeps images in sharp focus during tiled acquisitions. This page explains how the system works, when each mode is used, and how to configure it. For hands-on configuration, see the [Autofocus Editor](tools/autofocus-editor.md) and [Autofocus Benchmark](tools/autofocus-benchmark.md) tool guides.
 
+The autofocus system is in the middle of a rollout from a single fixed gate (tissue texture + area) to a **modality-aware strategy library** so that sparse fluorescence, dark-field / SHG, and brightfield runs can each use a validity gate appropriate for their contrast. See [Modality-Aware Autofocus](#modality-aware-autofocus) for the schema, strategy list, and current partial-rollout status.
+
 ---
 
 ## Overview
@@ -104,6 +106,68 @@ After the first tissue position uses standard AF, subsequent positions use a fas
 
 The sweep is designed for corrections of 1-5um, not for finding focus from scratch.
 
+**Speed note (2026-04-14):** The internal Z-wait path in `microscope_control/hardware/stage.py` now uses a tight `device_busy` poll instead of `wait_for_device`. On the Prior ProScan this cut the blocking round-trip for a 20 um move from ~240 ms to ~80 ms (~3x) with no behavioral change. Per-sweep savings are ~900 ms across a 6-step check, which adds up to ~11 minutes across a 750-sweep acquisition. Other stages see smaller but still positive gains.
+
+---
+
+## Smooth Focus (Live Viewer, experimental)
+
+**Smooth Focus** is a streaming-based continuous-Z autofocus accessed from the [Live Viewer](tools/live-viewer.md) as a button alongside **Sweep Focus** and **Refine Focus**. It was added in 2026-04-14 and is currently in the A/B-validation phase -- both Sweep and Smooth remain visible in the toolbar so the two can be compared on the same tissue.
+
+Unlike the stepped Sweep Drift Check above, Smooth Focus does not stop and snap at each Z position. Instead it:
+
+1. Drops the stage speed property (`MaxSpeed` on Prior, `Velocity` on ASI/Marzhauser, etc.) to a slow value
+2. Starts the camera in continuous sequence acquisition
+3. Fires a **non-blocking** Z move across the scan range
+4. Pops every frame from the circular buffer as it arrives, recording `(t_ms, z_at_pop, metric)` per frame
+5. Parabolic-fits the (z, metric) curve
+6. Commits the peak Z with a blocking move
+7. Restores the stage speed property
+
+On PPM at the production 0.73 ms exposure, a 6 um Smooth scan completes in ~1 second and delivers ~25-30 usable (z, metric) samples -- far denser than the stepped sweep could produce in the same time.
+
+### Feasibility envelope
+
+Smooth Focus is **opt-in with a graceful fallback**. Before running, the server checks three gates and returns `UNAVAILABLE` with a specific reason if any fail:
+
+| Gate | What it checks | Typical failure |
+|---|---|---|
+| Stage speed property | `MaxSpeed`, `Velocity`, `Speed`, or `MaxVelocity` exists and is writable on the focus device | Piezo stages without a velocity knob; demo adapters |
+| **Motion blur budget** | `expected_blur = min_velocity * exposure_ms` must be within 25% of DOF (~0.5 um default) | Long exposures on slow stages -- e.g., above ~43 ms on Prior at MaxSpeed=1 |
+| Saturation | Fewer than 5% of pixels saturated in a pre-scan snap | Camera overexposed -- metric would not discriminate |
+
+When Smooth returns UNAVAILABLE, the Live Viewer shows the button in orange with a tooltip explaining the reason. The user is expected to click **Sweep Focus** instead. UNAVAILABLE is informational, not an error.
+
+### When it helps
+
+- **Tilted samples** where the current sweep window is marginal but a wider range would be prohibitively slow stepped
+- **Short exposures** (<=20 ms at 20X-ish blur budget on a Prior): blur is negligible and sample density is high
+- **Testing / iteration on focus workflows** -- the Live Viewer button lets you A/B against Sweep Focus on real tissue
+
+### When to stick with Sweep Focus
+
+- **Long-exposure modalities** (dark fluorescence, low-angle PPM): Smooth's blur budget is dominated by exposure, and above the per-stage ceiling it will refuse
+- **Slow/fast-readout cameras where `snap_image` is competitive with streaming**: Smooth's advantage disappears (and Sweep is already 3-4x faster thanks to the busy-poll wait)
+- **First-AF-from-scratch situations**: Smooth is designed as a drift check, not a full search. Use Standard Autofocus or Refine Focus for recovery.
+
+### Configuration
+
+Smooth Focus reads `sweep_range_um` from `autofocus_<scope>.yml` per objective. There is no separate `smooth_range_um` field -- Smooth and the stepped Sweep Drift Check share the same range knob. Change it in the [Autofocus Configuration Editor](tools/autofocus-editor.md) and both paths use the new value.
+
+### How the server picks an objective
+
+The Live Viewer button does not currently pass an objective identifier, so the server resolves it in a 3-tier lookup:
+
+1. Client-provided `--objective` (not used from the Live Viewer yet; used by TESTAF-style commands)
+2. **Pixel-size auto-match**: query `core.get_pixel_size_um()` and find the objective in `config.hardware.objectives` whose `pixel_size_xy_um[*]` is within 0.01 um
+3. First entry in `autofocus_<scope>.yml` with a warning
+
+If your rig's MM pixel size is not wired up, the Autofocus Editor still lets you configure the per-objective values, but Smooth will fall back to the yaml's first entry.
+
+### Characterization
+
+The feasibility envelope for a new rig can be measured with the **PROBEZ** diagnostic probe. See [developer/PROBEZ.md](developer/PROBEZ.md) for the detailed guide. PROBEZ is also the right first diagnostic if Smooth is returning UNAVAILABLE unexpectedly on a working rig -- its Step 0 property snapshot and Step 5 metric-stability sweeps show exactly which gate is failing and why.
+
 ---
 
 ## Z-Focus Tilt Prediction
@@ -137,6 +201,96 @@ When autofocus fails (both primary and fallback metrics), the system can request
 - The server sends keepalive pings every 30 seconds while waiting
 
 This can be disabled with the **"No Manual Autofocus"** preference (Extensions > QP Scope > Preferences), in which case failures automatically use the current Z position.
+
+---
+
+## Modality-Aware Autofocus
+
+**Status: PARTIAL -- 2026-04-14.** The strategies module is loaded and logged at acquisition start, and the selected strategy object is built and available on the acquisition context, but the AF call sites at `workflow.py:2767` and `:3121` still invoke the legacy `has_sufficient_signal` gate directly. The behavior change -- routing those call sites through the strategy's `is_valid` / `score` / `failure_mode` hooks -- lands in a follow-up commit. Until then, modality-aware autofocus is plumbed end-to-end (schema, loader, logging, strategy selection) but does **not** yet change runtime behavior. See `claude-reports/2026-04-13_modality-aware-autofocus-design.md` for the full design and decision log.
+
+### Why
+
+The existing autofocus validity gate (`has_sufficient_tissue`) assumed H&E-style contrast: enough textured pixels covering enough of the FOV. That works for brightfield H&E, IHC, PPM, and confluent IF, but it's the wrong gate for:
+
+- **Sparse fluorescence** (beads, pollen, scattered cells, FISH spots) -- mostly dark background with a handful of bright spots, fails the area gate, triggers the "dim image -> double exposure" safety loop, and eventually saturates perfectly good samples.
+- **Dark-field / SHG / LSM** -- ~black background with localized gradient energy, fails both the texture and area gates.
+- **Manual-only modalities** -- the user wants the focus dialog every time, regardless of image content.
+
+### Schema (v2)
+
+The new YAML schema is opt-in via a top-level `schema_version` field in `autofocus_<scope>.yml`. Setting `schema_version: 2` enables the strategies library and modality bindings; omitting it (or setting `1`) preserves the exact legacy flat-loader behavior. Existing configs continue to work unchanged.
+
+```yaml
+schema_version: 2
+
+# Legacy per-objective hardware rows still live here as before:
+objectives:
+  LOCI_OBJECTIVE_OLYMPUS_10X_001:
+    search_range_um: 100
+    n_steps: 25
+    score_metric: normalized_variance
+    # ... existing parameters ...
+
+# New: named strategies library
+strategies:
+  dense_texture:
+    validity: { kind: texture_area, texture_threshold: 0.012, tissue_area_threshold: 0.15 }
+    score:    { kind: laplacian_variance }
+    failure_mode: DEFER
+  sparse_signal:
+    validity: { kind: bright_spot_count, min_spots: 3, k_mad: 4.0 }
+    brightness_check: dynamic_range   # NOT median floor -- do not saturate dark bg
+    score:
+      kind: laplacian_variance_on_spots
+      fallback: brenner_gradient
+    failure_mode: PROCEED
+  dark_field:
+    validity: { kind: fov_gradient_energy, min_energy: 0.01 }
+    score: { kind: brenner_gradient }
+    failure_mode: PROCEED
+  manual_only:
+    validity: { kind: always_invalid }
+    failure_mode: MANUAL_DIALOG
+
+# New: per-modality bindings
+modalities:
+  bf:          { strategy: dense_texture }
+  ppm:         { strategy: dense_texture, mask_range: [0.10, 0.90] }
+  fl:          { strategy: sparse_signal }
+  fluorescence: { strategy: sparse_signal }
+  bf_if:       { strategy: dense_texture }
+  lsm:         { strategy: dark_field }
+  shg:         { strategy: dark_field }
+  '2p':        { strategy: dark_field }
+  confocal:    { strategy: dark_field }
+```
+
+### The Four Strategies
+
+| Strategy | Validity Gate | Score Metric | Failure Mode | Target Modalities |
+|----------|---------------|--------------|--------------|-------------------|
+| `dense_texture` | Texture threshold + tissue area fraction (current behavior) | `laplacian_variance` | `DEFER` (skip tile, try next) | H&E, IHC, PPM, confluent IF, BF channel of BF+IF |
+| `sparse_signal` | Bright-spot count using `bg_median + k*MAD` threshold (no area requirement) | `laplacian_variance` on the spot ROIs, fallback `brenner_gradient` | `PROCEED` (run AF anyway on whatever signal is present) | Sparse fluorescence (beads, pollen, scattered cells, FISH spots) |
+| `dark_field` | Whole-FOV gradient energy above a minimum | `brenner_gradient` | `PROCEED` | SHG, LSM, 2P, confocal, dark-field contrast |
+| `manual_only` | Always returns invalid | -- | `MANUAL_DIALOG` (always pop the manual focus dialog) | User-requested manual focus |
+
+Two design choices deserve special mention:
+
+- **`sparse_signal` uses a dynamic-range brightness check, not a median floor.** The legacy `has_sufficient_tissue` gate used median brightness as a proxy for "is this image dark enough to need more exposure?", which caused the autofocus exposure-doubling safety loop to fire on dark-background samples with legitimate bright spots -- and then saturate the spots that would have focused perfectly well. Replacing the median floor with a dynamic-range test (peak minus background) makes the check signal-aware instead of average-aware.
+- **Failure modes are per-strategy.** `DEFER` (skip the tile, advance to the next candidate) is correct for dense samples where any given tile might legitimately land on a hole in tissue. `PROCEED` (run the focus search on whatever signal we have) is correct for sparse and dark-field samples where the next tile is not guaranteed to be any better than this one.
+
+### Focus-Channel Interaction
+
+For channel-based modalities (widefield IF, BF+IF), the user picks which channel autofocus runs against via the "Focus" radio-button column in the channel picker (see [CHANNELS.md](CHANNELS.md#focus-channel-radio-new----2026-04-13)). That choice has two effects:
+
+1. The picked channel is **the AF reference**. The strategy's validity gate and score metric evaluate against an image acquired with that channel's hardware state (filter, LED, exposure, any per-run intensity override from the picker).
+2. The picked channel is **moved to position 0** in the per-tile acquisition sequence. The AF snap and the first real image for each tile therefore share hardware state, avoiding a filter-wheel toggle between focus and the first channel.
+
+This pairing is what makes sparse-signal autofocus practical: the user can point AF at the brightest channel (e.g. DAPI on nuclei) without paying a filter-turret penalty, and the rest of the channels are collected immediately afterward from the same Z.
+
+### Naming: `has_sufficient_tissue` -> `has_sufficient_signal`
+
+The legacy validity predicate has been renamed from `has_sufficient_tissue` to `has_sufficient_signal` to reflect the fact that it now also covers fluorescence and dark-field contrast where "tissue" was never really the right word. A thin compatibility shim keeps the old name callable and logs a one-time deprecation `INFO` message on first call, so existing scripts and configs continue to work during the transition.
 
 ---
 

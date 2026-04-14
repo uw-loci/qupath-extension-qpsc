@@ -26,6 +26,26 @@ Real-time camera feed with integrated stage control, histogram, and noise statis
 
 Double-click on the camera image to center the stage at that position.
 
+### Focus Controls Toolbar
+
+Three buttons above the live image, all of which are enabled only when Live mode is ON:
+
+| Button | What it does | When to use |
+|---|---|---|
+| **Refine Focus** | Small-range hill-climbing refinement. Assumes you are already close to focus and makes sub-micron corrections. | Fine-tuning after you are almost in focus. |
+| **Sweep Focus** | Stepped-Z autofocus. Moves Z point by point, snaps at each step, fits a parabola. Works on any camera and any stage. | First-pass autofocus, or as a fallback when Smooth Focus is not available. |
+| **Smooth Focus** | Streaming-based continuous-Z autofocus. Drops the stage speed property, fires a non-blocking move across the scan range, and pops every frame while the stage moves. ~1 second on PPM at 0.73 ms exposure. | Fast drift checks on rigs where Smooth is feasible. See the feasibility gates below. |
+
+The **Auto / 1um / 2um / 5um / 10um / 20um** dropdown selects the search range for Refine Focus. Sweep Focus and Smooth Focus both read their scan range from `sweep_range_um` in `autofocus_<scope>.yml` via the [Autofocus Configuration Editor](autofocus-editor.md), not from this dropdown.
+
+**Smooth Focus feasibility gates.** Smooth is opt-in and will refuse to run with a specific reason if any of these checks fail. When it refuses, the button shows **Unavailable** in orange with a tooltip explaining why -- fall back to Sweep Focus.
+
+- **Stage speed property**: focus device must expose `MaxSpeed`, `Velocity`, `Speed`, or `MaxVelocity`. Piezo stages and demo adapters typically do not.
+- **Motion blur budget**: `min_velocity * exposure` must stay under ~0.5 um (25% of a nominal 20X DOF). On a Prior at MaxSpeed=1 (~11.5 um/s), the per-stage exposure ceiling is ~43 ms. Longer exposures (dark fluorescence, low-angle PPM) will refuse.
+- **Saturation**: fewer than 5% of pixels in a pre-scan snap may be saturated, or the focus metric will not discriminate.
+
+See [AUTOFOCUS.md](../AUTOFOCUS.md#smooth-focus-live-viewer-experimental) for the full design story and [developer/PROBEZ.md](../developer/PROBEZ.md) for how to characterize the envelope on a new rig.
+
 ### Histogram Panel
 
 | Option | Type | Description |

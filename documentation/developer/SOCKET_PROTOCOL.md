@@ -175,6 +175,65 @@ ENDOFSTR
 | SBCALIB | `sbcalib_` | params + ENDOFSTR | calibration result |
 | WBSIMPLE | `wbsimple` | params + ENDOFSTR | WB result |
 | WBPPM | `wbppm___` | params + ENDOFSTR | WB result |
+| PROBEZ | `probez__` | none | `PROBEZOK` or `PROBEZFL` (logs to server_session) |
+| SMOOTHZ | `smoothz_` | `--yaml <path> [--objective <id>] [--range <um>] ENDOFSTR` | `SUCCESS:<i>:<f>:<shift>:<n>:<span>` / `UNAVAILABLE:<reason>` / `FAILED:<reason>` |
+
+#### PROBEZ
+
+One-shot Z-stage diagnostic probe. No payload. Runs a snapshot of
+the focus device's property table, move-timing tests, a MaxSpeed
+sensitivity sweep, a streaming-during-motion test, and a
+per-exposure metric-stability sweep. Every log line is tagged
+`PROBEZ [step-N]:` for easy filtering. Two CSVs per run are
+written to the same `logs/` directory as the session log:
+`probez_metric_range6_*.csv` and `probez_metric_range12_*.csv`.
+
+State restoration: all writable properties on the focus device
+are snapshotted at entry and restored in a `finally` block,
+including Z position and camera exposure.
+
+Intended as diagnostic tooling for new-rig onboarding and for
+debugging `SMOOTHZ` UNAVAILABLE responses. See
+[developer/PROBEZ.md](PROBEZ.md) for the detailed guide and
+`handlers/probez.py` for the implementation.
+
+Response: `PROBEZOK` on normal completion (~30-60 seconds),
+`PROBEZFL` if a safety check failed (sequence already running,
+server not configured, etc.).
+
+#### SMOOTHZ
+
+Streaming-based continuous-Z autofocus scan. Used by the Live
+Viewer's **Smooth Focus** button as a drop-in replacement for
+stepped Sweep Drift Check on calibrated hardware.
+
+Payload flags (text, terminated by `ENDOFSTR`):
+
+| Flag | Required | Description |
+|---|---|---|
+| `--yaml <path>` | yes | Path to the active `config_<scope>.yml` |
+| `--objective <id>` | no | Caller's preferred objective (e.g. `LOCI_OBJECTIVE_OLYMPUS_20X_POL_001`). If missing, the server auto-resolves via pixel-size match against `config.hardware.objectives`. |
+| `--range <um>` | no | Override of `sweep_range_um` from the yaml. |
+
+Server-side sequence:
+
+1. Resolve objective (client-provided > pixel-size match > yaml first entry).
+2. Load `sweep_range_um` for the objective.
+3. Pre-flight: motion blur budget and saturation checks; fail with `UNAVAILABLE` if either refuses.
+4. Seed-move to `z_start` at full speed; drop speed property to slow for the scan motion; start continuous sequence acquisition; fire non-blocking move to `z_end`; pop every frame with `(t_ms, z_at_pop, metric)`; parabolic-fit peak; commit final Z.
+5. Always restore speed property in `finally`.
+
+Response formats:
+
+- `SUCCESS:<initial_z>:<final_z>:<shift>:<n_samples>:<z_span>`
+  -- scan completed and committed a new focus
+- `UNAVAILABLE:<reason>` -- a pre-flight check refused to run;
+  caller should fall back to stepped Sweep Focus (this is
+  informational, not an error)
+- `FAILED:<reason>` -- mid-scan error; stage state has been
+  restored but no new focus was committed
+
+See `handlers/smooth.py` and `claude-reports/2026-04-14_smooth-focus-design-and-probez-tooling.md` for the design rationale and PPM characterization results.
 
 ### System
 
