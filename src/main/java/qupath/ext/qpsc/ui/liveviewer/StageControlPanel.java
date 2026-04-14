@@ -259,6 +259,33 @@ public class StageControlPanel extends VBox {
             return null;
         };
 
+        // Input validation filter for signed-decimal stage positions
+        // (X, Y, Z, R). Allows empty string and the partial states a
+        // user types on the way to a complete number: '-', '.', '-.',
+        // '-1', '-1.', '-1.2'. Rejects any character that isn't a
+        // digit, minus, or dot, and rejects any invalid placement
+        // (extra minus, extra dot) by feeding the candidate text
+        // through a regex that only matches well-formed partials.
+        // Fixes a bug where typing a letter into the Z field
+        // corrupted the field and blocked subsequent stage moves
+        // until the user manually cleared and re-entered a value.
+        UnaryOperator<TextFormatter.Change> signedDecimalFilter = change -> {
+            String newText = change.getControlNewText();
+            if (newText.isEmpty()) {
+                return change;
+            }
+            // Allow signed decimal in progress -- minus only at start,
+            // at most one dot, digits anywhere else.
+            if (newText.matches("-?\\d*\\.?\\d*")) {
+                return change;
+            }
+            return null;
+        };
+        xField.setTextFormatter(new TextFormatter<>(signedDecimalFilter));
+        yField.setTextFormatter(new TextFormatter<>(signedDecimalFilter));
+        zField.setTextFormatter(new TextFormatter<>(signedDecimalFilter));
+        rField.setTextFormatter(new TextFormatter<>(signedDecimalFilter));
+
         // Initialize step size field from preferences
         xyStepField = new TextField(PersistentPreferences.getStageControlStepSize());
         xyStepField.setPrefWidth(70);

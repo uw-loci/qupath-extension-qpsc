@@ -1169,6 +1169,21 @@ public class LiveViewerWindow {
         // accurate enough for the Smooth use case.
         String objective = null;
 
+        // Read the focus range dropdown value. "Auto" -> NaN -> server
+        // uses sweep_range_um from the yaml. Any explicit "Num_um" value
+        // overrides. This gives the user a quick way to widen the scan
+        // window when they suspect they are far from focus (the default
+        // sweep_range_um=6 is tuned for small drift corrections, not
+        // initial acquisition from scratch).
+        double smoothRangeOverride = Double.NaN;
+        String rangeSelection = focusRangeCombo.getValue();
+        if (rangeSelection != null && rangeSelection.endsWith("um")) {
+            try {
+                smoothRangeOverride = Double.parseDouble(rangeSelection.replace("um", ""));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+
         smoothFocusButton.setText("Scanning...");
         smoothFocusButton.setStyle("");
         smoothFocusButton.setDisable(true);
@@ -1216,8 +1231,9 @@ public class LiveViewerWindow {
             });
         };
 
+        final double rangeOverride = smoothRangeOverride;
         Thread smoothThread = new Thread(() ->
-                smoothFocusController.execute(objectiveParam, Double.NaN, callback));
+                smoothFocusController.execute(objectiveParam, rangeOverride, callback));
         smoothThread.setDaemon(true);
         smoothThread.setName("LiveViewer-SmoothFocus");
         smoothThread.start();
