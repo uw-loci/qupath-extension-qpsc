@@ -1384,7 +1384,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
      *       pixel-size auto-match, else yaml first entry)</li>
      *   <li>Reads {@code sweep_range_um} for that objective from
      *       {@code autofocus_<scope>.yml}</li>
-     *   <li>Runs pre-flight feasibility checks (blur budget, saturation)</li>
+     *   <li>Runs pre-flight feasibility checks (blur budget, saturation).
+     *       The saturation threshold is modality-aware: brightfield tolerates
+     *       ~30% saturation, PPM ~5%, fluorescence ~2%, laser-scanning ~1%.
+     *       Pass the modality explicitly for the correct check; missing
+     *       modality falls back to the PPM/unknown default (5%).</li>
      *   <li>Seeds to z_start at full speed, drops stage speed property to the
      *       slow value, starts continuous sequence acquisition, fires a non-
      *       blocking move to z_end, pops every frame + Z reading during motion,
@@ -1401,6 +1405,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
      *                  ({@code config_<scope>.yml}). Required.
      * @param objective Objective identifier (e.g. {@code LOCI_OBJECTIVE_OLYMPUS_20X_POL_001})
      *                  or null to let the server auto-detect via pixel-size match.
+     * @param modality  Active imaging modality (e.g. {@code "brightfield"},
+     *                  {@code "ppm"}, {@code "fluorescence"}, {@code "laser_scanning"})
+     *                  or null to use the conservative default saturation threshold.
      * @param rangeOverrideUm Optional override of the yaml's {@code sweep_range_um};
      *                         pass NaN or a non-positive value to use the yaml.
      * @return {@link SmoothFocusResult} describing the outcome; never null.
@@ -1408,6 +1415,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      *                     smooth-focus rejection -- those return UNAVAILABLE).
      */
     public SmoothFocusResult smoothFocus(String yamlPath, String objective,
+                                          String modality,
                                           double rangeOverrideUm) throws IOException {
         if (yamlPath == null || yamlPath.isEmpty()) {
             throw new IllegalArgumentException("yamlPath is required for smoothFocus");
@@ -1417,6 +1425,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         msgBuilder.append("--yaml ").append(yamlPath);
         if (objective != null && !objective.isEmpty()) {
             msgBuilder.append(" --objective ").append(objective);
+        }
+        if (modality != null && !modality.isEmpty()) {
+            msgBuilder.append(" --modality ").append(modality);
         }
         if (!Double.isNaN(rangeOverrideUm) && rangeOverrideUm > 0) {
             msgBuilder.append(" --range ").append(rangeOverrideUm);

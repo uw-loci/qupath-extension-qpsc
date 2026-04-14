@@ -66,11 +66,20 @@ public class SmoothFocusController {
      *
      * @param objective    Objective identifier from the caller's context, or
      *                     null to let the server auto-detect via pixel size.
+     * @param modality     Active imaging modality (e.g. "brightfield", "ppm",
+     *                     "fluorescence", "laser_scanning") or null. Used by
+     *                     the server to pick a modality-appropriate saturation
+     *                     refusal threshold -- fluorescence and LSM need much
+     *                     stricter thresholds than brightfield or PPM because
+     *                     their signal pixels are rare and saturate into
+     *                     unusability long before a bulk-pixel percentage
+     *                     threshold would fire.
      * @param rangeOverrideUm Optional override for the yaml's sweep_range_um
      *                         (pass NaN or zero to use the yaml value).
      * @param callback     Status callback for progress / final outcome.
      */
-    public void execute(String objective, double rangeOverrideUm, StatusCallback callback) {
+    public void execute(String objective, String modality,
+                        double rangeOverrideUm, StatusCallback callback) {
         if (running) {
             callback.onStatusUpdate("Smooth Focus already running", Outcome.ERROR);
             return;
@@ -86,7 +95,8 @@ public class SmoothFocusController {
 
             callback.onStatusUpdate("Smooth Focus: scanning...", Outcome.IN_PROGRESS);
             long t0 = System.currentTimeMillis();
-            SmoothFocusResult result = socketClient.smoothFocus(yamlPath, objective, rangeOverrideUm);
+            SmoothFocusResult result = socketClient.smoothFocus(
+                    yamlPath, objective, modality, rangeOverrideUm);
             long elapsedMs = System.currentTimeMillis() - t0;
 
             switch (result.status) {

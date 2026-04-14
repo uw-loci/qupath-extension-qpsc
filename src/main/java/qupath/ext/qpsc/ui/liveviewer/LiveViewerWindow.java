@@ -1169,6 +1169,18 @@ public class LiveViewerWindow {
         // accurate enough for the Smooth use case.
         String objective = null;
 
+        // Read the modality from the Camera tab's modality dropdown.
+        // The server uses this to pick a modality-appropriate saturation
+        // refusal threshold: brightfield tolerates heavy saturation
+        // (bright background, dark tissue), PPM is moderate, and
+        // fluorescence / laser-scanning need strict thresholds because
+        // the signal is confined to a small fraction of pixels and
+        // saturating any of them means losing focus information.
+        String modality = null;
+        if (stageControlPanel != null) {
+            modality = stageControlPanel.getCurrentCameraModality();
+        }
+
         // Read the focus range dropdown value. "Auto" -> NaN -> server
         // uses sweep_range_um from the yaml. Any explicit "Num_um" value
         // overrides. This gives the user a quick way to widen the scan
@@ -1193,6 +1205,7 @@ public class LiveViewerWindow {
         liveToggleButton.setDisable(true);
 
         final String objectiveParam = objective;
+        final String modalityParam = modality;
         RefineFocusController.StatusCallback callback = (msg, outcome) -> {
             Platform.runLater(() -> {
                 boolean done = outcome != RefineFocusController.Outcome.IN_PROGRESS;
@@ -1233,7 +1246,8 @@ public class LiveViewerWindow {
 
         final double rangeOverride = smoothRangeOverride;
         Thread smoothThread = new Thread(() ->
-                smoothFocusController.execute(objectiveParam, rangeOverride, callback));
+                smoothFocusController.execute(objectiveParam, modalityParam,
+                        rangeOverride, callback));
         smoothThread.setDaemon(true);
         smoothThread.setName("LiveViewer-SmoothFocus");
         smoothThread.start();

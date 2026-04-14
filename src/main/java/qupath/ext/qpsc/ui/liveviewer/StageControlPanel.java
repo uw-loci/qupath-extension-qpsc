@@ -733,6 +733,22 @@ public class StageControlPanel extends VBox {
     private Label cameraStatusLabel;
     private VBox cameraModContent; // Swapped when modality changes
     private volatile String currentCameraModality; // Current modality for preset refresh
+
+    /**
+     * Returns the modality currently selected in the Camera tab, or
+     * {@code null} if none has been chosen yet. Thread-safe -- the
+     * field is volatile and this method is a simple read.
+     *
+     * <p>Used by other Live Viewer controls (e.g. Smooth Focus) that
+     * need to know the active modality to make modality-aware
+     * decisions. For Smooth Focus specifically, the server uses the
+     * modality to pick a saturation-refusal threshold: brightfield
+     * is tolerant (~30%), PPM is moderate (~5%), fluorescence and
+     * laser-scanning are strict (1-2%).
+     */
+    public String getCurrentCameraModality() {
+        return currentCameraModality;
+    }
     private String currentCameraObjectiveId;
     private String currentCameraDetectorId;
 
