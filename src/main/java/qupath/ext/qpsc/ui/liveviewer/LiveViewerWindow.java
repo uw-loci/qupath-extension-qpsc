@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
+import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
 /**
@@ -1225,11 +1226,22 @@ public class LiveViewerWindow {
                     if (outcome == RefineFocusController.Outcome.FAILED) {
                         // UNAVAILABLE / pre-flight refusal -- show in orange,
                         // not red, so the user understands this is a soft
-                        // fallback path rather than an error.
+                        // fallback path rather than an error. Show the full
+                        // reason in a dialog AND in the status area so the
+                        // user can't miss it -- the old tooltip-only path
+                        // was invisible unless the user hovered, and users
+                        // reported missing the explanation entirely.
                         smoothFocusButton.setText("Unavailable");
                         smoothFocusButton.setStyle("-fx-font-size: 11; -fx-base: #FF9800;");
                         smoothFocusButton.setTooltip(new Tooltip(msg + "\nFall back to Sweep Focus."));
                         smoothFocusButton.setDisable(!liveActive);
+                        // Strip the 'Smooth Focus unavailable: ' prefix if
+                        // present so the dialog body is the raw reason.
+                        String reason = msg;
+                        if (reason.startsWith("Smooth Focus unavailable: ")) {
+                            reason = reason.substring("Smooth Focus unavailable: ".length());
+                        }
+                        Dialogs.showInfoNotification("Smooth Focus unavailable", reason);
                     } else if (outcome == RefineFocusController.Outcome.ERROR) {
                         smoothFocusButton.setText("FAILED");
                         smoothFocusButton.setStyle("-fx-font-size: 11; -fx-base: #F44336;");
