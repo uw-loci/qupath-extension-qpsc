@@ -22,6 +22,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
+import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.model.StitchingMetadata;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -214,7 +215,8 @@ public class StitchingHelper {
                     gui,
                     project,
                     executor,
-                    handler);
+                    handler,
+                    sample != null ? sample.modality() : null);
         }
 
         if (angleExposures != null && angleExposures.size() > 1) {
@@ -625,7 +627,8 @@ public class StitchingHelper {
                     gui,
                     project,
                     executor,
-                    handler);
+                    handler,
+                    sample != null ? sample.modality() : null);
         }
 
         if (angleExposures != null && angleExposures.size() > 1) {
@@ -1058,7 +1061,8 @@ public class StitchingHelper {
             QuPathGUI gui,
             Project<BufferedImage> project,
             ExecutorService executor,
-            ModalityHandler handler) {
+            ModalityHandler handler,
+            String longModalityName) {
 
         logger.info(
                 "Stitching {} channels for: {}", channelIds.size(), annotationName);
@@ -1078,6 +1082,14 @@ public class StitchingHelper {
 
                         Map<String, Object> stitchParams = new HashMap<>();
                         stitchParams.put("metadata", metadata);
+                        // Skip per-channel project import: only the merged
+                        // multichannel file becomes a project entry. The
+                        // per-channel files are still stitched and renamed on
+                        // disk for forensics, but never appear in the project
+                        // tree -- which avoids the qpdata "save?" prompt that
+                        // QuPath fires when an entry is created and then
+                        // removed in the same run.
+                        stitchParams.put("skipProjectImport", Boolean.TRUE);
 
                         Path tileBaseDir =
                                 Paths.get(projectsFolder, sampleName, modeWithIndex, annotationName);
@@ -1191,14 +1203,19 @@ public class StitchingHelper {
                                 Path firstStitch = Paths.get(stitchedImages.get(0));
                                 String mergedDir = firstStitch.getParent().toString();
 
-                                // Target filename: PollenIF_Fluorescence_001.ome.tif style,
-                                // matching the per-channel naming convention but without a
-                                // channel suffix. Derive it by stripping the trailing channel
-                                // segment from the first per-channel output.
+                                // Target filename: PollenIF_fl_001.ome.tif style,
+                                // matching the per-channel naming convention but with the
+                                // channel token removed and the long modality name (e.g.
+                                // "Fluorescence") replaced by the short registry prefix
+                                // ("fl"). Modality combos like BF+IF use their multi-token
+                                // prefix verbatim ("bf_if").
+                                String shortModalityPrefix = ModalityRegistry.getShortPrefix(handler);
                                 String mergedStem = deriveMergedStem(
                                         firstStitch.getFileName().toString(),
                                         successfullyStitchedChannelIds.get(0),
-                                        annotationName);
+                                        annotationName,
+                                        longModalityName,
+                                        shortModalityPrefix);
 
                                 String mergedPath = ChannelMerger.merge(
                                         stitchedImages,
@@ -1213,17 +1230,10 @@ public class StitchingHelper {
                                             "Multichannel merge succeeded for {}: {}",
                                             annotationName, mergedPath);
 
-                                    // Import the merged file into the project as a single entry,
-                                    // then remove the per-channel intermediate entries so the
-                                    // user only sees ONE "PollenIF_Fluorescence_001" entry
-                                    // instead of three.
-                                    importMergedImageAndRemoveIntermediates(
-                                            mergedPath,
-                                            stitchedImages,
-                                            metadata,
-                                            gui,
-                                            project,
-                                            handler);
+                                    // Per-channel intermediates were never imported to the
+                                    // project (skipProjectImport=true above), so we only need
+                                    // to import the merged file as the single canonical entry.
+                                    importMergedImageOnly(mergedPath, metadata, gui, project, handler);
                                 } else {
                                     logger.warn(
                                             "Multichannel merge returned null for {} -- per-channel files remain as the output",
@@ -1269,18 +1279,28 @@ public class StitchingHelper {
 
     /**
      * Derives the merged-file stem by stripping the trailing channel segment from
-     * the first per-channel filename. For example:
-     *   {@code PollenIF_Fluorescence_FITC_001.ome.tif} + channel {@code FITC}
-     *   -> {@code PollenIF_Fluorescence_001}
-     * so the final file lands as {@code PollenIF_Fluorescence_001.ome.tif}, matching
-     * the per-channel naming convention but without the channel token.
+     * the first per-channel filename and (when a short prefix is supplied) replacing
+     * the long modality token with the short registry prefix.
+     *
+     * <p>For example:
+     * <pre>
+     *   PollenIF_Fluorescence_FITC_001.ome.tif + channel FITC + long "Fluorescence" + short "fl"
+     *      -> PollenIF_fl_001
+     *   PollenIF_BF_IF_BF_001.ome.tif + channel BF + long "BF_IF" + short "bf_if"
+     *      -> PollenIF_bf_if_001
+     * </pre>
      *
      * <p>Falls back to {@code <annotationName>_merged} if the filename doesn't
      * contain the channel id (e.g. custom naming scheme) so we never produce a
-     * garbage stem.
+     * garbage stem. If the long-to-short replacement isn't possible (long name not
+     * found in stem, or short prefix is null), the long form is kept verbatim.
      */
     private static String deriveMergedStem(
-            String firstPerChannelFilename, String firstChannelId, String annotationName) {
+            String firstPerChannelFilename,
+            String firstChannelId,
+            String annotationName,
+            String longModalityName,
+            String shortModalityPrefix) {
         // Strip file extension (.ome.tif, .ome.zarr, .tif, ...)
         String stem = firstPerChannelFilename;
         int dotIdx = stem.indexOf('.');
@@ -1290,38 +1310,48 @@ public class StitchingHelper {
         // Look for "_<channelId>_" and remove the "_<channelId>" segment.
         String token = "_" + firstChannelId + "_";
         int tokenIdx = stem.indexOf(token);
+        String stripped;
         if (tokenIdx >= 0) {
-            return stem.substring(0, tokenIdx) + "_" + stem.substring(tokenIdx + token.length());
+            stripped = stem.substring(0, tokenIdx) + "_" + stem.substring(tokenIdx + token.length());
+        } else {
+            // Handle "_<channelId>" at the end with no trailing counter.
+            String tailToken = "_" + firstChannelId;
+            if (stem.endsWith(tailToken)) {
+                stripped = stem.substring(0, stem.length() - tailToken.length());
+            } else {
+                return annotationName + "_merged";
+            }
         }
-        // Handle "_<channelId>" at the end with no trailing counter.
-        String tailToken = "_" + firstChannelId;
-        if (stem.endsWith(tailToken)) {
-            return stem.substring(0, stem.length() - tailToken.length());
+
+        // Replace the long modality token with the short registry prefix when both
+        // are known. Use "_<long>_" boundaries so we don't accidentally match a
+        // substring of the sample name.
+        if (longModalityName != null && !longModalityName.isBlank()
+                && shortModalityPrefix != null && !shortModalityPrefix.isBlank()
+                && !longModalityName.equalsIgnoreCase(shortModalityPrefix)) {
+            String longBounded = "_" + longModalityName + "_";
+            String shortBounded = "_" + shortModalityPrefix + "_";
+            if (stripped.contains(longBounded)) {
+                stripped = stripped.replace(longBounded, shortBounded);
+            }
         }
-        return annotationName + "_merged";
+        return stripped;
     }
 
     /**
-     * Imports the merged multichannel file into the QuPath project and removes the
-     * intermediate per-channel project entries so the user sees exactly one entry per
-     * channel-based acquisition (not one per channel + one merged).
-     *
-     * <p>Per-channel files remain on disk so they can be inspected directly if
-     * needed, but they are unlinked from the project tree after successful import.
+     * Imports the merged multichannel file into the QuPath project as a single entry.
+     * Per-channel intermediate files are NOT imported (callers pass
+     * {@code skipProjectImport=true} when invoking the per-channel stitch loop), so
+     * there is nothing to remove afterward — the merged file is the only project
+     * entry created by the channel-based path.
      */
-    private static void importMergedImageAndRemoveIntermediates(
+    private static void importMergedImageOnly(
             String mergedPath,
-            List<String> perChannelPaths,
             StitchingMetadata metadata,
             QuPathGUI gui,
             Project<BufferedImage> project,
             ModalityHandler handler) {
         final File mergedFile = new File(mergedPath);
-        // Build a set of absolute paths to the per-channel intermediates for comparison.
-        java.util.Set<String> intermediateAbsPaths = new java.util.HashSet<>();
-        for (String p : perChannelPaths) {
-            intermediateAbsPaths.add(new File(p).getAbsolutePath());
-        }
 
         Platform.runLater(() -> {
             try {
@@ -1343,30 +1373,6 @@ public class StitchingHelper {
                             mergedFile, project, false, false, handler);
                 }
                 logger.info("Merged multichannel file imported to project: {}", mergedFile.getName());
-
-                // Remove the per-channel intermediate entries so the project tree
-                // shows only the merged file. Entries are matched by absolute path.
-                List<ProjectImageEntry<BufferedImage>> toRemove = new ArrayList<>();
-                for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
-                    try {
-                        java.net.URI uri = entry.getURIs().iterator().hasNext()
-                                ? entry.getURIs().iterator().next()
-                                : null;
-                        if (uri == null) continue;
-                        File entryFile = new File(uri);
-                        if (intermediateAbsPaths.contains(entryFile.getAbsolutePath())) {
-                            toRemove.add(entry);
-                        }
-                    } catch (Exception ex) {
-                        logger.debug("Could not resolve URI for entry {}: {}", entry.getImageName(), ex.getMessage());
-                    }
-                }
-                if (!toRemove.isEmpty()) {
-                    logger.info(
-                            "Removing {} intermediate per-channel project entries (files kept on disk)",
-                            toRemove.size());
-                    project.removeAllImages(toRemove, false);
-                }
 
                 // Refresh the project view and open the merged entry.
                 gui.setProject(project);

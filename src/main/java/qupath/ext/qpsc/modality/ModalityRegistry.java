@@ -276,4 +276,36 @@ public final class ModalityRegistry {
     public static Map<String, ModalityHandler> getAllHandlers() {
         return Collections.unmodifiableMap(HANDLERS);
     }
+
+    /**
+     * Returns the shortest registered prefix for the given handler instance.
+     *
+     * <p>A handler may be registered under multiple prefixes (e.g. the widefield
+     * fluorescence handler is registered as both {@code "fl"} and
+     * {@code "fluorescence"}); this method returns the SHORTEST one, which is
+     * intended for use in filenames and other constrained-length identifiers
+     * where the long display name would be unwieldy. Multi-token prefixes like
+     * {@code "bf_if"} are returned verbatim — there's no further compression
+     * because the underscore is meaningful (it identifies the combo modality).
+     *
+     * <p>Returns {@code null} if the handler is not registered.
+     *
+     * @param handler the handler to look up
+     * @return the shortest registered prefix, or {@code null} if not registered
+     */
+    public static String getShortPrefix(ModalityHandler handler) {
+        if (handler == null) {
+            return null;
+        }
+        String shortest = null;
+        for (Map.Entry<String, ModalityHandler> entry : HANDLERS.entrySet()) {
+            if (entry.getValue() == handler) {
+                String prefix = entry.getKey();
+                if (shortest == null || prefix.length() < shortest.length()) {
+                    shortest = prefix;
+                }
+            }
+        }
+        return shortest;
+    }
 }

@@ -333,6 +333,20 @@ public class TileProcessingUtilities {
 
                     // Note: metadata was already extracted earlier (batchMetadata) for filename generation
 
+                    // Import this file to the project, UNLESS the caller passed
+                    // skipProjectImport=true (channel-merge path: per-channel
+                    // intermediates are stitched and renamed but not added to
+                    // the project, because the merged file becomes the only
+                    // canonical project entry. This avoids the qpdata "save?"
+                    // prompt that fires when an entry is created and then
+                    // removed in the same workflow run).
+                    boolean skipImport = stitchParams != null
+                            && Boolean.TRUE.equals(stitchParams.get("skipProjectImport"));
+                    if (skipImport) {
+                        logger.debug("Skipping project import for {} (skipProjectImport=true)", baseName);
+                        continue;
+                    }
+
                     // Import this file to the project
                     final String pathToImport = lastPath;
                     final StitchingMetadata finalMetadata = batchMetadata;
