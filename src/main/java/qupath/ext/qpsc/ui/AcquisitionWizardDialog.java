@@ -1096,7 +1096,52 @@ public class AcquisitionWizardDialog {
         }
     }
 
+    /**
+     * Re-assert the Wizard's current combo-box selections as the authoritative
+     * global preference state immediately before launching a sub-workflow.
+     *
+     * Sub-dialogs (WhiteBalanceDialog, BackgroundCollectionController, etc.)
+     * read `PersistentPreferences.getLastObjective()` / `getLastModality()` /
+     * `getLastDetector()` at init time to pre-select their own combo boxes.
+     * Between the moment the user opens the Wizard and the moment they click
+     * a sub-workflow button, something else (Live Viewer "Refresh from MM",
+     * another dialog's submit, a stale shadow preference) may have written a
+     * different value into those globals.
+     *
+     * The Wizard's own combo values are the user's *current stated intent*.
+     * Reasserting them here guarantees that whatever the Wizard is showing is
+     * what the downstream dialog sees. This is the single load-bearing line
+     * that keeps the Wizard -> WB -> Background -> Acquire chain consistent.
+     *
+     * Root cause for this defence: the 2026-04-15 incident where WB
+     * calibration saved exposures under a 20X_POL slot while the user was
+     * physically on 10X and the Wizard correctly knew 10X -- a stale shadow
+     * preference in WhiteBalanceDialog had silently overridden the Wizard's
+     * selection.
+     */
+    private void syncWizardSelectionToPreferences() {
+        String modality = getSelectedModality();
+        String objective = getSelectedObjective();
+        String detector = getSelectedDetector();
+        if (modality != null && !modality.isEmpty()) {
+            PersistentPreferences.setLastModality(modality);
+        }
+        if (objective != null && !objective.isEmpty()) {
+            PersistentPreferences.setLastObjective(objective);
+        }
+        if (detector != null && !detector.isEmpty()) {
+            PersistentPreferences.setLastDetector(detector);
+        }
+        logger.info(
+                "Wizard asserting selection to preferences before sub-workflow launch: "
+                        + "modality='{}', objective='{}', detector='{}'",
+                modality,
+                objective,
+                detector);
+    }
+
     private void onWhiteBalance() {
+        syncWizardSelectionToPreferences();
         try {
             QPScopeController.getInstance().startWorkflow("whiteBalance");
         } catch (IOException e) {
@@ -1105,6 +1150,7 @@ public class AcquisitionWizardDialog {
     }
 
     private void onBackgroundCollection() {
+        syncWizardSelectionToPreferences();
         try {
             QPScopeController.getInstance().startWorkflow("backgroundCollection");
         } catch (IOException e) {
@@ -1113,6 +1159,7 @@ public class AcquisitionWizardDialog {
     }
 
     private void onAlignment() {
+        syncWizardSelectionToPreferences();
         try {
             QPScopeController.getInstance().startWorkflow("microscopeAlignment");
         } catch (IOException e) {
@@ -1122,6 +1169,7 @@ public class AcquisitionWizardDialog {
 
     private void onBoundedAcquisition() {
         if (!confirmCalibrationStatus()) return;
+        syncWizardSelectionToPreferences();
         try {
             QPScopeController.getInstance().startWorkflow("boundedAcquisition");
         } catch (IOException e) {
@@ -1131,6 +1179,7 @@ public class AcquisitionWizardDialog {
 
     private void onExistingImageAcquisition() {
         if (!confirmCalibrationStatus()) return;
+        syncWizardSelectionToPreferences();
         try {
             QPScopeController.getInstance().startWorkflow("existingImage");
         } catch (IOException e) {

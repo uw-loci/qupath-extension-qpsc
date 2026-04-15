@@ -1013,6 +1013,24 @@ public class BackgroundCollectionController {
                 return null;
             }
 
+            // Drift guard: if the global objective state has moved since this dialog
+            // opened (e.g. Live Viewer "Refresh from MM", another dialog's submit),
+            // surface it and keep the global in sync with what we're about to send.
+            // Root cause of the 2026-04-15 WB/Background mislabel was exactly this
+            // class of silent drift between dialog caches and global preferences.
+            String globalObjective = PersistentPreferences.getLastObjective();
+            if (globalObjective != null
+                    && !globalObjective.isEmpty()
+                    && !globalObjective.equals(objective)) {
+                logger.warn(
+                        "Background collection objective drift: dialog combo='{}' but "
+                                + "PersistentPreferences.getLastObjective()='{}'. Using dialog value. "
+                                + "If this was unintentional, click Cancel and re-open the dialog.",
+                        objective,
+                        globalObjective);
+            }
+            PersistentPreferences.setLastObjective(objective);
+
             // Validate exposure values and angles
             List<AngleExposure> finalExposures = new ArrayList<>();
             if (currentAngleExposures.isEmpty() && !exposureFields.isEmpty()) {

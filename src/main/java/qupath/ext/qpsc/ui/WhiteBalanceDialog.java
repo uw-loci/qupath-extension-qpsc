@@ -105,9 +105,10 @@ public class WhiteBalanceDialog {
     private static final DoubleProperty boostedMaxGainDbProperty =
             PathPrefs.createPersistentPreference("wb.advanced.boostedMaxGainDb", 12.0);
 
-    // Objective selection for PPM WB (objective-specific exposures)
-    private static final StringProperty ppmObjectiveProperty =
-            PathPrefs.createPersistentPreference("wb.ppm.objective", "");
+    // Objective selection is tracked globally via PersistentPreferences.getLastObjective().
+    // This dialog used to have its own "wb.ppm.objective" shadow preference, but that
+    // silently overrode whatever the Acquisition Wizard (or any other dialog) had selected,
+    // causing mislabeled calibration slots when the shadow was stale.
 
     // Fixed PPM angles (standard values)
     public static final double POSITIVE_ANGLE = 7.0;
@@ -423,8 +424,8 @@ public class WhiteBalanceDialog {
                     // Save shared preferences (output path is auto-derived, not saved)
                     toleranceProperty.set(tolerance);
                     cameraProperty.set(camera);
-                    if (selectedObjective != null) {
-                        ppmObjectiveProperty.set(selectedObjective);
+                    if (selectedObjective != null && !selectedObjective.isEmpty()) {
+                        PersistentPreferences.setLastObjective(selectedObjective);
                     }
 
                     // Save advanced preferences
@@ -685,12 +686,11 @@ public class WhiteBalanceDialog {
                     objectiveCombo
                             .getItems()
                             .addAll(objectives.stream().sorted().toList());
-                    // Restore previous selection: try WB-specific preference first,
-                    // then fall back to wizard's last-used objective
-                    String savedObjective = ppmObjectiveProperty.get();
-                    if (savedObjective == null || savedObjective.isEmpty() || !objectives.contains(savedObjective)) {
-                        savedObjective = PersistentPreferences.getLastObjective();
-                    }
+                    // Single source of truth: whatever the Acquisition Wizard (or any other
+                    // dialog) most recently selected. Do not shadow this with a dialog-local
+                    // persistent preference -- that caused the 2026-04-15 calibration mislabel
+                    // where WB used a stale 20X_POL while the Wizard was on 10X.
+                    String savedObjective = PersistentPreferences.getLastObjective();
                     if (savedObjective != null && !savedObjective.isEmpty() && objectives.contains(savedObjective)) {
                         objectiveCombo.setValue(savedObjective);
                     } else {

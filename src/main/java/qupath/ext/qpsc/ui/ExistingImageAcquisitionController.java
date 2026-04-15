@@ -1596,6 +1596,24 @@ public class ExistingImageAcquisitionController {
                 boolean enableWhiteBalance = !"off".equals(wbMode);
                 boolean perAngleWhiteBalance = "per_angle".equals(wbMode);
 
+                // Drift guard: surface any divergence between the dialog combo and
+                // the global LastObjective preference that may have accumulated
+                // since this dialog opened (e.g. Live Viewer "Refresh from MM",
+                // another dialog's submit). The combo wins (user's explicit choice),
+                // but the warning flags a drift we want to catch early.
+                String globalObjective = PersistentPreferences.getLastObjective();
+                if (objective != null
+                        && !objective.isEmpty()
+                        && globalObjective != null
+                        && !globalObjective.isEmpty()
+                        && !globalObjective.equals(objective)) {
+                    logger.warn(
+                            "Existing image acquisition objective drift: dialog combo='{}' but "
+                                    + "PersistentPreferences.getLastObjective()='{}'. Using dialog value.",
+                            objective,
+                            globalObjective);
+                }
+
                 // Save preferences
                 PersistentPreferences.setLastSampleName(sampleName);
                 PersistentPreferences.setLastModality(modality);
