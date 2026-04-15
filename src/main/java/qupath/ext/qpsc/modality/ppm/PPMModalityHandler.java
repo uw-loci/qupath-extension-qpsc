@@ -60,9 +60,9 @@ public class PPMModalityHandler implements ModalityHandler {
      */
     @Override
     public CompletableFuture<List<AngleExposure>> getRotationAngles(
-            String modalityName, String objective, String detector) {
+            String modalityName, String objective, String detector, String wbMode) {
         RotationManager rotationManager = new RotationManager(modalityName, objective, detector);
-        return rotationManager.getRotationTicksWithExposure(modalityName);
+        return rotationManager.getRotationTicksWithExposure(modalityName, wbMode);
     }
 
     @Override
@@ -141,11 +141,15 @@ public class PPMModalityHandler implements ModalityHandler {
      */
     @Override
     public CompletableFuture<List<AngleExposure>> getRotationAnglesWithOverrides(
-            String modality, String objective, String detector, Map<String, Double> overrides) {
+            String modality,
+            String objective,
+            String detector,
+            Map<String, Double> overrides,
+            String wbMode) {
 
         if (overrides == null || overrides.isEmpty()) {
             // No overrides -- use normal flow (which shows the dialog)
-            return getRotationAngles(modality, objective, detector);
+            return getRotationAngles(modality, objective, detector, wbMode);
         }
 
         // Get defaults without dialog, apply overrides, then show dialog with overridden values
@@ -162,7 +166,7 @@ public class PPMModalityHandler implements ModalityHandler {
             }
 
             return PPMAngleSelectionController.showDialog(
-                            plusAngle, minusAngle, uncrossedAngle, modality, objective, detector)
+                            plusAngle, minusAngle, uncrossedAngle, modality, objective, detector, wbMode)
                     .thenApply(dialogResult -> {
                         if (dialogResult == null) {
                             throw new RuntimeException("ANGLE_SELECTION_CANCELLED");

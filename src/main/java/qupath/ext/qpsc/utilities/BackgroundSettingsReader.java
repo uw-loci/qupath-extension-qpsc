@@ -68,19 +68,26 @@ public class BackgroundSettingsReader {
      * Resolve the background folder path for a given hardware combination and WB mode.
      * This is the central path resolution method that all callers should use.
      *
-     * <p>Resolution logic:
-     * <ol>
-     *   <li>If wbMode provided: check {@code basePath/wbMode/background_settings.yml} first</li>
-     *   <li>Fall back to legacy {@code basePath/background_settings.yml}</li>
-     *   <li>If neither exists and wbMode provided: return {@code basePath/wbMode} (for new collections)</li>
-     * </ol>
+     * <p>The returned path is the canonical collection/lookup location for the
+     * given WB mode, regardless of whether a {@code background_settings.yml}
+     * currently exists there:
+     * <ul>
+     *   <li>Color WB modes ({@code per_angle}, {@code simple}, etc.): returns
+     *       {@code basePath/<wbMode>}.</li>
+     *   <li>{@code off} (monochrome): returns the flat {@code basePath} directly,
+     *       since mono detectors don't use a WB subdirectory.</li>
+     * </ul>
+     *
+     * <p>There is no legacy fallback to a stale top-level file from a
+     * pre-per-mode-split setup -- those are ignored by design.</p>
      *
      * @param baseBackgroundFolder The base background correction folder from config
      * @param modality The modality name (e.g., "ppm")
      * @param objective The objective ID
      * @param detector The detector ID
-     * @param wbMode White balance mode (e.g., "per_angle", "camera_awb"), or null for legacy behavior
-     * @return Resolved folder path (never null if inputs are valid)
+     * @param wbMode White balance mode (e.g., "per_angle", "simple", "off"). Required.
+     * @return Resolved folder path, or null if inputs are invalid
+     * @throws IllegalArgumentException if {@code wbMode} is null or empty
      */
     public static String resolveBackgroundFolder(
             String baseBackgroundFolder, String modality, String objective, String detector, String wbMode) {
@@ -89,60 +96,52 @@ public class BackgroundSettingsReader {
             logger.debug("Cannot resolve background folder - missing required parameters");
             return null;
         }
+        if (wbMode == null || wbMode.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "resolveBackgroundFolder requires a non-empty wbMode. Passing null is no longer supported.");
+        }
 
         String magnification = extractMagnificationFromObjective(objective);
         String basePath = new File(
                         baseBackgroundFolder, detector + File.separator + modality + File.separator + magnification)
                 .getPath();
 
-        // "off" is the default WB state and applies to all monochrome cameras;
-        // it does not need its own subdirectory (a /off/ folder just adds
-        // clutter for users whose camera has no color channels). Only append
-        // a WB-mode subdirectory for genuine color-WB modes.
-        boolean useWbSubdir = wbMode != null && !wbMode.isEmpty() && !"off".equalsIgnoreCase(wbMode);
-
-        if (useWbSubdir) {
-            // Check WB-mode subfolder first
-            File wbSettings = new File(basePath + File.separator + wbMode, "background_settings.yml");
-            if (wbSettings.exists()) {
-                String resolved = new File(basePath, wbMode).getPath();
-                logger.debug("Resolved background folder to WB subfolder: {}", resolved);
-                return resolved;
-            }
-        }
-
-        // Fall back to legacy (flat) path
-        File legacySettings = new File(basePath, "background_settings.yml");
-        if (legacySettings.exists()) {
-            logger.debug("Resolved background folder to legacy path: {}", basePath);
+        if ("off".equalsIgnoreCase(wbMode)) {
+            // Monochrome / no-WB: flat path, no subdirectory
+            logger.debug("Resolved background folder for 'off' WB mode: {}", basePath);
             return basePath;
         }
 
-        // Neither exists -- return WB subfolder for new color collections,
-        // or the flat basePath for "off" mode / new monochrome collections.
-        if (useWbSubdir) {
-            String newPath = new File(basePath, wbMode).getPath();
-            logger.debug("No existing backgrounds found; returning WB subfolder for new collection: {}", newPath);
-            return newPath;
-        }
-
-        logger.debug("No existing backgrounds found; returning flat path for off/monochrome: {}", basePath);
-        return basePath;
+        // Color WB modes: always under <wbMode> subfolder
+        String resolved = new File(basePath, wbMode).getPath();
+        logger.debug("Resolved background folder for wbMode='{}': {}", wbMode, resolved);
+        return resolved;
     }
 
     /**
-     * Attempt to find and read background settings for a given hardware combination.
+     * Find and read background settings for a given hardware combination and WB mode.
      *
-     * <p>When wbMode is provided, targets that specific WB subdirectory first, then falls back
-     * to the legacy (flat) path. When wbMode is null, checks the legacy path first, then scans
-     * all WB-mode subdirectories to find any available backgrounds.</p>
+     * <p>Resolution is strictly mode-specific:
+     * <ul>
+     *   <li>For color WB modes ("per_angle", "simple"): reads
+     *       {@code basePath/<wbMode>/background_settings.yml}.</li>
+     *   <li>For monochrome ("off"): reads {@code basePath/background_settings.yml}
+     *       directly (mono detectors don't use a WB subdirectory).</li>
+     * </ul>
+     *
+     * <p>There is no fallback between these paths: a stale top-level file left
+     * over from a pre-per-mode-split setup will not be read for a color mode
+     * lookup, and a per-mode subfolder file will not be read for an "off" lookup.
+     * This prevents the 2026-04-15 class of bug where a legacy flat file
+     * silently shadowed fresh per-mode backgrounds.</p>
      *
      * @param baseBackgroundFolder The base background correction folder from config
      * @param modality The modality name (e.g., "ppm")
      * @param objective The objective ID (e.g., "LOCI_OBJECTIVE_OLYMPUS_20X_POL_001")
      * @param detector The detector ID (e.g., "LOCI_DETECTOR_JAI_001")
-     * @param wbMode White balance mode for targeted lookup (e.g., "per_angle"), or null to scan all
+     * @param wbMode White balance mode (e.g., "per_angle", "simple", "off"). Required.
      * @return BackgroundSettings if found and valid, null otherwise
+     * @throws IllegalArgumentException if {@code wbMode} is null or empty
      */
     public static BackgroundSettings findBackgroundSettings(
             String baseBackgroundFolder, String modality, String objective, String detector, String wbMode) {
@@ -152,6 +151,11 @@ public class BackgroundSettingsReader {
             logger.debug("Cannot search for background settings - missing or empty base folder / required parameters");
             return null;
         }
+        if (wbMode == null || wbMode.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "findBackgroundSettings requires a non-empty wbMode ('per_angle', 'simple', or 'off'). "
+                            + "Passing null is no longer supported; callers must resolve their WB mode first.");
+        }
 
         try {
             String magnification = extractMagnificationFromObjective(objective);
@@ -159,39 +163,19 @@ public class BackgroundSettingsReader {
                             baseBackgroundFolder, detector + File.separator + modality + File.separator + magnification)
                     .getPath();
 
-            // If wbMode given, check WB subfolder first
-            if (wbMode != null && !wbMode.isEmpty()) {
-                File wbSettings = new File(basePath + File.separator + wbMode, "background_settings.yml");
-                if (wbSettings.exists()) {
-                    logger.debug("Found WB-mode background settings at: {}", wbSettings.getAbsolutePath());
-                    return readBackgroundSettings(wbSettings);
-                }
+            File target;
+            if ("off".equalsIgnoreCase(wbMode)) {
+                // Monochrome / no-WB: flat path, no subdirectory
+                target = new File(basePath, "background_settings.yml");
+            } else {
+                // Color WB modes: <wbMode> subdirectory
+                target = new File(basePath + File.separator + wbMode, "background_settings.yml");
             }
 
-            // Check legacy (flat) path
-            File legacySettings = new File(basePath, "background_settings.yml");
-            if (legacySettings.exists()) {
-                logger.debug("Found legacy background settings at: {}", legacySettings.getAbsolutePath());
-                return readBackgroundSettings(legacySettings);
-            }
-
-            // If no wbMode specified, scan WB-mode subdirectories
-            if (wbMode == null || wbMode.isEmpty()) {
-                File baseDir = new File(basePath);
-                if (baseDir.isDirectory()) {
-                    File[] subdirs = baseDir.listFiles(File::isDirectory);
-                    if (subdirs != null) {
-                        for (File subdir : subdirs) {
-                            File wbSettings = new File(subdir, "background_settings.yml");
-                            if (wbSettings.exists()) {
-                                logger.debug(
-                                        "Found WB-mode background settings in subdirectory: {}",
-                                        wbSettings.getAbsolutePath());
-                                return readBackgroundSettings(wbSettings);
-                            }
-                        }
-                    }
-                }
+            if (target.exists()) {
+                logger.debug(
+                        "Found background settings for wbMode='{}' at: {}", wbMode, target.getAbsolutePath());
+                return readBackgroundSettings(target);
             }
 
             logger.debug(
@@ -279,11 +263,21 @@ public class BackgroundSettingsReader {
     }
 
     /**
-     * Find all background settings across all WB-mode subdirectories for a given hardware combination.
+     * Find all background settings for a given hardware combination across
+     * every supported WB mode.
      *
-     * <p>Scans the base path for both legacy (flat) and WB-mode-specific background_settings.yml files.
-     * Returns a map keyed by WB mode protocol name (e.g., "per_angle", "simple").
-     * Legacy files with null wbMode are keyed by "unknown".
+     * <p>Scans only the canonical per-mode locations:
+     * <ul>
+     *   <li>Every {@code basePath/<wbMode>/background_settings.yml} for color
+     *       WB modes (keyed by the subdirectory name).</li>
+     *   <li>The flat {@code basePath/background_settings.yml} for {@code off}
+     *       (monochrome), keyed under {@code "off"}.</li>
+     * </ul>
+     *
+     * <p>Stale top-level files whose recorded {@code wbMode} is neither
+     * {@code off} nor a valid subdirectory name are ignored with a warning --
+     * they are most likely pre-per-mode-split legacy artifacts that would
+     * otherwise pollute validity checks (2026-04-15 incident).
      *
      * @param baseBackgroundFolder The base background correction folder from config
      * @param modality The modality name (e.g., "ppm")
@@ -307,18 +301,7 @@ public class BackgroundSettingsReader {
                             baseBackgroundFolder, detector + File.separator + modality + File.separator + magnification)
                     .getPath();
 
-            // Check legacy (flat) path
-            File legacySettings = new File(basePath, "background_settings.yml");
-            if (legacySettings.exists()) {
-                BackgroundSettings settings = readBackgroundSettings(legacySettings);
-                if (settings != null) {
-                    String key = settings.wbMode != null ? settings.wbMode : "unknown";
-                    result.put(key, settings);
-                    logger.debug("Found legacy background settings keyed as '{}'", key);
-                }
-            }
-
-            // Scan WB-mode subdirectories
+            // Scan WB-mode subdirectories. Subdirectory name IS the WB mode.
             File baseDir = new File(basePath);
             if (baseDir.isDirectory()) {
                 File[] subdirs = baseDir.listFiles(File::isDirectory);
@@ -328,12 +311,36 @@ public class BackgroundSettingsReader {
                         if (wbSettings.exists()) {
                             BackgroundSettings settings = readBackgroundSettings(wbSettings);
                             if (settings != null) {
-                                // Key by subdirectory name (which IS the WB mode protocol name)
                                 result.put(subdir.getName(), settings);
                                 logger.debug(
                                         "Found WB-mode background settings in '{}' subdirectory", subdir.getName());
                             }
                         }
+                    }
+                }
+            }
+
+            // Flat path is reserved for monochrome / 'off' WB. Only accept it
+            // if the file explicitly records wbMode='off' (or null for a
+            // clean mono collection that never had WB set). Anything else is
+            // a legacy artifact that we refuse to read.
+            File flatSettings = new File(basePath, "background_settings.yml");
+            if (flatSettings.exists()) {
+                BackgroundSettings settings = readBackgroundSettings(flatSettings);
+                if (settings != null) {
+                    String recorded = settings.wbMode;
+                    if (recorded == null || recorded.isEmpty() || "off".equalsIgnoreCase(recorded)) {
+                        result.put("off", settings);
+                        logger.debug("Found 'off' (monochrome) background settings at flat path");
+                    } else {
+                        logger.warn(
+                                "Ignoring stale legacy background_settings.yml at {} (recorded wbMode='{}'). "
+                                        + "Move or delete this file -- the current per-mode subfolder "
+                                        + "({}/{}/background_settings.yml) is authoritative.",
+                                flatSettings.getAbsolutePath(),
+                                recorded,
+                                basePath,
+                                recorded);
                     }
                 }
             }

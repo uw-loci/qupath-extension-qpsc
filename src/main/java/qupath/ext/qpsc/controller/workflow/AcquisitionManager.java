@@ -272,7 +272,11 @@ public class AcquisitionManager {
         String profileKey = qupath.ext.qpsc.utilities.ObjectiveUtils.createEnhancedFolderName(
                 state.sample.modality(), state.sample.objective());
         return AngleResolutionService.resolve(
-                profileKey, state.sample.objective(), state.sample.detector(), state.angleOverrides);
+                profileKey,
+                state.sample.objective(),
+                state.sample.detector(),
+                state.angleOverrides,
+                state.wbMode);
     }
 
     /**
@@ -518,7 +522,7 @@ public class AcquisitionManager {
             if (tilesPerAngle == 0) {
                 tilesPerAngle = estimateTileCount(ann);
             }
-            perAnnotationFileCounts.add(tilesPerAngle * numAngles);
+            perAnnotationFileCounts.add(tilesPerAngle * initialStepsPerPosition);
         }
         logger.info("Per-annotation file counts: {}", perAnnotationFileCounts);
 
@@ -884,7 +888,7 @@ public class AcquisitionManager {
                 MicroscopeController.getInstance().startAcquisition(config.commandBuilder());
 
                 // Monitor progress
-                return monitorAcquisition(annotation, angleExposures, progressDialog);
+                return monitorAcquisition(annotation, angleExposures, channelExposures, progressDialog);
 
             } catch (Exception e) {
                 logger.error("Acquisition failed for {}", annotation.getName(), e);
@@ -898,7 +902,7 @@ public class AcquisitionManager {
      *
      * <p>This method:
      * <ul>
-     *   <li>Calculates expected file count based on tiles and angles</li>
+     *   <li>Calculates expected file count based on tiles and angles/channels</li>
      *   <li>Shows a progress bar with cancel button</li>
      *   <li>Polls the microscope server for status updates</li>
      *   <li>Handles user cancellation requests</li>
@@ -906,11 +910,15 @@ public class AcquisitionManager {
      *
      * @param annotation The annotation being acquired
      * @param angleExposures Rotation angles for calculating expected files
+     * @param channelExposures Channel list (for widefield IF); may be null or empty
      * @return true if completed successfully, false if cancelled/failed
      * @throws IOException if communication with microscope fails
      */
     private boolean monitorAcquisition(
-            PathObject annotation, List<AngleExposure> angleExposures, DualProgressDialog progressDialog)
+            PathObject annotation,
+            List<AngleExposure> angleExposures,
+            List<qupath.ext.qpsc.modality.ChannelExposure> channelExposures,
+            DualProgressDialog progressDialog)
             throws IOException {
 
         MicroscopeSocketClient socketClient = MicroscopeController.getInstance().getSocketClient();

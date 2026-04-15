@@ -23,15 +23,19 @@ public interface RotationStrategy {
     /**
      * Gets the rotation angles required for this modality.
      * May show a dialog for user selection in PPM modes.
+     * @param wbMode White balance mode so background-aware dialog validation
+     *               can target the correct per-mode subfolder.
      * @return CompletableFuture with list of rotation angles in ticks
      */
-    CompletableFuture<List<Double>> getRotationTicks();
+    CompletableFuture<List<Double>> getRotationTicks(String wbMode);
 
     /**
      * Gets the rotation angles with exposure times for this modality.
+     * @param wbMode White balance mode so background-aware dialog validation
+     *               can target the correct per-mode subfolder.
      * @return CompletableFuture with list of AngleExposure objects
      */
-    CompletableFuture<List<AngleExposure>> getRotationTicksWithExposure();
+    CompletableFuture<List<AngleExposure>> getRotationTicksWithExposure(String wbMode);
 
     /**
      * Gets a suffix to append to file/folder names for each angle.
@@ -77,7 +81,7 @@ class PPMRotationStrategy implements RotationStrategy {
     }
 
     @Override
-    public CompletableFuture<List<Double>> getRotationTicks() {
+    public CompletableFuture<List<Double>> getRotationTicks(String wbMode) {
         // Show dialog for angle selection with exposure times
         return PPMAngleSelectionController.showDialog(
                         plusAngleExposure.ticks(),
@@ -85,7 +89,8 @@ class PPMRotationStrategy implements RotationStrategy {
                         uncrossedAngleExposure.ticks(),
                         modality,
                         objective,
-                        detector)
+                        detector,
+                        wbMode)
                 .thenApply(result -> {
                     if (result == null) {
                         return new ArrayList<>();
@@ -95,7 +100,7 @@ class PPMRotationStrategy implements RotationStrategy {
     }
 
     @Override
-    public CompletableFuture<List<AngleExposure>> getRotationTicksWithExposure() {
+    public CompletableFuture<List<AngleExposure>> getRotationTicksWithExposure(String wbMode) {
         // Show dialog for angle selection with exposure times
         return PPMAngleSelectionController.showDialog(
                         plusAngleExposure.ticks(),
@@ -103,7 +108,8 @@ class PPMRotationStrategy implements RotationStrategy {
                         uncrossedAngleExposure.ticks(),
                         modality,
                         objective,
-                        detector)
+                        detector,
+                        wbMode)
                 .thenApply(result -> {
                     if (result == null) {
                         return new ArrayList<>();
@@ -148,12 +154,12 @@ class NoRotationStrategy implements RotationStrategy {
     }
 
     @Override
-    public CompletableFuture<List<Double>> getRotationTicks() {
+    public CompletableFuture<List<Double>> getRotationTicks(String wbMode) {
         return CompletableFuture.completedFuture(List.of());
     }
 
     @Override
-    public CompletableFuture<List<AngleExposure>> getRotationTicksWithExposure() {
+    public CompletableFuture<List<AngleExposure>> getRotationTicksWithExposure(String wbMode) {
         return CompletableFuture.completedFuture(List.of());
     }
 

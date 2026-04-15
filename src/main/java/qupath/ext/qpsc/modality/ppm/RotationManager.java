@@ -96,9 +96,10 @@ public class RotationManager {
     /**
      * Gets the rotation angles required for the current modality.
      * @param modalityName The modality name
+     * @param wbMode White balance mode (for background-aware dialog validation)
      * @return CompletableFuture with list of angles (ticks)
      */
-    public CompletableFuture<List<Double>> getRotationTicks(String modalityName) {
+    public CompletableFuture<List<Double>> getRotationTicks(String modalityName, String wbMode) {
         logger.info("Getting rotation angles for modality: {}", modalityName);
 
         for (RotationStrategy strategy : strategies) {
@@ -108,7 +109,7 @@ public class RotationManager {
             if (strategy.appliesTo(modalityName)) {
                 logger.info("Using {} for modality {}", strategy.getClass().getSimpleName(), modalityName);
 
-                CompletableFuture<List<Double>> anglesFuture = strategy.getRotationTicks();
+                CompletableFuture<List<Double>> anglesFuture = strategy.getRotationTicks(wbMode);
 
                 // Add logging to see what angles are returned
                 return anglesFuture.thenApply(angles -> {
@@ -128,15 +129,17 @@ public class RotationManager {
     /**
      * Gets the rotation angles with exposure times for the current modality.
      * @param modalityName The modality name
+     * @param wbMode White balance mode (for background-aware dialog validation)
      * @return CompletableFuture with list of AngleExposure objects
      */
-    public CompletableFuture<List<AngleExposure>> getRotationTicksWithExposure(String modalityName) {
+    public CompletableFuture<List<AngleExposure>> getRotationTicksWithExposure(
+            String modalityName, String wbMode) {
         logger.info("Getting rotation angles with exposure for modality: {}", modalityName);
 
         for (RotationStrategy strategy : strategies) {
             if (strategy.appliesTo(modalityName)) {
                 logger.info("Using {} for modality {}", strategy.getClass().getSimpleName(), modalityName);
-                return strategy.getRotationTicksWithExposure();
+                return strategy.getRotationTicksWithExposure(wbMode);
             }
         }
         return CompletableFuture.completedFuture(List.of());

@@ -91,7 +91,15 @@ public interface ModalityHandler {
      * @see AngleExposure
      * @see ModalityRegistry#getHandler(String)
      */
-    CompletableFuture<List<AngleExposure>> getRotationAngles(String modalityName, String objective, String detector);
+    /**
+     * @param wbMode the white-balance mode selected for this acquisition (e.g.
+     *               "per_angle", "simple", "off"). Used by implementations that
+     *               need to validate angle/exposure choices against stored
+     *               background images in the correct per-mode subfolder. Never
+     *               null; callers must resolve "off" for monochrome acquisitions.
+     */
+    CompletableFuture<List<AngleExposure>> getRotationAngles(
+            String modalityName, String objective, String detector, String wbMode);
 
     /**
      * Creates an optional JavaFX UI component for modality-specific parameter controls.
@@ -261,8 +269,12 @@ public interface ModalityHandler {
      * @return future containing the final angle-exposure list
      */
     default CompletableFuture<List<AngleExposure>> getRotationAnglesWithOverrides(
-            String modality, String objective, String detector, Map<String, Double> overrides) {
-        return getRotationAngles(modality, objective, detector)
+            String modality,
+            String objective,
+            String detector,
+            Map<String, Double> overrides,
+            String wbMode) {
+        return getRotationAngles(modality, objective, detector, wbMode)
                 .thenApply(angles ->
                         overrides != null && !overrides.isEmpty() ? applyAngleOverrides(angles, overrides) : angles);
     }

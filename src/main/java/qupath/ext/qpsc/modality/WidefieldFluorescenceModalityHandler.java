@@ -37,7 +37,9 @@ public class WidefieldFluorescenceModalityHandler implements ModalityHandler {
 
     @Override
     public CompletableFuture<List<AngleExposure>> getRotationAngles(
-            String modalityName, String objective, String detector) {
+            String modalityName, String objective, String detector, String wbMode) {
+        // wbMode is unused -- widefield fluorescence is always channel-based
+        // or a single snap with no WB-aware angle dialog.
         // If a channel library is declared for this profile, the workflow will
         // take the channel path and ignore angles. Return an empty list so the
         // command builder doesn't also emit a bogus single exposure.

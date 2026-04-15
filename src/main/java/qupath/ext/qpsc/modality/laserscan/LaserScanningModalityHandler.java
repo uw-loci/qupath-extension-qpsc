@@ -32,8 +32,9 @@ public class LaserScanningModalityHandler implements ModalityHandler {
 
     @Override
     public CompletableFuture<List<AngleExposure>> getRotationAngles(
-            String modalityName, String objective, String detector) {
-        // Point scanning acquires a single image per tile -- no rotation
+            String modalityName, String objective, String detector, String wbMode) {
+        // Point scanning acquires a single image per tile -- no rotation,
+        // no WB-aware angle dialog.
         return CompletableFuture.completedFuture(List.of());
     }
 

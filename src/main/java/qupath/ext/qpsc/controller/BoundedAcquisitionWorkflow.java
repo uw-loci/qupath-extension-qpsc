@@ -287,7 +287,11 @@ public class BoundedAcquisitionWorkflow {
             // service short-circuits to an empty list (no rotation axis).
             CompletableFuture<List<qupath.ext.qpsc.modality.AngleExposure>> anglesFuture =
                     AngleResolutionService.resolve(
-                            enhancedModality, result.objective(), result.detector(), result.angleOverrides());
+                            enhancedModality,
+                            result.objective(),
+                            result.detector(),
+                            result.angleOverrides(),
+                            result.wbMode());
 
             anglesFuture
                     .thenAccept(angleExposures -> {

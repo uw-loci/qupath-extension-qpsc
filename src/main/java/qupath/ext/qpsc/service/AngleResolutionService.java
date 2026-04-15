@@ -35,14 +35,28 @@ public final class AngleResolutionService {
      * @param objective      objective ID for hardware-specific lookup
      * @param detector       detector ID for hardware-specific lookup
      * @param angleOverrides user-provided angle overrides (may be null or empty)
+     * @param wbMode         white balance mode selected in the acquisition
+     *                       dialog. Threaded to the modality handler so that
+     *                       background-aware angle dialogs (PPM) validate
+     *                       against the correct per-mode subfolder instead of
+     *                       the legacy flat path.
      * @return future containing the resolved angle-exposure list
      */
     public static CompletableFuture<List<AngleExposure>> resolve(
-            String modality, String objective, String detector, Map<String, Double> angleOverrides) {
+            String modality,
+            String objective,
+            String detector,
+            Map<String, Double> angleOverrides,
+            String wbMode) {
 
         ModalityHandler handler = ModalityRegistry.getHandler(modality);
 
-        logger.info("Resolving rotation angles for modality={} obj={} det={}", modality, objective, detector);
+        logger.info(
+                "Resolving rotation angles for modality={} obj={} det={} wbMode={}",
+                modality,
+                objective,
+                detector,
+                wbMode);
 
         // Channel-based modalities (widefield IF, BF+IF) have no rotation axis:
         // the per-tile sequence is driven by the channel library, not angles.
@@ -73,9 +87,10 @@ public final class AngleResolutionService {
         // Resolve angles -- handler decides whether to show dialog, apply overrides, etc.
         if (angleOverrides != null && !angleOverrides.isEmpty()) {
             logger.info("Applying angle overrides from user dialog: {}", angleOverrides);
-            return handler.getRotationAnglesWithOverrides(modality, objective, detector, angleOverrides);
+            return handler.getRotationAnglesWithOverrides(
+                    modality, objective, detector, angleOverrides, wbMode);
         } else {
-            return handler.getRotationAngles(modality, objective, detector);
+            return handler.getRotationAngles(modality, objective, detector, wbMode);
         }
     }
 }

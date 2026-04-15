@@ -32,7 +32,9 @@ public class BrightfieldModalityHandler implements ModalityHandler {
 
     @Override
     public CompletableFuture<List<AngleExposure>> getRotationAngles(
-            String modalityName, String objective, String detector) {
+            String modalityName, String objective, String detector, String wbMode) {
+        // wbMode is unused here -- brightfield uses monochrome detectors or
+        // "off" WB only; the angle-selection path has no WB-aware dialog.
         // Brightfield: single image per tile, no rotation. We still return a
         // single AngleExposure with angle=0 so downstream code has an exposure
         // value to use; the AcquisitionCommandBuilder's nonRotation flag
