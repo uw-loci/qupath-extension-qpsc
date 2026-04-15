@@ -1331,27 +1331,48 @@ public class MicroscopeConfigManager {
     }
 
     /**
-     * Get background correction folder for a specific modality.
-     * Reads from imageprocessing_{microscope}.yml -> background_correction -> modality -> base_folder
-     * Returns null if not found.
+     * Resolves the background_correction entry for a modality, trying the exact
+     * key first and falling back to the family prefix (e.g. "ppm_20x" -> "ppm").
+     * Config keys under background_correction use family names without magnification;
+     * callers often pass magnification-suffixed variants.
      */
     @SuppressWarnings("unchecked")
-    public String getBackgroundCorrectionFolder(String modality) {
-        logger.debug("Getting background correction folder for modality: {}", modality);
-
-        // Check external imageprocessing config
-        if (imageprocessingData != null && imageprocessingData.containsKey("background_correction")) {
-            Map<String, Object> bgCorrection = (Map<String, Object>) imageprocessingData.get("background_correction");
-            if (bgCorrection != null && bgCorrection.containsKey(modality)) {
-                Map<String, Object> modalityBg = (Map<String, Object>) bgCorrection.get(modality);
-                if (modalityBg != null && modalityBg.containsKey("base_folder")) {
-                    String folder = modalityBg.get("base_folder").toString();
-                    logger.debug("Found background folder in imageprocessing config: {}", folder);
-                    return folder;
-                }
+    private Map<String, Object> getBackgroundCorrectionEntry(String modality) {
+        if (imageprocessingData == null || !imageprocessingData.containsKey("background_correction")) {
+            return null;
+        }
+        Map<String, Object> bgCorrection = (Map<String, Object>) imageprocessingData.get("background_correction");
+        if (bgCorrection == null || modality == null) {
+            return null;
+        }
+        if (bgCorrection.containsKey(modality)) {
+            return (Map<String, Object>) bgCorrection.get(modality);
+        }
+        int underscore = modality.indexOf('_');
+        if (underscore > 0) {
+            String family = modality.substring(0, underscore);
+            if (bgCorrection.containsKey(family)) {
+                logger.debug("Resolved background_correction modality '{}' -> family '{}'", modality, family);
+                return (Map<String, Object>) bgCorrection.get(family);
             }
         }
+        return null;
+    }
 
+    /**
+     * Get background correction folder for a specific modality.
+     * Reads from imageprocessing_{microscope}.yml -> background_correction -> modality -> base_folder
+     * Falls back to the family key (e.g. "ppm" for "ppm_20x") if the exact modality key is absent.
+     * Returns null if not found.
+     */
+    public String getBackgroundCorrectionFolder(String modality) {
+        logger.debug("Getting background correction folder for modality: {}", modality);
+        Map<String, Object> modalityBg = getBackgroundCorrectionEntry(modality);
+        if (modalityBg != null && modalityBg.containsKey("base_folder")) {
+            String folder = modalityBg.get("base_folder").toString();
+            logger.debug("Found background folder in imageprocessing config: {}", folder);
+            return folder;
+        }
         logger.warn("No background correction folder found for {}", modality);
         return null;
     }
@@ -1359,51 +1380,33 @@ public class MicroscopeConfigManager {
     /**
      * Check if background correction is enabled for a modality.
      * Reads from imageprocessing_{microscope}.yml -> background_correction -> modality -> enabled
+     * Falls back to the family key (e.g. "ppm" for "ppm_20x") if the exact modality key is absent.
      */
-    @SuppressWarnings("unchecked")
     public boolean isBackgroundCorrectionEnabled(String modality) {
-        // Check external imageprocessing config
-        if (imageprocessingData != null && imageprocessingData.containsKey("background_correction")) {
-            Map<String, Object> bgCorrection = (Map<String, Object>) imageprocessingData.get("background_correction");
-            if (bgCorrection != null && bgCorrection.containsKey(modality)) {
-                Map<String, Object> modalityBg = (Map<String, Object>) bgCorrection.get(modality);
-                if (modalityBg != null && modalityBg.containsKey("enabled")) {
-                    Boolean enabled = (Boolean) modalityBg.get("enabled");
-                    logger.debug(
-                            "Found background_correction.enabled in imageprocessing config for {}: {}",
-                            modality,
-                            enabled);
-                    return enabled != null && enabled;
-                }
-            }
+        Map<String, Object> modalityBg = getBackgroundCorrectionEntry(modality);
+        if (modalityBg != null && modalityBg.containsKey("enabled")) {
+            Boolean enabled = (Boolean) modalityBg.get("enabled");
+            logger.debug(
+                    "Found background_correction.enabled in imageprocessing config for {}: {}", modality, enabled);
+            return enabled != null && enabled;
         }
-
         return false;
     }
 
     /**
      * Get background correction method for a modality.
      * Reads from imageprocessing_{microscope}.yml -> background_correction -> modality -> method
+     * Falls back to the family key (e.g. "ppm" for "ppm_20x") if the exact modality key is absent.
      * Returns null if not configured.
      */
-    @SuppressWarnings("unchecked")
     public String getBackgroundCorrectionMethod(String modality) {
-        // Check external imageprocessing config
-        if (imageprocessingData != null && imageprocessingData.containsKey("background_correction")) {
-            Map<String, Object> bgCorrection = (Map<String, Object>) imageprocessingData.get("background_correction");
-            if (bgCorrection != null && bgCorrection.containsKey(modality)) {
-                Map<String, Object> modalityBg = (Map<String, Object>) bgCorrection.get(modality);
-                if (modalityBg != null && modalityBg.containsKey("method")) {
-                    String method = modalityBg.get("method").toString();
-                    logger.debug(
-                            "Found background_correction.method in imageprocessing config for {}: {}",
-                            modality,
-                            method);
-                    return method;
-                }
-            }
+        Map<String, Object> modalityBg = getBackgroundCorrectionEntry(modality);
+        if (modalityBg != null && modalityBg.containsKey("method")) {
+            String method = modalityBg.get("method").toString();
+            logger.debug(
+                    "Found background_correction.method in imageprocessing config for {}: {}", modality, method);
+            return method;
         }
-
         return null;
     }
 
