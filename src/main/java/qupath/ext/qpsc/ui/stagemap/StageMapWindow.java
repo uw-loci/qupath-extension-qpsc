@@ -598,15 +598,22 @@ public class StageMapWindow {
                 }
             } else {
                 // null position is also an error
-                handlePollingError();
+                handlePollingError(null);
             }
 
         } catch (Exception e) {
-            handlePollingError();
+            handlePollingError(e);
         }
     }
 
-    private void handlePollingError() {
+    private void handlePollingError(Exception e) {
+        // Aux reconnect cooldown is a transient back-off imposed by the
+        // socket client when the auxiliary channel is contended (e.g. during
+        // an active acquisition). It is not a disconnection -- don't let it
+        // trip the Disconnected state. Just skip this cycle and retry later.
+        if (e != null && isCooldownError(e)) {
+            return;
+        }
         consecutiveErrors++;
 
         // Only update UI once when we hit the error threshold
@@ -626,6 +633,17 @@ public class StageMapWindow {
                 }
             });
         }
+    }
+
+    private static boolean isCooldownError(Throwable t) {
+        while (t != null) {
+            String msg = t.getMessage();
+            if (msg != null && msg.contains("cooldown")) {
+                return true;
+            }
+            t = t.getCause();
+        }
+        return false;
     }
 
     /**

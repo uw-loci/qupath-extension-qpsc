@@ -1404,6 +1404,15 @@ public class LiveViewerWindow {
      * this single check.
      */
     private void checkDesyncAndRecover(MicroscopeController controller) {
+        // Guard against stale state: when live is off, or when the arrival
+        // timestamp has been reset to 0, skip entirely. Without this, the
+        // IOException catch in pollFrame() drives this method regardless of
+        // liveActive, and sinceLast collapses to (now - 0) = raw epoch ms,
+        // producing "No frames for 1776...ms" spam every 100 ms during
+        // acquisition-induced aux socket contention.
+        if (!liveActive || lastFrameArrivalTime == 0) {
+            return;
+        }
         long now = System.currentTimeMillis();
         long elapsed = now - liveOnTimestamp;
         long sinceLast = now - lastFrameArrivalTime;
