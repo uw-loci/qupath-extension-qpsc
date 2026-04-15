@@ -120,6 +120,7 @@ After all tiles are captured, automatic stitching begins:
 - Image opens in QuPath viewer
 - Metadata is populated with acquisition details
 - Temporary tiles are handled per preferences
+- **A per-slide stage alignment is registered automatically** (see below)
 
 ![Acquisition progress dialog](../images/Docs_AcquisitionWorkflowProgress.png)
 
@@ -129,6 +130,24 @@ After all tiles are captured, automatic stitching begins:
 - Stitched pyramidal image (OME-TIFF or OME-ZARR) added to the project
 - Acquisition metadata stored in project
 - Temporary tile images (handled per preference settings)
+- Per-slide alignment JSON in `{project}/alignmentFiles/{imageName}_alignment.json`
+
+## Automatic Stage Alignment
+
+Because you supplied the stage bounds directly, QPSC already knows how every pixel in the stitched image maps to a physical stage position — no manual 3-point alignment is required. When the stitched file is imported, the workflow writes a pixel -> stage affine transform keyed by the stitched image's file name.
+
+**What you can do with it immediately:**
+
+- Open the stitched image and draw an ROI anywhere.
+- Click **Go to centroid** in the Live Viewer (Navigate tab). The button is enabled as soon as the new image is opened — you do not have to run Microscope Alignment first.
+- Double-click any point in the Live Viewer to center the stage there.
+
+The alignment is scoped to the current project. If you re-open the same image in a different project you will need to either re-register it (e.g. via a new BoundingBox acquisition over the same region) or use the Microscope Alignment workflow to add a manual one.
+
+**When auto-alignment does NOT fire:**
+
+- Annotation-based acquisitions from the **Existing Image Acquisition** workflow — those inherit their parent macro image's alignment and do not need a standalone registration.
+- Multi-channel widefield IF / BF+IF acquisitions where the channel merge fails: in the fallback path each per-channel pyramid is registered independently under its own file name, so Go-to-centroid still works when you open any one of them.
 
 ## Tips & Troubleshooting
 

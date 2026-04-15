@@ -54,7 +54,7 @@ if (flipX && flipY) {
 
 ### Step 3: Affine Transform (alignment calibration)
 
-The affine transform maps macro pixel coordinates to stage micrometers. It is computed during the Microscope Alignment workflow by collecting 3+ corresponding points in both coordinate spaces.
+The affine transform maps macro pixel coordinates to stage micrometers. It is computed either during the Microscope Alignment workflow (by collecting 3+ corresponding points in both coordinate spaces) or is auto-registered at import time by a BoundingBox acquisition (see "Auto-Registered Transforms" below).
 
 ```
 | a  b  tx |     | macro_x |     | stage_x |
@@ -63,6 +63,51 @@ The affine transform maps macro pixel coordinates to stage micrometers. It is co
 ```
 
 The transform encodes scale, rotation, and translation. It is stored persistently as JSON by `AffineTransformManager`.
+
+## Two Tiers of Transform Storage
+
+`AffineTransformManager` exposes two independent persistence paths:
+
+| Tier | File | Key | Created by | Consumed by |
+|------|------|-----|------------|-------------|
+| **Named presets** | `microscope_configurations/saved_transforms.json` | Preset name (scope-wide) | Manual alignment workflow when the user saves a reusable preset | `loadSavedTransformFromPreferences` — applied globally |
+| **Per-slide alignments** | `{project}/alignmentFiles/{imageName}_alignment.json` | Image file name | Manual alignment workflow (per slide) **and** BoundingBox auto-registration | `StageControlPanel.initializeCentroidButton` via `AffineTransformManager.loadSlideAlignment(project, imageName)` |
+
+Named presets survive across projects and sessions. Per-slide alignments live inside a specific project and are keyed by the stitched image's on-disk file name, which is the same string `QPProjectFunctions.getActualImageFileName(imageData)` returns — this is how the Live Viewer's Go-to-centroid button decides whether an alignment exists for the currently open image.
+
+## Auto-Registered Transforms (BoundingBox acquisitions)
+
+Every BoundingBox acquisition registers its own per-slide alignment automatically at stitch-import time, so Live Viewer Move-to-centroid and click-to-center work on the resulting image with zero manual alignment steps. The trick: BoundingBox already knows every input the transform needs.
+
+**Inputs:**
+
+| Input | Source |
+|-------|--------|
+| Stage bounds `(x1, y1, x2, y2)` in µm | User-entered in the BoundingBox dialog, carried through `StitchingMetadata.stageBoundsX1Um/...` |
+| Stitched image pixel dimensions `(widthPx, heightPx)` | Read from the stitched file's `ImageServer` after import |
+| Orientation | Guaranteed canonical — the stitcher already honours `StageImageTransform.stitcherFlipFlags()` when writing output |
+
+**Math** (in `AffineTransformManager.buildTransformFromStageBounds`):
+
+```java
+scaleX = (x2 - x1) / widthPx;
+scaleY = (y2 - y1) / heightPx;
+transform = new AffineTransform();
+transform.translate(x1, y1);
+transform.scale(scaleX, scaleY);
+```
+
+The result is a pixel → stage transform with positive scale components and a translation equal to the top-left stage corner.
+
+**Hook points** — `StitchingHelper.autoRegisterBoundsTransformIfAvailable` is called from three import sites so every flow is covered:
+
+1. `StitchingHelper.importMergedImageOnly` — merged multichannel output (IF / BF+IF)
+2. `StitchingHelper.importPerChannelFallback` — merge-failure fallback (each per-channel file gets its own alignment)
+3. `TileProcessingUtilities.stitchImagesAndUpdateProject` single-file branch — non-channel region stitching (single-angle, PPM, etc.)
+
+The helper is a no-op unless `StitchingMetadata.hasStageBounds()` is true, so annotation-based acquisitions are unaffected and continue to inherit alignment from the parent macro image.
+
+**Annotation acquisitions remain parent-inherited:** they do not register a standalone alignment because they already work through the parent's transform plus the `xOffset`/`yOffset` metadata fields (see `StageControlPanel.handleGoToCentroid` sub-image branch, which derives sign from the parent alignment's scale signs).
 
 ## Flip vs Inversion
 
@@ -137,7 +182,10 @@ The `--hint-z` flag tells the server to start its autofocus search near the pred
 | `utilities/ImageFlipHelper.java` | Creates flipped duplicate images |
 | `utilities/TilingUtilities.java` | Grid computation with axis inversion |
 | `utilities/ZFocusPredictionModel.java` | Tilt correction model |
-| `controller/MicroscopeAlignmentWorkflow.java` | Calibrates the affine transform |
+| `controller/MicroscopeAlignmentWorkflow.java` | Calibrates the affine transform (manual 3-point workflow) |
 | `controller/workflow/SingleTileRefinement.java` | SIFT-based position refinement |
+| `controller/workflow/StitchingHelper.java` | `autoRegisterBoundsTransformIfAvailable` — BoundingBox auto-registration |
+| `model/StitchingMetadata.java` | Carries optional stage bounds through the stitch path |
+| `controller/BoundedAcquisitionWorkflow.java` | Passes `(x1, y1, x2, y2)` into the bounds-aware `performRegionStitching` overload |
 | `preferences/QPPreferenceDialog.java` | Stage inversion flags |
 | `utilities/MicroscopeConfigManager.java` | Per-detector flip lookup |

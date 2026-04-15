@@ -299,6 +299,17 @@ Observe which direction the physical stage actually moves. If it moves in the la
 3. Points must be on the same image (can't mix images)
 4. Reference points must have both QuPath and stage coordinates recorded
 
+#### Q: Go to Centroid button is disabled on a BoundingBox acquisition output
+
+**A:** Every BoundingBox acquisition registers its own stage alignment automatically at stitch-import time, so the button should enable as soon as the new image is opened. If it does not, check in this order:
+
+1. **Open the image first.** The button state is re-evaluated on image change. Click the stitched image in the project tab.
+2. **Session log** (QuPath menu: View → Show log). Look for a line beginning `Auto-registered stage alignment for '<file>' from BoundingBox metadata`. If that line is missing, the registration never ran -- most likely because the stitched file was not readable by the image server at import time (Windows file lock, partial write, or merged file was never produced). Check the lines above it for a `ChannelMerger` / `PyramidImageWriter` warning.
+3. **Alignment file on disk.** Look in `{project}/alignmentFiles/` for a file named `{your-image}_alignment.json`. If it exists, the registration succeeded and the button should be enabled -- restart QuPath to force `StageControlPanel` to re-initialize. If it does not exist, re-run the BoundingBox acquisition after fixing any merge warnings.
+4. **Wrong lookup key.** The alignment is keyed by the on-disk file name returned by `QPProjectFunctions.getActualImageFileName(imageData)`. If you renamed the image in the project browser, the key no longer matches and the button will show `No alignment for: ...` -- either revert the rename or run Microscope Alignment to register a new one under the current name.
+
+For multi-channel IF / BF+IF acquisitions where the merge failed and each per-channel file was imported individually, every channel gets its own alignment. Opening any one of them should enable the button.
+
 ### Acquisition Problems
 
 #### Q: Acquisition starts but no images appear
@@ -805,6 +816,111 @@ See [CHANNELS.md](CHANNELS.md#3-profile-level-selection-and-overrides) for the f
 **A:** Some hardware (filter wheels, reflector turrets, certain light paths) reports `isBusy() = false` before the LED intensity or filter position has actually settled. Micro-Manager's `waitForDevice` cannot detect the remaining settling time, so the camera snaps too early.
 
 **Fix:** Add `settle_ms: <N>` to the offending channel in its YAML library entry. Start with 50-100 ms and tune down. This is a dumb sleep applied after all presets and property writes have been issued and `waitForDevice` has returned, immediately before the exposure is set and the image is snapped.
+
+### Widefield IF / BF+IF Gotchas (2026-04-13/14 session)
+
+This section documents failure signatures that were shaken out during the OWS3 widefield IF and BF+IF bring-up. Each item is: symptom -> what the log looks like -> root cause -> where it was fixed. If you are running an older build and see one of these, upgrading to the listed commit (or newer) is the real fix.
+
+#### Q: I picked two channels but the result only has one
+
+**A:** The merged OME-TIFF opens in QuPath with a single channel even though two (or more) channels were checked in the picker and acquisition appeared to succeed.
+
+**Log signature:**
+```
+StitchingHelper: Stitching region: bounds (single pass, no rotation or channel axis)
+...
+Updating server metadata for 1 channel
+```
+
+**Root cause:** The channel-library lookup used the base modality name (e.g. `widefield`) instead of the enhanced profile key (e.g. `Fluorescence_10x`) when deciding whether this was a channel-based run. The lookup returned no library, so the channel branch silently fell through to the single-pass stitcher, which flattened all the per-tile TIFFs it found into a single pancaked image.
+
+**Resolved in:** `b40c98e` + `0a67083` -- the channel branch is now wired into `performRegionStitching` as well as `performAnnotationStitching`, and both lookups use the enhanced profile key.
+
+#### Q: Merge said success but the output OME-TIFF is still 1 channel
+
+**A:** The stitching log clearly reports a multichannel merge, but when you open the file in QuPath (or read the OME metadata) it has one channel.
+
+**Log signature:**
+```
+ChannelMerger: Channel-merged (2 sources, 2 channels)
+PyramidImageWriter: Writing plane 1/1
+...
+1 channel
+```
+
+**Root cause:** `PyramidImageWriter.writeOMETIFF` unconditionally called `channelsInterleaved()` on the OME builder. Under JPEG-2000 compression this packs channels as samples-per-pixel, which the downstream writer then truncates to the first sample, dropping every channel after the first.
+
+**Resolved in:** tiles-to-pyramid `b60b689` -- `channelsInterleaved()` is now gated on `isRGB()` so only RGB images use interleaved samples. Grayscale multichannel OME-TIFFs write channels as separate planes and survive the round-trip.
+
+#### Q: Acquisition succeeds but all tile channels look identical
+
+**A:** Every channel subdirectory has the same number of tiles and they line up, but opening a DAPI tile and a FITC tile from the same position shows essentially the same image. Nothing is switching between channels at the hardware level.
+
+**Log signature (server side):**
+```
+'mmcorej_CMMCore' object has no attribute 'setConfig'
+'mmcorej_CMMCore' object has no attribute 'setProperty'
+'mmcorej_CMMCore' object has no attribute 'waitForDevice'
+```
+These warnings appear once per channel per tile.
+
+**Root cause:** `apply_channel_hardware_state` in the Python server used Java-style camelCase method names (`setConfig`, `setProperty`, `waitForDevice`) instead of pycromanager's snake_case equivalents (`set_config`, `set_property`, `wait_for_device`). Every hardware call raised an AttributeError, was caught by the guard clause, and was logged as a warning. The camera kept snapping, but whatever state the previous tile had left on the scope was what actually got captured -- so every "channel" came from the same hardware configuration.
+
+**Resolved in:** server commit `2498383` -- all pycromanager calls in `apply_channel_hardware_state` now use the correct snake_case API.
+
+#### Q: "Cannot set property State to 1.000000" on LappMainBranch1 at acquisition start
+
+**A:** Acquisition fails immediately on the first tile (or sometimes during mode setup) with a property rejection from `LappMainBranch1`.
+
+**Log signature:**
+```
+Cannot set property "State" to "1.000000" [ LappMainBranch1: Invalid property value: State (3) ]
+```
+
+**Root cause:** `apply_mode_setup` step 5 called `illumination.set_power(1.0)` using the profile's legacy `illumination_intensity` field. OWS3's `Fluorescence` modality declares its legacy illumination device as `LappMainBranch1` with `intensity_property: State`, which is a discrete integer property (0/1/2/3) and rejects float strings like `"1.000000"`. For channel-based profiles the per-channel library already handles illumination, so the profile-level `set_power` call is both wrong and unnecessary.
+
+**Resolved in:** `microscope_control/8e04254` -- `apply_mode_setup` now skips profile-level illumination for any profile whose modality has a `channels:` library. The per-channel `intensity_property` writes are still honored.
+
+#### Q: "Acquisition refused -- no channels selected" even though I opened the picker
+
+**A:** You checked "Customize channel selection for this acquisition" but did not tick any individual channel rows, then clicked OK.
+
+**Root cause:** The master override checkbox and the individual row checkboxes are independent. Turning on the master checkbox means "I am going to explicitly pick the channels for this run." An empty channel list in that mode is a different thing from leaving the master checkbox off, and the workflow refuses to run rather than silently falling back to the full library (which would be an invisible surprise downstream).
+
+**Fix:** Either tick at least one row, or turn the master checkbox off and rerun. See [WORKFLOWS.md Multi-Channel section](WORKFLOWS.md#multi-channel-acquisition-widefield-if-bfif) for the full picker behavior.
+
+#### Q: FITC / TRITC entries flicker into my QuPath project before a merged entry appears
+
+**A:** During acquisition you see per-channel project entries pop up (`..._FITC`, `..._TRITC`, etc.), then disappear and get replaced by a single merged entry. QuPath also prompts "Save changes to <entry>.qpdata?" as the old entries are removed.
+
+**Root cause:** `processAngleWithIsolation` imported every per-channel stitched OME-TIFF to the QuPath project as it was produced. The merge step then imported the merged file as a new entry and removed the per-channel ones -- but not before they had already appeared in the project tree and triggered auto-save dialogs on switch.
+
+**Resolved in:** `882367d` -- per-channel stitched files are now written with `skipProjectImport: true`. They still land on disk as recovery artifacts in the channel subdirectories, but the merged multichannel OME-TIFF is the only thing the project ever sees. No flicker, no qpdata save prompt.
+
+#### Q: Autofocus fails on sparse samples (beads, pollen, seeds)
+
+**A:** Autofocus refuses to run on a clearly-visible sample. The tissue texture gate passes but the area gate fails.
+
+**Log signature:**
+```
+Tissue stats: texture=0.0499 (threshold=0.0050)  PASS
+Tissue stats: area=0.009 (threshold=0.200)  FAIL
+```
+
+**Root cause:** The area gate ("fraction of the tile that is tissue") is a dense-sample assumption baked into the default autofocus strategy. Sparse samples -- fluorescent beads, pollen grains, individual seeds, single cells on a clean coverslip -- legitimately cover 1% of the field of view, so the gate fires every time.
+
+**Current workaround:** `autofocus_OWS3.yml` now ships with a v2 schema that has per-modality strategies (`dense`, `sparse`, `dark-field`, `manual_only`, ...). The loader reads them at acquisition start and logs which one was chosen. **The AF call-site swap that actually consumes the strategy object is deferred**, so today the way to tune the area threshold for a sparse sample is to hand-edit `autofocus_OWS3.yml`:
+
+```yaml
+strategies:
+  sparse:
+    texture_threshold: 0.003
+    area_threshold: 0.005
+    n_steps: 21
+    search_range_um: 40
+```
+
+and pick it (or `manual_only`) as the modality's default. The GUI dropdown for strategy selection is a follow-up feature -- see the [Autofocus Strategy Override note in WORKFLOWS.md](WORKFLOWS.md#autofocus-strategy-override-partial-feature).
 
 ### Performance & Optimization
 
