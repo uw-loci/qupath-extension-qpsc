@@ -91,23 +91,36 @@ public class UIFunctions {
      * - It is explicitly closed via the returned handle
      *
      * @param progressCounter Thread-safe counter (incremented externally as work completes).
-     * @param totalFiles      The max value of progressCounter.
+     * @param totalFiles      The max value of progressCounter (raw image file count).
      * @param timeoutMs       If no progress for this many ms, bar will auto-terminate.
      * @param showCancelButton Whether to show a cancel button
+     * @param stepsPerPosition Number of image files written per physical
+     *                         XY position. Used only for the user-facing
+     *                         label text ("Positions acquired: N of M") --
+     *                         the progress bar itself still advances per
+     *                         file for smooth updates. Pass 1 for
+     *                         single-shot modalities (brightfield),
+     *                         channelCount for widefield IF, angleCount
+     *                         for PPM, or their product when combined.
      * @return a ProgressHandle you can .close() when you're done, and set cancel callback on
      */
     public static ProgressHandle showProgressBarAsync(
-            AtomicInteger progressCounter, int totalFiles, int timeoutMs, boolean showCancelButton) {
+            AtomicInteger progressCounter, int totalFiles, int timeoutMs,
+            boolean showCancelButton, int stepsPerPosition) {
 
         final ProgressHandle[] handleHolder = new ProgressHandle[1];
+        final int stepsPerPositionFinal = Math.max(1, stepsPerPosition);
+        final int totalPositions = totalFiles / stepsPerPositionFinal;
 
         Platform.runLater(() -> {
-            logger.info("Creating progress bar UI on FX thread for {} total files", totalFiles);
+            logger.info(
+                    "Creating progress bar UI on FX thread for {} total files ({} positions x {} steps)",
+                    totalFiles, totalPositions, stepsPerPositionFinal);
             Stage stage = new Stage();
             ProgressBar progressBar = new ProgressBar(0);
             progressBar.setPrefWidth(300);
             Label timeLabel = new Label("Estimating time...");
-            Label progressLabel = new Label("Tiles acquired: 0 of " + totalFiles);
+            Label progressLabel = new Label("Positions acquired: 0 of " + totalPositions);
             Label statusLabel = new Label("Acquisition in progress...");
 
             VBox vbox = new VBox(10, progressBar, progressLabel, timeLabel, statusLabel);
@@ -164,10 +177,16 @@ public class UIFunctions {
                     startTime.set(now);
                 }
 
-                // Update UI
+                // Update UI. Progress bar fraction uses raw file count
+                // for smooth per-image advancement. Label text shows
+                // physical XY positions by dividing by stepsPerPosition
+                // -- this is what the user actually cares about ("how
+                // many stage stops remain") and matches the stage
+                // movement cadence rather than the image-write cadence.
                 double fraction = totalFiles > 0 ? current / (double) totalFiles : 0.0;
                 progressBar.setProgress(fraction);
-                progressLabel.setText("Positions acquired: " + current + " of " + totalFiles);
+                int positionsDone = current / stepsPerPositionFinal;
+                progressLabel.setText("Positions acquired: " + positionsDone + " of " + totalPositions);
 
                 // Update status message based on progress
                 if (current == 0) {
@@ -291,8 +310,20 @@ public class UIFunctions {
         return handleHolder[0];
     }
 
+    /**
+     * Backward-compatible overload. Assumes each image file is its own
+     * "position" (stepsPerPosition = 1) -- correct for single-shot
+     * modalities like plain brightfield. Channel-based (widefield IF)
+     * and angle-based (PPM) callers should use the 5-arg form above to
+     * get accurate position counts in the progress label.
+     */
+    public static ProgressHandle showProgressBarAsync(
+            AtomicInteger progressCounter, int totalFiles, int timeoutMs, boolean showCancelButton) {
+        return showProgressBarAsync(progressCounter, totalFiles, timeoutMs, showCancelButton, 1);
+    }
+
     public static ProgressHandle showProgressBarAsync(AtomicInteger progressCounter, int totalFiles, int timeoutMs) {
-        return showProgressBarAsync(progressCounter, totalFiles, timeoutMs, false);
+        return showProgressBarAsync(progressCounter, totalFiles, timeoutMs, false, 1);
     }
     /**
      * Shows an error dialog on the JavaFX thread with proper text wrapping.

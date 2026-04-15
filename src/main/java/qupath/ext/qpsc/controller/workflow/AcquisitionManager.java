@@ -497,10 +497,15 @@ public class AcquisitionManager {
             return CompletableFuture.completedFuture(false);
         }
 
-        // Set angle count for correct position display in the progress dialog
-        int numAngles = (angleExposures != null && !angleExposures.isEmpty()) ? angleExposures.size() : 1;
-        final int finalNumAngles = numAngles;
-        Platform.runLater(() -> progressDialog.setAngleCount(finalNumAngles));
+        // Set initial steps-per-position for the progress dialog based on
+        // the angle count we already have. For channel-based acquisitions
+        // (widefield IF) the correct value depends on channelExposures,
+        // which isn't resolved until performSingleAnnotationAcquisition
+        // runs; that method corrects this value once channels are known.
+        int initialStepsPerPosition =
+                (angleExposures != null && !angleExposures.isEmpty()) ? angleExposures.size() : 1;
+        final int finalInitialSteps = initialStepsPerPosition;
+        Platform.runLater(() -> progressDialog.setStepsPerPosition(finalInitialSteps));
 
         // Pre-compute file counts per annotation so the dialog can estimate
         // time for future annotations accurately (instead of assuming all are
@@ -925,22 +930,39 @@ public class AcquisitionManager {
             logger.info("Estimated {} tiles for annotation {}", tilesPerAngle, annotation.getName());
         }
 
-        final int expectedFiles = angleExposures != null && !angleExposures.isEmpty()
-                ? tilesPerAngle * angleExposures.size()
-                : tilesPerAngle;
+        // Steps per physical XY position: either the angle count
+        // (PPM) or the channel count (widefield IF), floored at 1.
+        // Python's acquisition workflow writes one file per (tile,
+        // step) pair, so the total file count is tiles * steps. The
+        // two axes are mutually exclusive upstream so we take the
+        // max; if both are zero/empty we fall back to 1 for a plain
+        // single-shot acquisition.
+        int numChannelsForProgress = (channelExposures != null) ? channelExposures.size() : 0;
+        int numAnglesForProgress = (angleExposures != null) ? angleExposures.size() : 0;
+        final int stepsPerPositionForProgress =
+                Math.max(1, Math.max(numChannelsForProgress, numAnglesForProgress));
+        final int expectedFiles = tilesPerAngle * stepsPerPositionForProgress;
 
         logger.info(
-                "Expected files: {} ({}x{} angles)",
+                "Expected files: {} ({} tiles x {} steps/position; angles={}, channels={})",
                 expectedFiles,
                 tilesPerAngle,
-                angleExposures != null ? angleExposures.size() : 1);
+                stepsPerPositionForProgress,
+                numAnglesForProgress,
+                numChannelsForProgress);
 
         // Create progress counter
         AtomicInteger progressCounter = new AtomicInteger(0);
 
-        // Start tracking this annotation in the dual progress dialog
+        // Start tracking this annotation in the dual progress dialog.
+        // Correct the steps-per-position now that channels are
+        // resolved -- the initial call in processAnnotations could
+        // only see angles. Idempotent when the value is unchanged.
         if (progressDialog != null && !progressDialog.isCancelled()) {
-            Platform.runLater(() -> progressDialog.startAnnotation(annotation.getName(), expectedFiles));
+            Platform.runLater(() -> {
+                progressDialog.setStepsPerPosition(stepsPerPositionForProgress);
+                progressDialog.startAnnotation(annotation.getName(), expectedFiles);
+            });
         }
 
         // Flag to track if we've read the acquisition metadata file

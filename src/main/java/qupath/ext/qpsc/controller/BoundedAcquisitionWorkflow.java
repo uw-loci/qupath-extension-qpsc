@@ -424,8 +424,17 @@ public class BoundedAcquisitionWorkflow {
 
                                 UIFunctions.ProgressHandle progressHandle = null;
                                 if (expectedFiles > 0) {
+                                    // Pass expectedFilesPerTile as the steps-per-position
+                                    // so the progress dialog displays physical XY
+                                    // positions, not raw image file counts. For 4-channel
+                                    // widefield IF with 10 tiles this shows "10 of 10
+                                    // positions" instead of the previously-wrong "40 of 40".
                                     progressHandle = UIFunctions.showProgressBarAsync(
-                                            progressCounter, expectedFiles, 300000, true);
+                                            progressCounter,
+                                            expectedFiles,
+                                            300000,
+                                            true,
+                                            expectedFilesPerTile);
 
                                     final UIFunctions.ProgressHandle finalHandle = progressHandle;
                                     progressHandle.setCancelCallback(v -> {

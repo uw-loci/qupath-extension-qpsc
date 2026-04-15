@@ -63,9 +63,25 @@ public class DualProgressDialog {
     private final AtomicInteger currentAnnotationProgress = new AtomicInteger(0);
     private final AtomicLong currentAnnotationStartTime = new AtomicLong(0);
 
-    // Angle count for converting file counts to position counts in the display.
-    // For single-angle modalities this is 1; for PPM it may be 4, etc.
-    private final AtomicInteger angleCount = new AtomicInteger(1);
+    // Steps per physical XY position -- used to convert the
+    // file-counting progress from the acquisition server into the
+    // position-counting display the user expects. One "step" is one
+    // image written by the camera; one position may write multiple
+    // steps in a variety of arrangements:
+    //   - PPM / polarized: N rotation angles per position
+    //   - Widefield IF: N fluorescence channels per position
+    //   - Multi-Z modalities (future): N z-planes per position
+    //   - Combinations: angles x z, channels x z, etc.
+    // All currently-implemented modalities use EITHER angles OR
+    // channels (mutually exclusive upstream), optionally multiplied
+    // by z-plane count. Callers compute the product and call
+    // setStepsPerPosition() with the result.
+    //
+    // Was previously named "angleCount" when only PPM needed the
+    // division. Renamed 2026-04-15 when widefield IF surfaced the
+    // same pattern for channels and we realized multi-Z modalities
+    // would need it too.
+    private final AtomicInteger stepsPerPosition = new AtomicInteger(1);
 
     // Tile timing tracking for better estimation (uses recent actual timing, no hardcoded values)
     // Dynamic timing window size based on autofocus settings (5x n_steps for that objective)
@@ -377,11 +393,20 @@ public class DualProgressDialog {
      * Sets the number of rotation angles per position for the current modality.
      * Used to convert between file counts (from server) and position counts (for display).
      *
-     * @param angles Number of angles (1 for single-angle, 4 for typical PPM, etc.)
+     * <p>One "step" is one image written by the camera. One position may
+     * correspond to multiple steps: PPM writes N angles per position,
+     * widefield IF writes N channels per position, multi-Z modalities
+     * write N z-planes per position, etc. Callers should compute the
+     * product of all such axes and pass the result here.
+     *
+     * @param steps Number of image files written per physical XY position
+     *              (1 for single-shot brightfield, 4 for typical PPM,
+     *              3 for a 3-channel IF acquisition, 12 for 4 angles x
+     *              3 z-planes, etc.)
      */
-    public void setAngleCount(int angles) {
-        if (angles > 0) {
-            angleCount.set(angles);
+    public void setStepsPerPosition(int steps) {
+        if (steps > 0) {
+            stepsPerPosition.set(steps);
         }
     }
 
@@ -458,10 +483,14 @@ public class DualProgressDialog {
         if (currentAnnotationName.isEmpty()) {
             currentProgressLabel.setText("Current Annotation: Waiting to start...");
         } else {
-            // Display in positions (file count / angle count) for user clarity
-            int angles = angleCount.get();
-            int positionsDone = currentFiles / Math.max(1, angles);
-            int positionsTotal = currentAnnotationExpectedFiles / Math.max(1, angles);
+            // Display as physical XY positions, not raw files. One position
+            // may correspond to N files (angles, channels, z-planes, or a
+            // product). The progress bar above still reflects file-level
+            // granularity for smooth updates; this label is the user-facing
+            // "how many physical stops has the stage visited" count.
+            int steps = stepsPerPosition.get();
+            int positionsDone = currentFiles / Math.max(1, steps);
+            int positionsTotal = currentAnnotationExpectedFiles / Math.max(1, steps);
             currentProgressLabel.setText("Current Annotation: " + currentAnnotationName + " (" + positionsDone + "/"
                     + positionsTotal + " positions)");
         }
@@ -566,8 +595,8 @@ public class DualProgressDialog {
 
         String estimate = formatTime(remainingSeconds);
 
-        int angles = angleCount.get();
-        int positionsRemaining = totalTilesRemaining / Math.max(1, angles);
+        int steps = stepsPerPosition.get();
+        int positionsRemaining = totalTilesRemaining / Math.max(1, steps);
 
         // Log periodically (every 25 tiles)
         if (totalCompleted > 0 && totalCompleted % 25 == 0) {
