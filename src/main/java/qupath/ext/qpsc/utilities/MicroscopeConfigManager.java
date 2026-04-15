@@ -609,6 +609,10 @@ public class MicroscopeConfigManager {
      * Settings like exposures, gains, and white balance are stored in imageprocessing_{microscope}.yml.
      * Pixel sizes are now in the hardware section of the main config.
      *
+     * <p>The {@code modality} parameter may be either the bare family form ({@code ppm}) or a
+     * magnification-suffixed variant ({@code ppm_10x}); imaging_profiles keys use the family
+     * form, so if the exact key does not match we fall back to {@link #modalityFamily(String)}.
+     *
      * @param modality The modality name
      * @param objective The objective ID
      * @param detector The detector ID
@@ -617,34 +621,53 @@ public class MicroscopeConfigManager {
      */
     @SuppressWarnings("unchecked")
     public Object getProfileSetting(String modality, String objective, String detector, String... settingPath) {
-        // Check external imageprocessing config
-        if (imageprocessingData != null && imageprocessingData.containsKey("imaging_profiles")) {
-            Map<String, Object> imagingProfiles = (Map<String, Object>) imageprocessingData.get("imaging_profiles");
-            if (imagingProfiles != null && imagingProfiles.containsKey(modality)) {
-                Map<String, Object> modalityProfiles = (Map<String, Object>) imagingProfiles.get(modality);
-                if (modalityProfiles != null && modalityProfiles.containsKey(objective)) {
-                    Map<String, Object> objectiveProfiles = (Map<String, Object>) modalityProfiles.get(objective);
-                    if (objectiveProfiles != null && objectiveProfiles.containsKey(detector)) {
-                        Map<String, Object> detectorProfile = (Map<String, Object>) objectiveProfiles.get(detector);
-                        if (detectorProfile != null) {
-                            Object value = getNestedValue(detectorProfile, settingPath);
-                            if (value != null) {
-                                logger.debug(
-                                        "Found setting in imaging_profiles: {} for {}/{}/{}",
-                                        Arrays.toString(settingPath),
-                                        modality,
-                                        objective,
-                                        detector);
-                                return value;
-                            }
-                        }
-                    }
-                }
+        if (imageprocessingData == null || !imageprocessingData.containsKey("imaging_profiles")) {
+            logger.debug("Setting not found: {} for {}/{}/{}", Arrays.toString(settingPath), modality, objective, detector);
+            return null;
+        }
+        Map<String, Object> imagingProfiles = (Map<String, Object>) imageprocessingData.get("imaging_profiles");
+        if (imagingProfiles == null) {
+            logger.debug("Setting not found: {} for {}/{}/{}", Arrays.toString(settingPath), modality, objective, detector);
+            return null;
+        }
+
+        // Try exact modality key first
+        Object value = extractProfileValue(imagingProfiles, modality, objective, detector, settingPath);
+        if (value != null) {
+            return value;
+        }
+
+        // Fall back to family form (ppm_10x -> ppm, BF_IF_10x -> BF_IF). imaging_profiles
+        // keys are family-form by convention; magnification-suffixed modalities resolve here.
+        String family = modalityFamily(modality);
+        if (family != null && !family.equals(modality)) {
+            value = extractProfileValue(imagingProfiles, family, objective, detector, settingPath);
+            if (value != null) {
+                logger.debug(
+                        "Resolved imaging_profiles '{}' -> family '{}' for setting {} ({}/{})",
+                        modality, family, Arrays.toString(settingPath), objective, detector);
+                return value;
             }
         }
 
         logger.debug("Setting not found: {} for {}/{}/{}", Arrays.toString(settingPath), modality, objective, detector);
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object extractProfileValue(
+            Map<String, Object> imagingProfiles,
+            String modality,
+            String objective,
+            String detector,
+            String... settingPath) {
+        Map<String, Object> modalityProfiles = (Map<String, Object>) imagingProfiles.get(modality);
+        if (modalityProfiles == null) return null;
+        Map<String, Object> objectiveProfiles = (Map<String, Object>) modalityProfiles.get(objective);
+        if (objectiveProfiles == null) return null;
+        Map<String, Object> detectorProfile = (Map<String, Object>) objectiveProfiles.get(detector);
+        if (detectorProfile == null) return null;
+        return getNestedValue(detectorProfile, settingPath);
     }
 
     /**
