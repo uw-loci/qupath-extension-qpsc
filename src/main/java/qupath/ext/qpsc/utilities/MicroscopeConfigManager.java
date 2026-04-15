@@ -1331,10 +1331,35 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * Strip a trailing magnification suffix ({@code _10x}, {@code _20X}, etc.) from a
+     * modality id to get the family form. Family names may contain underscores
+     * (e.g. {@code BF_IF}), so we only strip a terminal {@code _<digits><x|X>} segment.
+     */
+    private static String modalityFamily(String modality) {
+        if (modality == null) {
+            return null;
+        }
+        int idx = modality.lastIndexOf('_');
+        if (idx <= 0 || idx >= modality.length() - 2) {
+            return modality;
+        }
+        char last = modality.charAt(modality.length() - 1);
+        if (last != 'x' && last != 'X') {
+            return modality;
+        }
+        for (int i = idx + 1; i < modality.length() - 1; i++) {
+            if (!Character.isDigit(modality.charAt(i))) {
+                return modality;
+            }
+        }
+        return modality.substring(0, idx);
+    }
+
+    /**
      * Resolves the background_correction entry for a modality, trying the exact
-     * key first and falling back to the family prefix (e.g. "ppm_20x" -> "ppm").
-     * Config keys under background_correction use family names without magnification;
-     * callers often pass magnification-suffixed variants.
+     * key first and falling back to the family form (e.g. "ppm_20x" -> "ppm",
+     * "BF_IF_10x" -> "BF_IF"). Config keys under background_correction use family
+     * names without magnification; callers often pass magnification-suffixed variants.
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> getBackgroundCorrectionEntry(String modality) {
@@ -1348,13 +1373,10 @@ public class MicroscopeConfigManager {
         if (bgCorrection.containsKey(modality)) {
             return (Map<String, Object>) bgCorrection.get(modality);
         }
-        int underscore = modality.indexOf('_');
-        if (underscore > 0) {
-            String family = modality.substring(0, underscore);
-            if (bgCorrection.containsKey(family)) {
-                logger.debug("Resolved background_correction modality '{}' -> family '{}'", modality, family);
-                return (Map<String, Object>) bgCorrection.get(family);
-            }
+        String family = modalityFamily(modality);
+        if (!family.equals(modality) && bgCorrection.containsKey(family)) {
+            logger.debug("Resolved background_correction modality '{}' -> family '{}'", modality, family);
+            return (Map<String, Object>) bgCorrection.get(family);
         }
         return null;
     }

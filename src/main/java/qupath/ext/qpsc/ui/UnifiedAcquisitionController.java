@@ -1159,19 +1159,17 @@ public class UnifiedAcquisitionController {
                 return;
             }
 
-            // Extract base modality for config lookup (e.g., "ppm_20x" -> "ppm")
-            String baseModality = modality.contains("_") ? modality.substring(0, modality.indexOf('_')) : modality;
-            boolean bgEnabled = configManager.isBackgroundCorrectionEnabled(baseModality);
+            boolean bgEnabled = configManager.isBackgroundCorrectionEnabled(modality);
 
             String currentSelection = wbModeComboBox.getValue();
             wbModeComboBox.getItems().clear();
 
             if (bgEnabled) {
                 // Only show modes with valid backgrounds
-                String baseFolder = configManager.getBackgroundCorrectionFolder(baseModality);
+                String baseFolder = configManager.getBackgroundCorrectionFolder(modality);
                 if (baseFolder != null) {
                     List<WbMode> validModes = BackgroundValidityChecker.getValidModes(
-                            baseFolder, baseModality, objective, detector, configManager);
+                            baseFolder, modality, objective, detector, configManager);
                     for (WbMode mode : validModes) {
                         if (isPPM || !isPpmOnlyMode(mode)) {
                             wbModeComboBox.getItems().add(mode.getDisplayName());

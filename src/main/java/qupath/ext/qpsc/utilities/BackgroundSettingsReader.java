@@ -103,7 +103,8 @@ public class BackgroundSettingsReader {
 
         String magnification = extractMagnificationFromObjective(objective);
         String basePath = new File(
-                        baseBackgroundFolder, detector + File.separator + modality + File.separator + magnification)
+                        baseBackgroundFolder,
+                        detector + File.separator + modalityFamily(modality) + File.separator + magnification)
                 .getPath();
 
         if ("off".equalsIgnoreCase(wbMode)) {
@@ -160,7 +161,8 @@ public class BackgroundSettingsReader {
         try {
             String magnification = extractMagnificationFromObjective(objective);
             String basePath = new File(
-                            baseBackgroundFolder, detector + File.separator + modality + File.separator + magnification)
+                            baseBackgroundFolder,
+                            detector + File.separator + modalityFamily(modality) + File.separator + magnification)
                     .getPath();
 
             File target;
@@ -298,7 +300,8 @@ public class BackgroundSettingsReader {
         try {
             String magnification = extractMagnificationFromObjective(objective);
             String basePath = new File(
-                            baseBackgroundFolder, detector + File.separator + modality + File.separator + magnification)
+                            baseBackgroundFolder,
+                            detector + File.separator + modalityFamily(modality) + File.separator + magnification)
                     .getPath();
 
             // Scan WB-mode subdirectories. Subdirectory name IS the WB mode.
@@ -483,6 +486,33 @@ public class BackgroundSettingsReader {
 
         // Fallback: return "unknown" if pattern not found
         return "unknown";
+    }
+
+    /**
+     * Strip a trailing magnification suffix ({@code _10x}, {@code _20X}, etc.) from a
+     * modality id to get the on-disk family form. Family names may contain underscores
+     * (e.g. {@code BF_IF}), so we only strip a terminal {@code _<digits><x|X>} segment.
+     * Matches the convention in {@code MicroscopeConfigManager.getBackgroundCorrectionEntry}
+     * and the Python server's background-file writer layout.
+     */
+    private static String modalityFamily(String modality) {
+        if (modality == null) {
+            return null;
+        }
+        int idx = modality.lastIndexOf('_');
+        if (idx <= 0 || idx >= modality.length() - 2) {
+            return modality;
+        }
+        char last = modality.charAt(modality.length() - 1);
+        if (last != 'x' && last != 'X') {
+            return modality;
+        }
+        for (int i = idx + 1; i < modality.length() - 1; i++) {
+            if (!Character.isDigit(modality.charAt(i))) {
+                return modality;
+            }
+        }
+        return modality.substring(0, idx);
     }
 
     /**

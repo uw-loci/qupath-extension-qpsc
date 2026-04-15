@@ -1053,17 +1053,16 @@ public class ExistingImageAcquisitionController {
                 return;
             }
 
-            String baseModality = modality.contains("_") ? modality.substring(0, modality.indexOf('_')) : modality;
-            boolean bgEnabled = configManager.isBackgroundCorrectionEnabled(baseModality);
+            boolean bgEnabled = configManager.isBackgroundCorrectionEnabled(modality);
 
             String currentSelection = wbModeComboBox.getValue();
             wbModeComboBox.getItems().clear();
 
             if (bgEnabled) {
-                String baseFolder = configManager.getBackgroundCorrectionFolder(baseModality);
+                String baseFolder = configManager.getBackgroundCorrectionFolder(modality);
                 if (baseFolder != null) {
                     List<WbMode> validModes = BackgroundValidityChecker.getValidModes(
-                            baseFolder, baseModality, objective, detector, configManager);
+                            baseFolder, modality, objective, detector, configManager);
                     for (WbMode mode : validModes) {
                         wbModeComboBox.getItems().add(mode.getDisplayName());
                     }
