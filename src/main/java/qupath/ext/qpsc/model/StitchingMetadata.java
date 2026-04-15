@@ -23,6 +23,19 @@ public class StitchingMetadata {
     public final String annotationName;
     public final Integer imageIndex;
 
+    // Optional stage bounds for the acquisition region, in stage micrometers.
+    // Populated by BoundingBox acquisitions (and any other flow where the
+    // stage coverage of the stitched image is known up front). When non-null,
+    // downstream import sites use these bounds to auto-register a pixel->stage
+    // affine transform via AffineTransformManager.saveSlideAlignment, so that
+    // Live Viewer Move-to-centroid / click-to-center works on the resulting
+    // image without a separate alignment step. null for annotation-based
+    // acquisitions, which inherit alignment from the parent macro image.
+    public final Double stageBoundsX1Um;
+    public final Double stageBoundsY1Um;
+    public final Double stageBoundsX2Um;
+    public final Double stageBoundsY2Um;
+
     /**
      * Full constructor with all metadata fields.
      */
@@ -37,7 +50,11 @@ public class StitchingMetadata {
             String objective,
             String angle,
             String annotationName,
-            Integer imageIndex) {
+            Integer imageIndex,
+            Double stageBoundsX1Um,
+            Double stageBoundsY1Um,
+            Double stageBoundsX2Um,
+            Double stageBoundsY2Um) {
         this.parentEntry = parentEntry;
         this.xOffset = xOffset;
         this.yOffset = yOffset;
@@ -49,11 +66,49 @@ public class StitchingMetadata {
         this.angle = angle;
         this.annotationName = annotationName;
         this.imageIndex = imageIndex;
+        this.stageBoundsX1Um = stageBoundsX1Um;
+        this.stageBoundsY1Um = stageBoundsY1Um;
+        this.stageBoundsX2Um = stageBoundsX2Um;
+        this.stageBoundsY2Um = stageBoundsY2Um;
+    }
+
+    /**
+     * Full constructor without stage bounds (legacy identification-field flow).
+     */
+    public StitchingMetadata(
+            ProjectImageEntry<BufferedImage> parentEntry,
+            double xOffset,
+            double yOffset,
+            boolean flipX,
+            boolean flipY,
+            String sampleName,
+            String modality,
+            String objective,
+            String angle,
+            String annotationName,
+            Integer imageIndex) {
+        this(
+                parentEntry,
+                xOffset,
+                yOffset,
+                flipX,
+                flipY,
+                sampleName,
+                modality,
+                objective,
+                angle,
+                annotationName,
+                imageIndex,
+                null,
+                null,
+                null,
+                null);
     }
 
     /**
      * Convenience constructor for basic metadata.
-     * Creates metadata with null for optional identification fields.
+     * Creates metadata with null for optional identification fields and
+     * no stage bounds (no auto-transform registration).
      */
     public StitchingMetadata(
             ProjectImageEntry<BufferedImage> parentEntry,
@@ -63,5 +118,19 @@ public class StitchingMetadata {
             boolean flipY,
             String sampleName) {
         this(parentEntry, xOffset, yOffset, flipX, flipY, sampleName, null, null, null, null, null);
+    }
+
+    /**
+     * Returns true when this metadata carries a fully-specified stage bounds
+     * rectangle (all four corners non-null and the rectangle is non-degenerate).
+     * Used by the import path to decide whether to auto-register an alignment.
+     */
+    public boolean hasStageBounds() {
+        return stageBoundsX1Um != null
+                && stageBoundsY1Um != null
+                && stageBoundsX2Um != null
+                && stageBoundsY2Um != null
+                && stageBoundsX2Um > stageBoundsX1Um
+                && stageBoundsY2Um > stageBoundsY1Um;
     }
 }

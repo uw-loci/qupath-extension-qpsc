@@ -624,6 +624,16 @@ public class TileProcessingUtilities {
 
                     logger.info("Successfully added image to project");
 
+                    // Auto-register the pixel->stage alignment from the
+                    // BoundingBox acquisition's known stage bounds. No-op
+                    // unless the metadata carries them (annotation-based
+                    // acquisitions inherit alignment from the parent image
+                    // and don't need their own registration). Delegates to
+                    // StitchingHelper so the merged / fallback / single-file
+                    // import paths all use the same code.
+                    qupath.ext.qpsc.controller.workflow.StitchingHelper.autoRegisterBoundsTransformIfAvailable(
+                            new File(lastProcessedPath), finalMetadata, project);
+
                     // Save current image data before opening new image to prevent save prompts
                     try {
                         var currentData = qupathGUI.getImageData();

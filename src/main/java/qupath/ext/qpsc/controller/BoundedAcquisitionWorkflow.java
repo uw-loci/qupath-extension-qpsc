@@ -519,8 +519,17 @@ public class BoundedAcquisitionWorkflow {
                                                     STITCH_EXECUTOR,
                                                     modalityHandler,
                                                     actualSampleName, // Use derived sample name for correct path
-                                                    actualProjectsFolder // Use derived projectsFolder for correct path
-                                                    )
+                                                    actualProjectsFolder, // Use derived projectsFolder for correct path
+                                                    // Stage bounds carried through so the stitched
+                                                    // output(s) get an automatic pixel->stage
+                                                    // alignment registered at import time, which
+                                                    // enables Live Viewer Move-to-centroid / click-
+                                                    // to-center on the resulting image without a
+                                                    // separate manual alignment step.
+                                                    result.x1(),
+                                                    result.y1(),
+                                                    result.x2(),
+                                                    result.y2())
                                             .thenRun(() -> {
                                                 UIFunctions.playWorkflowCompletionBeep();
 

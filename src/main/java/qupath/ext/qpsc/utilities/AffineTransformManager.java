@@ -479,6 +479,63 @@ public class AffineTransformManager {
      *
      * @since 0.4.0
      */
+    /**
+     * Build a pixel -> stage affine transform from known acquisition stage
+     * bounds and the resulting stitched image's pixel dimensions.
+     *
+     * <p>Intended for BoundingBox acquisitions (and any flow where the stage
+     * coverage of the stitched output is known up front). The math assumes
+     * the stitched image is already in the canonical (non-flipped) orientation
+     * -- which it is, because the stitcher honours
+     * {@link StageImageTransform#stitcherFlipFlags()} when writing the output.
+     * The resulting transform therefore has positive scale components and a
+     * translation equal to the (x1, y1) corner of the acquisition region.
+     *
+     * <p>Pixel {@code (px, py)} maps to stage {@code (x1 + px * sx, y1 + py * sy)}
+     * where {@code sx = (x2 - x1) / widthPx} and {@code sy = (y2 - y1) / heightPx}.
+     *
+     * @param stageX1Um stage X of the top-left corner of the acquisition region
+     * @param stageY1Um stage Y of the top-left corner
+     * @param stageX2Um stage X of the bottom-right corner (must be &gt; x1)
+     * @param stageY2Um stage Y of the bottom-right corner (must be &gt; y1)
+     * @param imageWidthPx width of the stitched output in pixels (must be &gt; 0)
+     * @param imageHeightPx height of the stitched output in pixels (must be &gt; 0)
+     * @return pixel -> stage AffineTransform, or {@code null} if the inputs are
+     *     degenerate (caller falls back to "no alignment" behaviour).
+     */
+    public static AffineTransform buildTransformFromStageBounds(
+            double stageX1Um,
+            double stageY1Um,
+            double stageX2Um,
+            double stageY2Um,
+            int imageWidthPx,
+            int imageHeightPx) {
+        if (imageWidthPx <= 0 || imageHeightPx <= 0) {
+            logger.warn(
+                    "buildTransformFromStageBounds: invalid image dimensions ({}, {})",
+                    imageWidthPx, imageHeightPx);
+            return null;
+        }
+        if (stageX2Um <= stageX1Um || stageY2Um <= stageY1Um) {
+            logger.warn(
+                    "buildTransformFromStageBounds: degenerate bounds x=[{}..{}] y=[{}..{}]",
+                    stageX1Um, stageX2Um, stageY1Um, stageY2Um);
+            return null;
+        }
+        double scaleX = (stageX2Um - stageX1Um) / imageWidthPx;
+        double scaleY = (stageY2Um - stageY1Um) / imageHeightPx;
+        AffineTransform t = new AffineTransform();
+        t.translate(stageX1Um, stageY1Um);
+        t.scale(scaleX, scaleY);
+        logger.info(
+                "buildTransformFromStageBounds: bounds=({},{})->({},{}) size=({}x{}) -> scale=({},{}) origin=({},{})",
+                stageX1Um, stageY1Um, stageX2Um, stageY2Um,
+                imageWidthPx, imageHeightPx,
+                String.format("%.4f", scaleX), String.format("%.4f", scaleY),
+                String.format("%.1f", stageX1Um), String.format("%.1f", stageY1Um));
+        return t;
+    }
+
     public static void saveSlideAlignment(
             Project<BufferedImage> project,
             String sampleName,

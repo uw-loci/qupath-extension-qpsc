@@ -29,6 +29,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.DualProgressDialog;
 import qupath.ext.qpsc.ui.StitchingBlockingDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
@@ -203,6 +204,49 @@ public class StitchingHelper {
             ModalityHandler handler,
             String sampleName,
             String projectsFolder) {
+        return performRegionStitching(
+                regionName,
+                sample,
+                modeWithIndex,
+                angleExposures,
+                pixelSize,
+                gui,
+                project,
+                executor,
+                handler,
+                sampleName,
+                projectsFolder,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    /**
+     * Region-stitching overload that accepts the known stage bounds of the
+     * acquisition region. When all four bounds are non-null, the resulting
+     * stitched image(s) get an automatic pixel->stage alignment registered
+     * via {@link AffineTransformManager#saveSlideAlignment} so that Live
+     * Viewer Move-to-centroid / click-to-center works without a separate
+     * alignment step. Pass nulls for all four bounds to get the legacy
+     * behaviour (no auto-registration).
+     */
+    public static CompletableFuture<Void> performRegionStitching(
+            String regionName,
+            SampleSetupResult sample,
+            String modeWithIndex,
+            List<AngleExposure> angleExposures,
+            double pixelSize,
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            ExecutorService executor,
+            ModalityHandler handler,
+            String sampleName,
+            String projectsFolder,
+            Double stageBoundsX1Um,
+            Double stageBoundsY1Um,
+            Double stageBoundsX2Um,
+            Double stageBoundsY2Um) {
 
         // Use user-entered sample name for display/naming, not the project folder name.
         String displayName = (sample != null
@@ -210,7 +254,15 @@ public class StitchingHelper {
                         && !sample.sampleName().isEmpty())
                 ? sample.sampleName()
                 : sampleName;
-        StitchingMetadata metadata = calculateMetadataForRegion(regionName, displayName, gui, project);
+        StitchingMetadata metadata = calculateMetadataForRegion(
+                regionName,
+                displayName,
+                gui,
+                project,
+                stageBoundsX1Um,
+                stageBoundsY1Um,
+                stageBoundsX2Um,
+                stageBoundsY2Um);
         return performStitchingInternal(
                 regionName,
                 sample,
@@ -650,7 +702,14 @@ public class StitchingHelper {
      * @param sampleName The actual sample folder name (from ProjectInfo)
      */
     private static StitchingMetadata calculateMetadataForRegion(
-            String regionName, String sampleName, QuPathGUI gui, Project<BufferedImage> project) {
+            String regionName,
+            String sampleName,
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            Double stageBoundsX1Um,
+            Double stageBoundsY1Um,
+            Double stageBoundsX2Um,
+            Double stageBoundsY2Um) {
 
         // Get parent entry (the current open image) - may be null in Bounded Acquisition
         ProjectImageEntry<BufferedImage> parentEntry = null;
@@ -682,7 +741,22 @@ public class StitchingHelper {
             flipY = QPPreferenceDialog.getFlipMacroYProperty();
         }
 
-        return new StitchingMetadata(parentEntry, xOffset, yOffset, flipX, flipY, sampleName);
+        return new StitchingMetadata(
+                parentEntry,
+                xOffset,
+                yOffset,
+                flipX,
+                flipY,
+                sampleName,
+                null, // modality (unused in region path)
+                null, // objective
+                null, // angle
+                null, // annotationName
+                null, // imageIndex
+                stageBoundsX1Um,
+                stageBoundsY1Um,
+                stageBoundsX2Um,
+                stageBoundsY2Um);
     }
 
     /**
@@ -1099,6 +1173,74 @@ public class StitchingHelper {
      * entry created by the channel-based path.
      */
     /**
+     * Register an automatic pixel->stage affine alignment for a just-imported
+     * stitched file, when the source {@link StitchingMetadata} carries a
+     * fully-specified stage bounds rectangle (BoundingBox acquisitions).
+     *
+     * <p>This is the "auto-register on import" path that lets Live Viewer
+     * Move-to-centroid / click-to-center work on any BoundingBox output
+     * without a manual alignment step. The resulting alignment is keyed by
+     * the image's on-disk file name (matching
+     * {@code QPProjectFunctions.getActualImageFileName}), which is the same
+     * key {@link qupath.ext.qpsc.ui.liveviewer.StageControlPanel} uses when
+     * it calls {@link AffineTransformManager#loadSlideAlignment}.
+     *
+     * <p>No-op when {@code metadata.hasStageBounds()} is false, when the file
+     * is missing, or when opening the server for pixel dimensions fails.
+     * Errors are logged and swallowed so they never break the import flow.
+     */
+    public static void autoRegisterBoundsTransformIfAvailable(
+            File importedFile,
+            StitchingMetadata metadata,
+            Project<BufferedImage> project) {
+        if (metadata == null || !metadata.hasStageBounds()) {
+            return;
+        }
+        if (project == null || importedFile == null || !importedFile.exists()) {
+            return;
+        }
+        try {
+            int widthPx;
+            int heightPx;
+            // Prefer reading pixel dimensions from the actual stitched file so
+            // the transform reflects any rounding the tile grid introduced.
+            try (qupath.lib.images.servers.ImageServer<java.awt.image.BufferedImage> server =
+                    qupath.lib.images.servers.ImageServers.buildServer(importedFile.toURI())) {
+                widthPx = server.getWidth();
+                heightPx = server.getHeight();
+            }
+            AffineTransform transform = AffineTransformManager.buildTransformFromStageBounds(
+                    metadata.stageBoundsX1Um,
+                    metadata.stageBoundsY1Um,
+                    metadata.stageBoundsX2Um,
+                    metadata.stageBoundsY2Um,
+                    widthPx,
+                    heightPx);
+            if (transform == null) {
+                return;
+            }
+            // Key the alignment by the on-disk file name (no directory). This
+            // matches QPProjectFunctions.getActualImageFileName which is what
+            // StageControlPanel.initializeCentroidButton passes to
+            // AffineTransformManager.loadSlideAlignment.
+            String alignmentKey = importedFile.getName();
+            String modality = metadata.modality != null ? metadata.modality : "BoundingBox";
+            AffineTransformManager.saveSlideAlignment(project, alignmentKey, modality, transform, null);
+            logger.info(
+                    "Auto-registered stage alignment for '{}' from BoundingBox metadata "
+                            + "(bounds=({},{})->({},{}), image={}x{})",
+                    alignmentKey,
+                    metadata.stageBoundsX1Um, metadata.stageBoundsY1Um,
+                    metadata.stageBoundsX2Um, metadata.stageBoundsY2Um,
+                    widthPx, heightPx);
+        } catch (Exception e) {
+            logger.warn(
+                    "Failed to auto-register stage alignment for {}: {}",
+                    importedFile.getName(), e.getMessage());
+        }
+    }
+
+    /**
      * Fallback path used when {@link ChannelMerger#merge} returns null or
      * throws: imports each per-channel pyramid as its own project entry so
      * the user still has usable output. The channel-merge path sets
@@ -1137,6 +1279,10 @@ public class StitchingHelper {
                     } else {
                         QPProjectFunctions.addImageToProject(f, project, false, false, handler);
                     }
+                    // Every per-channel file gets its own alignment keyed by
+                    // its own file name, so Move-to-centroid works on any of
+                    // them individually (user may open any channel directly).
+                    autoRegisterBoundsTransformIfAvailable(f, metadata, project);
                     logger.info("Fallback imported per-channel file: {}", f.getName());
                 } catch (Exception e) {
                     logger.error(
@@ -1180,6 +1326,13 @@ public class StitchingHelper {
                             mergedFile, project, false, false, handler);
                 }
                 logger.info("Merged multichannel file imported to project: {}", mergedFile.getName());
+
+                // Auto-register the pixel->stage alignment from the known
+                // BoundingBox acquisition bounds (no-op when metadata lacks
+                // bounds, e.g. annotation-based acquisitions). Must happen
+                // after addImageToProjectWithMetadata so the merged file is
+                // on disk and its pixel dimensions can be read by the server.
+                autoRegisterBoundsTransformIfAvailable(mergedFile, metadata, project);
 
                 // Refresh the project view and open the merged entry.
                 gui.setProject(project);
