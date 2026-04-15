@@ -782,6 +782,71 @@ public class StageControlPanel extends VBox {
         hwGrid.add(objLabel, 0, 1);
         hwGrid.add(objValue, 1, 1);
 
+        // "Refresh from Micro-Manager" button: after the user changes
+        // objective turret position in MM directly (not via QPSC), the
+        // Camera tab and every downstream dialog that reads
+        // PersistentPreferences.getLastObjective() is still holding the
+        // stale objective from when the Live Viewer first opened. This
+        // button re-runs detectCurrentHardware() (which queries MM's live
+        // pixel size and reverse-matches it against the YAML's objective
+        // table), persists the new objective so the acquisition wizard
+        // picks it up next time it opens, and rebuilds the modality-
+        // specific content so per-objective exposures/gains reload.
+        Button refreshHardwareBtn = new Button("Refresh from MM");
+        refreshHardwareBtn.setStyle("-fx-font-size: 10px;");
+        refreshHardwareBtn.setTooltip(new Tooltip(
+                "Re-read the current objective and detector from Micro-Manager's live pixel size.\n"
+                        + "Use this after manually rotating the objective turret so QPSC\n"
+                        + "picks up the change. Also saves the new objective as the default\n"
+                        + "for the next acquisition dialog."));
+        refreshHardwareBtn.setOnAction(e -> {
+            String previousObjective = currentCameraObjectiveId;
+            String previousDetector = currentCameraDetectorId;
+            detectCurrentHardware();
+            objValue.setText(shortenId(currentCameraObjectiveId));
+            objValue.setTooltip(new Tooltip(currentCameraObjectiveId));
+            detValue.setText(shortenId(currentCameraDetectorId));
+            detValue.setTooltip(new Tooltip(currentCameraDetectorId));
+            if (currentCameraObjectiveId != null
+                    && !"Unknown".equals(currentCameraObjectiveId)) {
+                PersistentPreferences.setLastObjective(currentCameraObjectiveId);
+            }
+            // Per-objective exposures / gains / WB presets change with the
+            // objective; rebuild the modality panel so the UI reflects the
+            // newly-detected hardware.
+            if (currentCameraModality != null) {
+                rebuildCameraModContent(currentCameraModality);
+            }
+            if (cameraStatusLabel != null) {
+                if (currentCameraObjectiveId != null
+                        && !currentCameraObjectiveId.equals(previousObjective)) {
+                    cameraStatusLabel.setText(
+                            "Hardware refreshed: objective "
+                                    + shortenId(previousObjective)
+                                    + " -> "
+                                    + shortenId(currentCameraObjectiveId));
+                } else if (currentCameraDetectorId != null
+                        && !currentCameraDetectorId.equals(previousDetector)) {
+                    cameraStatusLabel.setText(
+                            "Hardware refreshed: detector "
+                                    + shortenId(previousDetector)
+                                    + " -> "
+                                    + shortenId(currentCameraDetectorId));
+                } else {
+                    cameraStatusLabel.setText(
+                            "Hardware already up to date: "
+                                    + shortenId(currentCameraObjectiveId)
+                                    + " on "
+                                    + shortenId(currentCameraDetectorId));
+                }
+            }
+            logger.info(
+                    "Camera tab: refreshed hardware from MM -- objective='{}' detector='{}'",
+                    currentCameraObjectiveId, currentCameraDetectorId);
+        });
+        hwGrid.add(refreshHardwareBtn, 2, 0, 1, 2);
+        GridPane.setMargin(refreshHardwareBtn, new Insets(0, 0, 0, 6));
+
         // Modality dropdown
         ComboBox<String> modalityCombo = new ComboBox<>();
         try {
