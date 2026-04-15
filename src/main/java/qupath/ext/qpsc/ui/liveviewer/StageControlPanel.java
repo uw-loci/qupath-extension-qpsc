@@ -144,6 +144,18 @@ public class StageControlPanel extends VBox {
     private volatile boolean zScrollInFlight = false;
     /** Standard JavaFX deltaY units per mouse wheel notch on Windows. */
     private static final double SCROLL_UNITS_PER_NOTCH = 40.0;
+    /**
+     * Next Z target for the worker thread. NaN means "nothing pending".
+     * Writes are guarded by {@link #zWorkerMutex}. The worker collapses
+     * multiple pending updates to the latest value, so rapid scroll
+     * gestures produce at most one queued move beyond the current one.
+     */
+    private double nextZTarget = Double.NaN;
+    /** True iff the Z scroll worker thread is currently alive. Guards
+     *  against spawning multiple workers for a single scroll gesture. */
+    private boolean zWorkerRunning = false;
+    /** Mutex for {@link #nextZTarget} and {@link #zWorkerRunning}. */
+    private final Object zWorkerMutex = new Object();
 
     // Saved Points tab components
     private ListView<SavedPoint> savedPointsListView;
@@ -2376,8 +2388,21 @@ public class StageControlPanel extends VBox {
     }
 
     /**
-     * Sends a single MOVEZ command to the accumulated {@link #pendingZTarget}.
-     * Called by the debounce timer after scroll events stop arriving.
+     * Publishes the accumulated {@link #pendingZTarget} to the single
+     * persistent scroll worker, starting one if none is currently
+     * running. Called by the debounce timer after scroll events stop
+     * arriving.
+     *
+     * <p>Prior implementation spawned a new "StageControl-ZScroll" thread
+     * on every debounce fire, which during the 2026-04-15 Z-scroll
+     * storm caused 6+ threads to pile up on the server simultaneously.
+     * Combined with the server-side lack of stage serialization, this
+     * meant every move retargeted the stage mid-wait and every
+     * `wait_z` busy-poll hung for the full 10 s timeout. Now a single
+     * worker thread consumes targets serially, collapsing multiple
+     * queued updates to the latest one so a rapid scroll burst of
+     * 10 ticks results in at most 2 actual moves (one in flight, one
+     * queued) regardless of gesture speed.
      */
     private void executeZScroll() {
         double target = pendingZTarget;
@@ -2385,25 +2410,56 @@ public class StageControlPanel extends VBox {
 
         logger.debug("Debounced scroll Z movement to: {}", target);
 
-        Thread moveThread = new Thread(
-                () -> {
-                    try {
-                        MicroscopeController.getInstance().moveStageZ(target);
-                        Platform.runLater(() -> {
-                            zStatus.setText(String.format("Scrolled Z to %.2f", target));
-                            zScrollInFlight = false;
-                        });
-                    } catch (Exception ex) {
-                        logger.warn("Z scroll movement failed: {}", ex.getMessage());
-                        Platform.runLater(() -> {
-                            zStatus.setText("Z scroll failed");
-                            zScrollInFlight = false;
-                        });
+        boolean startWorker;
+        synchronized (zWorkerMutex) {
+            nextZTarget = target;
+            startWorker = !zWorkerRunning;
+            if (startWorker) {
+                zWorkerRunning = true;
+            }
+        }
+
+        if (startWorker) {
+            Thread worker = new Thread(this::zScrollWorkerLoop, "StageControl-ZScroll");
+            worker.setDaemon(true);
+            worker.start();
+        }
+        // else: the already-running worker will pick up nextZTarget on
+        // its next iteration. No new thread, no server-side pile-up.
+    }
+
+    /**
+     * Body of the single persistent Z scroll worker. Loops until no more
+     * targets are pending, processing one move at a time. Multiple
+     * rapid scroll gestures collapse naturally: newer targets overwrite
+     * older ones in {@link #nextZTarget}, so the worker always moves to
+     * the most recent user intent, skipping intermediate positions.
+     */
+    private void zScrollWorkerLoop() {
+        try {
+            while (true) {
+                double target;
+                synchronized (zWorkerMutex) {
+                    if (Double.isNaN(nextZTarget)) {
+                        zWorkerRunning = false;
+                        return;
                     }
-                },
-                "StageControl-ZScroll");
-        moveThread.setDaemon(true);
-        moveThread.start();
+                    target = nextZTarget;
+                    nextZTarget = Double.NaN;
+                }
+                try {
+                    MicroscopeController.getInstance().moveStageZ(target);
+                    final double landed = target;
+                    Platform.runLater(() ->
+                            zStatus.setText(String.format("Scrolled Z to %.2f", landed)));
+                } catch (Exception ex) {
+                    logger.warn("Z scroll movement failed: {}", ex.getMessage());
+                    Platform.runLater(() -> zStatus.setText("Z scroll failed"));
+                }
+            }
+        } finally {
+            Platform.runLater(() -> zScrollInFlight = false);
+        }
     }
 
     private void handleArrowMove(int xDir, int yDir) {

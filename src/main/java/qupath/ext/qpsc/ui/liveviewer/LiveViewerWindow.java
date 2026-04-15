@@ -1314,38 +1314,7 @@ public class LiveViewerWindow {
 
             FrameData frame = controller.getFrame();
             if (frame == null) {
-                // No-frame timeout with auto-recovery
-                long now = System.currentTimeMillis();
-                long elapsed = now - liveOnTimestamp;
-                long sinceLast = now - lastFrameArrivalTime;
-                if (elapsed > GRACE_PERIOD_MS && sinceLast > NO_FRAME_TIMEOUT_MS && !recoveryInProgress) {
-                    if (recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
-                        // Auto-recovery: stop camera, restart, try again
-                        recoveryInProgress = true;
-                        recoveryAttempts++;
-                        logger.info(
-                                "No frames for {}ms -- auto-recovery attempt {}/{}",
-                                sinceLast,
-                                recoveryAttempts,
-                                MAX_RECOVERY_ATTEMPTS);
-                        Platform.runLater(() -> updateStatus("Reconnecting camera..."));
-                        attemptAutoRecovery(controller);
-                    } else {
-                        // Recovery exhausted -- turn off
-                        logger.warn("No frames for {}ms, recovery exhausted -- turning live OFF", sinceLast);
-                        liveActive = false;
-                        try {
-                            controller.stopContinuousAcquisition();
-                        } catch (IOException ex) {
-                            logger.debug("Stop during final shutdown: {}", ex.getMessage());
-                        }
-                        Platform.runLater(() -> {
-                            updateLiveButtonStyle(false);
-                            updateRefineFocusButtonState();
-                            updateStatus("Live OFF (no frames -- check camera connection)");
-                        });
-                    }
-                }
+                checkDesyncAndRecover(controller);
                 return;
             }
 
@@ -1404,8 +1373,68 @@ public class LiveViewerWindow {
         } catch (IOException e) {
             logger.debug("Frame poll failed: {}", e.getMessage());
             Platform.runLater(() -> updateStatus("Connection error: " + e.getMessage()));
+            // Socket timeouts (e.g. during stage-move storms) raise here without
+            // ever entering the frame==null branch, so the poller would show
+            // "Live: ON" forever while frames never actually arrived. Run the
+            // same desync check on exception paths so auto-recovery fires if
+            // enough consecutive polls fail.
+            MicroscopeController c = MicroscopeController.getInstance();
+            if (c != null) {
+                checkDesyncAndRecover(c);
+            }
         } catch (Exception e) {
             logger.error("Unexpected error in frame poll", e);
+        }
+    }
+
+    /**
+     * Shared desync check used by both the "frame == null" branch of
+     * {@link #pollFrame()} and its IOException catch block. Fires
+     * auto-recovery if frames have been absent for longer than
+     * {@link #NO_FRAME_TIMEOUT_MS}, after a {@link #GRACE_PERIOD_MS}
+     * startup grace period. Escalates to forcing the Live toggle OFF
+     * once {@link #MAX_RECOVERY_ATTEMPTS} have been exhausted so the
+     * button state stops lying about an effectively-dead stream.
+     *
+     * <p>Before this helper existed, exception paths (socket read
+     * timeouts during stage-move storms) would keep the button green
+     * and the status "Live ON - streaming" even though no frames had
+     * arrived in 30+ seconds -- the user had to toggle manually to
+     * resync. Both no-frame and exception paths now funnel through
+     * this single check.
+     */
+    private void checkDesyncAndRecover(MicroscopeController controller) {
+        long now = System.currentTimeMillis();
+        long elapsed = now - liveOnTimestamp;
+        long sinceLast = now - lastFrameArrivalTime;
+        if (elapsed <= GRACE_PERIOD_MS || sinceLast <= NO_FRAME_TIMEOUT_MS || recoveryInProgress) {
+            return;
+        }
+        if (recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
+            // Auto-recovery: stop camera, restart, try again
+            recoveryInProgress = true;
+            recoveryAttempts++;
+            logger.info(
+                    "No frames for {}ms -- auto-recovery attempt {}/{}",
+                    sinceLast,
+                    recoveryAttempts,
+                    MAX_RECOVERY_ATTEMPTS);
+            Platform.runLater(() -> updateStatus("Reconnecting camera..."));
+            attemptAutoRecovery(controller);
+        } else {
+            // Recovery exhausted -- turn off so the button stops lying
+            logger.warn("No frames for {}ms, recovery exhausted -- turning live OFF", sinceLast);
+            liveActive = false;
+            try {
+                controller.stopContinuousAcquisition();
+            } catch (IOException ex) {
+                logger.debug("Stop during final shutdown: {}", ex.getMessage());
+            }
+            Platform.runLater(() -> {
+                updateLiveButtonStyle(false);
+                updateRefineFocusButtonState();
+                updateStatus("Live OFF (no frames -- check camera connection)");
+            });
         }
     }
 
