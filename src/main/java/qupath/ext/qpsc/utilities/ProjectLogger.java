@@ -205,13 +205,24 @@ public class ProjectLogger {
     }
 
     /**
-     * Programmatically creates and attaches a {@link FileAppender} to the
-     * {@code qupath.ext.qpsc} logger. Any existing QPSC appender is
-     * detached and stopped first.
+     * Loggers that should route into the QPSC session log. The primary entry
+     * is the QPSC extension itself; sibling extensions that QPSC drives (the
+     * tiles-to-pyramid stitching pipeline, in particular ChannelMerger /
+     * PyramidImageWriter) are included so that stitch + merge internals are
+     * visible when diagnosing acquisition bugs from the session log alone.
+     */
+    private static final String[] ATTACHED_LOGGERS = new String[] {
+            "qupath.ext.qpsc",
+            "qupath.ext.basicstitching",
+    };
+
+    /**
+     * Programmatically creates and attaches a {@link FileAppender} to each
+     * logger in {@link #ATTACHED_LOGGERS}. Any existing appender is detached
+     * and stopped first.
      */
     private static void attachAppender(Path logFile) {
         LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
-        ch.qos.logback.classic.Logger qpscLogger = context.getLogger("qupath.ext.qpsc");
 
         // Detach any existing QPSC file appender
         detachAppender();
@@ -229,18 +240,22 @@ public class ProjectLogger {
         appender.setAppend(true);
         appender.start();
 
-        qpscLogger.addAppender(appender);
+        for (String name : ATTACHED_LOGGERS) {
+            context.getLogger(name).addAppender(appender);
+        }
         activeAppender = appender;
     }
 
     /**
-     * Detaches and stops the current QPSC file appender, if any.
+     * Detaches and stops the current QPSC file appender, if any, from every
+     * logger it was attached to in {@link #attachAppender}.
      */
     private static void detachAppender() {
         if (activeAppender != null) {
             LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
-            ch.qos.logback.classic.Logger qpscLogger = context.getLogger("qupath.ext.qpsc");
-            qpscLogger.detachAppender(activeAppender);
+            for (String name : ATTACHED_LOGGERS) {
+                context.getLogger(name).detachAppender(activeAppender);
+            }
             activeAppender.stop();
             activeAppender = null;
         }

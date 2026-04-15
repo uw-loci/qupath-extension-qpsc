@@ -576,6 +576,23 @@ public class TileProcessingUtilities {
             lastProcessedPath = outPath;
             final StitchingMetadata finalMetadata = metadata;
 
+            // Channel-merge path sets skipProjectImport=true so that per-channel
+            // pyramids are stitched and renamed on disk but never imported -- only
+            // the merged multichannel file becomes a project entry. Without this
+            // check the single-file branch was eagerly adding every intermediate
+            // per-channel file, which both cluttered the project and took Windows
+            // file locks on the pyramids before ChannelMerger could reopen them
+            // (causing the merge to silently return null).
+            boolean skipImport = stitchParams != null
+                    && Boolean.TRUE.equals(stitchParams.get("skipProjectImport"));
+            if (skipImport) {
+                logger.debug(
+                        "Skipping project import for {} (skipProjectImport=true)",
+                        new File(lastProcessedPath).getName());
+                logger.info("=== Stitching workflow completed ===");
+                return lastProcessedPath;
+            }
+
             // Import & open on the FX thread
             Platform.runLater(() -> {
                 logger.info("Importing stitched image to project on FX thread");

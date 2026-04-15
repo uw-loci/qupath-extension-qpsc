@@ -976,14 +976,26 @@ public class StitchingHelper {
                                     // to import the merged file as the single canonical entry.
                                     importMergedImageOnly(mergedPath, metadata, gui, project, handler);
                                 } else {
+                                    // Merge failed. Because skipProjectImport=true kept the
+                                    // per-channel pyramids out of the project, the user would
+                                    // otherwise see nothing at all in the project tree. Import
+                                    // each per-channel file as a fallback so at least the raw
+                                    // channels are usable; mark the failure in the log so the
+                                    // next diagnosis pass can chase down why the merge returned
+                                    // null (bad pixel dims, corrupted pyramid, lost file,
+                                    // ChannelMerger skipped due to <2 sources, etc.).
                                     logger.warn(
-                                            "Multichannel merge returned null for {} -- per-channel files remain as the output",
-                                            annotationName);
+                                            "Multichannel merge returned null for {} -- falling back to importing {} per-channel file(s)",
+                                            annotationName, stitchedImages.size());
+                                    importPerChannelFallback(
+                                            stitchedImages, metadata, gui, project, handler);
                                 }
                             } catch (Exception mergeEx) {
                                 logger.error(
-                                        "Multichannel merge failed for {}: {}",
+                                        "Multichannel merge failed for {}: {} -- falling back to per-channel import",
                                         annotationName, mergeEx.getMessage(), mergeEx);
+                                importPerChannelFallback(
+                                        stitchedImages, metadata, gui, project, handler);
                             }
                         } else {
                             logger.debug(
@@ -1086,6 +1098,60 @@ public class StitchingHelper {
      * there is nothing to remove afterward — the merged file is the only project
      * entry created by the channel-based path.
      */
+    /**
+     * Fallback path used when {@link ChannelMerger#merge} returns null or
+     * throws: imports each per-channel pyramid as its own project entry so
+     * the user still has usable output. The channel-merge path sets
+     * {@code skipProjectImport=true} during the stitch loop, so without this
+     * fallback a merge failure would leave the user with nothing in the
+     * project tree at all -- files on disk, but no entries.
+     */
+    private static void importPerChannelFallback(
+            List<String> stitchedImages,
+            StitchingMetadata metadata,
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            ModalityHandler handler) {
+        if (stitchedImages == null || stitchedImages.isEmpty()) {
+            return;
+        }
+        Platform.runLater(() -> {
+            for (String path : stitchedImages) {
+                File f = new File(path);
+                if (!f.exists()) {
+                    logger.warn("Fallback import: file does not exist, skipping: {}", path);
+                    continue;
+                }
+                try {
+                    if (metadata != null) {
+                        QPProjectFunctions.addImageToProjectWithMetadata(
+                                project,
+                                f,
+                                metadata.parentEntry,
+                                metadata.xOffset,
+                                metadata.yOffset,
+                                false,
+                                false,
+                                metadata.sampleName,
+                                handler);
+                    } else {
+                        QPProjectFunctions.addImageToProject(f, project, false, false, handler);
+                    }
+                    logger.info("Fallback imported per-channel file: {}", f.getName());
+                } catch (Exception e) {
+                    logger.error(
+                            "Fallback import failed for {}: {}", f.getName(), e.getMessage(), e);
+                }
+            }
+            try {
+                gui.setProject(project);
+                gui.refreshProject();
+            } catch (Exception refreshEx) {
+                logger.warn("Failed to refresh project after fallback import: {}", refreshEx.getMessage());
+            }
+        });
+    }
+
     private static void importMergedImageOnly(
             String mergedPath,
             StitchingMetadata metadata,
