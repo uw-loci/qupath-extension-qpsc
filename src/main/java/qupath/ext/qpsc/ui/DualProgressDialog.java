@@ -557,7 +557,18 @@ public class DualProgressDialog {
         int minTilesForEstimate = Math.min(windowSize, 5);
         if (tilesCollected < minTilesForEstimate) {
             int tilesNeeded = minTilesForEstimate - tilesCollected;
-            timeLabel.setText(String.format("Collecting timing data... %d positions remaining", tilesNeeded));
+            // Express the countdown in physical XY positions, not
+            // raw tile/file counts. For PPM 4-angle or 4-channel IF
+            // acquisitions the old label decremented once per image
+            // written (4x per stage stop) which confused users into
+            // thinking the dialog was frozen between stage moves.
+            // Ceiling division so a partial position still shows as
+            // "1 remaining" rather than 0.
+            int steps = stepsPerPosition.get();
+            int stepsSafe = Math.max(1, steps);
+            int positionsNeeded = (tilesNeeded + stepsSafe - 1) / stepsSafe;
+            timeLabel.setText(String.format(
+                    "Collecting timing data... %d positions remaining", positionsNeeded));
             return;
         }
 
