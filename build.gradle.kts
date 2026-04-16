@@ -8,7 +8,7 @@ plugins {
     // Code formatting (like Black for Python)
     id("com.diffplug.spotless") version "7.0.2"
     // Static bug detection
-    id("com.github.spotbugs") version "6.1.2"
+    id("com.github.spotbugs") version "6.5.0"
     // Publish to local Maven for dependent extensions (e.g., qupath-extension-ppm)
     id("maven-publish")
 }
@@ -82,7 +82,7 @@ dependencies {
     shadow("io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.2.2")
     // CompileOnly - QuPath provides bioformats at runtime, we just compile against it
     // This avoids trying to resolve OME transitive dependencies during build
-    compileOnly("io.github.qupath:qupath-extension-bioformats:0.6.0")
+    compileOnly("io.github.qupath:qupath-extension-bioformats:0.7.0")
     // LiveViewerWindow.showAcquiredTile uses loci.formats.gui.BufferedImageReader
     // to read 16-bit mono OME-TIFFs that ImageIO can't handle. BufferedImageReader
     // lives in formats-bsd, which is a transitive runtime dep of the BioFormats
@@ -96,7 +96,7 @@ dependencies {
 
     // For testing
     testImplementation(libs.bundles.qupath)
-    testImplementation("io.github.qupath:qupath-app:0.6.0")
+    testImplementation("io.github.qupath:qupath-app:0.7.0")
     //testImplementation(libs.junit)
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.13.4")
