@@ -1072,6 +1072,10 @@ public class LiveViewerWindow {
             try {
                 var exposures = controller.getSocketClient().getExposures();
                 double exposureMs = exposures.unified();
+                if (exposures.isPerChannel()) {
+                    exposureMs = Math.max(exposureMs,
+                            Math.max(exposures.red(), Math.max(exposures.green(), exposures.blue())));
+                }
                 if (exposureMs > 40.0) {
                     smoothFocusButton.setStyle("-fx-base: #F44336;");
                     sweepFocusButton.setVisible(true);
@@ -1080,11 +1084,10 @@ public class LiveViewerWindow {
                     javafx.scene.control.CheckBox dontShow =
                             new javafx.scene.control.CheckBox("Do not show this message again");
                     javafx.scene.control.Label msgLabel = new javafx.scene.control.Label(String.format(
-                            "Current exposure (%.1f ms) is too long for fast autofocus.\n"
-                            + "Try Sweep Focus instead.", exposureMs));
+                            "Current exposure (%.1f ms) is too long for fast autofocus.\n" + "Try Sweep Focus instead.",
+                            exposureMs));
                     msgLabel.setWrapText(true);
-                    javafx.scene.layout.VBox content =
-                            new javafx.scene.layout.VBox(8, msgLabel, dontShow);
+                    javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(8, msgLabel, dontShow);
 
                     javafx.scene.control.Alert alert =
                             new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
