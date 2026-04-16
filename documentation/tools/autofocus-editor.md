@@ -5,13 +5,19 @@
 
 ## Purpose
 
-Configure per-objective autofocus parameters in an easy-to-use GUI. This tool allows
-customization of focus search behavior for different objectives, controlling how many
-Z positions are sampled, how wide the search range is, and how frequently autofocus
-runs during tiled acquisition.
+Configure the full autofocus system in an easy-to-use tabbed GUI. The editor exposes
+all three sections of the v2 autofocus schema:
 
-Use this tool when setting up a new objective for acquisition or when adjusting
-autofocus behavior for different sample types (e.g., thick vs. thin sections).
+- **Tab 1 -- Per-Objective Parameters:** per-objective hardware tuning (search range,
+  step count, sweep drift check, AF scheduling grid, safety-net multipliers).
+- **Tab 2 -- Strategies:** the strategy library (named validity+score recipes like
+  `dense_texture`, `sparse_signal`, `dark_field`, `manual_only`).
+- **Tab 3 -- Modality Bindings:** which strategy each modality uses, with optional
+  per-modality parameter overrides.
+
+Use this tool when setting up a new objective, adjusting autofocus behavior for
+different sample types, tuning the validity gate for a new modality, or binding a
+custom strategy to a scope-specific modality.
 
 ![Autofocus Configuration Editor dialog](../images/Docs_AutofocusConfigurationEditor.png)
 
@@ -73,26 +79,61 @@ The Sweep Drift Check section configures a periodic Z sweep that monitors focus 
 | **OK** | Save and close dialog |
 | **Cancel** | Discard unsaved changes |
 
+### Tab 2 -- Strategies (v2)
+
+The strategy library defines named recipes for how AF decides whether a tile has
+enough signal to focus on. Each strategy is a collapsible card showing:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| Description | TextArea | Human-readable explanation of when to use this strategy |
+| Score metric | ComboBox | Focus quality algorithm: `laplacian_variance` (default), `normalized_variance`, `brenner_gradient`, `sobel`, `p98_p2`, `none` |
+| Validity check | ComboBox | How the system decides a tile is focusable: `texture_and_area`, `bright_spot_count`, `total_gradient_energy`, `always_false` |
+| Validity params | Dynamic grid | Parameters for the chosen validity check. The fields change when the validity check selection changes. |
+| On failure | ComboBox | `defer` (skip tile, try next), `proceed` (run AF anyway), `manual` (pop focus dialog) |
+
+Use **+ Add Strategy** to create a new custom strategy, or **Delete Strategy** inside
+a card to remove one. At minimum, `dense_texture` and `manual_only` should be present.
+
+### Tab 3 -- Modality Bindings (v2)
+
+Each row assigns a modality key to a strategy from Tab 2. The modality key is matched
+via longest-prefix-wins lookup (case-insensitive), so both `bf` and `brightfield` can
+independently point to the same or different strategies.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| Modality key | Label | The modality name (e.g. `bf`, `fluorescence`, `ppm`, `bf_if`) |
+| Strategy | ComboBox | Which strategy from Tab 2 this modality uses |
+| Overrides | CheckBox | When checked, expands a parameter grid to override specific validity_params from the base strategy |
+| X | Button | Delete this binding |
+
+Use **+ Add Binding** to map a new modality. The user can still override the strategy
+per-acquisition via the autofocus dropdown in the acquisition wizard.
+
 ## Workflow
 
 1. Open the Autofocus Configuration Editor from the menu.
-2. Select the objective you want to configure from the dropdown.
-3. Adjust **n_tiles** -- how often autofocus triggers (every N tiles). Watch the
-   read-only **af_min_distance** line update to see the resulting AF grid spacing.
-4. (Optional) Tighten **gap_index_multiplier** / **gap_spatial_multiplier** if you
-   suspect the planned grid may skip warped or fragmented regions; the read-only
-   description under each field shows the concrete force-AF threshold in tiles and
-   micrometers as you edit.
-5. Adjust **n_steps** -- the number of Z positions sampled during each autofocus run.
-6. Adjust **search_range_um** -- the total Z range (in um) over which focus is searched.
-7. Configure **Sweep Drift Check** parameters if needed (sweep_range_um, sweep_n_steps, score_metric).
-8. Click **Test Sweep Drift Check** to verify the sweep works at the current position.
-9. Click **Write to File** to save settings, or **OK** to save and close.
+2. **Tab 1 (Per-Objective):**
+   a. Select the objective from the dropdown.
+   b. Adjust **n_tiles** (AF scheduling density). Watch **af_min_distance** update live.
+   c. Tune safety-net multipliers if needed for warped or fragmented samples.
+   d. Adjust **n_steps**, **search_range_um**, and sweep drift check parameters.
+   e. Click **Test Sweep Drift Check** to verify at the current position.
+3. **Tab 2 (Strategies):** Review the strategy library. For most users the defaults
+   (`dense_texture`, `sparse_signal`, `dark_field`, `manual_only`) are sufficient.
+   Expand a strategy card to view or tweak its validity parameters.
+4. **Tab 3 (Modality Bindings):** Verify each modality on your scope maps to the
+   correct strategy. Adjust overrides as needed (e.g., PPM gets a wider
+   `tissue_mask_range` because polarized images have wider intensity distributions).
+5. Click **Write to File** to save settings, or **OK** to save and close.
 
 ## Output
 
 Settings are saved to `autofocus_{microscope}.yml` in the microscope configuration
-directory. Each objective gets its own section in the file.
+directory with `schema_version: 2`. The file contains three sections:
+`autofocus_settings` (per-objective parameters), `strategies` (the strategy library),
+and `modalities` (the per-modality bindings).
 
 ## Parameter Guidelines
 

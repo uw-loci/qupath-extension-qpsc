@@ -205,7 +205,7 @@ This can be disabled with the **"No Manual Autofocus"** preference (Extensions >
 
 ## Modality-Aware Autofocus
 
-**Status: PARTIAL -- 2026-04-14.** The strategies module is loaded and logged at acquisition start, and the selected strategy object is built and available on the acquisition context, but the AF call sites at `workflow.py:2767` and `:3121` still invoke the legacy `has_sufficient_signal` gate directly. The behavior change -- routing those call sites through the strategy's `is_valid` / `score` / `failure_mode` hooks -- lands in a follow-up commit. Until then, modality-aware autofocus is plumbed end-to-end (schema, loader, logging, strategy selection) but does **not** yet change runtime behavior. See `claude-reports/2026-04-13_modality-aware-autofocus-design.md` for the full design and decision log.
+**Status: COMPLETE -- 2026-04-15.** Both AF call sites in `workflow.py` (pre-acquisition validation and per-tile drift check) now route through `af_strategy.is_valid()` / `af_strategy.brightness_acceptable()`. The strategy's `StrategyFailureMode` (DEFER / PROCEED / MANUAL) drives the existing defer-to-next-tile / manual-focus-dialog dispatch. The autofocus editor GUI (Extensions > QP Scope > Utilities > Autofocus Configuration Editor) has been extended with two new tabs that expose the full v2 strategy library and modality bindings for editing. See `claude-reports/2026-04-13_modality-aware-autofocus-design.md` for the original design and decision log.
 
 ### Why
 

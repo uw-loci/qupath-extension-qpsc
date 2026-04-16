@@ -70,6 +70,7 @@ public class AutofocusEditorWorkflow {
         // Sweep drift check parameters
         double sweepRangeUm;
         int sweepNSteps;
+        int edgeRetries;
 
         // AF safety-net gap multipliers (drive force-AF when scheduled AF is sparse)
         int gapIndexMultiplier;
@@ -87,6 +88,7 @@ public class AutofocusEditorWorkflow {
                 double tissueAreaThreshold,
                 double sweepRangeUm,
                 int sweepNSteps,
+                int edgeRetries,
                 int gapIndexMultiplier,
                 double gapSpatialMultiplier) {
             this.objective = objective;
@@ -100,6 +102,7 @@ public class AutofocusEditorWorkflow {
             this.tissueAreaThreshold = tissueAreaThreshold;
             this.sweepRangeUm = sweepRangeUm;
             this.sweepNSteps = sweepNSteps;
+            this.edgeRetries = edgeRetries;
             this.gapIndexMultiplier = gapIndexMultiplier;
             this.gapSpatialMultiplier = gapSpatialMultiplier;
         }
@@ -163,6 +166,12 @@ public class AutofocusEditorWorkflow {
                 warnings.add("sweep_n_steps must be at least 3 for peak detection");
             } else if (sweepNSteps > 20) {
                 warnings.add("sweep_n_steps > 20 may be unnecessarily slow (typical range: 4-8)");
+            }
+
+            if (edgeRetries < 0) {
+                warnings.add("edge_retries must be >= 0");
+            } else if (edgeRetries > 3) {
+                warnings.add("edge_retries > 3 rarely helps and adds ~1s per AF point per retry");
             }
 
             // AF safety-net gap multipliers
@@ -332,19 +341,15 @@ public class AutofocusEditorWorkflow {
                                 existing.tissueAreaThreshold,
                                 existing.sweepRangeUm,
                                 existing.sweepNSteps,
+                                existing.edgeRetries,
                                 existing.gapIndexMultiplier,
                                 existing.gapSpatialMultiplier));
             } else {
                 logger.info("  NOT FOUND in existingSettings - using defaults");
-                // Use defaults: n_steps=9, search_range=15um, n_tiles=5, interp_strength=100,
-                // interp_kind=quadratic, score_metric=normalized_variance,
-                // texture_threshold=0.005, tissue_area_threshold=0.2
-                // Sweep defaults: range=10.0um, n_steps=6
-                // Safety-net defaults: gap_index_multiplier=3, gap_spatial_multiplier=2.0
                 workingSettings.put(
                         obj,
                         new AutofocusSettings(
-                                obj, 9, 15.0, 5, 100, "quadratic", "normalized_variance", 0.005, 0.2, 10.0, 6, 3, 2.0));
+                                obj, 9, 15.0, 5, 100, "quadratic", "normalized_variance", 0.005, 0.2, 10.0, 6, 2, 3, 2.0));
             }
         }
 
@@ -703,9 +708,32 @@ public class AutofocusEditorWorkflow {
         sweepGrid.add(sweepRangeField, 1, 0);
         sweepGrid.add(sweepRangeDesc, 2, 0);
 
+        Label edgeRetriesLabel = new Label("edge_retries:");
+        Spinner<Integer> edgeRetriesSpinner = new Spinner<>(0, 5, 2, 1);
+        edgeRetriesSpinner.setEditable(true);
+        edgeRetriesSpinner.setPrefWidth(100);
+        edgeRetriesSpinner.setTooltip(new Tooltip(
+                "Additional sweep attempts when peak is at the edge of the search range.\n\n"
+                + "When the sweep detects a monotonic profile (focus is outside\n"
+                + "the window), it shifts one full range in the peak direction\n"
+                + "and sweeps again.\n\n"
+                + "0 = no retries (original 1-window behavior)\n"
+                + "2 = up to 3 total attempts, covering 3x sweep_range_um\n\n"
+                + "WARNING: Each retry adds ~1s per autofocus point.\n"
+                + "For a 750-tile acquisition with 70 AF points,\n"
+                + "going from 2 to 4 adds 2+ minutes.\n"
+                + "Values above 3 rarely help -- if focus is that\n"
+                + "far away, the starting Z estimate is wrong."));
+        Label edgeRetriesDesc = new Label("(Extra attempts on boundary peaks, 0-5)");
+        edgeRetriesDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+
         sweepGrid.add(sweepNStepsLabel, 0, 1);
         sweepGrid.add(sweepNStepsSpinner, 1, 1);
         sweepGrid.add(sweepNStepsDesc, 2, 1);
+
+        sweepGrid.add(edgeRetriesLabel, 0, 2);
+        sweepGrid.add(edgeRetriesSpinner, 1, 2);
+        sweepGrid.add(edgeRetriesDesc, 2, 2);
 
         // Status label for validation feedback
         Label statusLabel = new Label();
@@ -730,6 +758,7 @@ public class AutofocusEditorWorkflow {
                 double tissueAreaThreshold = Double.parseDouble(tissueAreaThresholdField.getText());
                 double sweepRange = Double.parseDouble(sweepRangeField.getText());
                 int sweepNSteps = sweepNStepsSpinner.getValue();
+                int edgeRetries = edgeRetriesSpinner.getValue();
                 int gapIndexMult = gapIndexSpinner.getValue();
                 double gapSpatialMult = Double.parseDouble(gapSpatialField.getText());
 
@@ -747,6 +776,7 @@ public class AutofocusEditorWorkflow {
                                 tissueAreaThreshold,
                                 sweepRange,
                                 sweepNSteps,
+                                edgeRetries,
                                 gapIndexMult,
                                 gapSpatialMult));
             } catch (NumberFormatException ex) {
@@ -830,6 +860,7 @@ public class AutofocusEditorWorkflow {
                 tissueAreaThresholdField.setText(String.valueOf(settings.tissueAreaThreshold));
                 sweepRangeField.setText(String.valueOf(settings.sweepRangeUm));
                 sweepNStepsSpinner.getValueFactory().setValue(settings.sweepNSteps);
+                edgeRetriesSpinner.getValueFactory().setValue(settings.edgeRetries);
                 gapIndexSpinner.getValueFactory().setValue(settings.gapIndexMultiplier);
                 gapSpatialField.setText(String.valueOf(settings.gapSpatialMultiplier));
                 refreshDerivedDisplay.run();
@@ -1100,9 +1131,7 @@ public class AutofocusEditorWorkflow {
         tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         tabPane.setPrefHeight(550);
 
-        mainLayout
-                .getChildren()
-                .addAll(tabPane, statusLabel, new Separator(), buttonRow);
+        mainLayout.getChildren().addAll(tabPane, statusLabel, new Separator(), buttonRow);
 
         dialog.getDialogPane().setContent(mainLayout);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -1219,7 +1248,9 @@ public class AutofocusEditorWorkflow {
                         entry.getKey(),
                         new StrategyDefinition(
                                 entry.getKey(),
-                                s.get("description") != null ? s.get("description").toString().trim() : "",
+                                s.get("description") != null
+                                        ? s.get("description").toString().trim()
+                                        : "",
                                 (String) s.get("score_metric"),
                                 (String) s.get("validity_check"),
                                 vp,
@@ -1255,9 +1286,7 @@ public class AutofocusEditorWorkflow {
                         overrides.putAll(vp);
                     }
                 }
-                result.put(
-                        entry.getKey(),
-                        new ModalityBinding(entry.getKey(), (String) m.get("strategy"), overrides));
+                result.put(entry.getKey(), new ModalityBinding(entry.getKey(), (String) m.get("strategy"), overrides));
             }
             logger.info("Loaded {} modality bindings from {}", result.size(), autofocusFile.getName());
         } catch (Exception e) {
@@ -1294,8 +1323,15 @@ public class AutofocusEditorWorkflow {
                     Dialogs.showWarningNotification("Invalid Name", "Name is empty or already exists: " + key);
                     return;
                 }
-                strategies.put(key, new StrategyDefinition(key, "", "laplacian_variance", "texture_and_area",
-                        getDefaultValidityParams("texture_and_area"), "defer"));
+                strategies.put(
+                        key,
+                        new StrategyDefinition(
+                                key,
+                                "",
+                                "laplacian_variance",
+                                "texture_and_area",
+                                getDefaultValidityParams("texture_and_area"),
+                                "defer"));
                 rebuildCards.run();
             });
         });
@@ -1304,9 +1340,7 @@ public class AutofocusEditorWorkflow {
     }
 
     private static TitledPane buildStrategyCard(
-            StrategyDefinition sd,
-            Map<String, StrategyDefinition> allStrategies,
-            VBox cardsBox) {
+            StrategyDefinition sd, Map<String, StrategyDefinition> allStrategies, VBox cardsBox) {
         GridPane grid = new GridPane();
         grid.setHgap(8);
         grid.setVgap(6);
@@ -1325,12 +1359,28 @@ public class AutofocusEditorWorkflow {
         scoreCombo.getItems().addAll(SCORE_METRICS);
         scoreCombo.setValue(sd.scoreMetric);
         scoreCombo.setOnAction(e -> sd.scoreMetric = scoreCombo.getValue());
+        scoreCombo.setTooltip(new Tooltip(
+                "Focus quality metric used to evaluate each Z position.\n\n"
+                        + "laplacian_variance: Default. Second-derivative sharpness.\n"
+                        + "normalized_variance: Variance divided by mean intensity.\n"
+                        + "brenner_gradient: Good for low-contrast / dark-field.\n"
+                        + "none: Used by manual_only (no scoring needed)."));
         grid.add(new Label("Score metric:"), 0, row);
         grid.add(scoreCombo, 1, row++);
 
         ComboBox<String> validityCombo = new ComboBox<>();
         validityCombo.getItems().addAll(VALIDITY_CHECKS);
         validityCombo.setValue(sd.validityCheck);
+        validityCombo.setTooltip(new Tooltip(
+                "How the AF system decides if a tile has enough signal to focus on.\n\n"
+                        + "texture_and_area: Requires texture gradient AND tissue area.\n"
+                        + "  Best for: H&E, IHC, PPM, confluent IF.\n\n"
+                        + "bright_spot_count: Counts bright local maxima above background.\n"
+                        + "  Best for: sparse fluorescence (beads, pollen, FISH spots).\n\n"
+                        + "total_gradient_energy: Whole-FOV gradient magnitude.\n"
+                        + "  Best for: SHG, dark-field, laser scanning.\n\n"
+                        + "always_false: Always fails -- used by manual_only to force\n"
+                        + "  the manual focus dialog every time."));
         grid.add(new Label("Validity check:"), 0, row);
         grid.add(validityCombo, 1, row++);
 
@@ -1338,6 +1388,14 @@ public class AutofocusEditorWorkflow {
         failureCombo.getItems().addAll(ON_FAILURE_MODES);
         failureCombo.setValue(sd.onFailure);
         failureCombo.setOnAction(e -> sd.onFailure = failureCombo.getValue());
+        failureCombo.setTooltip(new Tooltip(
+                "What happens when validity check fails at a tile position.\n\n"
+                        + "defer: Skip this tile, try the next AF candidate.\n"
+                        + "  Correct for dense tissue where the next tile is better.\n\n"
+                        + "proceed: Run AF anyway on whatever signal is present.\n"
+                        + "  Correct for sparse/dark-field where no tile is guaranteed.\n\n"
+                        + "manual: Pop the manual focus dialog immediately.\n"
+                        + "  For training runs or edge-case samples."));
         grid.add(new Label("On failure:"), 0, row);
         grid.add(failureCombo, 1, row++);
 
@@ -1467,8 +1525,7 @@ public class AutofocusEditorWorkflow {
     }
 
     private static VBox buildModalityBindingsTab(
-            Map<String, ModalityBinding> bindings,
-            Map<String, StrategyDefinition> strategies) {
+            Map<String, ModalityBinding> bindings, Map<String, StrategyDefinition> strategies) {
         VBox content = new VBox(8);
         content.setPadding(new Insets(10));
         VBox rowsBox = new VBox(6);
@@ -1520,6 +1577,11 @@ public class AutofocusEditorWorkflow {
 
         Label keyLabel = new Label(mb.modalityKey);
         keyLabel.setStyle("-fx-font-weight: bold; -fx-min-width: 100;");
+        keyLabel.setTooltip(new Tooltip(
+                "Modality key matched via longest-prefix-wins (case-insensitive).\n"
+                        + "Common keys: bf, brightfield, ppm, fl, fluorescence, bf_if,\n"
+                        + "lsm, shg, 2p, confocal. Multiple keys can map to the same\n"
+                        + "strategy (e.g. both 'bf' and 'brightfield' -> dense_texture)."));
 
         ComboBox<String> strategyCombo = new ComboBox<>();
         strategyCombo.getItems().addAll(strategies.keySet());
@@ -1528,9 +1590,22 @@ public class AutofocusEditorWorkflow {
         }
         strategyCombo.setValue(mb.strategyName);
         strategyCombo.setOnAction(e -> mb.strategyName = strategyCombo.getValue());
+        strategyCombo.setTooltip(new Tooltip(
+                "Which strategy from the Strategies tab this modality uses.\n"
+                        + "At acquisition time, the modality-aware loader picks the\n"
+                        + "strategy by matching the acquisition's modality name against\n"
+                        + "these keys (longest prefix wins). The user can still override\n"
+                        + "the strategy per-acquisition via the AF dropdown in the\n"
+                        + "acquisition wizard."));
 
         CheckBox overrideCheck = new CheckBox("Overrides");
         overrideCheck.setSelected(!mb.overrides.isEmpty());
+        overrideCheck.setTooltip(new Tooltip(
+                "When checked, this modality overrides specific validity_params\n"
+                        + "from the base strategy. Overrides merge into the strategy\n"
+                        + "defaults -- only the listed parameters change, the rest keep\n"
+                        + "the strategy's values. Use for per-modality tuning (e.g.\n"
+                        + "looser tissue_mask_range for PPM polarized images)."));
 
         Button deleteBtn = new Button("X");
         deleteBtn.setStyle("-fx-text-fill: red; -fx-font-size: 10px;");
@@ -1662,6 +1737,10 @@ public class AutofocusEditorWorkflow {
                                 ? ((Number) entry.get("sweep_n_steps")).intValue()
                                 : 6;
 
+                        int edgeRetries = entry.containsKey("edge_retries")
+                                ? ((Number) entry.get("edge_retries")).intValue()
+                                : 2;
+
                         // Legacy support: old adaptive_initial_step_um -> sweep_range_um
                         if (!entry.containsKey("sweep_range_um") && entry.containsKey("adaptive_initial_step_um")) {
                             sweepRangeUm = ((Number) entry.get("adaptive_initial_step_um")).doubleValue() * 2;
@@ -1676,12 +1755,13 @@ public class AutofocusEditorWorkflow {
                                 : 2.0;
 
                         logger.info(
-                                "Loaded from YAML - objective='{}', n_steps={}, search_range={}, sweep_range={}, sweep_n_steps={}, gap_index={}, gap_spatial={}",
+                                "Loaded from YAML - objective='{}', n_steps={}, search_range={}, sweep_range={}, sweep_n_steps={}, edge_retries={}, gap_index={}, gap_spatial={}",
                                 objective,
                                 nSteps,
                                 searchRange,
                                 sweepRangeUm,
                                 sweepNSteps,
+                                edgeRetries,
                                 gapIndexMultiplier,
                                 gapSpatialMultiplier);
 
@@ -1699,6 +1779,7 @@ public class AutofocusEditorWorkflow {
                                         tissueAreaThreshold,
                                         sweepRangeUm,
                                         sweepNSteps,
+                                        edgeRetries,
                                         gapIndexMultiplier,
                                         gapSpatialMultiplier));
                     }
@@ -1739,6 +1820,7 @@ public class AutofocusEditorWorkflow {
             entry.put("tissue_area_threshold", setting.tissueAreaThreshold);
             entry.put("sweep_range_um", setting.sweepRangeUm);
             entry.put("sweep_n_steps", setting.sweepNSteps);
+            entry.put("edge_retries", setting.edgeRetries);
             entry.put("gap_index_multiplier", setting.gapIndexMultiplier);
             entry.put("gap_spatial_multiplier", setting.gapSpatialMultiplier);
             afSettingsList.add(entry);
