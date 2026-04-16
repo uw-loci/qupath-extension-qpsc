@@ -145,6 +145,11 @@ public class QPPreferenceDialog {
     private static final BooleanProperty warnOnLowDiskSpaceProperty =
             PathPrefs.createPersistentPreference("warnOnLowDiskSpace", true);
 
+    // Suppress the exposure-too-long warning dialog in the Live Viewer Autofocus button.
+    // Controlled by the "don't show again" checkbox in the dialog, not the preferences pane.
+    private static final BooleanProperty suppressExposureWarningProperty =
+            PathPrefs.createPersistentPreference("suppressExposureWarning", false);
+
     // --- Notification / Alert preferences ---
     private static final String ALERTS_CATEGORY = "QuPath SCope Alerts";
     private static final String PPM_CATEGORY = "PPM (Polarized Light Microscopy)";
@@ -619,6 +624,14 @@ public class QPPreferenceDialog {
 
     public static void setDisableAllAutofocus(boolean disable) {
         disableAllAutofocusProperty.set(disable);
+    }
+
+    public static boolean getSuppressExposureWarning() {
+        return suppressExposureWarningProperty.get();
+    }
+
+    public static void setSuppressExposureWarning(boolean suppress) {
+        suppressExposureWarningProperty.set(suppress);
     }
 
     /**

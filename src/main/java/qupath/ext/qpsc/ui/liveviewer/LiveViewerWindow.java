@@ -39,6 +39,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -70,7 +71,7 @@ public class LiveViewerWindow {
     private Label statusLabel;
     private Label cursorLabel;
     private Button liveToggleButton;
-    private Button refineFocusButton;
+    // Refine Focus removed from toolbar -- Sweep Focus includes it as Phase 5
     private Button sweepFocusButton;
     private Button smoothFocusButton;
     private SmoothFocusController smoothFocusController;
@@ -173,7 +174,6 @@ public class LiveViewerWindow {
     private void applyLock() {
         String reason = lockManager.getLockHolder();
         liveToggleButton.setDisable(true);
-        refineFocusButton.setDisable(true);
         sweepFocusButton.setDisable(true);
         if (smoothFocusButton != null) smoothFocusButton.setDisable(true);
         if (stageControlToggle != null) stageControlToggle.setDisable(true);
@@ -657,15 +657,6 @@ public class LiveViewerWindow {
         updateLiveButtonStyle(false);
         liveToggleButton.setOnAction(e -> toggleLiveMode());
 
-        // Refine focus button and search range selector
-        refineFocusButton = new Button("Refine Focus");
-        refineFocusButton.setTooltip(new Tooltip(
-                "Automatically refine Z focus using histogram contrast. " + "Best used when already close to focus."));
-        refineFocusButton.setDisable(true);
-        refineFocusButton.setVisible(false);
-        refineFocusButton.setManaged(false);
-        refineFocusButton.setOnAction(e -> handleRefineFocus());
-
         sweepFocusButton = new Button("Sweep Focus");
         sweepFocusButton.setTooltip(new Tooltip("Stepped-Z autofocus. Moves Z point by point and "
                 + "snaps at each step to find the best focus. Slower but works on any camera."));
@@ -757,7 +748,6 @@ public class LiveViewerWindow {
         HBox toolbar = new HBox(
                 8,
                 liveToggleButton,
-                refineFocusButton,
                 sweepFocusButton,
                 smoothFocusButton,
                 focusRangeCombo,
@@ -979,9 +969,6 @@ public class LiveViewerWindow {
             return;
         }
         boolean enabled = liveActive;
-        refineFocusButton.setText("Refine Focus");
-        refineFocusButton.setStyle("");
-        refineFocusButton.setDisable(!enabled);
         sweepFocusButton.setText("Sweep Focus");
         sweepFocusButton.setStyle("");
         sweepFocusButton.setDisable(!enabled);
@@ -991,87 +978,7 @@ public class LiveViewerWindow {
         focusRangeCombo.setDisable(!enabled);
     }
 
-    private void handleRefineFocus() {
-        if (refineFocusController != null && refineFocusController.isRunning()) {
-            // Already running -- cancel
-            refineFocusController.cancel();
-            refineFocusButton.setText("Cancelling...");
-            refineFocusButton.setDisable(true);
-            return;
-        }
-
-        MicroscopeController controller = MicroscopeController.getInstance();
-        if (controller == null || !liveActive) {
-            updateStatus("Cannot refine focus: not connected or live not active");
-            return;
-        }
-
-        if (controller.isAcquisitionActive()) {
-            updateStatus("Cannot refine focus: acquisition in progress");
-            return;
-        }
-
-        // Parse search range from combo
-        double searchRange = 0; // 0 = auto
-        String rangeSelection = focusRangeCombo.getValue();
-        if (rangeSelection != null && rangeSelection.endsWith("um")) {
-            try {
-                searchRange = Double.parseDouble(rangeSelection.replace("um", ""));
-            } catch (NumberFormatException ignored) {
-            }
-        }
-
-        // Create controller with frame supplier reading lastFrame
-        refineFocusController = new RefineFocusController(controller.getSocketClient(), () -> lastFrame, searchRange);
-
-        // Update button to cancel mode, lock live toggle during focus
-        refineFocusButton.setText("Cancel Focus");
-        refineFocusButton.setStyle("");
-        sweepFocusButton.setDisable(true);
-        smoothFocusButton.setDisable(true);
-        focusRangeCombo.setDisable(true);
-        liveToggleButton.setDisable(true);
-
-        // Status callback -- hold completion messages so FPS ticker doesn't overwrite them
-        RefineFocusController.StatusCallback callback = (msg, outcome) -> {
-            Platform.runLater(() -> {
-                boolean done = outcome != RefineFocusController.Outcome.IN_PROGRESS;
-                if (done) {
-                    updateStatusHeld(msg);
-                } else {
-                    updateStatus(msg);
-                }
-                if (done) {
-                    liveToggleButton.setDisable(false);
-                    focusRangeCombo.setDisable(!liveActive);
-                    sweepFocusButton.setDisable(!liveActive);
-                    smoothFocusButton.setDisable(!liveActive);
-                    if (stageControlPanel != null) {
-                        stageControlPanel.refreshPositions();
-                    }
-
-                    if (outcome == RefineFocusController.Outcome.FAILED) {
-                        refineFocusButton.setText("FAILED");
-                        refineFocusButton.setStyle("-fx-font-size: 11; -fx-base: #F44336;");
-                        refineFocusButton.setTooltip(new Tooltip("No focus improvement found within search range.\n"
-                                + "- Get closer to focus manually (scroll Z), then retry\n"
-                                + "- Or widen the search range dropdown"));
-                        refineFocusButton.setDisable(!liveActive);
-                    } else {
-                        refineFocusButton.setText("Refine Focus");
-                        refineFocusButton.setStyle("");
-                        refineFocusButton.setDisable(!liveActive);
-                    }
-                }
-            });
-        };
-
-        // Run on background daemon thread
-        Thread focusThread = new Thread(() -> refineFocusController.execute(callback));
-        focusThread.setDaemon(true);
-        focusThread.setName("LiveViewer-RefineFocus");
-        focusThread.start();
-    }
+    // handleRefineFocus removed -- Sweep Focus includes Refine as Phase 5
 
     private void handleSweepFocus() {
         if (sweepFocusController != null && sweepFocusController.isRunning()) {
@@ -1104,7 +1011,7 @@ public class LiveViewerWindow {
 
         sweepFocusButton.setText("Cancel Sweep");
         sweepFocusButton.setStyle("");
-        refineFocusButton.setDisable(true);
+
         smoothFocusButton.setDisable(true);
         focusRangeCombo.setDisable(true);
         liveToggleButton.setDisable(true);
@@ -1120,7 +1027,7 @@ public class LiveViewerWindow {
                 if (done) {
                     liveToggleButton.setDisable(false);
                     focusRangeCombo.setDisable(!liveActive);
-                    refineFocusButton.setDisable(!liveActive);
+
                     smoothFocusButton.setDisable(!liveActive);
                     if (stageControlPanel != null) {
                         stageControlPanel.refreshPositions();
@@ -1159,6 +1066,41 @@ public class LiveViewerWindow {
         if (controller.isAcquisitionActive()) {
             updateStatus("Cannot smooth focus: acquisition in progress");
             return;
+        }
+
+        if (!QPPreferenceDialog.getSuppressExposureWarning()) {
+            try {
+                var exposures = controller.getSocketClient().getExposures();
+                double exposureMs = exposures.unified();
+                if (exposureMs > 40.0) {
+                    smoothFocusButton.setStyle("-fx-base: #F44336;");
+                    sweepFocusButton.setVisible(true);
+                    sweepFocusButton.setManaged(true);
+
+                    javafx.scene.control.CheckBox dontShow =
+                            new javafx.scene.control.CheckBox("Do not show this message again");
+                    javafx.scene.control.Label msgLabel = new javafx.scene.control.Label(String.format(
+                            "Current exposure (%.1f ms) is too long for fast autofocus.\n"
+                            + "Try Sweep Focus instead.", exposureMs));
+                    msgLabel.setWrapText(true);
+                    javafx.scene.layout.VBox content =
+                            new javafx.scene.layout.VBox(8, msgLabel, dontShow);
+
+                    javafx.scene.control.Alert alert =
+                            new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+                    alert.setTitle("Autofocus");
+                    alert.setHeaderText("Exposure time too long for fast autofocus");
+                    alert.getDialogPane().setContent(content);
+                    alert.showAndWait();
+
+                    if (dontShow.isSelected()) {
+                        QPPreferenceDialog.setSuppressExposureWarning(true);
+                    }
+                    return;
+                }
+            } catch (java.io.IOException ex) {
+                logger.debug("Could not check exposure for pre-flight: {}", ex.getMessage());
+            }
         }
 
         smoothFocusController = new SmoothFocusController(controller.getSocketClient());
@@ -1203,7 +1145,7 @@ public class LiveViewerWindow {
         smoothFocusButton.setText("Scanning...");
         smoothFocusButton.setStyle("");
         smoothFocusButton.setDisable(true);
-        refineFocusButton.setDisable(true);
+
         sweepFocusButton.setDisable(true);
         focusRangeCombo.setDisable(true);
         liveToggleButton.setDisable(true);
@@ -1221,7 +1163,7 @@ public class LiveViewerWindow {
                 if (done) {
                     liveToggleButton.setDisable(false);
                     focusRangeCombo.setDisable(!liveActive);
-                    refineFocusButton.setDisable(!liveActive);
+
                     sweepFocusButton.setDisable(!liveActive);
                     if (stageControlPanel != null) {
                         stageControlPanel.refreshPositions();
@@ -1233,8 +1175,7 @@ public class LiveViewerWindow {
                         smoothFocusButton.setStyle("-fx-font-size: 11; -fx-base: #FF9800;");
                         smoothFocusButton.setTooltip(new Tooltip(msg + "\nUse Refine Focus or Sweep Focus instead."));
                         smoothFocusButton.setDisable(!liveActive);
-                        refineFocusButton.setVisible(true);
-                        refineFocusButton.setManaged(true);
+
                         sweepFocusButton.setVisible(true);
                         sweepFocusButton.setManaged(true);
                         String reason = msg;
@@ -1247,16 +1188,14 @@ public class LiveViewerWindow {
                         smoothFocusButton.setStyle("-fx-font-size: 11; -fx-base: #F44336;");
                         smoothFocusButton.setTooltip(new Tooltip(msg));
                         smoothFocusButton.setDisable(!liveActive);
-                        refineFocusButton.setVisible(true);
-                        refineFocusButton.setManaged(true);
+
                         sweepFocusButton.setVisible(true);
                         sweepFocusButton.setManaged(true);
                     } else {
                         smoothFocusButton.setText("Autofocus");
                         smoothFocusButton.setStyle("");
                         smoothFocusButton.setDisable(!liveActive);
-                        refineFocusButton.setVisible(false);
-                        refineFocusButton.setManaged(false);
+
                         sweepFocusButton.setVisible(false);
                         sweepFocusButton.setManaged(false);
                     }

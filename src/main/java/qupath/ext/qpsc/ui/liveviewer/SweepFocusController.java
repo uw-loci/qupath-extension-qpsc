@@ -226,6 +226,72 @@ public class SweepFocusController {
                     bestIdx = i;
                 }
             }
+
+            // Edge retry: when peak is at boundary with a real score trend,
+            // extend the sweep in the peak direction (up to 2 retries).
+            int maxEdgeRetries = 2;
+            double half = range / 2.0;
+            for (int retry = 0; retry < maxEdgeRetries; retry++) {
+                if (cancelled) break;
+                if (bestIdx > 0 && bestIdx < measurements.size() - 1) break;
+
+                double minM = Double.MAX_VALUE, maxM = Double.NEGATIVE_INFINITY, sumM = 0;
+                for (double[] m : measurements) {
+                    minM = Math.min(minM, m[1]);
+                    maxM = Math.max(maxM, m[1]);
+                    sumM += m[1];
+                }
+                double meanM = sumM / measurements.size();
+                double rangePct = (maxM - minM) / Math.max(meanM, 1.0) * 100;
+                if (rangePct < 2.0) break;
+
+                double boundaryZ = measurements.get(bestIdx)[0];
+                double newCenter = (bestIdx == measurements.size() - 1)
+                        ? boundaryZ + half : boundaryZ - half;
+                double extStart = newCenter - half;
+                double extEnd = newCenter + half;
+
+                if (configMgr != null) {
+                    if (!configMgr.isWithinStageBounds(extStart)
+                            || !configMgr.isWithinStageBounds(extEnd)) {
+                        logger.info("Sweep Focus: edge retry {} would exceed stage bounds, stopping", retry + 1);
+                        break;
+                    }
+                }
+
+                logger.info("Sweep Focus: peak at boundary (idx={}), retry {} [{} -> {}]",
+                        bestIdx, retry + 1, fmt(extStart), fmt(extEnd));
+                callback.onStatusUpdate(
+                        String.format("Sweep Focus: extending (retry %d)...", retry + 1),
+                        Outcome.IN_PROGRESS);
+
+                double extStep = (extEnd - extStart) / NUM_STEPS;
+                measurements.clear();
+                socketClient.moveStageZ(extStart);
+                for (int i = 0; i <= NUM_STEPS; i++) {
+                    if (cancelled) break;
+                    double z = extStart + i * extStep;
+                    long preTs = captureTimestamp();
+                    socketClient.moveStageZ(z);
+                    FrameData f = waitForFreshFrame(preTs);
+                    if (f == null) f = frameSupplier.get();
+                    if (f != null) {
+                        double metric = metricHelper.computeFocusMetric(f);
+                        measurements.add(new double[] {z, metric});
+                    }
+                }
+
+                if (measurements.size() < 3) break;
+                bestIdx = 0;
+                bestMetric = measurements.get(0)[1];
+                for (int i = 1; i < measurements.size(); i++) {
+                    if (measurements.get(i)[1] > bestMetric) {
+                        bestMetric = measurements.get(i)[1];
+                        bestIdx = i;
+                    }
+                }
+            }
+
             double bestZ = measurements.get(bestIdx)[0];
 
             // Quadratic interpolation around peak for sub-sample refinement
