@@ -17,4 +17,3 @@ qupath {
 plugins {
     id("io.github.qupath.qupath-extension-settings") version "0.2.1"
 }
-include("qupath-extension-bioformats")
