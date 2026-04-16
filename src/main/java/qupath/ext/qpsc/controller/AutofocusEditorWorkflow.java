@@ -175,10 +175,78 @@ public class AutofocusEditorWorkflow {
             if (gapSpatialMultiplier <= 0) {
                 warnings.add("gap_spatial_multiplier must be positive");
             } else if (gapSpatialMultiplier > 5.0) {
-                warnings.add("gap_spatial_multiplier > 5.0 effectively disables the spatial safety net (typical range: 1.0-3.0)");
+                warnings.add(
+                        "gap_spatial_multiplier > 5.0 effectively disables the spatial safety net (typical range: 1.0-3.0)");
             }
 
             return warnings;
+        }
+    }
+
+    private static final String[] SCORE_METRICS = {
+        "laplacian_variance", "normalized_variance", "brenner_gradient", "sobel", "p98_p2", "none"
+    };
+
+    private static final String[] VALIDITY_CHECKS = {
+        "texture_and_area", "bright_spot_count", "total_gradient_energy", "always_false"
+    };
+
+    private static final String[] ON_FAILURE_MODES = {"defer", "proceed", "manual"};
+
+    private static class StrategyDefinition {
+        String name;
+        String description;
+        String scoreMetric;
+        String validityCheck;
+        Map<String, Object> validityParams;
+        String onFailure;
+
+        StrategyDefinition(
+                String name,
+                String description,
+                String scoreMetric,
+                String validityCheck,
+                Map<String, Object> validityParams,
+                String onFailure) {
+            this.name = name;
+            this.description = description != null ? description : "";
+            this.scoreMetric = scoreMetric != null ? scoreMetric : "laplacian_variance";
+            this.validityCheck = validityCheck != null ? validityCheck : "texture_and_area";
+            this.validityParams = validityParams != null ? new LinkedHashMap<>(validityParams) : new LinkedHashMap<>();
+            this.onFailure = onFailure != null ? onFailure : "defer";
+        }
+
+        Map<String, Object> toYamlMap() {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("description", description);
+            map.put("score_metric", scoreMetric);
+            map.put("validity_check", validityCheck);
+            map.put("validity_params", new LinkedHashMap<>(validityParams));
+            map.put("on_failure", onFailure);
+            return map;
+        }
+    }
+
+    private static class ModalityBinding {
+        String modalityKey;
+        String strategyName;
+        Map<String, Object> overrides;
+
+        ModalityBinding(String modalityKey, String strategyName, Map<String, Object> overrides) {
+            this.modalityKey = modalityKey;
+            this.strategyName = strategyName != null ? strategyName : "dense_texture";
+            this.overrides = overrides != null ? new LinkedHashMap<>(overrides) : new LinkedHashMap<>();
+        }
+
+        Map<String, Object> toYamlMap() {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("strategy", strategyName);
+            if (!overrides.isEmpty()) {
+                Map<String, Object> ov = new LinkedHashMap<>();
+                ov.put("validity_params", new LinkedHashMap<>(overrides));
+                map.put("overrides", ov);
+            }
+            return map;
         }
     }
 
@@ -280,6 +348,11 @@ public class AutofocusEditorWorkflow {
             }
         }
 
+        // Load v2 sections (strategies + modality bindings) up front so they
+        // can be referenced by lambdas in the write/validate button handlers.
+        final Map<String, StrategyDefinition> strategiesRef = loadStrategies(autofocusFile);
+        final Map<String, ModalityBinding> bindingsRef = loadModalityBindings(autofocusFile);
+
         // Create dialog
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.initModality(javafx.stage.Modality.NONE);
@@ -380,13 +453,14 @@ public class AutofocusEditorWorkflow {
         Label derivedLabel = new Label("af_min_distance (derived):");
         Label derivedValue = new Label();
         derivedValue.setStyle("-fx-font-size: 11px; -fx-text-fill: #444; -fx-font-style: italic;");
-        derivedValue.setTooltip(new Tooltip("af_min_distance is not a user setting; it is computed at runtime by Python:\n"
-                + "  af_min_distance = ((fov_x + fov_y) / 2) x n_tiles\n\n"
-                + "where fov_x / fov_y come from the active modality + objective + detector.\n"
-                + "The value shown here is an editor estimate using the objective's camera FOV\n"
-                + "from the microscope config. To change af_min_distance, adjust n_tiles.\n\n"
-                + "This value controls the minimum spacing between planned AF grid points\n"
-                + "and also feeds into the gap_spatial_multiplier safety net."));
+        derivedValue.setTooltip(
+                new Tooltip("af_min_distance is not a user setting; it is computed at runtime by Python:\n"
+                        + "  af_min_distance = ((fov_x + fov_y) / 2) x n_tiles\n\n"
+                        + "where fov_x / fov_y come from the active modality + objective + detector.\n"
+                        + "The value shown here is an editor estimate using the objective's camera FOV\n"
+                        + "from the microscope config. To change af_min_distance, adjust n_tiles.\n\n"
+                        + "This value controls the minimum spacing between planned AF grid points\n"
+                        + "and also feeds into the gap_spatial_multiplier safety net."));
 
         acquisitionGrid.add(nTilesLabel, 0, 0);
         acquisitionGrid.add(nTilesSpinner, 1, 0);
@@ -403,8 +477,7 @@ public class AutofocusEditorWorkflow {
         acquisitionGrid.add(derivedLabel, 0, 3);
         acquisitionGrid.add(derivedValue, 1, 3, 2, 1);
 
-        TitledPane acquisitionPane =
-                new TitledPane("Acquisition Frequency & Safety Nets", acquisitionGrid);
+        TitledPane acquisitionPane = new TitledPane("Acquisition Frequency & Safety Nets", acquisitionGrid);
         acquisitionPane.setCollapsible(false);
 
         // ===== TISSUE DETECTION SECTION =====
@@ -701,7 +774,8 @@ public class AutofocusEditorWorkflow {
                             "%.0f um  (= %d x %.0f um FOV).  Force-AF thresholds: index >= %d tiles, spatial > %.0f um",
                             afMinDist, nTiles, meanFov, indexThreshold, spatialThreshold));
                     gapIndexDesc.setText(String.format("(force AF after %d tiles without one)", indexThreshold));
-                    gapSpatialDesc.setText(String.format("(force AF beyond %.0f um from nearest AF)", spatialThreshold));
+                    gapSpatialDesc.setText(
+                            String.format("(force AF beyond %.0f um from nearest AF)", spatialThreshold));
                 } else {
                     derivedValue.setText(String.format(
                             "~ %d x mean(FOV) um  (FOV unavailable for this objective -- value is computed at runtime)",
@@ -806,7 +880,7 @@ public class AutofocusEditorWorkflow {
                 }
 
                 // Save to file
-                saveAutofocusSettings(autofocusFile, workingSettings);
+                saveAutofocusSettings(autofocusFile, workingSettings, strategiesRef, bindingsRef);
                 statusLabel.setText("Settings saved successfully to " + autofocusFile.getName());
                 statusLabel.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
                 logger.info("Autofocus settings saved to: {}", autofocusFile.getAbsolutePath());
@@ -840,7 +914,7 @@ public class AutofocusEditorWorkflow {
                 }
 
                 // Save to file first so test uses current settings
-                saveAutofocusSettings(autofocusFile, workingSettings);
+                saveAutofocusSettings(autofocusFile, workingSettings, strategiesRef, bindingsRef);
                 statusLabel.setText("Settings saved - running standard autofocus test...");
                 statusLabel.setStyle("-fx-text-fill: blue; -fx-font-weight: bold;");
                 logger.info("Autofocus settings saved before standard test");
@@ -890,7 +964,7 @@ public class AutofocusEditorWorkflow {
                 }
 
                 // Save to file first so test uses current settings
-                saveAutofocusSettings(autofocusFile, workingSettings);
+                saveAutofocusSettings(autofocusFile, workingSettings, strategiesRef, bindingsRef);
                 statusLabel.setText("Settings saved - running sweep drift check test...");
                 statusLabel.setStyle("-fx-text-fill: blue; -fx-font-weight: bold;");
                 logger.info("Autofocus settings saved before sweep test");
@@ -943,7 +1017,7 @@ public class AutofocusEditorWorkflow {
         validateButton.setOnAction(e -> {
             try {
                 saveCurrentSettings.run();
-                saveAutofocusSettings(autofocusFile, workingSettings);
+                saveAutofocusSettings(autofocusFile, workingSettings, strategiesRef, bindingsRef);
                 statusLabel.setText("Settings saved - running autofocus validation...");
                 statusLabel.setStyle("-fx-text-fill: blue; -fx-font-weight: bold;");
 
@@ -994,17 +1068,41 @@ public class AutofocusEditorWorkflow {
         HBox buttonRow = new HBox(10, writeButton, validateButton);
         buttonRow.setAlignment(Pos.CENTER_LEFT);
 
-        // Layout
+        // ===== TAB 1: Per-Objective Parameters =====
         HBox objectiveRow = new HBox(10, objectiveLabel, objectiveCombo);
         objectiveRow.setAlignment(Pos.CENTER_LEFT);
 
-        // Use ScrollPane to handle potentially tall content
         VBox sectionsBox = new VBox(10);
         sectionsBox.getChildren().addAll(acquisitionPane, tissuePane, standardPane, sweepPane);
 
+        VBox tab1Content = new VBox(10);
+        tab1Content.setPadding(new Insets(10));
+        tab1Content.getChildren().addAll(objectiveRow, new Separator(), sectionsBox);
+
+        Tab tab1 = new Tab("Per-Objective");
+        tab1.setClosable(false);
+        tab1.setContent(new ScrollPane(tab1Content));
+
+        // ===== TAB 2: Strategy Library (v2) =====
+        VBox tab2Content = buildStrategyTab(strategiesRef);
+        Tab tab2 = new Tab("Strategies");
+        tab2.setClosable(false);
+        tab2.setContent(new ScrollPane(tab2Content));
+
+        // ===== TAB 3: Modality Bindings (v2) =====
+        VBox tab3Content = buildModalityBindingsTab(bindingsRef, strategiesRef);
+        Tab tab3 = new Tab("Modality Bindings");
+        tab3.setClosable(false);
+        tab3.setContent(new ScrollPane(tab3Content));
+
+        // ===== Tabbed layout =====
+        TabPane tabPane = new TabPane(tab1, tab2, tab3);
+        tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        tabPane.setPrefHeight(550);
+
         mainLayout
                 .getChildren()
-                .addAll(objectiveRow, new Separator(), sectionsBox, statusLabel, new Separator(), buttonRow);
+                .addAll(tabPane, statusLabel, new Separator(), buttonRow);
 
         dialog.getDialogPane().setContent(mainLayout);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -1094,6 +1192,424 @@ public class AutofocusEditorWorkflow {
         }
 
         return objectives;
+    }
+
+    // =========================================================================
+    // v2 Strategy + Modality Binding load/UI
+    // =========================================================================
+
+    private static Map<String, StrategyDefinition> loadStrategies(File autofocusFile) {
+        Map<String, StrategyDefinition> result = new LinkedHashMap<>();
+        if (!autofocusFile.exists()) return result;
+        try {
+            Yaml yaml = new Yaml();
+            Map<String, Object> data = yaml.load(Files.newInputStream(autofocusFile.toPath()));
+            if (data == null) return result;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> strategies = (Map<String, Object>) data.get("strategies");
+            if (strategies == null) return result;
+            for (Map.Entry<String, Object> entry : strategies.entrySet()) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> s = (Map<String, Object>) entry.getValue();
+                @SuppressWarnings("unchecked")
+                Map<String, Object> vp = s.get("validity_params") != null
+                        ? new LinkedHashMap<>((Map<String, Object>) s.get("validity_params"))
+                        : new LinkedHashMap<>();
+                result.put(
+                        entry.getKey(),
+                        new StrategyDefinition(
+                                entry.getKey(),
+                                s.get("description") != null ? s.get("description").toString().trim() : "",
+                                (String) s.get("score_metric"),
+                                (String) s.get("validity_check"),
+                                vp,
+                                (String) s.get("on_failure")));
+            }
+            logger.info("Loaded {} strategies from {}", result.size(), autofocusFile.getName());
+        } catch (Exception e) {
+            logger.error("Error loading strategies from YAML", e);
+        }
+        return result;
+    }
+
+    private static Map<String, ModalityBinding> loadModalityBindings(File autofocusFile) {
+        Map<String, ModalityBinding> result = new LinkedHashMap<>();
+        if (!autofocusFile.exists()) return result;
+        try {
+            Yaml yaml = new Yaml();
+            Map<String, Object> data = yaml.load(Files.newInputStream(autofocusFile.toPath()));
+            if (data == null) return result;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> modalities = (Map<String, Object>) data.get("modalities");
+            if (modalities == null) return result;
+            for (Map.Entry<String, Object> entry : modalities.entrySet()) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> m = (Map<String, Object>) entry.getValue();
+                Map<String, Object> overrides = new LinkedHashMap<>();
+                if (m.get("overrides") != null) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> ov = (Map<String, Object>) m.get("overrides");
+                    if (ov.get("validity_params") != null) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> vp = (Map<String, Object>) ov.get("validity_params");
+                        overrides.putAll(vp);
+                    }
+                }
+                result.put(
+                        entry.getKey(),
+                        new ModalityBinding(entry.getKey(), (String) m.get("strategy"), overrides));
+            }
+            logger.info("Loaded {} modality bindings from {}", result.size(), autofocusFile.getName());
+        } catch (Exception e) {
+            logger.error("Error loading modality bindings from YAML", e);
+        }
+        return result;
+    }
+
+    private static VBox buildStrategyTab(Map<String, StrategyDefinition> strategies) {
+        VBox content = new VBox(8);
+        content.setPadding(new Insets(10));
+        VBox cardsBox = new VBox(6);
+        Runnable rebuildCards = () -> {
+            cardsBox.getChildren().clear();
+            if (strategies.isEmpty()) {
+                Label empty = new Label("No strategies defined. Click '+' to add one.");
+                empty.setStyle("-fx-font-style: italic; -fx-text-fill: gray;");
+                cardsBox.getChildren().add(empty);
+                return;
+            }
+            for (StrategyDefinition sd : strategies.values()) {
+                cardsBox.getChildren().add(buildStrategyCard(sd, strategies, cardsBox));
+            }
+        };
+        rebuildCards.run();
+        Button addBtn = new Button("+ Add Strategy");
+        addBtn.setOnAction(e -> {
+            TextInputDialog nameDialog = new TextInputDialog("new_strategy");
+            nameDialog.setTitle("New Strategy");
+            nameDialog.setHeaderText("Enter a name for the new strategy:");
+            nameDialog.showAndWait().ifPresent(name -> {
+                String key = name.trim().toLowerCase().replaceAll("\\s+", "_");
+                if (key.isEmpty() || strategies.containsKey(key)) {
+                    Dialogs.showWarningNotification("Invalid Name", "Name is empty or already exists: " + key);
+                    return;
+                }
+                strategies.put(key, new StrategyDefinition(key, "", "laplacian_variance", "texture_and_area",
+                        getDefaultValidityParams("texture_and_area"), "defer"));
+                rebuildCards.run();
+            });
+        });
+        content.getChildren().addAll(cardsBox, new Separator(), addBtn);
+        return content;
+    }
+
+    private static TitledPane buildStrategyCard(
+            StrategyDefinition sd,
+            Map<String, StrategyDefinition> allStrategies,
+            VBox cardsBox) {
+        GridPane grid = new GridPane();
+        grid.setHgap(8);
+        grid.setVgap(6);
+        grid.setPadding(new Insets(6));
+        int row = 0;
+
+        TextArea descArea = new TextArea(sd.description);
+        descArea.setPrefRowCount(2);
+        descArea.setPrefColumnCount(40);
+        descArea.setWrapText(true);
+        descArea.textProperty().addListener((obs, o, n) -> sd.description = n);
+        grid.add(new Label("Description:"), 0, row);
+        grid.add(descArea, 1, row++);
+
+        ComboBox<String> scoreCombo = new ComboBox<>();
+        scoreCombo.getItems().addAll(SCORE_METRICS);
+        scoreCombo.setValue(sd.scoreMetric);
+        scoreCombo.setOnAction(e -> sd.scoreMetric = scoreCombo.getValue());
+        grid.add(new Label("Score metric:"), 0, row);
+        grid.add(scoreCombo, 1, row++);
+
+        ComboBox<String> validityCombo = new ComboBox<>();
+        validityCombo.getItems().addAll(VALIDITY_CHECKS);
+        validityCombo.setValue(sd.validityCheck);
+        grid.add(new Label("Validity check:"), 0, row);
+        grid.add(validityCombo, 1, row++);
+
+        ComboBox<String> failureCombo = new ComboBox<>();
+        failureCombo.getItems().addAll(ON_FAILURE_MODES);
+        failureCombo.setValue(sd.onFailure);
+        failureCombo.setOnAction(e -> sd.onFailure = failureCombo.getValue());
+        grid.add(new Label("On failure:"), 0, row);
+        grid.add(failureCombo, 1, row++);
+
+        VBox paramsBox = new VBox(4);
+        paramsBox.setPadding(new Insets(4, 0, 0, 20));
+        Runnable rebuildParams = () -> {
+            paramsBox.getChildren().clear();
+            paramsBox.getChildren().add(new Label("Validity parameters:"));
+            GridPane pg = new GridPane();
+            pg.setHgap(6);
+            pg.setVgap(4);
+            int pr = 0;
+            Map<String, Object> defaults = getDefaultValidityParams(sd.validityCheck);
+            Map<String, Object> merged = new LinkedHashMap<>(defaults);
+            merged.putAll(sd.validityParams);
+            sd.validityParams.clear();
+            sd.validityParams.putAll(merged);
+            for (Map.Entry<String, Object> param : sd.validityParams.entrySet()) {
+                String key = param.getKey();
+                pg.add(new Label(key + ":"), 0, pr);
+                if (param.getValue() instanceof List) {
+                    @SuppressWarnings("unchecked")
+                    List<Number> list = (List<Number>) param.getValue();
+                    TextField tf = new TextField(formatList(list));
+                    tf.setPrefWidth(150);
+                    tf.textProperty().addListener((obs, o, n) -> sd.validityParams.put(key, parseList(n)));
+                    pg.add(tf, 1, pr);
+                } else {
+                    TextField tf = new TextField(String.valueOf(param.getValue()));
+                    tf.setPrefWidth(150);
+                    tf.textProperty().addListener((obs, o, n) -> {
+                        try {
+                            sd.validityParams.put(key, Double.parseDouble(n));
+                        } catch (NumberFormatException ex) {
+                            sd.validityParams.put(key, n);
+                        }
+                    });
+                    pg.add(tf, 1, pr);
+                }
+                pr++;
+            }
+            if (pr == 0) {
+                pg.add(new Label("(none)"), 0, 0);
+            }
+            paramsBox.getChildren().add(pg);
+        };
+        rebuildParams.run();
+        validityCombo.setOnAction(e -> {
+            sd.validityCheck = validityCombo.getValue();
+            sd.validityParams.clear();
+            sd.validityParams.putAll(getDefaultValidityParams(sd.validityCheck));
+            rebuildParams.run();
+        });
+        grid.add(paramsBox, 0, row, 2, 1);
+        row++;
+
+        Button deleteBtn = new Button("Delete Strategy");
+        deleteBtn.setStyle("-fx-text-fill: red;");
+        deleteBtn.setOnAction(e -> {
+            allStrategies.remove(sd.name);
+            cardsBox.getChildren().clear();
+            for (StrategyDefinition s : allStrategies.values()) {
+                cardsBox.getChildren().add(buildStrategyCard(s, allStrategies, cardsBox));
+            }
+            if (allStrategies.isEmpty()) {
+                Label empty = new Label("No strategies defined. Click '+' to add one.");
+                empty.setStyle("-fx-font-style: italic; -fx-text-fill: gray;");
+                cardsBox.getChildren().add(empty);
+            }
+        });
+        grid.add(deleteBtn, 1, row);
+
+        TitledPane pane = new TitledPane(sd.name, grid);
+        pane.setExpanded(false);
+        return pane;
+    }
+
+    private static Map<String, Object> getDefaultValidityParams(String validityCheck) {
+        Map<String, Object> defaults = new LinkedHashMap<>();
+        if (validityCheck == null) return defaults;
+        switch (validityCheck) {
+            case "texture_and_area":
+                defaults.put("texture_threshold", 0.010);
+                defaults.put("tissue_area_threshold", 0.200);
+                defaults.put("rgb_brightness_threshold", 240.0);
+                defaults.put("tissue_mask_range", List.of(0.10, 0.90));
+                defaults.put("median_floor", 15.0);
+                break;
+            case "bright_spot_count":
+                defaults.put("spot_sigma_above_bg", 5.0);
+                defaults.put("spot_min_separation_px", 8);
+                defaults.put("min_spots", 3);
+                defaults.put("min_peak_intensity", 20.0);
+                defaults.put("bright_pixel_floor", 50.0);
+                break;
+            case "total_gradient_energy":
+                defaults.put("min_gradient_energy", 0.002);
+                break;
+            case "always_false":
+                break;
+        }
+        return defaults;
+    }
+
+    private static String formatList(List<? extends Number> list) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < list.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(list.get(i));
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    private static List<Double> parseList(String s) {
+        List<Double> result = new ArrayList<>();
+        s = s.replaceAll("[\\[\\]]", "").trim();
+        if (s.isEmpty()) return result;
+        for (String part : s.split(",")) {
+            try {
+                result.add(Double.parseDouble(part.trim()));
+            } catch (NumberFormatException e) {
+                // skip invalid parts
+            }
+        }
+        return result;
+    }
+
+    private static VBox buildModalityBindingsTab(
+            Map<String, ModalityBinding> bindings,
+            Map<String, StrategyDefinition> strategies) {
+        VBox content = new VBox(8);
+        content.setPadding(new Insets(10));
+        VBox rowsBox = new VBox(6);
+        Runnable rebuildRows = () -> {
+            rowsBox.getChildren().clear();
+            if (bindings.isEmpty()) {
+                Label empty = new Label("No modality bindings defined. Click '+' to add one.");
+                empty.setStyle("-fx-font-style: italic; -fx-text-fill: gray;");
+                rowsBox.getChildren().add(empty);
+                return;
+            }
+            for (ModalityBinding mb : bindings.values()) {
+                rowsBox.getChildren().add(buildBindingRow(mb, bindings, strategies, rowsBox));
+            }
+        };
+        rebuildRows.run();
+        Button addBtn = new Button("+ Add Binding");
+        addBtn.setOnAction(e -> {
+            TextInputDialog nameDialog = new TextInputDialog("modality_name");
+            nameDialog.setTitle("New Modality Binding");
+            nameDialog.setHeaderText("Enter the modality key (e.g. bf, fluorescence, ppm):");
+            nameDialog.showAndWait().ifPresent(name -> {
+                String key = name.trim().toLowerCase();
+                if (key.isEmpty()) {
+                    Dialogs.showWarningNotification("Invalid Name", "Name cannot be empty");
+                    return;
+                }
+                String defaultStrategy = strategies.isEmpty()
+                        ? "dense_texture"
+                        : strategies.keySet().iterator().next();
+                bindings.put(key, new ModalityBinding(key, defaultStrategy, new LinkedHashMap<>()));
+                rebuildRows.run();
+            });
+        });
+        content.getChildren().addAll(rowsBox, new Separator(), addBtn);
+        return content;
+    }
+
+    private static VBox buildBindingRow(
+            ModalityBinding mb,
+            Map<String, ModalityBinding> allBindings,
+            Map<String, StrategyDefinition> strategies,
+            VBox rowsBox) {
+        VBox container = new VBox(4);
+        container.setPadding(new Insets(4));
+        container.setStyle("-fx-border-color: #ddd; -fx-border-radius: 4;");
+        HBox row = new HBox(8);
+        row.setAlignment(Pos.CENTER_LEFT);
+
+        Label keyLabel = new Label(mb.modalityKey);
+        keyLabel.setStyle("-fx-font-weight: bold; -fx-min-width: 100;");
+
+        ComboBox<String> strategyCombo = new ComboBox<>();
+        strategyCombo.getItems().addAll(strategies.keySet());
+        if (!strategies.containsKey(mb.strategyName)) {
+            strategyCombo.getItems().add(mb.strategyName);
+        }
+        strategyCombo.setValue(mb.strategyName);
+        strategyCombo.setOnAction(e -> mb.strategyName = strategyCombo.getValue());
+
+        CheckBox overrideCheck = new CheckBox("Overrides");
+        overrideCheck.setSelected(!mb.overrides.isEmpty());
+
+        Button deleteBtn = new Button("X");
+        deleteBtn.setStyle("-fx-text-fill: red; -fx-font-size: 10px;");
+        deleteBtn.setOnAction(e -> {
+            allBindings.remove(mb.modalityKey);
+            rowsBox.getChildren().clear();
+            if (allBindings.isEmpty()) {
+                Label empty = new Label("No modality bindings defined. Click '+' to add one.");
+                empty.setStyle("-fx-font-style: italic; -fx-text-fill: gray;");
+                rowsBox.getChildren().add(empty);
+            } else {
+                for (ModalityBinding m : allBindings.values()) {
+                    rowsBox.getChildren().add(buildBindingRow(m, allBindings, strategies, rowsBox));
+                }
+            }
+        });
+        row.getChildren().addAll(keyLabel, new Label("->"), strategyCombo, overrideCheck, deleteBtn);
+
+        GridPane overrideGrid = new GridPane();
+        overrideGrid.setHgap(6);
+        overrideGrid.setVgap(4);
+        overrideGrid.setPadding(new Insets(4, 0, 0, 20));
+        overrideGrid.setVisible(!mb.overrides.isEmpty());
+        overrideGrid.setManaged(!mb.overrides.isEmpty());
+
+        // Self-referencing Runnable via single-element array (Java lambda limitation).
+        Runnable[] rebuildHolder = new Runnable[1];
+        rebuildHolder[0] = () -> {
+            overrideGrid.getChildren().clear();
+            int pr = 0;
+            for (Map.Entry<String, Object> param : mb.overrides.entrySet()) {
+                String key = param.getKey();
+                overrideGrid.add(new Label(key + ":"), 0, pr);
+                if (param.getValue() instanceof List) {
+                    @SuppressWarnings("unchecked")
+                    List<Number> list = (List<Number>) param.getValue();
+                    TextField tf = new TextField(formatList(list));
+                    tf.setPrefWidth(150);
+                    tf.textProperty().addListener((obs, o, n) -> mb.overrides.put(key, parseList(n)));
+                    overrideGrid.add(tf, 1, pr);
+                } else {
+                    TextField tf = new TextField(String.valueOf(param.getValue()));
+                    tf.setPrefWidth(150);
+                    tf.textProperty().addListener((obs, o, n) -> {
+                        try {
+                            mb.overrides.put(key, Double.parseDouble(n));
+                        } catch (NumberFormatException ex) {
+                            mb.overrides.put(key, n);
+                        }
+                    });
+                    overrideGrid.add(tf, 1, pr);
+                }
+                pr++;
+            }
+            if (pr == 0 && overrideCheck.isSelected()) {
+                StrategyDefinition ref = strategies.get(mb.strategyName);
+                if (ref != null && !ref.validityParams.isEmpty()) {
+                    mb.overrides.putAll(ref.validityParams);
+                    rebuildHolder[0].run();
+                    return;
+                }
+                overrideGrid.add(new Label("(no parameters to override)"), 0, 0);
+            }
+        };
+        overrideCheck.setOnAction(e -> {
+            boolean show = overrideCheck.isSelected();
+            overrideGrid.setVisible(show);
+            overrideGrid.setManaged(show);
+            if (show && mb.overrides.isEmpty()) {
+                rebuildHolder[0].run();
+            }
+            if (!show) {
+                mb.overrides.clear();
+            }
+        });
+        rebuildHolder[0].run();
+
+        container.getChildren().addAll(row, overrideGrid);
+        return container;
     }
 
     /**
@@ -1200,7 +1716,11 @@ public class AutofocusEditorWorkflow {
     /**
      * Save autofocus settings to YAML file
      */
-    private static void saveAutofocusSettings(File autofocusFile, Map<String, AutofocusSettings> settings)
+    private static void saveAutofocusSettings(
+            File autofocusFile,
+            Map<String, AutofocusSettings> settings,
+            Map<String, StrategyDefinition> strategies,
+            Map<String, ModalityBinding> bindings)
             throws IOException {
         // Build YAML structure
         List<Map<String, Object>> afSettingsList = new ArrayList<>();
@@ -1208,7 +1728,6 @@ public class AutofocusEditorWorkflow {
         for (AutofocusSettings setting : settings.values()) {
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("objective", setting.objective);
-            // User explicitly reviewed values in the editor -- mark as calibrated
             entry.put("calibrated", true);
             entry.put("n_steps", setting.nSteps);
             entry.put("search_range_um", setting.searchRangeUm);
@@ -1226,7 +1745,26 @@ public class AutofocusEditorWorkflow {
         }
 
         Map<String, Object> root = new LinkedHashMap<>();
+        root.put("schema_version", 2);
         root.put("autofocus_settings", afSettingsList);
+
+        // v2 strategy library
+        if (strategies != null && !strategies.isEmpty()) {
+            Map<String, Object> strategiesMap = new LinkedHashMap<>();
+            for (StrategyDefinition sd : strategies.values()) {
+                strategiesMap.put(sd.name, sd.toYamlMap());
+            }
+            root.put("strategies", strategiesMap);
+        }
+
+        // v2 modality bindings
+        if (bindings != null && !bindings.isEmpty()) {
+            Map<String, Object> modalitiesMap = new LinkedHashMap<>();
+            for (ModalityBinding mb : bindings.values()) {
+                modalitiesMap.put(mb.modalityKey, mb.toYamlMap());
+            }
+            root.put("modalities", modalitiesMap);
+        }
 
         // Configure YAML dumper for clean output
         DumperOptions options = new DumperOptions();
@@ -1263,7 +1801,8 @@ public class AutofocusEditorWorkflow {
             writer.write("#   gap_index_multiplier: force AF after (this x n_tiles) positions without one\n");
             writer.write("#                         Default 3, typical 1-5. Lower = more aggressive safety net.\n");
             writer.write("#   gap_spatial_multiplier: force AF beyond (this x af_min_distance) from nearest AF\n");
-            writer.write("#                           Default 2.0, typical 1.0-3.0. Catches disconnected fragments.\n\n");
+            writer.write(
+                    "#                           Default 2.0, typical 1.0-3.0. Catches disconnected fragments.\n\n");
 
             yaml.dump(root, writer);
         }
