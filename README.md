@@ -82,15 +82,11 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 - **Autofocus Editor**: Configure focus parameters per objective
 - **Autofocus Benchmark**: Systematically find optimal autofocus settings by testing parameter combinations
 
-### PPM Analysis Tools
+### PPM (Polarized Light Microscopy)
 
-> **PPM calibration and analysis workflows are provided by the [qupath-extension-ppm](https://github.com/uw-loci/qupath-extension-ppm) modality plugin.** See its [documentation](https://github.com/uw-loci/qupath-extension-ppm/tree/master/documentation) for detailed workflow guides. PPM computations use the [ppm_library](https://github.com/uw-loci/ppm_library) Python package.
+QPSC includes PPM hardware support in its `modality/ppm/` package: rotation stage control, calibration workflows (Polarizer Calibration, Birefringence Optimization, Sensitivity Test, Reference Slide), angle selection, and exposure management. These appear under **Scope > PPM** when a PPM microscope is configured.
 
-- **PPM Hue Range Filter**: Interactive HSV-based filtering for isolating specific fiber orientations by color
-- **PPM Polarity Plot**: Polar histogram visualization of fiber orientation distributions
-- **Surface Perpendicularity**: Analyze fiber orientation relative to annotation boundaries (PS-TACS)
-- **Batch PPM Analysis**: Automated batch processing of PPM image sets (hue analysis, TACS scoring, boundary analysis)
-- **Back-Propagate Annotations**: Copy annotations from child images back to parent macro for overview visualization
+> **PPM image analysis** (hue range filtering, polarity plots, surface perpendicularity, batch analysis) is provided by the separate [qupath-extension-ppm](https://github.com/uw-loci/qupath-extension-ppm) extension under **Extensions > PPM Analysis**. Analysis tools work on any PPM images and do not require microscope hardware. See the [PPM extension documentation](https://github.com/uw-loci/qupath-extension-ppm/tree/master/documentation) for workflow guides. PPM computations use the [ppm_library](https://github.com/uw-loci/ppm_library) Python package.
 
 ### Technical Features
 
