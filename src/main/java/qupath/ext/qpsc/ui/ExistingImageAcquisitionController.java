@@ -742,8 +742,7 @@ public class ExistingImageAcquisitionController {
             // users a GUI entry point to pick the strategy without editing YAML).
             afStrategyCombo = new ComboBox<>();
             afStrategyCombo.getItems().addAll(AfStrategyChoice.displayOrder());
-            afStrategyCombo.setValue(
-                    AfStrategyChoice.protocolToDisplay(PersistentPreferences.getLastAfStrategy()));
+            afStrategyCombo.setValue(AfStrategyChoice.protocolToDisplay(PersistentPreferences.getLastAfStrategy()));
             afStrategyCombo.setTooltip(new Tooltip(AfStrategyChoice.TOOLTIP));
             GridPane afGrid = new GridPane();
             afGrid.setHgap(10);
@@ -975,8 +974,7 @@ public class ExistingImageAcquisitionController {
             }
             if (defaultIdx < 0) return;
             String currentValue = afStrategyCombo.getValue();
-            boolean wasOnDefault = currentValue != null
-                    && currentValue.startsWith(AfStrategyChoice.DEFAULT_DISPLAY);
+            boolean wasOnDefault = currentValue != null && currentValue.startsWith(AfStrategyChoice.DEFAULT_DISPLAY);
             afStrategyCombo.getItems().set(defaultIdx, defaultLabel);
             if (wasOnDefault) {
                 afStrategyCombo.setValue(defaultLabel);
@@ -1028,17 +1026,18 @@ public class ExistingImageAcquisitionController {
             whiteBalanceSection.setManaged(isJAI);
 
             String modality = modalityBox.getValue();
-            boolean isPPM = modality != null && modality.toLowerCase().startsWith("ppm");
+            var handler = modality != null ? ModalityRegistry.getHandler(modality) : null;
+            boolean isMultiAngle = handler != null && handler.isMultiAngleModality();
 
             // Filter WB modes based on background validity
             if (wbModeComboBox != null && modality != null && detector != null) {
-                filterWbModesByBackgroundValidity(modality, detector, isPPM);
+                filterWbModesByBackgroundValidity(modality, detector, isMultiAngle);
             }
 
             logger.debug(
-                    "White balance visibility updated: JAI={}, PPM={}, section visible={}",
+                    "White balance visibility updated: JAI={}, multiAngle={}, section visible={}",
                     isJAI,
-                    isPPM,
+                    isMultiAngle,
                     whiteBalanceSection.isVisible());
         }
 
@@ -1467,10 +1466,9 @@ public class ExistingImageAcquisitionController {
                         return overrides.size();
                     }
                 }
-                // For PPM modalities, use default of 4 angles (typical configuration)
-                // This avoids blocking the UI thread with async calls for a preview estimate
-                if (modality.toLowerCase().startsWith("ppm")) {
-                    return 4; // Typical PPM: 0, +7, -7, 90 degrees
+                var modHandler = ModalityRegistry.getHandler(modality);
+                if (modHandler != null && modHandler.isMultiAngleModality()) {
+                    return modHandler.getDefaultAngleCount();
                 }
             }
             return 1;

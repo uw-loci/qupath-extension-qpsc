@@ -490,8 +490,8 @@ public class UnifiedAcquisitionController {
             // correction when a matching background image exists on disk.
             monoBgCorrectionCheck = new CheckBox("Use background correction");
             monoBgCorrectionCheck.setSelected(PersistentPreferences.getUseBackgroundCorrectionMono());
-            monoBgCorrectionCheck.setTooltip(new Tooltip(
-                    "Apply flat-field background correction to monochrome acquisitions.\n"
+            monoBgCorrectionCheck.setTooltip(
+                    new Tooltip("Apply flat-field background correction to monochrome acquisitions.\n"
                             + "Requires a matching background image collected at the same\n"
                             + "objective/detector (and ideally the same exposure)."));
             monoBgCorrectionCheck
@@ -862,8 +862,7 @@ public class UnifiedAcquisitionController {
             // the --af-strategy CLI flag which the Python v2 loader respects.
             afStrategyCombo = new ComboBox<>();
             afStrategyCombo.getItems().addAll(AfStrategyChoice.displayOrder());
-            afStrategyCombo.setValue(
-                    AfStrategyChoice.protocolToDisplay(PersistentPreferences.getLastAfStrategy()));
+            afStrategyCombo.setValue(AfStrategyChoice.protocolToDisplay(PersistentPreferences.getLastAfStrategy()));
             afStrategyCombo.setTooltip(new Tooltip(AfStrategyChoice.TOOLTIP));
             GridPane afGrid = new GridPane();
             afGrid.setHgap(10);
@@ -1103,8 +1102,7 @@ public class UnifiedAcquisitionController {
             }
             if (defaultIdx < 0) return;
             String currentValue = afStrategyCombo.getValue();
-            boolean wasOnDefault = currentValue != null
-                    && currentValue.startsWith(AfStrategyChoice.DEFAULT_DISPLAY);
+            boolean wasOnDefault = currentValue != null && currentValue.startsWith(AfStrategyChoice.DEFAULT_DISPLAY);
             afStrategyCombo.getItems().set(defaultIdx, defaultLabel);
             if (wasOnDefault) {
                 afStrategyCombo.setValue(defaultLabel);
@@ -1138,14 +1136,15 @@ public class UnifiedAcquisitionController {
             }
 
             String modality = modalityBox.getValue();
-            boolean isPPM = modality != null && modality.toLowerCase().startsWith("ppm");
+            var handler = modality != null ? ModalityRegistry.getHandler(modality) : null;
+            boolean isMultiAngle = handler != null && handler.isMultiAngleModality();
 
             // Filter WB modes based on background validity (JAI only)
             if (isJAI && wbModeComboBox != null && modality != null && detector != null) {
-                filterWbModesByBackgroundValidity(modality, detector, isPPM);
+                filterWbModesByBackgroundValidity(modality, detector, isMultiAngle);
             }
 
-            logger.debug("WB/BG visibility updated: JAI={}, PPM={}", isJAI, isPPM);
+            logger.debug("WB/BG visibility updated: JAI={}, multiAngle={}", isJAI, isMultiAngle);
         }
 
         /**

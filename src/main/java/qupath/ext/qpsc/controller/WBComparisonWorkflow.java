@@ -779,9 +779,11 @@ public class WBComparisonWorkflow {
 
     private static String resolveModality(MicroscopeConfigManager configManager) {
         Set<String> modalities = configManager.getAvailableModalities();
-        // Prefer PPM if available
-        if (modalities.contains("ppm")) return "ppm";
-        // Otherwise use first available
+        // Prefer multi-angle modality (e.g., PPM) for WB comparison
+        for (String m : modalities) {
+            var handler = ModalityRegistry.getHandler(m);
+            if (handler != null && handler.isMultiAngleModality()) return m;
+        }
         if (!modalities.isEmpty()) return modalities.iterator().next();
         throw new RuntimeException("No modalities configured in YAML");
     }

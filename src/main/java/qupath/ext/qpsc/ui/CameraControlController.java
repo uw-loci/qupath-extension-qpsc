@@ -12,6 +12,7 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
@@ -326,11 +327,12 @@ public class CameraControlController {
             var configMgr = MicroscopeConfigManager.getInstanceIfAvailable();
             if (configMgr != null) {
                 hasRotationModality = configMgr.getAvailableModalities().stream()
-                        .anyMatch(m -> m.toLowerCase().startsWith("ppm")
-                                || m.toLowerCase().startsWith("polarized"));
+                        .anyMatch(m -> {
+                            var handler = ModalityRegistry.getHandler(m);
+                            return handler != null && handler.isMultiAngleModality();
+                        });
             }
         } catch (Exception ex) {
-            // Fallback: show if JAI camera is present (legacy behavior)
             hasRotationModality = isJAI;
         }
 
@@ -723,8 +725,7 @@ public class CameraControlController {
                 String initialModality = "All modalities";
                 String currentObjective = objectiveCombo.getValue();
                 if (currentObjective != null) {
-                    String mag = qupath.ext.qpsc.utilities.ObjectiveUtils
-                            .extractMagnification(currentObjective);
+                    String mag = qupath.ext.qpsc.utilities.ObjectiveUtils.extractMagnification(currentObjective);
                     if (mag != null) {
                         for (Map.Entry<?, ?> entry : profileMap.entrySet()) {
                             String key = String.valueOf(entry.getKey());

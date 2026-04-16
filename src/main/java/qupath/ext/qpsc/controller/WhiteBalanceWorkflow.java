@@ -219,9 +219,14 @@ public class WhiteBalanceWorkflow {
                         try {
                             var configManager = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(yamlPath);
                             var modalities = configManager.getAvailableModalities();
-                            modality = modalities.contains("ppm")
-                                    ? "ppm"
-                                    : modalities.iterator().next();
+                            modality = modalities.iterator().next();
+                            for (String m : modalities) {
+                                var handler = qupath.ext.qpsc.modality.ModalityRegistry.getHandler(m);
+                                if (handler != null && handler.isMultiAngleModality()) {
+                                    modality = m;
+                                    break;
+                                }
+                            }
                         } catch (Exception e2) {
                             logger.warn(
                                     "Could not resolve modality from config, calibration won't be saved to YAML: {}",

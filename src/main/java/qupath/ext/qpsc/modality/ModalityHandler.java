@@ -269,11 +269,7 @@ public interface ModalityHandler {
      * @return future containing the final angle-exposure list
      */
     default CompletableFuture<List<AngleExposure>> getRotationAnglesWithOverrides(
-            String modality,
-            String objective,
-            String detector,
-            Map<String, Double> overrides,
-            String wbMode) {
+            String modality, String objective, String detector, Map<String, Double> overrides, String wbMode) {
         return getRotationAngles(modality, objective, detector, wbMode)
                 .thenApply(angles ->
                         overrides != null && !overrides.isEmpty() ? applyAngleOverrides(angles, overrides) : angles);
@@ -303,6 +299,17 @@ public interface ModalityHandler {
      */
     default int getDefaultAngleCount() {
         return 1;
+    }
+
+    /**
+     * Returns true if this modality acquires at multiple rotation angles.
+     * Used by UI controllers to decide whether to show per-angle settings,
+     * WB-per-angle options, and rotation stage controls.
+     *
+     * @return true if getDefaultAngleCount() > 1
+     */
+    default boolean isMultiAngleModality() {
+        return getDefaultAngleCount() > 1;
     }
 
     /**
