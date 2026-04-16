@@ -5,15 +5,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
-import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.SmoothFocusResult;
+import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.StreamingFocusResult;
 import qupath.ext.qpsc.ui.liveviewer.RefineFocusController.Outcome;
 import qupath.ext.qpsc.ui.liveviewer.RefineFocusController.StatusCallback;
 
 /**
- * Thin Java-side wrapper around the server's SMOOTHZ command.
+ * Thin Java-side wrapper around the server's STRMAFZ (streaming autofocus) command.
  *
  * <p>Unlike {@link SweepFocusController}, which runs a stepped loop client-
- * side issuing move + snap commands one at a time, the Smooth controller
+ * side issuing move + snap commands one at a time, this controller
  * delegates the whole scan to the server. The server:
  *
  * <ol>
@@ -30,29 +30,25 @@ import qupath.ext.qpsc.ui.liveviewer.RefineFocusController.StatusCallback;
  * as a separate class (instead of inlining in LiveViewerWindow) is to
  * match the existing running/cancel/callback lifecycle pattern used by
  * {@link SweepFocusController} and {@link RefineFocusController}, so the
- * Live Viewer can track Smooth state with the same plumbing.
+ * Live Viewer can track state with the same plumbing.
  *
  * <p><b>Cancellation:</b> not currently supported. The server-side scan is
  * short (~1 second on PPM) and best-effort cancellation would mean sending
  * a separate command mid-scan which the server does not currently handle.
- * Adding it is a future improvement if long-range Smooth scans (20-50 um)
- * become common.
  *
  * <p><b>Fallback behavior:</b> if the server returns {@code UNAVAILABLE}
  * (pre-flight refusal -- exposure too long, saturated, no speed property,
- * too few samples), the controller reports SUCCESS with an explanatory
- * message but does <i>not</i> raise an error. The caller is expected to
- * fall back to the stepped Sweep Focus path, which is now 3-4x faster than
- * before thanks to the busy-poll wait in the stage hardware layer.
+ * too few samples), the controller reports FAILED with an explanatory
+ * message. The caller is expected to fall back to the stepped Sweep Focus.
  */
-public class SmoothFocusController {
+public class StreamingFocusController {
 
-    private static final Logger logger = LoggerFactory.getLogger(SmoothFocusController.class);
+    private static final Logger logger = LoggerFactory.getLogger(StreamingFocusController.class);
 
     private volatile boolean running = false;
     private final MicroscopeSocketClient socketClient;
 
-    public SmoothFocusController(MicroscopeSocketClient socketClient) {
+    public StreamingFocusController(MicroscopeSocketClient socketClient) {
         this.socketClient = socketClient;
     }
 
@@ -61,7 +57,7 @@ public class SmoothFocusController {
     }
 
     /**
-     * Run one Smooth focus scan.
+     * Run one streaming autofocus scan.
      *
      * @param objective    Objective identifier from the caller's context, or
      *                     null to let the server auto-detect via pixel size.
@@ -93,7 +89,7 @@ public class SmoothFocusController {
 
             callback.onStatusUpdate("Autofocus: scanning...", Outcome.IN_PROGRESS);
             long t0 = System.currentTimeMillis();
-            SmoothFocusResult result = socketClient.smoothFocus(yamlPath, objective, modality, rangeOverrideUm);
+            StreamingFocusResult result = socketClient.streamingFocus(yamlPath, objective, modality, rangeOverrideUm);
             long elapsedMs = System.currentTimeMillis() - t0;
 
             switch (result.status) {
@@ -113,10 +109,6 @@ public class SmoothFocusController {
                     return;
 
                 case UNAVAILABLE:
-                    // This is a pre-flight refusal, not an error. Log it
-                    // and report back with a SUCCESS-style message so the
-                    // caller can show it as informational. The caller
-                    // should then fall back to stepped Sweep Focus.
                     String unavailableMsg = "Autofocus unavailable: " + result.reason;
                     logger.info("Autofocus UNAVAILABLE: {}", result.reason);
                     finish(callback, unavailableMsg, Outcome.FAILED);

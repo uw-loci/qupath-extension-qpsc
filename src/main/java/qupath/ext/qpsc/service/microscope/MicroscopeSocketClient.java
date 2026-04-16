@@ -241,8 +241,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         /** Apply acquisition profile (calls apply_mode_setup on server) */
         APPLYPR("applypr_"),
 
-        /** Smooth (streaming) focus -- continuous-Z autofocus via streamed frames */
-        SMOOTHZ("smoothz_");
+        /** Streaming autofocus -- continuous-Z autofocus via streamed frames */
+        STRMAFZ("strmafz_");
 
         private final byte[] value;
 
@@ -1334,7 +1334,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
-     * Outcome of a {@link #smoothFocus} call.
+     * Outcome of a {@link #streamingFocus} call.
      *
      * <p>Three distinct states:
      * <ul>
@@ -1351,7 +1351,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * {@code nSamples}, and {@code zSpan} are populated. The other fields are
      * zero on UNAVAILABLE / FAILED.
      */
-    public static final class SmoothFocusResult {
+    public static final class StreamingFocusResult {
         public enum Status {
             SUCCESS,
             UNAVAILABLE,
@@ -1366,7 +1366,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         public final double zSpan;
         public final String reason;
 
-        public SmoothFocusResult(
+        public StreamingFocusResult(
                 Status status,
                 double initialZ,
                 double finalZ,
@@ -1385,9 +1385,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
-     * Run a Smooth (streaming) focus scan at the current XY position.
+     * Run a Streaming autofocus scan at the current XY position.
      *
-     * <p>Runs fully server-side via the SMOOTHZ command. The server:
+     * <p>Runs fully server-side via the STRMAFZ command. The server:
      * <ol>
      *   <li>Resolves the objective (prefers client-provided id, else
      *       pixel-size auto-match, else yaml first entry)</li>
@@ -1419,14 +1419,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
      *                  or null to use the conservative default saturation threshold.
      * @param rangeOverrideUm Optional override of the yaml's {@code sweep_range_um};
      *                         pass NaN or a non-positive value to use the yaml.
-     * @return {@link SmoothFocusResult} describing the outcome; never null.
+     * @return {@link StreamingFocusResult} describing the outcome; never null.
      * @throws IOException if the socket communication itself fails (not a
-     *                     smooth-focus rejection -- those return UNAVAILABLE).
+     *                     streaming-focus rejection -- those return UNAVAILABLE).
      */
-    public SmoothFocusResult smoothFocus(String yamlPath, String objective, String modality, double rangeOverrideUm)
+    public StreamingFocusResult streamingFocus(String yamlPath, String objective, String modality, double rangeOverrideUm)
             throws IOException {
         if (yamlPath == null || yamlPath.isEmpty()) {
-            throw new IllegalArgumentException("yamlPath is required for smoothFocus");
+            throw new IllegalArgumentException("yamlPath is required for streamingFocus");
         }
 
         StringBuilder msgBuilder = new StringBuilder();
@@ -1444,7 +1444,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         String message = msgBuilder.toString();
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
 
-        logger.info("Sending SMOOTHZ command: {}", message);
+        logger.info("Sending STRMAFZ command: {}", message);
 
         synchronized (socketLock) {
             ensureConnected();
@@ -1452,12 +1452,12 @@ public class MicroscopeSocketClient implements AutoCloseable {
             int originalTimeout = readTimeout;
             try {
                 if (socket != null) {
-                    // Smooth scan is fast (<2s on PPM) but give it headroom
+                    // Streaming AF scan is fast (<2s on PPM) but give it headroom
                     // for slow hardware and serial overhead.
                     socket.setSoTimeout(30000);
                 }
 
-                output.write(Command.SMOOTHZ.getValue());
+                output.write(Command.STRMAFZ.getValue());
                 output.flush();
                 Thread.sleep(50);
                 output.write(messageBytes);
@@ -1467,10 +1467,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 byte[] buffer = new byte[1024];
                 int bytesRead = input.read(buffer);
                 if (bytesRead <= 0) {
-                    throw new IOException("SMOOTHZ: no response from server");
+                    throw new IOException("STRMAFZ: no response from server");
                 }
                 String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8).trim();
-                logger.info("SMOOTHZ response: {}", response);
+                logger.info("STRMAFZ response: {}", response);
                 lastActivityTime.set(System.currentTimeMillis());
 
                 if (response.startsWith("SUCCESS:")) {
@@ -1478,7 +1478,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     String body = response.substring("SUCCESS:".length());
                     String[] parts = body.split(":");
                     if (parts.length < 5) {
-                        throw new IOException("SMOOTHZ: malformed SUCCESS payload: " + response);
+                        throw new IOException("STRMAFZ: malformed SUCCESS payload: " + response);
                     }
                     try {
                         double initialZ = Double.parseDouble(parts[0].trim());
@@ -1490,31 +1490,31 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         double zShift = Double.parseDouble(shiftStr);
                         int nSamples = Integer.parseInt(parts[3].trim());
                         double zSpan = Double.parseDouble(parts[4].trim());
-                        return new SmoothFocusResult(
-                                SmoothFocusResult.Status.SUCCESS, initialZ, finalZ, zShift, nSamples, zSpan, null);
+                        return new StreamingFocusResult(
+                                StreamingFocusResult.Status.SUCCESS, initialZ, finalZ, zShift, nSamples, zSpan, null);
                     } catch (NumberFormatException e) {
-                        throw new IOException("SMOOTHZ: could not parse SUCCESS payload: " + response, e);
+                        throw new IOException("STRMAFZ: could not parse SUCCESS payload: " + response, e);
                     }
                 } else if (response.startsWith("UNAVAILABLE:")) {
                     String reason = response.substring("UNAVAILABLE:".length());
-                    logger.info("SMOOTHZ UNAVAILABLE: {}", reason);
-                    return new SmoothFocusResult(SmoothFocusResult.Status.UNAVAILABLE, 0, 0, 0, 0, 0, reason);
+                    logger.info("STRMAFZ UNAVAILABLE: {}", reason);
+                    return new StreamingFocusResult(StreamingFocusResult.Status.UNAVAILABLE, 0, 0, 0, 0, 0, reason);
                 } else if (response.startsWith("FAILED:")) {
                     String reason = response.substring("FAILED:".length());
-                    logger.warn("SMOOTHZ FAILED: {}", reason);
-                    return new SmoothFocusResult(SmoothFocusResult.Status.FAILED, 0, 0, 0, 0, 0, reason);
+                    logger.warn("STRMAFZ FAILED: {}", reason);
+                    return new StreamingFocusResult(StreamingFocusResult.Status.FAILED, 0, 0, 0, 0, 0, reason);
                 } else {
-                    throw new IOException("SMOOTHZ: unknown response prefix: " + response);
+                    throw new IOException("STRMAFZ: unknown response prefix: " + response);
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                throw new IOException("SMOOTHZ interrupted", e);
+                throw new IOException("STRMAFZ interrupted", e);
             } finally {
                 if (socket != null) {
                     try {
                         socket.setSoTimeout(originalTimeout);
                     } catch (IOException e) {
-                        logger.warn("Failed to restore socket timeout after SMOOTHZ", e);
+                        logger.warn("Failed to restore socket timeout after STRMAFZ", e);
                     }
                 }
             }

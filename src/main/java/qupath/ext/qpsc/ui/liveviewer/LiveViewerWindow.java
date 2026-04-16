@@ -73,8 +73,8 @@ public class LiveViewerWindow {
     private Button liveToggleButton;
     // Refine Focus removed from toolbar -- Sweep Focus includes it as Phase 5
     private Button sweepFocusButton;
-    private Button smoothFocusButton;
-    private SmoothFocusController smoothFocusController;
+    private Button streamingFocusButton;
+    private StreamingFocusController streamingFocusController;
     private ComboBox<String> focusRangeCombo;
     private HistogramView histogramView;
     private TitledPane histogramPane;
@@ -175,7 +175,7 @@ public class LiveViewerWindow {
         String reason = lockManager.getLockHolder();
         liveToggleButton.setDisable(true);
         sweepFocusButton.setDisable(true);
-        if (smoothFocusButton != null) smoothFocusButton.setDisable(true);
+        if (streamingFocusButton != null) streamingFocusButton.setDisable(true);
         if (stageControlToggle != null) stageControlToggle.setDisable(true);
         if (stageControlPanel != null) stageControlPanel.setDisable(true);
         updateStatus("LOCKED: " + (reason != null ? reason : "operation in progress"));
@@ -665,13 +665,13 @@ public class LiveViewerWindow {
         sweepFocusButton.setManaged(false);
         sweepFocusButton.setOnAction(e -> handleSweepFocus());
 
-        smoothFocusButton = new Button("Autofocus");
-        smoothFocusButton.setTooltip(new Tooltip("Primary autofocus.\n"
+        streamingFocusButton = new Button("Autofocus");
+        streamingFocusButton.setTooltip(new Tooltip("Primary autofocus.\n"
                 + "Uses streaming continuous-Z scan when available.\n"
                 + "If unavailable (long exposure, no speed property, saturated),\n"
                 + "fallback buttons (Refine Focus, Sweep Focus) appear."));
-        smoothFocusButton.setDisable(true);
-        smoothFocusButton.setOnAction(e -> handleSmoothFocus());
+        streamingFocusButton.setDisable(true);
+        streamingFocusButton.setOnAction(e -> handleStreamingFocus());
 
         focusRangeCombo = new ComboBox<>();
         focusRangeCombo.getItems().addAll("Auto", "1um", "2um", "5um", "10um", "20um");
@@ -749,7 +749,7 @@ public class LiveViewerWindow {
                 8,
                 liveToggleButton,
                 sweepFocusButton,
-                smoothFocusButton,
+                streamingFocusButton,
                 focusRangeCombo,
                 showTilesCheckBox,
                 spacer,
@@ -964,17 +964,17 @@ public class LiveViewerWindow {
             // Keep showing cancel while either is running
             return;
         }
-        boolean smoothRunning = smoothFocusController != null && smoothFocusController.isRunning();
-        if (smoothRunning) {
+        boolean streamingRunning = streamingFocusController != null && streamingFocusController.isRunning();
+        if (streamingRunning) {
             return;
         }
         boolean enabled = liveActive;
         sweepFocusButton.setText("Sweep Focus");
         sweepFocusButton.setStyle("");
         sweepFocusButton.setDisable(!enabled);
-        smoothFocusButton.setText("Autofocus");
-        smoothFocusButton.setStyle("");
-        smoothFocusButton.setDisable(!enabled);
+        streamingFocusButton.setText("Autofocus");
+        streamingFocusButton.setStyle("");
+        streamingFocusButton.setDisable(!enabled);
         focusRangeCombo.setDisable(!enabled);
     }
 
@@ -1012,7 +1012,7 @@ public class LiveViewerWindow {
         sweepFocusButton.setText("Cancel Sweep");
         sweepFocusButton.setStyle("");
 
-        smoothFocusButton.setDisable(true);
+        streamingFocusButton.setDisable(true);
         focusRangeCombo.setDisable(true);
         liveToggleButton.setDisable(true);
 
@@ -1028,7 +1028,7 @@ public class LiveViewerWindow {
                     liveToggleButton.setDisable(false);
                     focusRangeCombo.setDisable(!liveActive);
 
-                    smoothFocusButton.setDisable(!liveActive);
+                    streamingFocusButton.setDisable(!liveActive);
                     if (stageControlPanel != null) {
                         stageControlPanel.refreshPositions();
                     }
@@ -1051,20 +1051,20 @@ public class LiveViewerWindow {
         sweepThread.start();
     }
 
-    private void handleSmoothFocus() {
-        if (smoothFocusController != null && smoothFocusController.isRunning()) {
-            // Smooth scans are short (<2s); we do not currently support cancel.
+    private void handleStreamingFocus() {
+        if (streamingFocusController != null && streamingFocusController.isRunning()) {
+            // Streaming AF scans are short (<2s); we do not currently support cancel.
             // Ignore double-clicks while running.
             return;
         }
 
         MicroscopeController controller = MicroscopeController.getInstance();
         if (controller == null || !liveActive) {
-            updateStatus("Cannot smooth focus: not connected or live not active");
+            updateStatus("Cannot autofocus: not connected or live not active");
             return;
         }
         if (controller.isAcquisitionActive()) {
-            updateStatus("Cannot smooth focus: acquisition in progress");
+            updateStatus("Cannot autofocus: acquisition in progress");
             return;
         }
 
@@ -1077,7 +1077,7 @@ public class LiveViewerWindow {
                             exposureMs, Math.max(exposures.red(), Math.max(exposures.green(), exposures.blue())));
                 }
                 if (exposureMs > 40.0) {
-                    smoothFocusButton.setStyle("-fx-base: #F44336;");
+                    streamingFocusButton.setStyle("-fx-base: #F44336;");
                     sweepFocusButton.setVisible(true);
                     sweepFocusButton.setManaged(true);
 
@@ -1106,7 +1106,7 @@ public class LiveViewerWindow {
             }
         }
 
-        smoothFocusController = new SmoothFocusController(controller.getSocketClient());
+        streamingFocusController = new StreamingFocusController(controller.getSocketClient());
 
         // Pass null for objective: the server resolves via pixel-size
         // match against config.hardware.objectives. This avoids depending
@@ -1115,7 +1115,7 @@ public class LiveViewerWindow {
         // wizard). When the Live Viewer is invoked mid-acquisition we
         // could in theory thread the active objective through, but that
         // plumbing does not exist yet and the server auto-detect is
-        // accurate enough for the Smooth use case.
+        // accurate enough for the streaming AF use case.
         String objective = null;
 
         // Read the modality from the Camera tab's modality dropdown.
@@ -1136,18 +1136,18 @@ public class LiveViewerWindow {
         // window when they suspect they are far from focus (the default
         // sweep_range_um=6 is tuned for small drift corrections, not
         // initial acquisition from scratch).
-        double smoothRangeOverride = Double.NaN;
+        double streamingRangeOverride = Double.NaN;
         String rangeSelection = focusRangeCombo.getValue();
         if (rangeSelection != null && rangeSelection.endsWith("um")) {
             try {
-                smoothRangeOverride = Double.parseDouble(rangeSelection.replace("um", ""));
+                streamingRangeOverride = Double.parseDouble(rangeSelection.replace("um", ""));
             } catch (NumberFormatException ignored) {
             }
         }
 
-        smoothFocusButton.setText("Scanning...");
-        smoothFocusButton.setStyle("");
-        smoothFocusButton.setDisable(true);
+        streamingFocusButton.setText("Scanning...");
+        streamingFocusButton.setStyle("");
+        streamingFocusButton.setDisable(true);
 
         sweepFocusButton.setDisable(true);
         focusRangeCombo.setDisable(true);
@@ -1174,10 +1174,10 @@ public class LiveViewerWindow {
                     if (outcome == RefineFocusController.Outcome.FAILED) {
                         // UNAVAILABLE / pre-flight refusal -- show fallback
                         // buttons so the user has an alternative path.
-                        smoothFocusButton.setText("NO FOCUS");
-                        smoothFocusButton.setStyle("-fx-font-size: 11; -fx-base: #FF9800;");
-                        smoothFocusButton.setTooltip(new Tooltip(msg + "\nUse Refine Focus or Sweep Focus instead."));
-                        smoothFocusButton.setDisable(!liveActive);
+                        streamingFocusButton.setText("NO FOCUS");
+                        streamingFocusButton.setStyle("-fx-font-size: 11; -fx-base: #FF9800;");
+                        streamingFocusButton.setTooltip(new Tooltip(msg + "\nUse Refine Focus or Sweep Focus instead."));
+                        streamingFocusButton.setDisable(!liveActive);
 
                         sweepFocusButton.setVisible(true);
                         sweepFocusButton.setManaged(true);
@@ -1187,17 +1187,17 @@ public class LiveViewerWindow {
                         }
                         Dialogs.showInfoNotification("Autofocus: no focus found", reason);
                     } else if (outcome == RefineFocusController.Outcome.ERROR) {
-                        smoothFocusButton.setText("FAILED");
-                        smoothFocusButton.setStyle("-fx-font-size: 11; -fx-base: #F44336;");
-                        smoothFocusButton.setTooltip(new Tooltip(msg));
-                        smoothFocusButton.setDisable(!liveActive);
+                        streamingFocusButton.setText("FAILED");
+                        streamingFocusButton.setStyle("-fx-font-size: 11; -fx-base: #F44336;");
+                        streamingFocusButton.setTooltip(new Tooltip(msg));
+                        streamingFocusButton.setDisable(!liveActive);
 
                         sweepFocusButton.setVisible(true);
                         sweepFocusButton.setManaged(true);
                     } else {
-                        smoothFocusButton.setText("Autofocus");
-                        smoothFocusButton.setStyle("");
-                        smoothFocusButton.setDisable(!liveActive);
+                        streamingFocusButton.setText("Autofocus");
+                        streamingFocusButton.setStyle("");
+                        streamingFocusButton.setDisable(!liveActive);
 
                         sweepFocusButton.setVisible(false);
                         sweepFocusButton.setManaged(false);
@@ -1206,12 +1206,12 @@ public class LiveViewerWindow {
             });
         };
 
-        final double rangeOverride = smoothRangeOverride;
-        Thread smoothThread =
-                new Thread(() -> smoothFocusController.execute(objectiveParam, modalityParam, rangeOverride, callback));
-        smoothThread.setDaemon(true);
-        smoothThread.setName("LiveViewer-SmoothFocus");
-        smoothThread.start();
+        final double rangeOverride = streamingRangeOverride;
+        Thread streamingThread =
+                new Thread(() -> streamingFocusController.execute(objectiveParam, modalityParam, rangeOverride, callback));
+        streamingThread.setDaemon(true);
+        streamingThread.setName("LiveViewer-StreamingFocus");
+        streamingThread.start();
     }
 
     /**

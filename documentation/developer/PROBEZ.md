@@ -2,7 +2,7 @@
 
 PROBEZ is a one-shot diagnostic command that characterizes a
 microscope's focus device (Z stage + camera pipeline) end-to-end.
-It was built to answer the question "can we run Smooth Focus on
+It was built to answer the question "can we run Streaming Autofocus on
 this rig, and with what parameters?" but the same data is useful
 whenever you need to understand the timing, property table, or
 sample density envelope of a new or broken setup.
@@ -28,10 +28,10 @@ at the start and restored in a `finally` block. Safe to re-run.
 
 ## When to use it
 
-- **New rig onboarding**. Before enabling Smooth Focus (or
+- **New rig onboarding**. Before enabling Streaming Autofocus (or
   diagnosing why a stepped sweep is slow on an unfamiliar
   microscope), run PROBEZ to establish baselines.
-- **Smooth Focus returning UNAVAILABLE on tissue**. PROBEZ shows
+- **Streaming Autofocus returning UNAVAILABLE on tissue**. PROBEZ shows
   exactly which pre-flight check would fail and why: blur
   budget, metric stability, saturation, or speed-property
   detection.
@@ -92,7 +92,7 @@ Key lines to look at:
   reports `PIZStage` when you expected a Prior Z), your MM
   startup config has the wrong `Core,Focus` role.
 - **`PROBEZ [step-0]:   <name> = '<value>' [RW/RO] ...`** -- the
-  writable property list. Smooth Focus needs one of
+  writable property list. Streaming Autofocus needs one of
   `MaxSpeed`, `Velocity`, `Speed`, or `MaxVelocity`.
 - **`PROBEZ [step-1]: dz=+X.X um  out=YYYms`** -- default-speed
   blocking round-trip times. Compare to step-2's non-blocking
@@ -101,7 +101,7 @@ Key lines to look at:
 - **`PROBEZ [step-2]: dz=... trace: (Tms,z,B/I)`** -- the
   mid-motion position trace. If the first-sample z is already
   near the target, the stage is too fast to resolve at the
-  current poll rate, and Smooth needs the stage slowed further.
+  current poll rate, and streaming AF needs the stage slowed further.
 - **`PROBEZ [step-3]: MaxSpeed=N  out=YYYms (~Z um/s)`** --
   velocity at each speed. Pick the slowest speed where forward
   velocity is > 5 um/s.
@@ -155,7 +155,7 @@ Guidelines:
 
 Adding new pixel/metric helpers: `_pop_image_as_numpy` and
 `_focus_metric` are intentionally duplicated between `probez.py`
-and `handlers/smooth.py` for module isolation. If you need a
+and `handlers/streaming_focus.py` for module isolation. If you need a
 third consumer, lift them into a shared module.
 
 ## Client script
@@ -169,11 +169,11 @@ just a convenience wrapper.
 
 ## Related
 
-- `handlers/smooth.py` uses the same pixel and metric helpers,
+- `handlers/streaming_focus.py` uses the same pixel and metric helpers,
   and its pre-flight checks mirror the feasibility gates that
   PROBEZ step 5 validates.
 - `claude-reports/2026-04-14_smooth-focus-design-and-probez-tooling.md`
   has the full design story and results from the PPM runs
-  that shaped both PROBEZ and Smooth Focus.
+  that shaped both PROBEZ and Streaming Autofocus.
 - `documentation/AUTOFOCUS.md` user-facing doc for the Live
-  Viewer Smooth Focus button.
+  Viewer Streaming Autofocus button.

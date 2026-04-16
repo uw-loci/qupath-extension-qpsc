@@ -751,9 +751,9 @@ public class StageControlPanel extends VBox {
      * {@code null} if none has been chosen yet. Thread-safe -- the
      * field is volatile and this method is a simple read.
      *
-     * <p>Used by other Live Viewer controls (e.g. Smooth Focus) that
+     * <p>Used by other Live Viewer controls (e.g. Streaming Autofocus) that
      * need to know the active modality to make modality-aware
-     * decisions. For Smooth Focus specifically, the server uses the
+     * decisions. For Streaming Autofocus specifically, the server uses the
      * modality to pick a saturation-refusal threshold: brightfield
      * is tolerant (~30%), PPM is moderate (~5%), fluorescence and
      * laser-scanning are strict (1-2%).

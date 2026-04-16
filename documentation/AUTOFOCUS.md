@@ -111,7 +111,7 @@ The sweep is designed for corrections of 1-5um per attempt, with the retry loop 
 
 ## Autofocus (Live Viewer)
 
-**Autofocus** (formerly Smooth Focus) is a streaming-based continuous-Z autofocus accessed from the [Live Viewer](tools/live-viewer.md) as the primary focus button. Refine Focus and Sweep Focus buttons are hidden by default and only appear when Autofocus returns UNAVAILABLE (pre-flight refusal).
+**Autofocus** is a streaming-based continuous-Z autofocus accessed from the [Live Viewer](tools/live-viewer.md) as the primary focus button. Sweep Focus is hidden by default and only appears when Autofocus returns UNAVAILABLE (pre-flight refusal).
 
 Unlike the stepped Sweep Drift Check above, Autofocus does not stop and snap at each Z position. Instead it:
 

@@ -176,7 +176,7 @@ ENDOFSTR
 | WBSIMPLE | `wbsimple` | params + ENDOFSTR | WB result |
 | WBPPM | `wbppm___` | params + ENDOFSTR | WB result |
 | PROBEZ | `probez__` | none | `PROBEZOK` or `PROBEZFL` (logs to server_session) |
-| SMOOTHZ | `smoothz_` | `--yaml <path> [--objective <id>] [--range <um>] ENDOFSTR` | `SUCCESS:<i>:<f>:<shift>:<n>:<span>` / `UNAVAILABLE:<reason>` / `FAILED:<reason>` |
+| STRMAFZ | `strmafz_` | `--yaml <path> [--objective <id>] [--range <um>] ENDOFSTR` | `SUCCESS:<i>:<f>:<shift>:<n>:<span>` / `UNAVAILABLE:<reason>` / `FAILED:<reason>` |
 
 #### PROBEZ
 
@@ -193,7 +193,7 @@ are snapshotted at entry and restored in a `finally` block,
 including Z position and camera exposure.
 
 Intended as diagnostic tooling for new-rig onboarding and for
-debugging `SMOOTHZ` UNAVAILABLE responses. See
+debugging `STRMAFZ` UNAVAILABLE responses. See
 [developer/PROBEZ.md](PROBEZ.md) for the detailed guide and
 `handlers/probez.py` for the implementation.
 
@@ -201,11 +201,11 @@ Response: `PROBEZOK` on normal completion (~30-60 seconds),
 `PROBEZFL` if a safety check failed (sequence already running,
 server not configured, etc.).
 
-#### SMOOTHZ
+#### STRMAFZ
 
-Streaming-based continuous-Z autofocus scan. Used by the Live
-Viewer's **Smooth Focus** button as a drop-in replacement for
-stepped Sweep Drift Check on calibrated hardware.
+Streaming autofocus scan. Used by the Live Viewer's **Autofocus**
+button. Streams frames during continuous Z motion and fits the focus
+curve, replacing the stepped Sweep Drift Check on calibrated hardware.
 
 Payload flags (text, terminated by `ENDOFSTR`):
 
@@ -233,7 +233,7 @@ Response formats:
 - `FAILED:<reason>` -- mid-scan error; stage state has been
   restored but no new focus was committed
 
-See `handlers/smooth.py` and `claude-reports/2026-04-14_smooth-focus-design-and-probez-tooling.md` for the design rationale and PPM characterization results.
+See `handlers/streaming_focus.py` and `claude-reports/2026-04-14_smooth-focus-design-and-probez-tooling.md` for the design rationale and PPM characterization results.
 
 ### System
 
