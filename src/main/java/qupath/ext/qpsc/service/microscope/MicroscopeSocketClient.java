@@ -97,6 +97,12 @@ public class MicroscopeSocketClient implements AutoCloseable {
         t.setDaemon(true);
         return t;
     });
+    /** Guard: true while a reconnection cycle is in progress. Prevents
+     *  the health-check timer from spawning duplicate reconnection tasks. */
+    private final AtomicBoolean reconnecting = new AtomicBoolean(false);
+    /** Exponential backoff for the main socket, mirrors the aux pattern. */
+    private volatile long mainReconnectBackoffMs;
+    private static final long MAIN_RECONNECT_BACKOFF_MAX_MS = 30_000;
 
     // Health monitoring
     private final ScheduledExecutorService healthCheckExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -342,6 +348,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         this.maxReconnectAttempts = maxReconnectAttempts;
         this.reconnectDelayMs = reconnectDelayMs;
         this.healthCheckIntervalMs = healthCheckIntervalMs;
+        this.mainReconnectBackoffMs = reconnectDelayMs;
 
         // Start health monitoring
         startHealthMonitoring();
@@ -358,6 +365,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 logger.debug("Already connected to {}:{}", host, port);
                 return;
             }
+
+            // Close any leaked socket from a previous failed connection attempt
+            // so we don't leave an orphaned server thread listening on it.
+            closeSocketQuietly();
 
             logger.info("Connecting to microscope server at {}:{}", host, port);
 
@@ -1423,8 +1434,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if the socket communication itself fails (not a
      *                     streaming-focus rejection -- those return UNAVAILABLE).
      */
-    public StreamingFocusResult streamingFocus(String yamlPath, String objective, String modality, double rangeOverrideUm)
-            throws IOException {
+    public StreamingFocusResult streamingFocus(
+            String yamlPath, String objective, String modality, double rangeOverrideUm) throws IOException {
         if (yamlPath == null || yamlPath.isEmpty()) {
             throw new IllegalArgumentException("yamlPath is required for streamingFocus");
         }
@@ -2832,30 +2843,50 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
-     * Schedules automatic reconnection attempts.
+     * Schedules automatic reconnection attempts with exponential backoff.
+     * Only one reconnection cycle runs at a time -- duplicate calls (e.g.
+     * from the health-check timer firing while a cycle is already in
+     * progress) are silently dropped.
      */
     private void scheduleReconnection() {
+        if (!reconnecting.compareAndSet(false, true)) {
+            logger.debug("Reconnection already in progress, skipping duplicate request");
+            return;
+        }
+
         reconnectExecutor.submit(() -> {
-            int attempts = 0;
+            try {
+                int attempts = 0;
 
-            while (attempts < maxReconnectAttempts && !connected.get() && !shuttingDown.get()) {
-                attempts++;
-                logger.info("Reconnection attempt {} of {}", attempts, maxReconnectAttempts);
+                while (attempts < maxReconnectAttempts && !connected.get() && !shuttingDown.get()) {
+                    attempts++;
+                    logger.info("Reconnection attempt {} of {} (backoff {}ms)",
+                            attempts, maxReconnectAttempts, mainReconnectBackoffMs);
 
-                try {
-                    Thread.sleep(reconnectDelayMs);
-                    connect();
-                    logger.info("Successfully reconnected to microscope server");
-                    consecutiveErrors.set(0);
-                    userAlertedAboutConnectionIssue = false;
-                    break;
-                } catch (Exception e) {
-                    logger.warn("Reconnection attempt {} failed: {}", attempts, e.getMessage());
+                    try {
+                        Thread.sleep(mainReconnectBackoffMs);
+                        connect();
+                        logger.info("Successfully reconnected to microscope server");
+                        consecutiveErrors.set(0);
+                        userAlertedAboutConnectionIssue = false;
+                        // Reset backoff on success
+                        mainReconnectBackoffMs = reconnectDelayMs;
+                        break;
+                    } catch (Exception e) {
+                        logger.warn("Reconnection attempt {} failed: {}", attempts, e.getMessage());
+                        // Exponential backoff, capped at 30s
+                        mainReconnectBackoffMs = Math.min(
+                                mainReconnectBackoffMs * 2, MAIN_RECONNECT_BACKOFF_MAX_MS);
+                    }
                 }
-            }
 
-            if (!connected.get() && !shuttingDown.get()) {
-                logger.error("Failed to reconnect after {} attempts", maxReconnectAttempts);
+                if (!connected.get() && !shuttingDown.get()) {
+                    logger.error("Failed to reconnect after {} attempts (next health check "
+                            + "in ~{}s may retry)", maxReconnectAttempts,
+                            healthCheckIntervalMs / 1000);
+                }
+            } finally {
+                reconnecting.set(false);
             }
         });
     }
@@ -2886,6 +2917,24 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 healthCheckIntervalMs,
                 healthCheckIntervalMs,
                 TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Silently closes the primary socket and its streams without touching
+     * {@code connected} or the auxiliary socket.  Used by {@link #connect()}
+     * to clean up a leaked socket from a prior failed attempt before
+     * opening a fresh one.
+     */
+    private void closeSocketQuietly() {
+        try {
+            if (input != null) { input.close(); input = null; }
+        } catch (Exception ignored) { }
+        try {
+            if (output != null) { output.close(); output = null; }
+        } catch (Exception ignored) { }
+        try {
+            if (socket != null && !socket.isClosed()) { socket.close(); socket = null; }
+        } catch (Exception ignored) { }
     }
 
     /**
