@@ -28,17 +28,18 @@ Double-click on the camera image to center the stage at that position.
 
 ### Focus Controls Toolbar
 
-The primary **Autofocus** button is always visible when Live mode is ON. Two fallback buttons appear only when Autofocus is unavailable:
+The primary **Autofocus** button is always visible when Live mode is ON. **Sweep Focus** appears as a fallback when Autofocus is unavailable:
 
 | Button | Visibility | What it does |
 |---|---|---|
-| **Autofocus** | Always visible | Streaming continuous-Z autofocus. ~1 second on PPM at 0.73 ms exposure. Shows "NO FOCUS" in orange if unavailable. |
-| **Refine Focus** | Appears on Autofocus failure | Small-range hill-climbing refinement. Best when already close to focus. |
-| **Sweep Focus** | Appears on Autofocus failure | Stepped-Z autofocus. Works on any camera and any stage. |
+| **Autofocus** | Always visible | Streaming continuous-Z autofocus. ~1 second on PPM at 0.73 ms exposure. Shows red if exposure is too long. |
+| **Sweep Focus** | Appears on Autofocus failure | Stepped-Z autofocus with edge retry. Works on any camera and any stage. Includes automatic refinement as a final phase. |
 
-The **Auto / 1um / 2um / 5um / 10um / 20um** dropdown selects the search range for Refine Focus. Autofocus and Sweep Focus both read their scan range from `sweep_range_um` in `autofocus_<scope>.yml` via the [Autofocus Configuration Editor](autofocus-editor.md), not from this dropdown.
+The **Auto / 1um / 2um / 5um / 10um / 20um** dropdown selects the search range. Autofocus and Sweep Focus both read their scan range from `sweep_range_um` in `autofocus_<scope>.yml` via the [Autofocus Configuration Editor](autofocus-editor.md), not from this dropdown.
 
-**Autofocus feasibility gates.** Autofocus checks three pre-flight gates and returns UNAVAILABLE if any fail. When this happens, the button shows "NO FOCUS" in orange and the Refine Focus and Sweep Focus fallback buttons appear:
+**Exposure pre-check.** Before running, Autofocus queries the current camera exposure. If it exceeds ~40 ms (the blur-budget ceiling on a Prior at MaxSpeed=1), the button turns red, a warning dialog appears (with a "don't show again" checkbox), and the Sweep Focus fallback button is revealed. The user can still retry Autofocus after adjusting exposure.
+
+**Autofocus feasibility gates.** If the exposure check passes, the server checks three additional pre-flight gates. If any fail, the button shows "NO FOCUS" in orange and Sweep Focus appears:
 
 - **Stage speed property**: focus device must expose `MaxSpeed`, `Velocity`, `Speed`, or `MaxVelocity`. Piezo stages and demo adapters typically do not.
 - **Motion blur budget**: `min_velocity * exposure` must stay under ~0.5 um (25% of a nominal 20X DOF). On a Prior at MaxSpeed=1 (~11.5 um/s), the per-stage exposure ceiling is ~43 ms. Longer exposures (dark fluorescence, low-angle PPM) will refuse.

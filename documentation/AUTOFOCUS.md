@@ -309,6 +309,7 @@ Autofocus parameters are configured **per objective** in the autofocus YAML file
 | `tissue_area_threshold` | Min tissue coverage fraction | 0.05-0.30 |
 | `sweep_range_um` | Z range for drift check | 6-10 |
 | `sweep_n_steps` | Steps in drift check | 6-10 |
+| `edge_retries` | Additional sweep attempts on boundary peaks (0=disable, 2=default) | 0-3 |
 | `gap_index_multiplier` | Force AF after this x `n_tiles` without AF (safety net) | 2-5 (default 3) |
 | `gap_spatial_multiplier` | Force AF when nearest AF exceeds this x grid spacing (fragment safety net) | 1.5-3.0 (default 2.0) |
 
