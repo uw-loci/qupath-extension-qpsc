@@ -10,13 +10,13 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.utilities.CameraOrientation;
-import qupath.ext.qpsc.utilities.StagePolarity;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.modality.ppm.PPMPreferences;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
+import qupath.ext.qpsc.utilities.CameraOrientation;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.StagePolarity;
 import qupath.fx.prefs.controlsfx.PropertyItemBuilder;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.prefs.PathPrefs;
@@ -503,58 +503,16 @@ public class QPPreferenceDialog {
                         + "Defaults to ppm_reference_slide/ next to the microscope config.")
                 .build());
 
-        items.add(new PropertyItemBuilder<>(PPMPreferences.birefringenceThresholdProperty(), String.class)
-                .name("Birefringence Threshold")
+        items.add(new PropertyItemBuilder<>(PPMPreferences.birefringenceMinIntensityProperty(), String.class)
+                .name("Birefringence Min Intensity")
                 .category(PPM_CATEGORY)
-                .description("Minimum birefringence intensity for a pixel to be included in analysis.\n"
-                        + "Pixels below this threshold are excluded from polarity plots,\n"
-                        + "batch analysis, and perpendicularity calculations.\n"
-                        + "Default: 100.0")
+                .description("Dark-pixel noise suppression threshold for birefringence computation.\n"
+                        + "Pixels with combined intensity (I+ + I-) below this value\n"
+                        + "are zeroed during birefringence computation on the server.\n"
+                        + "Default: 10")
                 .build());
-
-        items.add(new PropertyItemBuilder<>(PPMPreferences.histogramBinsProperty(), String.class)
-                .name("Histogram Bins")
-                .category(PPM_CATEGORY)
-                .description("Number of bins for polarity plot rose diagrams.\n"
-                        + "18 bins = 10 deg per bin. Higher values give finer angular resolution\n"
-                        + "but require more pixels per bin for statistical significance.\n"
-                        + "Default: 18")
-                .build());
-
-        items.add(new PropertyItemBuilder<>(PPMPreferences.saturationThresholdProperty(), String.class)
-                .name("Saturation Threshold")
-                .category(PPM_CATEGORY)
-                .description("Minimum HSV saturation for a pixel to be considered valid.\n"
-                        + "Used by the Hue Range Filter to exclude low-saturation pixels.\n"
-                        + "Range: 0.0-1.0. Default: 0.2")
-                .build());
-
-        items.add(new PropertyItemBuilder<>(PPMPreferences.valueThresholdProperty(), String.class)
-                .name("Value (Brightness) Threshold")
-                .category(PPM_CATEGORY)
-                .description("Minimum HSV brightness for a pixel to be considered valid.\n"
-                        + "Used by the Hue Range Filter to exclude dark pixels.\n"
-                        + "Range: 0.0-1.0. Default: 0.2")
-                .build());
-
-        items.add(new PropertyItemBuilder<>(PPMPreferences.dilationUmProperty(), String.class)
-                .name("Dilation Distance (um)")
-                .category(PPM_CATEGORY)
-                .description("Distance in micrometers to dilate annotation boundaries\n"
-                        + "for surface perpendicularity analysis.\n"
-                        + "Fibers within this distance of the boundary are analyzed.\n"
-                        + "Default: 50.0 um")
-                .build());
-
-        items.add(new PropertyItemBuilder<>(PPMPreferences.tacsThresholdDegProperty(), String.class)
-                .name("TACS Threshold (deg)")
-                .category(PPM_CATEGORY)
-                .description("Angle threshold for PS-TACS classification.\n"
-                        + "Fibers within this angle of perpendicular to the boundary\n"
-                        + "are classified as TACS-3. Fibers within this angle of parallel\n"
-                        + "are classified as TACS-2.\n"
-                        + "Range: 5-85 deg. Default: 30 deg")
-                .build());
+        // Analysis preferences (birefringence threshold, histogram bins, saturation,
+        // value, dilation, TACS) are registered by the PPM Analysis extension.
     }
 
     // --- Typed getters for use throughout your code ---
@@ -579,13 +537,11 @@ public class QPPreferenceDialog {
     /**
      * Returns the composite {@link StagePolarity} derived from the per-axis
      * boolean preferences. This is the preferred way to access stage polarity
-     * in new code — the two individual boolean prefs are retained for UI
+     * in new code -- the two individual boolean prefs are retained for UI
      * editing and backwards compatibility.
      */
     public static StagePolarity getStagePolarityProperty() {
-        return StagePolarity.fromBooleans(
-                stageInvertedXProperty.get(),
-                stageInvertedYProperty.get());
+        return StagePolarity.fromBooleans(stageInvertedXProperty.get(), stageInvertedYProperty.get());
     }
 
     /**

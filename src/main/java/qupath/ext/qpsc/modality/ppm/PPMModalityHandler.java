@@ -7,10 +7,10 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.BackgroundValidationResult;
 import qupath.ext.qpsc.modality.ModalityHandler;
-import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.modality.ModalityMenuItem;
 import qupath.ext.qpsc.modality.ppm.ui.PPMAngleSelectionController;
 import qupath.ext.qpsc.modality.ppm.ui.PPMBoundingBoxUI;
+import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.lib.images.ImageData;
 
@@ -141,11 +141,7 @@ public class PPMModalityHandler implements ModalityHandler {
      */
     @Override
     public CompletableFuture<List<AngleExposure>> getRotationAnglesWithOverrides(
-            String modality,
-            String objective,
-            String detector,
-            Map<String, Double> overrides,
-            String wbMode) {
+            String modality, String objective, String detector, Map<String, Double> overrides, String wbMode) {
 
         if (overrides == null || overrides.isEmpty()) {
             // No overrides -- use normal flow (which shows the dialog)
@@ -210,6 +206,13 @@ public class PPMModalityHandler implements ModalityHandler {
         // JAI 3-CCD uses prism color splitting, not Bayer mosaic.
         // Debayering must be disabled to prevent corrupting the image.
         builder.enableDebayer(false);
+
+        // Dark-region noise suppression: pixels with combined intensity (I+ + I-)
+        // below this threshold are zeroed during birefringence computation.
+        int minIntensity = PPMPreferences.getBirefringenceMinIntensity();
+        if (minIntensity > 0) {
+            builder.birefMinIntensity(minIntensity);
+        }
     }
 
     /**
