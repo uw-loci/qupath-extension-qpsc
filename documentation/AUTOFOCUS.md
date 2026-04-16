@@ -16,9 +16,7 @@ During a tiled acquisition, the sample's focal plane can shift due to slide tilt
 | [Sweep Drift Check](#sweep-drift-check) | Subsequent AF positions during tiling | ~9s | Good (narrow Z range) |
 | [Z-Focus Tilt Model](#z-focus-tilt-prediction) | Between annotations | Instant | Approximate (guides AF search center) |
 
-Additionally, the [Live Viewer](tools/live-viewer.md) provides interactive focus tools:
-- **Sweep Focus** -- Rapid Z scan for initial focusing
-- **Refine Focus** -- Hill-climbing for fine adjustment near focus
+Additionally, the [Live Viewer](tools/live-viewer.md) provides an interactive **Autofocus** button (primary, uses streaming scan when available) with **Sweep Focus** and **Refine Focus** as fallbacks that appear only when Autofocus is unavailable.
 
 ---
 
@@ -100,21 +98,22 @@ After the first tissue position uses standard AF, subsequent positions use a fas
 
 - Sweeps a narrow Z range (configured via `sweep_range_um`, default 6-10um)
 - Uses fewer steps (`sweep_n_steps`, default 6-10)
-- Rejects boundary peaks (monotonic profiles indicate no real focus peak in range)
-- Rejects flat profiles (score variation < 2%)
-- If the sweep fails to find a good peak, **keeps the current Z and continues** (no expensive fallback)
+- **Boundary retry (3 attempts):** When the peak is at a sweep boundary (monotonic profile), the sweep extends up to 2 additional times in the peak direction, each shifting the window by one full range. Total coverage is 3x `sweep_range_um` (e.g., 30um for a 10um setting), clamped to stage Z limits. This prevents dead zones where autofocus cannot recover from a bad starting Z on tilted samples.
+- Rejects flat profiles (score variation < 2% -- no retry, since retrying won't help)
+- If all attempts fail to find an interior peak, **keeps the current Z and continues** (no expensive fallback)
+- Failed sweeps (zero drift) are not recorded in the AF position map, preventing stale Z values from propagating to neighboring tiles via nearest-neighbor lookup
 
-The sweep is designed for corrections of 1-5um, not for finding focus from scratch.
+The sweep is designed for corrections of 1-5um per attempt, with the retry loop extending reach to ~15um.
 
 **Speed note (2026-04-14):** The internal Z-wait path in `microscope_control/hardware/stage.py` now uses a tight `device_busy` poll instead of `wait_for_device`. On the Prior ProScan this cut the blocking round-trip for a 20 um move from ~240 ms to ~80 ms (~3x) with no behavioral change. Per-sweep savings are ~900 ms across a 6-step check, which adds up to ~11 minutes across a 750-sweep acquisition. Other stages see smaller but still positive gains.
 
 ---
 
-## Smooth Focus (Live Viewer, experimental)
+## Autofocus (Live Viewer)
 
-**Smooth Focus** is a streaming-based continuous-Z autofocus accessed from the [Live Viewer](tools/live-viewer.md) as a button alongside **Sweep Focus** and **Refine Focus**. It was added in 2026-04-14 and is currently in the A/B-validation phase -- both Sweep and Smooth remain visible in the toolbar so the two can be compared on the same tissue.
+**Autofocus** (formerly Smooth Focus) is a streaming-based continuous-Z autofocus accessed from the [Live Viewer](tools/live-viewer.md) as the primary focus button. Refine Focus and Sweep Focus buttons are hidden by default and only appear when Autofocus returns UNAVAILABLE (pre-flight refusal).
 
-Unlike the stepped Sweep Drift Check above, Smooth Focus does not stop and snap at each Z position. Instead it:
+Unlike the stepped Sweep Drift Check above, Autofocus does not stop and snap at each Z position. Instead it:
 
 1. Drops the stage speed property (`MaxSpeed` on Prior, `Velocity` on ASI/Marzhauser, etc.) to a slow value
 2. Starts the camera in continuous sequence acquisition
@@ -124,11 +123,11 @@ Unlike the stepped Sweep Drift Check above, Smooth Focus does not stop and snap 
 6. Commits the peak Z with a blocking move
 7. Restores the stage speed property
 
-On PPM at the production 0.73 ms exposure, a 6 um Smooth scan completes in ~1 second and delivers ~25-30 usable (z, metric) samples -- far denser than the stepped sweep could produce in the same time.
+On PPM at the production 0.73 ms exposure, a 6 um Autofocus scan completes in ~1 second and delivers ~25-30 usable (z, metric) samples -- far denser than the stepped sweep could produce in the same time.
 
 ### Feasibility envelope
 
-Smooth Focus is **opt-in with a graceful fallback**. Before running, the server checks three gates and returns `UNAVAILABLE` with a specific reason if any fail:
+Autofocus is **opt-in with a graceful fallback**. Before running, the server checks three gates and returns `UNAVAILABLE` with a specific reason if any fail. When this happens, the Refine Focus and Sweep Focus buttons appear in the Live Viewer toolbar:
 
 | Gate | What it checks | Typical failure |
 |---|---|---|
@@ -136,7 +135,7 @@ Smooth Focus is **opt-in with a graceful fallback**. Before running, the server 
 | **Motion blur budget** | `expected_blur = min_velocity * exposure_ms` must be within 25% of DOF (~0.5 um default) | Long exposures on slow stages -- e.g., above ~43 ms on Prior at MaxSpeed=1 |
 | Saturation | Fewer than 5% of pixels saturated in a pre-scan snap | Camera overexposed -- metric would not discriminate |
 
-When Smooth returns UNAVAILABLE, the Live Viewer shows the button in orange with a tooltip explaining the reason. The user is expected to click **Sweep Focus** instead. UNAVAILABLE is informational, not an error.
+When Autofocus returns UNAVAILABLE, the button shows "NO FOCUS" in orange with a tooltip explaining the reason, and the Refine Focus and Sweep Focus fallback buttons appear. UNAVAILABLE is informational, not an error.
 
 ### When it helps
 
@@ -146,13 +145,13 @@ When Smooth returns UNAVAILABLE, the Live Viewer shows the button in orange with
 
 ### When to stick with Sweep Focus
 
-- **Long-exposure modalities** (dark fluorescence, low-angle PPM): Smooth's blur budget is dominated by exposure, and above the per-stage ceiling it will refuse
-- **Slow/fast-readout cameras where `snap_image` is competitive with streaming**: Smooth's advantage disappears (and Sweep is already 3-4x faster thanks to the busy-poll wait)
-- **First-AF-from-scratch situations**: Smooth is designed as a drift check, not a full search. Use Standard Autofocus or Refine Focus for recovery.
+- **Long-exposure modalities** (dark fluorescence, low-angle PPM): Autofocus's blur budget is dominated by exposure, and above the per-stage ceiling it will refuse
+- **Slow/fast-readout cameras where `snap_image` is competitive with streaming**: Autofocus's advantage disappears (and Sweep is already 3-4x faster thanks to the busy-poll wait)
+- **First-AF-from-scratch situations**: Autofocus is designed as a drift check, not a full search. Use Standard Autofocus or Refine Focus for recovery.
 
 ### Configuration
 
-Smooth Focus reads `sweep_range_um` from `autofocus_<scope>.yml` per objective. There is no separate `smooth_range_um` field -- Smooth and the stepped Sweep Drift Check share the same range knob. Change it in the [Autofocus Configuration Editor](tools/autofocus-editor.md) and both paths use the new value.
+Autofocus reads `sweep_range_um` from `autofocus_<scope>.yml` per objective. There is no separate range field -- Autofocus and the stepped Sweep Drift Check share the same range knob. Change it in the [Autofocus Configuration Editor](tools/autofocus-editor.md) and both paths use the new value.
 
 ### How the server picks an objective
 
@@ -162,11 +161,11 @@ The Live Viewer button does not currently pass an objective identifier, so the s
 2. **Pixel-size auto-match**: query `core.get_pixel_size_um()` and find the objective in `config.hardware.objectives` whose `pixel_size_xy_um[*]` is within 0.01 um
 3. First entry in `autofocus_<scope>.yml` with a warning
 
-If your rig's MM pixel size is not wired up, the Autofocus Editor still lets you configure the per-objective values, but Smooth will fall back to the yaml's first entry.
+If your rig's MM pixel size is not wired up, the Autofocus Editor still lets you configure the per-objective values, but Autofocus will fall back to the yaml's first entry.
 
 ### Characterization
 
-The feasibility envelope for a new rig can be measured with the **PROBEZ** diagnostic probe. See [developer/PROBEZ.md](developer/PROBEZ.md) for the detailed guide. PROBEZ is also the right first diagnostic if Smooth is returning UNAVAILABLE unexpectedly on a working rig -- its Step 0 property snapshot and Step 5 metric-stability sweeps show exactly which gate is failing and why.
+The feasibility envelope for a new rig can be measured with the **PROBEZ** diagnostic probe. See [developer/PROBEZ.md](developer/PROBEZ.md) for the detailed guide. PROBEZ is also the right first diagnostic if Autofocus is returning UNAVAILABLE unexpectedly on a working rig -- its Step 0 property snapshot and Step 5 metric-stability sweeps show exactly which gate is failing and why.
 
 ---
 
