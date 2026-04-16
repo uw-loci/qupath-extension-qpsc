@@ -426,8 +426,10 @@ public class LiveViewerWindow {
                 //   bpp=1 -- matches renderFrame's RGB branch at line ~1199.
                 FrameData frame = bufferedImageToFrameData(img);
                 if (frame == null) {
-                    logger.debug("Unsupported tile image format for {}: type={}, bands={}",
-                            tileFile.getName(), img.getType(),
+                    logger.debug(
+                            "Unsupported tile image format for {}: type={}, bands={}",
+                            tileFile.getName(),
+                            img.getType(),
                             img.getRaster().getNumBands());
                     return;
                 }
@@ -476,7 +478,7 @@ public class LiveViewerWindow {
                 byte[] bytes = new byte[w * h * 2];
                 for (int i = 0; i < samples.length; i++) {
                     int v = samples[i] & 0xFFFF;
-                    bytes[i * 2] = (byte) ((v >> 8) & 0xFF);     // high byte first
+                    bytes[i * 2] = (byte) ((v >> 8) & 0xFF); // high byte first
                     bytes[i * 2 + 1] = (byte) (v & 0xFF);
                 }
                 return new FrameData(w, h, 1, 2, bytes, System.currentTimeMillis());
@@ -563,7 +565,8 @@ public class LiveViewerWindow {
             File[] subdirs = rootDir.listFiles(f -> f.isDirectory() && isAngleDirectory(f.getName()));
             if (subdirs != null) {
                 for (File subdir : subdirs) {
-                    File[] tiffs = subdir.listFiles(f -> f.isFile() && f.getName().endsWith(".tif"));
+                    File[] tiffs =
+                            subdir.listFiles(f -> f.isFile() && f.getName().endsWith(".tif"));
                     if (tiffs == null) continue;
                     for (File tif : tiffs) {
                         long mod = tif.lastModified();
@@ -625,7 +628,7 @@ public class LiveViewerWindow {
         // the stock ImageIO decoder chokes on). Provided at runtime by QuPath's
         // bioformats extension (build.gradle.kts compileOnly dependency).
         try (loci.formats.gui.BufferedImageReader reader =
-                     new loci.formats.gui.BufferedImageReader(new loci.formats.ImageReader())) {
+                new loci.formats.gui.BufferedImageReader(new loci.formats.ImageReader())) {
             reader.setId(tileFile.getAbsolutePath());
             return reader.openImage(0);
         } catch (Throwable t) {
@@ -658,24 +661,24 @@ public class LiveViewerWindow {
         refineFocusButton = new Button("Refine Focus");
         refineFocusButton.setTooltip(new Tooltip(
                 "Automatically refine Z focus using histogram contrast. " + "Best used when already close to focus."));
-        refineFocusButton.setDisable(true); // disabled until live is ON
+        refineFocusButton.setDisable(true);
+        refineFocusButton.setVisible(false);
+        refineFocusButton.setManaged(false);
         refineFocusButton.setOnAction(e -> handleRefineFocus());
 
         sweepFocusButton = new Button("Sweep Focus");
         sweepFocusButton.setTooltip(new Tooltip("Stepped-Z autofocus. Moves Z point by point and "
                 + "snaps at each step to find the best focus. Slower but works on any camera."));
         sweepFocusButton.setDisable(true);
+        sweepFocusButton.setVisible(false);
+        sweepFocusButton.setManaged(false);
         sweepFocusButton.setOnAction(e -> handleSweepFocus());
 
-        smoothFocusButton = new Button("Smooth Focus");
-        smoothFocusButton.setTooltip(new Tooltip(
-                "Streaming-based continuous-Z autofocus.\n"
-                + "Reads sweep_range_um per objective from autofocus_*.yml.\n"
-                + "Automatically refuses and falls back to stepped Sweep Focus if:\n"
-                + "  - Exposure is too long (motion blur exceeds DOF budget)\n"
-                + "  - Image is > 5% saturated (metric unreliable)\n"
-                + "  - Stage has no speed-control property\n"
-                + "Typical scan time: ~1 second on PPM."));
+        smoothFocusButton = new Button("Autofocus");
+        smoothFocusButton.setTooltip(new Tooltip("Primary autofocus.\n"
+                + "Uses streaming continuous-Z scan when available.\n"
+                + "If unavailable (long exposure, no speed property, saturated),\n"
+                + "fallback buttons (Refine Focus, Sweep Focus) appear."));
         smoothFocusButton.setDisable(true);
         smoothFocusButton.setOnAction(e -> handleSmoothFocus());
 
@@ -982,7 +985,7 @@ public class LiveViewerWindow {
         sweepFocusButton.setText("Sweep Focus");
         sweepFocusButton.setStyle("");
         sweepFocusButton.setDisable(!enabled);
-        smoothFocusButton.setText("Smooth Focus");
+        smoothFocusButton.setText("Autofocus");
         smoothFocusButton.setStyle("");
         smoothFocusButton.setDisable(!enabled);
         focusRangeCombo.setDisable(!enabled);
@@ -1224,42 +1227,46 @@ public class LiveViewerWindow {
                         stageControlPanel.refreshPositions();
                     }
                     if (outcome == RefineFocusController.Outcome.FAILED) {
-                        // UNAVAILABLE / pre-flight refusal -- show in orange,
-                        // not red, so the user understands this is a soft
-                        // fallback path rather than an error. Show the full
-                        // reason in a dialog AND in the status area so the
-                        // user can't miss it -- the old tooltip-only path
-                        // was invisible unless the user hovered, and users
-                        // reported missing the explanation entirely.
+                        // UNAVAILABLE / pre-flight refusal -- show fallback
+                        // buttons so the user has an alternative path.
                         smoothFocusButton.setText("NO FOCUS");
                         smoothFocusButton.setStyle("-fx-font-size: 11; -fx-base: #FF9800;");
-                        smoothFocusButton.setTooltip(new Tooltip(msg + "\nFall back to Sweep Focus."));
+                        smoothFocusButton.setTooltip(new Tooltip(msg + "\nUse Refine Focus or Sweep Focus instead."));
                         smoothFocusButton.setDisable(!liveActive);
-                        // Strip the 'Smooth Focus unavailable: ' prefix if
-                        // present so the dialog body is the raw reason.
+                        refineFocusButton.setVisible(true);
+                        refineFocusButton.setManaged(true);
+                        sweepFocusButton.setVisible(true);
+                        sweepFocusButton.setManaged(true);
                         String reason = msg;
-                        if (reason.startsWith("Smooth Focus unavailable: ")) {
-                            reason = reason.substring("Smooth Focus unavailable: ".length());
+                        if (reason.startsWith("Autofocus unavailable: ")) {
+                            reason = reason.substring("Autofocus unavailable: ".length());
                         }
-                        Dialogs.showInfoNotification("Smooth Focus: no focus found", reason);
+                        Dialogs.showInfoNotification("Autofocus: no focus found", reason);
                     } else if (outcome == RefineFocusController.Outcome.ERROR) {
                         smoothFocusButton.setText("FAILED");
                         smoothFocusButton.setStyle("-fx-font-size: 11; -fx-base: #F44336;");
                         smoothFocusButton.setTooltip(new Tooltip(msg));
                         smoothFocusButton.setDisable(!liveActive);
+                        refineFocusButton.setVisible(true);
+                        refineFocusButton.setManaged(true);
+                        sweepFocusButton.setVisible(true);
+                        sweepFocusButton.setManaged(true);
                     } else {
-                        smoothFocusButton.setText("Smooth Focus");
+                        smoothFocusButton.setText("Autofocus");
                         smoothFocusButton.setStyle("");
                         smoothFocusButton.setDisable(!liveActive);
+                        refineFocusButton.setVisible(false);
+                        refineFocusButton.setManaged(false);
+                        sweepFocusButton.setVisible(false);
+                        sweepFocusButton.setManaged(false);
                     }
                 }
             });
         };
 
         final double rangeOverride = smoothRangeOverride;
-        Thread smoothThread = new Thread(() ->
-                smoothFocusController.execute(objectiveParam, modalityParam,
-                        rangeOverride, callback));
+        Thread smoothThread =
+                new Thread(() -> smoothFocusController.execute(objectiveParam, modalityParam, rangeOverride, callback));
         smoothThread.setDaemon(true);
         smoothThread.setName("LiveViewer-SmoothFocus");
         smoothThread.start();
@@ -1623,9 +1630,12 @@ public class LiveViewerWindow {
                         double[] currentPos = controller.getStagePositionXY();
 
                         double[] target = transform.clickOffsetToMmTarget(
-                                currentPos[0], currentPos[1],
-                                offsetPixelsX, offsetPixelsY,
-                                pixelSizeX_um, pixelSizeY_um);
+                                currentPos[0],
+                                currentPos[1],
+                                offsetPixelsX,
+                                offsetPixelsY,
+                                pixelSizeX_um,
+                                pixelSizeY_um);
                         double newX = target[0];
                         double newY = target[1];
 

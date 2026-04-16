@@ -8,7 +8,6 @@ import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.SmoothFocusResult;
 import qupath.ext.qpsc.ui.liveviewer.RefineFocusController.Outcome;
 import qupath.ext.qpsc.ui.liveviewer.RefineFocusController.StatusCallback;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * Thin Java-side wrapper around the server's SMOOTHZ command.
@@ -78,10 +77,9 @@ public class SmoothFocusController {
      *                         (pass NaN or zero to use the yaml value).
      * @param callback     Status callback for progress / final outcome.
      */
-    public void execute(String objective, String modality,
-                        double rangeOverrideUm, StatusCallback callback) {
+    public void execute(String objective, String modality, double rangeOverrideUm, StatusCallback callback) {
         if (running) {
-            callback.onStatusUpdate("Smooth Focus already running", Outcome.ERROR);
+            callback.onStatusUpdate("Autofocus already running", Outcome.ERROR);
             return;
         }
         running = true;
@@ -93,20 +91,24 @@ public class SmoothFocusController {
                 return;
             }
 
-            callback.onStatusUpdate("Smooth Focus: scanning...", Outcome.IN_PROGRESS);
+            callback.onStatusUpdate("Autofocus: scanning...", Outcome.IN_PROGRESS);
             long t0 = System.currentTimeMillis();
-            SmoothFocusResult result = socketClient.smoothFocus(
-                    yamlPath, objective, modality, rangeOverrideUm);
+            SmoothFocusResult result = socketClient.smoothFocus(yamlPath, objective, modality, rangeOverrideUm);
             long elapsedMs = System.currentTimeMillis() - t0;
 
             switch (result.status) {
                 case SUCCESS:
                     String okMsg = String.format(
-                            "Smooth Focus: shifted %+.2f um, %d samples, span %.1f um (%.1fs)",
+                            "Autofocus: shifted %+.2f um, %d samples, span %.1f um (%.1fs)",
                             result.zShift, result.nSamples, result.zSpan, elapsedMs / 1000.0);
-                    logger.info("Smooth Focus SUCCESS: initial={} final={} shift={} n={} span={} elapsed={}ms",
-                            result.initialZ, result.finalZ, result.zShift,
-                            result.nSamples, result.zSpan, elapsedMs);
+                    logger.info(
+                            "Autofocus SUCCESS: initial={} final={} shift={} n={} span={} elapsed={}ms",
+                            result.initialZ,
+                            result.finalZ,
+                            result.zShift,
+                            result.nSamples,
+                            result.zSpan,
+                            elapsedMs);
                     finish(callback, okMsg, Outcome.SUCCESS);
                     return;
 
@@ -115,24 +117,24 @@ public class SmoothFocusController {
                     // and report back with a SUCCESS-style message so the
                     // caller can show it as informational. The caller
                     // should then fall back to stepped Sweep Focus.
-                    String unavailableMsg = "Smooth Focus unavailable: " + result.reason;
-                    logger.info("Smooth Focus UNAVAILABLE: {}", result.reason);
+                    String unavailableMsg = "Autofocus unavailable: " + result.reason;
+                    logger.info("Autofocus UNAVAILABLE: {}", result.reason);
                     finish(callback, unavailableMsg, Outcome.FAILED);
                     return;
 
                 case FAILED:
                 default:
-                    String failMsg = "Smooth Focus failed: " + result.reason;
-                    logger.warn("Smooth Focus FAILED: {}", result.reason);
+                    String failMsg = "Autofocus failed: " + result.reason;
+                    logger.warn("Autofocus FAILED: {}", result.reason);
                     finish(callback, failMsg, Outcome.ERROR);
                     return;
             }
         } catch (IOException e) {
-            logger.error("Smooth Focus IO error: {}", e.getMessage(), e);
-            finish(callback, "Smooth Focus error: " + e.getMessage(), Outcome.ERROR);
+            logger.error("Autofocus IO error: {}", e.getMessage(), e);
+            finish(callback, "Autofocus error: " + e.getMessage(), Outcome.ERROR);
         } catch (Exception e) {
-            logger.error("Smooth Focus unexpected error", e);
-            finish(callback, "Smooth Focus error: " + e.getMessage(), Outcome.ERROR);
+            logger.error("Autofocus unexpected error", e);
+            finish(callback, "Autofocus error: " + e.getMessage(), Outcome.ERROR);
         }
     }
 
