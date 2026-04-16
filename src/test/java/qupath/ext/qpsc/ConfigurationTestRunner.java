@@ -220,9 +220,10 @@ public class ConfigurationTestRunner {
             configManager.getPixelSize("fake", "fake");
         });
 
-        // Test invalid stage axis
-        double invalidLimit = configManager.getStageLimit("invalid", "low");
-        assertEquals(-20000.0, invalidLimit, 0.001); // Should return default
+        // Test invalid stage axis throws exception
+        assertThrows(IllegalStateException.class, () -> {
+            configManager.getStageLimit("invalid", "low");
+        });
     }
 
     private void writeTestConfig(Path path) throws IOException {

@@ -1,7 +1,7 @@
 package qupath.ext.qpsc.utilities;
 
 /**
- * Represents the hardware polarity of the stage axes — whether MicroManager's
+ * Represents the hardware polarity of the stage axes -- whether MicroManager's
  * {@code setXYPosition} command moves the physical stage in the same direction
  * as the lab frame (sample frame, in our model) or the opposite direction,
  * per axis.
@@ -21,11 +21,11 @@ package qupath.ext.qpsc.utilities;
  * reason about the whole-stage polarity as a single value.
  */
 public enum StagePolarity {
-    /** MM +X → lab +X, MM +Y → lab +Y. */
+    /** MM +X -> lab +X, MM +Y -> lab +Y. */
     NORMAL(false, false),
-    /** MM +X → lab -X, MM +Y → lab +Y. */
+    /** MM +X -> lab -X, MM +Y -> lab +Y. */
     INVERT_X(true, false),
-    /** MM +X → lab +X, MM +Y → lab -Y. */
+    /** MM +X -> lab +X, MM +Y -> lab -Y. */
     INVERT_Y(false, true),
     /** Both axes inverted. */
     INVERT_XY(true, true);
@@ -39,23 +39,20 @@ public enum StagePolarity {
     }
 
     /**
-     * Convert a sample-frame delta (µm) to the corresponding MM-command delta
-     * (µm). For an inverted axis, the sign is flipped.
+     * Convert a sample-frame delta (um) to the corresponding MM-command delta
+     * (um). For an inverted axis, the sign is flipped.
      *
-     * @param sampleDx sample-frame X delta in µm
-     * @param sampleDy sample-frame Y delta in µm
+     * @param sampleDx sample-frame X delta in um
+     * @param sampleDy sample-frame Y delta in um
      * @return {@code double[2]} containing {@code [mmDx, mmDy]}
      */
     public double[] sampleToMmDelta(double sampleDx, double sampleDy) {
-        return new double[] {
-            invertX ? -sampleDx : sampleDx,
-            invertY ? -sampleDy : sampleDy
-        };
+        return new double[] {invertX ? -sampleDx : sampleDx, invertY ? -sampleDy : sampleDy};
     }
 
     /**
-     * Convert an MM-command delta (µm) to the corresponding sample-frame
-     * delta (µm). For axis sign flips the operation is its own inverse.
+     * Convert an MM-command delta (um) to the corresponding sample-frame
+     * delta (um). For axis sign flips the operation is its own inverse.
      */
     public double[] mmToSampleDelta(double mmDx, double mmDy) {
         return sampleToMmDelta(mmDx, mmDy);

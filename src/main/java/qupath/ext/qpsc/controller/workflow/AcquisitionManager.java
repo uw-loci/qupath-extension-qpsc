@@ -33,8 +33,8 @@ import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AngleResolutionService;
-import qupath.ext.qpsc.service.ChannelResolutionService;
 import qupath.ext.qpsc.service.AnnotationOrderingService;
+import qupath.ext.qpsc.service.ChannelResolutionService;
 import qupath.ext.qpsc.service.ManualFocusHandler;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.AnnotationAcquisitionDialog;
@@ -272,11 +272,7 @@ public class AcquisitionManager {
         String profileKey = qupath.ext.qpsc.utilities.ObjectiveUtils.createEnhancedFolderName(
                 state.sample.modality(), state.sample.objective());
         return AngleResolutionService.resolve(
-                profileKey,
-                state.sample.objective(),
-                state.sample.detector(),
-                state.angleOverrides,
-                state.wbMode);
+                profileKey, state.sample.objective(), state.sample.detector(), state.angleOverrides, state.wbMode);
     }
 
     /**
@@ -373,13 +369,13 @@ public class AcquisitionManager {
             String tempTileDir = state.projectInfo.getTempTileDirectory();
             long totalTiles = 0;
             for (PathObject ann : state.annotations) {
-                String tileDirPath =
-                        Paths.get(tempTileDir, ann.getName()).toString();
+                String tileDirPath = Paths.get(tempTileDir, ann.getName()).toString();
                 totalTiles += MinorFunctions.countTifEntriesInTileConfig(List.of(tileDirPath));
             }
 
             if (totalTiles <= 0) {
-                logger.warn("Skipping disk space check -- tile count is 0 across {} annotations", state.annotations.size());
+                logger.warn(
+                        "Skipping disk space check -- tile count is 0 across {} annotations", state.annotations.size());
                 return angleExposures;
             }
 
@@ -506,8 +502,7 @@ public class AcquisitionManager {
         // (widefield IF) the correct value depends on channelExposures,
         // which isn't resolved until performSingleAnnotationAcquisition
         // runs; that method corrects this value once channels are known.
-        int initialStepsPerPosition =
-                (angleExposures != null && !angleExposures.isEmpty()) ? angleExposures.size() : 1;
+        int initialStepsPerPosition = (angleExposures != null && !angleExposures.isEmpty()) ? angleExposures.size() : 1;
         final int finalInitialSteps = initialStepsPerPosition;
         Platform.runLater(() -> progressDialog.setStepsPerPosition(finalInitialSteps));
 
@@ -687,14 +682,10 @@ public class AcquisitionManager {
                 // falling back to library defaults (which is what the same empty map means
                 // when it comes from a non-channel UI).
                 if (ChannelResolutionService.isEmptySelectionForChannelBasedModality(
-                        profileKey,
-                        state.sample.objective(),
-                        state.sample.detector(),
-                        state.angleOverrides)) {
-                    throw new RuntimeException(
-                            "No fluorescence channels selected. Enable at least one channel "
-                                    + "in the acquisition dialog, or uncheck 'Customize channel selection' "
-                                    + "to use the library defaults.");
+                        profileKey, state.sample.objective(), state.sample.detector(), state.angleOverrides)) {
+                    throw new RuntimeException("No fluorescence channels selected. Enable at least one channel "
+                            + "in the acquisition dialog, or uncheck 'Customize channel selection' "
+                            + "to use the library defaults.");
                 }
 
                 // Resolve per-channel sequence for channel-based modalities (widefield IF).
@@ -947,8 +938,7 @@ public class AcquisitionManager {
         // single-shot acquisition.
         int numChannelsForProgress = (channelExposures != null) ? channelExposures.size() : 0;
         int numAnglesForProgress = (angleExposures != null) ? angleExposures.size() : 0;
-        final int stepsPerPositionForProgress =
-                Math.max(1, Math.max(numChannelsForProgress, numAnglesForProgress));
+        final int stepsPerPositionForProgress = Math.max(1, Math.max(numChannelsForProgress, numAnglesForProgress));
         final int expectedFiles = tilesPerAngle * stepsPerPositionForProgress;
 
         logger.info(

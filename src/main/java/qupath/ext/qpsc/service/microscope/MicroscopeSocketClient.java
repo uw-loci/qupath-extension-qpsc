@@ -1352,7 +1352,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * zero on UNAVAILABLE / FAILED.
      */
     public static final class SmoothFocusResult {
-        public enum Status { SUCCESS, UNAVAILABLE, FAILED }
+        public enum Status {
+            SUCCESS,
+            UNAVAILABLE,
+            FAILED
+        }
 
         public final Status status;
         public final double initialZ;
@@ -1362,9 +1366,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
         public final double zSpan;
         public final String reason;
 
-        public SmoothFocusResult(Status status, double initialZ, double finalZ,
-                                  double zShift, int nSamples, double zSpan,
-                                  String reason) {
+        public SmoothFocusResult(
+                Status status,
+                double initialZ,
+                double finalZ,
+                double zShift,
+                int nSamples,
+                double zSpan,
+                String reason) {
             this.status = status;
             this.initialZ = initialZ;
             this.finalZ = finalZ;
@@ -1414,9 +1423,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if the socket communication itself fails (not a
      *                     smooth-focus rejection -- those return UNAVAILABLE).
      */
-    public SmoothFocusResult smoothFocus(String yamlPath, String objective,
-                                          String modality,
-                                          double rangeOverrideUm) throws IOException {
+    public SmoothFocusResult smoothFocus(String yamlPath, String objective, String modality, double rangeOverrideUm)
+            throws IOException {
         if (yamlPath == null || yamlPath.isEmpty()) {
             throw new IllegalArgumentException("yamlPath is required for smoothFocus");
         }
@@ -1483,24 +1491,18 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         int nSamples = Integer.parseInt(parts[3].trim());
                         double zSpan = Double.parseDouble(parts[4].trim());
                         return new SmoothFocusResult(
-                                SmoothFocusResult.Status.SUCCESS,
-                                initialZ, finalZ, zShift, nSamples, zSpan, null);
+                                SmoothFocusResult.Status.SUCCESS, initialZ, finalZ, zShift, nSamples, zSpan, null);
                     } catch (NumberFormatException e) {
-                        throw new IOException("SMOOTHZ: could not parse SUCCESS payload: "
-                                + response, e);
+                        throw new IOException("SMOOTHZ: could not parse SUCCESS payload: " + response, e);
                     }
                 } else if (response.startsWith("UNAVAILABLE:")) {
                     String reason = response.substring("UNAVAILABLE:".length());
                     logger.info("SMOOTHZ UNAVAILABLE: {}", reason);
-                    return new SmoothFocusResult(
-                            SmoothFocusResult.Status.UNAVAILABLE,
-                            0, 0, 0, 0, 0, reason);
+                    return new SmoothFocusResult(SmoothFocusResult.Status.UNAVAILABLE, 0, 0, 0, 0, 0, reason);
                 } else if (response.startsWith("FAILED:")) {
                     String reason = response.substring("FAILED:".length());
                     logger.warn("SMOOTHZ FAILED: {}", reason);
-                    return new SmoothFocusResult(
-                            SmoothFocusResult.Status.FAILED,
-                            0, 0, 0, 0, 0, reason);
+                    return new SmoothFocusResult(SmoothFocusResult.Status.FAILED, 0, 0, 0, 0, 0, reason);
                 } else {
                     throw new IOException("SMOOTHZ: unknown response prefix: " + response);
                 }

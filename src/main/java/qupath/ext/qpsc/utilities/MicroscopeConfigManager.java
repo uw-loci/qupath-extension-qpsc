@@ -622,12 +622,14 @@ public class MicroscopeConfigManager {
     @SuppressWarnings("unchecked")
     public Object getProfileSetting(String modality, String objective, String detector, String... settingPath) {
         if (imageprocessingData == null || !imageprocessingData.containsKey("imaging_profiles")) {
-            logger.debug("Setting not found: {} for {}/{}/{}", Arrays.toString(settingPath), modality, objective, detector);
+            logger.debug(
+                    "Setting not found: {} for {}/{}/{}", Arrays.toString(settingPath), modality, objective, detector);
             return null;
         }
         Map<String, Object> imagingProfiles = (Map<String, Object>) imageprocessingData.get("imaging_profiles");
         if (imagingProfiles == null) {
-            logger.debug("Setting not found: {} for {}/{}/{}", Arrays.toString(settingPath), modality, objective, detector);
+            logger.debug(
+                    "Setting not found: {} for {}/{}/{}", Arrays.toString(settingPath), modality, objective, detector);
             return null;
         }
 
@@ -645,7 +647,11 @@ public class MicroscopeConfigManager {
             if (value != null) {
                 logger.debug(
                         "Resolved imaging_profiles '{}' -> family '{}' for setting {} ({}/{})",
-                        modality, family, Arrays.toString(settingPath), objective, detector);
+                        modality,
+                        family,
+                        Arrays.toString(settingPath),
+                        objective,
+                        detector);
                 return value;
             }
         }
@@ -782,19 +788,22 @@ public class MicroscopeConfigManager {
         if (modality != null && storedModality != null && !modality.equals(storedModality.toString())) {
             logger.debug(
                     "Background exposures stored for modality '{}' but requested '{}' -- ignoring",
-                    storedModality, modality);
+                    storedModality,
+                    modality);
             return null;
         }
         if (objective != null && storedObjective != null && !objective.equals(storedObjective.toString())) {
             logger.debug(
                     "Background exposures stored for objective '{}' but requested '{}' -- ignoring",
-                    storedObjective, objective);
+                    storedObjective,
+                    objective);
             return null;
         }
         if (detector != null && storedDetector != null && !detector.equals(storedDetector.toString())) {
             logger.debug(
                     "Background exposures stored for detector '{}' but requested '{}' -- ignoring",
-                    storedDetector, detector);
+                    storedDetector,
+                    detector);
             return null;
         }
 
@@ -822,7 +831,10 @@ public class MicroscopeConfigManager {
         }
         logger.debug(
                 "Loaded {} background exposure(s) from calibration_targets for {}/{}/{}",
-                result.size(), modality, objective, detector);
+                result.size(),
+                modality,
+                objective,
+                detector);
         return result;
     }
 
@@ -1431,8 +1443,7 @@ public class MicroscopeConfigManager {
         Map<String, Object> modalityBg = getBackgroundCorrectionEntry(modality);
         if (modalityBg != null && modalityBg.containsKey("enabled")) {
             Boolean enabled = (Boolean) modalityBg.get("enabled");
-            logger.debug(
-                    "Found background_correction.enabled in imageprocessing config for {}: {}", modality, enabled);
+            logger.debug("Found background_correction.enabled in imageprocessing config for {}: {}", modality, enabled);
             return enabled != null && enabled;
         }
         return false;
@@ -1448,8 +1459,7 @@ public class MicroscopeConfigManager {
         Map<String, Object> modalityBg = getBackgroundCorrectionEntry(modality);
         if (modalityBg != null && modalityBg.containsKey("method")) {
             String method = modalityBg.get("method").toString();
-            logger.debug(
-                    "Found background_correction.method in imageprocessing config for {}: {}", modality, method);
+            logger.debug("Found background_correction.method in imageprocessing config for {}: {}", modality, method);
             return method;
         }
         return null;
@@ -1732,10 +1742,9 @@ public class MicroscopeConfigManager {
             if (expObj instanceof Number n) {
                 exposure = n.doubleValue();
             }
-            List<PropertyWrite> mergedProperties = mergeDevicePropertyOverrides(
-                    c.properties(), override.get("device_properties"), c.id(), profileKey);
-            result.add(new Channel(
-                    c.id(), c.displayName(), exposure, c.presets(), mergedProperties, c.settleMs()));
+            List<PropertyWrite> mergedProperties =
+                    mergeDevicePropertyOverrides(c.properties(), override.get("device_properties"), c.id(), profileKey);
+            result.add(new Channel(c.id(), c.displayName(), exposure, c.presets(), mergedProperties, c.settleMs()));
         }
         return List.copyOf(result);
     }
@@ -1815,9 +1824,8 @@ public class MicroscopeConfigManager {
             return null;
         }
         String id = idObj.toString();
-        String displayName = channelMap.containsKey("display_name")
-                ? String.valueOf(channelMap.get("display_name"))
-                : id;
+        String displayName =
+                channelMap.containsKey("display_name") ? String.valueOf(channelMap.get("display_name")) : id;
 
         Object exposureObj = channelMap.get("exposure_ms");
         if (!(exposureObj instanceof Number)) {
@@ -1852,8 +1860,7 @@ public class MicroscopeConfigManager {
                     Object property = pm.get("property");
                     Object value = pm.get("value");
                     if (device != null && property != null && value != null) {
-                        properties.add(
-                                new PropertyWrite(device.toString(), property.toString(), value.toString()));
+                        properties.add(new PropertyWrite(device.toString(), property.toString(), value.toString()));
                     }
                 }
             }
@@ -1890,10 +1897,7 @@ public class MicroscopeConfigManager {
             return new Channel(id, displayName, exposureMs, presets, properties, intensityProperty, settleMs);
         } catch (IllegalArgumentException e) {
             logger.warn(
-                    "Skipping invalid channel '{}' in modalities.{}.channels: {}",
-                    id,
-                    modalityForLog,
-                    e.getMessage());
+                    "Skipping invalid channel '{}' in modalities.{}.channels: {}", id, modalityForLog, e.getMessage());
             return null;
         }
     }
@@ -2618,9 +2622,7 @@ public class MicroscopeConfigManager {
             Map<String, Object> data = yaml.load(Files.newInputStream(autofocusFile.toPath()));
             if (data == null) return null;
             Object schemaVersionObj = data.get("schema_version");
-            int schemaVersion = (schemaVersionObj instanceof Number)
-                    ? ((Number) schemaVersionObj).intValue()
-                    : 1;
+            int schemaVersion = (schemaVersionObj instanceof Number) ? ((Number) schemaVersionObj).intValue() : 1;
             if (schemaVersion < 2) return null;
             Object modalitiesObj = data.get("modalities");
             if (!(modalitiesObj instanceof Map)) return null;

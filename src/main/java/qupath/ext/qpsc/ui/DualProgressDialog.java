@@ -301,9 +301,7 @@ public class DualProgressDialog {
                 // predictor of steady-state throughput.
                 if (!firstTileProcessed.get() && filesCompleted == 1) {
                     firstTileProcessed.set(true);
-                    logger.info(
-                            "First tile time (includes full AF + settling): {} ms -- excluded from mean",
-                            tileTime);
+                    logger.info("First tile time (includes full AF + settling): {} ms -- excluded from mean", tileTime);
                 } else {
                     allTileTimes.addLast(tileTime);
                     // Cap the history at 3x the live-window size to bound memory
@@ -567,8 +565,7 @@ public class DualProgressDialog {
             int steps = stepsPerPosition.get();
             int stepsSafe = Math.max(1, steps);
             int positionsNeeded = (tilesNeeded + stepsSafe - 1) / stepsSafe;
-            timeLabel.setText(String.format(
-                    "Collecting timing data... %d positions remaining", positionsNeeded));
+            timeLabel.setText(String.format("Collecting timing data... %d positions remaining", positionsNeeded));
             return;
         }
 

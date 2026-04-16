@@ -132,8 +132,7 @@ public class RotationManager {
      * @param wbMode White balance mode (for background-aware dialog validation)
      * @return CompletableFuture with list of AngleExposure objects
      */
-    public CompletableFuture<List<AngleExposure>> getRotationTicksWithExposure(
-            String modalityName, String wbMode) {
+    public CompletableFuture<List<AngleExposure>> getRotationTicksWithExposure(String modalityName, String wbMode) {
         logger.info("Getting rotation angles with exposure for modality: {}", modalityName);
 
         for (RotationStrategy strategy : strategies) {

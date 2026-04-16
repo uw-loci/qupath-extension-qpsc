@@ -512,14 +512,16 @@ public class AffineTransformManager {
             int imageHeightPx) {
         if (imageWidthPx <= 0 || imageHeightPx <= 0) {
             logger.warn(
-                    "buildTransformFromStageBounds: invalid image dimensions ({}, {})",
-                    imageWidthPx, imageHeightPx);
+                    "buildTransformFromStageBounds: invalid image dimensions ({}, {})", imageWidthPx, imageHeightPx);
             return null;
         }
         if (stageX2Um <= stageX1Um || stageY2Um <= stageY1Um) {
             logger.warn(
                     "buildTransformFromStageBounds: degenerate bounds x=[{}..{}] y=[{}..{}]",
-                    stageX1Um, stageX2Um, stageY1Um, stageY2Um);
+                    stageX1Um,
+                    stageX2Um,
+                    stageY1Um,
+                    stageY2Um);
             return null;
         }
         double scaleX = (stageX2Um - stageX1Um) / imageWidthPx;
@@ -529,10 +531,16 @@ public class AffineTransformManager {
         t.scale(scaleX, scaleY);
         logger.info(
                 "buildTransformFromStageBounds: bounds=({},{})->({},{}) size=({}x{}) -> scale=({},{}) origin=({},{})",
-                stageX1Um, stageY1Um, stageX2Um, stageY2Um,
-                imageWidthPx, imageHeightPx,
-                String.format("%.4f", scaleX), String.format("%.4f", scaleY),
-                String.format("%.1f", stageX1Um), String.format("%.1f", stageY1Um));
+                stageX1Um,
+                stageY1Um,
+                stageX2Um,
+                stageY2Um,
+                imageWidthPx,
+                imageHeightPx,
+                String.format("%.4f", scaleX),
+                String.format("%.4f", scaleY),
+                String.format("%.1f", stageX1Um),
+                String.format("%.1f", stageY1Um));
         return t;
     }
 

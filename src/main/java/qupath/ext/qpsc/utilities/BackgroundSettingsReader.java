@@ -147,8 +147,11 @@ public class BackgroundSettingsReader {
     public static BackgroundSettings findBackgroundSettings(
             String baseBackgroundFolder, String modality, String objective, String detector, String wbMode) {
 
-        if (baseBackgroundFolder == null || baseBackgroundFolder.isEmpty()
-                || modality == null || objective == null || detector == null) {
+        if (baseBackgroundFolder == null
+                || baseBackgroundFolder.isEmpty()
+                || modality == null
+                || objective == null
+                || detector == null) {
             logger.debug("Cannot search for background settings - missing or empty base folder / required parameters");
             return null;
         }
@@ -175,8 +178,7 @@ public class BackgroundSettingsReader {
             }
 
             if (target.exists()) {
-                logger.debug(
-                        "Found background settings for wbMode='{}' at: {}", wbMode, target.getAbsolutePath());
+                logger.debug("Found background settings for wbMode='{}' at: {}", wbMode, target.getAbsolutePath());
                 return readBackgroundSettings(target);
             }
 
@@ -292,8 +294,11 @@ public class BackgroundSettingsReader {
 
         Map<String, BackgroundSettings> result = new HashMap<>();
 
-        if (baseBackgroundFolder == null || baseBackgroundFolder.isEmpty()
-                || modality == null || objective == null || detector == null) {
+        if (baseBackgroundFolder == null
+                || baseBackgroundFolder.isEmpty()
+                || modality == null
+                || objective == null
+                || detector == null) {
             return result;
         }
 

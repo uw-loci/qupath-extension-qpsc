@@ -100,8 +100,7 @@ public record Channel(
             return Double.NaN;
         }
         for (PropertyWrite p : properties) {
-            if (p.device().equals(intensityProperty.device())
-                    && p.property().equals(intensityProperty.property())) {
+            if (p.device().equals(intensityProperty.device()) && p.property().equals(intensityProperty.property())) {
                 try {
                     return Double.parseDouble(p.value());
                 } catch (NumberFormatException e) {

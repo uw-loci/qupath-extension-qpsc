@@ -212,23 +212,21 @@ public class TileProcessingUtilities {
                 qupath.ext.qpsc.utilities.StageImageTransform siTransform =
                         qupath.ext.qpsc.utilities.StageImageTransform.current();
                 boolean[] stitcherFlags = siTransform.stitcherFlipFlags();
-                qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX =
-                        stitcherFlags[0];
-                qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY =
-                        stitcherFlags[1];
+                qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = stitcherFlags[0];
+                qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = stitcherFlags[1];
                 logger.info(
                         "Set TileConfigurationTxtStrategy flipStitchingX={}, flipStitchingY={} "
                                 + "(from transform {})",
-                        stitcherFlags[0], stitcherFlags[1], siTransform);
+                        stitcherFlags[0],
+                        stitcherFlags[1],
+                        siTransform);
                 try {
                     outPath = StitchingWorkflow.run(config);
                 } finally {
                     // Always clear the flags so they don't leak into a later
                     // unrelated stitching invocation.
-                    qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX =
-                            false;
-                    qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY =
-                            false;
+                    qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = false;
+                    qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = false;
                 }
                 logger.info("BasicStitching workflow completed. Output: {}", outPath);
                 break; // Success
@@ -340,8 +338,8 @@ public class TileProcessingUtilities {
                     // canonical project entry. This avoids the qpdata "save?"
                     // prompt that fires when an entry is created and then
                     // removed in the same workflow run).
-                    boolean skipImport = stitchParams != null
-                            && Boolean.TRUE.equals(stitchParams.get("skipProjectImport"));
+                    boolean skipImport =
+                            stitchParams != null && Boolean.TRUE.equals(stitchParams.get("skipProjectImport"));
                     if (skipImport) {
                         logger.debug("Skipping project import for {} (skipProjectImport=true)", baseName);
                         continue;
@@ -583,8 +581,7 @@ public class TileProcessingUtilities {
             // per-channel file, which both cluttered the project and took Windows
             // file locks on the pyramids before ChannelMerger could reopen them
             // (causing the merge to silently return null).
-            boolean skipImport = stitchParams != null
-                    && Boolean.TRUE.equals(stitchParams.get("skipProjectImport"));
+            boolean skipImport = stitchParams != null && Boolean.TRUE.equals(stitchParams.get("skipProjectImport"));
             if (skipImport) {
                 logger.debug(
                         "Skipping project import for {} (skipProjectImport=true)",

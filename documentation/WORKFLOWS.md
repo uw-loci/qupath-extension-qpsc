@@ -136,16 +136,27 @@ There is no new menu entry for multi-channel acquisition. Any acquisition profil
 
 Angle-based modalities (PPM) and channel-based modalities are mutually exclusive per acquisition. If a profile has a channel library, the angle axis is suppressed; if it does not, the workflow falls back to the existing single-snap / multi-angle path unchanged.
 
+### Picking a Channel-Based Profile
+
+The modality dropdown in the sample setup dialog now shows enhanced profile keys (e.g. `Fluorescence_10x`, `BF_IF_20x`) rather than raw modality types. Picking any enhanced key that resolves to a `widefield` or `bf_if` modality lights up the Fluorescence Channels panel further down the dialog. If your OWS3 (or other scope with a channel library) has both a `Fluorescence_10x` and a `BF_IF_10x` profile, pick the one that matches what you want to collect -- there is no way to toggle BF on/off after the fact because the BF entry is declared in the library for `bf_if` only.
+
 ### What You See in the UI
 
 When a channel-based profile is selected, the acquisition dialog grows a **Fluorescence Channels** panel below the main settings. The panel shows:
 
 - A **"Customize channel selection for this acquisition"** master checkbox.
-- One row per channel from the library, each with a checkbox (Use), the channel's display name, and a per-channel **Exposure (ms)** spinner.
+- One row per channel from the library, each with:
+  - A **Use** checkbox
+  - The channel's display name
+  - A per-channel **Exposure (ms)** spinner
+  - A per-channel **Intensity** spinner (only for channels whose YAML library entry declares an `intensity_property`; greyed out otherwise)
+  - A **Focus** radio button (one and only one channel per acquisition can be the focus channel)
 
-Default behavior (master checkbox OFF): the acquisition uses every channel in the library at its YAML-declared exposure. The individual rows are greyed out.
+Default behavior (master checkbox OFF): the acquisition uses every channel in the library at its YAML-declared exposure and intensity. The Use/Exposure/Intensity controls are greyed out. The Focus radio buttons remain active so you can pick which channel drives autofocus even when you are not customizing anything else.
 
-Customized behavior (master checkbox ON): the individual row checkboxes and exposure spinners are enabled. Only checked channels are acquired, in library order, at the exposure values shown in their spinners. Per-channel selections and exposures are persisted between sessions (see [PREFERENCES.md](PREFERENCES.md#channel-picker-persistent-preferences) for the exact keys).
+Customized behavior (master checkbox ON): the per-row controls are enabled. Only checked channels are acquired, in library order, at the exposure and intensity values shown in their spinners. Per-channel selections, exposures, intensities, and the focus-channel pick are persisted between sessions (see [PREFERENCES.md](PREFERENCES.md#channel-picker-persistent-preferences) for the exact keys).
+
+**Focus channel:** The channel you mark as the focus channel is always collected first for every tile. Autofocus runs against that channel's image, and the resulting Z position is reused for the remaining channels in the tile. Pick the channel with the strongest, most focus-sensitive signal for your sample -- DAPI for nuclear stains, FITC/GFP for cytoplasmic markers, BF for BF+IF profiles with bright transmitted light. Picking a dim or sparse channel as the focus channel is a fast way to get drifted, out-of-focus stacks.
 
 If the master checkbox is on and you uncheck every channel row, the workflow refuses to start the acquisition with a clear error -- zero-channel acquisitions are blocked rather than silently falling back to the full library.
 
@@ -165,11 +176,29 @@ Each channel gets its own per-tile directory, mirroring the PPM per-angle layout
     TileConfiguration.txt
 ```
 
-After the tile loop finishes, each channel subdirectory is stitched independently into its own single-channel pyramidal OME-TIFF (via `StitchingHelper.stitchChannelDirectories`, which reuses the same helper that PPM uses per angle). The per-channel pyramids are then merged into a single multichannel output `{annotation}_merged.ome.tif` with `ChannelMerger` / `ChannelMergeImageServer` from the [qupath-extension-tiles-to-pyramid](https://github.com/uw-loci/qupath-extension-tiles-to-pyramid) extension. The merged file is what gets added to your QuPath project.
+After the tile loop finishes, each channel subdirectory is stitched independently into its own single-channel pyramidal OME-TIFF (via `StitchingHelper.stitchChannelDirectories`, which reuses the same helper that PPM uses per angle). The per-channel pyramids are then merged into a single multichannel output with `ChannelMerger` / `ChannelMergeImageServer` from the [qupath-extension-tiles-to-pyramid](https://github.com/uw-loci/qupath-extension-tiles-to-pyramid) extension.
+
+The merged file uses a short-modality prefix and is named:
+
+```
+<sample>_<short_modality>_NNN.ome.tif
+```
+
+For example: `PollenIF_fl_001.ome.tif` for a widefield fluorescence acquisition of the `PollenIF` sample, or `SkinBiopsy_bf_if_003.ome.tif` for the third combined BF+IF acquisition on `SkinBiopsy`. The short modality slug (`fl` for `widefield`, `bf_if` for `bf_if`) is chosen per modality type and the zero-padded counter is per annotation.
+
+Only the merged multichannel file is added to the QuPath project. The per-channel intermediate OME-TIFFs are written with `skipProjectImport: true` so they stay on disk as recovery artifacts but never clutter the project tree (this also means you will not see a sequence of single-channel project entries flash into existence during acquisition).
 
 ### BF+IF on Single-Camera Scopes
 
-On instruments with one camera that can be switched between a transmitted port and an epi port (e.g. OWS3), combined brightfield + IF acquisition is available as its own `bf_if` modality. There is nothing special about the BF step in the code path -- it is just the first entry in the channel library, and its `mm_setup_presets` switch the light path back to transmitted before the snap. Everything downstream (per-tile layout, per-channel stitching, multichannel merge) is identical to pure IF.
+On instruments with one camera that can be switched between a transmitted port and an epi port (e.g. OWS3), combined brightfield + IF acquisition is available as its own `bf_if` modality. A single profile (e.g. `BF_IF_20x`) acquires the BF tile and the N IF channels in sequence for every tile position. There is nothing special about the BF step in the code path -- it is just one entry in the channel library. Its `mm_setup_presets` switch the light path back to transmitted before the snap, and its `intensity_property` points at the transmitted lamp (e.g. `DiaLamp.Intensity`) rather than at a DLED wavelength so the Intensity spinner in the channel picker controls the brightfield lamp directly.
+
+Everything downstream (per-tile layout, per-channel stitching, multichannel merge, merged filename with `bf_if` prefix) is identical to pure IF. You can mark BF as the focus channel on BF+IF profiles, which is typically the right choice on samples with strong transmitted contrast because BF focuses far more reliably than sparse fluorescence.
+
+### Autofocus Strategy Override (partial feature)
+
+When the v2 `autofocus_<scope>.yml` schema is present, the per-modality autofocus strategy (dense / sparse / dark-field / manual_only / etc.) is resolved at acquisition start and logged as part of the run banner. You can see which strategy was picked in the server log under the autofocus loader.
+
+> **Note:** The Java UI dropdown for "AF strategy: from config / dense / sparse / dark-field / manual_only" is **not yet wired up**. Selecting a strategy in the GUI has no effect at acquisition time. To tune AF strategies today, hand-edit `autofocus_<scope>.yml` in your microscope configurations directory and restart the acquisition. A full GUI editor for per-modality strategies is a follow-up feature and is deliberately deferred.
 
 ### Learn More / Troubleshooting
 

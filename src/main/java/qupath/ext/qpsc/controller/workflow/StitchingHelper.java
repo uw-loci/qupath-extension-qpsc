@@ -18,6 +18,8 @@ import java.util.concurrent.TimeUnit;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.basicstitching.assembly.ChannelMerger;
+import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
@@ -34,8 +36,6 @@ import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.ext.qpsc.utilities.TileProcessingUtilities;
-import qupath.ext.basicstitching.assembly.ChannelMerger;
-import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
@@ -456,14 +456,17 @@ public class StitchingHelper {
                                     stitchingConfig.outputFormat() == StitchingConfig.OutputFormat.OME_ZARR;
 
                             String mode = useParallel ? "parallel" : "sequential";
-                            logger.info("Starting {} stitching for {} angles (format={})",
-                                    mode, angleExposures.size(), stitchingConfig.outputFormat());
+                            logger.info(
+                                    "Starting {} stitching for {} angles (format={})",
+                                    mode,
+                                    angleExposures.size(),
+                                    stitchingConfig.outputFormat());
 
                             if (blockingDialog != null) {
                                 blockingDialog.updateStatus(
                                         operationId,
-                                        "Stitching " + angleExposures.size() + " angles ("
-                                                + mode + ") for " + annotationName + "...");
+                                        "Stitching " + angleExposures.size() + " angles (" + mode + ") for "
+                                                + annotationName + "...");
                             }
 
                             if (useParallel) {
@@ -475,41 +478,59 @@ public class StitchingHelper {
                                     String angleStr = String.valueOf(angleExposure.ticks());
                                     final int angleIndex = i;
 
-                                    logger.info("Launching parallel stitch for angle {} ({}/{})",
-                                            angleStr, i + 1, angleExposures.size());
+                                    logger.info(
+                                            "Launching parallel stitch for angle {} ({}/{})",
+                                            angleStr,
+                                            i + 1,
+                                            angleExposures.size());
 
                                     angleFutures.add(CompletableFuture.supplyAsync(() -> {
                                         try {
                                             return processAngleWithIsolation(
-                                                    tileBaseDir, angleStr,
-                                                    projectsFolder, sampleName,
-                                                    modeWithIndex, annotationName,
-                                                    compression, pixelSize,
+                                                    tileBaseDir,
+                                                    angleStr,
+                                                    projectsFolder,
+                                                    sampleName,
+                                                    modeWithIndex,
+                                                    annotationName,
+                                                    compression,
+                                                    pixelSize,
                                                     stitchingConfig.downsampleFactor(),
-                                                    gui, project, handler, stitchParams);
+                                                    gui,
+                                                    project,
+                                                    handler,
+                                                    stitchParams);
                                         } catch (Exception e) {
-                                            logger.error("Failed to stitch angle {} ({}/{}): {}",
-                                                    angleStr, angleIndex + 1,
-                                                    angleExposures.size(), e.getMessage(), e);
+                                            logger.error(
+                                                    "Failed to stitch angle {} ({}/{}): {}",
+                                                    angleStr,
+                                                    angleIndex + 1,
+                                                    angleExposures.size(),
+                                                    e.getMessage(),
+                                                    e);
                                             return null;
                                         }
                                     }));
                                 }
 
-                                CompletableFuture.allOf(
-                                        angleFutures.toArray(new CompletableFuture[0])).join();
+                                CompletableFuture.allOf(angleFutures.toArray(new CompletableFuture[0]))
+                                        .join();
 
                                 for (int i = 0; i < angleFutures.size(); i++) {
                                     try {
                                         String outPath = angleFutures.get(i).get();
                                         if (outPath != null) {
                                             stitchedImages.add(outPath);
-                                            logger.info("Parallel stitch completed for angle {}: {}",
-                                                    angleExposures.get(i).ticks(), outPath);
+                                            logger.info(
+                                                    "Parallel stitch completed for angle {}: {}",
+                                                    angleExposures.get(i).ticks(),
+                                                    outPath);
                                         }
                                     } catch (Exception e) {
-                                        logger.error("Failed to get result for angle {}: {}",
-                                                angleExposures.get(i).ticks(), e.getMessage());
+                                        logger.error(
+                                                "Failed to get result for angle {}: {}",
+                                                angleExposures.get(i).ticks(),
+                                                e.getMessage());
                                     }
                                 }
                             } else {
@@ -518,32 +539,47 @@ public class StitchingHelper {
                                     AngleExposure angleExposure = angleExposures.get(i);
                                     String angleStr = String.valueOf(angleExposure.ticks());
 
-                                    logger.info("Stitching angle {} ({}/{})",
-                                            angleStr, i + 1, angleExposures.size());
+                                    logger.info("Stitching angle {} ({}/{})", angleStr, i + 1, angleExposures.size());
 
                                     try {
                                         String outPath = processAngleWithIsolation(
-                                                tileBaseDir, angleStr,
-                                                projectsFolder, sampleName,
-                                                modeWithIndex, annotationName,
-                                                compression, pixelSize,
+                                                tileBaseDir,
+                                                angleStr,
+                                                projectsFolder,
+                                                sampleName,
+                                                modeWithIndex,
+                                                annotationName,
+                                                compression,
+                                                pixelSize,
                                                 stitchingConfig.downsampleFactor(),
-                                                gui, project, handler, stitchParams);
+                                                gui,
+                                                project,
+                                                handler,
+                                                stitchParams);
                                         if (outPath != null) {
                                             stitchedImages.add(outPath);
-                                            logger.info("Stitch completed for angle {}: {}",
-                                                    angleExposure.ticks(), outPath);
+                                            logger.info(
+                                                    "Stitch completed for angle {}: {}",
+                                                    angleExposure.ticks(),
+                                                    outPath);
                                         }
                                     } catch (Exception e) {
-                                        logger.error("Failed to stitch angle {} ({}/{}): {}",
-                                                angleStr, i + 1, angleExposures.size(),
-                                                e.getMessage(), e);
+                                        logger.error(
+                                                "Failed to stitch angle {} ({}/{}): {}",
+                                                angleStr,
+                                                i + 1,
+                                                angleExposures.size(),
+                                                e.getMessage(),
+                                                e);
                                     }
                                 }
                             }
 
-                            logger.info("Completed {} stitching of {} angles. Successfully stitched {} images.",
-                                    mode, angleExposures.size(), stitchedImages.size());
+                            logger.info(
+                                    "Completed {} stitching of {} angles. Successfully stitched {} images.",
+                                    mode,
+                                    angleExposures.size(),
+                                    stitchedImages.size());
 
                             // Process modality-specific post-processing directories (e.g., biref, sum)
                             processPostProcessingDirectories(
@@ -592,8 +628,7 @@ public class StitchingHelper {
                             }
                             if (blockingDialog == null) {
                                 Platform.runLater(() -> UIFunctions.notifyUserOfError(
-                                        String.format(
-                                                "Stitching failed for %s: %s", targetName, e.getMessage()),
+                                        String.format("Stitching failed for %s: %s", targetName, e.getMessage()),
                                         "Stitching Error"));
                             }
                         }
@@ -684,8 +719,7 @@ public class StitchingHelper {
                             }
                             if (blockingDialog == null) {
                                 Platform.runLater(() -> UIFunctions.notifyUserOfError(
-                                        String.format(
-                                                "Stitching failed for %s: %s", targetName, e.getMessage()),
+                                        String.format("Stitching failed for %s: %s", targetName, e.getMessage()),
                                         "Stitching Error"));
                             }
                         }
@@ -693,7 +727,6 @@ public class StitchingHelper {
                     executor);
         }
     }
-
 
     /**
      * Calculates metadata for a region-based acquisition (BoundedAcquisitionWorkflow).
@@ -815,10 +848,7 @@ public class StitchingHelper {
      */
     private static List<String> resolveChannelIdsForStitching(ModalityHandler handler, SampleSetupResult sample) {
         if (handler == null || sample == null) {
-            logger.info(
-                    "resolveChannelIdsForStitching: early exit -- handler={} sample={}",
-                    handler,
-                    sample);
+            logger.info("resolveChannelIdsForStitching: early exit -- handler={} sample={}", handler, sample);
             return List.of();
         }
         String profileKey = qupath.ext.qpsc.utilities.ObjectiveUtils.createEnhancedFolderName(
@@ -848,10 +878,7 @@ public class StitchingHelper {
             return ids;
         } catch (Exception e) {
             logger.warn(
-                    "Failed to resolve channel library for stitching (profile={}): {}",
-                    profileKey,
-                    e.getMessage(),
-                    e);
+                    "Failed to resolve channel library for stitching (profile={}): {}", profileKey, e.getMessage(), e);
             return List.of();
         }
     }
@@ -879,16 +906,14 @@ public class StitchingHelper {
             ModalityHandler handler,
             String longModalityName) {
 
-        logger.info(
-                "Stitching {} channels for: {}", channelIds.size(), annotationName);
+        logger.info("Stitching {} channels for: {}", channelIds.size(), annotationName);
 
         return CompletableFuture.runAsync(
                 () -> {
                     try {
                         if (blockingDialog != null) {
                             blockingDialog.updateStatus(
-                                    operationId,
-                                    "Initializing multi-channel stitching for " + annotationName + "...");
+                                    operationId, "Initializing multi-channel stitching for " + annotationName + "...");
                         }
 
                         StitchingConfiguration.StitchingParams stitchingConfig =
@@ -906,8 +931,7 @@ public class StitchingHelper {
                         // removed in the same run.
                         stitchParams.put("skipProjectImport", Boolean.TRUE);
 
-                        Path tileBaseDir =
-                                Paths.get(projectsFolder, sampleName, modeWithIndex, annotationName);
+                        Path tileBaseDir = Paths.get(projectsFolder, sampleName, modeWithIndex, annotationName);
 
                         // Filter to only channels that were actually acquired. The library
                         // may list DAPI/FITC/TRITC/Cy5 but the user may have picked only a
@@ -922,9 +946,7 @@ public class StitchingHelper {
                                 acquiredChannelIds.add(cid);
                             } else {
                                 logger.debug(
-                                        "Skipping channel '{}' -- subdirectory does not exist: {}",
-                                        cid,
-                                        channelSubdir);
+                                        "Skipping channel '{}' -- subdirectory does not exist: {}", cid, channelSubdir);
                             }
                         }
                         logger.info(
@@ -934,15 +956,12 @@ public class StitchingHelper {
                                 acquiredChannelIds);
 
                         if (acquiredChannelIds.isEmpty()) {
-                            logger.error(
-                                    "No channel subdirectories found in {}; nothing to stitch",
-                                    tileBaseDir);
+                            logger.error("No channel subdirectories found in {}; nothing to stitch", tileBaseDir);
                             if (blockingDialog != null) {
                                 blockingDialog.failOperation(operationId, "No channel tiles found");
                             }
                             if (dualProgressDialog != null) {
-                                dualProgressDialog.failStitchingOperation(
-                                        operationId, "No channel tiles found");
+                                dualProgressDialog.failStitchingOperation(operationId, "No channel tiles found");
                             }
                             return;
                         }
@@ -968,9 +987,7 @@ public class StitchingHelper {
                                                 "Stitching channel %s (%d/%d) for %s...",
                                                 channelId, i + 1, acquiredChannelIds.size(), annotationName));
                             }
-                            logger.info(
-                                    "Stitching channel {} ({}/{})",
-                                    channelId, i + 1, acquiredChannelIds.size());
+                            logger.info("Stitching channel {} ({}/{})", channelId, i + 1, acquiredChannelIds.size());
                             try {
                                 String outPath = processAngleWithIsolation(
                                         tileBaseDir,
@@ -989,19 +1006,23 @@ public class StitchingHelper {
                                 if (outPath != null) {
                                     stitchedImages.add(outPath);
                                     successfullyStitchedChannelIds.add(channelId);
-                                    logger.info(
-                                            "Stitch completed for channel {}: {}", channelId, outPath);
+                                    logger.info("Stitch completed for channel {}: {}", channelId, outPath);
                                 }
                             } catch (Exception e) {
                                 logger.error(
                                         "Failed to stitch channel {} ({}/{}): {}",
-                                        channelId, i + 1, acquiredChannelIds.size(), e.getMessage(), e);
+                                        channelId,
+                                        i + 1,
+                                        acquiredChannelIds.size(),
+                                        e.getMessage(),
+                                        e);
                             }
                         }
 
                         logger.info(
                                 "Completed multi-channel stitching: {} of {} channels succeeded",
-                                stitchedImages.size(), acquiredChannelIds.size());
+                                stitchedImages.size(),
+                                acquiredChannelIds.size());
 
                         // Merge per-channel pyramids into a single multichannel pyramid,
                         // which becomes THE output of a channel-based acquisition: imported
@@ -1041,9 +1062,7 @@ public class StitchingHelper {
                                         stitchingConfig.outputFormat());
 
                                 if (mergedPath != null) {
-                                    logger.info(
-                                            "Multichannel merge succeeded for {}: {}",
-                                            annotationName, mergedPath);
+                                    logger.info("Multichannel merge succeeded for {}: {}", annotationName, mergedPath);
 
                                     // Per-channel intermediates were never imported to the
                                     // project (skipProjectImport=true above), so we only need
@@ -1060,16 +1079,17 @@ public class StitchingHelper {
                                     // ChannelMerger skipped due to <2 sources, etc.).
                                     logger.warn(
                                             "Multichannel merge returned null for {} -- falling back to importing {} per-channel file(s)",
-                                            annotationName, stitchedImages.size());
-                                    importPerChannelFallback(
-                                            stitchedImages, metadata, gui, project, handler);
+                                            annotationName,
+                                            stitchedImages.size());
+                                    importPerChannelFallback(stitchedImages, metadata, gui, project, handler);
                                 }
                             } catch (Exception mergeEx) {
                                 logger.error(
                                         "Multichannel merge failed for {}: {} -- falling back to per-channel import",
-                                        annotationName, mergeEx.getMessage(), mergeEx);
-                                importPerChannelFallback(
-                                        stitchedImages, metadata, gui, project, handler);
+                                        annotationName,
+                                        mergeEx.getMessage(),
+                                        mergeEx);
+                                importPerChannelFallback(stitchedImages, metadata, gui, project, handler);
                             }
                         } else {
                             logger.debug(
@@ -1094,9 +1114,7 @@ public class StitchingHelper {
                         if (blockingDialog == null) {
                             Platform.runLater(() -> UIFunctions.notifyUserOfError(
                                     String.format(
-                                            "Channel stitching failed for %s: %s",
-                                            annotationName,
-                                            e.getMessage()),
+                                            "Channel stitching failed for %s: %s", annotationName, e.getMessage()),
                                     "Stitching Error"));
                         }
                     }
@@ -1153,8 +1171,10 @@ public class StitchingHelper {
         // Replace the long modality token with the short registry prefix when both
         // are known. Use "_<long>_" boundaries so we don't accidentally match a
         // substring of the sample name.
-        if (longModalityName != null && !longModalityName.isBlank()
-                && shortModalityPrefix != null && !shortModalityPrefix.isBlank()
+        if (longModalityName != null
+                && !longModalityName.isBlank()
+                && shortModalityPrefix != null
+                && !shortModalityPrefix.isBlank()
                 && !longModalityName.equalsIgnoreCase(shortModalityPrefix)) {
             String longBounded = "_" + longModalityName + "_";
             String shortBounded = "_" + shortModalityPrefix + "_";
@@ -1169,7 +1189,7 @@ public class StitchingHelper {
      * Imports the merged multichannel file into the QuPath project as a single entry.
      * Per-channel intermediate files are NOT imported (callers pass
      * {@code skipProjectImport=true} when invoking the per-channel stitch loop), so
-     * there is nothing to remove afterward — the merged file is the only project
+     * there is nothing to remove afterward -- the merged file is the only project
      * entry created by the channel-based path.
      */
     /**
@@ -1190,9 +1210,7 @@ public class StitchingHelper {
      * Errors are logged and swallowed so they never break the import flow.
      */
     public static void autoRegisterBoundsTransformIfAvailable(
-            File importedFile,
-            StitchingMetadata metadata,
-            Project<BufferedImage> project) {
+            File importedFile, StitchingMetadata metadata, Project<BufferedImage> project) {
         if (metadata == null || !metadata.hasStageBounds()) {
             return;
         }
@@ -1230,13 +1248,14 @@ public class StitchingHelper {
                     "Auto-registered stage alignment for '{}' from BoundingBox metadata "
                             + "(bounds=({},{})->({},{}), image={}x{})",
                     alignmentKey,
-                    metadata.stageBoundsX1Um, metadata.stageBoundsY1Um,
-                    metadata.stageBoundsX2Um, metadata.stageBoundsY2Um,
-                    widthPx, heightPx);
+                    metadata.stageBoundsX1Um,
+                    metadata.stageBoundsY1Um,
+                    metadata.stageBoundsX2Um,
+                    metadata.stageBoundsY2Um,
+                    widthPx,
+                    heightPx);
         } catch (Exception e) {
-            logger.warn(
-                    "Failed to auto-register stage alignment for {}: {}",
-                    importedFile.getName(), e.getMessage());
+            logger.warn("Failed to auto-register stage alignment for {}: {}", importedFile.getName(), e.getMessage());
         }
     }
 
@@ -1285,8 +1304,7 @@ public class StitchingHelper {
                     autoRegisterBoundsTransformIfAvailable(f, metadata, project);
                     logger.info("Fallback imported per-channel file: {}", f.getName());
                 } catch (Exception e) {
-                    logger.error(
-                            "Fallback import failed for {}: {}", f.getName(), e.getMessage(), e);
+                    logger.error("Fallback import failed for {}: {}", f.getName(), e.getMessage(), e);
                 }
             }
             try {
@@ -1322,8 +1340,7 @@ public class StitchingHelper {
                             metadata.sampleName,
                             handler);
                 } else {
-                    QPProjectFunctions.addImageToProject(
-                            mergedFile, project, false, false, handler);
+                    QPProjectFunctions.addImageToProject(mergedFile, project, false, false, handler);
                 }
                 logger.info("Merged multichannel file imported to project: {}", mergedFile.getName());
 
@@ -1361,10 +1378,7 @@ public class StitchingHelper {
                         });
             } catch (Exception e) {
                 logger.error(
-                        "Failed to import merged multichannel file {}: {}",
-                        mergedFile.getName(),
-                        e.getMessage(),
-                        e);
+                        "Failed to import merged multichannel file {}: {}", mergedFile.getName(), e.getMessage(), e);
             }
         });
     }

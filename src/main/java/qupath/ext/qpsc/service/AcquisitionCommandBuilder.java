@@ -537,8 +537,7 @@ public class AcquisitionCommandBuilder {
             // of the acquired channels (defensive). Python uses this to apply
             // the channel's hardware state before the AF snap.
             if (focusChannelId != null && !focusChannelId.isBlank()) {
-                boolean focusInList = channelExposures.stream()
-                        .anyMatch(ce -> focusChannelId.equals(ce.channelId()));
+                boolean focusInList = channelExposures.stream().anyMatch(ce -> focusChannelId.equals(ce.channelId()));
                 if (focusInList) {
                     args.add("--focus-channel");
                     args.add(focusChannelId);
@@ -547,7 +546,9 @@ public class AcquisitionCommandBuilder {
                     logger.warn(
                             "Focus channel '{}' not in acquired channels {}; omitting --focus-channel flag",
                             focusChannelId,
-                            channelExposures.stream().map(ChannelExposure::channelId).toList());
+                            channelExposures.stream()
+                                    .map(ChannelExposure::channelId)
+                                    .toList());
                 }
             }
 

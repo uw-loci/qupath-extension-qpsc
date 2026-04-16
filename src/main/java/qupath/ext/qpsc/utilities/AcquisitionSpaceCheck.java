@@ -97,19 +97,28 @@ public class AcquisitionSpaceCheck {
         try {
             int[] dims = configManager.getDetectorDimensions(detector);
             if (dims == null || dims.length < 2 || dims[0] <= 0 || dims[1] <= 0) {
-                logger.debug("Detector {} has no usable dimensions -- using {} MB fallback",
-                        detector, FALLBACK_BYTES_PER_TILE / (1024 * 1024));
+                logger.debug(
+                        "Detector {} has no usable dimensions -- using {} MB fallback",
+                        detector,
+                        FALLBACK_BYTES_PER_TILE / (1024 * 1024));
                 return FALLBACK_BYTES_PER_TILE;
             }
             int bpp = bytesPerPixelFor(configManager, detector);
             if (bpp <= 0) {
-                logger.debug("Detector {} bytes-per-pixel unknown -- using {} MB fallback",
-                        detector, FALLBACK_BYTES_PER_TILE / (1024 * 1024));
+                logger.debug(
+                        "Detector {} bytes-per-pixel unknown -- using {} MB fallback",
+                        detector,
+                        FALLBACK_BYTES_PER_TILE / (1024 * 1024));
                 return FALLBACK_BYTES_PER_TILE;
             }
             long bytesPerTile = (long) dims[0] * dims[1] * bpp;
-            logger.info("Detector {} estimate: {}x{} pixels x {} bytes/pixel = {}/tile/angle",
-                    detector, dims[0], dims[1], bpp, formatBytes(bytesPerTile));
+            logger.info(
+                    "Detector {} estimate: {}x{} pixels x {} bytes/pixel = {}/tile/angle",
+                    detector,
+                    dims[0],
+                    dims[1],
+                    bpp,
+                    formatBytes(bytesPerTile));
             return bytesPerTile;
         } catch (Exception e) {
             logger.debug("Could not estimate bytes/tile for {}: {}", detector, e.getMessage());
@@ -228,9 +237,7 @@ public class AcquisitionSpaceCheck {
                         + "stitched output. If you run out of space mid-acquisition, tiles will "
                         + "fail to write and the run will be lost.%n%n"
                         + "Continue anyway?",
-                outputPath,
-                formatBytes(estimatedBytes),
-                formatBytes(usableBytes)));
+                outputPath, formatBytes(estimatedBytes), formatBytes(usableBytes)));
         body.setWrapText(true);
         body.setMaxWidth(520);
 
@@ -268,7 +275,8 @@ public class AcquisitionSpaceCheck {
     }
 
     /** Convenience for callers that have a String path. */
-    public static Result checkAndWarn(String outputPath, long totalTileCount, int angleCount, long bytesPerTilePerAngle) {
+    public static Result checkAndWarn(
+            String outputPath, long totalTileCount, int angleCount, long bytesPerTilePerAngle) {
         return checkAndWarn(Paths.get(outputPath), totalTileCount, angleCount, bytesPerTilePerAngle);
     }
 }

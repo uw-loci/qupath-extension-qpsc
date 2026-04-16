@@ -76,7 +76,10 @@ public class BrightfieldModalityHandler implements ModalityHandler {
                     }
                     logger.info(
                             "Brightfield using background collection exposure: {} ms (modality={}, objective={}, detector={})",
-                            exposure, modalityName, objective, detector);
+                            exposure,
+                            modalityName,
+                            objective,
+                            detector);
                     return exposure;
                 }
             }
@@ -89,7 +92,10 @@ public class BrightfieldModalityHandler implements ModalityHandler {
         double fallback = PersistentPreferences.getLastUnifiedExposureMs();
         logger.info(
                 "Brightfield using PersistentPreferences.lastUnifiedExposureMs fallback: {} ms (no matching background_exposures for modality={}, objective={}, detector={})",
-                fallback, modalityName, objective, detector);
+                fallback,
+                modalityName,
+                objective,
+                detector);
         return fallback;
     }
 

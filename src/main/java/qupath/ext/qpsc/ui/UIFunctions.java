@@ -105,8 +105,11 @@ public class UIFunctions {
      * @return a ProgressHandle you can .close() when you're done, and set cancel callback on
      */
     public static ProgressHandle showProgressBarAsync(
-            AtomicInteger progressCounter, int totalFiles, int timeoutMs,
-            boolean showCancelButton, int stepsPerPosition) {
+            AtomicInteger progressCounter,
+            int totalFiles,
+            int timeoutMs,
+            boolean showCancelButton,
+            int stepsPerPosition) {
 
         final ProgressHandle[] handleHolder = new ProgressHandle[1];
         final int stepsPerPositionFinal = Math.max(1, stepsPerPosition);
@@ -115,7 +118,9 @@ public class UIFunctions {
         Platform.runLater(() -> {
             logger.info(
                     "Creating progress bar UI on FX thread for {} total files ({} positions x {} steps)",
-                    totalFiles, totalPositions, stepsPerPositionFinal);
+                    totalFiles,
+                    totalPositions,
+                    stepsPerPositionFinal);
             Stage stage = new Stage();
             ProgressBar progressBar = new ProgressBar(0);
             progressBar.setPrefWidth(300);

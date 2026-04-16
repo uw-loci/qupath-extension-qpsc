@@ -245,8 +245,7 @@ public class PPMAngleSelectionController {
 
             // Helper to update warnings based on current checkbox state
             Runnable updateWarnings =
-                    () -> updateDynamicWarnings(
-                            warningArea, angleCheckboxMap, modality, objective, detector, wbMode);
+                    () -> updateDynamicWarnings(warningArea, angleCheckboxMap, modality, objective, detector, wbMode);
 
             // Wire checkbox listeners to update warnings
             minusCheck.selectedProperty().addListener((obs, o, s) -> updateWarnings.run());
@@ -291,8 +290,7 @@ public class PPMAngleSelectionController {
                     }
                     if (plusCheck.isSelected()) {
                         list.add(new AngleExposure(
-                                plusAngle,
-                                getDefaultExposureTime(plusAngle, modality, objective, detector, wbMode)));
+                                plusAngle, getDefaultExposureTime(plusAngle, modality, objective, detector, wbMode)));
                     }
                     if (zeroCheck.isSelected()) {
                         list.add(new AngleExposure(
@@ -300,8 +298,7 @@ public class PPMAngleSelectionController {
                     }
                     if (minusCheck.isSelected()) {
                         list.add(new AngleExposure(
-                                minusAngle,
-                                getDefaultExposureTime(minusAngle, modality, objective, detector, wbMode)));
+                                minusAngle, getDefaultExposureTime(minusAngle, modality, objective, detector, wbMode)));
                     }
 
                     logger.info("PPM angles selected with auto-determined exposures: {}", list);
@@ -315,8 +312,7 @@ public class PPMAngleSelectionController {
                     .ifPresentOrElse(
                             result -> {
                                 // Perform background validation asynchronously after dialog closes
-                                performBackgroundValidationAsync(
-                                        result, modality, objective, detector, wbMode, future);
+                                performBackgroundValidationAsync(result, modality, objective, detector, wbMode, future);
                             },
                             () -> future.cancel(true));
         });

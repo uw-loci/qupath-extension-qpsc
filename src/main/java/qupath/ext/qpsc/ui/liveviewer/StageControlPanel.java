@@ -11,6 +11,7 @@ import java.util.ResourceBundle;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.geometry.HPos;
@@ -30,12 +31,12 @@ import javafx.scene.control.Separator;
 import javafx.scene.control.Slider;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.Tab;
-import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.ToggleButton;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
@@ -43,7 +44,6 @@ import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import javafx.animation.PauseTransition;
 import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -761,6 +761,7 @@ public class StageControlPanel extends VBox {
     public String getCurrentCameraModality() {
         return currentCameraModality;
     }
+
     private String currentCameraObjectiveId;
     private String currentCameraDetectorId;
 
@@ -806,8 +807,8 @@ public class StageControlPanel extends VBox {
         // specific content so per-objective exposures/gains reload.
         Button refreshHardwareBtn = new Button("Refresh from MM");
         refreshHardwareBtn.setStyle("-fx-font-size: 10px;");
-        refreshHardwareBtn.setTooltip(new Tooltip(
-                "Re-read the current objective and detector from Micro-Manager's live pixel size.\n"
+        refreshHardwareBtn.setTooltip(
+                new Tooltip("Re-read the current objective and detector from Micro-Manager's live pixel size.\n"
                         + "Use this after manually rotating the objective turret so QPSC\n"
                         + "picks up the change. Also saves the new objective as the default\n"
                         + "for the next acquisition dialog."));
@@ -819,8 +820,7 @@ public class StageControlPanel extends VBox {
             objValue.setTooltip(new Tooltip(currentCameraObjectiveId));
             detValue.setText(shortenId(currentCameraDetectorId));
             detValue.setTooltip(new Tooltip(currentCameraDetectorId));
-            if (currentCameraObjectiveId != null
-                    && !"Unknown".equals(currentCameraObjectiveId)) {
+            if (currentCameraObjectiveId != null && !"Unknown".equals(currentCameraObjectiveId)) {
                 PersistentPreferences.setLastObjective(currentCameraObjectiveId);
             }
             // Per-objective exposures / gains / WB presets change with the
@@ -830,31 +830,27 @@ public class StageControlPanel extends VBox {
                 rebuildCameraModContent(currentCameraModality);
             }
             if (cameraStatusLabel != null) {
-                if (currentCameraObjectiveId != null
-                        && !currentCameraObjectiveId.equals(previousObjective)) {
-                    cameraStatusLabel.setText(
-                            "Hardware refreshed: objective "
-                                    + shortenId(previousObjective)
-                                    + " -> "
-                                    + shortenId(currentCameraObjectiveId));
-                } else if (currentCameraDetectorId != null
-                        && !currentCameraDetectorId.equals(previousDetector)) {
-                    cameraStatusLabel.setText(
-                            "Hardware refreshed: detector "
-                                    + shortenId(previousDetector)
-                                    + " -> "
-                                    + shortenId(currentCameraDetectorId));
+                if (currentCameraObjectiveId != null && !currentCameraObjectiveId.equals(previousObjective)) {
+                    cameraStatusLabel.setText("Hardware refreshed: objective "
+                            + shortenId(previousObjective)
+                            + " -> "
+                            + shortenId(currentCameraObjectiveId));
+                } else if (currentCameraDetectorId != null && !currentCameraDetectorId.equals(previousDetector)) {
+                    cameraStatusLabel.setText("Hardware refreshed: detector "
+                            + shortenId(previousDetector)
+                            + " -> "
+                            + shortenId(currentCameraDetectorId));
                 } else {
-                    cameraStatusLabel.setText(
-                            "Hardware already up to date: "
-                                    + shortenId(currentCameraObjectiveId)
-                                    + " on "
-                                    + shortenId(currentCameraDetectorId));
+                    cameraStatusLabel.setText("Hardware already up to date: "
+                            + shortenId(currentCameraObjectiveId)
+                            + " on "
+                            + shortenId(currentCameraDetectorId));
                 }
             }
             logger.info(
                     "Camera tab: refreshed hardware from MM -- objective='{}' detector='{}'",
-                    currentCameraObjectiveId, currentCameraDetectorId);
+                    currentCameraObjectiveId,
+                    currentCameraDetectorId);
         });
         hwGrid.add(refreshHardwareBtn, 2, 0, 1, 2);
         GridPane.setMargin(refreshHardwareBtn, new Insets(0, 0, 0, 6));
@@ -1199,10 +1195,9 @@ public class StageControlPanel extends VBox {
             for (qupath.ext.qpsc.modality.Channel ch : channels) {
                 RadioButton previewRadio = new RadioButton();
                 previewRadio.setToggleGroup(previewGroup);
-                previewRadio.setTooltip(new Tooltip(
-                        "Mark " + ch.displayName() + " as the active preview channel. "
-                                + "Full live preview pending a SETPROP socket command; "
-                                + "today this persists the choice for the next acquisition."));
+                previewRadio.setTooltip(new Tooltip("Mark " + ch.displayName() + " as the active preview channel. "
+                        + "Full live preview pending a SETPROP socket command; "
+                        + "today this persists the choice for the next acquisition."));
 
                 Label channelLabel = new Label(ch.displayName() != null ? ch.displayName() : ch.id());
                 channelLabel.setStyle("-fx-font-size: 10px;");
@@ -1220,8 +1215,7 @@ public class StageControlPanel extends VBox {
                 // There's nothing for the spinner to write to in that case.
                 if (ch.intensityProperty() == null) {
                     intSpinner.setDisable(true);
-                    intSpinner.setTooltip(new Tooltip(
-                            "No intensity_property declared for this channel in the YAML."));
+                    intSpinner.setTooltip(new Tooltip("No intensity_property declared for this channel in the YAML."));
                 }
 
                 // Persist exposure to PersistentPreferences on change; the next
@@ -1230,9 +1224,8 @@ public class StageControlPanel extends VBox {
                     if (newV == null) return;
                     try {
                         // Apply to live view too via setExposures (single-axis).
-                        MicroscopeController.getInstance()
-                                .getSocketClient()
-                                .setExposures(new float[] {newV.floatValue()});
+                        MicroscopeController.getInstance().getSocketClient().setExposures(new float[] {newV.floatValue()
+                        });
                         cameraStatusLabel.setText("Channel " + ch.id() + " exposure -> " + newV + " ms");
                         cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
                     } catch (Exception ex) {
@@ -1243,10 +1236,9 @@ public class StageControlPanel extends VBox {
 
                 intSpinner.valueProperty().addListener((obs, oldV, newV) -> {
                     if (newV == null || ch.intensityProperty() == null) return;
-                    qupath.ext.qpsc.preferences.PersistentPreferences.setLastChannelIntensity(
-                            modality, ch.id(), newV);
-                    cameraStatusLabel.setText("Channel " + ch.id() + " intensity -> " + newV
-                            + " (saved; applied on next acquisition)");
+                    qupath.ext.qpsc.preferences.PersistentPreferences.setLastChannelIntensity(modality, ch.id(), newV);
+                    cameraStatusLabel.setText(
+                            "Channel " + ch.id() + " intensity -> " + newV + " (saved; applied on next acquisition)");
                     cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #555555;");
                 });
 
@@ -1272,10 +1264,9 @@ public class StageControlPanel extends VBox {
 
             cameraModContent.getChildren().add(grid);
 
-            Label liveNote = new Label(
-                    "Note: intensity changes save to preferences and apply on "
-                            + "the next acquisition. Full live-preview intensity "
-                            + "control needs a SETPROP socket command (pending).");
+            Label liveNote = new Label("Note: intensity changes save to preferences and apply on "
+                    + "the next acquisition. Full live-preview intensity "
+                    + "control needs a SETPROP socket command (pending).");
             liveNote.setWrapText(true);
             liveNote.setStyle("-fx-font-size: 9px; -fx-text-fill: gray; -fx-font-style: italic;");
             cameraModContent.getChildren().addAll(new Separator(), liveNote);
@@ -2450,8 +2441,7 @@ public class StageControlPanel extends VBox {
                 try {
                     MicroscopeController.getInstance().moveStageZ(target);
                     final double landed = target;
-                    Platform.runLater(() ->
-                            zStatus.setText(String.format("Scrolled Z to %.2f", landed)));
+                    Platform.runLater(() -> zStatus.setText(String.format("Scrolled Z to %.2f", landed)));
                 } catch (Exception ex) {
                     logger.warn("Z scroll movement failed: {}", ex.getMessage());
                     Platform.runLater(() -> zStatus.setText("Z scroll failed"));
@@ -2480,8 +2470,8 @@ public class StageControlPanel extends VBox {
             boolean sampleMode = sampleMovementCheckbox.isSelected();
             double screenDx = step * xDir;
             double screenDy = step * (-yDir);
-            double[] mmDelta = qupath.ext.qpsc.utilities.StageImageTransform.current()
-                    .screenPanDeltaToMmDelta(screenDx, screenDy);
+            double[] mmDelta =
+                    qupath.ext.qpsc.utilities.StageImageTransform.current().screenPanDeltaToMmDelta(screenDx, screenDy);
             if (!sampleMode) {
                 mmDelta[0] = -mmDelta[0];
             }
@@ -2536,8 +2526,8 @@ public class StageControlPanel extends VBox {
             // knobOffsetY uses mouse coordinates). Feed it directly into
             // StageImageTransform. Sample mode inverts X on top.
             boolean sampleMode = sampleMovementMode.get();
-            double[] mmDelta = qupath.ext.qpsc.utilities.StageImageTransform.current()
-                    .screenPanDeltaToMmDelta(deltaX, deltaY);
+            double[] mmDelta =
+                    qupath.ext.qpsc.utilities.StageImageTransform.current().screenPanDeltaToMmDelta(deltaX, deltaY);
             if (!sampleMode) {
                 mmDelta[0] = -mmDelta[0];
             }

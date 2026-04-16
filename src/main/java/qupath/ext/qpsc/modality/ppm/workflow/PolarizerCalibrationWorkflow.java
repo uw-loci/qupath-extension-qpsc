@@ -559,8 +559,7 @@ public class PolarizerCalibrationWorkflow {
             }
 
             Dialogs.showInfoNotification(
-                    "Offset Written",
-                    "ppm_pizstage_offset set to " + offsetValue + " in\n" + configPath.getFileName());
+                    "Offset Written", "ppm_pizstage_offset set to " + offsetValue + " in\n" + configPath.getFileName());
 
         } catch (IOException e) {
             logger.error("Failed to write offset to YAML", e);

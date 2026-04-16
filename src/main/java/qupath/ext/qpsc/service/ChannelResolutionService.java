@@ -62,11 +62,7 @@ public final class ChannelResolutionService {
      * @param focusChannelId channel id to move to position 0, or {@code null} for library order
      */
     public static List<ChannelExposure> resolve(
-            String modality,
-            String objective,
-            String detector,
-            Map<String, Double> overrides,
-            String focusChannelId) {
+            String modality, String objective, String detector, Map<String, Double> overrides, String focusChannelId) {
         ModalityHandler handler = ModalityRegistry.getHandler(modality);
         if (handler == null) {
             return List.of();
@@ -99,9 +95,7 @@ public final class ChannelResolutionService {
         } else if (overrides.isEmpty()) {
             // Empty map means "user actively selected zero channels" -> caller MUST
             // refuse to start the acquisition. Return empty list so this is visible.
-            logger.warn(
-                    "Channel selection is empty for modality '{}' -- acquisition should be refused",
-                    modality);
+            logger.warn("Channel selection is empty for modality '{}' -- acquisition should be refused", modality);
             return List.of();
         } else {
             // Use library order, but include only channels present in overrides.
@@ -174,7 +168,8 @@ public final class ChannelResolutionService {
             return false;
         }
         try {
-            List<Channel> library = handler.getChannels(modality, objective, detector).join();
+            List<Channel> library =
+                    handler.getChannels(modality, objective, detector).join();
             return library != null && !library.isEmpty();
         } catch (Exception e) {
             return false;

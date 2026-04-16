@@ -246,24 +246,25 @@ public class SweepFocusController {
                 if (rangePct < 2.0) break;
 
                 double boundaryZ = measurements.get(bestIdx)[0];
-                double newCenter = (bestIdx == measurements.size() - 1)
-                        ? boundaryZ + half : boundaryZ - half;
+                double newCenter = (bestIdx == measurements.size() - 1) ? boundaryZ + half : boundaryZ - half;
                 double extStart = newCenter - half;
                 double extEnd = newCenter + half;
 
                 if (configMgr != null) {
-                    if (!configMgr.isWithinStageBounds(extStart)
-                            || !configMgr.isWithinStageBounds(extEnd)) {
+                    if (!configMgr.isWithinStageBounds(extStart) || !configMgr.isWithinStageBounds(extEnd)) {
                         logger.info("Sweep Focus: edge retry {} would exceed stage bounds, stopping", retry + 1);
                         break;
                     }
                 }
 
-                logger.info("Sweep Focus: peak at boundary (idx={}), retry {} [{} -> {}]",
-                        bestIdx, retry + 1, fmt(extStart), fmt(extEnd));
+                logger.info(
+                        "Sweep Focus: peak at boundary (idx={}), retry {} [{} -> {}]",
+                        bestIdx,
+                        retry + 1,
+                        fmt(extStart),
+                        fmt(extEnd));
                 callback.onStatusUpdate(
-                        String.format("Sweep Focus: extending (retry %d)...", retry + 1),
-                        Outcome.IN_PROGRESS);
+                        String.format("Sweep Focus: extending (retry %d)...", retry + 1), Outcome.IN_PROGRESS);
 
                 double extStep = (extEnd - extStart) / NUM_STEPS;
                 measurements.clear();

@@ -10,7 +10,7 @@ pluginManagement {
 
 //Specify which version of QuPath the extension is targeting here
 qupath {
-    version = "0.6.0-rc4"
+    version = "0.6.0"
 }
 
 // Apply QuPath Gradle settings plugin to handle configuration

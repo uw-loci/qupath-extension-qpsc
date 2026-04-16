@@ -70,10 +70,8 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     // Only enabled when 2+ channels are selected -- with one channel there's no
     // choice to make. The selected channel is collected first per tile so its
     // hardware state is the same one autofocus runs against.
-    private final LinkedHashMap<String, javafx.scene.control.RadioButton> channelFocusRadios =
-            new LinkedHashMap<>();
-    private final javafx.scene.control.ToggleGroup focusToggleGroup =
-            new javafx.scene.control.ToggleGroup();
+    private final LinkedHashMap<String, javafx.scene.control.RadioButton> channelFocusRadios = new LinkedHashMap<>();
+    private final javafx.scene.control.ToggleGroup focusToggleGroup = new javafx.scene.control.ToggleGroup();
 
     public WidefieldChannelBoundingBoxUI() {
         root = new VBox(5);
@@ -83,26 +81,27 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
 
         List<Channel> library = loadChannelLibrary();
         if (library.isEmpty()) {
-            Label empty = new Label(
-                    "No fluorescence channels configured for this microscope.\n"
-                            + "Contact facility staff to add a 'channels' list under\n"
-                            + "modalities.<widefield-modality>.channels in the YAML.");
+            Label empty = new Label("No fluorescence channels configured for this microscope.\n"
+                    + "Contact facility staff to add a 'channels' list under\n"
+                    + "modalities.<widefield-modality>.channels in the YAML.");
             empty.setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
             root.getChildren().addAll(new Separator(), title, empty);
             masterOverride = null;
             return;
         }
 
-        boolean masterEnabled = Boolean.parseBoolean(
-                PersistentPreferences.getStringPreference(PREF_KEY_MASTER, "false"));
+        boolean masterEnabled =
+                Boolean.parseBoolean(PersistentPreferences.getStringPreference(PREF_KEY_MASTER, "false"));
         masterOverride = new CheckBox("Customize channel selection for this acquisition");
         masterOverride.setSelected(masterEnabled);
-        masterOverride.setTooltip(new Tooltip(
-                "Unchecked: acquire every channel in the library with default exposures.\n"
+        masterOverride.setTooltip(
+                new Tooltip("Unchecked: acquire every channel in the library with default exposures.\n"
                         + "Checked: pick which channels to acquire and override exposures.\n"
                         + "When checked, deselecting all channels blocks the acquisition."));
-        masterOverride.selectedProperty().addListener((obs, oldVal, newVal) ->
-                PersistentPreferences.setStringPreference(PREF_KEY_MASTER, String.valueOf(newVal)));
+        masterOverride
+                .selectedProperty()
+                .addListener((obs, oldVal, newVal) ->
+                        PersistentPreferences.setStringPreference(PREF_KEY_MASTER, String.valueOf(newVal)));
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
@@ -129,8 +128,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         grid.add(boldLabel("Focus"), 4, 0);
 
         // Persisted last focus-channel selection from a previous run.
-        String savedFocusChannel =
-                PersistentPreferences.getStringPreference(PREF_KEY_FOCUS_CHANNEL, "");
+        String savedFocusChannel = PersistentPreferences.getStringPreference(PREF_KEY_FOCUS_CHANNEL, "");
 
         int row = 1;
         for (Channel channel : library) {
@@ -139,8 +137,8 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
             String exposurePrefKey = PREF_KEY_PREFIX + id + ".exposure_ms";
             String intensityPrefKey = PREF_KEY_PREFIX + id + ".intensity";
 
-            boolean selected = Boolean.parseBoolean(
-                    PersistentPreferences.getStringPreference(selectedPrefKey, "false"));
+            boolean selected =
+                    Boolean.parseBoolean(PersistentPreferences.getStringPreference(selectedPrefKey, "false"));
             double exposure;
             try {
                 exposure = Double.parseDouble(PersistentPreferences.getStringPreference(
@@ -157,8 +155,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
             nameLabel.setMaxWidth(Double.MAX_VALUE);
 
             Spinner<Double> expSpinner = new Spinner<>();
-            expSpinner.setValueFactory(
-                    new SpinnerValueFactory.DoubleSpinnerValueFactory(0.1, 60000.0, exposure, 10.0));
+            expSpinner.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(0.1, 60000.0, exposure, 10.0));
             expSpinner.setEditable(true);
             expSpinner.setPrefWidth(110);
             expSpinner.setTooltip(new Tooltip("Camera exposure for this channel.\n"
@@ -166,12 +163,17 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
             commitOnFocusLost(expSpinner);
 
             // Spinner enabled only when master override is on AND the channel row is selected.
-            expSpinner.disableProperty().bind(
-                    masterOverride.selectedProperty().not().or(cb.selectedProperty().not()));
+            expSpinner
+                    .disableProperty()
+                    .bind(masterOverride
+                            .selectedProperty()
+                            .not()
+                            .or(cb.selectedProperty().not()));
             cb.disableProperty().bind(masterOverride.selectedProperty().not());
 
-            cb.selectedProperty().addListener((obs, oldVal, newVal) ->
-                    PersistentPreferences.setStringPreference(selectedPrefKey, String.valueOf(newVal)));
+            cb.selectedProperty()
+                    .addListener((obs, oldVal, newVal) ->
+                            PersistentPreferences.setStringPreference(selectedPrefKey, String.valueOf(newVal)));
             expSpinner.valueProperty().addListener((obs, oldVal, newVal) -> {
                 if (newVal != null) {
                     PersistentPreferences.setStringPreference(exposurePrefKey, String.valueOf(newVal));
@@ -205,13 +207,16 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                         new SpinnerValueFactory.DoubleSpinnerValueFactory(0.0, 65535.0, intensity, 1.0));
                 intensitySpinner.setEditable(true);
                 intensitySpinner.setPrefWidth(100);
-                intensitySpinner.setTooltip(new Tooltip(String.format(
-                        "Override for %s (default: %s)",
-                        channel.intensityProperty(), defaultIntensity)));
+                intensitySpinner.setTooltip(new Tooltip(
+                        String.format("Override for %s (default: %s)", channel.intensityProperty(), defaultIntensity)));
                 commitOnFocusLost(intensitySpinner);
 
-                intensitySpinner.disableProperty().bind(
-                        masterOverride.selectedProperty().not().or(cb.selectedProperty().not()));
+                intensitySpinner
+                        .disableProperty()
+                        .bind(masterOverride
+                                .selectedProperty()
+                                .not()
+                                .or(cb.selectedProperty().not()));
 
                 intensitySpinner.valueProperty().addListener((obs, oldVal, newVal) -> {
                     if (newVal != null) {
@@ -225,9 +230,8 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
             } else {
                 Label placeholder = new Label("-");
                 placeholder.setStyle("-fx-text-fill: gray;");
-                placeholder.setTooltip(new Tooltip(
-                        "This channel has no intensity_property declared in the YAML, "
-                                + "so there is no runtime intensity knob for it."));
+                placeholder.setTooltip(new Tooltip("This channel has no intensity_property declared in the YAML, "
+                        + "so there is no runtime intensity knob for it."));
                 grid.add(placeholder, 3, row);
             }
 
@@ -237,16 +241,19 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
             // wins by default after the loop ends.
             javafx.scene.control.RadioButton focusRadio = new javafx.scene.control.RadioButton();
             focusRadio.setToggleGroup(focusToggleGroup);
-            focusRadio.setTooltip(new Tooltip(
-                    "Use " + channel.displayName() + " as the autofocus reference channel.\n"
-                            + "The focus channel is collected first per tile so its hardware state\n"
-                            + "matches the autofocus snap, avoiding a second hardware switch."));
+            focusRadio.setTooltip(new Tooltip("Use " + channel.displayName() + " as the autofocus reference channel.\n"
+                    + "The focus channel is collected first per tile so its hardware state\n"
+                    + "matches the autofocus snap, avoiding a second hardware switch."));
             // Focus radio is enabled only when this channel row is selected
             // AND at least one OTHER channel is also selected (so there's
             // an actual choice to make). Single-channel runs hide the
             // focus selection entirely.
-            focusRadio.disableProperty().bind(
-                    masterOverride.selectedProperty().not().or(cb.selectedProperty().not()));
+            focusRadio
+                    .disableProperty()
+                    .bind(masterOverride
+                            .selectedProperty()
+                            .not()
+                            .or(cb.selectedProperty().not()));
             if (savedFocusChannel != null && savedFocusChannel.equals(id)) {
                 focusRadio.setSelected(true);
             }
@@ -270,8 +277,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         }
 
         Label hint = new Label(String.format(
-                "Library has %d channels. Default mode uses all of them at YAML exposures.",
-                library.size()));
+                "Library has %d channels. Default mode uses all of them at YAML exposures.", library.size()));
         hint.setStyle("-fx-text-fill: gray; -fx-font-size: 10.5px;");
 
         root.getChildren().addAll(new Separator(), title, masterOverride, grid, hint);

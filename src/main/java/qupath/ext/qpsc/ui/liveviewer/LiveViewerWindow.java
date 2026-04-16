@@ -1073,8 +1073,8 @@ public class LiveViewerWindow {
                 var exposures = controller.getSocketClient().getExposures();
                 double exposureMs = exposures.unified();
                 if (exposures.isPerChannel()) {
-                    exposureMs = Math.max(exposureMs,
-                            Math.max(exposures.red(), Math.max(exposures.green(), exposures.blue())));
+                    exposureMs = Math.max(
+                            exposureMs, Math.max(exposures.red(), Math.max(exposures.green(), exposures.blue())));
                 }
                 if (exposureMs > 40.0) {
                     smoothFocusButton.setStyle("-fx-base: #F44336;");

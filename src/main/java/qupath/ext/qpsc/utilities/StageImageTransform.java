@@ -11,22 +11,22 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
  *
  * <p>This is the single source of truth for the relationship between "what
  * the user sees on screen" and "what stage command produces that view". All
- * subsystems that care about this relationship — arrow buttons, virtual
+ * subsystems that care about this relationship -- arrow buttons, virtual
  * joystick, double-click-to-center, and the stitcher's stage-to-pixel
- * mapping — should go through this class instead of doing their own sign
+ * mapping -- should go through this class instead of doing their own sign
  * math. This prevents the drift-between-subsystems bug class that produced
  * several separate sign regressions on OWS3 over a single day.
  *
  * <h2>Coordinate frames</h2>
  * <ul>
- *   <li><strong>Screen frame</strong> — displayed pixels. Positive Y grows
+ *   <li><strong>Screen frame</strong> -- displayed pixels. Positive Y grows
  *       downward (universal display convention).</li>
- *   <li><strong>Sample frame</strong> — the idealised "lab" frame where the
+ *   <li><strong>Sample frame</strong> -- the idealised "lab" frame where the
  *       sample physically sits. Intermediate frame between screen and MM
  *       command. Sample +X is to the right in the lab; sample +Y points
  *       "toward the back" of the microscope (away from the user) by the
  *       convention chosen here.</li>
- *   <li><strong>MM command frame</strong> — what
+ *   <li><strong>MM command frame</strong> -- what
  *       {@code core.setXYPosition(x, y)} accepts. Related to sample frame
  *       only by {@link StagePolarity} (per-axis sign flips from wiring
  *       conventions).</li>
@@ -46,17 +46,17 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
  * checkbox is checked (the more intuitive default). When the checkbox is
  * unchecked, the arrow handler flips the X sign itself (the historical
  * MicroManager behaviour for the "default" mode). This small UI-layer
- * flip is out-of-scope for this class — callers handle it themselves.
+ * flip is out-of-scope for this class -- callers handle it themselves.
  *
  * <h2>Transform chain</h2>
  *
- * <p>For a user gesture (screen delta → MM command delta):
+ * <p>For a user gesture (screen delta -> MM command delta):
  * <pre>
  *   sampleDelta = cameraOrientation.displayToSample(screenDx, screenDy)
  *   mmDelta = stagePolarity.sampleToMmDelta(sampleDelta[0], sampleDelta[1])
  * </pre>
  *
- * <p>For the stitcher (stage position → displayed pixel position):
+ * <p>For the stitcher (stage position -> displayed pixel position):
  * <pre>
  *   sample = stagePolarity.mmToSampleDelta(mmX, mmY)
  *   display = cameraOrientation.sampleToDisplay(sample[0], sample[1])
@@ -104,7 +104,7 @@ public class StageImageTransform {
     }
 
     // ------------------------------------------------------------
-    // Screen-space → MM-command-space (user gestures)
+    // Screen-space -> MM-command-space (user gestures)
     // ------------------------------------------------------------
 
     /**
@@ -137,14 +137,17 @@ public class StageImageTransform {
      * @param currentMmY current MM-command Y
      * @param offsetPixelX click offset from image center in screen pixels (positive = right of center)
      * @param offsetPixelY click offset from image center in screen pixels (positive = below center)
-     * @param pixelSizeUmX X pixel size in µm / pixel
-     * @param pixelSizeUmY Y pixel size in µm / pixel
+     * @param pixelSizeUmX X pixel size in um / pixel
+     * @param pixelSizeUmY Y pixel size in um / pixel
      * @return {@code double[2]} containing {@code [newMmX, newMmY]}
      */
     public double[] clickOffsetToMmTarget(
-            double currentMmX, double currentMmY,
-            double offsetPixelX, double offsetPixelY,
-            double pixelSizeUmX, double pixelSizeUmY) {
+            double currentMmX,
+            double currentMmY,
+            double offsetPixelX,
+            double offsetPixelY,
+            double pixelSizeUmX,
+            double pixelSizeUmY) {
         double screenDx = offsetPixelX * pixelSizeUmX;
         double screenDy = offsetPixelY * pixelSizeUmY;
         double[] mmDelta = screenPanDeltaToMmDelta(screenDx, screenDy);
@@ -194,10 +197,7 @@ public class StageImageTransform {
                     || cameraOrientation == CameraOrientation.ANTI_TRANSPOSE;
             boolean flipY = cameraOrientation == CameraOrientation.ROT_90_CCW
                     || cameraOrientation == CameraOrientation.ANTI_TRANSPOSE;
-            return new boolean[] {
-                    flipX ^ stagePolarity.invertX,
-                    flipY ^ stagePolarity.invertY
-            };
+            return new boolean[] {flipX ^ stagePolarity.invertX, flipY ^ stagePolarity.invertY};
         }
 
         // Axis-aligned case: the final sign is the XOR of stage polarity
@@ -212,9 +212,7 @@ public class StageImageTransform {
 
     @Override
     public String toString() {
-        return String.format(
-                "StageImageTransform[stage=%s, camera=%s]",
-                stagePolarity, cameraOrientation);
+        return String.format("StageImageTransform[stage=%s, camera=%s]", stagePolarity, cameraOrientation);
     }
 
     /**
@@ -242,10 +240,15 @@ public class StageImageTransform {
                         + "  Arrow up    (pan up)    -> mmDelta (%+.2f, %+.2f)%n"
                         + "  Click below center      -> mmDelta (%+.2f, %+.2f)%n"
                         + "  Stitcher flip flags     -> flipX=%s, flipY=%s",
-                stagePolarity, cameraOrientation,
-                right[0], right[1],
-                up[0], up[1],
-                below[0], below[1],
-                flags[0], flags[1]);
+                stagePolarity,
+                cameraOrientation,
+                right[0],
+                right[1],
+                up[0],
+                up[1],
+                below[0],
+                below[1],
+                flags[0],
+                flags[1]);
     }
 }

@@ -349,7 +349,20 @@ public class AutofocusEditorWorkflow {
                 workingSettings.put(
                         obj,
                         new AutofocusSettings(
-                                obj, 9, 15.0, 5, 100, "quadratic", "normalized_variance", 0.005, 0.2, 10.0, 6, 2, 3, 2.0));
+                                obj,
+                                9,
+                                15.0,
+                                5,
+                                100,
+                                "quadratic",
+                                "normalized_variance",
+                                0.005,
+                                0.2,
+                                10.0,
+                                6,
+                                2,
+                                3,
+                                2.0));
             }
         }
 
@@ -712,18 +725,18 @@ public class AutofocusEditorWorkflow {
         Spinner<Integer> edgeRetriesSpinner = new Spinner<>(0, 5, 2, 1);
         edgeRetriesSpinner.setEditable(true);
         edgeRetriesSpinner.setPrefWidth(100);
-        edgeRetriesSpinner.setTooltip(new Tooltip(
-                "Additional sweep attempts when peak is at the edge of the search range.\n\n"
-                + "When the sweep detects a monotonic profile (focus is outside\n"
-                + "the window), it shifts one full range in the peak direction\n"
-                + "and sweeps again.\n\n"
-                + "0 = no retries (original 1-window behavior)\n"
-                + "2 = up to 3 total attempts, covering 3x sweep_range_um\n\n"
-                + "WARNING: Each retry adds ~1s per autofocus point.\n"
-                + "For a 750-tile acquisition with 70 AF points,\n"
-                + "going from 2 to 4 adds 2+ minutes.\n"
-                + "Values above 3 rarely help -- if focus is that\n"
-                + "far away, the starting Z estimate is wrong."));
+        edgeRetriesSpinner.setTooltip(
+                new Tooltip("Additional sweep attempts when peak is at the edge of the search range.\n\n"
+                        + "When the sweep detects a monotonic profile (focus is outside\n"
+                        + "the window), it shifts one full range in the peak direction\n"
+                        + "and sweeps again.\n\n"
+                        + "0 = no retries (original 1-window behavior)\n"
+                        + "2 = up to 3 total attempts, covering 3x sweep_range_um\n\n"
+                        + "WARNING: Each retry adds ~1s per autofocus point.\n"
+                        + "For a 750-tile acquisition with 70 AF points,\n"
+                        + "going from 2 to 4 adds 2+ minutes.\n"
+                        + "Values above 3 rarely help -- if focus is that\n"
+                        + "far away, the starting Z estimate is wrong."));
         Label edgeRetriesDesc = new Label("(Extra attempts on boundary peaks, 0-5)");
         edgeRetriesDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
@@ -1359,28 +1372,26 @@ public class AutofocusEditorWorkflow {
         scoreCombo.getItems().addAll(SCORE_METRICS);
         scoreCombo.setValue(sd.scoreMetric);
         scoreCombo.setOnAction(e -> sd.scoreMetric = scoreCombo.getValue());
-        scoreCombo.setTooltip(new Tooltip(
-                "Focus quality metric used to evaluate each Z position.\n\n"
-                        + "laplacian_variance: Default. Second-derivative sharpness.\n"
-                        + "normalized_variance: Variance divided by mean intensity.\n"
-                        + "brenner_gradient: Good for low-contrast / dark-field.\n"
-                        + "none: Used by manual_only (no scoring needed)."));
+        scoreCombo.setTooltip(new Tooltip("Focus quality metric used to evaluate each Z position.\n\n"
+                + "laplacian_variance: Default. Second-derivative sharpness.\n"
+                + "normalized_variance: Variance divided by mean intensity.\n"
+                + "brenner_gradient: Good for low-contrast / dark-field.\n"
+                + "none: Used by manual_only (no scoring needed)."));
         grid.add(new Label("Score metric:"), 0, row);
         grid.add(scoreCombo, 1, row++);
 
         ComboBox<String> validityCombo = new ComboBox<>();
         validityCombo.getItems().addAll(VALIDITY_CHECKS);
         validityCombo.setValue(sd.validityCheck);
-        validityCombo.setTooltip(new Tooltip(
-                "How the AF system decides if a tile has enough signal to focus on.\n\n"
-                        + "texture_and_area: Requires texture gradient AND tissue area.\n"
-                        + "  Best for: H&E, IHC, PPM, confluent IF.\n\n"
-                        + "bright_spot_count: Counts bright local maxima above background.\n"
-                        + "  Best for: sparse fluorescence (beads, pollen, FISH spots).\n\n"
-                        + "total_gradient_energy: Whole-FOV gradient magnitude.\n"
-                        + "  Best for: SHG, dark-field, laser scanning.\n\n"
-                        + "always_false: Always fails -- used by manual_only to force\n"
-                        + "  the manual focus dialog every time."));
+        validityCombo.setTooltip(new Tooltip("How the AF system decides if a tile has enough signal to focus on.\n\n"
+                + "texture_and_area: Requires texture gradient AND tissue area.\n"
+                + "  Best for: H&E, IHC, PPM, confluent IF.\n\n"
+                + "bright_spot_count: Counts bright local maxima above background.\n"
+                + "  Best for: sparse fluorescence (beads, pollen, FISH spots).\n\n"
+                + "total_gradient_energy: Whole-FOV gradient magnitude.\n"
+                + "  Best for: SHG, dark-field, laser scanning.\n\n"
+                + "always_false: Always fails -- used by manual_only to force\n"
+                + "  the manual focus dialog every time."));
         grid.add(new Label("Validity check:"), 0, row);
         grid.add(validityCombo, 1, row++);
 
@@ -1388,14 +1399,13 @@ public class AutofocusEditorWorkflow {
         failureCombo.getItems().addAll(ON_FAILURE_MODES);
         failureCombo.setValue(sd.onFailure);
         failureCombo.setOnAction(e -> sd.onFailure = failureCombo.getValue());
-        failureCombo.setTooltip(new Tooltip(
-                "What happens when validity check fails at a tile position.\n\n"
-                        + "defer: Skip this tile, try the next AF candidate.\n"
-                        + "  Correct for dense tissue where the next tile is better.\n\n"
-                        + "proceed: Run AF anyway on whatever signal is present.\n"
-                        + "  Correct for sparse/dark-field where no tile is guaranteed.\n\n"
-                        + "manual: Pop the manual focus dialog immediately.\n"
-                        + "  For training runs or edge-case samples."));
+        failureCombo.setTooltip(new Tooltip("What happens when validity check fails at a tile position.\n\n"
+                + "defer: Skip this tile, try the next AF candidate.\n"
+                + "  Correct for dense tissue where the next tile is better.\n\n"
+                + "proceed: Run AF anyway on whatever signal is present.\n"
+                + "  Correct for sparse/dark-field where no tile is guaranteed.\n\n"
+                + "manual: Pop the manual focus dialog immediately.\n"
+                + "  For training runs or edge-case samples."));
         grid.add(new Label("On failure:"), 0, row);
         grid.add(failureCombo, 1, row++);
 
@@ -1577,11 +1587,10 @@ public class AutofocusEditorWorkflow {
 
         Label keyLabel = new Label(mb.modalityKey);
         keyLabel.setStyle("-fx-font-weight: bold; -fx-min-width: 100;");
-        keyLabel.setTooltip(new Tooltip(
-                "Modality key matched via longest-prefix-wins (case-insensitive).\n"
-                        + "Common keys: bf, brightfield, ppm, fl, fluorescence, bf_if,\n"
-                        + "lsm, shg, 2p, confocal. Multiple keys can map to the same\n"
-                        + "strategy (e.g. both 'bf' and 'brightfield' -> dense_texture)."));
+        keyLabel.setTooltip(new Tooltip("Modality key matched via longest-prefix-wins (case-insensitive).\n"
+                + "Common keys: bf, brightfield, ppm, fl, fluorescence, bf_if,\n"
+                + "lsm, shg, 2p, confocal. Multiple keys can map to the same\n"
+                + "strategy (e.g. both 'bf' and 'brightfield' -> dense_texture)."));
 
         ComboBox<String> strategyCombo = new ComboBox<>();
         strategyCombo.getItems().addAll(strategies.keySet());
@@ -1590,22 +1599,20 @@ public class AutofocusEditorWorkflow {
         }
         strategyCombo.setValue(mb.strategyName);
         strategyCombo.setOnAction(e -> mb.strategyName = strategyCombo.getValue());
-        strategyCombo.setTooltip(new Tooltip(
-                "Which strategy from the Strategies tab this modality uses.\n"
-                        + "At acquisition time, the modality-aware loader picks the\n"
-                        + "strategy by matching the acquisition's modality name against\n"
-                        + "these keys (longest prefix wins). The user can still override\n"
-                        + "the strategy per-acquisition via the AF dropdown in the\n"
-                        + "acquisition wizard."));
+        strategyCombo.setTooltip(new Tooltip("Which strategy from the Strategies tab this modality uses.\n"
+                + "At acquisition time, the modality-aware loader picks the\n"
+                + "strategy by matching the acquisition's modality name against\n"
+                + "these keys (longest prefix wins). The user can still override\n"
+                + "the strategy per-acquisition via the AF dropdown in the\n"
+                + "acquisition wizard."));
 
         CheckBox overrideCheck = new CheckBox("Overrides");
         overrideCheck.setSelected(!mb.overrides.isEmpty());
-        overrideCheck.setTooltip(new Tooltip(
-                "When checked, this modality overrides specific validity_params\n"
-                        + "from the base strategy. Overrides merge into the strategy\n"
-                        + "defaults -- only the listed parameters change, the rest keep\n"
-                        + "the strategy's values. Use for per-modality tuning (e.g.\n"
-                        + "looser tissue_mask_range for PPM polarized images)."));
+        overrideCheck.setTooltip(new Tooltip("When checked, this modality overrides specific validity_params\n"
+                + "from the base strategy. Overrides merge into the strategy\n"
+                + "defaults -- only the listed parameters change, the rest keep\n"
+                + "the strategy's values. Use for per-modality tuning (e.g.\n"
+                + "looser tissue_mask_range for PPM polarized images)."));
 
         Button deleteBtn = new Button("X");
         deleteBtn.setStyle("-fx-text-fill: red; -fx-font-size: 10px;");
@@ -1737,9 +1744,8 @@ public class AutofocusEditorWorkflow {
                                 ? ((Number) entry.get("sweep_n_steps")).intValue()
                                 : 6;
 
-                        int edgeRetries = entry.containsKey("edge_retries")
-                                ? ((Number) entry.get("edge_retries")).intValue()
-                                : 2;
+                        int edgeRetries =
+                                entry.containsKey("edge_retries") ? ((Number) entry.get("edge_retries")).intValue() : 2;
 
                         // Legacy support: old adaptive_initial_step_um -> sweep_range_um
                         if (!entry.containsKey("sweep_range_um") && entry.containsKey("adaptive_initial_step_um")) {

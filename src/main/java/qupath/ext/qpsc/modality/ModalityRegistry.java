@@ -285,7 +285,7 @@ public final class ModalityRegistry {
      * {@code "fluorescence"}); this method returns the SHORTEST one, which is
      * intended for use in filenames and other constrained-length identifiers
      * where the long display name would be unwieldy. Multi-token prefixes like
-     * {@code "bf_if"} are returned verbatim — there's no further compression
+     * {@code "bf_if"} are returned verbatim -- there's no further compression
      * because the underscore is meaningful (it identifies the combo modality).
      *
      * <p>Returns {@code null} if the handler is not registered.

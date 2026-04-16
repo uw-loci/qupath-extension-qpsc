@@ -1,6 +1,5 @@
 package qupath.ext.qpsc.ui;
 
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -65,11 +64,10 @@ public final class AfStrategyChoice {
     }
 
     /** Tooltip text shown alongside the dropdown. */
-    public static final String TOOLTIP =
-            "Autofocus strategy override.\n"
-                    + "Default (from config) uses the per-modality binding from autofocus_<scope>.yml.\n"
-                    + "Dense works for H&E, IHC, PPM, confluent IF.\n"
-                    + "Sparse is for beads/pollen/scattered IF spots on a dark background.\n"
-                    + "Dark-field is for SHG and laser scanning.\n"
-                    + "Manual only skips auto entirely and prompts the user.";
+    public static final String TOOLTIP = "Autofocus strategy override.\n"
+            + "Default (from config) uses the per-modality binding from autofocus_<scope>.yml.\n"
+            + "Dense works for H&E, IHC, PPM, confluent IF.\n"
+            + "Sparse is for beads/pollen/scattered IF spots on a dark background.\n"
+            + "Dark-field is for SHG and laser scanning.\n"
+            + "Manual only skips auto entirely and prompts the user.";
 }

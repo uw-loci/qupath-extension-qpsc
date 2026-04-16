@@ -212,8 +212,7 @@ public class ProjectLogger {
      * visible when diagnosing acquisition bugs from the session log alone.
      */
     private static final String[] ATTACHED_LOGGERS = new String[] {
-            "qupath.ext.qpsc",
-            "qupath.ext.basicstitching",
+        "qupath.ext.qpsc", "qupath.ext.basicstitching",
     };
 
     /**

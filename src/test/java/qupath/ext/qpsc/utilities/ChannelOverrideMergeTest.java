@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
@@ -66,24 +65,16 @@ public class ChannelOverrideMergeTest {
     @Test
     public void testExposureOverrideIsApplied() {
         List<Channel> channels = configManager.getChannelsForProfile("BF_IF_10x");
-        Channel bf = channels.stream()
-                .filter(c -> c.id().equals("BF"))
-                .findFirst()
-                .orElseThrow();
-        assertEquals(
-                20.0,
-                bf.defaultExposureMs(),
-                0.0001,
-                "BF exposure should be overridden to 20 ms for 10x");
+        Channel bf =
+                channels.stream().filter(c -> c.id().equals("BF")).findFirst().orElseThrow();
+        assertEquals(20.0, bf.defaultExposureMs(), 0.0001, "BF exposure should be overridden to 20 ms for 10x");
     }
 
     @Test
     public void testDevicePropertyOverrideReplacesExistingEntry() {
         List<Channel> channels = configManager.getChannelsForProfile("BF_IF_10x");
-        Channel bf = channels.stream()
-                .filter(c -> c.id().equals("BF"))
-                .findFirst()
-                .orElseThrow();
+        Channel bf =
+                channels.stream().filter(c -> c.id().equals("BF")).findFirst().orElseThrow();
 
         // The (DiaLamp, Intensity) pair exists in the library at value 500.
         // The 10x override specifies value 70, which must replace it in place.
@@ -95,7 +86,9 @@ public class ChannelOverrideMergeTest {
 
         // The other library properties should still be present, same order.
         assertEquals(2, bf.properties().size(), "BF channel should still have 2 properties after override");
-        assertEquals("DiaLamp", bf.properties().get(0).device(),
+        assertEquals(
+                "DiaLamp",
+                bf.properties().get(0).device(),
                 "DiaLamp Intensity should still be the first entry (replaced in place, not appended)");
         assertEquals("Intensity", bf.properties().get(0).property());
         assertEquals("70", bf.properties().get(0).value());
@@ -106,35 +99,24 @@ public class ChannelOverrideMergeTest {
         // BF_IF_40x adds a NEW (device, property) pair that doesn't exist in the library.
         // The merge must append it to the end of the channel's property list.
         List<Channel> channels = configManager.getChannelsForProfile("BF_IF_40x");
-        Channel bf = channels.stream()
-                .filter(c -> c.id().equals("BF"))
-                .findFirst()
-                .orElseThrow();
+        Channel bf =
+                channels.stream().filter(c -> c.id().equals("BF")).findFirst().orElseThrow();
 
-        assertEquals(3, bf.properties().size(),
-                "BF should have library's 2 properties plus 1 appended override");
+        assertEquals(3, bf.properties().size(), "BF should have library's 2 properties plus 1 appended override");
         // Library entries preserved
-        assertEquals(
-                500.0,
-                findPropertyValue(bf.properties(), "DiaLamp", "Intensity"),
-                0.0001);
+        assertEquals(500.0, findPropertyValue(bf.properties(), "DiaLamp", "Intensity"), 0.0001);
         // New appended entry
-        assertEquals("ND",
-                bf.properties().get(bf.properties().size() - 1).device());
-        assertEquals("Position",
-                bf.properties().get(bf.properties().size() - 1).property());
-        assertEquals("2",
-                bf.properties().get(bf.properties().size() - 1).value());
+        assertEquals("ND", bf.properties().get(bf.properties().size() - 1).device());
+        assertEquals("Position", bf.properties().get(bf.properties().size() - 1).property());
+        assertEquals("2", bf.properties().get(bf.properties().size() - 1).value());
     }
 
     @Test
     public void testOverridesOnlyAffectNamedChannels() {
         // BF_IF_10x only overrides BF. The DAPI channel should be returned unmodified.
         List<Channel> channels = configManager.getChannelsForProfile("BF_IF_10x");
-        Channel dapi = channels.stream()
-                .filter(c -> c.id().equals("DAPI"))
-                .findFirst()
-                .orElseThrow();
+        Channel dapi =
+                channels.stream().filter(c -> c.id().equals("DAPI")).findFirst().orElseThrow();
         assertEquals(100.0, dapi.defaultExposureMs(), 0.0001);
         assertEquals(1, dapi.properties().size());
         assertEquals("DLED", dapi.properties().get(0).device());
@@ -160,7 +142,8 @@ public class ChannelOverrideMergeTest {
 
     // Minimal self-contained test config. Keeps the BF channel library small
     // (one DAPI channel as a control) so the assertions can be precise.
-    private static final String TEST_CONFIG = """
+    private static final String TEST_CONFIG =
+            """
 microscope:
   name: TestScope
   type: Test

@@ -121,8 +121,7 @@ public class AcquisitionConfigurationBuilder {
                 // Treat the checkbox as an opt-in even when the YAML flag
                 // hasn't been flipped yet (e.g. prior to the first successful
                 // background collection through the updated workflow).
-                logger.info(
-                        "Monochrome BG correction enabled by user preference even though YAML enabled=false");
+                logger.info("Monochrome BG correction enabled by user preference even though YAML enabled=false");
                 bgEnabled = true;
                 if (bgMethod == null) {
                     bgMethod = "divide";

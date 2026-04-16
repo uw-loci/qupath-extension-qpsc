@@ -104,8 +104,7 @@ public class BoundedAcquisitionWorkflow {
             double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
             // Stage polarity is read via the composite StagePolarity enum
             // so it matches what the rest of the refactored pipeline sees.
-            qupath.ext.qpsc.utilities.StagePolarity stagePolarity =
-                    QPPreferenceDialog.getStagePolarityProperty();
+            qupath.ext.qpsc.utilities.StagePolarity stagePolarity = QPPreferenceDialog.getStagePolarityProperty();
             boolean stageInvertedX = stagePolarity.invertX;
             boolean stageInvertedY = stagePolarity.invertY;
 
@@ -258,10 +257,7 @@ public class BoundedAcquisitionWorkflow {
             // modality. Same error surface as the one inside runAsync below, but
             // checked here so the workflow never enters the async chain.
             if (ChannelResolutionService.isEmptySelectionForChannelBasedModality(
-                    enhancedModality,
-                    result.objective(),
-                    result.detector(),
-                    result.angleOverrides())) {
+                    enhancedModality, result.objective(), result.detector(), result.angleOverrides())) {
                 MicroscopeController.getInstance().setAcquisitionActive(false);
                 UIFunctions.notifyUserOfError(
                         "No fluorescence channels selected. Enable at least one channel, "
@@ -275,13 +271,12 @@ public class BoundedAcquisitionWorkflow {
             // to the legacy angle path. The focus channel (if any) is moved to
             // position 0 so it's collected first per tile and the autofocus snap
             // shares hardware state with the first acquired image.
-            final List<qupath.ext.qpsc.modality.ChannelExposure> channelExposures =
-                    ChannelResolutionService.resolve(
-                            enhancedModality,
-                            result.objective(),
-                            result.detector(),
-                            result.angleOverrides(),
-                            result.focusChannelId());
+            final List<qupath.ext.qpsc.modality.ChannelExposure> channelExposures = ChannelResolutionService.resolve(
+                    enhancedModality,
+                    result.objective(),
+                    result.detector(),
+                    result.angleOverrides(),
+                    result.focusChannelId());
 
             // Resolve angles via shared service. For channel-based modalities the
             // service short-circuits to an empty list (no rotation axis).
@@ -321,8 +316,8 @@ public class BoundedAcquisitionWorkflow {
                         long tileCount = MinorFunctions.countTifEntriesInTileConfig(
                                 List.of(Paths.get(tempTileDir, boundsMode).toString()));
                         if (tileCount > 0) {
-                            long bytesPerTile =
-                                    AcquisitionSpaceCheck.estimateBytesPerTilePerAngle(configManager, result.detector());
+                            long bytesPerTile = AcquisitionSpaceCheck.estimateBytesPerTilePerAngle(
+                                    configManager, result.detector());
                             AcquisitionSpaceCheck.Result spaceResult = AcquisitionSpaceCheck.checkAndWarn(
                                     Paths.get(tempTileDir), tileCount, sequenceSteps, bytesPerTile);
                             if (!spaceResult.proceed()) {
@@ -379,8 +374,7 @@ public class BoundedAcquisitionWorkflow {
 
                                 // Per-channel intensity overrides (widefield IF). Empty/null map
                                 // means "use YAML defaults" and produces no CLI flag.
-                                config.commandBuilder()
-                                        .channelIntensityOverrides(result.channelIntensityOverrides());
+                                config.commandBuilder().channelIntensityOverrides(result.channelIntensityOverrides());
 
                                 // Focus channel for AF / first-collection ordering. Null means
                                 // "no preference" and produces no CLI flag.
@@ -434,11 +428,7 @@ public class BoundedAcquisitionWorkflow {
                                     // widefield IF with 10 tiles this shows "10 of 10
                                     // positions" instead of the previously-wrong "40 of 40".
                                     progressHandle = UIFunctions.showProgressBarAsync(
-                                            progressCounter,
-                                            expectedFiles,
-                                            300000,
-                                            true,
-                                            expectedFilesPerTile);
+                                            progressCounter, expectedFiles, 300000, true, expectedFilesPerTile);
 
                                     final UIFunctions.ProgressHandle finalHandle = progressHandle;
                                     progressHandle.setCancelCallback(v -> {
@@ -457,7 +447,8 @@ public class BoundedAcquisitionWorkflow {
                                 // as it is acquired. The tile directory layout is
                                 // tempTileDir/<annotationName>/... where annotationName is
                                 // boundsMode for this workflow (e.g. "bounds").
-                                final String tileDirPath = Paths.get(tempTileDir, boundsMode).toString();
+                                final String tileDirPath =
+                                        Paths.get(tempTileDir, boundsMode).toString();
                                 final AtomicInteger lastTileProgress = new AtomicInteger(0);
 
                                 MicroscopeSocketClient.AcquisitionState finalState = socketClient.monitorAcquisition(
@@ -467,8 +458,8 @@ public class BoundedAcquisitionWorkflow {
                                             if (qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.isShowTilesEnabled()
                                                     && progress.current > lastTileProgress.get()) {
                                                 lastTileProgress.set(progress.current);
-                                                qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow
-                                                        .scanAndShowLatestTile(tileDirPath);
+                                                qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.scanAndShowLatestTile(
+                                                        tileDirPath);
                                             }
                                         },
                                         retriesRemaining -> ManualFocusHandler.handle(

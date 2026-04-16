@@ -364,9 +364,8 @@ public class ExistingImageWorkflowV2 {
 
             // Store angle + channel-intensity overrides + focus channel + AF strategy
             state.angleOverrides = config.angleOverrides();
-            state.channelIntensityOverrides = config.channelIntensityOverrides() == null
-                    ? Map.of()
-                    : config.channelIntensityOverrides();
+            state.channelIntensityOverrides =
+                    config.channelIntensityOverrides() == null ? Map.of() : config.channelIntensityOverrides();
             state.focusChannelId = config.focusChannelId();
             state.afStrategy = config.afStrategy();
 
@@ -663,8 +662,15 @@ public class ExistingImageWorkflowV2 {
             String entryObjective = entry.getMetadata().get(ImageMetadataManager.OBJECTIVE);
             String entryDetector = ImageMetadataManager.getDetectorId(entry);
 
-            logger.info("Sub-acquisition metadata: offset=({}, {}), flip=({}, {}), modality={}, objective={}, detector={}",
-                    xyOffset[0], xyOffset[1], flipX, flipY, entryModality, entryObjective, entryDetector);
+            logger.info(
+                    "Sub-acquisition metadata: offset=({}, {}), flip=({}, {}), modality={}, objective={}, detector={}",
+                    xyOffset[0],
+                    xyOffset[1],
+                    flipX,
+                    flipY,
+                    entryModality,
+                    entryObjective,
+                    entryDetector);
 
             // Delegate to ProjectHelper for proper project setup
             return ProjectHelper.setupProject(gui, state.sample)
@@ -688,8 +694,7 @@ public class ExistingImageWorkflowV2 {
                         // This must happen AFTER flip validation since the image dimensions
                         // and pixel coordinates are from the (possibly flipped) server.
                         AffineTransform transform = buildOffsetBasedTransform(
-                                xyOffset, flipX, flipY,
-                                entryModality, entryObjective, entryDetector);
+                                xyOffset, flipX, flipY, entryModality, entryObjective, entryDetector);
 
                         state.transform = transform;
                         MicroscopeController.getInstance().setCurrentTransform(transform);
@@ -706,8 +711,7 @@ public class ExistingImageWorkflowV2 {
                         return ensureAnnotationsExist(state);
                     })
                     .thenApply(finalState -> {
-                        logger.info("Sub-acquisition path ready with {} annotations",
-                                finalState.annotations.size());
+                        logger.info("Sub-acquisition path ready with {} annotations", finalState.annotations.size());
                         return finalState;
                     });
         }
@@ -724,10 +728,10 @@ public class ExistingImageWorkflowV2 {
          * </ul>
          */
         private AffineTransform buildOffsetBasedTransform(
-                double[] xyOffset, boolean flipX, boolean flipY,
-                String modality, String objective, String detector) {
+                double[] xyOffset, boolean flipX, boolean flipY, String modality, String objective, String detector) {
 
-            double pixelSize = gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
+            double pixelSize =
+                    gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
             int width = gui.getImageData().getServer().getWidth();
             int height = gui.getImageData().getServer().getHeight();
 
@@ -765,8 +769,14 @@ public class ExistingImageWorkflowV2 {
             double imageOriginX = xyOffset[0] - halfFovX;
             double imageOriginY = xyOffset[1] - halfFovY;
 
-            logger.info("Image origin in stage coords: ({}, {}) um  [offset ({}, {}) - halfFOV ({}, {})]",
-                    imageOriginX, imageOriginY, xyOffset[0], xyOffset[1], halfFovX, halfFovY);
+            logger.info(
+                    "Image origin in stage coords: ({}, {}) um  [offset ({}, {}) - halfFOV ({}, {})]",
+                    imageOriginX,
+                    imageOriginY,
+                    xyOffset[0],
+                    xyOffset[1],
+                    halfFovX,
+                    halfFovY);
 
             // Build transform: pixel -> stage
             // translate(imageOrigin) * scale(pixelSize) maps unflipped pixels to stage
@@ -791,8 +801,12 @@ public class ExistingImageWorkflowV2 {
             pixelToStage.transform(topLeft, 0, stageTopLeft, 0, 1);
             pixelToStage.transform(bottomRight, 0, stageBottomRight, 0, 1);
             logger.info("Transform validation: pixel(0,0) -> stage({}, {})", stageTopLeft[0], stageTopLeft[1]);
-            logger.info("Transform validation: pixel({},{}) -> stage({}, {})",
-                    width, height, stageBottomRight[0], stageBottomRight[1]);
+            logger.info(
+                    "Transform validation: pixel({},{}) -> stage({}, {})",
+                    width,
+                    height,
+                    stageBottomRight[0],
+                    stageBottomRight[1]);
 
             return pixelToStage;
         }

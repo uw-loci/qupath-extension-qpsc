@@ -82,7 +82,7 @@ dependencies {
     shadow("io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.2.2")
     // CompileOnly - QuPath provides bioformats at runtime, we just compile against it
     // This avoids trying to resolve OME transitive dependencies during build
-    compileOnly("io.github.qupath:qupath-extension-bioformats:0.6.0-rc4")
+    compileOnly("io.github.qupath:qupath-extension-bioformats:0.6.0")
     // LiveViewerWindow.showAcquiredTile uses loci.formats.gui.BufferedImageReader
     // to read 16-bit mono OME-TIFFs that ImageIO can't handle. BufferedImageReader
     // lives in formats-bsd, which is a transitive runtime dep of the BioFormats
@@ -96,17 +96,18 @@ dependencies {
 
     // For testing
     testImplementation(libs.bundles.qupath)
-    testImplementation("io.github.qupath:qupath-app:0.6.0-rc4")
+    testImplementation("io.github.qupath:qupath-app:0.6.0")
     //testImplementation(libs.junit)
-    testImplementation("org.junit.jupiter:junit-jupiter:5.9.1")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.13.4")
     testImplementation("org.assertj:assertj-core:3.24.2")
     testImplementation(libs.bundles.logging)
     testImplementation(libs.qupath.fxtras)
     testImplementation("org.openjfx:javafx-base:$javafxVersion")
     testImplementation("org.openjfx:javafx-graphics:$javafxVersion")
     testImplementation("org.openjfx:javafx-controls:$javafxVersion")
-    testImplementation("org.mockito:mockito-core:5.14.2")
-    testImplementation("org.mockito:mockito-junit-jupiter:5.14.2")
+    testImplementation("org.mockito:mockito-core:5.21.0")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.21.0")
 }
 
 //TODO remove before release

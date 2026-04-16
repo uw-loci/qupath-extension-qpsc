@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
  * {@link CameraOrientation}.
  *
  * <p>The goal of this test suite is to verify coordinate-math correctness
- * across every combination of stage polarity × camera orientation. Manual
+ * across every combination of stage polarity x camera orientation. Manual
  * sign reasoning is error-prone (see OWS3 debugging session 2026-04-09,
  * which produced sign regressions in three separate subsystems), so we
  * enumerate the full matrix rather than picking representative cases.
@@ -56,9 +56,9 @@ class StageImageTransformTest {
 
     @Test
     void stagePolarity_fromBooleans_covers4Cases() {
-        assertEquals(StagePolarity.NORMAL,    StagePolarity.fromBooleans(false, false));
-        assertEquals(StagePolarity.INVERT_X,  StagePolarity.fromBooleans(true, false));
-        assertEquals(StagePolarity.INVERT_Y,  StagePolarity.fromBooleans(false, true));
+        assertEquals(StagePolarity.NORMAL, StagePolarity.fromBooleans(false, false));
+        assertEquals(StagePolarity.INVERT_X, StagePolarity.fromBooleans(true, false));
+        assertEquals(StagePolarity.INVERT_Y, StagePolarity.fromBooleans(false, true));
         assertEquals(StagePolarity.INVERT_XY, StagePolarity.fromBooleans(true, true));
     }
 
@@ -75,8 +75,7 @@ class StageImageTransformTest {
             for (double[] v : testVectors) {
                 double[] display = o.sampleToDisplay(v[0], v[1]);
                 double[] roundtrip = o.displayToSample(display[0], display[1]);
-                assertArrayEquals(v, roundtrip, EPS,
-                        "orientation=" + o + " vector=(" + v[0] + "," + v[1] + ")");
+                assertArrayEquals(v, roundtrip, EPS, "orientation=" + o + " vector=(" + v[0] + "," + v[1] + ")");
             }
         }
     }
@@ -106,7 +105,7 @@ class StageImageTransformTest {
         // Sample +X should appear at the top of the display (= display -Y).
         // Matrix: [[0, 1], [-1, 0]]. Sample (1, 0) -> (0, -1). Correct.
         assertArrayEquals(new double[] {0, -1}, CameraOrientation.ROT_90_CW.sampleToDisplay(1, 0), EPS);
-        assertArrayEquals(new double[] {1, 0},  CameraOrientation.ROT_90_CW.sampleToDisplay(0, 1), EPS);
+        assertArrayEquals(new double[] {1, 0}, CameraOrientation.ROT_90_CW.sampleToDisplay(0, 1), EPS);
     }
 
     @Test
@@ -122,7 +121,7 @@ class StageImageTransformTest {
     }
 
     // ------------------------------------------------------------
-    // StageImageTransform: screen pan → MM command
+    // StageImageTransform: screen pan -> MM command
     // ------------------------------------------------------------
 
     @Test
@@ -130,16 +129,14 @@ class StageImageTransformTest {
         // NORMAL stage + NORMAL camera.
         // Arrow up = pan up = screen delta (0, -1).
         // Expected: sample delta (0, -1), MM delta (0, -1).
-        StageImageTransform t = new StageImageTransform(
-                StagePolarity.NORMAL, CameraOrientation.NORMAL);
+        StageImageTransform t = new StageImageTransform(StagePolarity.NORMAL, CameraOrientation.NORMAL);
         double[] mm = t.screenPanDeltaToMmDelta(0, -1);
         assertArrayEquals(new double[] {0, -1}, mm, EPS);
     }
 
     @Test
     void transform_normal_panRight_increasesX() {
-        StageImageTransform t = new StageImageTransform(
-                StagePolarity.NORMAL, CameraOrientation.NORMAL);
+        StageImageTransform t = new StageImageTransform(StagePolarity.NORMAL, CameraOrientation.NORMAL);
         double[] mm = t.screenPanDeltaToMmDelta(1, 0);
         assertArrayEquals(new double[] {1, 0}, mm, EPS);
     }
@@ -150,8 +147,7 @@ class StageImageTransformTest {
         // Arrow up = pan up = screen delta (0, -1).
         // Expected: sample delta (0, -1) but stage polarity INVERT_Y
         // flips Y, so MM delta = (0, +1). Stage Y should INCREASE.
-        StageImageTransform t = new StageImageTransform(
-                StagePolarity.INVERT_Y, CameraOrientation.NORMAL);
+        StageImageTransform t = new StageImageTransform(StagePolarity.INVERT_Y, CameraOrientation.NORMAL);
         double[] mm = t.screenPanDeltaToMmDelta(0, -1);
         assertArrayEquals(new double[] {0, 1}, mm, EPS);
     }
@@ -162,8 +158,7 @@ class StageImageTransformTest {
         // Arrow up = screen (0, -1). displayToSample on FLIP_V:
         // [[1,0],[0,-1]] applied (transposed = self) to (0, -1) = (0, 1).
         // Sample delta (0, 1) through NORMAL polarity = MM (0, 1).
-        StageImageTransform t = new StageImageTransform(
-                StagePolarity.NORMAL, CameraOrientation.FLIP_V);
+        StageImageTransform t = new StageImageTransform(StagePolarity.NORMAL, CameraOrientation.FLIP_V);
         double[] mm = t.screenPanDeltaToMmDelta(0, -1);
         assertArrayEquals(new double[] {0, 1}, mm, EPS);
     }
@@ -172,8 +167,7 @@ class StageImageTransformTest {
     void transform_invertY_and_flipV_cancel() {
         // INVERT_Y stage AND FLIP_V camera should cancel out, giving the
         // same result as NORMAL + NORMAL.
-        StageImageTransform t = new StageImageTransform(
-                StagePolarity.INVERT_Y, CameraOrientation.FLIP_V);
+        StageImageTransform t = new StageImageTransform(StagePolarity.INVERT_Y, CameraOrientation.FLIP_V);
         double[] mm = t.screenPanDeltaToMmDelta(0, -1);
         assertArrayEquals(new double[] {0, -1}, mm, EPS);
     }
@@ -182,8 +176,7 @@ class StageImageTransformTest {
     void transform_clickBelow_panDown_increasesY_on_normal() {
         // Click below center should bring the below-center content to the
         // center = pan down. On a NORMAL scope that means stage Y INCREASES.
-        StageImageTransform t = new StageImageTransform(
-                StagePolarity.NORMAL, CameraOrientation.NORMAL);
+        StageImageTransform t = new StageImageTransform(StagePolarity.NORMAL, CameraOrientation.NORMAL);
         double[] target = t.clickOffsetToMmTarget(1000, 2000, 0, 100, 0.65, 0.65);
         assertEquals(1000, target[0], EPS);
         assertEquals(2000 + 100 * 0.65, target[1], EPS);
@@ -191,10 +184,9 @@ class StageImageTransformTest {
 
     @Test
     void transform_clickBelow_decreasesY_on_invertY() {
-        // OWS3-style scope: click below center → pan down → stage Y
+        // OWS3-style scope: click below center -> pan down -> stage Y
         // DECREASES (opposite of normal).
-        StageImageTransform t = new StageImageTransform(
-                StagePolarity.INVERT_Y, CameraOrientation.NORMAL);
+        StageImageTransform t = new StageImageTransform(StagePolarity.INVERT_Y, CameraOrientation.NORMAL);
         double[] target = t.clickOffsetToMmTarget(1000, 2000, 0, 100, 0.65, 0.65);
         assertEquals(1000, target[0], EPS);
         assertEquals(2000 - 100 * 0.65, target[1], EPS);
@@ -206,43 +198,37 @@ class StageImageTransformTest {
 
     @Test
     void stitcherFlags_normal_isNoFlip() {
-        StageImageTransform t = new StageImageTransform(
-                StagePolarity.NORMAL, CameraOrientation.NORMAL);
+        StageImageTransform t = new StageImageTransform(StagePolarity.NORMAL, CameraOrientation.NORMAL);
         assertArrayEquals(new boolean[] {false, false}, t.stitcherFlipFlags());
     }
 
     @Test
     void stitcherFlags_invertY_flipsY() {
-        StageImageTransform t = new StageImageTransform(
-                StagePolarity.INVERT_Y, CameraOrientation.NORMAL);
+        StageImageTransform t = new StageImageTransform(StagePolarity.INVERT_Y, CameraOrientation.NORMAL);
         assertArrayEquals(new boolean[] {false, true}, t.stitcherFlipFlags());
     }
 
     @Test
     void stitcherFlags_invertXY_flipsBoth() {
-        StageImageTransform t = new StageImageTransform(
-                StagePolarity.INVERT_XY, CameraOrientation.NORMAL);
+        StageImageTransform t = new StageImageTransform(StagePolarity.INVERT_XY, CameraOrientation.NORMAL);
         assertArrayEquals(new boolean[] {true, true}, t.stitcherFlipFlags());
     }
 
     @Test
     void stitcherFlags_flipH_flipsX() {
-        StageImageTransform t = new StageImageTransform(
-                StagePolarity.NORMAL, CameraOrientation.FLIP_H);
+        StageImageTransform t = new StageImageTransform(StagePolarity.NORMAL, CameraOrientation.FLIP_H);
         assertArrayEquals(new boolean[] {true, false}, t.stitcherFlipFlags());
     }
 
     @Test
     void stitcherFlags_invertX_and_flipH_cancel() {
-        StageImageTransform t = new StageImageTransform(
-                StagePolarity.INVERT_X, CameraOrientation.FLIP_H);
+        StageImageTransform t = new StageImageTransform(StagePolarity.INVERT_X, CameraOrientation.FLIP_H);
         assertArrayEquals(new boolean[] {false, false}, t.stitcherFlipFlags());
     }
 
     @Test
     void stitcherFlags_rot180_flipsBoth() {
-        StageImageTransform t = new StageImageTransform(
-                StagePolarity.NORMAL, CameraOrientation.ROT_180);
+        StageImageTransform t = new StageImageTransform(StagePolarity.NORMAL, CameraOrientation.ROT_180);
         assertArrayEquals(new boolean[] {true, true}, t.stitcherFlipFlags());
     }
 
@@ -256,22 +242,22 @@ class StageImageTransformTest {
         // opposite intents and must therefore produce opposite Y signs
         // in the MM-command delta for every transform configuration.
         CameraOrientation[] axisAligned = {
-                CameraOrientation.NORMAL,
-                CameraOrientation.FLIP_H,
-                CameraOrientation.FLIP_V,
-                CameraOrientation.ROT_180
+            CameraOrientation.NORMAL, CameraOrientation.FLIP_H, CameraOrientation.FLIP_V, CameraOrientation.ROT_180
         };
         for (StagePolarity p : StagePolarity.values()) {
             for (CameraOrientation o : axisAligned) {
                 StageImageTransform t = new StageImageTransform(p, o);
-                double[] arrowUp = t.screenPanDeltaToMmDelta(0, -1);     // pan up
-                double[] clickBelow = t.screenPanDeltaToMmDelta(0, 1);   // pan down
-                assertTrue(arrowUp[1] * clickBelow[1] < 0,
-                        "Arrow up and click below must produce opposite Y signs. "
-                                + "transform=" + t);
-                assertEquals(0, arrowUp[0], EPS,
-                        "Arrow up should not produce any X motion on axis-aligned transform " + t);
-                assertEquals(0, clickBelow[0], EPS,
+                double[] arrowUp = t.screenPanDeltaToMmDelta(0, -1); // pan up
+                double[] clickBelow = t.screenPanDeltaToMmDelta(0, 1); // pan down
+                assertTrue(
+                        arrowUp[1] * clickBelow[1] < 0,
+                        "Arrow up and click below must produce opposite Y signs. " + "transform=" + t);
+                assertEquals(
+                        0, arrowUp[0], EPS, "Arrow up should not produce any X motion on axis-aligned transform " + t);
+                assertEquals(
+                        0,
+                        clickBelow[0],
+                        EPS,
                         "Click below should not produce any X motion on axis-aligned transform " + t);
             }
         }
@@ -280,21 +266,18 @@ class StageImageTransformTest {
     @Test
     void allAxisAlignedCombinations_arrowRight_andClickRight_produceSameXDirection() {
         // Arrow right (pan right) and click right of center (also pan right
-        // — bring right content to center) share the same intent and must
+        // -- bring right content to center) share the same intent and must
         // produce the same X sign.
         CameraOrientation[] axisAligned = {
-                CameraOrientation.NORMAL,
-                CameraOrientation.FLIP_H,
-                CameraOrientation.FLIP_V,
-                CameraOrientation.ROT_180
+            CameraOrientation.NORMAL, CameraOrientation.FLIP_H, CameraOrientation.FLIP_V, CameraOrientation.ROT_180
         };
         for (StagePolarity p : StagePolarity.values()) {
             for (CameraOrientation o : axisAligned) {
                 StageImageTransform t = new StageImageTransform(p, o);
                 double[] arrowRight = t.screenPanDeltaToMmDelta(1, 0);
                 double[] clickRight = t.screenPanDeltaToMmDelta(1, 0);
-                assertEquals(arrowRight[0], clickRight[0], EPS,
-                        "Same input should produce same output. transform=" + t);
+                assertEquals(
+                        arrowRight[0], clickRight[0], EPS, "Same input should produce same output. transform=" + t);
             }
         }
     }

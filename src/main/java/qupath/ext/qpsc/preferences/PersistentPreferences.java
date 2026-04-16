@@ -461,7 +461,8 @@ public class PersistentPreferences {
     // Saved values are the protocol strategy names (dense_texture, sparse_signal,
     // dark_field, manual_only); the dropdown display strings are translated
     // separately in the dialog.
-    private static final StringProperty lastAfStrategySaved = PathPrefs.createPersistentPreference("LastAfStrategy", "");
+    private static final StringProperty lastAfStrategySaved =
+            PathPrefs.createPersistentPreference("LastAfStrategy", "");
 
     public static String getLastAfStrategy() {
         return lastAfStrategySaved.getValue();
@@ -843,9 +844,7 @@ public class PersistentPreferences {
 
         double alpha = sampleCount == 0 ? 1.0 : 0.3;
         long oldMean = getBaseTileTimeMs();
-        long newMean = oldMean == 0
-                ? meanTileTimeMs
-                : (long) (alpha * meanTileTimeMs + (1 - alpha) * oldMean);
+        long newMean = oldMean == 0 ? meanTileTimeMs : (long) (alpha * meanTileTimeMs + (1 - alpha) * oldMean);
 
         meanTileTimeMsSaved.setValue(String.valueOf(newMean));
         timingSampleCountSaved.setValue(String.valueOf(sampleCount + 1));

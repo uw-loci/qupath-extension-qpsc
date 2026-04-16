@@ -546,21 +546,20 @@ public class StitchingRecoveryWorkflow {
                     qupath.ext.qpsc.utilities.StageImageTransform siTransform =
                             qupath.ext.qpsc.utilities.StageImageTransform.current();
                     boolean[] stitcherFlags = siTransform.stitcherFlipFlags();
-                    qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX =
-                            stitcherFlags[0];
-                    qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY =
-                            stitcherFlags[1];
+                    qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = stitcherFlags[0];
+                    qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = stitcherFlags[1];
                     logger.info(
                             "Recovery stitching for angle '{}': set flipStitchingX={}, flipStitchingY={} (from {})",
-                            angleName, stitcherFlags[0], stitcherFlags[1], siTransform);
+                            angleName,
+                            stitcherFlags[0],
+                            stitcherFlags[1],
+                            siTransform);
                     String outPath;
                     try {
                         outPath = StitchingWorkflow.run(config);
                     } finally {
-                        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX =
-                                false;
-                        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY =
-                                false;
+                        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = false;
+                        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = false;
                     }
 
                     if (outPath == null) {

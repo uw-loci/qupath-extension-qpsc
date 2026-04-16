@@ -106,8 +106,12 @@ public class BackgroundCollectionWorkflow {
      * when the dialog stays open during acquisition).
      */
     public static void executeBackgroundAcquisitionDirect(
-            String modality, String objective, List<AngleExposure> angleExposures,
-            String outputPath, String wbMode, double targetIntensity) {
+            String modality,
+            String objective,
+            List<AngleExposure> angleExposures,
+            String outputPath,
+            String wbMode,
+            double targetIntensity) {
         executeBackgroundAcquisition(modality, objective, angleExposures, outputPath, wbMode, targetIntensity);
     }
 
@@ -122,8 +126,12 @@ public class BackgroundCollectionWorkflow {
      * @param targetIntensity Target median intensity for adaptive exposure (0 = use server default)
      */
     private static void executeBackgroundAcquisition(
-            String modality, String objective, List<AngleExposure> angleExposures,
-            String outputPath, String wbMode, double targetIntensity) {
+            String modality,
+            String objective,
+            List<AngleExposure> angleExposures,
+            String outputPath,
+            String wbMode,
+            double targetIntensity) {
         logger.info(
                 "Executing background acquisition for modality '{}' with {} angles, wbMode={}",
                 modality,
@@ -197,7 +205,8 @@ public class BackgroundCollectionWorkflow {
             } else {
                 // No rotation angles -- just send the starting exposure
                 angles = "()";
-                exposures = angleExposures.isEmpty() ? "(50.0)"
+                exposures = angleExposures.isEmpty()
+                        ? "(50.0)"
                         : "(" + angleExposures.get(0).exposureMs() + ")";
             }
 
@@ -206,7 +215,14 @@ public class BackgroundCollectionWorkflow {
             // Call the synchronous background acquisition method
             // Returns map of final exposures actually used by Python (with adaptive exposure)
             Map<Double, Double> finalExposures = socketClient.startBackgroundAcquisition(
-                    configFileLocation, finalOutputPath, modality, angles, exposures, wbMode, objective, detector,
+                    configFileLocation,
+                    finalOutputPath,
+                    modality,
+                    angles,
+                    exposures,
+                    wbMode,
+                    objective,
+                    detector,
                     targetIntensity);
 
             logger.info("Background acquisition completed successfully with {} final exposures", finalExposures.size());
@@ -351,7 +367,9 @@ public class BackgroundCollectionWorkflow {
 
             logger.info(
                     "Updated background_correction in {} for modality '{}': enabled=true, base_folder={}",
-                    imgprocFile.getName(), modality, normalizedFolder);
+                    imgprocFile.getName(),
+                    modality,
+                    normalizedFolder);
         } catch (Exception e) {
             logger.error("Failed to update background_correction config: {}", e.getMessage());
         }

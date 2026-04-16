@@ -81,8 +81,8 @@ public class LiveTileMeasurementPoller {
     public static LiveTileMeasurementPoller start(
             Path ndjsonPath, String annotationName, ScheduledExecutorService executor) {
         LiveTileMeasurementPoller poller = new LiveTileMeasurementPoller(ndjsonPath, annotationName);
-        poller.handle = executor.scheduleAtFixedRate(
-                poller::tickSafely, POLL_PERIOD_MS, POLL_PERIOD_MS, TimeUnit.MILLISECONDS);
+        poller.handle =
+                executor.scheduleAtFixedRate(poller::tickSafely, POLL_PERIOD_MS, POLL_PERIOD_MS, TimeUnit.MILLISECONDS);
         logger.debug("Started live tile measurement poller for annotation '{}' at {}", annotationName, ndjsonPath);
         return poller;
     }

@@ -194,12 +194,7 @@ public class StageInsertRegistry {
             double slideYOffsetMm = (apertureHeightUm - slideHeightUm) / 2.0 / 1000.0;
 
             StageInsert.SlidePosition slide = new StageInsert.SlidePosition(
-                    "Slide 1",
-                    slideXOffsetMm,
-                    slideYOffsetMm,
-                    slideWidthUm / 1000.0,
-                    slideHeightUm / 1000.0,
-                    0);
+                    "Slide 1", slideXOffsetMm, slideYOffsetMm, slideWidthUm / 1000.0, slideHeightUm / 1000.0, 0);
 
             StageInsert synth = new StageInsert(
                     "single_h",
@@ -212,8 +207,7 @@ public class StageInsertRegistry {
                     List.of(slide));
 
             logger.info(
-                    "Synthesized insert: aperture={}x{} mm, origin=({}, {}) um, "
-                            + "slide={}x{} mm centered",
+                    "Synthesized insert: aperture={}x{} mm, origin=({}, {}) um, " + "slide={}x{} mm centered",
                     String.format("%.1f", apertureWidthUm / 1000.0),
                     String.format("%.1f", apertureHeightUm / 1000.0),
                     String.format("%.0f", Math.min(xLow, xHigh)),

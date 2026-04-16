@@ -48,6 +48,48 @@ modalities:
 | `mm_setup_presets` | list | no | Ordered list of `{group, preset}` entries. Applied by the server via `core.setConfig(group, preset)` at the start of this channel's step. May be empty. |
 | `device_properties` | list | no | Ordered list of `{device, property, value}` entries. Applied by the server via `core.setProperty(device, property, value)` after the presets. May be empty. |
 | `settle_ms` | number | no | Dumb-sleep (in milliseconds) applied after all presets/properties have settled via `waitForDevice`. Only needed when a piece of hardware reports not-busy too early (some filter wheels and reflector turrets). Defaults to 0. |
+| `intensity_property` | object | no | `{device, property}` pointer into this channel's own `device_properties` list, naming the primary brightness knob. When present, the channel picker renders an Intensity spinner for this row; when absent, the row shows a grayed "-" placeholder. See [Intensity Property Pointer](#intensity-property-pointer). |
+
+### Intensity Property Pointer
+
+Declaring `intensity_property` tells the UI which single device property is the "brightness knob" for this channel, so the per-channel Intensity spinner in the picker knows what to adjust. The field is a reference into the channel's own `device_properties` list -- it does not add a new property, it selects one.
+
+```yaml
+modalities:
+  Fluorescence:
+    type: widefield
+    channels:
+      - id: DAPI
+        display_name: DAPI (385 nm)
+        exposure_ms: 100
+        mm_setup_presets:
+          - { group: Filter Turret, preset: Single photon LED-DA FI TR Cy5-B }
+        device_properties:
+          - { device: DLED, property: Intensity-385nm, value: 25 }
+          - { device: DLED, property: Intensity-475nm, value: 0 }
+          - { device: DLED, property: Intensity-550nm, value: 0 }
+          - { device: DLED, property: Intensity-621nm, value: 0 }
+        intensity_property:
+          device: DLED
+          property: Intensity-385nm
+```
+
+The same schema works for brightfield-style channels in a `bf_if` modality -- the BF entry just points `intensity_property` at `DiaLamp.Intensity` (the transmitted lamp) instead of a DLED wavelength:
+
+```yaml
+      - id: BF
+        display_name: Brightfield
+        exposure_ms: 15
+        mm_setup_presets:
+          - { group: Light Path, preset: Transmitted }
+        device_properties:
+          - { device: DiaLamp, property: Intensity, value: 70 }
+        intensity_property:
+          device: DiaLamp
+          property: Intensity
+```
+
+Channels without an `intensity_property` declaration still work -- they just get a grayed "-" in the Intensity column and cannot be tuned from the UI. This is appropriate for channels whose brightness is fixed in hardware (laser interlocks, filter-only channels).
 
 ### Notes
 
@@ -130,7 +172,39 @@ See `../../QPSC/docs/multichannel-if-overview.md` for the full OWS3 `BF_IF_20x` 
 
 ---
 
-## 5. How It Reaches the Acquisition Loop
+## 5. The Channel Picker UI
+
+The picker is rendered by `WidefieldChannelBoundingBoxUI` and appears in the Bounded and Existing-Image dialogs whenever the resolved profile has a non-empty channel library. It has one row per channel with four interactive columns:
+
+| Column | Control | Purpose |
+|--------|---------|---------|
+| (select) | Checkbox | Include this channel in the acquisition. |
+| Exposure (ms) | Spinner | Override the library default exposure for this run. |
+| Intensity | Spinner or "-" | Override the library default value of the channel's `intensity_property` for this run. Shows a grayed "-" placeholder when the library entry does not declare `intensity_property`. |
+| Focus | Radio button | Pick which channel autofocus runs against. Mutually exclusive across rows via a shared JavaFX `ToggleGroup`. Disabled when the row is not selected. |
+
+### Intensity Spinner (NEW -- 2026-04-13)
+
+The Intensity column lets the user adjust the brightness of the channel from the picker without editing YAML. The spinner is seeded with the current value of the channel's `intensity_property` in the library and is bounded by the device-reported limits of that property (or a sensible default range when limits are not available).
+
+Only values that have actually been changed from the library default are emitted; untouched rows are omitted from the CLI flag to keep the command tight. Changed values are sent as a `--channel-intensities "(FITC=30.0,TRITC=45.0)"` flag on `BGACQUIRE`, and the Python server applies them as runtime device-property overrides at the start of each tile's per-channel step -- the YAML on disk is never modified.
+
+Channels whose library entry has no `intensity_property` declaration render a disabled "-" placeholder instead of a spinner and contribute nothing to `--channel-intensities`.
+
+### Focus-Channel Radio (NEW -- 2026-04-13)
+
+The Focus column is a single column of radio buttons (one per channel row) that all belong to the same `ToggleGroup`, so exactly one channel can be picked as the autofocus reference at a time. The radio button for a row is disabled until that row's select checkbox is on.
+
+The picked focus channel has two effects on the acquisition:
+
+1. It is **moved to position 0** in the per-tile acquisition sequence. The server collects it first on every tile, so the autofocus snap and the first real image share hardware state (filter position, LED, exposure). The remaining channels follow in their original library order.
+2. It is passed to the server as `--focus-channel <id>` on `BGACQUIRE`. The autofocus subsystem uses that channel's hardware state (including any per-run Intensity/Exposure overrides from the picker) when it runs the focus gate and Z search. See [AUTOFOCUS.md](AUTOFOCUS.md) for how the focus channel interacts with modality-aware autofocus strategies.
+
+The picked channel is persisted in `PersistentPreferences` across sessions, keyed per microscope/profile, so reopening the dialog remembers the last focus-channel choice. If no radio button is selected (either because persistence has no value yet or because the user cleared the selection), the server defaults to the first channel in library order.
+
+---
+
+## 6. How It Reaches the Acquisition Loop
 
 The channel path is pure data flow from YAML to server CLI flags. Each step below lists the class/method that carries the data, so future readers can find the code quickly:
 
@@ -141,16 +215,45 @@ The channel path is pure data flow from YAML to server CLI flags. Each step belo
 - `WidefieldChannelBoundingBoxUI` -- channel-picker panel (checkbox + exposure spinner per channel, with a master "Customize channel selection" checkbox). Shown by `WidefieldFluorescenceModalityHandler.createBoundingBoxUI()` when a library is present; otherwise the angle-based single-snap fallback is used.
 - `ChannelResolutionService.resolve(modality, objective, detector, overrides)` -- combines the library with the UI's selection map into the final `List<ChannelExposure>`.
 - `ChannelResolutionService.isEmptySelectionForChannelBasedModality(...)` -- guard that the workflow checks to refuse acquisitions where the user has actively deselected every channel.
-- `AcquisitionCommandBuilder.channelExposures(list)` -- emits `--channels "(id1,id2,...)"` and `--channel-exposures "(exp1,exp2,...)"` on the BGACQUIRE command instead of `--angles`/`--exposures`. Channel-based and angle-based acquisitions are mutually exclusive per acquisition.
-- Python server -- `acquisition/workflow.py` re-resolves the plan from YAML, then for each tile iterates every channel: `apply_channel_hardware_state` -> set exposure -> snap -> write to `{annotation}/{channel_id}/{tile}.tif`.
+- `AcquisitionCommandBuilder.channelExposures(list)` -- emits `--channels "(id1,id2,...)"` and `--channel-exposures "(exp1,exp2,...)"` on the BGACQUIRE command instead of `--angles`/`--exposures`. Also emits `--channel-intensities "(id=val,...)"` for any channels whose Intensity spinner was changed from the library default, and `--focus-channel <id>` for the picked focus channel. Channel-based and angle-based acquisitions are mutually exclusive per acquisition.
+- Python server -- `acquisition/workflow.py` re-resolves the plan from YAML, moves the `--focus-channel` entry to position 0, then for each tile iterates every channel: `apply_channel_hardware_state` (including any per-run intensity overrides from `--channel-intensities`) -> set exposure -> snap -> write to `{annotation}/{channel_id}/{tile}.tif`.
 - `StitchingHelper.stitchChannelDirectories` -- iterates the channel ids and calls `processAngleWithIsolation` per channel to produce one single-channel pyramid per channel.
-- `ChannelMerger` / `ChannelMergeImageServer` (in `qupath-extension-tiles-to-pyramid`) -- merges the per-channel pyramids into one `{annotation}_merged.ome.tif` multichannel OME-TIFF.
+- `ChannelMerger` / `ChannelMergeImageServer` (in `qupath-extension-tiles-to-pyramid`) -- merges the per-channel pyramids into one multichannel OME-TIFF. See [Multichannel Stitching and Merge](#7-multichannel-stitching-and-merge) below.
 
 Both `BoundedAcquisitionWorkflow` and the `AcquisitionManager` used by the Existing Image workflow route through `ChannelResolutionService`, so any workflow that reaches an acquisition profile with a channel library takes the channel branch automatically.
 
+### Profile-Key Lookup Fix (`b40c98e` / `0a67083`)
+
+Channel-based modalities now correctly resolve their library through the **enhanced profile key** (e.g. `Fluorescence_10x`) rather than the base modality name (`Fluorescence`). An earlier bug silently fell back to single-angle stitching because `performRegionStitching` (used by the bounded workflow) was passing the bare modality name while `performAnnotationStitching` (used by the existing-image workflow) was already passing the full profile key. Dryruns on bounded acquisitions looked like single-angle stitches even though the acquisition had collected the full channel set. The fix wires the channel branch into `performRegionStitching` as well, so both entry points resolve channels consistently. If an older session log shows multichannel tiles on disk but a single-channel (`001.ome.tif`) stitched output, this is the bug.
+
 ---
 
-## 6. Troubleshooting
+## 7. Multichannel Stitching and Merge
+
+After the per-channel tile directories are written, the channel branch runs a two-stage stitching pipeline:
+
+1. **Per-channel stitching.** `StitchingHelper.stitchChannelDirectories` iterates the acquired channel ids and calls `processAngleWithIsolation` once per channel. Each call produces a single-channel OME-TIFF pyramid on disk. Because the QuPath project tree would otherwise fill up with N intermediates per annotation, the stitching params for this stage set `skipProjectImport: true` -- the per-channel pyramids land in the output directory but are not added to the project.
+2. **Channel merge.** `ChannelMerger.merge()` (in `qupath-extension-tiles-to-pyramid`) then combines the N single-channel pyramids into one multichannel OME-TIFF via `ChannelMergeImageServer`. Only the merged file is imported into the QuPath project, so the user sees exactly one entry per annotation regardless of how many channels were acquired.
+
+### Merged Filename Convention
+
+The merged file is named using the **short modality name** from the `ModalityRegistry` prefix instead of the long display name, and it drops the `_merged` suffix now that only the merged file is visible in the project. For example, the OWS3 Fluorescence_20x profile writes:
+
+```
+PollenIF_fl_001.ome.tif
+```
+
+instead of the old form `PollenIF_Fluorescence_001.ome.tif`. For the combined brightfield + IF modality, the full registry prefix is used so the two distinct modality types are still disambiguated on disk:
+
+```
+PollenBFIF_bf_if_001.ome.tif
+```
+
+This keeps filenames short and regular across modalities while preserving enough information for downstream tooling to route by modality.
+
+---
+
+## 8. Troubleshooting
 
 Channel-specific failure modes and log lines to search for. General acquisition troubleshooting lives in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
@@ -214,10 +317,11 @@ Channel-specific failure modes and log lines to search for. General acquisition 
 
 ---
 
-## 7. See Also
+## 9. See Also
 
+- [AUTOFOCUS.md](AUTOFOCUS.md) -- how the picked focus channel feeds the modality-aware autofocus strategies.
 - [WORKFLOWS.md](WORKFLOWS.md) -- user-level multi-channel acquisition walkthrough (what the dialog looks like, what lands on disk).
-- [PREFERENCES.md](PREFERENCES.md) -- persistent channel picker preferences (`widefield.channel.*` dynamic keys).
+- [PREFERENCES.md](PREFERENCES.md) -- persistent channel picker preferences (`widefield.channel.*` dynamic keys, including the persisted focus-channel selection).
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) -- multi-channel acquisition subsection.
 - `../../QPSC/docs/multichannel-if-overview.md` -- cross-repo design overview, vendor-agnostic primitives, OWS3 end-to-end example.
 - `../../microscope_command_server/` -- Python server implementation of `resolve_channel_plan` and `apply_channel_hardware_state`.

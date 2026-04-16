@@ -840,8 +840,7 @@ public class MicroscopeAlignmentWorkflow {
 
             // Get stage axis inversion settings (not optical flip -- see CLAUDE.md).
             // Read via the composite StagePolarity enum so all call sites agree.
-            qupath.ext.qpsc.utilities.StagePolarity stagePolarity =
-                    QPPreferenceDialog.getStagePolarityProperty();
+            qupath.ext.qpsc.utilities.StagePolarity stagePolarity = QPPreferenceDialog.getStagePolarityProperty();
             boolean stageInvertedX = stagePolarity.invertX;
             boolean stageInvertedY = stagePolarity.invertY;
 

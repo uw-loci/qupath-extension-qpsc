@@ -395,8 +395,7 @@ public class BackgroundCollectionController {
 
         // Target intensity field (for monochrome cameras only -- RGB cameras use WB calibration)
         Label targetLabel = new Label("Target Intensity:");
-        targetLabel.setTooltip(new Tooltip(
-                "Target median pixel value for adaptive background exposure.\n"
+        targetLabel.setTooltip(new Tooltip("Target median pixel value for adaptive background exposure.\n"
                 + "For 16-bit cameras: typical range 30000-55000.\n"
                 + "For 8-bit cameras: typical range 150-240.\n"
                 + "Set to 0 to use server default."));
@@ -1019,9 +1018,7 @@ public class BackgroundCollectionController {
             // Root cause of the 2026-04-15 WB/Background mislabel was exactly this
             // class of silent drift between dialog caches and global preferences.
             String globalObjective = PersistentPreferences.getLastObjective();
-            if (globalObjective != null
-                    && !globalObjective.isEmpty()
-                    && !globalObjective.equals(objective)) {
+            if (globalObjective != null && !globalObjective.isEmpty() && !globalObjective.equals(objective)) {
                 logger.warn(
                         "Background collection objective drift: dialog combo='{}' but "
                                 + "PersistentPreferences.getLastObjective()='{}'. Using dialog value. "
@@ -1041,14 +1038,14 @@ public class BackgroundCollectionController {
                     // The exposure is passed via the exposures string to the server
                     finalExposures.add(new AngleExposure(0, exposure));
                 } catch (NumberFormatException e) {
-                    Dialogs.showErrorMessage(
-                            "Invalid Exposure", "Please enter a valid numeric exposure value.");
+                    Dialogs.showErrorMessage("Invalid Exposure", "Please enter a valid numeric exposure value.");
                     return null;
                 }
             } else {
                 for (int i = 0; i < exposureFields.size(); i++) {
                     try {
-                        double exposure = Double.parseDouble(exposureFields.get(i).getText());
+                        double exposure =
+                                Double.parseDouble(exposureFields.get(i).getText());
                         double angle;
 
                         // For multi-angle modalities, read angle from editable field

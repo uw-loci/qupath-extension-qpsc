@@ -43,11 +43,7 @@ public final class AngleResolutionService {
      * @return future containing the resolved angle-exposure list
      */
     public static CompletableFuture<List<AngleExposure>> resolve(
-            String modality,
-            String objective,
-            String detector,
-            Map<String, Double> angleOverrides,
-            String wbMode) {
+            String modality, String objective, String detector, Map<String, Double> angleOverrides, String wbMode) {
 
         ModalityHandler handler = ModalityRegistry.getHandler(modality);
 
@@ -87,8 +83,7 @@ public final class AngleResolutionService {
         // Resolve angles -- handler decides whether to show dialog, apply overrides, etc.
         if (angleOverrides != null && !angleOverrides.isEmpty()) {
             logger.info("Applying angle overrides from user dialog: {}", angleOverrides);
-            return handler.getRotationAnglesWithOverrides(
-                    modality, objective, detector, angleOverrides, wbMode);
+            return handler.getRotationAnglesWithOverrides(modality, objective, detector, angleOverrides, wbMode);
         } else {
             return handler.getRotationAngles(modality, objective, detector, wbMode);
         }
