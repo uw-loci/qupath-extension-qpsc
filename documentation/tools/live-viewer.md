@@ -28,22 +28,44 @@ Double-click on the camera image to center the stage at that position.
 
 ### Focus Controls Toolbar
 
-The primary **Autofocus** button is always visible when Live mode is ON. **Sweep Focus** appears as a fallback when Autofocus is unavailable:
+The toolbar contains two focus buttons and a range selector:
 
-| Button | Visibility | What it does |
+| Control | Default Visibility | Description |
 |---|---|---|
-| **Autofocus** | Always visible | Streaming continuous-Z autofocus. ~1 second on PPM at 0.73 ms exposure. Shows red if exposure is too long. |
-| **Sweep Focus** | Appears on Autofocus failure | Stepped-Z autofocus with edge retry. Works on any camera and any stage. Includes automatic refinement as a final phase. |
+| **Autofocus** | Always visible | Primary focus button. Sends a streaming autofocus command to the server (~1 second on PPM at 0.73 ms exposure). |
+| **Sweep Focus** | Hidden | Fallback. Stepped-Z autofocus with edge retry (up to 3 total attempts). Works on any camera and any stage. Includes automatic refinement as a final phase. |
+| **Range dropdown** | Always visible | `Auto / 1um / 2um / 5um / 10um / 20um`. "Auto" uses `sweep_range_um` from `autofocus_<scope>.yml`. Explicit values override the YAML. Both Autofocus and Sweep Focus use this selection. |
 
-The **Auto / 1um / 2um / 5um / 10um / 20um** dropdown selects the search range. Autofocus and Sweep Focus both read their scan range from `sweep_range_um` in `autofocus_<scope>.yml` via the [Autofocus Configuration Editor](autofocus-editor.md), not from this dropdown.
+#### Button state transitions
 
-**Exposure pre-check.** Before running, Autofocus queries the current camera exposure. If it exceeds ~40 ms (the blur-budget ceiling on a Prior at MaxSpeed=1), the button turns red, a warning dialog appears (with a "don't show again" checkbox), and the Sweep Focus fallback button is revealed. The user can still retry Autofocus after adjusting exposure.
+The Autofocus button changes appearance to communicate status:
 
-**Autofocus feasibility gates.** If the exposure check passes, the server checks three additional pre-flight gates. If any fail, the button shows "NO FOCUS" in orange and Sweep Focus appears:
+| Button State | Appearance | What happened | Sweep Focus |
+|---|---|---|---|
+| Ready | Default styling, label "Autofocus" | Normal idle state | Hidden |
+| Running | Label "Scanning...", disabled | Server is executing streaming autofocus | Hidden, disabled |
+| Success | Returns to "Autofocus" | Focus found and committed | Hidden |
+| Exposure too long | **Red** background | Client-side pre-check: exposure > ~40 ms | **Visible** |
+| Server unavailable | **Orange** background, label "NO FOCUS" | Server pre-flight gate refused (see below) | **Visible** |
+| Error | **Red** background, label "FAILED" | Mid-scan error on server | **Visible** |
+
+After a successful Autofocus run, the Sweep Focus button is hidden again. It only appears when Autofocus cannot run.
+
+#### Exposure pre-check (client-side)
+
+Before contacting the server, Autofocus queries the current camera exposure. If it exceeds ~40 ms (the blur-budget ceiling on a Prior at MaxSpeed=1), the button turns red, a warning dialog appears (with a "don't show again" checkbox), and the Sweep Focus fallback is revealed. For JAI per-channel cameras (PPM), the check uses `max(unified, R, G, B)`. The user can still retry Autofocus after reducing exposure.
+
+#### Server feasibility gates
+
+If the exposure check passes, the server checks three additional pre-flight gates. If any fail, the button shows "NO FOCUS" in orange and Sweep Focus appears:
 
 - **Stage speed property**: focus device must expose `MaxSpeed`, `Velocity`, `Speed`, or `MaxVelocity`. Piezo stages and demo adapters typically do not.
 - **Motion blur budget**: `min_velocity * exposure` must stay under ~0.5 um (25% of a nominal 20X DOF). On a Prior at MaxSpeed=1 (~11.5 um/s), the per-stage exposure ceiling is ~43 ms. Longer exposures (dark fluorescence, low-angle PPM) will refuse.
 - **Saturation**: fewer than 5% of pixels in a pre-scan snap may be saturated, or the focus metric will not discriminate.
+
+#### Slope without peak
+
+If either Autofocus or Sweep Focus detects a focus slope (monotonic profile) but cannot find a true peak even after edge retries, the stage is left at the best Z found rather than returning to the starting position.
 
 See [AUTOFOCUS.md](../AUTOFOCUS.md#autofocus-live-viewer) for the full design story and [developer/PROBEZ.md](../developer/PROBEZ.md) for how to characterize the envelope on a new rig.
 

@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
  * <p>Locked controls include:
  * <ul>
  *   <li>Live ON/OFF toggle</li>
- *   <li>Refine Focus / Sweep Focus buttons</li>
+ *   <li>Autofocus / Sweep Focus buttons</li>
  *   <li>Stage control panel (XY/Z/R movement, joystick, presets)</li>
  *   <li>Stage control toggle button</li>
  *   <li>Double-click-to-move on the image</li>

@@ -227,9 +227,12 @@ Response formats:
 
 - `SUCCESS:<initial_z>:<final_z>:<shift>:<n_samples>:<z_span>`
   -- scan completed and committed a new focus
-- `UNAVAILABLE:<reason>` -- a pre-flight check refused to run;
-  caller should fall back to stepped Sweep Focus (this is
-  informational, not an error)
+- `UNAVAILABLE:<reason>` -- a pre-flight check refused to run,
+  or no interior peak found after edge retries. The stage is
+  moved to the best Z found if a focus slope was detected
+  (better than initial_z even without a peak). Caller should
+  fall back to stepped Sweep Focus. This is informational,
+  not an error.
 - `FAILED:<reason>` -- mid-scan error; stage state has been
   restored but no new focus was committed
 

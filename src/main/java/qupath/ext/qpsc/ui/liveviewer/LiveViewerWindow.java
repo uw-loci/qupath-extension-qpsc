@@ -85,7 +85,8 @@ public class LiveViewerWindow {
     private final ContrastSettings contrastSettings = new ContrastSettings();
 
     // Focus controllers
-    private RefineFocusController refineFocusController;
+    // RefineFocusController is used internally by SweepFocusController (Phase 5)
+    // but has no standalone button or field in the Live Viewer.
     private SweepFocusController sweepFocusController;
 
     // Live mode state (camera streaming on/off, independent of window visibility)
@@ -669,7 +670,7 @@ public class LiveViewerWindow {
         streamingFocusButton.setTooltip(new Tooltip("Primary autofocus.\n"
                 + "Uses streaming continuous-Z scan when available.\n"
                 + "If unavailable (long exposure, no speed property, saturated),\n"
-                + "fallback buttons (Refine Focus, Sweep Focus) appear."));
+                + "Sweep Focus fallback button appears."));
         streamingFocusButton.setDisable(true);
         streamingFocusButton.setOnAction(e -> handleStreamingFocus());
 
@@ -677,8 +678,9 @@ public class LiveViewerWindow {
         focusRangeCombo.getItems().addAll("Auto", "1um", "2um", "5um", "10um", "20um");
         focusRangeCombo.setValue("Auto");
         focusRangeCombo.setPrefWidth(70);
-        focusRangeCombo.setTooltip(new Tooltip("Search range for Refine Focus.\n"
-                + "Auto: determined from objective magnification.\n"
+        focusRangeCombo.setTooltip(new Tooltip("Search range for autofocus.\n"
+                + "Auto: uses sweep_range_um from autofocus YAML.\n"
+                + "Explicit values override the YAML setting.\n"
                 + "Smaller = faster but must be closer to focus.\n"
                 + "Larger = searches wider but takes longer."));
         focusRangeCombo.setDisable(true);
@@ -953,14 +955,12 @@ public class LiveViewerWindow {
     }
 
     /**
-     * Updates the Refine Focus button enabled/disabled state and text
-     * based on current live mode and refine focus running state.
-     * Must be called on FX thread.
+     * Updates focus button enabled/disabled state and text based on
+     * current live mode and running state. Must be called on FX thread.
      */
     private void updateRefineFocusButtonState() {
-        boolean refineRunning = refineFocusController != null && refineFocusController.isRunning();
         boolean sweepRunning = sweepFocusController != null && sweepFocusController.isRunning();
-        if (refineRunning || sweepRunning) {
+        if (sweepRunning) {
             // Keep showing cancel while either is running
             return;
         }
@@ -1176,7 +1176,7 @@ public class LiveViewerWindow {
                         // buttons so the user has an alternative path.
                         streamingFocusButton.setText("NO FOCUS");
                         streamingFocusButton.setStyle("-fx-font-size: 11; -fx-base: #FF9800;");
-                        streamingFocusButton.setTooltip(new Tooltip(msg + "\nUse Refine Focus or Sweep Focus instead."));
+                        streamingFocusButton.setTooltip(new Tooltip(msg + "\nUse Sweep Focus instead."));
                         streamingFocusButton.setDisable(!liveActive);
 
                         sweepFocusButton.setVisible(true);
@@ -1207,8 +1207,8 @@ public class LiveViewerWindow {
         };
 
         final double rangeOverride = streamingRangeOverride;
-        Thread streamingThread =
-                new Thread(() -> streamingFocusController.execute(objectiveParam, modalityParam, rangeOverride, callback));
+        Thread streamingThread = new Thread(
+                () -> streamingFocusController.execute(objectiveParam, modalityParam, rangeOverride, callback));
         streamingThread.setDaemon(true);
         streamingThread.setName("LiveViewer-StreamingFocus");
         streamingThread.start();
@@ -1727,11 +1727,6 @@ public class LiveViewerWindow {
         if (histogramExecutor != null) {
             histogramExecutor.shutdownNow();
             histogramExecutor = null;
-        }
-
-        // Cancel any running refine focus
-        if (refineFocusController != null && refineFocusController.isRunning()) {
-            refineFocusController.cancel();
         }
 
         // Stop stage control panel (joystick executor)

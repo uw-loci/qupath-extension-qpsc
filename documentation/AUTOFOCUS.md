@@ -16,7 +16,7 @@ During a tiled acquisition, the sample's focal plane can shift due to slide tilt
 | [Sweep Drift Check](#sweep-drift-check) | Subsequent AF positions during tiling | ~9s | Good (narrow Z range) |
 | [Z-Focus Tilt Model](#z-focus-tilt-prediction) | Between annotations | Instant | Approximate (guides AF search center) |
 
-Additionally, the [Live Viewer](tools/live-viewer.md) provides an interactive **Autofocus** button (primary, uses streaming scan when available) with **Sweep Focus** and **Refine Focus** as fallbacks that appear only when Autofocus is unavailable.
+Additionally, the [Live Viewer](tools/live-viewer.md) provides an interactive **Autofocus** button (primary, uses streaming scan when available) with **Sweep Focus** as a fallback that appears only when Autofocus is unavailable.
 
 ---
 
@@ -100,8 +100,8 @@ After the first tissue position uses standard AF, subsequent positions use a fas
 - Uses fewer steps (`sweep_n_steps`, default 6-10)
 - **Boundary retry (3 attempts):** When the peak is at a sweep boundary (monotonic profile), the sweep extends up to 2 additional times in the peak direction, each shifting the window by one full range. Total coverage is 3x `sweep_range_um` (e.g., 30um for a 10um setting), clamped to stage Z limits. This prevents dead zones where autofocus cannot recover from a bad starting Z on tilted samples.
 - Rejects flat profiles (score variation < 2% -- no retry, since retrying won't help)
-- If all attempts fail to find an interior peak, **keeps the current Z and continues** (no expensive fallback)
-- Failed sweeps (zero drift) are not recorded in the AF position map, preventing stale Z values from propagating to neighboring tiles via nearest-neighbor lookup
+- If all attempts fail to find an interior peak but a focus slope is detected, **moves to the best Z found** (the boundary position with the highest metric) rather than returning to the starting Z. This is better than no correction even without a true peak.
+- Failed sweeps with flat profiles (no slope, no drift) are not recorded in the AF position map, preventing stale Z values from propagating to neighboring tiles via nearest-neighbor lookup
 
 The sweep is designed for corrections of 1-5um per attempt, with the retry loop extending reach to ~15um.
 
@@ -127,7 +127,7 @@ On PPM at the production 0.73 ms exposure, a 6 um Autofocus scan completes in ~1
 
 ### Feasibility envelope
 
-Autofocus is **opt-in with a graceful fallback**. Before running, the server checks three gates and returns `UNAVAILABLE` with a specific reason if any fail. When this happens, the Refine Focus and Sweep Focus buttons appear in the Live Viewer toolbar:
+Autofocus is **opt-in with a graceful fallback**. Before running, the client checks exposure and the server checks three gates. If any check fails, the Sweep Focus fallback button appears in the Live Viewer toolbar:
 
 | Gate | What it checks | Typical failure |
 |---|---|---|
@@ -135,7 +135,11 @@ Autofocus is **opt-in with a graceful fallback**. Before running, the server che
 | **Motion blur budget** | `expected_blur = min_velocity * exposure_ms` must be within 25% of DOF (~0.5 um default) | Long exposures on slow stages -- e.g., above ~43 ms on Prior at MaxSpeed=1 |
 | Saturation | Fewer than 5% of pixels saturated in a pre-scan snap | Camera overexposed -- metric would not discriminate |
 
-When Autofocus returns UNAVAILABLE, the button shows "NO FOCUS" in orange with a tooltip explaining the reason, and the Refine Focus and Sweep Focus fallback buttons appear. UNAVAILABLE is informational, not an error.
+**Exposure pre-check (client-side).** Before contacting the server, the Live Viewer queries the current camera exposure. If it exceeds ~40 ms (the blur-budget ceiling on a Prior at MaxSpeed=1), the Autofocus button turns red, a warning dialog appears (with a "don't show again" checkbox), and the Sweep Focus fallback becomes visible. For JAI per-channel cameras (PPM), the check uses `max(unified, R, G, B)`. The user can still click Autofocus after adjusting exposure.
+
+When Autofocus returns UNAVAILABLE from the server, the button shows "NO FOCUS" in orange with a tooltip explaining the reason, and the Sweep Focus fallback button appears. UNAVAILABLE is informational, not an error.
+
+If no peak is found but a focus slope is detected (monotonic profile after edge retries), the stage is left at the best Z found rather than returning to the starting position.
 
 ### When it helps
 
@@ -147,7 +151,7 @@ When Autofocus returns UNAVAILABLE, the button shows "NO FOCUS" in orange with a
 
 - **Long-exposure modalities** (dark fluorescence, low-angle PPM): Autofocus's blur budget is dominated by exposure, and above the per-stage ceiling it will refuse
 - **Slow/fast-readout cameras where `snap_image` is competitive with streaming**: Autofocus's advantage disappears (and Sweep is already 3-4x faster thanks to the busy-poll wait)
-- **First-AF-from-scratch situations**: Autofocus is designed as a drift check, not a full search. Use Standard Autofocus or Refine Focus for recovery.
+- **First-AF-from-scratch situations**: Autofocus is designed as a drift check, not a full search. Use a wider range (select from the Live Viewer dropdown) or Sweep Focus for recovery from far-from-focus starting positions.
 
 ### Configuration
 
@@ -370,6 +374,6 @@ See the [Autofocus Editor](tools/autofocus-editor.md) for detailed parameter des
 
 - [Autofocus Editor](tools/autofocus-editor.md) -- GUI for per-objective parameter configuration
 - [Autofocus Benchmark](tools/autofocus-benchmark.md) -- Systematic parameter optimization tool
-- [Live Viewer](tools/live-viewer.md) -- Interactive focus tools (Sweep Focus, Refine Focus)
+- [Live Viewer](tools/live-viewer.md) -- Interactive focus tools (Autofocus, Sweep Focus)
 - [Preferences](PREFERENCES.md) -- "No Manual Autofocus" setting
 - [Autofocus YAML Template](../../microscope_configurations/templates/autofocus_template.yml) -- Full parameter reference with inline documentation
