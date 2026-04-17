@@ -56,6 +56,7 @@ import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
+import qupath.ext.qpsc.utilities.StageImageTransform;
 import qupath.ext.qpsc.utilities.StagePositionManager;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
@@ -2661,87 +2662,35 @@ public class StageControlPanel extends VBox {
         double centroidX = selectedObject.getROI().getCentroidX();
         double centroidY = selectedObject.getROI().getCentroidY();
 
-        // Try sub-image XY offset path first
+        // Try sub-image alignment first.
+        // Sub-images from BoundingBox acquisitions have their own pixel-to-stage
+        // alignment registered by autoRegisterBoundsTransformIfAvailable(). This
+        // is the most accurate path -- use it when available.
         if (gui.getProject() != null) {
             try {
                 @SuppressWarnings("unchecked")
                 Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
-                // Use robust entry lookup (project.getEntry() alone can return null)
-                ProjectImageEntry<BufferedImage> entry =
-                        QPProjectFunctions.findImageInProject(project, gui.getImageData());
-                if (entry != null) {
-                    double[] offset = ImageMetadataManager.getXYOffset(entry);
-                    if (offset[0] != 0 || offset[1] != 0) {
-                        double pixelSize = gui.getImageData()
-                                .getServer()
-                                .getPixelCalibration()
-                                .getAveragedPixelSizeMicrons();
-
-                        // Derive the pixel-to-stage direction from the parent alignment
-                        // transform's scale signs. The alignment bakes in the combined
-                        // effect of optical flip and stage inversion; reading preferences
-                        // directly is unreliable (persisted stageInverted may differ from
-                        // auto-detected values).
-                        double signX = 1.0;
-                        double signY = 1.0;
-                        String baseName = entry.getMetadata().get(ImageMetadataManager.BASE_IMAGE);
-                        if (baseName != null && !baseName.isEmpty()) {
-                            AffineTransform parentTransform =
-                                    AffineTransformManager.loadSlideAlignment(project, baseName);
-                            if (parentTransform != null) {
-                                signX = parentTransform.getScaleX() < 0 ? -1.0 : 1.0;
-                                signY = parentTransform.getScaleY() < 0 ? -1.0 : 1.0;
-                            } else {
-                                logger.warn(
-                                        "Could not load parent alignment for '{}' " + "- defaulting sign to +1",
-                                        baseName);
-                            }
-                        } else {
-                            logger.warn(
-                                    "No base_image metadata on entry '{}' " + "- defaulting sign to +1",
-                                    entry.getImageName());
-                        }
-
-                        int imgW = gui.getImageData().getServer().getWidth();
-                        int imgH = gui.getImageData().getServer().getHeight();
-
-                        // The XY offset stores transform(annotation corner), but the
-                        // stitched image extends half a frame beyond the annotation in
-                        // each direction (TilingUtilities: startX = minX - frameWidth/2).
-                        // After stitcher normalization, the image center (not the corner)
-                        // aligns with the annotation corner. So centroid coordinates must
-                        // be measured relative to the image center, not pixel (0,0).
-                        double halfW = imgW / 2.0;
-                        double halfH = imgH / 2.0;
-                        double targetX = offset[0] + (centroidX - halfW) * pixelSize * signX;
-                        double targetY = offset[1] + (centroidY - halfH) * pixelSize * signY;
+                String subImageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+                if (subImageName != null && !subImageName.isEmpty()) {
+                    AffineTransform subAlignment =
+                            AffineTransformManager.loadSlideAlignment(project, subImageName);
+                    if (subAlignment != null) {
+                        double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
+                                new double[] {centroidX, centroidY}, subAlignment);
                         logger.info(
-                                "Sub-image centroid: pixel ({}, {}) - center ({}, {}) "
-                                        + "* {}um * sign({}, {}) [base={}] "
-                                        + "+ offset ({}, {}) -> stage ({}, {})",
+                                "Sub-image centroid via alignment: pixel ({}, {}) "
+                                        + "-> stage ({}, {}) [image={}]",
                                 String.format("%.1f", centroidX),
                                 String.format("%.1f", centroidY),
-                                String.format("%.1f", halfW),
-                                String.format("%.1f", halfH),
-                                String.format("%.4f", pixelSize),
-                                String.format("%.0f", signX),
-                                String.format("%.0f", signY),
-                                baseName,
-                                String.format("%.1f", offset[0]),
-                                String.format("%.1f", offset[1]),
-                                String.format("%.1f", targetX),
-                                String.format("%.1f", targetY));
-                        moveToStagePosition(targetX, targetY);
+                                String.format("%.1f", stageCoords[0]),
+                                String.format("%.1f", stageCoords[1]),
+                                subImageName);
+                        moveToStagePosition(stageCoords[0], stageCoords[1]);
                         return;
-                    } else {
-                        logger.info("Sub-image entry found but XY offset is (0,0): {}", entry.getImageName());
                     }
-                } else {
-                    logger.warn("Could not find project entry for current image - "
-                            + "sub-image offset navigation unavailable");
                 }
             } catch (Exception e) {
-                logger.warn("Could not use XY offset path: {}", e.getMessage());
+                logger.debug("Could not use sub-image alignment path: {}", e.getMessage());
             }
         }
 
