@@ -64,6 +64,7 @@ public class StageMapWindow {
     private Stage stage;
     private StageMapCanvas canvas;
     private ComboBox<StageInsert> insertComboBox;
+    private ComboBox<AffineTransformManager.TransformPreset> presetComboBox;
     private Label positionLabel;
     private Label targetLabel;
     private Label statusLabel;
@@ -97,6 +98,7 @@ public class StageMapWindow {
     private StageMapWindow() {
         buildUI();
         loadInsertConfigurations();
+        loadTransformPresets();
     }
 
     /**
@@ -272,6 +274,41 @@ public class StageMapWindow {
             updateMovementWarning();
         });
 
+        // Preset transform selector -- selects which scanner-to-stage alignment to use for macro overlay
+        Label presetLabel = new Label("Preset:");
+        presetLabel.setStyle("-fx-text-fill: #ccc;");
+
+        presetComboBox = new ComboBox<>();
+        presetComboBox.setPrefWidth(180);
+        presetComboBox.setTooltip(new Tooltip(
+                "Select a saved scanner-to-stage transform preset.\n"
+                        + "This determines how the macro overlay is positioned\n"
+                        + "on the stage map.\n\n"
+                        + "Presets are created during Microscope Alignment."));
+        presetComboBox.setCellFactory(lv -> new ListCell<>() {
+            @Override
+            protected void updateItem(AffineTransformManager.TransformPreset item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.getName() + " (" + item.getMountingMethod() + ")");
+            }
+        });
+        presetComboBox.setButtonCell(new ListCell<>() {
+            @Override
+            protected void updateItem(AffineTransformManager.TransformPreset item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.getName() + " (" + item.getMountingMethod() + ")");
+            }
+        });
+        presetComboBox.setOnAction(e -> {
+            AffineTransformManager.TransformPreset selected = presetComboBox.getValue();
+            if (selected != null) {
+                PersistentPreferences.setSavedTransformName(selected.getName());
+                logger.info("Stage Map preset changed to: '{}' ({})",
+                        selected.getName(), selected.getMountingMethod());
+                checkMacroOverlayAvailability();
+            }
+        });
+
         // Movement direction warning label - shows when Live View controls move opposite to expected
         movementWarningLabel = new Label();
         movementWarningLabel.setStyle("-fx-text-fill: orange; -fx-font-size: 10px; -fx-font-weight: bold;");
@@ -371,6 +408,8 @@ public class StageMapWindow {
                 .addAll(
                         insertLabel,
                         insertComboBox,
+                        presetLabel,
+                        presetComboBox,
                         spacer,
                         applyFlipsCheckbox,
                         macroOverlayCheckbox,
@@ -510,6 +549,79 @@ public class StageMapWindow {
             logger.error("Error loading insert configurations: {}", e.getMessage(), e);
             statusLabel.setText("Config error");
             statusLabel.setStyle("-fx-text-fill: #f66;");
+        }
+    }
+
+    /**
+     * Loads transform presets for the current microscope into the preset ComboBox.
+     * Filters to show only presets matching the configured microscope name.
+     * Restores the previously selected preset from preferences if available.
+     */
+    private void loadTransformPresets() {
+        if (presetComboBox == null) return;
+
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath == null || configPath.isEmpty()) {
+                logger.info("No microscope config - preset selector disabled");
+                presetComboBox.setDisable(true);
+                presetComboBox.setTooltip(new Tooltip(
+                        "No microscope configuration loaded.\n"
+                                + "Set a configuration file in QuPath preferences."));
+                return;
+            }
+
+            // Get microscope name for filtering
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            String microscopeName = (mgr != null) ? mgr.getMicroscopeName() : null;
+
+            // Load transforms
+            AffineTransformManager transformManager =
+                    new AffineTransformManager(new File(configPath).getParent());
+
+            java.util.List<AffineTransformManager.TransformPreset> presets;
+            if (microscopeName != null && !"Unknown".equals(microscopeName)) {
+                presets = transformManager.getTransformsForMicroscope(microscopeName);
+                logger.info("Loaded {} presets for microscope '{}'", presets.size(), microscopeName);
+            } else {
+                presets = new java.util.ArrayList<>(transformManager.getAllTransforms());
+                presets.sort(java.util.Comparator.comparing(AffineTransformManager.TransformPreset::getName));
+                logger.info("No microscope name available - showing all {} presets", presets.size());
+            }
+
+            if (presets.isEmpty()) {
+                presetComboBox.setDisable(true);
+                presetComboBox.setTooltip(new Tooltip(
+                        "No transform presets available.\n"
+                                + "Create one using Microscope Alignment\n"
+                                + "in the Existing Image workflow."));
+                return;
+            }
+
+            presetComboBox.setDisable(false);
+            presetComboBox.setItems(FXCollections.observableArrayList(presets));
+
+            // Restore saved selection
+            String savedName = PersistentPreferences.getSavedTransformName();
+            if (savedName != null && !savedName.isEmpty()) {
+                presets.stream()
+                        .filter(p -> p.getName().equals(savedName))
+                        .findFirst()
+                        .ifPresent(presetComboBox::setValue);
+            }
+
+            // If nothing selected but presets exist, select first
+            if (presetComboBox.getValue() == null && !presets.isEmpty()) {
+                presetComboBox.getSelectionModel().selectFirst();
+                AffineTransformManager.TransformPreset first = presetComboBox.getValue();
+                if (first != null) {
+                    PersistentPreferences.setSavedTransformName(first.getName());
+                    logger.info("Auto-selected first preset: '{}'", first.getName());
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error loading transform presets: {}", e.getMessage(), e);
+            presetComboBox.setDisable(true);
         }
     }
 
