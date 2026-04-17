@@ -14,7 +14,7 @@ This document provides an overview of all utilities available in the QPSC extens
 | [Acquisition Wizard](tools/acquisition-wizard.md) | Guided setup wizard for new users | Extensions > QP Scope > Acquisition Wizard |
 | [Live Camera Viewer](tools/live-viewer.md) | Real-time camera feed with integrated stage control | Extensions > QP Scope > Live Viewer |
 | [Camera Control](tools/camera-control.md) | View/test camera exposure and gain settings | Extensions > QP Scope > Camera Control... |
-| [Stage Map](tools/stage-map.md) | Visual map showing stage insert with slide positions | Extensions > QP Scope > Stage Map |
+| [Stage Map](tools/stage-map.md) | Visual map with slide positions, scanner preset selector, and macro overlay | Extensions > QP Scope > Stage Map |
 | [Communication Settings](tools/server-connection.md) | Configure server connection and notification alerts | Extensions > QP Scope > Communication Settings... |
 | [Background Collection](tools/background-collection.md) | Capture flat-field correction images | Extensions > QP Scope > Collect Background Images |
 | [White Balance Calibration](tools/white-balance-calibration.md) | Calibrate JAI 3-CCD camera white balance | Extensions > QP Scope > White Balance Calibration... |
@@ -47,7 +47,7 @@ View and test camera exposure and gain settings loaded from calibration profiles
 
 ### [Stage Map](tools/stage-map.md)
 
-Visual representation of the microscope stage insert showing slide positions and current stage location. Supports configurable macro image overlay for navigation context.
+Visual representation of the microscope stage insert showing slide positions and current stage location. Supports configurable macro image overlay for navigation context. Includes a scanner preset selector for choosing which scanner-to-stage alignment to use for the overlay (e.g., "Ocus40 to PPM").
 
 If the microscope config has no `stage.inserts` block, the Stage Map synthesizes a single-slide insert at the center of `stage.limits` using `slide_size_um` for the slide footprint. This lets scopes with only basic stage-limits calibration get a working Stage Map without an explicit per-instrument insert block.
 
