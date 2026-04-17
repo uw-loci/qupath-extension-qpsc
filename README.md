@@ -1,6 +1,6 @@
 # QuPath Scope Control (QPSC) Extension
 
-[![QuPath Version](https://img.shields.io/badge/qupath-0.6.0+-blue)](https://qupath.github.io/)
+[![QuPath Version](https://img.shields.io/badge/qupath-0.7.0+-blue)](https://qupath.github.io/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](#license)
 [![Status](https://img.shields.io/badge/status-active%20development-orange)](#)
 
@@ -127,7 +127,7 @@ All motorized components must be controllable through [Micro-Manager](https://mi
 
 **Software Requirements:**
 - **Operating System**: **Windows 10+** (required -- microscope hardware drivers and Micro-Manager device adapters are Windows-only)
-- [QuPath 0.6.0+](https://qupath.github.io/) with Java 21+
+- [QuPath 0.7.0+](https://qupath.github.io/) with Java 25+
 - [qupath-extension-tiles-to-pyramid](https://github.com/uw-loci/qupath-extension-tiles-to-pyramid) - Required for image stitching
 - [Micro-Manager 2.0](https://micro-manager.org/) configured for your microscope
 - Python 3.10+ with [Pycro-Manager](https://pycro-manager.readthedocs.io/) installed
@@ -672,7 +672,7 @@ If you want to build the extension yourself (for development or to get the lates
 
 ### Prerequisites
 
-- **Java 21+** (JDK, not just JRE)
+- **Java 25+** (JDK, not just JRE)
 - **Git** for cloning repositories
 
 ### Build Steps

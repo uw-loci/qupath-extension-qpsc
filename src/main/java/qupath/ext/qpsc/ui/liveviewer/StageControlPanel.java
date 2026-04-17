@@ -56,7 +56,6 @@ import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
-import qupath.ext.qpsc.utilities.StageImageTransform;
 import qupath.ext.qpsc.utilities.StagePositionManager;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
@@ -2672,14 +2671,12 @@ public class StageControlPanel extends VBox {
                 Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
                 String subImageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
                 if (subImageName != null && !subImageName.isEmpty()) {
-                    AffineTransform subAlignment =
-                            AffineTransformManager.loadSlideAlignment(project, subImageName);
+                    AffineTransform subAlignment = AffineTransformManager.loadSlideAlignment(project, subImageName);
                     if (subAlignment != null) {
                         double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
                                 new double[] {centroidX, centroidY}, subAlignment);
                         logger.info(
-                                "Sub-image centroid via alignment: pixel ({}, {}) "
-                                        + "-> stage ({}, {}) [image={}]",
+                                "Sub-image centroid via alignment: pixel ({}, {}) " + "-> stage ({}, {}) [image={}]",
                                 String.format("%.1f", centroidX),
                                 String.format("%.1f", centroidY),
                                 String.format("%.1f", stageCoords[0]),

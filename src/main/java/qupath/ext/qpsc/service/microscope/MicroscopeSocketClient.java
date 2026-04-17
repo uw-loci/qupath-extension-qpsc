@@ -102,6 +102,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
     private final AtomicBoolean reconnecting = new AtomicBoolean(false);
     /** Exponential backoff for the main socket, mirrors the aux pattern. */
     private volatile long mainReconnectBackoffMs;
+
     private static final long MAIN_RECONNECT_BACKOFF_MAX_MS = 30_000;
 
     // Health monitoring
@@ -2860,8 +2861,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
                 while (attempts < maxReconnectAttempts && !connected.get() && !shuttingDown.get()) {
                     attempts++;
-                    logger.info("Reconnection attempt {} of {} (backoff {}ms)",
-                            attempts, maxReconnectAttempts, mainReconnectBackoffMs);
+                    logger.info(
+                            "Reconnection attempt {} of {} (backoff {}ms)",
+                            attempts,
+                            maxReconnectAttempts,
+                            mainReconnectBackoffMs);
 
                     try {
                         Thread.sleep(mainReconnectBackoffMs);
@@ -2875,14 +2879,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     } catch (Exception e) {
                         logger.warn("Reconnection attempt {} failed: {}", attempts, e.getMessage());
                         // Exponential backoff, capped at 30s
-                        mainReconnectBackoffMs = Math.min(
-                                mainReconnectBackoffMs * 2, MAIN_RECONNECT_BACKOFF_MAX_MS);
+                        mainReconnectBackoffMs = Math.min(mainReconnectBackoffMs * 2, MAIN_RECONNECT_BACKOFF_MAX_MS);
                     }
                 }
 
                 if (!connected.get() && !shuttingDown.get()) {
-                    logger.error("Failed to reconnect after {} attempts (next health check "
-                            + "in ~{}s may retry)", maxReconnectAttempts,
+                    logger.error(
+                            "Failed to reconnect after {} attempts (next health check " + "in ~{}s may retry)",
+                            maxReconnectAttempts,
                             healthCheckIntervalMs / 1000);
                 }
             } finally {
@@ -2927,14 +2931,26 @@ public class MicroscopeSocketClient implements AutoCloseable {
      */
     private void closeSocketQuietly() {
         try {
-            if (input != null) { input.close(); input = null; }
-        } catch (Exception ignored) { }
+            if (input != null) {
+                input.close();
+                input = null;
+            }
+        } catch (Exception ignored) {
+        }
         try {
-            if (output != null) { output.close(); output = null; }
-        } catch (Exception ignored) { }
+            if (output != null) {
+                output.close();
+                output = null;
+            }
+        } catch (Exception ignored) {
+        }
         try {
-            if (socket != null && !socket.isClosed()) { socket.close(); socket = null; }
-        } catch (Exception ignored) { }
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
+                socket = null;
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     /**

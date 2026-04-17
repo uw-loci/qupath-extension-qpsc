@@ -142,8 +142,7 @@ public class ChannelOverrideMergeTest {
 
     // Minimal self-contained test config. Keeps the BF channel library small
     // (one DAPI channel as a control) so the assertions can be precise.
-    private static final String TEST_CONFIG =
-            """
+    private static final String TEST_CONFIG = """
 microscope:
   name: TestScope
   type: Test

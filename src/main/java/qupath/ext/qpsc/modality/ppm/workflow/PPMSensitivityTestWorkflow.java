@@ -193,16 +193,18 @@ public class PPMSensitivityTestWorkflow {
             testTypeCombo.valueProperty().addListener((obs, old, newValue) -> {
                 // Update description
                 switch (newValue) {
-                    case "comprehensive" -> testDescLabel.setText(
-                            "Runs all test types in sequence for complete analysis (20-30 min)");
-                    case "standard" -> testDescLabel.setText(
-                            "Tests at all standard PPM angles: 0, 7, 14, ..., 91 degrees (5-8 min)");
-                    case "deviation" -> testDescLabel.setText(
-                            "Fine angular deviations (0.05-1.0 deg) around base angle (3-5 min)");
-                    case "repeatability" -> testDescLabel.setText(
-                            "Returns to same angle N times to measure mechanical precision (2-4 min)");
-                    case "calibration" -> testDescLabel.setText(
-                            "Compares current angles vs optimal from polarizer calibration (3-5 min)");
+                    case "comprehensive" ->
+                        testDescLabel.setText("Runs all test types in sequence for complete analysis (20-30 min)");
+                    case "standard" ->
+                        testDescLabel.setText("Tests at all standard PPM angles: 0, 7, 14, ..., 91 degrees (5-8 min)");
+                    case "deviation" ->
+                        testDescLabel.setText("Fine angular deviations (0.05-1.0 deg) around base angle (3-5 min)");
+                    case "repeatability" ->
+                        testDescLabel.setText(
+                                "Returns to same angle N times to measure mechanical precision (2-4 min)");
+                    case "calibration" ->
+                        testDescLabel.setText(
+                                "Compares current angles vs optimal from polarizer calibration (3-5 min)");
                 }
 
                 // Enable/disable fields based on test type

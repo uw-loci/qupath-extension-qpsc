@@ -160,9 +160,9 @@ public class QPScopeController {
                 logger.debug("Launching background collection workflow");
                 BackgroundCollectionWorkflow.run();
             }
-                // PPM workflows (polarizerCalibration, birefringenceOptimization,
-                // sunburstCalibration, ppmSensitivityTest) are now registered dynamically
-                // via PPMModalityHandler.getMenuContributions() -- no case statements needed
+            // PPM workflows (polarizerCalibration, birefringenceOptimization,
+            // sunburstCalibration, ppmSensitivityTest) are now registered dynamically
+            // via PPMModalityHandler.getMenuContributions() -- no case statements needed
             case "autofocusEditor" -> {
                 logger.debug("Launching autofocus settings editor");
                 AutofocusEditorWorkflow.run();
@@ -171,7 +171,7 @@ public class QPScopeController {
                 logger.debug("Launching autofocus parameter benchmark");
                 AutofocusBenchmarkWorkflow.run();
             }
-                // ppmSensitivityTest -- handled via dynamic menu registration
+            // ppmSensitivityTest -- handled via dynamic menu registration
             case "whiteBalance" -> {
                 logger.debug("Launching white balance calibration workflow");
                 WhiteBalanceWorkflow.run();

@@ -280,11 +280,10 @@ public class StageMapWindow {
 
         presetComboBox = new ComboBox<>();
         presetComboBox.setPrefWidth(180);
-        presetComboBox.setTooltip(new Tooltip(
-                "Select a saved scanner-to-stage transform preset.\n"
-                        + "This determines how the macro overlay is positioned\n"
-                        + "on the stage map.\n\n"
-                        + "Presets are created during Microscope Alignment."));
+        presetComboBox.setTooltip(new Tooltip("Select a saved scanner-to-stage transform preset.\n"
+                + "This determines how the macro overlay is positioned\n"
+                + "on the stage map.\n\n"
+                + "Presets are created during Microscope Alignment."));
         presetComboBox.setCellFactory(lv -> new ListCell<>() {
             @Override
             protected void updateItem(AffineTransformManager.TransformPreset item, boolean empty) {
@@ -303,8 +302,7 @@ public class StageMapWindow {
             AffineTransformManager.TransformPreset selected = presetComboBox.getValue();
             if (selected != null) {
                 PersistentPreferences.setSavedTransformName(selected.getName());
-                logger.info("Stage Map preset changed to: '{}' ({})",
-                        selected.getName(), selected.getMountingMethod());
+                logger.info("Stage Map preset changed to: '{}' ({})", selected.getName(), selected.getMountingMethod());
                 checkMacroOverlayAvailability();
             }
         });
@@ -566,8 +564,7 @@ public class StageMapWindow {
                 logger.info("No microscope config - preset selector disabled");
                 presetComboBox.setDisable(true);
                 presetComboBox.setTooltip(new Tooltip(
-                        "No microscope configuration loaded.\n"
-                                + "Set a configuration file in QuPath preferences."));
+                        "No microscope configuration loaded.\n" + "Set a configuration file in QuPath preferences."));
                 return;
             }
 
@@ -576,8 +573,7 @@ public class StageMapWindow {
             String microscopeName = (mgr != null) ? mgr.getMicroscopeName() : null;
 
             // Load transforms
-            AffineTransformManager transformManager =
-                    new AffineTransformManager(new File(configPath).getParent());
+            AffineTransformManager transformManager = new AffineTransformManager(new File(configPath).getParent());
 
             java.util.List<AffineTransformManager.TransformPreset> presets;
             if (microscopeName != null && !"Unknown".equals(microscopeName)) {
@@ -591,10 +587,9 @@ public class StageMapWindow {
 
             if (presets.isEmpty()) {
                 presetComboBox.setDisable(true);
-                presetComboBox.setTooltip(new Tooltip(
-                        "No transform presets available.\n"
-                                + "Create one using Microscope Alignment\n"
-                                + "in the Existing Image workflow."));
+                presetComboBox.setTooltip(new Tooltip("No transform presets available.\n"
+                        + "Create one using Microscope Alignment\n"
+                        + "in the Existing Image workflow."));
                 return;
             }
 

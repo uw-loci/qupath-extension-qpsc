@@ -953,8 +953,7 @@ public class ExistingAlignmentPath {
             ImageData<BufferedImage> flippedData;
             if (currentImageData != null
                     && currentImageData.getServer().getMetadata().getName() != null
-                    && currentImageData.getServer().getMetadata().getName()
-                            .equals(flippedEntry.getImageName())) {
+                    && currentImageData.getServer().getMetadata().getName().equals(flippedEntry.getImageName())) {
                 logger.info("Flipped entry is the current viewer image -- using live hierarchy");
                 flippedData = currentImageData;
             } else {

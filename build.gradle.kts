@@ -17,7 +17,7 @@ plugins {
 qupathExtension {
     name = "qupath-extension-qpsc"
     group = "io.github.uw-loci"
-    version = "0.4.2"
+    version = "0.5.0"
     description = "A QuPath extension to allow interaction with a microscope through PycroManager and MicroManager."
     automaticModule = "io.github.uw-loci.extension.qpsc"
 }
@@ -28,7 +28,7 @@ publishing {
         create<MavenPublication>("maven") {
             groupId = "io.github.uw-loci"
             artifactId = "qupath-extension-qpsc"
-            version = "0.4.2"
+            version = "0.5.0"
             from(components["java"])
         }
     }
@@ -79,7 +79,7 @@ dependencies {
     shadow(libs.gson)
 
     // Bundle tiles-to-pyramid into the shadow JAR for single-file distribution
-    shadow("io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.2.2")
+    shadow("io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.3.0")
     // CompileOnly - QuPath provides bioformats at runtime, we just compile against it
     // This avoids trying to resolve OME transitive dependencies during build
     compileOnly("io.github.qupath:qupath-extension-bioformats:0.7.0")
@@ -141,7 +141,7 @@ tasks.test {
 spotless {
     java {
         target("src/**/*.java")
-        palantirJavaFormat("2.50.0")
+        palantirJavaFormat("2.90.0")
         trimTrailingWhitespace()
         endWithNewline()
     }
