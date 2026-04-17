@@ -88,6 +88,10 @@ public class MicroscopeConfigManager {
     public static synchronized MicroscopeConfigManager getInstance(String configPath) {
         if (instance == null) {
             instance = new MicroscopeConfigManager(configPath);
+        } else if (configPath != null && !configPath.equals(instance.configPath)) {
+            logger.info("Config path changed from {} to {} -- reloading",
+                    instance.configPath, configPath);
+            instance.reload(configPath);
         }
         return instance;
     }
