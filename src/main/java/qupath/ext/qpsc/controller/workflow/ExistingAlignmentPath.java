@@ -942,10 +942,24 @@ public class ExistingAlignmentPath {
             return AnnotationHelper.getCurrentValidAnnotations(gui, null); // null = no class filter
         }
 
-        // Read annotations directly from the flipped entry's saved data
+        // Read annotations from the flipped entry.
+        // If the flipped entry is currently open in the viewer, use the LIVE
+        // in-memory hierarchy (which has unsaved annotations the user just drew).
+        // Only fall back to readImageData() (saved-to-disk) when the viewer
+        // is showing a different image.
         try {
             logger.info("Reading annotations from flipped entry: {}", flippedEntry.getImageName());
-            ImageData<BufferedImage> flippedData = flippedEntry.readImageData();
+            ImageData<BufferedImage> currentImageData = gui.getImageData();
+            ImageData<BufferedImage> flippedData;
+            if (currentImageData != null
+                    && currentImageData.getServer().getMetadata().getName() != null
+                    && currentImageData.getServer().getMetadata().getName()
+                            .equals(flippedEntry.getImageName())) {
+                logger.info("Flipped entry is the current viewer image -- using live hierarchy");
+                flippedData = currentImageData;
+            } else {
+                flippedData = flippedEntry.readImageData();
+            }
             var hierarchy = flippedData.getHierarchy();
             var allAnnotations = hierarchy.getAnnotationObjects();
 
