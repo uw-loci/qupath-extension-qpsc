@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import javafx.application.ColorScheme;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -31,6 +32,7 @@ import qupath.ext.qpsc.ui.CalibrationChecker.StepStatus;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.gui.prefs.QuPathStyleManager;
 
 /**
  * Acquisition Wizard - a checklist-style dashboard that guides users through
@@ -52,6 +54,24 @@ public class AcquisitionWizardDialog {
     private static final String BLUE = "#2d5aa0";
     private static final String BLUE_HOVER = "#3d6ab0";
     private static final double EXPANDED_WIDTH = 520;
+
+    /** Returns true when QuPath is using a dark color scheme. */
+    private static boolean isDark() {
+        return QuPathStyleManager.getStyleColorScheme() == ColorScheme.DARK;
+    }
+
+    // Theme-adaptive colors queried at build time
+    private static String bgMain()      { return isDark() ? "#2b2b2b" : "white"; }
+    private static String bgSection()   { return isDark() ? "#333333" : "#f5f5f5"; }
+    private static String bgRow()       { return isDark() ? "#363636" : "white"; }
+    private static String bgIcon()      { return isDark() ? "#3a4a60" : "#e8eef7"; }
+    private static String borderColor() { return isDark() ? "#555"    : "#e0e0e0"; }
+    private static String borderOuter() { return isDark() ? "#555"    : "#bbb"; }
+    private static String borderSection() { return isDark() ? "#555"  : "#ddd"; }
+    private static String textPrimary() { return isDark() ? "#ddd"    : "black"; }
+    private static String textSecondary() { return isDark() ? "#aaa"  : "#666"; }
+    private static String textMuted()   { return isDark() ? "#888"    : "#999"; }
+    private static String textSectionHeader() { return isDark() ? "#aaa" : "#888"; }
 
     private static Stage wizardStage;
 
@@ -202,9 +222,9 @@ public class AcquisitionWizardDialog {
     private VBox buildExpandedContent() {
         VBox root = new VBox(0);
         root.setPrefWidth(EXPANDED_WIDTH);
-        root.setStyle("-fx-background-color: white; -fx-background-radius: 8; "
-                + "-fx-border-color: #bbb; -fx-border-radius: 8; -fx-border-width: 1; "
-                + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.2), 8, 0, 0, 2);");
+        root.setStyle("-fx-background-color: " + bgMain() + "; -fx-background-radius: 8; "
+                + "-fx-border-color: " + borderOuter() + "; -fx-border-radius: 8; -fx-border-width: 1; "
+                + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.3), 8, 0, 0, 2);");
 
         // -- Draggable header with window controls --
         root.getChildren().add(createHeader());
@@ -421,31 +441,38 @@ public class AcquisitionWizardDialog {
     private VBox createHardwareSection() {
         VBox section = new VBox(6);
         section.setPadding(new Insets(12, 16, 8, 16));
-        section.setStyle("-fx-background-color: #f5f5f5; -fx-border-color: #ddd; -fx-border-width: 0 0 1 0;");
+        section.setStyle("-fx-background-color: " + bgSection() + "; -fx-border-color: " + borderSection()
+                + "; -fx-border-width: 0 0 1 0;");
 
         Label label = new Label("Hardware Configuration");
-        label.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
+        label.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: " + textPrimary() + ";");
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(6);
 
         // Modality
-        grid.add(new Label("Modality:"), 0, 0);
+        Label modalityLabel = new Label("Modality:");
+        modalityLabel.setStyle("-fx-text-fill: " + textPrimary() + ";");
+        grid.add(modalityLabel, 0, 0);
         modalityCombo = new ComboBox<>();
         modalityCombo.setMaxWidth(Double.MAX_VALUE);
         modalityCombo.setOnAction(e -> onModalityChanged());
         grid.add(modalityCombo, 1, 0);
 
         // Objective
-        grid.add(new Label("Objective:"), 0, 1);
+        Label objectiveLabel = new Label("Objective:");
+        objectiveLabel.setStyle("-fx-text-fill: " + textPrimary() + ";");
+        grid.add(objectiveLabel, 0, 1);
         objectiveCombo = new ComboBox<>();
         objectiveCombo.setMaxWidth(Double.MAX_VALUE);
         objectiveCombo.setOnAction(e -> onObjectiveChanged());
         grid.add(objectiveCombo, 1, 1);
 
         // Detector
-        grid.add(new Label("Detector:"), 0, 2);
+        Label detectorLabel = new Label("Detector:");
+        detectorLabel.setStyle("-fx-text-fill: " + textPrimary() + ";");
+        grid.add(detectorLabel, 0, 2);
         detectorCombo = new ComboBox<>();
         detectorCombo.setMaxWidth(Double.MAX_VALUE);
         detectorCombo.setOnAction(e -> onDetectorChanged());
@@ -602,15 +629,15 @@ public class AcquisitionWizardDialog {
         HBox row = new HBox(10);
         row.setAlignment(Pos.CENTER_LEFT);
         row.setPadding(new Insets(8, 12, 8, 12));
-        row.setStyle("-fx-background-color: white; -fx-background-radius: 6; "
-                + "-fx-border-color: #e0e0e0; -fx-border-radius: 6;");
+        row.setStyle("-fx-background-color: " + bgRow() + "; -fx-background-radius: 6; "
+                + "-fx-border-color: " + borderColor() + "; -fx-border-radius: 6;");
 
         // Icon circle
         StackPane iconPane = new StackPane(icon);
         iconPane.setPrefSize(36, 36);
         iconPane.setMinSize(36, 36);
         iconPane.setMaxSize(36, 36);
-        iconPane.setStyle("-fx-background-color: #e8eef7; -fx-background-radius: 18;");
+        iconPane.setStyle("-fx-background-color: " + bgIcon() + "; -fx-background-radius: 18;");
         iconPane.setAlignment(Pos.CENTER);
 
         // Text
@@ -618,10 +645,10 @@ public class AcquisitionWizardDialog {
         HBox.setHgrow(textBox, Priority.ALWAYS);
 
         Label titleLabel = new Label(title);
-        titleLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
+        titleLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: " + textPrimary() + ";");
 
         Label descLabel = new Label(description);
-        descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + textSecondary() + ";");
         descLabel.setWrapText(true);
 
         textBox.getChildren().addAll(titleLabel, descLabel);
@@ -630,7 +657,7 @@ public class AcquisitionWizardDialog {
         Circle statusDot = new Circle(5, Color.GRAY);
 
         Label statusLabel = new Label("Checking...");
-        statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #999;");
+        statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + textMuted() + ";");
         statusLabel.setMaxWidth(120);
         statusLabel.setWrapText(true);
 
@@ -680,12 +707,12 @@ public class AcquisitionWizardDialog {
                 }
                 case NOT_APPLICABLE -> {
                     dotColor = Color.web("#9E9E9E");
-                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: #999;";
+                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: " + textMuted() + ";";
                     row.actionButton.setDisable(true);
                 }
                 default -> {
                     dotColor = Color.GRAY;
-                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: #999;";
+                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: " + textMuted() + ";";
                 }
             }
 
@@ -850,7 +877,7 @@ public class AcquisitionWizardDialog {
         if (disableAutofocusCheckBox.isSelected()) {
             disableAutofocusCheckBox.setStyle("-fx-text-fill: #E65100; -fx-font-weight: bold; -fx-font-size: 12px;");
         } else {
-            disableAutofocusCheckBox.setStyle("-fx-font-size: 12px;");
+            disableAutofocusCheckBox.setStyle("-fx-font-size: 12px; -fx-text-fill: " + textPrimary() + ";");
         }
     }
 
@@ -953,8 +980,8 @@ public class AcquisitionWizardDialog {
         HBox bar = new HBox(10);
         bar.setPadding(new Insets(8, 16, 10, 16));
         bar.setAlignment(Pos.CENTER_RIGHT);
-        bar.setStyle("-fx-background-color: #f5f5f5; -fx-border-color: #ddd; -fx-border-width: 1 0 0 0; "
-                + "-fx-background-radius: 0 0 8 8;");
+        bar.setStyle("-fx-background-color: " + bgSection() + "; -fx-border-color: " + borderSection()
+                + "; -fx-border-width: 1 0 0 0; -fx-background-radius: 0 0 8 8;");
 
         Button refreshBtn = new Button("Refresh All");
         refreshBtn.setOnAction(e -> refreshAllStatuses());
@@ -976,7 +1003,7 @@ public class AcquisitionWizardDialog {
         sep.setPadding(new Insets(8, 16, 4, 16));
 
         Label label = new Label(text);
-        label.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #888;");
+        label.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + textSectionHeader() + ";");
 
         Separator line = new Separator();
         HBox.setHgrow(line, Priority.ALWAYS);
