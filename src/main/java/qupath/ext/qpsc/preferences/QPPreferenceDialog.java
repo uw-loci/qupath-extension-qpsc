@@ -320,15 +320,13 @@ public class QPPreferenceDialog {
                 .category(CATEGORY)
                 .description("Overlap percentage between adjacent tiles in acquisition.")
                 .build());
-        items.add(new PropertyItemBuilder<>(compressionTypeProperty, OMEPyramidWriter.CompressionType.class)
-                .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
-                .choices(Arrays.asList(OMEPyramidWriter.CompressionType.values()))
-                .name("Compression type")
-                .category(CATEGORY)
-                .description("Compression for OME Pyramid output. LZW recommended for reliability.")
-                .build());
+        // Output format MUST appear before compression type so users see the format
+        // first -- compression choices are filtered based on the selected format.
+        ObservableList<OMEPyramidWriter.CompressionType> compressionChoices =
+                FXCollections.observableArrayList(OMEPyramidWriter.CompressionType.values());
         try {
-            items.add(new PropertyItemBuilder<>(getOutputFormatPropertyInternal(), StitchingConfig.OutputFormat.class)
+            ObjectProperty<StitchingConfig.OutputFormat> formatProp = getOutputFormatPropertyInternal();
+            items.add(new PropertyItemBuilder<>(formatProp, StitchingConfig.OutputFormat.class)
                     .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
                     .choices(Arrays.asList(StitchingConfig.OutputFormat.values()))
                     .name("Stitching output format")
@@ -338,12 +336,31 @@ public class QPPreferenceDialog {
                             + "OME-ZARR: Cloud-native directory format with better compression and parallel writing,\n"
                             + "but less commonly used. ZARR provides 2-3x faster writing and 20-30% smaller files.")
                     .build());
+
+            // Populate compression choices for the current format
+            compressionChoices.setAll(getCompressionTypesForFormat(formatProp.get()));
+
+            // When format changes, update compression choices and fix invalid selection
+            formatProp.addListener((obs, oldFormat, newFormat) -> {
+                compressionChoices.setAll(getCompressionTypesForFormat(newFormat));
+                if (!compressionChoices.contains(compressionTypeProperty.get())) {
+                    compressionTypeProperty.set(OMEPyramidWriter.CompressionType.LZW);
+                }
+            });
         } catch (NoClassDefFoundError e) {
             logger.error("qupath-extension-tiles-to-pyramid is missing! "
                     + "Install it in your QuPath extensions folder. "
                     + "Stitching output format preference will be unavailable.");
             stitchingAvailable = false;
         }
+        items.add(new PropertyItemBuilder<>(compressionTypeProperty, OMEPyramidWriter.CompressionType.class)
+                .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
+                .choices(compressionChoices)
+                .name("Compression type")
+                .category(CATEGORY)
+                .description("Compression for stitched output. LZW recommended for reliability.\n"
+                        + "Available options depend on the selected output format.")
+                .build());
 
         items.add(new PropertyItemBuilder<>(microscopeServerHostProperty, String.class)
                 .name("Microscope Server Host")
@@ -997,5 +1014,25 @@ public class QPPreferenceDialog {
 
     public static void setNotifyOnErrors(boolean enabled) {
         notifyOnErrorsProperty.set(enabled);
+    }
+
+    /**
+     * Returns the compression types that are valid for the given stitching output format.
+     *
+     * <p>OME-TIFF supports all compression types. OME-ZARR only supports a subset:
+     * JPEG-2000 variants (J2K, J2K_LOSSY) have no native ZARR codec, and JPEG would
+     * silently fall back to zstd which is misleading. Only types that produce the
+     * expected compression algorithm are offered.
+     */
+    private static List<OMEPyramidWriter.CompressionType> getCompressionTypesForFormat(
+            StitchingConfig.OutputFormat format) {
+        if (format == StitchingConfig.OutputFormat.OME_ZARR) {
+            return List.of(
+                    OMEPyramidWriter.CompressionType.LZW,
+                    OMEPyramidWriter.CompressionType.ZLIB,
+                    OMEPyramidWriter.CompressionType.UNCOMPRESSED,
+                    OMEPyramidWriter.CompressionType.DEFAULT);
+        }
+        return Arrays.asList(OMEPyramidWriter.CompressionType.values());
     }
 }
