@@ -1053,9 +1053,12 @@ public class StitchingHelper {
                                         longModalityName,
                                         shortModalityPrefix);
 
+                                List<Integer> channelColors = getDefaultChannelColors(
+                                        successfullyStitchedChannelIds);
                                 String mergedPath = ChannelMerger.merge(
                                         stitchedImages,
                                         successfullyStitchedChannelIds,
+                                        channelColors,
                                         mergedDir,
                                         mergedStem,
                                         compression,
@@ -1140,6 +1143,40 @@ public class StitchingHelper {
      * garbage stem. If the long-to-short replacement isn't possible (long name not
      * found in stem, or short prefix is null), the long form is kept verbatim.
      */
+
+    // -- Default fluorescence channel colors (packed ARGB) --
+
+    private static final java.util.Map<String, Integer> DEFAULT_CHANNEL_COLORS = java.util.Map.ofEntries(
+            // Common fluorescence filter names
+            java.util.Map.entry("dapi",  packRGB(0, 0, 255)),       // Blue
+            java.util.Map.entry("fitc",  packRGB(0, 255, 0)),       // Green
+            java.util.Map.entry("gfp",   packRGB(0, 255, 0)),       // Green
+            java.util.Map.entry("tritc", packRGB(255, 0, 0)),       // Red
+            java.util.Map.entry("cy3",   packRGB(255, 165, 0)),     // Orange
+            java.util.Map.entry("cy5",   packRGB(255, 0, 255)),     // Magenta
+            java.util.Map.entry("cy7",   packRGB(128, 0, 128)),     // Purple
+            java.util.Map.entry("bf",    packRGB(255, 255, 255)),    // White
+            java.util.Map.entry("brightfield", packRGB(255, 255, 255))
+    );
+
+    private static int packRGB(int r, int g, int b) {
+        return (255 << 24) | (r << 16) | (g << 8) | b;
+    }
+
+    /**
+     * Returns default display colors for a list of channel IDs.
+     * Matches by case-insensitive channel name (DAPI->blue, FITC->green, etc.).
+     * Unknown channels get {@code null} (source default preserved by the merger).
+     */
+    private static List<Integer> getDefaultChannelColors(List<String> channelIds) {
+        List<Integer> colors = new ArrayList<>();
+        for (String id : channelIds) {
+            Integer color = DEFAULT_CHANNEL_COLORS.get(id.toLowerCase());
+            colors.add(color); // null is fine -- merger falls back to source color
+        }
+        return colors;
+    }
+
     private static String deriveMergedStem(
             String firstPerChannelFilename,
             String firstChannelId,
