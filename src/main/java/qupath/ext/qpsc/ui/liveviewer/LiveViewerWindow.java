@@ -557,13 +557,13 @@ public class LiveViewerWindow {
                 }
             }
 
-            // Rotation layout: tiles in angle subdirectories (90/, 7/, -7/, 0/).
-            // Only scan dirs whose name parses as a number -- this excludes
-            // post-processing output directories like 7.0.biref/ and 7.0.sum/
+            // Subdirectory layout: tiles in angle subdirs (90/, 7/, -7/) for PPM,
+            // or channel subdirs (DAPI/, FITC/, TRITC/) for fluorescence/BF-IF.
+            // Exclude PPM post-processing dirs like 7.0.biref/ and 7.0.sum/
             // whose biref TIFFs are computed last (newest timestamp) but are
             // 16-bit grayscale and render poorly with the 8-bit RGB contrast
             // settings of the Live Viewer.
-            File[] subdirs = rootDir.listFiles(f -> f.isDirectory() && isAngleDirectory(f.getName()));
+            File[] subdirs = rootDir.listFiles(f -> f.isDirectory() && !isPostProcessingDirectory(f.getName()));
             if (subdirs != null) {
                 for (File subdir : subdirs) {
                     File[] tiffs =
@@ -588,16 +588,26 @@ public class LiveViewerWindow {
     }
 
     /**
-     * Returns true if the directory name looks like an angle value (e.g. "90",
-     * "7.0", "-7.0"). Post-processing directories like "7.0.biref" or "7.0.sum"
-     * fail to parse and are excluded.
+     * Returns true if the directory name looks like a PPM post-processing
+     * output (e.g. "7.0.biref", "7.0.sum"). These contain computed images
+     * that are 16-bit grayscale and render poorly in the Live Viewer.
+     * Pattern: a numeric prefix followed by a dot and a non-numeric suffix.
      */
-    private static boolean isAngleDirectory(String name) {
+    private static boolean isPostProcessingDirectory(String name) {
+        // Post-processing dirs have the form "<number>.<suffix>" where suffix
+        // is NOT purely numeric (e.g. "7.0.biref", "90.0.sum").
+        // Angle dirs like "7.0" or "-7" parse as Double; channel dirs like
+        // "DAPI" or "FITC" have no dots. Neither should be excluded.
+        int lastDot = name.lastIndexOf('.');
+        if (lastDot <= 0) return false;
+        String suffix = name.substring(lastDot + 1);
+        if (suffix.isEmpty()) return false;
+        // If the part after the last dot is non-numeric, it's a post-processing dir
         try {
-            Double.parseDouble(name);
-            return true;
+            Double.parseDouble(suffix);
+            return false; // e.g. "7.0" -- the suffix "0" is numeric, this is an angle dir
         } catch (NumberFormatException e) {
-            return false;
+            return true; // e.g. "7.0.biref" -- suffix "biref" is non-numeric
         }
     }
 
