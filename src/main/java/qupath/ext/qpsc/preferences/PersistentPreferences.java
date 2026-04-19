@@ -73,6 +73,12 @@ public class PersistentPreferences {
     private static final StringProperty boundingBoxHeightSaved =
             PathPrefs.createPersistentPreference("BoundingBoxHeight", "2000");
 
+    private static final StringProperty boundingBoxCenterXSaved =
+            PathPrefs.createPersistentPreference("BoundingBoxCenterX", "");
+
+    private static final StringProperty boundingBoxCenterYSaved =
+            PathPrefs.createPersistentPreference("BoundingBoxCenterY", "");
+
     public static String getBoundingBoxString() {
         return boundingBoxString.getValue();
     }
@@ -95,6 +101,22 @@ public class PersistentPreferences {
 
     public static void setBoundingBoxHeight(final String height) {
         boundingBoxHeightSaved.setValue(height);
+    }
+
+    public static String getBoundingBoxCenterX() {
+        return boundingBoxCenterXSaved.getValue();
+    }
+
+    public static void setBoundingBoxCenterX(final String x) {
+        boundingBoxCenterXSaved.setValue(x);
+    }
+
+    public static String getBoundingBoxCenterY() {
+        return boundingBoxCenterYSaved.getValue();
+    }
+
+    public static void setBoundingBoxCenterY(final String y) {
+        boundingBoxCenterYSaved.setValue(y);
     }
 
     // ================== GREEN BOX DETECTION PARAMETERS ==================

@@ -613,8 +613,27 @@ public class UnifiedAcquisitionController {
             startSizePane.setHgap(10);
             startSizePane.setVgap(8);
 
-            startXField = new TextField();
-            startYField = new TextField();
+            // Initialize center coordinates: prefer saved value, then current stage position
+            String savedCenterX = PersistentPreferences.getBoundingBoxCenterX();
+            String savedCenterY = PersistentPreferences.getBoundingBoxCenterY();
+            if ((savedCenterX == null || savedCenterX.isEmpty())
+                    && (savedCenterY == null || savedCenterY.isEmpty())) {
+                // No saved center -- try current stage position
+                try {
+                    if (MicroscopeController.getInstance().isConnected()) {
+                        double[] coords = MicroscopeController.getInstance().getStagePositionXY();
+                        if (coords != null && coords.length >= 2) {
+                            savedCenterX = String.format("%.2f", coords[0]);
+                            savedCenterY = String.format("%.2f", coords[1]);
+                            logger.info("Initialized center from current stage position: {}, {}", savedCenterX, savedCenterY);
+                        }
+                    }
+                } catch (Exception ex) {
+                    logger.debug("Could not read stage position for center default: {}", ex.getMessage());
+                }
+            }
+            startXField = new TextField(savedCenterX != null ? savedCenterX : "");
+            startYField = new TextField(savedCenterY != null ? savedCenterY : "");
             startXField.setPromptText("Center X");
             startYField.setPromptText("Center Y");
             startXField.setPrefWidth(120);
@@ -752,10 +771,16 @@ public class UnifiedAcquisitionController {
             startXField.textProperty().addListener((obs, old, newVal) -> {
                 validateRegion();
                 triggerPreviewUpdate();
+                if (!newVal.isEmpty()) {
+                    PersistentPreferences.setBoundingBoxCenterX(newVal);
+                }
             });
             startYField.textProperty().addListener((obs, old, newVal) -> {
                 validateRegion();
                 triggerPreviewUpdate();
+                if (!newVal.isEmpty()) {
+                    PersistentPreferences.setBoundingBoxCenterY(newVal);
+                }
             });
             widthField.textProperty().addListener((obs, old, newVal) -> {
                 validateRegion();
