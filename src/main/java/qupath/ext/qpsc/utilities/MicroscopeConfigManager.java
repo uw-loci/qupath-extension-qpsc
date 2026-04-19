@@ -54,6 +54,16 @@ public class MicroscopeConfigManager {
      *
      * @param configPath Filesystem path to the microscope YAML configuration file.
      */
+    /** Empty-state constructor for when no config path is set yet. */
+    private MicroscopeConfigManager() {
+        this.configPath = null;
+        this.configData = Collections.emptyMap();
+        this.resourceData = Collections.emptyMap();
+        this.autofocusData = Collections.emptyMap();
+        this.imageprocessingData = Collections.emptyMap();
+        this.lociSectionMap = Collections.emptyMap();
+    }
+
     private MicroscopeConfigManager(String configPath) {
         this.configPath = configPath;
         this.configData = loadConfig(configPath);
@@ -86,10 +96,21 @@ public class MicroscopeConfigManager {
      * @return Shared MicroscopeConfigManager instance.
      */
     public static synchronized MicroscopeConfigManager getInstance(String configPath) {
-        if (instance == null) {
+        if (configPath == null || configPath.isBlank()) {
+            if (instance != null) {
+                return instance;
+            }
+            logger.warn("No microscope config path set -- configure it in "
+                    + "Edit > Preferences > QuPath SCope > Microscope Config File");
+            // Create an empty-state instance so callers don't NPE
+            instance = new MicroscopeConfigManager();
+            return instance;
+        }
+        if (instance == null || (instance.configPath == null || instance.configPath.isBlank())) {
             instance = new MicroscopeConfigManager(configPath);
-        } else if (configPath != null && !configPath.equals(instance.configPath)) {
-            logger.info("Config path changed from {} to {} -- reloading", instance.configPath, configPath);
+        } else if (!configPath.equals(instance.configPath)) {
+            logger.info("Config path changed from {} to {} -- reloading",
+                    instance.configPath, configPath);
             instance.reload(configPath);
         }
         return instance;
