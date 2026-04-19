@@ -17,7 +17,6 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Camera orientation](#camera-orientation) | Enum | NORMAL | How the displayed image is oriented relative to the sample frame |
 | [Microscope Config File](#microscope-config-file) | File | - | Path to microscope YAML config |
 | [Projects Folder](#projects-folder) | Directory | - | Root folder for slide projects |
-| [Extension Location](#extension-location) | Directory | - | QPSC extension installation directory |
 | [Tissue Detection Script](#tissue-detection-script) | File | - | Optional Groovy script for tissue detection |
 | [Tissue Artifact Filter Enabled](#tissue-artifact-filter-enabled) | Boolean | ON | Use artifact-aware tissue detection |
 | [Tissue Two-Pass Refine](#tissue-two-pass-refine) | Boolean | OFF | Apply second refinement pass |
@@ -285,19 +284,6 @@ ProjectsFolder/
         +-- project.qpproj
         +-- SlideImages/
 ```
-
----
-
-### Extension Location
-
-| Property | Value |
-|----------|-------|
-| Type | Directory |
-| Default | (none) |
-| Requires Restart | No |
-
-**Description:**
-Directory where the QPSC extension is installed. Used to locate built-in scripts and resources.
 
 ---
 
