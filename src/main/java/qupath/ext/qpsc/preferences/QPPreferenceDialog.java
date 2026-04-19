@@ -410,30 +410,29 @@ public class QPPreferenceDialog {
                         + "verified that disk space is sufficient.")
                 .build());
 
-        // Image Name Contents -- what metadata to include in generated filenames.
+        // Image name contents -- what metadata to include in generated filenames.
         // All metadata is always stored in QuPath regardless of these settings.
-        String filenameCategory = "Image Name Contents";
         items.add(new PropertyItemBuilder<>(includeObjectiveInFilenameProperty, Boolean.class)
-                .name("Objective")
-                .category(filenameCategory)
+                .name("Image Name Includes Objective")
+                .category(CATEGORY)
                 .description("e.g. SampleName_20x_001.ome.tif")
                 .build());
 
         items.add(new PropertyItemBuilder<>(includeModalityInFilenameProperty, Boolean.class)
-                .name("Modality")
-                .category(filenameCategory)
+                .name("Image Name Includes Modality")
+                .category(CATEGORY)
                 .description("e.g. SampleName_ppm_001.ome.tif")
                 .build());
 
         items.add(new PropertyItemBuilder<>(includeAnnotationInFilenameProperty, Boolean.class)
-                .name("Annotation")
-                .category(filenameCategory)
+                .name("Image Name Includes Annotation")
+                .category(CATEGORY)
                 .description("e.g. SampleName_Tissue_001.ome.tif")
                 .build());
 
         items.add(new PropertyItemBuilder<>(includeAngleInFilenameProperty, Boolean.class)
-                .name("Angle")
-                .category(filenameCategory)
+                .name("Image Name Includes Angle")
+                .category(CATEGORY)
                 .description("e.g. SampleName_001_7.0.ome.zarr (critical for PPM)")
                 .build());
 
