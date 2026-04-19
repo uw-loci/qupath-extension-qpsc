@@ -8,6 +8,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import javafx.animation.PauseTransition;
+import javafx.application.ColorScheme;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -21,6 +22,7 @@ import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.workflow.AlignmentHelper;
+import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.WbMode;
@@ -31,6 +33,7 @@ import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
+import qupath.lib.gui.prefs.QuPathStyleManager;
 import qupath.ext.qpsc.utilities.SampleNameValidator;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
@@ -859,7 +862,9 @@ public class ExistingImageAcquisitionController {
             VBox previewContent =
                     new VBox(5, previewAnnotationsLabel, previewTilesLabel, previewTimeLabel, previewStorageLabel);
             previewContent.setPadding(new Insets(10));
-            previewContent.setStyle("-fx-background-color: #f8f9fa; -fx-border-color: #dee2e6; -fx-border-width: 1px;");
+            boolean dark = QuPathStyleManager.getStyleColorScheme() == ColorScheme.DARK;
+            previewContent.setStyle("-fx-background-color: " + (dark ? "#333" : "#f8f9fa")
+                    + "; -fx-border-color: " + (dark ? "#555" : "#dee2e6") + "; -fx-border-width: 1px;");
 
             TitledPane previewPane = new TitledPane("ACQUISITION PREVIEW", previewContent);
             previewPane.setExpanded(true);
@@ -871,13 +876,15 @@ public class ExistingImageAcquisitionController {
 
         private void createErrorSummaryPanel() {
             errorSummaryPanel = new VBox(5);
-            errorSummaryPanel.setStyle("-fx-background-color: #fff3cd; -fx-border-color: #ffc107; "
-                    + "-fx-border-width: 1px; -fx-padding: 10px;");
+            boolean darkErr = QuPathStyleManager.getStyleColorScheme() == ColorScheme.DARK;
+            errorSummaryPanel.setStyle("-fx-background-color: " + (darkErr ? "#4a3800" : "#fff3cd")
+                    + "; -fx-border-color: " + (darkErr ? "#806000" : "#ffc107")
+                    + "; -fx-border-width: 1px; -fx-padding: 10px;");
             errorSummaryPanel.setVisible(false);
             errorSummaryPanel.setManaged(false);
 
             Label errorTitle = new Label("Please fix the following errors:");
-            errorTitle.setStyle("-fx-font-weight: bold; -fx-text-fill: #856404;");
+            errorTitle.setStyle("-fx-font-weight: bold; -fx-text-fill: " + (darkErr ? "#ffc107" : "#856404") + ";");
 
             errorListBox = new VBox(3);
             errorSummaryPanel.getChildren().addAll(errorTitle, errorListBox);
@@ -1367,14 +1374,18 @@ public class ExistingImageAcquisitionController {
                 double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
                 int totalTiles = calculateTileCount(fovWidthMicrons, fovHeightMicrons, overlapPercent, imagePixelSize);
 
-                // Get angle count from modality handler
-                int angleCount = getAngleCountForModality(modality);
-                int totalImages = totalTiles * angleCount;
+                // Get per-tile image count (angles for PPM, channels for fluorescence/BF-IF)
+                int imagesPerTile = getImagesPerTileForModality(modality);
+                int totalImages = totalTiles * imagesPerTile;
 
                 // Update labels with actual counts
-                if (angleCount > 1) {
+                if (imagesPerTile > 1) {
+                    ModalityHandler handler = ModalityRegistry.getHandler(modality);
+                    boolean isPpm = handler != null && handler.isMultiAngleModality();
+                    String unit = isPpm ? "angles" : "channels";
                     previewTilesLabel.setText(String.format(
-                            "Images: %,d tiles x %d angles = %,d images", totalTiles, angleCount, totalImages));
+                            "Images: %,d tiles x %d %s = %,d images",
+                            totalTiles, imagesPerTile, unit, totalImages));
                 } else {
                     previewTilesLabel.setText(String.format("Tiles: %,d", totalTiles));
                 }
@@ -1445,31 +1456,38 @@ public class ExistingImageAcquisitionController {
         }
 
         /**
-         * Gets the estimated number of angles for a modality (for preview purposes).
-         *
-         * <p>This method provides a synchronous estimate for the preview panel.
-         * It uses angle overrides if available from the modality UI, otherwise
-         * returns a reasonable default based on the modality type.
+         * Gets the number of images captured per tile position for a modality.
+         * For PPM this is the number of rotation angles; for fluorescence/BF-IF
+         * this is the number of channels.
          *
          * @param modality The modality name
-         * @return Estimated number of angles (minimum 1)
+         * @return Images per tile (minimum 1)
          */
-        private int getAngleCountForModality(String modality) {
+        private int getImagesPerTileForModality(String modality) {
             if (modality == null) return 1;
 
             ModalityHandler handler = ModalityRegistry.getHandler(modality);
             if (handler != null) {
-                // Use angle overrides if available from modalityUI (most accurate)
-                if (modalityUI != null) {
-                    Map<String, Double> overrides = modalityUI.getAngleOverrides();
-                    if (overrides != null && !overrides.isEmpty()) {
-                        return overrides.size();
+                // PPM: use angle overrides if available, else default angle count
+                if (handler.isMultiAngleModality()) {
+                    if (modalityUI != null) {
+                        Map<String, Double> overrides = modalityUI.getAngleOverrides();
+                        if (overrides != null && !overrides.isEmpty()) {
+                            return overrides.size();
+                        }
                     }
+                    return handler.getDefaultAngleCount();
                 }
-                var modHandler = ModalityRegistry.getHandler(modality);
-                if (modHandler != null && modHandler.isMultiAngleModality()) {
-                    return modHandler.getDefaultAngleCount();
+            }
+
+            // Non-PPM: count channels from the modality config
+            try {
+                List<Channel> channels = configManager.getModalityChannels(modality);
+                if (channels != null && !channels.isEmpty()) {
+                    return channels.size();
                 }
+            } catch (Exception e) {
+                logger.debug("Could not read channels for modality {}: {}", modality, e.getMessage());
             }
             return 1;
         }
