@@ -2414,7 +2414,7 @@ public class MicroscopeConfigManager {
             return Collections.emptySet();
         }
 
-        Set<String> result = new HashSet<>();
+        Set<String> result = new LinkedHashSet<>();
         for (Object obj : detectors) {
             if (obj instanceof String) {
                 result.add((String) obj);
@@ -2463,7 +2463,7 @@ public class MicroscopeConfigManager {
     public Set<String> getAvailableObjectives() {
         logger.debug("Finding available objectives");
 
-        Set<String> objectives = new HashSet<>();
+        Set<String> objectives = new LinkedHashSet<>();
         List<Map<String, Object>> hardwareObjectives = getHardwareObjectives();
 
         if (hardwareObjectives.isEmpty()) {

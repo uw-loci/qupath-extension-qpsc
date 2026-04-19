@@ -780,12 +780,12 @@ public class StageControlPanel extends VBox {
         GridPane hwGrid = new GridPane();
         hwGrid.setHgap(4);
         hwGrid.setVgap(2);
-        Label detLabel = new Label("Detector:");
+        Label detLabel = new Label("Det:");
         detLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
         Label detValue = new Label(shortenId(currentCameraDetectorId));
         detValue.setStyle("-fx-font-size: 10px;");
         detValue.setTooltip(new Tooltip(currentCameraDetectorId));
-        Label objLabel = new Label("Objective:");
+        Label objLabel = new Label("Obj:");
         objLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
         Label objValue = new Label(shortenId(currentCameraObjectiveId));
         objValue.setStyle("-fx-font-size: 10px;");
@@ -955,11 +955,12 @@ public class StageControlPanel extends VBox {
                 }
             }
             if (!detected) {
+                // Fall back to the last known objective if it's still in the config.
+                // Do NOT guess by picking the first objective -- that silently selects
+                // the wrong hardware when the server isn't connected yet.
                 String lastObj = PersistentPreferences.getLastObjective();
                 if (lastObj != null && !lastObj.isEmpty() && objectives != null && objectives.contains(lastObj))
                     currentCameraObjectiveId = lastObj;
-                if (objectives != null && !objectives.isEmpty() && "Unknown".equals(currentCameraObjectiveId))
-                    currentCameraObjectiveId = objectives.iterator().next();
                 if (detectors != null && !detectors.isEmpty())
                     currentCameraDetectorId = detectors.iterator().next();
             }
