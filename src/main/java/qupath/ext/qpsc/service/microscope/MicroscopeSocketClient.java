@@ -249,7 +249,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         APPLYPR("applypr_"),
 
         /** Streaming autofocus -- continuous-Z autofocus via streamed frames */
-        STRMAFZ("strmafz_");
+        STRMAFZ("strmafz_"),
+
+        /** Rapid scan -- fast tiled brightfield acquisition, no AF, no Z */
+        RPDSCAN("rpdscan_");
 
         private final byte[] value;
 
@@ -1527,6 +1530,95 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         socket.setSoTimeout(originalTimeout);
                     } catch (IOException e) {
                         logger.warn("Failed to restore socket timeout after STRMAFZ", e);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Start a rapid scan acquisition over a rectangular region.
+     *
+     * <p>Fast tiled brightfield acquisition with no autofocus, no Z movement,
+     * and exposure capped at 0.5ms. Traces a serpentine path through the region.
+     * Tiles are saved with a TileConfiguration.txt for optional stitching.
+     *
+     * @param outputFolder Directory to save tiles and TileConfiguration.txt
+     * @param centerX Center X of scan region (stage um)
+     * @param centerY Center Y of scan region (stage um)
+     * @param width Width of scan region (um)
+     * @param height Height of scan region (um)
+     * @param overlapPercent Overlap between tiles (0-50%)
+     * @param exposureMs Exposure time in ms (max 0.5)
+     * @param fovWidth Camera FOV width (um)
+     * @param fovHeight Camera FOV height (um)
+     * @return Response string: "SUCCESS:nTiles:elapsedSeconds" or throws on failure
+     * @throws IOException if communication fails or scan fails
+     */
+    public String startRapidScan(
+            String outputFolder,
+            double centerX,
+            double centerY,
+            double width,
+            double height,
+            double overlapPercent,
+            double exposureMs,
+            double fovWidth,
+            double fovHeight)
+            throws IOException {
+
+        String message = String.format(
+                "--output %s --center-x %.3f --center-y %.3f --width %.3f --height %.3f "
+                        + "--overlap %.1f --exposure %.3f --fov-w %.3f --fov-h %.3f %s",
+                outputFolder, centerX, centerY, width, height, overlapPercent, exposureMs, fovWidth, fovHeight,
+                END_MARKER);
+        byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
+
+        logger.info("Sending RPDSCAN command: {}", message);
+
+        synchronized (socketLock) {
+            ensureConnected();
+
+            int originalTimeout = readTimeout;
+            try {
+                if (socket != null) {
+                    // Rapid scan can take up to 5 minutes for large areas
+                    socket.setSoTimeout(300000);
+                }
+
+                output.write(Command.RPDSCAN.getValue());
+                output.flush();
+                Thread.sleep(50);
+                output.write(messageBytes);
+                output.flush();
+                lastActivityTime.set(System.currentTimeMillis());
+
+                byte[] buffer = new byte[1024];
+                int bytesRead = input.read(buffer);
+                if (bytesRead <= 0) {
+                    throw new IOException("RPDSCAN: no response from server");
+                }
+                String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8).trim();
+                logger.info("RPDSCAN response: {}", response);
+                lastActivityTime.set(System.currentTimeMillis());
+
+                if (response.startsWith("SUCCESS:")) {
+                    return response;
+                } else if (response.startsWith("FAILED:")) {
+                    String reason = response.substring("FAILED:".length());
+                    throw new IOException("Rapid scan failed: " + reason);
+                } else {
+                    throw new IOException("RPDSCAN: unexpected response: " + response);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("RPDSCAN interrupted", e);
+            } finally {
+                if (socket != null) {
+                    try {
+                        socket.setSoTimeout(originalTimeout);
+                    } catch (IOException e) {
+                        logger.warn("Failed to restore socket timeout after RPDSCAN", e);
                     }
                 }
             }
