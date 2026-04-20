@@ -47,11 +47,17 @@ public class RapidScanWorkflow {
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+
             Set<String> objectives = mgr.getAvailableObjectives();
             String objective = objectives.isEmpty() ? null : objectives.iterator().next();
             objectiveUsed = objective != null ? objective : "unknown";
 
-            double[] fov = mgr.getModalityFOV("brightfield", objective, null);
+            // Resolve detector explicitly -- getModalityFOV falls back to
+            // getDefaultDetector() which may not exist in all configs.
+            Set<String> detectors = mgr.getHardwareDetectors();
+            String detector = detectors.isEmpty() ? null : detectors.iterator().next();
+
+            double[] fov = mgr.getModalityFOV("brightfield", objective, detector);
             if (fov != null) {
                 fovWidth = fov[0];
                 fovHeight = fov[1];
