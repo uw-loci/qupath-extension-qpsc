@@ -55,6 +55,7 @@ import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.classes.PathClass;
+import qupath.lib.objects.hierarchy.PathObjectHierarchy;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.scripting.QP;
@@ -120,6 +121,31 @@ public class AcquisitionManager {
     /** ImageData captured at session start -- provides stable access to the WSI server
      *  for tile reading (e.g., WSI tissue scoring) even after the viewer loses its image. */
     private ImageData<BufferedImage> capturedImageData = null;
+
+    /**
+     * Returns the hierarchy for the acquisition session image.
+     * Uses capturedImageData (stable, viewer-independent) when available,
+     * falling back to the live viewer only if no session was captured
+     * (e.g., bounded acquisition with no parent image).
+     */
+    private PathObjectHierarchy getSessionHierarchy() {
+        if (capturedImageData != null) {
+            return capturedImageData.getHierarchy();
+        }
+        if (gui.getImageData() != null) {
+            return gui.getImageData().getHierarchy();
+        }
+        return QP.getCurrentHierarchy();
+    }
+
+    /**
+     * Checks whether the viewer is currently showing the acquisition session image.
+     * Used to decide whether to fire UI refresh events (which are pointless if
+     * the user is looking at a different image).
+     */
+    private boolean isSessionImageActive() {
+        return capturedImageData != null && gui.getImageData() == capturedImageData;
+    }
 
     /**
      * Creates a new acquisition manager.
@@ -300,6 +326,26 @@ public class AcquisitionManager {
 
             logger.info("Preparing for acquisition with {} angles", angleExposures.size());
 
+            // Capture parent entry NOW while the viewer definitely has the right image.
+            // This anchors the entire session to this specific image so that switching
+            // images in the viewer during acquisition does not crash or misdirect data.
+            if (capturedImageData == null) {
+                @SuppressWarnings("unchecked")
+                Project<BufferedImage> captureProject =
+                        (Project<BufferedImage>) state.projectInfo.getCurrentProject();
+                if (gui.getViewer().hasServer() && gui.getImageData() != null && captureProject != null) {
+                    capturedImageData = gui.getImageData();
+                    parentEntry = captureProject.getEntry(capturedImageData);
+                    logger.info(
+                            "Captured parent entry for session: {}",
+                            parentEntry != null ? parentEntry.getImageName() : "null");
+                } else {
+                    logger.warn(
+                            "No parent entry available at prep start -- "
+                                    + "tile display will use fallback hierarchy");
+                }
+            }
+
             // Save project entry state before acquisition starts
             try {
                 var imageData = QP.getCurrentImageData();
@@ -324,7 +370,7 @@ public class AcquisitionManager {
             logger.info("Found {} annotations to acquire", currentAnnotations.size());
 
             // Clean up old tiles
-            TileHelper.deleteAllTiles(gui, state.sample.modality());
+            TileHelper.deleteAllTiles(getSessionHierarchy(), state.sample.modality());
             TileHelper.cleanupStaleFolders(state.projectInfo.getTempTileDirectory(), currentAnnotations);
 
             // Create fresh tiles
@@ -446,21 +492,19 @@ public class AcquisitionManager {
         lastAcquisitionZ = null;
         zFocusModel.reset();
 
-        // Capture parent entry NOW while the viewer definitely has the right image.
-        // This must not be looked up later from gui.getImageData() because stitching
-        // dialogs closing can cause the viewer to lose its image reference.
-        @SuppressWarnings("unchecked")
-        Project<BufferedImage> captureProject = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
-        if (gui.getViewer().hasServer() && gui.getImageData() != null && captureProject != null) {
-            capturedImageData = gui.getImageData();
-            parentEntry = captureProject.getEntry(capturedImageData);
-            logger.info(
-                    "Captured parent entry for metadata: {}",
-                    parentEntry != null ? parentEntry.getImageName() : "null");
-        } else {
-            capturedImageData = null;
-            parentEntry = null;
-            logger.warn("No parent entry available at session start -- stitched images will be unassigned");
+        // Defensive re-check: if capturedImageData was not set during prepareForAcquisition
+        // (e.g. bounded acquisition with no parent image), try once more here.
+        if (capturedImageData == null && gui.getViewer().hasServer() && gui.getImageData() != null) {
+            @SuppressWarnings("unchecked")
+            Project<BufferedImage> captureProject =
+                    (Project<BufferedImage>) state.projectInfo.getCurrentProject();
+            if (captureProject != null) {
+                capturedImageData = gui.getImageData();
+                parentEntry = captureProject.getEntry(capturedImageData);
+                logger.info(
+                        "Late-captured parent entry for metadata: {}",
+                        parentEntry != null ? parentEntry.getImageName() : "null");
+            }
         }
 
         // Show initial progress notification
@@ -976,7 +1020,9 @@ public class AcquisitionManager {
         // at the end still runs and catches anything the poller missed.
         java.nio.file.Path ndjsonPath = Paths.get(tileDirPath, "tile_measurements.ndjson");
         LiveTileMeasurementPoller livePoller =
-                LiveTileMeasurementPoller.start(ndjsonPath, annotation.getName(), LIVE_POLL_EXECUTOR);
+                LiveTileMeasurementPoller.start(
+                        ndjsonPath, annotation.getName(), LIVE_POLL_EXECUTOR,
+                        getSessionHierarchy(), capturedImageData);
 
         try {
             // Monitor acquisition with regular status updates
@@ -1346,10 +1392,13 @@ public class AcquisitionManager {
             double annWidth = annotation.getROI().getBoundsWidth();
             double annHeight = annotation.getROI().getBoundsHeight();
 
-            // Get image pixel size
-            double imagePixelSize = QuPathGUI.getInstance()
-                    .getImageData()
-                    .getServer()
+            // Get image pixel size from cached session data (viewer-independent)
+            ImageData<?> imgData = capturedImageData != null ? capturedImageData : gui.getImageData();
+            if (imgData == null) {
+                logger.debug("No image data available for tile count estimate");
+                return 1;
+            }
+            double imagePixelSize = imgData.getServer()
                     .getPixelCalibration()
                     .getAveragedPixelSizeMicrons();
 
@@ -1578,52 +1627,42 @@ public class AcquisitionManager {
     }
 
     /**
-     * Gets the name of the currently-open parent image in the QuPath viewer.
+     * Gets the parent image name using the cached entry (viewer-independent).
      *
      * @return parent image name, or null if unavailable
      */
-    @SuppressWarnings("unchecked")
     private String getParentImageName() {
+        if (parentEntry != null) {
+            return parentEntry.getImageName();
+        }
+        // Fallback: try the live viewer (only relevant before caching completes)
         if (gui.getViewer().hasServer() && gui.getImageData() != null) {
             try {
+                @SuppressWarnings("unchecked")
                 Project<BufferedImage> project = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
                 ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
                 return entry != null ? entry.getImageName() : null;
             } catch (Exception e) {
                 logger.debug("Could not get parent image name: {}", e.getMessage());
-                return null;
             }
         }
         return null;
     }
 
     /**
-     * Gets the flip-X status of the currently-open parent image, falling back
-     * to the preference value if no parent entry is available.
-     */
-    /**
      * Gets the flip-X status for the current acquisition context.
      *
      * <p>Fallback chain:
      * <ol>
-     *   <li>Parent image metadata (most specific -- image was already flipped)</li>
+     *   <li>Cached parent entry metadata (viewer-independent)</li>
      *   <li>Per-detector config from resources_LOCI.yml (hardware-specific optical flip)</li>
      *   <li>Global preference (legacy fallback for unconfigured systems)</li>
      * </ol>
      */
-    @SuppressWarnings("unchecked")
     private boolean getParentFlipX() {
-        // 1. Try image metadata (already stores the flip state for this specific image)
-        if (gui.getViewer().hasServer() && gui.getImageData() != null) {
-            try {
-                Project<BufferedImage> project = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
-                ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
-                if (entry != null) {
-                    return ImageMetadataManager.isFlippedX(entry);
-                }
-            } catch (Exception e) {
-                // fall through
-            }
+        // 1. Try cached parent entry (viewer-independent, stable during acquisition)
+        if (parentEntry != null) {
+            return ImageMetadataManager.isFlippedX(parentEntry);
         }
         // 2. Try per-detector config (hardware optical flip)
         String detectorId = state.sample != null ? state.sample.detector() : null;
@@ -1642,19 +1681,10 @@ public class AcquisitionManager {
      *
      * @see #getParentFlipX()
      */
-    @SuppressWarnings("unchecked")
     private boolean getParentFlipY() {
-        // 1. Try image metadata
-        if (gui.getViewer().hasServer() && gui.getImageData() != null) {
-            try {
-                Project<BufferedImage> project = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
-                ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
-                if (entry != null) {
-                    return ImageMetadataManager.isFlippedY(entry);
-                }
-            } catch (Exception e) {
-                // fall through
-            }
+        // 1. Try cached parent entry (viewer-independent, stable during acquisition)
+        if (parentEntry != null) {
+            return ImageMetadataManager.isFlippedY(parentEntry);
         }
         // 2. Try per-detector config
         String detectorId = state.sample != null ? state.sample.detector() : null;
@@ -1708,10 +1738,11 @@ public class AcquisitionManager {
             // annotationName contains the XY stage coordinates (e.g., "58394_50846").
             // They spatially intersect the annotation but are NOT hierarchical children.
             String annotationName = annotation.getName();
-            QuPathGUI guiInstance = QuPathGUI.getInstance();
-            var hierarchy = (guiInstance != null && guiInstance.getImageData() != null)
-                    ? guiInstance.getImageData().getHierarchy()
-                    : QP.getCurrentHierarchy();
+            var hierarchy = getSessionHierarchy();
+            if (hierarchy == null) {
+                logger.warn("No hierarchy available for tile measurement attachment");
+                return;
+            }
 
             java.util.List<PathObject> detections = hierarchy.getDetectionObjects().stream()
                     .filter(d -> {
@@ -1744,15 +1775,12 @@ public class AcquisitionManager {
                     detections.size(),
                     annotation.getName());
 
-            // Fire hierarchy update so measurement table refreshes
-            if (guiInstance != null && guiInstance.getImageData() != null) {
-                guiInstance
-                        .getImageData()
-                        .getHierarchy()
-                        .fireHierarchyChangedEvent(
-                                guiInstance.getImageData().getHierarchy().getRootObject());
-            } else {
-                QP.fireHierarchyUpdate();
+            // Fire hierarchy update so measurement table refreshes -- but only if the
+            // viewer is currently showing the session image. If the user switched images,
+            // measurements are still on the correct PathObjects (in memory) and will
+            // display when the user switches back.
+            if (isSessionImageActive()) {
+                hierarchy.fireHierarchyChangedEvent(hierarchy.getRootObject());
             }
 
         } catch (Exception e) {

@@ -318,21 +318,17 @@ public class TilingUtilities {
         Files.write(configFilePathQP, configLinesPixels, StandardCharsets.UTF_8);
         logger.info("Wrote QuPath tile configuration to: {}", configFilePathQP);
 
-        // Add detection objects to QuPath hierarchy
-        // IMPORTANT: Use GUI's hierarchy, not QP static context, to ensure tiles
-        // are added to the correct image (especially after image flip operations)
+        // Add detection objects to QuPath hierarchy.
+        // Use GUI's ImageData hierarchy (which is stable for the session even if the
+        // viewer later switches to a different image). Fall back to QP static context.
         if (!detectionTiles.isEmpty()) {
             QuPathGUI gui = QuPathGUI.getInstance();
-            if (gui != null && gui.getImageData() != null) {
-                gui.getImageData().getHierarchy().addObjects(detectionTiles);
-                gui.getImageData()
-                        .getHierarchy()
-                        .fireHierarchyChangedEvent(
-                                gui.getImageData().getHierarchy().getRootObject());
-            } else {
-                // Fallback to QP static context if GUI not available
-                QP.getCurrentHierarchy().addObjects(detectionTiles);
-                QP.fireHierarchyUpdate();
+            var hierarchy = (gui != null && gui.getImageData() != null)
+                    ? gui.getImageData().getHierarchy()
+                    : QP.getCurrentHierarchy();
+            if (hierarchy != null) {
+                hierarchy.addObjects(detectionTiles);
+                hierarchy.fireHierarchyChangedEvent(hierarchy.getRootObject());
             }
             logger.info("Added {} detection tiles to QuPath", detectionTiles.size());
         }

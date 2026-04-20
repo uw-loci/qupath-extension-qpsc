@@ -15,9 +15,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.workflow.AcquisitionManager;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.hierarchy.PathObjectHierarchy;
-import qupath.lib.scripting.QP;
 
 /**
  * Tails an NDJSON file (one JSON object per line) written incrementally by
@@ -59,13 +59,21 @@ public class LiveTileMeasurementPoller {
     private final java.lang.reflect.Type mapType =
             new com.google.gson.reflect.TypeToken<Map<String, Object>>() {}.getType();
 
+    /** Stable hierarchy reference captured at acquisition start (viewer-independent). */
+    private final PathObjectHierarchy sessionHierarchy;
+    /** ImageData captured at acquisition start -- used to check if viewer is showing this image. */
+    private final ImageData<?> sessionImageData;
+
     private long offset = 0L;
     private int totalApplied = 0;
     private ScheduledFuture<?> handle;
 
-    private LiveTileMeasurementPoller(Path ndjsonPath, String annotationName) {
+    private LiveTileMeasurementPoller(Path ndjsonPath, String annotationName,
+                                      PathObjectHierarchy sessionHierarchy, ImageData<?> sessionImageData) {
         this.ndjsonPath = ndjsonPath;
         this.annotationName = annotationName;
+        this.sessionHierarchy = sessionHierarchy;
+        this.sessionImageData = sessionImageData;
     }
 
     /**
@@ -77,10 +85,14 @@ public class LiveTileMeasurementPoller {
      * @param annotationName name of the annotation being acquired -- used to
      *     filter the detection hierarchy the same way the batch path does
      * @param executor shared executor to run ticks on; caller owns its lifecycle
+     * @param sessionHierarchy stable hierarchy reference (viewer-independent); may be null
+     * @param sessionImageData ImageData captured at session start; used to check viewer state
      */
     public static LiveTileMeasurementPoller start(
-            Path ndjsonPath, String annotationName, ScheduledExecutorService executor) {
-        LiveTileMeasurementPoller poller = new LiveTileMeasurementPoller(ndjsonPath, annotationName);
+            Path ndjsonPath, String annotationName, ScheduledExecutorService executor,
+            PathObjectHierarchy sessionHierarchy, ImageData<?> sessionImageData) {
+        LiveTileMeasurementPoller poller = new LiveTileMeasurementPoller(
+                ndjsonPath, annotationName, sessionHierarchy, sessionImageData);
         poller.handle =
                 executor.scheduleAtFixedRate(poller::tickSafely, POLL_PERIOD_MS, POLL_PERIOD_MS, TimeUnit.MILLISECONDS);
         logger.debug("Started live tile measurement poller for annotation '{}' at {}", annotationName, ndjsonPath);
@@ -179,15 +191,14 @@ public class LiveTileMeasurementPoller {
         }
         if (byIndex.isEmpty()) return;
 
-        QuPathGUI guiInstance = QuPathGUI.getInstance();
-        PathObjectHierarchy hierarchy = (guiInstance != null && guiInstance.getImageData() != null)
-                ? guiInstance.getImageData().getHierarchy()
-                : QP.getCurrentHierarchy();
-        if (hierarchy == null) {
+        // Use the stable session hierarchy captured at acquisition start.
+        // This is viewer-independent -- measurements go to the correct image
+        // even if the user has switched to a different image in the viewer.
+        if (sessionHierarchy == null) {
             return;
         }
 
-        List<PathObject> detections = hierarchy.getDetectionObjects().stream()
+        List<PathObject> detections = sessionHierarchy.getDetectionObjects().stream()
                 .filter(d -> {
                     String name = d.getName();
                     return name != null && name.contains(annotationName);
@@ -211,15 +222,15 @@ public class LiveTileMeasurementPoller {
                     updated.size(),
                     annotationName,
                     totalApplied);
-            // Fire a measurement-only change on just the touched detections.
-            // fireHierarchyChangedEvent(root) forces QuPath's viewer to invalidate
-            // the detection spatial cache and repaint the entire tile overlay,
-            // which produced a visible "all tiles disappear then reappear" flicker
-            // every poll tick. fireObjectMeasurementsChangedEvent only notifies the
-            // measurement panel / measurement-dependent overlays of a value change
-            // and leaves detection geometry untouched.
+            // Fire a measurement-only change on just the touched detections, but only
+            // if the viewer is currently showing the session image. If the user switched
+            // to a different image, the measurements are still on the PathObjects in
+            // memory and will display when they switch back.
             try {
-                hierarchy.fireObjectMeasurementsChangedEvent(hierarchy, updated);
+                QuPathGUI guiInstance = QuPathGUI.getInstance();
+                if (guiInstance != null && guiInstance.getImageData() == sessionImageData) {
+                    sessionHierarchy.fireObjectMeasurementsChangedEvent(sessionHierarchy, updated);
+                }
             } catch (Exception e) {
                 logger.debug("Measurement change event failed: {}", e.getMessage());
             }

@@ -177,7 +177,21 @@ public class TileHelper {
      * @param modality Base modality name (without index suffix)
      */
     public static void deleteAllTiles(QuPathGUI gui, String modality) {
-        var hierarchy = gui.getViewer().getHierarchy();
+        var hierarchy = (gui.getImageData() != null)
+                ? gui.getImageData().getHierarchy()
+                : gui.getViewer().getHierarchy();
+        deleteAllTiles(hierarchy, modality);
+    }
+
+    /**
+     * Removes all tile detections for the given modality from the specified hierarchy.
+     * This overload is viewer-independent and safe to call during acquisition.
+     */
+    public static void deleteAllTiles(qupath.lib.objects.hierarchy.PathObjectHierarchy hierarchy, String modality) {
+        if (hierarchy == null) {
+            logger.warn("Cannot delete tiles -- no hierarchy available");
+            return;
+        }
         int totalDetections = hierarchy.getDetectionObjects().size();
 
         String modalityBase = modality.replaceAll("(_\\d+)$", "");
