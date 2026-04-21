@@ -8,7 +8,7 @@ plugins {
     // Code formatting (like Black for Python)
     id("com.diffplug.spotless") version "7.0.2"
     // Static bug detection
-    id("com.github.spotbugs") version "6.5.0"
+    id("com.github.spotbugs") version "6.5.1"
     // Publish to local Maven for dependent extensions (e.g., qupath-extension-ppm)
     id("maven-publish")
 }
