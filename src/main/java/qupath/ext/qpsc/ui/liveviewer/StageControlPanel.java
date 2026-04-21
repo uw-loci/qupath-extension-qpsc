@@ -106,6 +106,21 @@ public class StageControlPanel extends VBox {
     private final Label fovInfoLabel;
     private final double[] cachedFovUm = {0, 0};
 
+    /** Callback invoked when hardware detection changes (objective/detector). */
+    private Runnable onHardwareChanged;
+    /** Callback invoked when user toggles the FoV overlay button. */
+    private Runnable onFovOverlayToggle;
+
+    /** Sets a callback invoked whenever the detected objective/detector changes. */
+    public void setOnHardwareChanged(Runnable callback) {
+        this.onHardwareChanged = callback;
+    }
+
+    /** Sets a callback invoked when the "Show Objective FoVs" button is toggled. */
+    public void setOnFovOverlayToggle(Runnable callback) {
+        this.onFovOverlayToggle = callback;
+    }
+
     // Navigation components
     private final VirtualJoystick joystick;
     // Single-step arrows
@@ -765,6 +780,16 @@ public class StageControlPanel extends VBox {
     private String currentCameraObjectiveId;
     private String currentCameraDetectorId;
 
+    /** Returns the currently detected objective ID, or "Unknown". */
+    public String getCurrentObjectiveId() {
+        return currentCameraObjectiveId;
+    }
+
+    /** Returns the currently detected detector ID, or "Unknown". */
+    public String getCurrentDetectorId() {
+        return currentCameraDetectorId;
+    }
+
     /**
      * Builds the Camera tab with modality dropdown and modality-specific content.
      */
@@ -851,6 +876,7 @@ public class StageControlPanel extends VBox {
                     "Camera tab: refreshed hardware from MM -- objective='{}' detector='{}'",
                     currentCameraObjectiveId,
                     currentCameraDetectorId);
+            if (onHardwareChanged != null) onHardwareChanged.run();
         });
         hwGrid.add(refreshHardwareBtn, 2, 0, 1, 2);
         GridPane.setMargin(refreshHardwareBtn, new Insets(0, 0, 0, 6));
@@ -893,6 +919,19 @@ public class StageControlPanel extends VBox {
             }
         });
 
+        // "Show Objective FoVs" toggle -- draws a temporary overlay on the
+        // live image showing relative FoV sizes for all configured objectives.
+        ToggleButton fovOverlayBtn = new ToggleButton("Show Objective FoVs");
+        fovOverlayBtn.setMaxWidth(Double.MAX_VALUE);
+        fovOverlayBtn.setStyle("-fx-font-size: 10px;");
+        fovOverlayBtn.setTooltip(new Tooltip(
+                "Overlay color-coded rectangles on the live image showing each\n"
+                        + "objective's FoV relative to the current one. Useful for\n"
+                        + "framing decisions when switching magnifications."));
+        fovOverlayBtn.setOnAction(e -> {
+            if (onFovOverlayToggle != null) onFovOverlayToggle.run();
+        });
+
         cameraContent
                 .getChildren()
                 .addAll(
@@ -903,7 +942,8 @@ public class StageControlPanel extends VBox {
                         cameraModContent,
                         new Separator(),
                         cameraStatusLabel,
-                        fullControlBtn);
+                        fullControlBtn,
+                        fovOverlayBtn);
 
         // Populate initial content and wire dropdown
         currentCameraModality = modalityCombo.getValue();

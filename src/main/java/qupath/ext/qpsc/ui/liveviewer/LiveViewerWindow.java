@@ -3,6 +3,9 @@ package qupath.ext.qpsc.ui.liveviewer;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -30,8 +33,11 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javax.imageio.ImageIO;
@@ -41,6 +47,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
@@ -70,6 +77,7 @@ public class LiveViewerWindow {
     private ImageView imageView;
     private Label statusLabel;
     private Label cursorLabel;
+    private Label fovLabel;
     private Button liveToggleButton;
     // Refine Focus removed from toolbar -- Sweep Focus includes it as Phase 5
     private Button sweepFocusButton;
@@ -797,11 +805,20 @@ public class LiveViewerWindow {
         scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         scrollPane.setPannable(true); // Allow drag-to-pan
 
+        // Overlay canvas for drawing objective FoV rectangles on the live image
+        fovOverlayCanvas = new Canvas();
+        fovOverlayCanvas.setMouseTransparent(true);
+
         // Inner container for centering when image is smaller than viewport
-        imageContainer = new StackPane(imageView);
+        imageContainer = new StackPane(imageView, fovOverlayCanvas);
         imageContainer.setStyle("-fx-background-color: black;");
         imageContainer.setAlignment(Pos.CENTER);
         scrollPane.setContent(imageContainer);
+
+        // Redraw overlay when image bounds change (resize/zoom)
+        imageView.boundsInParentProperty().addListener((obs, oldB, newB) -> {
+            if (fovOverlayVisible) drawFovOverlay();
+        });
 
         // Default to Fit mode: image scales to fill container
         scrollPane.setFitToWidth(true);
@@ -811,6 +828,8 @@ public class LiveViewerWindow {
 
         // Stage control panel (on right side, expanded by default for visibility)
         stageControlPanel = new StageControlPanel();
+        stageControlPanel.setOnHardwareChanged(this::updateFovLabel);
+        stageControlPanel.setOnFovOverlayToggle(this::toggleFovOverlay);
 
         // Wrap in ScrollPane to handle overflow when window is short
         stageScrollPane = new ScrollPane(stageControlPanel);
@@ -830,16 +849,19 @@ public class LiveViewerWindow {
         // Noise stats panel (collapsible, below histogram)
         noiseStatsPanel = new NoiseStatsPanel();
 
-        // Status bar with cursor pixel readout on the right
+        // Status bar with FoV and cursor pixel readout
         statusLabel = new Label("Ready - press Live to start");
         statusLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11;");
+        fovLabel = new Label("FoV: --");
+        fovLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11; -fx-font-weight: bold;");
         cursorLabel = new Label("Pixel: --");
         cursorLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11;");
         Region statusSpacer = new Region();
         HBox.setHgrow(statusSpacer, Priority.ALWAYS);
-        HBox statusBar = new HBox(8, statusLabel, statusSpacer, cursorLabel);
+        HBox statusBar = new HBox(8, statusLabel, statusSpacer, fovLabel, cursorLabel);
         statusBar.setPadding(new Insets(4));
         statusBar.setAlignment(Pos.CENTER_LEFT);
+        updateFovLabel();
 
         // Bottom pane: Histogram, Noise Stats, Status Bar
         VBox bottomPane = new VBox(histogramPane, noiseStatsPanel, statusBar);
@@ -1611,6 +1633,195 @@ public class LiveViewerWindow {
                 "LiveViewer-ClickToCenter");
         moveThread.setDaemon(true);
         moveThread.start();
+    }
+
+    // ---- FoV indicator and objective overlay ----
+
+    /** Overlay canvas for drawing objective FoV rectangles on top of the image. */
+    private Canvas fovOverlayCanvas;
+    /** Whether the FoV overlay is currently visible. */
+    private boolean fovOverlayVisible = false;
+
+    /**
+     * Updates the FoV size label in the status bar using the current objective/detector.
+     * Shows the field of view in microns. Turns RED if pixel size is unavailable.
+     */
+    private void updateFovLabel() {
+        if (fovLabel == null) return;
+        try {
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr == null) {
+                fovLabel.setText("FoV: no config");
+                fovLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11; "
+                        + "-fx-font-weight: bold; -fx-text-fill: red;");
+                return;
+            }
+            String objId = stageControlPanel != null ? stageControlPanel.getCurrentObjectiveId() : null;
+            String detId = stageControlPanel != null ? stageControlPanel.getCurrentDetectorId() : null;
+            if (objId == null || "Unknown".equals(objId) || detId == null || "Unknown".equals(detId)) {
+                fovLabel.setText("FoV: unknown obj");
+                fovLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11; "
+                        + "-fx-font-weight: bold; -fx-text-fill: red;");
+                return;
+            }
+            Double pixelSize = mgr.getHardwarePixelSize(objId, detId);
+            int[] dims = mgr.getDetectorDimensions(detId);
+            if (pixelSize == null || pixelSize <= 0 || dims == null) {
+                fovLabel.setText("FoV: no pixel size");
+                fovLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11; "
+                        + "-fx-font-weight: bold; -fx-text-fill: red;");
+                return;
+            }
+            double fovW = dims[0] * pixelSize;
+            double fovH = dims[1] * pixelSize;
+            fovLabel.setText(String.format("FoV: %.0f x %.0f um", fovW, fovH));
+            fovLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11; -fx-font-weight: bold;");
+        } catch (Exception e) {
+            fovLabel.setText("FoV: error");
+            fovLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11; "
+                    + "-fx-font-weight: bold; -fx-text-fill: red;");
+        }
+    }
+
+    /**
+     * Toggles the objective FoV overlay on/off. When enabled, draws a centered
+     * rectangle for each objective's FoV on the live image, color-coded and labeled.
+     */
+    private void toggleFovOverlay() {
+        fovOverlayVisible = !fovOverlayVisible;
+        if (fovOverlayVisible) {
+            drawFovOverlay();
+        } else {
+            clearFovOverlay();
+        }
+    }
+
+    /**
+     * Clears the FoV overlay canvas.
+     */
+    private void clearFovOverlay() {
+        if (fovOverlayCanvas != null) {
+            GraphicsContext gc = fovOverlayCanvas.getGraphicsContext2D();
+            gc.clearRect(0, 0, fovOverlayCanvas.getWidth(), fovOverlayCanvas.getHeight());
+        }
+    }
+
+    /**
+     * Standard hue-separated colors for up to 12 objectives.
+     * Uses saturated, bright colors that are visible on both brightfield and
+     * dark IF backgrounds.
+     */
+    private static final Color[] OBJECTIVE_COLORS = {
+        Color.rgb(255,  50,  50),  // red
+        Color.rgb( 50, 220,  50),  // green
+        Color.rgb( 80, 130, 255),  // blue
+        Color.rgb(255, 200,  30),  // yellow
+        Color.rgb(255,  50, 255),  // magenta
+        Color.rgb( 50, 230, 230),  // cyan
+        Color.rgb(255, 140,  30),  // orange
+        Color.rgb(160,  80, 255),  // purple
+        Color.rgb( 50, 255, 140),  // spring green
+        Color.rgb(255,  80, 160),  // pink
+        Color.rgb(180, 210,  40),  // lime
+        Color.rgb(100, 200, 255),  // sky blue
+    };
+
+    /**
+     * Draws FoV rectangles for all configured objectives, centered on the image.
+     * Each rectangle shows the relative FoV size of that objective compared to
+     * the current one and is labeled with the objective ID.
+     */
+    private void drawFovOverlay() {
+        if (fovOverlayCanvas == null || imageView == null) return;
+
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        if (mgr == null) return;
+
+        String currentDetId = stageControlPanel != null ? stageControlPanel.getCurrentDetectorId() : null;
+        if (currentDetId == null || "Unknown".equals(currentDetId)) return;
+
+        int[] dims = mgr.getDetectorDimensions(currentDetId);
+        if (dims == null) return;
+        int sensorW = dims[0];
+        int sensorH = dims[1];
+
+        // Get all objectives
+        Set<String> objectives = mgr.getAvailableObjectives();
+        if (objectives == null || objectives.isEmpty()) return;
+
+        // Collect per-objective FoV in microns
+        List<String> objIds = new ArrayList<>(objectives);
+        List<double[]> fovs = new ArrayList<>();
+        for (String obj : objIds) {
+            Double px = mgr.getHardwarePixelSize(obj, currentDetId);
+            if (px != null && px > 0) {
+                fovs.add(new double[]{sensorW * px, sensorH * px});
+            } else {
+                fovs.add(null);
+            }
+        }
+
+        // Find the largest FoV to scale the overlay -- all rectangles are drawn
+        // proportional to their actual physical size
+        double maxFov = 0;
+        for (double[] fov : fovs) {
+            if (fov != null) {
+                maxFov = Math.max(maxFov, Math.max(fov[0], fov[1]));
+            }
+        }
+        if (maxFov <= 0) return;
+
+        // Size the canvas to match the imageView's rendered size
+        double canvasW = imageView.getBoundsInParent().getWidth();
+        double canvasH = imageView.getBoundsInParent().getHeight();
+        fovOverlayCanvas.setWidth(canvasW);
+        fovOverlayCanvas.setHeight(canvasH);
+
+        GraphicsContext gc = fovOverlayCanvas.getGraphicsContext2D();
+        gc.clearRect(0, 0, canvasW, canvasH);
+
+        // Scale factor: the largest FoV fills ~90% of the shorter canvas dimension
+        double usable = Math.min(canvasW, canvasH) * 0.90;
+        double scale = usable / maxFov;
+
+        double cx = canvasW / 2.0;
+        double cy = canvasH / 2.0;
+
+        // Draw from largest to smallest so smaller FoVs are on top
+        // Build sorted index list
+        List<Integer> indices = new ArrayList<>();
+        for (int i = 0; i < objIds.size(); i++) indices.add(i);
+        indices.sort((a, b) -> {
+            double areaA = fovs.get(a) != null ? fovs.get(a)[0] * fovs.get(a)[1] : 0;
+            double areaB = fovs.get(b) != null ? fovs.get(b)[0] * fovs.get(b)[1] : 0;
+            return Double.compare(areaB, areaA); // largest first
+        });
+
+        for (int idx : indices) {
+            double[] fov = fovs.get(idx);
+            if (fov == null) continue;
+
+            String objId = objIds.get(idx);
+            Color color = OBJECTIVE_COLORS[idx % OBJECTIVE_COLORS.length];
+
+            double rectW = fov[0] * scale;
+            double rectH = fov[1] * scale;
+            // Line thickness = 2% of this FoV's shorter dimension
+            double lineWidth = Math.max(1.5, Math.min(rectW, rectH) * 0.02);
+            double x = cx - rectW / 2.0;
+            double y = cy - rectH / 2.0;
+
+            gc.setStroke(color);
+            gc.setLineWidth(lineWidth);
+            gc.strokeRect(x, y, rectW, rectH);
+
+            // Label in the top-left corner of the rectangle
+            gc.setFill(color);
+            gc.setFont(javafx.scene.text.Font.font("SansSerif", javafx.scene.text.FontWeight.BOLD,
+                    Math.max(10, Math.min(14, lineWidth * 5))));
+            String label = String.format("%s (%.0f x %.0f um)", objId, fov[0], fov[1]);
+            gc.fillText(label, x + lineWidth + 2, y + lineWidth + gc.getFont().getSize() + 2);
+        }
     }
 
     /**
