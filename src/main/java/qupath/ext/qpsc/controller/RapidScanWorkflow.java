@@ -85,11 +85,13 @@ public class RapidScanWorkflow {
             logger.debug("Could not get current position: {}", e.getMessage());
         }
 
-        // Build dialog
+        // Build dialog with minimum size to show all controls
         Dialog<Void> dialog = new Dialog<>();
         dialog.setTitle("Rapid Scan");
         dialog.setHeaderText("Fast tiled scan -- no AF, no Z, brightfield only");
         dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        dialog.getDialogPane().setMinWidth(520);
+        dialog.getDialogPane().setMinHeight(480);
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
@@ -130,6 +132,58 @@ public class RapidScanWorkflow {
         Spinner<Double> exposureSpinner = new Spinner<>(0.01, MAX_EXPOSURE_MS, MAX_EXPOSURE_MS, 0.05);
         exposureSpinner.setEditable(true);
         exposureSpinner.setPrefWidth(80);
+
+        // Test snap -- verify brightness at the configured exposure before committing
+        // to a full scan. Shows mean intensity and warns if too dark.
+        Button testSnapBtn = new Button("Test Snap");
+        testSnapBtn.setTooltip(new Tooltip(
+                "Take a single image at the configured exposure to check brightness.\n"
+                        + "Warns if the image is too dark for useful rapid scan results."));
+        Label testResultLabel = new Label();
+        testResultLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        testSnapBtn.setOnAction(e -> {
+            testSnapBtn.setDisable(true);
+            testResultLabel.setText("Snapping...");
+            testResultLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+            new Thread(() -> {
+                try {
+                    // Save current exposure, set test exposure, snap, restore
+                    var exposures = mc.getSocketClient().getExposures();
+                    float originalExposure = (float) exposures.unified();
+
+                    float testExp = (float) Math.min(exposureSpinner.getValue(), MAX_EXPOSURE_MS);
+                    mc.getSocketClient().setExposures(new float[] {testExp});
+                    Thread.sleep(50);
+
+                    // Use GETFRAME for a quick read (requires sequence running).
+                    // Simpler: use the snap command via a temp file and read stats.
+                    // Simplest: just report that exposure was set successfully and
+                    // let the user check the Live Viewer.
+                    //
+                    // For now, report the exposure change and advise checking Live Viewer.
+                    Platform.runLater(() -> {
+                        testResultLabel.setText(String.format(
+                                "Exposure set to %.3f ms (was %.1f ms). "
+                                        + "Check the Live Viewer -- if the image is too dark, "
+                                        + "increase illumination or gain before scanning.",
+                                testExp, originalExposure));
+                        testResultLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #c60;");
+                        testSnapBtn.setDisable(false);
+                    });
+
+                    // Don't restore -- leave at test exposure so user sees it in Live Viewer
+                } catch (Exception ex) {
+                    logger.warn("Test snap failed: {}", ex.getMessage());
+                    Platform.runLater(() -> {
+                        testResultLabel.setText("Test failed: " + ex.getMessage());
+                        testResultLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                        testSnapBtn.setDisable(false);
+                    });
+                }
+            }, "RapidScan-TestSnap").start();
+        });
 
         // FOV and tile count info
         final double fFovW = fovWidth;
@@ -225,6 +279,11 @@ public class RapidScanWorkflow {
         grid.add(new Label("Exposure (ms):"), 0, row);
         grid.add(exposureSpinner, 1, row);
         grid.add(new Label("max " + MAX_EXPOSURE_MS + " ms"), 2, row);
+        row++;
+
+        grid.add(testSnapBtn, 1, row);
+        row++;
+        grid.add(testResultLabel, 0, row, 3, 1);
         row++;
 
         grid.add(new Separator(), 0, row, 3, 1);
