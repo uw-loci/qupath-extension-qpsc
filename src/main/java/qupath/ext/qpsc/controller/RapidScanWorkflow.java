@@ -362,6 +362,11 @@ public class RapidScanWorkflow {
                 statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
                 return;
             }
+            if (fovState.pixelSize <= 0) {
+                statusLabel.setText("Cannot determine pixel size -- stitching would fail.");
+                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                return;
+            }
             String output = outputField.getText().trim();
             if (output.isEmpty()) {
                 statusLabel.setText("Please specify an output folder.");
@@ -456,7 +461,6 @@ public class RapidScanWorkflow {
                 params.compressionType(),
                 pixelSizeMicrons,
                 1, ".", 1.0, outputFormat);
-        config.outputFilename = "rapid_scan";
 
         StageImageTransform siTransform = StageImageTransform.current();
         boolean[] stitcherFlags = siTransform.stitcherFlipFlags();
