@@ -68,10 +68,14 @@ public class RapidScanWorkflow {
             return;
         }
         Set<String> detectors = mgr.getHardwareDetectors();
-        String detector = detectors.isEmpty() ? null : detectors.iterator().next();
+        if (detectors.isEmpty()) {
+            Dialogs.showErrorMessage("Rapid Scan", "No detectors found in microscope configuration.");
+            return;
+        }
 
-        // Build objective display names
+        // Build display names for objectives and detectors
         Map<String, String> friendlyNames = mgr.getObjectiveFriendlyNames(objectives);
+        Map<String, String> detectorFriendlyNames = mgr.getDetectorFriendlyNames(detectors);
 
         // Get current stage position for defaults
         double currentX = 0;
@@ -119,6 +123,25 @@ public class RapidScanWorkflow {
             }
         });
 
+        // Detector selector
+        List<String> detectorIds = new ArrayList<>(detectors);
+        ComboBox<String> detectorCombo = new ComboBox<>(FXCollections.observableArrayList(detectorIds));
+        detectorCombo.setPrefWidth(220);
+        detectorCombo.setCellFactory(lv -> new ListCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : detectorFriendlyNames.getOrDefault(item, item));
+            }
+        });
+        detectorCombo.setButtonCell(new ListCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : detectorFriendlyNames.getOrDefault(item, item));
+            }
+        });
+
         // FOV and tile count labels
         Label fovLabel = new Label();
         fovLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
@@ -155,30 +178,21 @@ public class RapidScanWorkflow {
         exposureSpinner.setEditable(true);
         exposureSpinner.setPrefWidth(80);
 
-        // Update FOV + tile count when objective or scan params change
-        final String fDetector = detector;
+        // Update FOV + tile count when objective or detector or scan params change
         Runnable updateFovAndTiles = () -> {
             String selectedObj = objectiveCombo.getValue();
-            if (selectedObj == null) return;
+            String selectedDet = detectorCombo.getValue();
+            if (selectedObj == null || selectedDet == null) return;
 
-            // Log all inputs so we can diagnose FOV mismatches
-            int[] dims = mgr.getDetectorDimensions(fDetector);
-            double pxSz = 0;
-            try {
-                pxSz = mgr.getPixelSize(selectedObj, fDetector);
-            } catch (Exception ignored) {
-            }
-            logger.info("Rapid Scan FOV lookup: objective='{}', detector='{}', "
-                            + "detectorDims={}x{}, pixelSize={} um",
-                    selectedObj, fDetector,
-                    dims != null ? dims[0] : "null", dims != null ? dims[1] : "null", pxSz);
-
-            double[] fov = mgr.getModalityFOV("brightfield", selectedObj, fDetector);
+            double[] fov = mgr.getModalityFOV("brightfield", selectedObj, selectedDet);
             if (fov != null) {
                 fovState.fovW = fov[0];
                 fovState.fovH = fov[1];
-                fovState.pixelSize = pxSz;
-                logger.info("Rapid Scan FOV result: {} x {} um", fov[0], fov[1]);
+                try {
+                    fovState.pixelSize = mgr.getPixelSize(selectedObj, selectedDet);
+                } catch (Exception ignored) {
+                    fovState.pixelSize = 0;
+                }
                 String name = friendlyNames.getOrDefault(selectedObj, selectedObj);
                 fovLabel.setText(String.format("FOV: %.1f x %.1f um  |  Pixel size: %.3f um  (%s)",
                         fov[0], fov[1], fovState.pixelSize, name));
@@ -205,12 +219,15 @@ public class RapidScanWorkflow {
         };
 
         objectiveCombo.setOnAction(e -> updateFovAndTiles.run());
+        detectorCombo.setOnAction(e -> updateFovAndTiles.run());
         widthSpinner.valueProperty().addListener((obs, o, n) -> updateFovAndTiles.run());
         heightSpinner.valueProperty().addListener((obs, o, n) -> updateFovAndTiles.run());
         overlapSpinner.valueProperty().addListener((obs, o, n) -> updateFovAndTiles.run());
 
-        // Select first objective and trigger initial FOV computation
+        // Select defaults and trigger initial FOV computation
         objectiveCombo.getSelectionModel().selectFirst();
+        // Default to last detector (JAI is typically listed after Teledyne on PPM)
+        detectorCombo.getSelectionModel().selectLast();
         updateFovAndTiles.run();
 
         // Test snap button
@@ -279,6 +296,9 @@ public class RapidScanWorkflow {
         int row = 0;
         grid.add(new Label("Objective:"), 0, row);
         grid.add(objectiveCombo, 1, row, 2, 1);
+        row++;
+        grid.add(new Label("Detector:"), 0, row);
+        grid.add(detectorCombo, 1, row, 2, 1);
         row++;
 
         grid.add(fovLabel, 0, row, 3, 1);
