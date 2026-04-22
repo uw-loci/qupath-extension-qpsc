@@ -91,13 +91,14 @@ public class RapidScanWorkflow {
         // Mutable state for FOV -- updated when objective selection changes
         FovState fovState = new FovState();
 
-        // Build dialog
+        // Build non-modal dialog so QuPath remains usable during scan
         Dialog<Void> dialog = new Dialog<>();
         dialog.setTitle("Rapid Scan");
         dialog.setHeaderText("Fast tiled scan -- no AF, no Z, brightfield only");
         dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
         dialog.getDialogPane().setMinWidth(540);
         dialog.getDialogPane().setMinHeight(520);
+        dialog.initModality(javafx.stage.Modality.NONE);
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
@@ -433,7 +434,7 @@ public class RapidScanWorkflow {
 
         dialog.getDialogPane().setContent(grid);
         dialog.setResizable(true);
-        dialog.showAndWait();
+        dialog.show();
     }
 
     /**
