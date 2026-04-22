@@ -401,6 +401,17 @@ public class RapidScanWorkflow {
                     String response = mc.getSocketClient().startRapidScan(
                             output, cx, cy, w, h, overlap, exposure, fovW, fovH);
 
+                    // Parse binning from response: SUCCESS:nTiles:elapsed:binning
+                    int binning = 2; // default
+                    try {
+                        String[] parts = response.substring("SUCCESS:".length()).split(":");
+                        if (parts.length >= 3) {
+                            binning = Integer.parseInt(parts[2].trim());
+                        }
+                    } catch (Exception ignored) {
+                    }
+                    final int fBinning = binning;
+
                     Platform.runLater(() -> {
                         statusLabel.setText("Scan complete: " + response);
                         statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
@@ -412,7 +423,8 @@ public class RapidScanWorkflow {
                             statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
                         });
                         try {
-                            stitchRapidScanOutput(output, pxSize);
+                            // Pixel size scales with binning (2x2 binning -> 2x pixel size)
+                            stitchRapidScanOutput(output, pxSize * fBinning);
                             Platform.runLater(() -> {
                                 statusLabel.setText("Scan + stitch complete");
                                 statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
