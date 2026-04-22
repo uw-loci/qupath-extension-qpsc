@@ -13,7 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.controller.QPScopeController;
-import qupath.ext.qpsc.controller.RapidScanWorkflow;
 import qupath.ext.qpsc.controller.StackTimeLapseWorkflow;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
@@ -419,22 +418,12 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
-        // Rapid Scan (fast tiled acquisition demo)
-        MenuItem rapidScanOption = new MenuItem("Rapid Scan...");
-        rapidScanOption.setDisable(!configValid);
-        setMenuItemTooltip(
-                rapidScanOption,
-                "Fast tiled scan of a rectangular region. No autofocus, no Z, "
-                        + "brightfield only, exposure <=0.5ms. Saves tiles for optional stitching.");
-        rapidScanOption.setOnAction(e -> RapidScanWorkflow.show(qupath));
-
         // Server settings and wizard (always last in utilities)
         utilitiesMenu
                 .getItems()
                 .addAll(
                         new SeparatorMenuItem(),
                         stackTimeLapseOption,
-                        rapidScanOption,
                         new SeparatorMenuItem(),
                         propagationManagerOption,
                         stitchingRecoveryOption,
