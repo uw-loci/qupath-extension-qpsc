@@ -161,15 +161,24 @@ public class RapidScanWorkflow {
             String selectedObj = objectiveCombo.getValue();
             if (selectedObj == null) return;
 
+            // Log all inputs so we can diagnose FOV mismatches
+            int[] dims = mgr.getDetectorDimensions(fDetector);
+            double pxSz = 0;
+            try {
+                pxSz = mgr.getPixelSize(selectedObj, fDetector);
+            } catch (Exception ignored) {
+            }
+            logger.info("Rapid Scan FOV lookup: objective='{}', detector='{}', "
+                            + "detectorDims={}x{}, pixelSize={} um",
+                    selectedObj, fDetector,
+                    dims != null ? dims[0] : "null", dims != null ? dims[1] : "null", pxSz);
+
             double[] fov = mgr.getModalityFOV("brightfield", selectedObj, fDetector);
             if (fov != null) {
                 fovState.fovW = fov[0];
                 fovState.fovH = fov[1];
-                try {
-                    fovState.pixelSize = mgr.getPixelSize(selectedObj, fDetector);
-                } catch (Exception ignored) {
-                    fovState.pixelSize = 0;
-                }
+                fovState.pixelSize = pxSz;
+                logger.info("Rapid Scan FOV result: {} x {} um", fov[0], fov[1]);
                 String name = friendlyNames.getOrDefault(selectedObj, selectedObj);
                 fovLabel.setText(String.format("FOV: %.1f x %.1f um  |  Pixel size: %.3f um  (%s)",
                         fov[0], fov[1], fovState.pixelSize, name));
