@@ -9,8 +9,12 @@ import javafx.scene.layout.*;
 import javafx.stage.DirectoryChooser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.basicstitching.config.StitchingConfig;
+import qupath.ext.basicstitching.workflow.StitchingWorkflow;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.StageImageTransform;
+import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
@@ -40,9 +44,10 @@ public class RapidScanWorkflow {
             return;
         }
 
-        // Load FOV from config
+        // Load FOV and pixel size from config
         double fovWidth = 0;
         double fovHeight = 0;
+        double pixelSize = 0;
         String objectiveUsed = "";
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
@@ -61,6 +66,9 @@ public class RapidScanWorkflow {
             if (fov != null) {
                 fovWidth = fov[0];
                 fovHeight = fov[1];
+            }
+            if (objective != null && detector != null) {
+                pixelSize = mgr.getPixelSize(objective, detector);
             }
         } catch (Exception e) {
             logger.warn("Could not determine camera FOV: {}", e.getMessage());
@@ -185,9 +193,10 @@ public class RapidScanWorkflow {
             }, "RapidScan-TestSnap").start();
         });
 
-        // FOV and tile count info
+        // Capture values for use in lambdas
         final double fFovW = fovWidth;
         final double fFovH = fovHeight;
+        final double fPixelSize = pixelSize;
         Label fovLabel = new Label(String.format("FOV: %.1f x %.1f um (%s)", fovWidth, fovHeight, objectiveUsed));
         fovLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
 
@@ -347,27 +356,38 @@ public class RapidScanWorkflow {
                             output, cx, cy, w, h, overlap, exposure, fFovW, fFovH);
 
                     Platform.runLater(() -> {
-                        statusLabel.setText("Complete: " + response);
+                        statusLabel.setText("Scan complete: " + response);
                         statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
-                        startBtn.setDisable(false);
                     });
 
                     if (doStitch) {
-                        Platform.runLater(() -> statusLabel.setText("Stitching..."));
-                        // TODO: invoke stitching on the output folder
-                        logger.info("Stitching requested but not yet integrated for rapid scan output");
                         Platform.runLater(() -> {
-                            statusLabel.setText("Scan complete. Stitching not yet integrated.");
-                            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
+                            statusLabel.setText("Stitching...");
+                            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
                         });
+
+                        try {
+                            stitchRapidScanOutput(output, fPixelSize);
+                            Platform.runLater(() -> {
+                                statusLabel.setText("Scan + stitch complete");
+                                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
+                            });
+                        } catch (Exception stitchEx) {
+                            logger.error("Stitching failed", stitchEx);
+                            Platform.runLater(() -> {
+                                statusLabel.setText("Scan OK, stitch failed: " + stitchEx.getMessage());
+                                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: orange;");
+                            });
+                        }
                     }
                 } catch (Exception ex) {
                     logger.error("Rapid scan failed", ex);
                     Platform.runLater(() -> {
                         statusLabel.setText("Failed: " + ex.getMessage());
                         statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
-                        startBtn.setDisable(false);
                     });
+                } finally {
+                    Platform.runLater(() -> startBtn.setDisable(false));
                 }
             }, "RapidScan-Acquire").start();
         });
@@ -375,5 +395,52 @@ public class RapidScanWorkflow {
         dialog.getDialogPane().setContent(grid);
         dialog.setResizable(true);
         dialog.showAndWait();
+    }
+
+    /**
+     * Stitch rapid scan tiles using the same pipeline as normal acquisitions.
+     *
+     * @param tileFolder Folder containing numbered .tif files + TileConfiguration.txt
+     * @param pixelSizeMicrons Pixel size for the stitched output
+     */
+    private static void stitchRapidScanOutput(String tileFolder, double pixelSizeMicrons) throws Exception {
+        File tileFolderFile = new File(tileFolder);
+        File stitchedFolder = new File(tileFolderFile.getParentFile(), "stitched");
+        stitchedFolder.mkdirs();
+
+        StitchingConfiguration.StitchingParams params = StitchingConfiguration.getStandardConfiguration();
+
+        StitchingConfig.OutputFormat outputFormat = QPPreferenceDialog.getOutputFormatProperty();
+        if (outputFormat == null) {
+            outputFormat = StitchingConfig.OutputFormat.OME_TIFF;
+        }
+
+        StitchingConfig config = new StitchingConfig(
+                "Coordinates in TileConfiguration.txt file",
+                tileFolder,
+                stitchedFolder.getAbsolutePath(),
+                params.compressionType(),
+                pixelSizeMicrons,
+                1, // downsample
+                ".", // match everything
+                1.0, // zSpacingMicrons
+                outputFormat);
+        config.outputFilename = "rapid_scan";
+
+        // Apply stitcher flip flags from the current stage/camera transform
+        StageImageTransform siTransform = StageImageTransform.current();
+        boolean[] stitcherFlags = siTransform.stitcherFlipFlags();
+        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = stitcherFlags[0];
+        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = stitcherFlags[1];
+        logger.info("Rapid scan stitching: flipX={}, flipY={} (from {})",
+                stitcherFlags[0], stitcherFlags[1], siTransform);
+
+        try {
+            String outPath = StitchingWorkflow.run(config);
+            logger.info("Rapid scan stitched output: {}", outPath);
+        } finally {
+            qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = false;
+            qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = false;
+        }
     }
 }
