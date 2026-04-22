@@ -1737,13 +1737,21 @@ public class LiveViewerWindow {
         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
         if (mgr == null) return;
 
+        String currentObjId = stageControlPanel != null ? stageControlPanel.getCurrentObjectiveId() : null;
         String currentDetId = stageControlPanel != null ? stageControlPanel.getCurrentDetectorId() : null;
         if (currentDetId == null || "Unknown".equals(currentDetId)) return;
+        if (currentObjId == null || "Unknown".equals(currentObjId)) return;
 
         int[] dims = mgr.getDetectorDimensions(currentDetId);
         if (dims == null) return;
         int sensorW = dims[0];
         int sensorH = dims[1];
+
+        // Current objective's FoV in microns -- this defines the image edges
+        Double currentPx = mgr.getHardwarePixelSize(currentObjId, currentDetId);
+        if (currentPx == null || currentPx <= 0) return;
+        double currentFovW = sensorW * currentPx;
+        double currentFovH = sensorH * currentPx;
 
         // Get all objectives
         Set<String> objectives = mgr.getAvailableObjectives();
@@ -1761,16 +1769,6 @@ public class LiveViewerWindow {
             }
         }
 
-        // Find the largest FoV to scale the overlay -- all rectangles are drawn
-        // proportional to their actual physical size
-        double maxFov = 0;
-        for (double[] fov : fovs) {
-            if (fov != null) {
-                maxFov = Math.max(maxFov, Math.max(fov[0], fov[1]));
-            }
-        }
-        if (maxFov <= 0) return;
-
         // Size the canvas to match the imageView's rendered size
         double canvasW = imageView.getBoundsInParent().getWidth();
         double canvasH = imageView.getBoundsInParent().getHeight();
@@ -1780,15 +1778,16 @@ public class LiveViewerWindow {
         GraphicsContext gc = fovOverlayCanvas.getGraphicsContext2D();
         gc.clearRect(0, 0, canvasW, canvasH);
 
-        // Scale factor: the largest FoV fills ~90% of the shorter canvas dimension
-        double usable = Math.min(canvasW, canvasH) * 0.90;
-        double scale = usable / maxFov;
+        // Scale: the CURRENT objective's FoV maps exactly to the canvas edges.
+        // Other objectives scale proportionally -- lower mag objectives extend
+        // beyond the canvas (clipped), higher mag sit inside.
+        double scaleX = canvasW / currentFovW;
+        double scaleY = canvasH / currentFovH;
 
         double cx = canvasW / 2.0;
         double cy = canvasH / 2.0;
 
         // Draw from largest to smallest so smaller FoVs are on top
-        // Build sorted index list
         List<Integer> indices = new ArrayList<>();
         for (int i = 0; i < objIds.size(); i++) indices.add(i);
         indices.sort((a, b) -> {
@@ -1802,25 +1801,37 @@ public class LiveViewerWindow {
             if (fov == null) continue;
 
             String objId = objIds.get(idx);
+            boolean isCurrent = objId.equals(currentObjId);
             Color color = OBJECTIVE_COLORS[idx % OBJECTIVE_COLORS.length];
 
-            double rectW = fov[0] * scale;
-            double rectH = fov[1] * scale;
-            // Line thickness = 2% of this FoV's shorter dimension
+            double rectW = fov[0] * scaleX;
+            double rectH = fov[1] * scaleY;
+            // Line thickness = 2% of this FoV's shorter screen dimension
             double lineWidth = Math.max(1.5, Math.min(rectW, rectH) * 0.02);
             double x = cx - rectW / 2.0;
             double y = cy - rectH / 2.0;
 
             gc.setStroke(color);
-            gc.setLineWidth(lineWidth);
+            gc.setLineWidth(isCurrent ? lineWidth * 1.5 : lineWidth);
+            if (isCurrent) {
+                // Dashed outline for the current objective to distinguish it
+                gc.setLineDashes(8, 4);
+            } else {
+                gc.setLineDashes(null);
+            }
             gc.strokeRect(x, y, rectW, rectH);
+            gc.setLineDashes(null); // reset
 
-            // Label in the top-left corner of the rectangle
+            // Label -- place inside the rectangle if it fits, otherwise outside
             gc.setFill(color);
-            gc.setFont(javafx.scene.text.Font.font("SansSerif", javafx.scene.text.FontWeight.BOLD,
-                    Math.max(10, Math.min(14, lineWidth * 5))));
-            String label = String.format("%s (%.0f x %.0f um)", objId, fov[0], fov[1]);
-            gc.fillText(label, x + lineWidth + 2, y + lineWidth + gc.getFont().getSize() + 2);
+            double fontSize = Math.max(10, Math.min(14, lineWidth * 5));
+            gc.setFont(javafx.scene.text.Font.font("SansSerif", javafx.scene.text.FontWeight.BOLD, fontSize));
+            String label = isCurrent
+                    ? String.format("[%s] %.0f x %.0f um", objId, fov[0], fov[1])
+                    : String.format("%s  %.0f x %.0f um", objId, fov[0], fov[1]);
+            double labelX = Math.max(2, x + lineWidth + 2);
+            double labelY = Math.max(fontSize + 2, y + lineWidth + fontSize + 2);
+            gc.fillText(label, labelX, labelY);
         }
     }
 
