@@ -1372,8 +1372,13 @@ public class StageControlPanel extends VBox {
 
     /** Resolve the detector ID for a given modality. */
     private String resolveDetector(String modality) {
+        // Use the detected detector (matched from MM pixel size) when available.
+        // Only fall back to the first hardware detector when detection failed.
+        if (currentCameraDetectorId != null && !"Unknown".equals(currentCameraDetectorId)) {
+            return currentCameraDetectorId;
+        }
         var dets = mgr.getAvailableDetectors();
-        return (dets != null && !dets.isEmpty()) ? dets.iterator().next() : currentCameraDetectorId;
+        return (dets != null && !dets.isEmpty()) ? dets.iterator().next() : "Unknown";
     }
 
     // --- Shared Camera Tab builders ---
