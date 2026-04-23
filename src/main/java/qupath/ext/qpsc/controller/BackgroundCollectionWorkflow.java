@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
+import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
@@ -247,6 +248,12 @@ public class BackgroundCollectionWorkflow {
                 logger.info("Reloaded config after background collection");
             } catch (Exception reloadEx) {
                 logger.warn("Could not reload config after background collection: {}", reloadEx.getMessage());
+            }
+            // Tell the Python server to re-read the YAML too
+            try {
+                MicroscopeController.getInstance().sendReconfig();
+            } catch (Exception reconfigEx) {
+                logger.warn("Server config reload failed (non-fatal): {}", reconfigEx.getMessage());
             }
 
             // Show success notification on UI thread

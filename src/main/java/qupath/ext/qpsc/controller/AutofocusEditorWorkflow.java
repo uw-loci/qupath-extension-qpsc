@@ -1912,6 +1912,12 @@ public class AutofocusEditorWorkflow {
                 mgr.reload(configPath);
                 logger.info("Reloaded config after autofocus settings save");
             }
+            // Tell the Python server to re-read the YAML too
+            try {
+                MicroscopeController.getInstance().sendReconfig();
+            } catch (Exception reconfigEx) {
+                logger.warn("Server config reload failed (non-fatal): {}", reconfigEx.getMessage());
+            }
         } catch (Exception reloadEx) {
             logger.warn("Could not reload config after AF save: {}", reloadEx.getMessage());
         }

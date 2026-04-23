@@ -540,6 +540,16 @@ public class MicroscopeController implements StagePositionProvider {
         socketClient.disconnectPrimary();
     }
 
+    /**
+     * Tells the Python server to re-read YAML config files from disk.
+     * Call after calibration workflows that write to the YAML.
+     *
+     * @throws IOException if communication fails
+     */
+    public void sendReconfig() throws IOException {
+        socketClient.sendReconfig();
+    }
+
     // ==================== Camera Control Methods ====================
 
     /**

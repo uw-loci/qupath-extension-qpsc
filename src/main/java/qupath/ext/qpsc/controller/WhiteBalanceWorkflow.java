@@ -14,6 +14,7 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.WhiteBalanceDialog;
 import qupath.fx.dialogs.Dialogs;
@@ -285,6 +286,12 @@ public class WhiteBalanceWorkflow {
                         } catch (Exception reloadEx) {
                             logger.warn("Could not reload config after calibration: {}", reloadEx.getMessage());
                         }
+                        // Tell the Python server to re-read the YAML too
+                        try {
+                            MicroscopeController.getInstance().sendReconfig();
+                        } catch (Exception reconfigEx) {
+                            logger.warn("Server config reload failed (non-fatal): {}", reconfigEx.getMessage());
+                        }
 
                         Platform.runLater(() -> {
                             progressStage.close();
@@ -404,6 +411,12 @@ public class WhiteBalanceWorkflow {
                             qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.refreshCameraPresets();
                         } catch (Exception reloadEx) {
                             logger.warn("Could not reload config after calibration: {}", reloadEx.getMessage());
+                        }
+                        // Tell the Python server to re-read the YAML too
+                        try {
+                            MicroscopeController.getInstance().sendReconfig();
+                        } catch (Exception reconfigEx) {
+                            logger.warn("Server config reload failed (non-fatal): {}", reconfigEx.getMessage());
                         }
 
                         Platform.runLater(() -> {

@@ -129,6 +129,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
     public enum Command {
         /** Send microscope configuration file path (CRITICAL - must be first command after connection) */
         CONFIG("config__"),
+        /** Re-read YAML configs from disk (after calibration writes) */
+        RECONFG("reconfg_"),
         /** Get XY stage position */
         GETXY("getxy___"),
         /** Get Z stage position */
@@ -766,6 +768,29 @@ public class MicroscopeSocketClient implements AutoCloseable {
             } catch (SocketTimeoutException e) {
                 throw new IOException("Timeout waiting for CONFIG response from server", e);
             }
+        }
+    }
+
+    /**
+     * Tells the Python server to re-read all YAML config files from disk.
+     *
+     * <p>Send this after Java writes to the YAML (WB calibration, polarizer
+     * calibration, background collection) so the Python server picks up the
+     * new values without a restart.
+     *
+     * @throws IOException if communication fails or the server rejects the reload
+     */
+    public void sendReconfig() throws IOException {
+        byte[] response = executeCommand(Command.RECONFG, null, 8);
+        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+
+        if (responseStr.startsWith("ACK")) {
+            logger.info("Server config reloaded successfully");
+        } else if (responseStr.startsWith("FAILED")) {
+            throw new IOException("Server config reload failed: "
+                    + responseStr.substring(Math.min(7, responseStr.length())));
+        } else {
+            throw new IOException("Unexpected RECONFIG response: " + responseStr);
         }
     }
 

@@ -557,6 +557,12 @@ public class PolarizerCalibrationWorkflow {
             } catch (Exception e) {
                 logger.warn("Could not reload config after writing offset: {}", e.getMessage());
             }
+            // Tell the Python server to re-read the YAML too
+            try {
+                MicroscopeController.getInstance().sendReconfig();
+            } catch (Exception reconfigEx) {
+                logger.warn("Server config reload failed (non-fatal): {}", reconfigEx.getMessage());
+            }
 
             Dialogs.showInfoNotification(
                     "Offset Written", "ppm_pizstage_offset set to " + offsetValue + " in\n" + configPath.getFileName());
