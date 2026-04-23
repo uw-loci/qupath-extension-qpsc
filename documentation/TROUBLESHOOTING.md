@@ -177,6 +177,27 @@ taskkill /PID <process_id> /F
 3. **Server running:** Make sure server console is still open and not showing errors
 4. **Test connection:** Use Extensions > QPSC > Utilities > Communication Settings
 
+#### Q: "Not connected to microscope server" but Live Viewer works fine
+
+**A:** QPSC uses two independent socket connections to the Python server:
+
+- **Primary socket:** Acquisition commands, configuration, and other long-running operations
+- **Auxiliary socket:** Live Viewer frames, stage control, and position polling
+
+The Live Viewer and stage control operate exclusively through the auxiliary socket, which auto-connects when first used. Workflow dialogs (Z-Stack, Acquisition, etc.) check overall connection status, and the primary socket auto-reconnects when needed.
+
+If you see this error despite Live Viewer working:
+1. Open **Communication Settings** (Extensions > QP Scope > Utilities)
+2. Check the status line -- it shows both socket states
+3. Click **Connect Now** to reconnect the primary socket (the auxiliary stays running)
+4. If the status shows "Auxiliary only," the primary will reconnect automatically the next time a command is sent
+
+**Technical detail:** The Connection dialog shows four possible states:
+- **Green** "Connected (primary + auxiliary)" -- fully operational
+- **Green** "Primary connected" -- auxiliary will connect on first Live Viewer use
+- **Orange** "Auxiliary only" -- Live Viewer works; primary reconnects on demand
+- **Gray** "Disconnected" -- no connection to server
+
 #### Q: Server crashes during acquisition with "UnicodeEncodeError"
 
 **A:** This is a Windows encoding issue. The fix is already in the code, but if you see it:

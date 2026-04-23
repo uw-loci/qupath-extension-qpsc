@@ -475,17 +475,48 @@ public class MicroscopeController implements StagePositionProvider {
     }
 
     /**
-     * Checks if the socket client is connected.
+     * Checks if any connection to the microscope server is active.
      *
-     * @return true if connected, false otherwise
+     * <p>Returns true if either the primary socket (used for acquisition commands,
+     * config, etc.) or the auxiliary socket (used for Live Viewer, stage control,
+     * frame polling) is connected. This reflects whether the server is reachable --
+     * if only the auxiliary is connected, the primary will auto-reconnect via
+     * {@code ensureConnected()} when the next command is sent.
+     *
+     * @return true if either primary or auxiliary socket is connected
      */
     @Override
     public boolean isConnected() {
+        return socketClient.isConnected() || socketClient.isAuxConnected();
+    }
+
+    /**
+     * Checks if the primary socket is connected.
+     *
+     * <p>The primary socket handles acquisition commands, configuration,
+     * and other long-running operations.
+     *
+     * @return true if primary socket is connected
+     */
+    public boolean isPrimaryConnected() {
         return socketClient.isConnected();
     }
 
     /**
-     * Manually connects to the microscope server.
+     * Checks if the auxiliary socket is connected.
+     *
+     * <p>The auxiliary socket handles Live Viewer frames, stage control,
+     * and other real-time operations that must not be blocked by
+     * long-running commands on the primary socket.
+     *
+     * @return true if auxiliary socket is connected
+     */
+    public boolean isAuxConnected() {
+        return socketClient.isAuxConnected();
+    }
+
+    /**
+     * Manually connects the primary socket to the microscope server.
      *
      * @throws IOException if connection fails
      */
@@ -495,9 +526,18 @@ public class MicroscopeController implements StagePositionProvider {
 
     /**
      * Manually disconnects from the microscope server.
+     * Closes both primary and auxiliary sockets.
      */
     public void disconnect() {
         socketClient.disconnect();
+    }
+
+    /**
+     * Disconnects only the primary socket.
+     * Leaves the auxiliary socket (Live Viewer, stage control) intact.
+     */
+    public void disconnectPrimary() {
+        socketClient.disconnectPrimary();
     }
 
     // ==================== Camera Control Methods ====================

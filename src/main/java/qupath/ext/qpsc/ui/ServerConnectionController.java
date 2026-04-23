@@ -656,17 +656,30 @@ public class ServerConnectionController {
                 Platform.runLater(this::saveSettings);
                 Thread.sleep(100); // Let settings save
 
-                // Get controller instance and connect
                 MicroscopeController controller = MicroscopeController.getInstance();
-                controller.disconnect(); // Disconnect first if connected
+
+                // Only disconnect the primary socket -- leave the auxiliary
+                // (Live Viewer, stage control) running so we don't disrupt
+                // an active live session while reconnecting.
+                if (controller.isPrimaryConnected()) {
+                    controller.disconnectPrimary();
+                    logMessage("Disconnected primary socket (auxiliary left intact)");
+                }
 
                 controller.connect();
 
-                logMessage("Connected to server via MicroscopeController");
+                logMessage("Primary socket connected");
+
+                // Report both socket states
+                boolean auxOk = controller.isAuxConnected();
+                if (auxOk) {
+                    logMessage("Auxiliary socket also connected (Live Viewer ready)");
+                } else {
+                    logMessage("Auxiliary socket will connect on next Live Viewer use");
+                }
 
                 Platform.runLater(() -> {
-                    statusLabel.setText(res.getString("server.status.connected"));
-                    statusLabel.setTextFill(Color.GREEN);
+                    updateConnectionStatus();
                 });
 
             } catch (Exception e) {
@@ -743,14 +756,32 @@ public class ServerConnectionController {
 
     /**
      * Updates the connection status label based on controller state.
+     * Shows both primary and auxiliary socket states so the user can
+     * diagnose partial-connection scenarios (e.g., Live Viewer works
+     * but acquisition commands fail).
      */
     private void updateConnectionStatus() {
         try {
             MicroscopeController controller = MicroscopeController.getInstance();
-            boolean connected = controller.isConnected();
-            statusLabel.setText(
-                    res.getString("server.connection.status") + " " + (connected ? "Connected" : "Disconnected"));
-            statusLabel.setTextFill(connected ? Color.GREEN : Color.GRAY);
+            boolean primary = controller.isPrimaryConnected();
+            boolean auxiliary = controller.isAuxConnected();
+
+            String prefix = res.getString("server.connection.status") + " ";
+
+            if (primary && auxiliary) {
+                statusLabel.setText(prefix + "Connected (primary + auxiliary)");
+                statusLabel.setTextFill(Color.GREEN);
+            } else if (primary) {
+                statusLabel.setText(prefix + "Primary connected (auxiliary will connect on use)");
+                statusLabel.setTextFill(Color.GREEN);
+            } else if (auxiliary) {
+                statusLabel.setText(prefix
+                        + "Auxiliary only (Live Viewer works; primary will reconnect on next command)");
+                statusLabel.setTextFill(Color.ORANGE);
+            } else {
+                statusLabel.setText(prefix + "Disconnected");
+                statusLabel.setTextFill(Color.GRAY);
+            }
         } catch (Exception e) {
             statusLabel.setText(res.getString("server.connection.status") + " Not initialized");
             statusLabel.setTextFill(Color.GRAY);

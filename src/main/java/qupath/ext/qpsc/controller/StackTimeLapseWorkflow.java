@@ -30,9 +30,15 @@ public class StackTimeLapseWorkflow {
      */
     public static void show(QuPathGUI qupath) {
         MicroscopeController mc = MicroscopeController.getInstance();
-        if (mc == null || !mc.isConnected()) {
-            Dialogs.showErrorMessage("Z-Stack / Time-Lapse", "Not connected to microscope server.");
-            return;
+        if (!mc.isConnected()) {
+            try {
+                mc.connect();
+            } catch (java.io.IOException e) {
+                logger.error("Failed to connect to microscope server: {}", e.getMessage());
+                Dialogs.showErrorMessage("Z-Stack / Time-Lapse",
+                        "Not connected to microscope server: " + e.getMessage());
+                return;
+            }
         }
 
         Dialog<Void> dialog = new Dialog<>();

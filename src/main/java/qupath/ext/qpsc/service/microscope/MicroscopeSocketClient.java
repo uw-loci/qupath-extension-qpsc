@@ -436,6 +436,46 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
+     * Disconnects only the primary socket, leaving the auxiliary socket intact.
+     * Use this when reconnecting the primary without disrupting Live Viewer
+     * or stage control operations.
+     */
+    public void disconnectPrimary() {
+        synchronized (socketLock) {
+            if (!connected.get()) {
+                return;
+            }
+
+            try {
+                sendCommand(Command.DISCONNECT);
+            } catch (Exception e) {
+                logger.debug("Error sending disconnect command on primary", e);
+            }
+
+            // Clean up primary socket only -- do NOT call cleanup() which
+            // also destroys the auxiliary socket
+            try {
+                if (input != null) { input.close(); input = null; }
+            } catch (Exception e) {
+                logger.debug("Error closing primary input stream", e);
+            }
+            try {
+                if (output != null) { output.close(); output = null; }
+            } catch (Exception e) {
+                logger.debug("Error closing primary output stream", e);
+            }
+            try {
+                if (socket != null && !socket.isClosed()) { socket.close(); socket = null; }
+            } catch (Exception e) {
+                logger.debug("Error closing primary socket", e);
+            }
+
+            connected.set(false);
+            logger.info("Primary socket disconnected (auxiliary left intact)");
+        }
+    }
+
+    /**
      * Establishes the auxiliary connection for Live Viewer and stage control.
      * This connection operates independently of the primary connection, allowing
      * live preview and stage movements to work during long-running operations.
