@@ -19,6 +19,7 @@ import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AngleResolutionService;
 import qupath.ext.qpsc.service.ChannelResolutionService;
+import qupath.ext.qpsc.service.AcquisitionMonitorService;
 import qupath.ext.qpsc.service.ManualFocusHandler;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
@@ -451,41 +452,30 @@ public class BoundedAcquisitionWorkflow {
                                         Paths.get(tempTileDir, boundsMode).toString();
                                 final AtomicInteger lastTileProgress = new AtomicInteger(0);
 
-                                MicroscopeSocketClient.AcquisitionState finalState = socketClient.monitorAcquisition(
-                                        progress -> {
-                                            progressCounter.set(progress.current);
-                                            // Show acquired tile in Live Viewer (if enabled)
-                                            if (qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.isShowTilesEnabled()
-                                                    && progress.current > lastTileProgress.get()) {
-                                                lastTileProgress.set(progress.current);
-                                                qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.scanAndShowLatestTile(
-                                                        tileDirPath);
-                                            }
-                                        },
-                                        retriesRemaining -> ManualFocusHandler.handle(
-                                                socketClient,
-                                                retriesRemaining,
-                                                null,
-                                                null,
-                                                UIFunctions::showManualFocusDialog),
-                                        500,
-                                        300000);
+                                AcquisitionMonitorService.monitorAndHandle(socketClient,
+                                        AcquisitionMonitorService.MonitorConfig.create()
+                                                .progress(progress -> {
+                                                    progressCounter.set(progress.current);
+                                                    if (qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow
+                                                                    .isShowTilesEnabled()
+                                                            && progress.current > lastTileProgress.get()) {
+                                                        lastTileProgress.set(progress.current);
+                                                        qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow
+                                                                .scanAndShowLatestTile(tileDirPath);
+                                                    }
+                                                })
+                                                .manualFocus(retriesRemaining -> ManualFocusHandler.handle(
+                                                        socketClient,
+                                                        retriesRemaining,
+                                                        null,
+                                                        null,
+                                                        UIFunctions::showManualFocusDialog))
+                                                .tileDir(tileDirPath)
+                                                .pollInterval(500)
+                                                .timeout(300000));
 
                                 if (progressHandle != null) {
                                     progressHandle.close();
-                                }
-
-                                if (finalState == MicroscopeSocketClient.AcquisitionState.COMPLETED) {
-                                    logger.info("Acquisition completed successfully");
-                                } else if (finalState == MicroscopeSocketClient.AcquisitionState.CANCELLED) {
-                                    logger.warn("Acquisition was cancelled");
-                                    Platform.runLater(() -> UIFunctions.notifyUserOfError(
-                                            "Acquisition was cancelled", "Acquisition Cancelled"));
-                                    throw new java.util.concurrent.CancellationException("Acquisition was cancelled");
-                                } else if (finalState == MicroscopeSocketClient.AcquisitionState.FAILED) {
-                                    String failureMessage = socketClient.getLastFailureMessage();
-                                    throw new RuntimeException("Acquisition failed: "
-                                            + (failureMessage != null ? failureMessage : "Unknown error"));
                                 }
 
                             } catch (java.util.concurrent.CancellationException e) {

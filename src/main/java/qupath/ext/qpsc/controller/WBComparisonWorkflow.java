@@ -16,6 +16,7 @@ import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
+import qupath.ext.qpsc.service.AcquisitionMonitorService;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.WBComparisonDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -437,33 +438,23 @@ public class WBComparisonWorkflow {
         // (matches BoundedAcquisitionWorkflow pattern)
         Thread.sleep(1000);
 
-        // Poll for completion using monitorAcquisition() which has retry logic
-        // for initial connection failures (server closes connection after STARTED ack)
-        MicroscopeSocketClient.AcquisitionState finalState = socketClient.monitorAcquisition(
-                progress -> logger.debug("[{}] Acquisition progress: {}/{}", wbMode, progress.current, progress.total),
-                retriesRemaining -> {
-                    // Auto-skip manual focus for WB comparison (automated workflow)
-                    logger.warn(
-                            "[{}] Autofocus failed, auto-skipping (retries remaining: {})", wbMode, retriesRemaining);
-                    try {
-                        socketClient.skipAutofocusRetry();
-                    } catch (IOException e) {
-                        logger.error("[{}] Failed to send SKIPAF response", wbMode, e);
-                    }
-                },
-                ACQUISITION_POLL_INTERVAL_MS,
-                ACQUISITION_TIMEOUT_MS);
-
-        if (finalState == MicroscopeSocketClient.AcquisitionState.FAILED) {
-            String failMsg = socketClient.getLastFailureMessage();
-            throw new RuntimeException("Acquisition failed for WB mode '" + wbMode + "': "
-                    + (failMsg != null ? failMsg : "unknown error"));
-        } else if (finalState == MicroscopeSocketClient.AcquisitionState.CANCELLED) {
-            throw new RuntimeException("Acquisition cancelled for WB mode '" + wbMode + "'");
-        } else if (finalState != MicroscopeSocketClient.AcquisitionState.COMPLETED) {
-            throw new RuntimeException(
-                    "Acquisition ended in unexpected state '" + finalState + "' for WB mode '" + wbMode + "'");
-        }
+        // Poll for completion with consistent error handling via shared service
+        AcquisitionMonitorService.monitorAndHandle(socketClient,
+                AcquisitionMonitorService.MonitorConfig.create()
+                        .progress(progress -> logger.debug("[{}] Acquisition progress: {}/{}",
+                                wbMode, progress.current, progress.total))
+                        .manualFocus(retriesRemaining -> {
+                            // Auto-skip manual focus for WB comparison (automated workflow)
+                            logger.warn("[{}] Autofocus failed, auto-skipping (retries remaining: {})",
+                                    wbMode, retriesRemaining);
+                            try {
+                                socketClient.skipAutofocusRetry();
+                            } catch (IOException e) {
+                                logger.error("[{}] Failed to send SKIPAF response", wbMode, e);
+                            }
+                        })
+                        .pollInterval(ACQUISITION_POLL_INTERVAL_MS)
+                        .timeout(ACQUISITION_TIMEOUT_MS));
         logger.info("[{}] Acquisition completed", wbMode);
 
         // Capture the focus Z found by this mode's autofocus.
