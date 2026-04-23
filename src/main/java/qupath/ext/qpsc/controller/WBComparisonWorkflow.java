@@ -19,6 +19,7 @@ import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.WBComparisonDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.ext.qpsc.utilities.TileProcessingUtilities;
@@ -721,13 +722,14 @@ public class WBComparisonWorkflow {
                     handler,
                     null);
         } finally {
-            // Always restore the directory structure
+            // Always restore the directory structure.
+            // Retry with backoff for Windows file handle release delays.
             try {
                 if (Files.exists(tempAngleDir)) {
-                    Files.move(tempAngleDir, angleDir);
+                    MinorFunctions.moveWithRetry(tempAngleDir, angleDir, 5, 200);
                 }
                 if (Files.exists(tempIsolationDir)) {
-                    Files.delete(tempIsolationDir);
+                    MinorFunctions.deleteWithRetry(tempIsolationDir, 5, 200);
                 }
                 logger.info("Restored {} from isolation", angleStr);
             } catch (IOException e) {

@@ -524,4 +524,93 @@ public class MinorFunctions {
 
         return formatted.toString();
     }
+
+    // ==================== File I/O Retry Utilities ====================
+
+    /**
+     * Moves a file or directory with retry-and-backoff for Windows file handle issues.
+     *
+     * <p>On Windows, {@link Files#move} can fail with {@link java.nio.file.AccessDeniedException}
+     * when BioFormats readers or TIFF writers have not yet released their file handles,
+     * even after the Java objects are closed. This method retries with exponential backoff
+     * to give the OS time to release the handles.
+     *
+     * @param source      source path
+     * @param target      target path
+     * @param maxAttempts maximum number of attempts (e.g. 5)
+     * @param initialDelayMs initial delay in milliseconds (doubled each retry, e.g. 200)
+     * @throws IOException if all attempts fail
+     */
+    public static void moveWithRetry(Path source, Path target, int maxAttempts, long initialDelayMs)
+            throws IOException {
+        long delay = initialDelayMs;
+        IOException lastException = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                Files.move(source, target);
+                if (attempt > 1) {
+                    logger.info("Files.move succeeded on attempt {}: {} -> {}", attempt, source, target);
+                }
+                return;
+            } catch (IOException e) {
+                lastException = e;
+                if (attempt < maxAttempts) {
+                    logger.warn("Files.move attempt {}/{} failed ({}), retrying in {}ms: {} -> {}",
+                            attempt, maxAttempts, e.getClass().getSimpleName(), delay, source, target);
+                    try {
+                        Thread.sleep(delay);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("Interrupted during Files.move retry", ie);
+                    }
+                    delay *= 2; // Exponential backoff
+                }
+            }
+        }
+
+        // All attempts exhausted
+        throw new IOException(String.format(
+                "Files.move failed after %d attempts: %s -> %s", maxAttempts, source, target), lastException);
+    }
+
+    /**
+     * Deletes a file or empty directory with retry-and-backoff for Windows file handle issues.
+     *
+     * @param path         path to delete
+     * @param maxAttempts  maximum number of attempts
+     * @param initialDelayMs initial delay in milliseconds (doubled each retry)
+     * @throws IOException if all attempts fail
+     */
+    public static void deleteWithRetry(Path path, int maxAttempts, long initialDelayMs)
+            throws IOException {
+        long delay = initialDelayMs;
+        IOException lastException = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                Files.delete(path);
+                if (attempt > 1) {
+                    logger.info("Files.delete succeeded on attempt {}: {}", attempt, path);
+                }
+                return;
+            } catch (IOException e) {
+                lastException = e;
+                if (attempt < maxAttempts) {
+                    logger.warn("Files.delete attempt {}/{} failed ({}), retrying in {}ms: {}",
+                            attempt, maxAttempts, e.getClass().getSimpleName(), delay, path);
+                    try {
+                        Thread.sleep(delay);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("Interrupted during Files.delete retry", ie);
+                    }
+                    delay *= 2;
+                }
+            }
+        }
+
+        throw new IOException(String.format(
+                "Files.delete failed after %d attempts: %s", maxAttempts, path), lastException);
+    }
 }

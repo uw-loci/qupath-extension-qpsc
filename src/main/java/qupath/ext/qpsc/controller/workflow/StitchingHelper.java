@@ -33,6 +33,7 @@ import qupath.ext.qpsc.ui.StitchingBlockingDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.ext.qpsc.utilities.TileProcessingUtilities;
@@ -1497,19 +1498,22 @@ public class StitchingHelper {
             return outPath;
 
         } finally {
-            // Always restore the directory structure
+            // Always restore the directory structure.
+            // On Windows, BioFormats readers / TIFF writers may still hold file handles
+            // briefly after close, causing AccessDeniedException on Files.move.
+            // Retry with exponential backoff (200ms, 400ms, 800ms, 1600ms, 3200ms).
             logger.info("Starting cleanup - restoring directory structure for angle {}", angleStr);
             try {
                 if (Files.exists(tempAngleDir)) {
                     logger.info("Restoring directory from {} to {}", tempAngleDir, angleDir);
-                    Files.move(tempAngleDir, angleDir);
+                    MinorFunctions.moveWithRetry(tempAngleDir, angleDir, 5, 200);
                     logger.info("Successfully restored {} from isolation", angleStr);
                 } else {
                     logger.warn("Temporary angle directory no longer exists: {}", tempAngleDir);
                 }
                 if (Files.exists(tempIsolationDir)) {
                     logger.info("Cleaning up temporary isolation directory: {}", tempIsolationDir);
-                    Files.delete(tempIsolationDir);
+                    MinorFunctions.deleteWithRetry(tempIsolationDir, 5, 200);
                     logger.info("Successfully cleaned up temporary isolation directory");
                 } else {
                     logger.warn("Temporary isolation directory no longer exists: {}", tempIsolationDir);
@@ -1521,7 +1525,6 @@ public class StitchingHelper {
                         angleStr,
                         e.getMessage(),
                         e);
-                // Log the current state for debugging
                 logger.error(
                         "Current state - tempAngleDir exists: {}, tempIsolationDir exists: {}, originalAngleDir exists: {}",
                         Files.exists(tempAngleDir),
