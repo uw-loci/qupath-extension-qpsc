@@ -529,47 +529,25 @@ public class PolarizerCalibrationWorkflow {
         try {
             java.util.List<String> lines = Files.readAllLines(configPath);
 
-            // Update both the canonical modalities.ppm.pizstage_offset location
-            // and the legacy top-level ppm_pizstage_offset for backward compatibility.
-            boolean updatedModality = false;
-            boolean updatedLegacy = false;
-
+            // Update modalities.ppm.pizstage_offset (indented under modalities.ppm)
+            boolean updated = false;
             for (int i = 0; i < lines.size(); i++) {
                 String trimmed = lines.get(i).trim();
-                // Canonical: indented "pizstage_offset:" under modalities.ppm
                 if (trimmed.startsWith("pizstage_offset") && lines.get(i).startsWith("    ")) {
                     lines.set(i, "    pizstage_offset: " + offsetValue
                             + "  # calibrated by Polarizer Calibration workflow");
-                    updatedModality = true;
-                }
-                // Legacy: top-level ppm_pizstage_offset (no leading whitespace)
-                if (trimmed.startsWith("ppm_pizstage_offset") && !lines.get(i).startsWith(" ")) {
-                    lines.set(i, "ppm_pizstage_offset : " + offsetValue);
-                    updatedLegacy = true;
+                    updated = true;
+                    break;
                 }
             }
 
-            // If the legacy key wasn't found, don't add it -- new configs don't need it.
-            // If the modality key wasn't found, that's unexpected but not fatal.
-            if (!updatedModality) {
-                logger.warn("Could not find modalities.ppm.pizstage_offset in config -- "
-                        + "only legacy top-level key was updated");
-            }
-            if (!updatedLegacy && !updatedModality) {
-                // Neither found -- insert legacy key at top for safety
-                for (int i = 0; i < lines.size(); i++) {
-                    String line = lines.get(i).trim();
-                    if (!line.isEmpty() && !line.startsWith("#")) {
-                        lines.add(i + 1, "ppm_pizstage_offset : " + offsetValue);
-                        updatedLegacy = true;
-                        break;
-                    }
-                }
+            if (!updated) {
+                logger.error("Could not find modalities.ppm.pizstage_offset in config file. "
+                        + "Ensure the PPM modality section has a pizstage_offset field.");
             }
 
             Files.write(configPath, lines);
-            logger.info("Wrote pizstage_offset={} to {} (modality={}, legacy={})",
-                    offsetValue, yamlPath, updatedModality, updatedLegacy);
+            logger.info("Wrote pizstage_offset={} to {}", offsetValue, yamlPath);
 
             try {
                 MicroscopeConfigManager.getInstance(yamlPath).reload(yamlPath);
