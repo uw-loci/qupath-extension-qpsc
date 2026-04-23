@@ -197,6 +197,7 @@ public class SaturationSummaryDialog {
     private static void navigateToTile(Map<String, Object> tile) {
         Object xObj = tile.get("stage_x");
         Object yObj = tile.get("stage_y");
+        Object zObj = tile.get("stage_z");
 
         if (!(xObj instanceof Number) || !(yObj instanceof Number)) {
             logger.warn("No stage position available for tile {}", tile.get("filename"));
@@ -205,8 +206,10 @@ public class SaturationSummaryDialog {
 
         double x = ((Number) xObj).doubleValue();
         double y = ((Number) yObj).doubleValue();
+        Double z = (zObj instanceof Number) ? ((Number) zObj).doubleValue() : null;
 
-        logger.info("Navigating to saturated tile {} at ({}, {})", tile.get("filename"), x, y);
+        logger.info("Navigating to saturated tile {} at ({}, {}, Z={})",
+                tile.get("filename"), x, y, z != null ? z : "N/A");
 
         // Move stage on background thread
         new Thread(
@@ -215,7 +218,11 @@ public class SaturationSummaryDialog {
                                 MicroscopeController controller = MicroscopeController.getInstance();
                                 if (controller != null && controller.isConnected()) {
                                     controller.moveStageXY(x, y);
-                                    logger.info("Stage moved to ({}, {})", x, y);
+                                    if (z != null) {
+                                        controller.moveStageZ(z);
+                                    }
+                                    logger.info("Stage moved to ({}, {}, Z={})", x, y,
+                                            z != null ? z : "unchanged");
                                 } else {
                                     logger.warn("Microscope not connected -- cannot navigate to tile");
                                     Platform.runLater(() -> qupath.fx.dialogs.Dialogs.showWarningNotification(

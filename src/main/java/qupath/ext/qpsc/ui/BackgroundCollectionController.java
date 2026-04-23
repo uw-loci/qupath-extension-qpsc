@@ -637,54 +637,64 @@ public class BackgroundCollectionController {
                             int gridRow = isMultiAngle ? i + 1 : i; // Offset for header row
 
                             if (isMultiAngle) {
-                                // Multi-angle: Editable angle field + exposure field + angle type label
-                                TextField angleField = new TextField(String.format("%.1f", ae.ticks()));
-                                angleField.setPrefWidth(80);
-                                TextField exposureField = new TextField(String.valueOf(ae.exposureMs()));
-                                exposureField.setPrefWidth(100);
                                 Label angleTypeLabel = new Label(getAngleTypeName(ae.ticks()));
                                 angleTypeLabel.setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
 
-                                // Update current values when user changes angle
-                                angleField.textProperty().addListener((obs, oldVal, newVal) -> {
-                                    try {
-                                        double newAngle = Double.parseDouble(newVal);
-                                        if (index < currentAngleExposures.size()) {
-                                            AngleExposure oldAe = currentAngleExposures.get(index);
-                                            currentAngleExposures.set(
-                                                    index, new AngleExposure(newAngle, oldAe.exposureMs()));
+                                if (perAngleWbEnabled) {
+                                    // WB-calibrated: read-only labels -- editing would create
+                                    // a mismatch between background and acquisition exposures
+                                    Label angleLabel = new Label(String.format("%.1f", ae.ticks()));
+                                    angleLabel.setPrefWidth(80);
+                                    Label exposureLabel = new Label(String.format("%.2f", ae.exposureMs()));
+                                    exposureLabel.setPrefWidth(100);
 
-                                            // Update angle type label
-                                            Platform.runLater(() -> angleTypeLabel.setText(getAngleTypeName(newAngle)));
+                                    exposureGrid.add(angleLabel, 0, gridRow);
+                                    exposureGrid.add(exposureLabel, 1, gridRow);
+                                    exposureGrid.add(new Label("ms"), 2, gridRow);
+                                    exposureGrid.add(angleTypeLabel, 3, gridRow);
+                                } else {
+                                    // Camera AWB or Off: editable -- user controls these
+                                    TextField angleField = new TextField(String.format("%.1f", ae.ticks()));
+                                    angleField.setPrefWidth(80);
+                                    TextField exposureField = new TextField(String.valueOf(ae.exposureMs()));
+                                    exposureField.setPrefWidth(100);
+
+                                    angleField.textProperty().addListener((obs, oldVal, newVal) -> {
+                                        try {
+                                            double newAngle = Double.parseDouble(newVal);
+                                            if (index < currentAngleExposures.size()) {
+                                                AngleExposure oldAe = currentAngleExposures.get(index);
+                                                currentAngleExposures.set(
+                                                        index, new AngleExposure(newAngle, oldAe.exposureMs()));
+                                                Platform.runLater(
+                                                        () -> angleTypeLabel.setText(getAngleTypeName(newAngle)));
+                                            }
+                                        } catch (IllegalArgumentException e) {
+                                            // Invalid input, ignore during typing
                                         }
-                                    } catch (IllegalArgumentException e) {
-                                        // Invalid input (unparseable or out of range), ignore during typing
-                                        // NumberFormatException is a subclass of IllegalArgumentException
-                                    }
-                                });
+                                    });
 
-                                // Update current values when user changes exposure
-                                exposureField.textProperty().addListener((obs, oldVal, newVal) -> {
-                                    try {
-                                        double newExposure = Double.parseDouble(newVal);
-                                        if (index < currentAngleExposures.size()) {
-                                            AngleExposure oldAe = currentAngleExposures.get(index);
-                                            currentAngleExposures.set(
-                                                    index, new AngleExposure(oldAe.ticks(), newExposure));
+                                    exposureField.textProperty().addListener((obs, oldVal, newVal) -> {
+                                        try {
+                                            double newExposure = Double.parseDouble(newVal);
+                                            if (index < currentAngleExposures.size()) {
+                                                AngleExposure oldAe = currentAngleExposures.get(index);
+                                                currentAngleExposures.set(
+                                                        index, new AngleExposure(oldAe.ticks(), newExposure));
+                                            }
+                                        } catch (IllegalArgumentException e) {
+                                            // Invalid input, ignore during typing
                                         }
-                                    } catch (IllegalArgumentException e) {
-                                        // Invalid input (unparseable or out of range), ignore during typing
-                                        // NumberFormatException is a subclass of IllegalArgumentException
-                                    }
-                                });
+                                    });
 
-                                exposureGrid.add(angleField, 0, gridRow);
-                                exposureGrid.add(exposureField, 1, gridRow);
-                                exposureGrid.add(new Label("ms"), 2, gridRow);
-                                exposureGrid.add(angleTypeLabel, 3, gridRow);
+                                    exposureGrid.add(angleField, 0, gridRow);
+                                    exposureGrid.add(exposureField, 1, gridRow);
+                                    exposureGrid.add(new Label("ms"), 2, gridRow);
+                                    exposureGrid.add(angleTypeLabel, 3, gridRow);
 
-                                exposureFields.add(exposureField);
-                                angleFields.add(angleField);
+                                    exposureFields.add(exposureField);
+                                    angleFields.add(angleField);
+                                }
 
                             } else {
                                 // Single-angle: Fixed angle label + exposure field
@@ -692,7 +702,6 @@ public class BackgroundCollectionController {
                                 TextField exposureField = new TextField(String.valueOf(ae.exposureMs()));
                                 exposureField.setPrefWidth(100);
 
-                                // Update current values when user changes exposure
                                 exposureField.textProperty().addListener((obs, oldVal, newVal) -> {
                                     try {
                                         double newExposure = Double.parseDouble(newVal);
@@ -702,8 +711,7 @@ public class BackgroundCollectionController {
                                                     index, new AngleExposure(oldAe.ticks(), newExposure));
                                         }
                                     } catch (IllegalArgumentException e) {
-                                        // Invalid input (unparseable or out of range), ignore during typing
-                                        // NumberFormatException is a subclass of IllegalArgumentException
+                                        // Invalid input, ignore during typing
                                     }
                                 });
 
