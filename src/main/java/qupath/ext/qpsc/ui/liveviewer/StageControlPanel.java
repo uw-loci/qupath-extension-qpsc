@@ -347,9 +347,14 @@ public class StageControlPanel extends VBox {
         zStepField = new TextField(PersistentPreferences.getStageControlZStepSize());
         zStepField.setPrefWidth(45);
         zStepField.setAlignment(Pos.CENTER);
+        // Allow positive decimals (e.g. ".25", "0.5") because handleZScroll
+        // parses this with Double.parseDouble - integer-only filtering would
+        // block fine-focus step sizes that the rest of the code supports.
+        // Match any *prefix* of a legal positive decimal so the user can
+        // type a value one character at a time, including a leading dot.
         zStepField.setTextFormatter(new TextFormatter<>(change -> {
             String newText = change.getControlNewText();
-            if (newText.matches("[0-9,]*")) {
+            if (newText.isEmpty() || newText.matches("\\d*\\.?\\d*")) {
                 return change;
             }
             return null;
