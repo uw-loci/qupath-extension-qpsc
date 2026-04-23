@@ -25,12 +25,15 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Tissue Morph Close Iterations](#tissue-morph-close-iterations) | Integer | 3 | Morphological closing iterations |
 | [Tile Handling Method](#tile-handling-method) | Choice | None | How to handle intermediate tiles |
 | [Tile Overlap Percent](#tile-overlap-percent) | Double | 10.0 | Overlap between adjacent tiles |
-| [Compression type](#compression-type) | Choice | DEFAULT | OME pyramid compression |
+| [Compression type](#compression-type) | Choice | LZW | OME pyramid compression |
 | [Stitching output format](#stitching-output-format) | Choice | OME_TIFF | Output format for stitched images |
 | [Microscope Server Host](#microscope-server-host) | String | 127.0.0.1 | Server IP address |
 | [Microscope Server Port](#microscope-server-port) | Integer | 5000 | Server port number |
 | [Auto-connect to Server](#auto-connect-to-server) | Boolean | ON | Connect on QuPath startup |
 | [No Manual Autofocus (Danger)](#no-manual-autofocus-danger) | Boolean | OFF | Skip manual focus dialogs |
+| Disable All Autofocus (Danger) | Boolean | OFF | Disable ALL autofocus during acquisition |
+| Save Raw Tiles | Boolean | OFF | Save unprocessed tiles alongside corrected |
+| Warn On Low Disk Space | Boolean | ON | Alert when disk space is low before acquisition |
 | [Image name includes: Objective](#image-name-includes-objective) | Boolean | OFF | Add objective to filename |
 | [Image name includes: Modality](#image-name-includes-modality) | Boolean | OFF | Add modality to filename |
 | [Image name includes: Annotation](#image-name-includes-annotation) | Boolean | OFF | Add annotation name to filename |
