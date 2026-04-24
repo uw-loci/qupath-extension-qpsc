@@ -182,6 +182,7 @@ public class ExistingImageAcquisitionController {
         // Transform data
         private List<AffineTransformManager.TransformPreset> availableTransforms;
         private AffineTransformManager transformManager;
+        private boolean hasSlideAlignment;  // True if _alignment.json exists for current image
 
         // UI Components - Banner
         private HBox variantBanner;
@@ -275,6 +276,23 @@ public class ExistingImageAcquisitionController {
             String microscopeName = configManager.getMicroscopeName();
             this.availableTransforms = transformManager.getTransformsForMicroscope(microscopeName);
             logger.info("Found {} transforms for microscope '{}'", availableTransforms.size(), microscopeName);
+
+            // Check for slide-specific alignment (auto-registered from BoundingBox acquisition)
+            this.hasSlideAlignment = detectSlideSpecificAlignment();
+            logger.info("Slide-specific alignment for current image: {}", hasSlideAlignment);
+        }
+
+        private boolean detectSlideSpecificAlignment() {
+            QuPathGUI gui = QuPathGUI.getInstance();
+            if (gui == null || gui.getImageData() == null || gui.getProject() == null) return false;
+            String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+            if (imageName == null) return false;
+            @SuppressWarnings("unchecked")
+            Project<java.awt.image.BufferedImage> project =
+                    (Project<java.awt.image.BufferedImage>) gui.getProject();
+            java.awt.geom.AffineTransform t =
+                    AffineTransformManager.loadSlideAlignment(project, imageName);
+            return t != null;
         }
 
         Optional<ExistingImageAcquisitionConfig> buildAndShow() {
@@ -554,14 +572,12 @@ public class ExistingImageAcquisitionController {
             useExistingRadio.setToggleGroup(alignmentGroup);
             manualAlignRadio.setToggleGroup(alignmentGroup);
 
-            boolean hasTransforms = !availableTransforms.isEmpty();
-            if (hasTransforms && PersistentPreferences.getUseExistingAlignment()) {
+            boolean hasScannerTransforms = !availableTransforms.isEmpty();
+            boolean hasTransforms = hasScannerTransforms || hasSlideAlignment;
+            if (hasTransforms) {
                 useExistingRadio.setSelected(true);
             } else {
                 manualAlignRadio.setSelected(true);
-            }
-
-            if (!hasTransforms) {
                 useExistingRadio.setDisable(true);
             }
 
@@ -634,8 +650,21 @@ public class ExistingImageAcquisitionController {
 
             Label transformLabel = new Label("Select saved transform:");
             transformSelectionBox.getChildren().addAll(transformLabel, transformCombo, confidenceLabel);
-            transformSelectionBox.setVisible(useExistingRadio.isSelected());
-            transformSelectionBox.setManaged(useExistingRadio.isSelected());
+
+            // Hide scanner preset combo when only slide alignment is available
+            // (no scanner preset to select -- the slide-specific alignment is used directly)
+            boolean showScannerCombo = hasScannerTransforms && useExistingRadio.isSelected();
+            transformSelectionBox.setVisible(showScannerCombo);
+            transformSelectionBox.setManaged(showScannerCombo);
+
+            // Info label for slide-specific (auto-registered) alignment
+            Label slideAlignmentInfo = new Label(
+                    "This image has stage coordinates from QPSC acquisition. "
+                    + "No scanner alignment needed.");
+            slideAlignmentInfo.setWrapText(true);
+            slideAlignmentInfo.setStyle("-fx-font-size: 11px; -fx-text-fill: #1B5E20; -fx-padding: 4 0 0 20;");
+            slideAlignmentInfo.setVisible(hasSlideAlignment && useExistingRadio.isSelected());
+            slideAlignmentInfo.setManaged(hasSlideAlignment && useExistingRadio.isSelected());
 
             // Recommendation
             Label recommendationLabel = new Label();
@@ -644,7 +673,11 @@ public class ExistingImageAcquisitionController {
             recommendationLabel.setStyle(
                     "-fx-background-color: #FFF8E1; -fx-background-radius: 4; -fx-font-size: 11px;");
 
-            if (hasTransforms) {
+            if (hasSlideAlignment) {
+                recommendationLabel.setText(
+                        "[i] Image has auto-registered alignment from QPSC acquisition. "
+                        + "Ready to acquire without additional alignment setup.");
+            } else if (hasScannerTransforms) {
                 recommendationLabel.setText(
                         "[i] Recommendation: Use Existing Alignment (found " + availableTransforms.size()
                                 + " saved transform" + (availableTransforms.size() > 1 ? "s" : "")
@@ -653,7 +686,7 @@ public class ExistingImageAcquisitionController {
                 recommendationLabel.setText("[i] Manual alignment required (no saved transforms found)");
             }
 
-            content.getChildren().addAll(comparisonRow, transformSelectionBox, recommendationLabel);
+            content.getChildren().addAll(comparisonRow, transformSelectionBox, slideAlignmentInfo, recommendationLabel);
 
             alignmentPane = new TitledPane("ALIGNMENT CONFIGURATION", content);
             alignmentPane.setExpanded(true);
@@ -1148,8 +1181,10 @@ public class ExistingImageAcquisitionController {
             });
 
             useExistingRadio.selectedProperty().addListener((obs, old, selected) -> {
-                transformSelectionBox.setVisible(selected);
-                transformSelectionBox.setManaged(selected);
+                // Show scanner combo only when selected AND scanner presets exist
+                boolean showScanner = selected && !availableTransforms.isEmpty();
+                transformSelectionBox.setVisible(showScanner);
+                transformSelectionBox.setManaged(showScanner);
                 refinementBox.setVisible(selected);
                 refinementBox.setManaged(selected);
                 PersistentPreferences.setUseExistingAlignment(selected);
