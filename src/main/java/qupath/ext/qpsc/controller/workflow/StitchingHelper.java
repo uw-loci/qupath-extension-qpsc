@@ -1307,11 +1307,28 @@ public class StitchingHelper {
                     String.format("%.1f", imgX2), String.format("%.1f", imgY2),
                     String.format("%.1f", halfFovX), String.format("%.1f", halfFovY));
 
-            AffineTransform transform = AffineTransformManager.buildTransformFromStageBounds(
-                    imgX1, imgY1, imgX2, imgY2,
-                    widthPx,
-                    heightPx);
-            if (transform == null) {
+            // Account for image flips: when the stitched image is displayed
+            // flipped (via TransformedServerBuilder), QuPath pixel coordinates
+            // are in the flipped space. The alignment must use negative scales
+            // and the opposite-corner origin so that pixel (0,0) in the flipped
+            // view maps to the correct stage position.
+            boolean flipX = metadata.flipX;
+            boolean flipY = metadata.flipY;
+
+            double originX = flipX ? imgX2 : imgX1;
+            double originY = flipY ? imgY2 : imgY1;
+            double scaleX = (flipX ? -1 : 1) * (imgX2 - imgX1) / widthPx;
+            double scaleY = (flipY ? -1 : 1) * (imgY2 - imgY1) / heightPx;
+
+            AffineTransform transform = new AffineTransform(scaleX, 0, 0, scaleY, originX, originY);
+
+            logger.info("Auto-register alignment: flip=({},{}), scale=({},{}), origin=({},{})",
+                    flipX, flipY,
+                    String.format("%.6f", scaleX), String.format("%.6f", scaleY),
+                    String.format("%.1f", originX), String.format("%.1f", originY));
+
+            if (scaleX == 0 || scaleY == 0) {
+                logger.warn("Degenerate alignment transform (zero scale), skipping");
                 return;
             }
             // Key the alignment by the file name WITHOUT extension. This
