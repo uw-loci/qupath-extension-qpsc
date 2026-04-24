@@ -18,8 +18,11 @@ import javafx.scene.control.Spinner;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.geometry.Rectangle2D;
 import javafx.stage.Modality;
+import javafx.stage.Screen;
 import javafx.stage.Stage;
+import javafx.stage.Window;
 import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -480,10 +483,19 @@ public class SingleTileRefinement {
         siftDescription.setWrapText(true);
         siftDescription.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
 
-        // SIFT Settings button
+        // SIFT Settings button. Dialog is non-modal and docked next to the
+        // Refine Alignment stage (right side preferred, left if it doesn't
+        // fit). Previously it was modal under the main QuPath window and got
+        // hidden behind the always-on-top Refine Alignment dialog, leaving
+        // its focus there and blocking interaction with both.
         Button siftSettingsButton = new Button("Settings...");
         siftSettingsButton.setStyle("-fx-font-size: 10px;");
-        siftSettingsButton.setOnAction(e -> showSiftSettingsDialog());
+        siftSettingsButton.setOnAction(e -> {
+            Window ownerWindow = siftSettingsButton.getScene() != null
+                    ? siftSettingsButton.getScene().getWindow()
+                    : null;
+            showSiftSettingsDialog(ownerWindow);
+        });
 
         Label autoAlignStatus = new Label();
         autoAlignStatus.setWrapText(true);
@@ -586,13 +598,26 @@ public class SingleTileRefinement {
     /**
      * Shows a dialog for tuning SIFT matching parameters.
      * Changes are saved to persistent preferences and take effect on the next SIFT run.
+     *
+     * <p>Non-modal and docked next to the Refine Alignment window so the user
+     * can see both at once. Previously the dialog opened modal under the main
+     * QuPath window, hidden behind the always-on-top Refine Alignment stage,
+     * leaving focus in the hidden dialog and blocking all interaction.
+     *
+     * @param ownerWindow the Refine Alignment stage (dock target). May be null,
+     *     in which case the dialog falls back to screen-center positioning.
      */
-    private static void showSiftSettingsDialog() {
+    private static void showSiftSettingsDialog(Window ownerWindow) {
         var prefs = qupath.ext.qpsc.preferences.PersistentPreferences.class;
         Dialog<Void> dialog = new Dialog<>();
         dialog.setTitle("SIFT Matching Settings");
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
         dialog.getDialogPane().setPrefWidth(400);
+        // Non-modal so input isn't captured away from either window.
+        dialog.initModality(Modality.NONE);
+        if (ownerWindow != null) {
+            dialog.initOwner(ownerWindow);
+        }
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
@@ -693,7 +718,71 @@ public class SingleTileRefinement {
             }
             return null;
         });
-        dialog.showAndWait();
+
+        // Dock next to the owner window once sizes are known, and keep the
+        // dialog on top so it sits beside the always-on-top Refine Alignment
+        // stage instead of disappearing behind it.
+        dialog.setOnShown(evt -> {
+            Window dialogWindow = dialog.getDialogPane().getScene() != null
+                    ? dialog.getDialogPane().getScene().getWindow()
+                    : null;
+            if (dialogWindow instanceof Stage) {
+                ((Stage) dialogWindow).setAlwaysOnTop(true);
+            }
+            if (ownerWindow != null && dialogWindow != null) {
+                dockNextTo(dialogWindow, ownerWindow);
+            }
+        });
+
+        // Non-blocking so the workflow thread isn't held up; the result
+        // converter still fires on OK/Cancel to persist the preferences.
+        dialog.show();
+    }
+
+    /**
+     * Position {@code child} immediately to the right of {@code owner}. If the
+     * right side doesn't fit within the containing screen's visual bounds,
+     * fall back to the left. If neither fits, center horizontally. Y-align
+     * with the owner's top edge.
+     */
+    private static void dockNextTo(Window child, Window owner) {
+        double gap = 10;
+        double childW = child.getWidth();
+        double childH = child.getHeight();
+
+        // Find the screen containing the owner so we dock within the same
+        // monitor the user is looking at.
+        Rectangle2D bounds = Screen.getPrimary().getVisualBounds();
+        double ownerCx = owner.getX() + owner.getWidth() / 2.0;
+        double ownerCy = owner.getY() + owner.getHeight() / 2.0;
+        for (Screen s : Screen.getScreens()) {
+            if (s.getBounds().contains(ownerCx, ownerCy)) {
+                bounds = s.getVisualBounds();
+                break;
+            }
+        }
+
+        double rightX = owner.getX() + owner.getWidth() + gap;
+        double leftX = owner.getX() - gap - childW;
+
+        if (rightX + childW <= bounds.getMaxX()) {
+            child.setX(rightX);
+        } else if (leftX >= bounds.getMinX()) {
+            child.setX(leftX);
+        } else {
+            // Neither side fits; center on the owner's screen as a last resort.
+            child.setX(bounds.getMinX() + Math.max(0, (bounds.getWidth() - childW) / 2.0));
+        }
+
+        // Clamp vertical position so the dialog stays on-screen.
+        double y = owner.getY();
+        if (y + childH > bounds.getMaxY()) {
+            y = Math.max(bounds.getMinY(), bounds.getMaxY() - childH);
+        }
+        if (y < bounds.getMinY()) {
+            y = bounds.getMinY();
+        }
+        child.setY(y);
     }
 
     private static double[] performSiftAutoAlign(QuPathGUI gui, PathObject selectedTile) throws Exception {
