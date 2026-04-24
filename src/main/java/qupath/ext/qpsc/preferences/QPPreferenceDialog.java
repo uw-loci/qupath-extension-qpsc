@@ -188,6 +188,12 @@ public class QPPreferenceDialog {
     private static final IntegerProperty sunburstRadiusOuterProperty =
             PathPrefs.createPersistentPreference("sunburstRadiusOuter", 150);
 
+    // Experimental feature flag: enables the unified single-point acquisition dialog
+    // (the successor to StackTimeLapseWorkflow). Default off so the new path is only
+    // reachable when opted in during development / early testing.
+    private static final BooleanProperty singlePointDialogEnabledProperty =
+            PathPrefs.createPersistentPreference("qpsc.experimental.singlePointDialog", false);
+
     /**
      * Register all preferences in QuPath's PreferencePane. Call once during extension installation.
      */
@@ -312,6 +318,14 @@ public class QPPreferenceDialog {
                 .description("Save unprocessed (pre-background-correction) tile images.\n"
                         + "Useful for troubleshooting background subtraction.\n"
                         + "WARNING: Doubles file I/O time during acquisition.")
+                .build());
+        items.add(new PropertyItemBuilder<>(singlePointDialogEnabledProperty, Boolean.class)
+                .name("Enable Single-Point Acquisition dialog (experimental)")
+                .category(CATEGORY)
+                .description("Shows a new unified Single-Point Acquisition menu entry in Utilities that "
+                        + "supersedes the classic Z-Stack / Time-Lapse dialog. Honors the selected modality "
+                        + "(instead of hardcoded brightfield). Still dispatches via the legacy socket commands "
+                        + "until the unified ACQUIRE server path lands.")
                 .build());
         items.add(new PropertyItemBuilder<>(tileOverlapPercentProperty, Double.class)
                 .name("Tile Overlap Percent")
@@ -1034,5 +1048,14 @@ public class QPPreferenceDialog {
                     OMEPyramidWriter.CompressionType.DEFAULT);
         }
         return Arrays.asList(OMEPyramidWriter.CompressionType.values());
+    }
+
+    /** Observable flag controlling visibility of the experimental single-point acquisition dialog. */
+    public static BooleanProperty getSinglePointDialogEnabledProperty() {
+        return singlePointDialogEnabledProperty;
+    }
+
+    public static boolean isSinglePointDialogEnabled() {
+        return singlePointDialogEnabledProperty.get();
     }
 }

@@ -15,6 +15,7 @@ import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.controller.MakePortableWorkflow;
 import qupath.ext.qpsc.controller.QPScopeController;
 import qupath.ext.qpsc.controller.StackTimeLapseWorkflow;
+import qupath.ext.qpsc.ui.SinglePointAcquisitionController;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -383,6 +384,19 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         + "Single-tile acquisition with configurable Z range or time intervals.");
         stackTimeLapseOption.setOnAction(e -> StackTimeLapseWorkflow.show(qupath));
 
+        // Single-Point Acquisition (experimental, feature-flagged)
+        // Shown only when qpsc.experimental.singlePointDialog is enabled; honors the
+        // modality from Sample Setup instead of hardcoding brightfield, and will be the
+        // default path once the unified ACQUIRE server-side work lands.
+        MenuItem singlePointOption = new MenuItem("Single-Point Acquisition (experimental)...");
+        singlePointOption.setDisable(!configValid);
+        setMenuItemTooltip(
+                singlePointOption,
+                "Experimental: unified Z-stack + time-lapse dialog that honors the selected modality. "
+                        + "Toggle via preferences if you want to try it.");
+        singlePointOption.setOnAction(e -> SinglePointAcquisitionController.show());
+        singlePointOption.visibleProperty().bind(QPPreferenceDialog.getSinglePointDialogEnabledProperty());
+
         // Propagation tools (project utilities, no microscope needed)
         MenuItem propagationManagerOption = new MenuItem("Propagation Manager...");
         setMenuItemTooltip(
@@ -434,6 +448,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 .addAll(
                         new SeparatorMenuItem(),
                         stackTimeLapseOption,
+                        singlePointOption,
                         new SeparatorMenuItem(),
                         propagationManagerOption,
                         stitchingRecoveryOption,
