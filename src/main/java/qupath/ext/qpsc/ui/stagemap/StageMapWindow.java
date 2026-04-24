@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
@@ -487,8 +488,8 @@ public class StageMapWindow {
                 alert.setTitle("Configuration Folder");
                 alert.setHeaderText("Open this folder to edit calibration:");
                 alert.setContentText(configFolder.getAbsolutePath());
-                alert.initOwner(stage);
-                alert.showAndWait();
+                // StageMap is always-on-top; helper raises the alert above it.
+                UIFunctions.showAlertOverParent(alert, stage);
             }
 
         } catch (Exception e) {
@@ -843,13 +844,12 @@ public class StageMapWindow {
                             + "This warning will not appear again this session.",
                     targetX, targetY));
 
-            alert.initOwner(stage);
-
             ButtonType moveButton = new ButtonType("Move Stage", ButtonBar.ButtonData.OK_DONE);
             ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
             alert.getButtonTypes().setAll(moveButton, cancelButton);
 
-            Optional<ButtonType> result = alert.showAndWait();
+            // StageMap is always-on-top; helper parents + raises the alert.
+            Optional<ButtonType> result = UIFunctions.showAlertOverParent(alert, stage);
             return result.isPresent() && result.get() == moveButton;
         } finally {
             dialogShowing = false;
@@ -883,8 +883,7 @@ public class StageMapWindow {
                 alert.setTitle(title);
                 alert.setHeaderText(null);
                 alert.setContentText(message);
-                alert.initOwner(stage);
-                alert.showAndWait();
+                UIFunctions.showAlertOverParent(alert, stage);
             } finally {
                 dialogShowing = false;
             }
@@ -899,8 +898,7 @@ public class StageMapWindow {
                 alert.setTitle(title);
                 alert.setHeaderText(null);
                 alert.setContentText(message);
-                alert.initOwner(stage);
-                alert.showAndWait();
+                UIFunctions.showAlertOverParent(alert, stage);
             } finally {
                 dialogShowing = false;
             }

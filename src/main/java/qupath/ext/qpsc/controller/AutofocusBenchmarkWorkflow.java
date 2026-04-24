@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.AutofocusBenchmarkDialog;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.fx.dialogs.Dialogs;
 
 /**
@@ -255,7 +256,9 @@ public class AutofocusBenchmarkWorkflow {
                 confirm.setContentText("The benchmark will be stopped. Partial results may have been saved "
                         + "to the output directory.\n\nCancel the benchmark?");
 
-                confirm.showAndWait().ifPresent(response -> {
+                // Progress stage is always-on-top. Route through the helper so
+                // this alert doesn't sink behind it while holding modal focus.
+                UIFunctions.showAlertOverParent(confirm, progressStage).ifPresent(response -> {
                     if (response == ButtonType.OK) {
                         logger.info("User requested benchmark cancellation");
                         cancelled.set(true);

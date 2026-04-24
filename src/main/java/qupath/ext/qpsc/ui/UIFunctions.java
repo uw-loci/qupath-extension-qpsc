@@ -25,6 +25,7 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.stage.Window;
 import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1181,5 +1182,52 @@ public class UIFunctions {
         });
 
         return future;
+    }
+
+    /**
+     * Show an {@link Alert} that cohabits correctly with an always-on-top
+     * parent window.
+     *
+     * <p>Recurring bug class this addresses: when a parent dialog sets
+     * {@code setAlwaysOnTop(true)} (e.g. Refine Alignment, the autofocus
+     * benchmark progress, the acquisition wizard, the stage map), any
+     * {@code new Alert(...).showAndWait()} opened from inside it defaults
+     * to owner = main QuPath window and APPLICATION_MODAL. The alert then
+     * sinks behind the always-on-top parent but keeps modal focus, so the
+     * parent appears frozen and the user can't see or dismiss the alert.
+     *
+     * <p>This helper:
+     * <ul>
+     *   <li>Parents the alert to {@code parent} via {@code initOwner}.</li>
+     *   <li>Raises the alert's stage above the parent with
+     *       {@code setAlwaysOnTop(true)} once it's shown, so it co-floats
+     *       instead of sinking.</li>
+     * </ul>
+     *
+     * <p>Uses {@code showAndWait} so existing blocking call sites can
+     * migrate with a minimal diff.
+     *
+     * @param alert  the alert to display (already configured with title,
+     *               header, content, buttons)
+     * @param parent the parent window (typically the always-on-top stage);
+     *               may be null, in which case no owner is set but
+     *               always-on-top is still applied
+     * @return the user's chosen button, or empty if the alert was closed
+     *         without a selection
+     */
+    public static Optional<ButtonType> showAlertOverParent(Alert alert, Window parent) {
+        if (parent != null) {
+            alert.initOwner(parent);
+        }
+        alert.setOnShown(e -> {
+            if (alert.getDialogPane() != null
+                    && alert.getDialogPane().getScene() != null) {
+                Window w = alert.getDialogPane().getScene().getWindow();
+                if (w instanceof Stage) {
+                    ((Stage) w).setAlwaysOnTop(true);
+                }
+            }
+        });
+        return alert.showAndWait();
     }
 }

@@ -1259,7 +1259,8 @@ public class AcquisitionWizardDialog {
             alert.setTitle("Cannot Start Acquisition");
             alert.setHeaderText("Microscope server is not connected");
             alert.setContentText(connStatus.message());
-            alert.showAndWait();
+            // Wizard is always-on-top; helper parents + raises the alert.
+            UIFunctions.showAlertOverParent(alert, wizardStage);
             return false;
         }
 
@@ -1279,7 +1280,8 @@ public class AcquisitionWizardDialog {
         alert.setContentText(msg.toString());
         alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.CANCEL);
 
-        var result = alert.showAndWait();
+        // Wizard is always-on-top; helper parents + raises the alert.
+        var result = UIFunctions.showAlertOverParent(alert, wizardStage);
         if (result.isPresent() && result.get() == ButtonType.YES) {
             logger.warn("User proceeding with calibration warnings: {}", warnings);
             return true;
