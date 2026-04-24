@@ -330,9 +330,12 @@ public class QPPreferenceDialog {
                     .name("Stitching output format")
                     .category(CATEGORY)
                     .description("Output format for stitched images.\n"
-                            + "OME-TIFF: Traditional single-file format, widely compatible (standard as of 2025).\n"
-                            + "OME-ZARR: Cloud-native directory format with better compression and parallel writing,\n"
-                            + "but less commonly used. ZARR provides 2-3x faster writing and 20-30% smaller files.")
+                            + "OME-TIFF: Traditional single-file format, widely compatible.\n"
+                            + "OME-ZARR: Directory format with parallel writing (2-3x faster). "
+                            + "Produces many small files -- harder to copy on Windows.\n"
+                            + "OME-TIFF via ZARR: Best of both -- parallel ZARR stitching for speed, "
+                            + "then automatic background conversion to single-file OME-TIFF. "
+                            + "Images are available immediately via ZARR while TIFF converts unattended.")
                     .build());
 
             // Populate compression choices for the current format
@@ -1023,7 +1026,7 @@ public class QPPreferenceDialog {
      */
     private static List<OMEPyramidWriter.CompressionType> getCompressionTypesForFormat(
             StitchingConfig.OutputFormat format) {
-        if (format == StitchingConfig.OutputFormat.OME_ZARR) {
+        if (format != null && format.stitchAsZarr()) {
             return List.of(
                     OMEPyramidWriter.CompressionType.LZW,
                     OMEPyramidWriter.CompressionType.ZLIB,
