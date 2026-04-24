@@ -381,45 +381,45 @@ public class SinglePointAcquisitionController {
 
         Thread worker = new Thread(
                 () -> {
-                    // Fix #5: Stop live streaming before acquisition -- JAI camera
-                    // properties cannot be changed during streaming
                     try {
-                        mc.getSocketClient().stopContinuousAcquisition();
-                        logger.info("Stopped live streaming for single-point acquisition");
-                    } catch (Exception e) {
-                        logger.debug("Could not stop live mode (may not be running): {}", e.getMessage());
-                    }
-
-                    try {
-                        String response;
-                        if (zEnabled) {
-                            response = mc.getSocketClient()
-                                    .startZStack(
-                                            outputFolder,
-                                            zStart,
-                                            zEnd,
-                                            zStep,
-                                            modality,
-                                            null,
-                                            wbMode,
-                                            configPath,
-                                            null,
-                                            null,
-                                            zProjection);
-                        } else {
-                            response = mc.getSocketClient()
-                                    .startTimeLapse(
-                                            outputFolder,
-                                            timepoints,
-                                            intervalSec,
-                                            modality,
-                                            null,
-                                            wbMode,
-                                            configPath,
-                                            null,
-                                            null);
-                        }
-                        logger.info("Single-point acquisition complete: {}", response);
+                        // Use the shared live-mode wrapper so the Live Viewer
+                        // button state stays in sync with actual streaming.
+                        // Calling stopContinuousAcquisition() on the socket
+                        // directly bypasses LiveViewerWindow's local state and
+                        // leaves the button stuck on "Live ON" after the
+                        // acquisition completes. withLiveModeHandling handles
+                        // stop-before / restart-after and keeps the UI honest.
+                        mc.withLiveModeHandling(() -> {
+                            String response;
+                            if (zEnabled) {
+                                response = mc.getSocketClient()
+                                        .startZStack(
+                                                outputFolder,
+                                                zStart,
+                                                zEnd,
+                                                zStep,
+                                                modality,
+                                                null,
+                                                wbMode,
+                                                configPath,
+                                                null,
+                                                null,
+                                                zProjection);
+                            } else {
+                                response = mc.getSocketClient()
+                                        .startTimeLapse(
+                                                outputFolder,
+                                                timepoints,
+                                                intervalSec,
+                                                modality,
+                                                null,
+                                                wbMode,
+                                                configPath,
+                                                null,
+                                                null);
+                            }
+                            logger.info("Single-point acquisition complete: {}", response);
+                        });
 
                         Platform.runLater(() ->
                                 Dialogs.showInfoNotification(
