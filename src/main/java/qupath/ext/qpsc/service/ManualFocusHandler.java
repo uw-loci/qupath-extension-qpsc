@@ -121,7 +121,16 @@ public final class ManualFocusHandler {
                                     logger.info("User chose to use current focus");
                                     break;
                                 case CANCEL_ACQUISITION:
-                                    socketClient.skipAutofocusRetry();
+                                    // Send ONLY cancelAcquisition. The server's
+                                    // manual-focus wait now polls both the
+                                    // focus-complete event and the cancel
+                                    // event, so CANC alone transitions the
+                                    // autofocus wait directly to user_choice
+                                    // ="cancel" (which raises the cancelled
+                                    // sentinel and sets state=CANCELLED).
+                                    // Previously we sent SKPAF first, which
+                                    // won the race and made the server treat
+                                    // the cancel as "use current focus".
                                     socketClient.cancelAcquisition();
                                     logger.info("User chose to cancel acquisition");
                                     break;
