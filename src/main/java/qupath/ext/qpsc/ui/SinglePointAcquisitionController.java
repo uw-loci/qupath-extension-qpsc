@@ -136,7 +136,7 @@ public class SinglePointAcquisitionController {
 
             // --- Z-stack section ---
             CheckBox zEnableCheckbox = new CheckBox("Enable Z-stack");
-            Spinner<Double> zRangeSpinner = new Spinner<>(0.1, 200.0, 20.0, 5.0);
+            Spinner<Double> zRangeSpinner = new Spinner<>(0.1, 2000.0, 20.0, 5.0);
             zRangeSpinner.setEditable(true);
             zRangeSpinner.setPrefWidth(100);
             Spinner<Double> zStepSpinner = new Spinner<>(0.1, 50.0, 1.0, 0.5);

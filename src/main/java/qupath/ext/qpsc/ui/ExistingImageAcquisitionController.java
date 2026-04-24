@@ -777,7 +777,7 @@ public class ExistingImageAcquisitionController {
                             + "Essential for thick samples and SHG/multiphoton imaging."));
             enableCheck.setSelected(PersistentPreferences.isZStackEnabled());
 
-            Spinner<Double> rangeSpinner = new Spinner<>(1.0, 200.0, PersistentPreferences.getZStackRange(), 5.0);
+            Spinner<Double> rangeSpinner = new Spinner<>(1.0, 2000.0, PersistentPreferences.getZStackRange(), 5.0);
             rangeSpinner.setEditable(true);
             rangeSpinner.setPrefWidth(100);
             rangeSpinner.setTooltip(new Tooltip(
