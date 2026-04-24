@@ -16,6 +16,7 @@ import qupath.ext.qpsc.controller.workflow.StitchingHelper;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.model.SampleSetupResult;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AngleResolutionService;
 import qupath.ext.qpsc.service.ChannelResolutionService;
@@ -414,6 +415,15 @@ public class BoundedAcquisitionWorkflow {
                                 int expectedFilesPerTile = !channelExposures.isEmpty()
                                         ? channelExposures.size()
                                         : Math.max(1, angleExposures.size());
+                                // Z-stack multiplier: each tile captures N Z-planes
+                                if (PersistentPreferences.isZStackEnabled()) {
+                                    double zRange = PersistentPreferences.getZStackRange();
+                                    double zStep = PersistentPreferences.getZStackStep();
+                                    if (zStep > 0) {
+                                        int nZPlanes = (int) Math.ceil(zRange / zStep) + 1;
+                                        expectedFilesPerTile *= nZPlanes;
+                                    }
+                                }
                                 int expectedFiles = MinorFunctions.countTifEntriesInTileConfig(
                                                 List.of(Paths.get(tempTileDir, boundsMode)
                                                         .toString()))
