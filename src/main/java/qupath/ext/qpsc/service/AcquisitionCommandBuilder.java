@@ -747,6 +747,21 @@ public class AcquisitionCommandBuilder {
             args.addAll(Arrays.asList("--preferred-af-tile", String.valueOf(preferredAfTile)));
         }
 
+        // Add time-lapse + output-format flags (Z-stack + time-lapse refactor).
+        // Only emit when non-default so existing single-snap command lines
+        // remain byte-identical to pre-refactor output. Python side applies
+        // the same defaults (timepoints=1, interval=0, output_format='ome-per-t')
+        // when the flags are absent.
+        if (timepoints > 1) {
+            args.addAll(Arrays.asList("--timepoints", String.valueOf(timepoints)));
+        }
+        if (intervalSec > 0.0) {
+            args.addAll(Arrays.asList("--interval", String.valueOf(intervalSec)));
+        }
+        if (outputFormat != null) {
+            args.addAll(Arrays.asList("--output-format", outputFormat.toWireValue()));
+        }
+
         // Join with spaces, properly quoting arguments
         String message = args.stream()
                 .map(arg -> {
