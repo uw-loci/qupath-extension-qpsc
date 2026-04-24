@@ -132,10 +132,6 @@ All motorized components must be controllable through [Micro-Manager](https://mi
 - [Micro-Manager 2.0](https://micro-manager.org/) configured for your microscope
 - Python 3.10+ with [Pycro-Manager](https://pycro-manager.readthedocs.io/) installed
 
-**Optional companion extensions** (useful but not required):
-- [qupath-extension-project-metadata-browser](https://github.com/uw-loci/qupath-extension-project-metadata-browser) - Table view of every image in a project with all built-in and user-added metadata keys as sortable, filterable columns. Handy for surveying the metadata QPSC attaches to each acquired image entry (modality, objective, sample name, xy offsets, etc.).
-- [qupath-extension-dialog-manager](https://github.com/uw-loci/qupath-extension-dialog-manager) - Persists QuPath dialog window positions across sessions and recovers off-screen dialogs.
-
 ### Installation
 
 1. **Download the extension JARs:**
