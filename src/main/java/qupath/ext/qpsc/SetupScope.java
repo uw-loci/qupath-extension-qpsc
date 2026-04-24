@@ -376,26 +376,27 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         autofocusBenchmarkOption);
 
         // Z-Stack / Time-Lapse (needs microscope)
+        // Default path is now SinglePointAcquisitionController -- it honors the
+        // selected modality (instead of hardcoding brightfield), emits multi-dim
+        // OME-TIFFs, and syncs the Live button with server streaming state.
+        // The legacy StackTimeLapseWorkflow.java is retained as a fallback:
+        // setting qpsc.experimental.singlePointDialog to false re-routes the
+        // menu back to it. Rip-out will follow once the new path has been
+        // exercised against production acquisitions.
         MenuItem stackTimeLapseOption = new MenuItem("Z-Stack / Time-Lapse...");
         stackTimeLapseOption.setDisable(!configValid);
         setMenuItemTooltip(
                 stackTimeLapseOption,
                 "Acquire a Z-stack or time-lapse at the current stage position. "
-                        + "Single-tile acquisition with configurable Z range or time intervals.");
-        stackTimeLapseOption.setOnAction(e -> StackTimeLapseWorkflow.show(qupath));
-
-        // Single-Point Acquisition (experimental, feature-flagged)
-        // Shown only when qpsc.experimental.singlePointDialog is enabled; honors the
-        // modality from Sample Setup instead of hardcoding brightfield, and will be the
-        // default path once the unified ACQUIRE server-side work lands.
-        MenuItem singlePointOption = new MenuItem("Single-Point Acquisition (experimental)...");
-        singlePointOption.setDisable(!configValid);
-        setMenuItemTooltip(
-                singlePointOption,
-                "Experimental: unified Z-stack + time-lapse dialog that honors the selected modality. "
-                        + "Toggle via preferences if you want to try it.");
-        singlePointOption.setOnAction(e -> SinglePointAcquisitionController.show());
-        singlePointOption.visibleProperty().bind(QPPreferenceDialog.getSinglePointDialogEnabledProperty());
+                        + "Single-tile acquisition with configurable Z range, time intervals, "
+                        + "and per-modality output (multi-plane OME-TIFF).");
+        stackTimeLapseOption.setOnAction(e -> {
+            if (QPPreferenceDialog.isSinglePointDialogEnabled()) {
+                SinglePointAcquisitionController.show();
+            } else {
+                StackTimeLapseWorkflow.show(qupath);
+            }
+        });
 
         // Propagation tools (project utilities, no microscope needed)
         MenuItem propagationManagerOption = new MenuItem("Propagation Manager...");
@@ -448,7 +449,6 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 .addAll(
                         new SeparatorMenuItem(),
                         stackTimeLapseOption,
-                        singlePointOption,
                         new SeparatorMenuItem(),
                         propagationManagerOption,
                         stitchingRecoveryOption,

@@ -188,11 +188,12 @@ public class QPPreferenceDialog {
     private static final IntegerProperty sunburstRadiusOuterProperty =
             PathPrefs.createPersistentPreference("sunburstRadiusOuter", 150);
 
-    // Experimental feature flag: enables the unified single-point acquisition dialog
-    // (the successor to StackTimeLapseWorkflow). Default off so the new path is only
-    // reachable when opted in during development / early testing.
+    // Unified single-point acquisition dialog (successor to StackTimeLapseWorkflow).
+    // Default true as of the menu cutover: the Utilities > Z-Stack / Time-Lapse menu
+    // routes to SinglePointAcquisitionController. Set false to fall back to the
+    // legacy StackTimeLapseWorkflow if the new path misbehaves in production.
     private static final BooleanProperty singlePointDialogEnabledProperty =
-            PathPrefs.createPersistentPreference("qpsc.experimental.singlePointDialog", false);
+            PathPrefs.createPersistentPreference("qpsc.experimental.singlePointDialog", true);
 
     /**
      * Register all preferences in QuPath's PreferencePane. Call once during extension installation.
@@ -320,12 +321,13 @@ public class QPPreferenceDialog {
                         + "WARNING: Doubles file I/O time during acquisition.")
                 .build());
         items.add(new PropertyItemBuilder<>(singlePointDialogEnabledProperty, Boolean.class)
-                .name("Enable Single-Point Acquisition dialog (experimental)")
+                .name("Use new Z-Stack / Time-Lapse dialog")
                 .category(CATEGORY)
-                .description("Shows a new unified Single-Point Acquisition menu entry in Utilities that "
-                        + "supersedes the classic Z-Stack / Time-Lapse dialog. Honors the selected modality "
-                        + "(instead of hardcoded brightfield). Still dispatches via the legacy socket commands "
-                        + "until the unified ACQUIRE server path lands.")
+                .description("Route the Utilities > Z-Stack / Time-Lapse menu to the unified "
+                        + "Single-Point Acquisition dialog. Honors the selected modality "
+                        + "(instead of hardcoded brightfield), emits multi-plane OME-TIFFs, "
+                        + "and keeps the Live Viewer button synced with server streaming state. "
+                        + "Disable to fall back to the legacy StackTimeLapseWorkflow dialog.")
                 .build());
         items.add(new PropertyItemBuilder<>(tileOverlapPercentProperty, Double.class)
                 .name("Tile Overlap Percent")
