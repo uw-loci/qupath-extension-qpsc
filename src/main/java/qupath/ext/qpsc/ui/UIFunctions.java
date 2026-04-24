@@ -619,7 +619,15 @@ public class UIFunctions {
                     + "- Cancel - Stop the acquisition";
         }
         alert.setContentText(message);
-        alert.initModality(Modality.APPLICATION_MODAL);
+        // Modality.NONE so the user can actually interact with the Live
+        // Viewer focus controls -- the whole point of this dialog is to
+        // prompt a manual-focus action that requires those controls.
+        // APPLICATION_MODAL blocked every other window, making the
+        // "Use Current Focus" option the only viable choice. The dialog
+        // is still kept on top via setAlwaysOnTop below, and showAndWait()
+        // still blocks the calling thread so the workflow waits for the
+        // user's choice.
+        alert.initModality(Modality.NONE);
 
         // Add custom buttons
         ButtonType retryButton = new ButtonType("Retry Autofocus", ButtonBar.ButtonData.OK_DONE);
