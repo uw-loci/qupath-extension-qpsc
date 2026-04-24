@@ -102,6 +102,17 @@ public class AcquisitionCommandBuilder {
     private Double zPixelSize; // Z pixel size in um (for OME-TIFF metadata)
     private String zProjection; // Projection type: "max", "min", "sum", "mean", "std"
 
+    // Optional parameters for time-lapse.
+    // Defaults: timepoints=1, intervalSec=0 (single snap, no interval).
+    // Signatures only at Task #1 -- buildSocketMessage does NOT emit these yet.
+    private int timepoints = 1;
+    private double intervalSec = 0.0;
+
+    // Optional output format selector for the Z/T/single-point refactor.
+    // Null = unset; buildSocketMessage does NOT emit this yet (Task #1 is
+    // signature-only). Downstream teams will wire emission in later tasks.
+    private OutputFormat outputFormat = null;
+
     // Z-focus hint from prediction model (tilt correction)
     private Double hintZ;
 
@@ -389,6 +400,48 @@ public class AcquisitionCommandBuilder {
     /** Set Z-stack projection type ("max", "min", "sum", "mean", "std"). Default: "max". */
     public AcquisitionCommandBuilder zProjection(String projection) {
         this.zProjection = projection;
+        return this;
+    }
+
+    /**
+     * Configures time-lapse acquisition parameters.
+     *
+     * <p>Defaults are {@code timepoints=1, intervalSec=0} (single snap, no
+     * wait) which leaves non-time-lapse acquisitions unchanged. Interval
+     * semantics follow the "start at {@code t0 + n*dt}" rule: if an
+     * acquisition takes longer than the interval, a warning is emitted and
+     * the next timepoint starts after the previous completes.
+     *
+     * <p>Task #1 scope: this setter stores the values but
+     * {@link #buildSocketMessage()} does NOT yet emit them on the wire.
+     * Socket emission lands in a later task in the refactor rollout.
+     *
+     * @param timepoints number of timepoints (must be >= 1; 1 disables time-lapse)
+     * @param intervalSec interval between timepoint starts, in seconds
+     *                    (must be >= 0; ignored when {@code timepoints == 1})
+     * @return this builder instance for method chaining
+     */
+    public AcquisitionCommandBuilder timeLapse(int timepoints, double intervalSec) {
+        this.timepoints = timepoints;
+        this.intervalSec = intervalSec;
+        return this;
+    }
+
+    /**
+     * Selects the OME-TIFF output granularity for the acquisition.
+     *
+     * <p>See {@link OutputFormat} for the available layouts. Null is a valid
+     * value meaning "let the server pick a modality-appropriate default".
+     *
+     * <p>Task #1 scope: this setter stores the value but
+     * {@link #buildSocketMessage()} does NOT yet emit it on the wire. Socket
+     * emission lands in a later task in the refactor rollout.
+     *
+     * @param fmt the desired output format, or {@code null} to use the default
+     * @return this builder instance for method chaining
+     */
+    public AcquisitionCommandBuilder outputFormat(OutputFormat fmt) {
+        this.outputFormat = fmt;
         return this;
     }
 
