@@ -5322,7 +5322,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String wbMode,
             String yamlPath,
             String objective,
-            String detector)
+            String detector,
+            String projection)
             throws IOException {
         StringBuilder msg = new StringBuilder();
         msg.append("--output ").append(outputFolder);
@@ -5335,6 +5336,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if (yamlPath != null) msg.append(" --yaml ").append(yamlPath);
         if (objective != null) msg.append(" --objective ").append(objective);
         if (detector != null) msg.append(" --detector ").append(detector);
+        if (projection != null && !"none".equals(projection)) msg.append(" --projection ").append(projection);
         msg.append(" ENDOFSTR");
 
         return executeChunkedCommand(Command.ZSTACK, msg.toString(), "ZSTACK");

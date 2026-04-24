@@ -147,6 +147,7 @@ public class StackTimeLapseWorkflow {
                                                     "off",
                                                     configPath,
                                                     null,
+                                                    null,
                                                     null);
                                     javafx.application.Platform.runLater(() -> {
                                         zStatusLabel.setText("Complete: " + response);

@@ -1,11 +1,14 @@
 package qupath.ext.qpsc.ui;
 
 import java.io.File;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import javafx.application.Platform;
+import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
@@ -14,6 +17,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
+import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -23,26 +27,22 @@ import org.slf4j.LoggerFactory;
 
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.model.SampleSetupResult;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.OutputFormat;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
 /**
- * Scaffold for the unified single-point acquisition dialog (Z-stack + time-lapse)
- * that will eventually replace {@link qupath.ext.qpsc.controller.StackTimeLapseWorkflow}.
+ * Single-point acquisition dialog for Z-stack and time-lapse.
  *
- * <p>Currently feature-flagged behind
- * {@link QPPreferenceDialog#getSinglePointDialogEnabledProperty()}. When the flag
- * is off this dialog is not reachable from the menu.
+ * <p>Self-contained dialog with inline sample name, modality selection, and
+ * output configuration. Does not require the full SampleSetupController flow
+ * (which locks the sample name when a project is open).
  *
- * <p>Dispatch is still via the legacy {@code startZStack}/{@code startTimeLapse}
- * socket methods so that existing server behavior is preserved. The pass-through
- * modality (from {@link SampleSetupController}) is now honored instead of the
- * previous hardcoded "brightfield".
- *
- * <p>Combined Z+T acquisitions are blocked with a validation message until the
- * server-side {@code single_point.py} path lands.
+ * <p>Stops live camera streaming before acquisition and restarts it after
+ * completion, matching the behavior of the main acquisition workflows.
  */
 public class SinglePointAcquisitionController {
 
@@ -51,10 +51,8 @@ public class SinglePointAcquisitionController {
     private SinglePointAcquisitionController() {}
 
     /**
-     * Launch the dialog. Sample setup runs first (modality, objective, output folder).
-     * The main acquisition dialog is shown if setup completes successfully.
-     *
-     * @return a future that completes when the user dismisses the dialog
+     * Launch the dialog. Connects to microscope if needed, then shows the
+     * all-in-one dialog directly (no separate sample setup step).
      */
     public static CompletableFuture<Void> show() {
         QuPathGUI qupath = QuPathGUI.getInstance();
@@ -70,26 +68,17 @@ public class SinglePointAcquisitionController {
             }
         }
 
-        return SampleSetupController.showDialog().thenCompose(sample -> {
-            if (sample == null) {
-                logger.info("Sample setup cancelled; single-point dialog not opened");
-                return CompletableFuture.completedFuture(null);
-            }
-            return showMainDialog(qupath, mc, sample);
-        });
+        return showMainDialog(qupath, mc);
     }
 
-    private static CompletableFuture<Void> showMainDialog(
-            QuPathGUI qupath, MicroscopeController mc, SampleSetupResult sample) {
+    private static CompletableFuture<Void> showMainDialog(QuPathGUI qupath, MicroscopeController mc) {
 
         CompletableFuture<Void> future = new CompletableFuture<>();
 
         Platform.runLater(() -> {
             Dialog<ButtonType> dialog = new Dialog<>();
-            dialog.setTitle("Single-Point Acquisition (experimental)");
-            dialog.setHeaderText(String.format(
-                    "Sample: %s    Modality: %s    Objective: %s",
-                    sample.sampleName(), sample.modality(), sample.objective()));
+            dialog.setTitle("Z-Stack / Time-Lapse Acquisition");
+            dialog.setResizable(true);
 
             // Current Z for Z-stack default range
             double currentZ = 0.0;
@@ -100,6 +89,50 @@ public class SinglePointAcquisitionController {
                 logger.debug("Could not get current Z: {}", e.getMessage());
             }
             final double fCurrentZ = currentZ;
+
+            // --- Sample & Modality section (fixes #1, #4) ---
+            TextField sampleNameField = new TextField();
+            sampleNameField.setPromptText("Sample name");
+            // Pre-populate from open project or last used
+            if (qupath.getProject() != null) {
+                File projectFile = qupath.getProject().getPath().toFile();
+                sampleNameField.setText(projectFile.getParentFile().getName());
+            } else {
+                String lastSample = PersistentPreferences.getLastSampleName();
+                if (!lastSample.isEmpty()) sampleNameField.setText(lastSample);
+            }
+
+            ComboBox<String> modalityCombo = new ComboBox<>();
+            try {
+                MicroscopeConfigManager mgr =
+                        MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
+                Set<String> modalities = mgr.getAvailableModalities();
+                modalityCombo.setItems(FXCollections.observableArrayList(modalities));
+                String lastModality = PersistentPreferences.getLastModality();
+                if (!lastModality.isEmpty() && modalities.contains(lastModality)) {
+                    modalityCombo.setValue(lastModality);
+                } else if (!modalities.isEmpty()) {
+                    modalityCombo.setValue(modalities.iterator().next());
+                }
+            } catch (Exception e) {
+                modalityCombo.getItems().add("brightfield");
+                modalityCombo.setValue("brightfield");
+                logger.warn("Could not load modalities from config: {}", e.getMessage());
+            }
+
+            GridPane setupGrid = new GridPane();
+            setupGrid.setHgap(8);
+            setupGrid.setVgap(6);
+            setupGrid.setPadding(new Insets(8));
+            ColumnConstraints labelCol = new ColumnConstraints();
+            labelCol.setMinWidth(100);
+            ColumnConstraints fieldCol = new ColumnConstraints();
+            fieldCol.setHgrow(Priority.ALWAYS);
+            setupGrid.getColumnConstraints().addAll(labelCol, fieldCol);
+            setupGrid.add(new Label("Sample name:"), 0, 0);
+            setupGrid.add(sampleNameField, 1, 0);
+            setupGrid.add(new Label("Modality:"), 0, 1);
+            setupGrid.add(modalityCombo, 1, 1);
 
             // --- Z-stack section ---
             CheckBox zEnableCheckbox = new CheckBox("Enable Z-stack");
@@ -176,50 +209,78 @@ public class SinglePointAcquisitionController {
             TitledPane tPane = new TitledPane("Time-lapse", new VBox(6, tEnableCheckbox, tGrid));
             tPane.setCollapsible(false);
 
-            // --- Output format + output folder ---
+            // --- Output section (fix #2: full-width folder field) ---
             ComboBox<OutputFormat> outputFormatCombo = new ComboBox<>();
             outputFormatCombo.getItems().addAll(OutputFormat.values());
             outputFormatCombo.setValue(OutputFormat.OME_PER_T);
 
             TextField outputFolderField = new TextField();
-            outputFolderField.setText(defaultOutputFolder(sample));
+            outputFolderField.setMaxWidth(Double.MAX_VALUE);
+            // Default output folder from projects folder + sample name
+            String projectsFolder = QPPreferenceDialog.getProjectsFolderProperty();
+            if (projectsFolder != null && !projectsFolder.isEmpty()) {
+                String name = sampleNameField.getText();
+                if (name != null && !name.isEmpty()) {
+                    outputFolderField.setText(
+                            new File(new File(projectsFolder, name), "singlepoint").getAbsolutePath());
+                }
+            }
+            // Update output folder when sample name changes
+            sampleNameField.textProperty().addListener((obs, oldVal, newVal) -> {
+                String pf = QPPreferenceDialog.getProjectsFolderProperty();
+                if (pf != null && !pf.isEmpty() && newVal != null && !newVal.isEmpty()) {
+                    outputFolderField.setText(
+                            new File(new File(pf, newVal), "singlepoint").getAbsolutePath());
+                }
+            });
+
             Button browseBtn = new Button("Browse...");
             browseBtn.setOnAction(e -> {
                 javafx.stage.DirectoryChooser chooser = new javafx.stage.DirectoryChooser();
                 chooser.setTitle("Select Output Folder");
+                String current = outputFolderField.getText();
+                if (current != null && !current.isEmpty()) {
+                    File dir = new File(current);
+                    if (dir.exists()) chooser.setInitialDirectory(dir);
+                    else if (dir.getParentFile() != null && dir.getParentFile().exists())
+                        chooser.setInitialDirectory(dir.getParentFile());
+                }
                 File dir = chooser.showDialog(dialog.getOwner());
                 if (dir != null) outputFolderField.setText(dir.getAbsolutePath());
             });
 
-            GridPane outGrid = new GridPane();
-            outGrid.setHgap(8);
-            outGrid.setVgap(6);
-            outGrid.setPadding(new Insets(8));
-            outGrid.add(new Label("Output format:"), 0, 0);
-            outGrid.add(outputFormatCombo, 1, 0);
-            outGrid.add(new Label("Output folder:"), 0, 1);
-            HBox folderRow = new HBox(4, outputFolderField, browseBtn);
-            HBox.setHgrow(outputFolderField, Priority.ALWAYS);
-            outGrid.add(folderRow, 1, 1);
-            TitledPane outPane = new TitledPane("Output", outGrid);
+            VBox outContent = new VBox(6);
+            outContent.setPadding(new Insets(8));
+            GridPane outFormatRow = new GridPane();
+            outFormatRow.setHgap(8);
+            outFormatRow.add(new Label("Output format:"), 0, 0);
+            outFormatRow.add(outputFormatCombo, 1, 0);
+            outContent.getChildren().addAll(
+                    outFormatRow,
+                    new Label("Output folder:"),
+                    outputFolderField,
+                    browseBtn);
+            TitledPane outPane = new TitledPane("Output", outContent);
             outPane.setCollapsible(false);
 
             Label statusLabel = new Label();
             statusLabel.setStyle("-fx-font-size: 11px;");
             statusLabel.setWrapText(true);
 
-            VBox content = new VBox(10, zPane, tPane, outPane, statusLabel);
+            VBox content = new VBox(10, setupGrid, zPane, tPane, outPane, statusLabel);
             content.setPadding(new Insets(10));
 
             dialog.getDialogPane().setContent(content);
             dialog.getDialogPane().setPrefWidth(520);
-            ButtonType startButtonType = new ButtonType("Start", ButtonType.OK.getButtonData());
+            dialog.getDialogPane().setPrefHeight(620);
+            ButtonType startButtonType = new ButtonType("Start", ButtonBar.ButtonData.OK_DONE);
             dialog.getDialogPane().getButtonTypes().addAll(startButtonType, ButtonType.CANCEL);
 
-            // Consume the Start action if validation fails, so the dialog stays open
+            // Validation on Start
             Button startBtn = (Button) dialog.getDialogPane().lookupButton(startButtonType);
             startBtn.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
                 String error = validate(
+                        sampleNameField.getText(),
                         zEnableCheckbox.isSelected(),
                         tEnableCheckbox.isSelected(),
                         outputFolderField.getText());
@@ -230,16 +291,23 @@ public class SinglePointAcquisitionController {
                 }
             });
 
-            dialog.setOnCloseRequest(e -> {
-                // Cancel path: nothing to clean up
-            });
-
             dialog.resultProperty().addListener((obs, oldVal, result) -> {
                 if (result == startButtonType) {
+                    String modality = modalityCombo.getValue() != null ? modalityCombo.getValue() : "brightfield";
                     double range = zRangeSpinner.getValue();
                     double step = zStepSpinner.getValue();
                     double zStart = fCurrentZ - range / 2;
                     double zEnd = fCurrentZ + range / 2;
+
+                    // Build a SampleSetupResult for compatibility with dispatch
+                    SampleSetupResult sample = new SampleSetupResult(
+                            sampleNameField.getText(),
+                            projectsFolder != null ? new File(projectsFolder) : null,
+                            modality,
+                            null, // objective (not needed for single-point)
+                            null  // detector
+                    );
+
                     dispatch(
                             mc,
                             sample,
@@ -265,12 +333,10 @@ public class SinglePointAcquisitionController {
         return future;
     }
 
-    /**
-     * Validate user selections. Returns an error string to display, or null when valid.
-     *
-     * <p>Combined Z+T is rejected until the server-side single_point.py path lands.
-     */
-    private static String validate(boolean zEnabled, boolean tEnabled, String outputFolder) {
+    private static String validate(String sampleName, boolean zEnabled, boolean tEnabled, String outputFolder) {
+        if (sampleName == null || sampleName.trim().isEmpty()) {
+            return "Please enter a sample name.";
+        }
         if (!zEnabled && !tEnabled) {
             return "Enable at least one of Z-stack or Time-lapse.";
         }
@@ -285,11 +351,10 @@ public class SinglePointAcquisitionController {
     }
 
     /**
-     * Dispatch to the existing socket methods on a background thread. The new builder
-     * fields ({@code outputFormat}, {@code .timeLapse(...)}) are plumbed through the
-     * builder but the legacy {@code startZStack}/{@code startTimeLapse} methods are
-     * still used for wire transport -- the server will honor the per-command defaults
-     * until the unified ACQUIRE path is adopted.
+     * Dispatch acquisition on a background thread.
+     *
+     * <p>Fix #5: Stops live camera streaming before acquisition (JAI camera
+     * properties cannot be changed during streaming) and logs completion.
      */
     private static void dispatch(
             MicroscopeController mc,
@@ -312,17 +377,19 @@ public class SinglePointAcquisitionController {
 
         logger.info(
                 "Single-point dispatch: modality={}, z={}[{}..{} step {}], t=[{}pts, {}s], outFmt={}",
-                modality,
-                zEnabled,
-                zStart,
-                zEnd,
-                zStep,
-                timepoints,
-                intervalSec,
-                outputFormat);
+                modality, zEnabled, zStart, zEnd, zStep, timepoints, intervalSec, outputFormat);
 
         Thread worker = new Thread(
                 () -> {
+                    // Fix #5: Stop live streaming before acquisition -- JAI camera
+                    // properties cannot be changed during streaming
+                    try {
+                        mc.getSocketClient().stopContinuousAcquisition();
+                        logger.info("Stopped live streaming for single-point acquisition");
+                    } catch (Exception e) {
+                        logger.debug("Could not stop live mode (may not be running): {}", e.getMessage());
+                    }
+
                     try {
                         String response;
                         if (zEnabled) {
@@ -337,7 +404,8 @@ public class SinglePointAcquisitionController {
                                             wbMode,
                                             configPath,
                                             null,
-                                            null);
+                                            null,
+                                            zProjection);
                         } else {
                             response = mc.getSocketClient()
                                     .startTimeLapse(
@@ -352,8 +420,17 @@ public class SinglePointAcquisitionController {
                                             null);
                         }
                         logger.info("Single-point acquisition complete: {}", response);
+
+                        Platform.runLater(() ->
+                                Dialogs.showInfoNotification(
+                                        "Single-Point Acquisition",
+                                        "Acquisition complete. Output: " + outputFolder));
                     } catch (Exception ex) {
                         logger.error("Single-point acquisition failed: {}", ex.getMessage(), ex);
+                        Platform.runLater(() ->
+                                Dialogs.showErrorNotification(
+                                        "Single-Point Acquisition",
+                                        "Acquisition failed: " + ex.getMessage()));
                     } finally {
                         future.complete(null);
                     }
@@ -361,14 +438,5 @@ public class SinglePointAcquisitionController {
                 "SinglePoint-Acquire");
         worker.setDaemon(true);
         worker.start();
-    }
-
-    private static String defaultOutputFolder(SampleSetupResult sample) {
-        File projectsFolder = sample.projectsFolder();
-        String sampleName = sample.sampleName();
-        if (projectsFolder != null && sampleName != null && !sampleName.isEmpty()) {
-            return new File(new File(projectsFolder, sampleName), "singlepoint").getAbsolutePath();
-        }
-        return "";
     }
 }
