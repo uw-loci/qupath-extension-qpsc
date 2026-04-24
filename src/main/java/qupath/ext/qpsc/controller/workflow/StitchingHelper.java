@@ -1288,11 +1288,11 @@ public class StitchingHelper {
             if (transform == null) {
                 return;
             }
-            // Key the alignment by the on-disk file name (no directory). This
-            // matches QPProjectFunctions.getActualImageFileName which is what
-            // StageControlPanel.initializeCentroidButton passes to
-            // AffineTransformManager.loadSlideAlignment.
-            String alignmentKey = importedFile.getName();
+            // Key the alignment by the file name WITHOUT extension. This
+            // matches QPProjectFunctions.getActualImageFileName (which calls
+            // GeneralTools.stripExtension) and what AlignmentHelper /
+            // StageControlPanel use for lookup via loadSlideAlignment.
+            String alignmentKey = qupath.lib.common.GeneralTools.stripExtension(importedFile.getName());
             String modality = metadata.modality != null ? metadata.modality : "BoundingBox";
             AffineTransformManager.saveSlideAlignment(project, alignmentKey, modality, transform, null);
             logger.info(
