@@ -1271,18 +1271,44 @@ public class StitchingHelper {
         try {
             int widthPx;
             int heightPx;
+            double pixelSizeUm;
             // Prefer reading pixel dimensions from the actual stitched file so
             // the transform reflects any rounding the tile grid introduced.
             try (qupath.lib.images.servers.ImageServer<java.awt.image.BufferedImage> server =
                     qupath.lib.images.servers.ImageServers.buildServer(importedFile.toURI())) {
                 widthPx = server.getWidth();
                 heightPx = server.getHeight();
+                pixelSizeUm = server.getPixelCalibration().getAveragedPixelSizeMicrons();
             }
+            // The stage bounds from metadata are the ANNOTATION bounds, but the
+            // stitched image extends half a camera FOV beyond them in each direction
+            // (TilingUtilities centers the first tile on the annotation edge).
+            // Compute the actual image extent and adjust the origin accordingly.
+            double imageExtentX = widthPx * pixelSizeUm;
+            double imageExtentY = heightPx * pixelSizeUm;
+            double annotExtentX = metadata.stageBoundsX2Um - metadata.stageBoundsX1Um;
+            double annotExtentY = metadata.stageBoundsY2Um - metadata.stageBoundsY1Um;
+            double halfFovX = (imageExtentX - annotExtentX) / 2.0;
+            double halfFovY = (imageExtentY - annotExtentY) / 2.0;
+
+            // Adjust bounds to reflect the actual image origin (half FOV before annotation edge)
+            double imgX1 = metadata.stageBoundsX1Um - halfFovX;
+            double imgY1 = metadata.stageBoundsY1Um - halfFovY;
+            double imgX2 = metadata.stageBoundsX2Um + halfFovX;
+            double imgY2 = metadata.stageBoundsY2Um + halfFovY;
+
+            logger.info("Stage bounds adjustment: annotation ({},{}) -> ({},{}), "
+                    + "image ({},{}) -> ({},{}) (halfFOV={},{})",
+                    String.format("%.1f", metadata.stageBoundsX1Um),
+                    String.format("%.1f", metadata.stageBoundsY1Um),
+                    String.format("%.1f", metadata.stageBoundsX2Um),
+                    String.format("%.1f", metadata.stageBoundsY2Um),
+                    String.format("%.1f", imgX1), String.format("%.1f", imgY1),
+                    String.format("%.1f", imgX2), String.format("%.1f", imgY2),
+                    String.format("%.1f", halfFovX), String.format("%.1f", halfFovY));
+
             AffineTransform transform = AffineTransformManager.buildTransformFromStageBounds(
-                    metadata.stageBoundsX1Um,
-                    metadata.stageBoundsY1Um,
-                    metadata.stageBoundsX2Um,
-                    metadata.stageBoundsY2Um,
+                    imgX1, imgY1, imgX2, imgY2,
                     widthPx,
                     heightPx);
             if (transform == null) {
