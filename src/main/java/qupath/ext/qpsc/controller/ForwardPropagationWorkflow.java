@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
@@ -543,17 +544,21 @@ public class ForwardPropagationWorkflow {
         // But the tile grid starts half a FOV before the annotation edge (TilingUtilities
         // line 99: startX = minX - frameWidth/2). Correct the offset to match the
         // actual image origin.
+        //
+        // Resolve FOV from (in priority order):
+        //   1. Per-image metadata (fov_x_um / fov_y_um) -- always correct
+        //   2. Config file (modality + objective + detector from metadata) -- works offline
+        //   3. Live microscope connection -- fallback if nothing else available
         double halfFovX = 0;
         double halfFovY = 0;
-        try {
-            MicroscopeController mc = MicroscopeController.getInstance();
-            if (mc != null && mc.isConnected()) {
-                double[] fov = mc.getCameraFOV();
-                halfFovX = fov[0] / 2.0;
-                halfFovY = fov[1] / 2.0;
-            }
-        } catch (Exception e) {
-            logger.debug("Could not get FOV for offset correction: {}", e.getMessage());
+        double[] fov = resolveFovForEntry(subEntry);
+        if (fov != null) {
+            halfFovX = fov[0] / 2.0;
+            halfFovY = fov[1] / 2.0;
+        } else {
+            logger.warn("Could not determine FOV for sub-image '{}'. "
+                    + "Offset correction will be skipped -- propagated objects may be shifted by half a FOV.",
+                    subEntry.getImageName());
         }
 
         double correctedOffsetX = xyOffset[0] - halfFovX;
@@ -624,18 +629,16 @@ public class ForwardPropagationWorkflow {
         int baseWidth = baseData.getServer().getWidth();
         int baseHeight = baseData.getServer().getHeight();
 
-        // Apply same half-FOV correction as forward propagation
+        // Apply same half-FOV correction as forward propagation (see resolveFovForEntry)
         double halfFovX = 0;
         double halfFovY = 0;
-        try {
-            MicroscopeController mc = MicroscopeController.getInstance();
-            if (mc != null && mc.isConnected()) {
-                double[] fov = mc.getCameraFOV();
-                halfFovX = fov[0] / 2.0;
-                halfFovY = fov[1] / 2.0;
-            }
-        } catch (Exception e) {
-            logger.debug("Could not get FOV for offset correction: {}", e.getMessage());
+        double[] fov = resolveFovForEntry(subEntry);
+        if (fov != null) {
+            halfFovX = fov[0] / 2.0;
+            halfFovY = fov[1] / 2.0;
+        } else {
+            logger.warn("Could not determine FOV for sub-image '{}'. "
+                    + "Offset correction will be skipped.", subEntry.getImageName());
         }
         double correctedOffsetX = xyOffset[0] - halfFovX;
         double correctedOffsetY = xyOffset[1] - halfFovY;
@@ -772,17 +775,21 @@ public class ForwardPropagationWorkflow {
      * @return AffineTransform mapping sub-image pixels to stage microns
      */
     public static AffineTransform buildSubToStageTransform(double subPixelSize, double[] xyOffset) {
+        return buildSubToStageTransform(subPixelSize, xyOffset, (ProjectImageEntry<BufferedImage>) null);
+    }
+
+    /**
+     * Overload that resolves FOV from the sub-image entry metadata/config,
+     * enabling offline use without a microscope connection.
+     */
+    public static AffineTransform buildSubToStageTransform(
+            double subPixelSize, double[] xyOffset, ProjectImageEntry<BufferedImage> subEntry) {
         double halfFovX = 0;
         double halfFovY = 0;
-        try {
-            MicroscopeController mc = MicroscopeController.getInstance();
-            if (mc != null && mc.isConnected()) {
-                double[] fov = mc.getCameraFOV();
-                halfFovX = fov[0] / 2.0;
-                halfFovY = fov[1] / 2.0;
-            }
-        } catch (Exception e) {
-            logger.debug("Could not get FOV for offset correction: {}", e.getMessage());
+        double[] fov = resolveFovForEntry(subEntry);
+        if (fov != null) {
+            halfFovX = fov[0] / 2.0;
+            halfFovY = fov[1] / 2.0;
         }
         double correctedX = xyOffset[0] - halfFovX;
         double correctedY = xyOffset[1] - halfFovY;
@@ -806,5 +813,77 @@ public class ForwardPropagationWorkflow {
             flip.scale(1, -1);
         }
         return flip;
+    }
+
+    /**
+     * Resolve the camera field of view for a project image entry.
+     *
+     * <p>Tries three sources in priority order:
+     * <ol>
+     *   <li>Per-image metadata ({@code fov_x_um}, {@code fov_y_um}) -- always correct</li>
+     *   <li>Config file via modality + objective + detector from metadata -- works offline</li>
+     *   <li>Live microscope connection -- fallback for legacy images without metadata</li>
+     * </ol>
+     *
+     * @param entry The project image entry (may be null)
+     * @return [fovX, fovY] in microns, or null if unavailable
+     */
+    private static double[] resolveFovForEntry(ProjectImageEntry<BufferedImage> entry) {
+        // Source 1: per-image metadata (best -- recorded at acquisition time)
+        if (entry != null) {
+            Map<String, String> meta = entry.getMetadata();
+            String fxStr = meta.get(ImageMetadataManager.FOV_X_UM);
+            String fyStr = meta.get(ImageMetadataManager.FOV_Y_UM);
+            if (fxStr != null && fyStr != null) {
+                try {
+                    double fx = Double.parseDouble(fxStr);
+                    double fy = Double.parseDouble(fyStr);
+                    if (fx > 0 && fy > 0) {
+                        logger.debug("FOV from metadata: {}x{} um", fx, fy);
+                        return new double[]{fx, fy};
+                    }
+                } catch (NumberFormatException e) {
+                    logger.debug("Invalid FOV metadata: {}, {}", fxStr, fyStr);
+                }
+            }
+        }
+
+        // Source 2: config file (modality + objective + detector from metadata)
+        if (entry != null) {
+            Map<String, String> meta = entry.getMetadata();
+            String modality = meta.get(ImageMetadataManager.MODALITY);
+            String objective = meta.get(ImageMetadataManager.OBJECTIVE);
+            String detector = meta.get(ImageMetadataManager.DETECTOR_ID);
+            if (modality != null && objective != null && detector != null) {
+                try {
+                    MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+                    if (mgr == null) throw new IllegalStateException("Config not loaded");
+                    double[] fov = mgr.getCameraFOV(modality, objective, detector);
+                    if (fov != null && fov[0] > 0 && fov[1] > 0) {
+                        logger.debug("FOV from config: {}x{} um (modality={}, obj={}, det={})",
+                                fov[0], fov[1], modality, objective, detector);
+                        return fov;
+                    }
+                } catch (Exception e) {
+                    logger.debug("Could not get FOV from config: {}", e.getMessage());
+                }
+            }
+        }
+
+        // Source 3: live microscope (legacy fallback)
+        try {
+            MicroscopeController mc = MicroscopeController.getInstance();
+            if (mc != null && mc.isConnected()) {
+                double[] fov = mc.getCameraFOV();
+                if (fov != null && fov[0] > 0 && fov[1] > 0) {
+                    logger.debug("FOV from live microscope: {}x{} um", fov[0], fov[1]);
+                    return fov;
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not get FOV from microscope: {}", e.getMessage());
+        }
+
+        return null;
     }
 }

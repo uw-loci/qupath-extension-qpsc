@@ -55,6 +55,11 @@ public class ImageMetadataManager {
     // Detector that captured this image (per-detector flip, WB lookup, etc.)
     public static final String DETECTOR_ID = "detector_id";
 
+    // Camera field of view at acquisition time (microns). Needed for
+    // coordinate propagation when the microscope is not connected.
+    public static final String FOV_X_UM = "fov_x_um";
+    public static final String FOV_Y_UM = "fov_y_um";
+
     // PPM analysis metadata
     public static final String PPM_CALIBRATION = "ppm_calibration";
 

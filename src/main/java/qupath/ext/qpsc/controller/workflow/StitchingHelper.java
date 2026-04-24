@@ -801,7 +801,9 @@ public class StitchingHelper {
                 stageBoundsX1Um,
                 stageBoundsY1Um,
                 stageBoundsX2Um,
-                stageBoundsY2Um);
+                stageBoundsY2Um,
+                null, // fovXUm -- not available in region path
+                null);
     }
 
     /**

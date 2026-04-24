@@ -36,6 +36,11 @@ public class StitchingMetadata {
     public final Double stageBoundsX2Um;
     public final Double stageBoundsY2Um;
 
+    // Camera field of view at acquisition time. Stored per-image so coordinate
+    // propagation works offline (different objective or no microscope connection).
+    public final Double fovXUm;
+    public final Double fovYUm;
+
     /**
      * Full constructor with all metadata fields.
      */
@@ -54,7 +59,9 @@ public class StitchingMetadata {
             Double stageBoundsX1Um,
             Double stageBoundsY1Um,
             Double stageBoundsX2Um,
-            Double stageBoundsY2Um) {
+            Double stageBoundsY2Um,
+            Double fovXUm,
+            Double fovYUm) {
         this.parentEntry = parentEntry;
         this.xOffset = xOffset;
         this.yOffset = yOffset;
@@ -70,6 +77,8 @@ public class StitchingMetadata {
         this.stageBoundsY1Um = stageBoundsY1Um;
         this.stageBoundsX2Um = stageBoundsX2Um;
         this.stageBoundsY2Um = stageBoundsY2Um;
+        this.fovXUm = fovXUm;
+        this.fovYUm = fovYUm;
     }
 
     /**
@@ -99,10 +108,8 @@ public class StitchingMetadata {
                 angle,
                 annotationName,
                 imageIndex,
-                null,
-                null,
-                null,
-                null);
+                null, null, null, null,
+                null, null);
     }
 
     /**
