@@ -15,7 +15,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -625,7 +624,7 @@ public class StitchingHelper {
                                     && !stitchedImages.isEmpty()) {
                                 // Use LZW for TIFF (ZARR compression types don't apply to TIFF)
                                 queueBackgroundZarrToTiffConversion(
-                                        stitchedImages, project, gui, "LZW", annotationName);
+                                        stitchedImages, "LZW", annotationName);
                             }
 
                         } catch (Exception e) {
@@ -1684,27 +1683,24 @@ public class StitchingHelper {
      * Queue background conversion of ZARR stitched images to OME-TIFF.
      *
      * <p>Runs on a daemon thread so it does not block the user. Each ZARR
-     * directory is opened as an ImageServer, written to OME-TIFF via
-     * {@link PyramidImageWriter}, then the project entry is updated to point
-     * to the TIFF and the ZARR intermediate is deleted.
+     * directory is opened as an ImageServer and written to OME-TIFF via
+     * {@link PyramidImageWriter}. The TIFF file is placed alongside the ZARR
+     * (same directory, same base name, .ome.tif extension).
      *
-     * <p>If conversion fails for any file, the ZARR is kept and a warning is
-     * logged. The user still has a working image either way.
+     * <p>This method does NOT modify the project or delete the ZARR.
+     * The project continues to use the ZARR as the working image.
+     * Use "Make Project Portable" (Extensions > QP Scope > Utilities) to
+     * swap project entries from ZARR to TIFF and clean up intermediates.
      *
      * @param zarrPaths   Absolute paths to .ome.zarr directories produced by stitching
-     * @param project     QuPath project (for entry replacement)
-     * @param gui         QuPath GUI (for project sync on FX thread)
      * @param compression TIFF compression type (e.g. "LZW", "J2K")
      * @param label       Human-readable label for logging (e.g. annotation name)
      */
     private static void queueBackgroundZarrToTiffConversion(
             List<String> zarrPaths,
-            Project<BufferedImage> project,
-            QuPathGUI gui,
             String compression,
             String label) {
 
-        // Filter to only .ome.zarr paths (other formats don't need conversion)
         List<String> toConvert = zarrPaths.stream()
                 .filter(p -> p.endsWith(".ome.zarr"))
                 .toList();
@@ -1727,7 +1723,7 @@ public class StitchingHelper {
 
             for (String zarrPath : toConvert) {
                 try {
-                    boolean ok = convertSingleZarrToTiff(zarrPath, project, gui, compression);
+                    boolean ok = convertSingleZarrToTiff(zarrPath, compression);
                     if (ok) succeeded++;
                     else failed++;
                 } catch (Exception e) {
@@ -1743,25 +1739,26 @@ public class StitchingHelper {
                     succeeded, toConvert.size(), failed, elapsed / 60, elapsed % 60);
 
             if (failed > 0) {
-                logger.warn("  {} ZARR files were kept (conversion failed). "
-                        + "They remain usable in QuPath but are directory-based.", failed);
+                logger.warn("  {} ZARR files had conversion failures. "
+                        + "ZARR images remain usable in QuPath.", failed);
             }
 
-            // Notify user on FX thread
             final int s = succeeded;
             final int f = failed;
             final long e = elapsed;
             Platform.runLater(() -> {
+                String msg;
                 if (f == 0) {
+                    msg = String.format(
+                            "Background TIFF conversion complete: %d files (%dm %ds). "
+                            + "Use 'Make Project Portable' to finalize.", s, e / 60, e % 60);
                     qupath.fx.dialogs.Dialogs.showInfoNotification(
-                            "ZARR to TIFF Conversion",
-                            String.format("Background conversion complete: %d files converted to OME-TIFF (%dm %ds).",
-                                    s, e / 60, e % 60));
+                            "ZARR to TIFF Conversion", msg);
                 } else {
-                    UIFunctions.notifyUserOfError(
-                            String.format("Background conversion: %d/%d succeeded, %d failed (ZARR kept). "
-                                    + "Check the log for details.", s, s + f, f),
-                            "ZARR to TIFF Conversion");
+                    msg = String.format(
+                            "Background conversion: %d/%d succeeded, %d failed. "
+                            + "Check log for details.", s, s + f, f);
+                    UIFunctions.notifyUserOfError(msg, "ZARR to TIFF Conversion");
                 }
             });
         }, "zarr-to-tiff-converter");
@@ -1771,41 +1768,38 @@ public class StitchingHelper {
     }
 
     /**
-     * Convert a single .ome.zarr directory to .ome.tif, replace the project
-     * entry, and delete the ZARR intermediate.
+     * Convert a single .ome.zarr directory to .ome.tif alongside it.
+     * Does NOT modify the project or delete the ZARR.
      *
-     * @return true if conversion succeeded
+     * @return true if the TIFF was written successfully
      */
-    private static boolean convertSingleZarrToTiff(
-            String zarrPath,
-            Project<BufferedImage> project,
-            QuPathGUI gui,
-            String compression) {
-
+    private static boolean convertSingleZarrToTiff(String zarrPath, String compression) {
         Path zarr = Path.of(zarrPath);
         if (!Files.isDirectory(zarr)) {
             logger.warn("ZARR path is not a directory, skipping: {}", zarrPath);
             return false;
         }
 
-        // Derive TIFF path: replace .ome.zarr with .ome.tif
-        String tiffPath = zarrPath.replaceAll("\\.ome\\.zarr$", ".ome.tif");
-        Path tiff = Path.of(tiffPath);
-        Path tiffWriting = Path.of(tiffPath + ".writing");
+        String tiffPathStr = zarrPath.replaceAll("\\.ome\\.zarr$", ".ome.tif");
+        Path tiff = Path.of(tiffPathStr);
+
+        // Skip if TIFF already exists (idempotent)
+        if (Files.exists(tiff)) {
+            logger.info("TIFF already exists, skipping conversion: {}", tiff.getFileName());
+            return true;
+        }
 
         logger.info("Converting ZARR -> TIFF: {}", zarr.getFileName());
         long start = System.currentTimeMillis();
 
         try {
-            // Open the ZARR as a QuPath ImageServer
             var server = qupath.lib.images.servers.ImageServers.buildServer(zarr.toUri());
-
             try {
-                // Write to temp file first (atomic rename on success)
+                String baseName = zarr.getFileName().toString().replace(".ome.zarr", "");
                 String result = PyramidImageWriter.write(
                         server,
-                        tiffWriting.getParent().toString(),
-                        tiffWriting.getFileName().toString().replace(".ome.tif.writing", ""),
+                        zarr.getParent().toString(),
+                        baseName,
                         compression,
                         1.0,
                         StitchingConfig.OutputFormat.OME_TIFF);
@@ -1818,134 +1812,19 @@ public class StitchingHelper {
                 server.close();
             }
 
-            // Rename .writing to final name
-            Path writtenFile = Path.of(tiffWriting.getParent().toString(),
-                    zarr.getFileName().toString().replace(".ome.zarr", ".ome.tif"));
-            if (Files.exists(writtenFile)) {
-                if (Files.exists(tiff) && !tiff.equals(writtenFile)) {
-                    Files.delete(tiff);
-                }
-                if (!tiff.equals(writtenFile)) {
-                    Files.move(writtenFile, tiff);
-                }
-            }
-
             long elapsed = (System.currentTimeMillis() - start) / 1000;
             long sizeMB = Files.size(tiff) / (1024 * 1024);
             logger.info("  Converted {} -> {} ({} MB, {}m {}s)",
                     zarr.getFileName(), tiff.getFileName(), sizeMB, elapsed / 60, elapsed % 60);
-
-            // Replace the project entry: find the entry pointing to the ZARR, update to TIFF
-            replaceProjectEntry(project, gui, zarr, tiff);
-
-            // Delete the ZARR intermediate directory
-            deleteZarrDirectory(zarr);
-
             return true;
 
         } catch (Exception e) {
             logger.error("Failed to convert {} to TIFF: {}", zarr.getFileName(), e.getMessage(), e);
             // Clean up partial TIFF if it exists
             try {
-                if (Files.exists(tiffWriting)) Files.delete(tiffWriting);
+                if (Files.exists(tiff)) Files.delete(tiff);
             } catch (IOException ignored) {}
             return false;
-        }
-    }
-
-    /**
-     * Replace a project entry that points to a ZARR directory with one
-     * pointing to the equivalent TIFF file.
-     */
-    private static void replaceProjectEntry(
-            Project<BufferedImage> project,
-            QuPathGUI gui,
-            Path zarrPath,
-            Path tiffPath) {
-
-        String zarrUri = zarrPath.toUri().toString();
-        String zarrName = zarrPath.getFileName().toString().replace(".ome.zarr", "");
-
-        // Find the project entry for this ZARR
-        ProjectImageEntry<BufferedImage> matchingEntry = null;
-        for (var entry : project.getImageList()) {
-            try {
-                String entryUri = entry.getURIs().iterator().next().toString();
-                if (entryUri.contains(zarrName) && entryUri.contains(".ome.zarr")) {
-                    matchingEntry = entry;
-                    break;
-                }
-            } catch (Exception e) {
-                // Skip entries with no URI
-            }
-        }
-
-        if (matchingEntry == null) {
-            logger.warn("Could not find project entry for ZARR: {}. "
-                    + "TIFF was created but project still points to ZARR.", zarrName);
-            return;
-        }
-
-        // Remove old ZARR entry and add new TIFF entry on FX thread
-        final ProjectImageEntry<BufferedImage> oldEntry = matchingEntry;
-        Platform.runLater(() -> {
-            try {
-                // Copy metadata from old entry
-                String entryName = oldEntry.getImageName();
-
-                // Remove old entry
-                project.removeImage(oldEntry, false);
-
-                // Add new TIFF entry
-                try (var tiffServer = qupath.lib.images.servers.ImageServers.buildServer(
-                        tiffPath.toUri())) {
-                    var newEntry = project.addImage(tiffServer.getBuilder());
-                    if (newEntry != null) {
-                        newEntry.setImageName(entryName);
-                        // Copy all metadata from old entry
-                        for (var key : oldEntry.getMetadataKeys()) {
-                            newEntry.putMetadataValue(key, oldEntry.getMetadataValue(key));
-                        }
-                        project.syncChanges();
-                        logger.info("  Replaced project entry: {} (ZARR -> TIFF)", entryName);
-                    }
-                }
-            } catch (Exception e) {
-                logger.error("Failed to replace project entry for {}: {}",
-                        zarrName, e.getMessage(), e);
-            }
-        });
-    }
-
-    /**
-     * Recursively delete a .ome.zarr directory and all its contents.
-     */
-    private static void deleteZarrDirectory(Path zarrDir) {
-        try {
-            if (!Files.isDirectory(zarrDir) || !zarrDir.toString().endsWith(".ome.zarr")) {
-                logger.warn("Refusing to delete non-ZARR path: {}", zarrDir);
-                return;
-            }
-
-            // Walk in reverse order (deepest first) to delete files then directories
-            try (Stream<Path> walk = Files.walk(zarrDir)) {
-                walk.sorted(java.util.Comparator.reverseOrder())
-                        .forEach(p -> {
-                            try {
-                                Files.delete(p);
-                            } catch (IOException e) {
-                                logger.warn("Could not delete {}: {}", p, e.getMessage());
-                            }
-                        });
-            }
-
-            if (!Files.exists(zarrDir)) {
-                logger.info("  Deleted ZARR intermediate: {}", zarrDir.getFileName());
-            } else {
-                logger.warn("  ZARR directory partially deleted (some files locked?): {}", zarrDir);
-            }
-        } catch (Exception e) {
-            logger.warn("Failed to delete ZARR directory {}: {}", zarrDir, e.getMessage());
         }
     }
 }

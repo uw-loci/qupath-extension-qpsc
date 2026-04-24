@@ -12,6 +12,7 @@ import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
+import qupath.ext.qpsc.controller.MakePortableWorkflow;
 import qupath.ext.qpsc.controller.QPScopeController;
 import qupath.ext.qpsc.controller.StackTimeLapseWorkflow;
 import qupath.ext.qpsc.modality.ModalityRegistry;
@@ -404,6 +405,15 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
+        // Make Project Portable (doesn't need microscope connection)
+        MenuItem makePortableOption = new MenuItem("Make Project Portable...");
+        setMenuItemTooltip(
+                makePortableOption,
+                "Swap ZARR-backed images to single-file OME-TIFF for easy copying. "
+                        + "Preserves all annotations, metadata, and image settings. "
+                        + "Requires background TIFF conversion to be complete (OME_TIFF_VIA_ZARR mode).");
+        makePortableOption.setOnAction(e -> MakePortableWorkflow.run(qupath));
+
         // Setup Wizard (always available -- guides first-time configuration)
         MenuItem setupWizardOption = new MenuItem(res.getString("menu.setupWizard"));
         setMenuItemTooltip(
@@ -427,6 +437,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         new SeparatorMenuItem(),
                         propagationManagerOption,
                         stitchingRecoveryOption,
+                        makePortableOption,
                         new SeparatorMenuItem(),
                         setupWizardOption,
                         serverConnectionOption);
