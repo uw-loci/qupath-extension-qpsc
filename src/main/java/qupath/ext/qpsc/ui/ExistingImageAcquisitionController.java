@@ -1605,9 +1605,17 @@ public class ExistingImageAcquisitionController {
                     logger.info("User selected AF strategy override: {}", afStrategyProtocol);
                 }
 
-                // Get white balance settings from ComboBox
-                String wbModeDisplay = wbModeComboBox != null ? wbModeComboBox.getValue() : "Per-angle (PPM)";
-                String wbMode = WbMode.fromDisplayName(wbModeDisplay).getProtocolName();
+                // Get white balance settings from ComboBox.
+                // Force "off" when the WB section is hidden (non-JAI cameras,
+                // non-rotation modalities) to prevent stale per_angle defaults
+                // from being sent for brightfield acquisitions.
+                String wbMode;
+                if (whiteBalanceSection != null && !whiteBalanceSection.isVisible()) {
+                    wbMode = "off";
+                } else {
+                    String wbModeDisplay = wbModeComboBox != null ? wbModeComboBox.getValue() : "Off";
+                    wbMode = WbMode.fromDisplayName(wbModeDisplay).getProtocolName();
+                }
                 boolean enableWhiteBalance = !"off".equals(wbMode);
                 boolean perAngleWhiteBalance = "per_angle".equals(wbMode);
 

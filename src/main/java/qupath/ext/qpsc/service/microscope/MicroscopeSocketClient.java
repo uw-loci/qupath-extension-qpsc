@@ -13,6 +13,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import javafx.application.Platform;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.ReadOnlyBooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
@@ -78,6 +82,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
     private final AtomicBoolean connected = new AtomicBoolean(false);
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
     private final AtomicLong lastActivityTime = new AtomicLong(System.currentTimeMillis());
+
+    // Shared source-of-truth for camera continuous-acquisition state. Any
+    // caller that successfully issues STRTSEQ/STOPSEQ updates this property;
+    // the Live Viewer button and any future UI can bind to it without keeping
+    // a separate local flag that drifts out of sync. Mutated on the FX thread
+    // because JavaFX properties are not thread-safe by default.
+    private final BooleanProperty streamingActiveProperty =
+            new SimpleBooleanProperty(this, "streamingActive", false);
 
     // Progress monitoring state - tracks last time progress was made or significant event occurred
     private final AtomicLong lastProgressUpdateTime = new AtomicLong(System.currentTimeMillis());
@@ -5239,6 +5251,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throw new IOException("Failed to start continuous acquisition: " + responseStr);
         }
         logger.info("Continuous sequence acquisition started (core-level)");
+        setStreamingActive(true);
     }
 
     /**
@@ -5254,6 +5267,39 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throw new IOException("Failed to stop continuous acquisition: " + responseStr);
         }
         logger.info("Continuous sequence acquisition stopped (core-level)");
+        setStreamingActive(false);
+    }
+
+    /**
+     * Observable camera continuous-acquisition state, driven by server ACKs
+     * to STRTSEQ/STOPSEQ. UI components should bind to this rather than
+     * tracking a local boolean -- any workflow that starts/stops streaming
+     * through this client will update the property automatically.
+     */
+    public ReadOnlyBooleanProperty streamingActiveProperty() {
+        return streamingActiveProperty;
+    }
+
+    /**
+     * Returns the most recent known streaming state. Driven by ACKs to
+     * STRTSEQ/STOPSEQ; may briefly lag the server if something other than
+     * this client toggles streaming.
+     */
+    public boolean isStreamingActive() {
+        return streamingActiveProperty.get();
+    }
+
+    /**
+     * Internal setter that marshals the update onto the FX thread because
+     * JavaFX properties are not thread-safe. All streaming state transitions
+     * should go through this method so listeners fire consistently.
+     */
+    private void setStreamingActive(boolean active) {
+        if (Platform.isFxApplicationThread()) {
+            streamingActiveProperty.set(active);
+        } else {
+            Platform.runLater(() -> streamingActiveProperty.set(active));
+        }
     }
 
     /**

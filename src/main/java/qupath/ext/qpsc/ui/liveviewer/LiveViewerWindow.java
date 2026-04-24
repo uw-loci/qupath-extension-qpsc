@@ -168,6 +168,35 @@ public class LiveViewerWindow {
     private LiveViewerWindow() {
         buildUI();
         lockManager = new LiveViewerLockManager(this::applyLock, this::releaseLock);
+
+        // Structural state sync: bind the Live button's visual state to the
+        // MicroscopeSocketClient's streamingActiveProperty. Any workflow that
+        // successfully issues STRTSEQ/STOPSEQ (including ones that bypass
+        // this window and call the socket directly) updates the property, so
+        // the button cannot drift from the actual server streaming state.
+        MicroscopeController controller = MicroscopeController.getInstance();
+        if (controller != null && controller.getSocketClient() != null) {
+            controller.getSocketClient().streamingActiveProperty().addListener(
+                    (obs, wasActive, nowActive) -> Platform.runLater(
+                            () -> syncLiveStateFromServer(nowActive != null && nowActive)));
+        }
+    }
+
+    /**
+     * Reconcile local liveActive + button visuals with the authoritative
+     * streaming state reported by the socket client. Called from the
+     * streamingActiveProperty listener so any path that stops/starts
+     * streaming keeps the UI honest.
+     */
+    private void syncLiveStateFromServer(boolean nowActive) {
+        if (liveActive == nowActive) {
+            return;
+        }
+        liveActive = nowActive;
+        updateLiveButtonStyle(nowActive);
+        updateStatus(nowActive ? "Live ON" : "Live OFF");
+        logger.info("Live button synced to server streaming state: {}",
+                nowActive ? "ACTIVE" : "INACTIVE");
     }
 
     /**
