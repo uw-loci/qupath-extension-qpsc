@@ -137,22 +137,43 @@ newEntry.setImageName(outFile.getFileName().toString())
 def newImageData = newEntry.readImageData()
 def newHier = newImageData.getHierarchy()
 
-AffineTransform xform = AffineTransform.getScaleInstance(scale, scale)
-List<PathObject> scaled = []
-for (PathObject anno : srcHier.getAnnotationObjects()) {
-    PathObject copy = PathObjectTools.transformObject(anno, xform, true, true)
-    if (copy != null)
-        scaled.add(copy)
-}
-if (!scaled.isEmpty()) {
-    newHier.addObjects(scaled)
-    newHier.fireHierarchyChangedEvent(newHier.getRootObject())
-}
-
-// Propagate image type so downstream analysis doesn't need a re-classify
+// Propagate image type FIRST so the saved data has the correct type
 newImageData.setImageType(imageData.getImageType())
 
+// Collect TOP-LEVEL annotations only (children of the root). transformObject with
+// copyChildObjects=true will recursively copy any nested children, so iterating
+// getAnnotationObjects() (which is flattened) would otherwise double-add children.
+List<PathObject> srcTopLevel = srcHier.getRootObject().getChildObjects()
+        .findAll { it != null && it.isAnnotation() }
+
+print "Source has ${srcHier.getAnnotationObjects().size()} total annotation(s) " +
+      "(${srcTopLevel.size()} top-level)."
+
+AffineTransform xform = AffineTransform.getScaleInstance(scale, scale)
+List<PathObject> scaled = new ArrayList<>()
+for (PathObject anno : srcTopLevel) {
+    try {
+        PathObject copy = PathObjectTools.transformObject(anno, xform, true, true)
+        if (copy != null && copy.getROI() != null)
+            scaled.add(copy)
+        else
+            print "  skipped annotation '${anno.getDisplayedName()}' (null copy or null ROI)"
+    } catch (Exception e) {
+        print "  failed to scale annotation '${anno.getDisplayedName()}': ${e.getMessage()}"
+    }
+}
+
+if (!scaled.isEmpty()) {
+    newHier.addObjects(scaled)
+}
+
+print "newHier now has ${newHier.getAnnotationObjects().size()} annotation(s) before save."
+
 newEntry.saveImageData(newImageData)
+
+// Verify by re-reading from disk
+def verifyData = newEntry.readImageData()
+print "newHier has ${verifyData.getHierarchy().getAnnotationObjects().size()} annotation(s) after re-read."
 
 // ---------- persist + refresh ----------
 project.syncChanges()
