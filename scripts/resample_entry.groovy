@@ -133,47 +133,57 @@ ImageServer<BufferedImage> newServer = ImageServers.buildServer(outFile.toUri().
 ProjectImageEntry<BufferedImage> newEntry = project.addImage(newServer.getBuilder())
 newEntry.setImageName(outFile.getFileName().toString())
 
-// ---------- copy + scale annotations ----------
+// ---------- persist source annotations FIRST ----------
+// QPSC pattern (see ImageFlipHelper line 194-215): the source's live in-memory hierarchy
+// may contain annotations that haven't been saved to .qpdata yet. Save the source entry
+// before reading from it so transferred objects definitely include any unsaved drawings.
+try {
+    srcEntry.saveImageData(imageData)
+    project.syncChanges()
+    print "Saved source entry to persist any unsaved annotations."
+} catch (Exception e) {
+    print "Could not pre-save source entry (${e.getMessage()}). Continuing with live hierarchy."
+}
+
+// ---------- copy + scale annotations (mirrors QPSC TransformationFunctions.transformHierarchy) ----------
 def newImageData = newEntry.readImageData()
 def newHier = newImageData.getHierarchy()
 
 // Propagate image type FIRST so the saved data has the correct type
 newImageData.setImageType(imageData.getImageType())
 
-// Collect TOP-LEVEL annotations only (children of the root). transformObject with
-// copyChildObjects=true will recursively copy any nested children, so iterating
-// getAnnotationObjects() (which is flattened) would otherwise double-add children.
-List<PathObject> srcTopLevel = srcHier.getRootObject().getChildObjects()
-        .findAll { it != null && it.isAnnotation() }
-
-print "Source has ${srcHier.getAnnotationObjects().size()} total annotation(s) " +
-      "(${srcTopLevel.size()} top-level)."
-
 AffineTransform xform = AffineTransform.getScaleInstance(scale, scale)
-List<PathObject> scaled = new ArrayList<>()
-for (PathObject anno : srcTopLevel) {
+
+// Use getFlattenedObjectList(null) like QPSC does -- gets EVERYTHING, then filter root/null ROIs.
+// transformObject(obj, xform, true) with the 3-arg form matches the proven flip-duplicate path.
+Collection<PathObject> srcAll = srcHier.getFlattenedObjectList(null)
+List<PathObject> transformed = new ArrayList<>()
+for (PathObject obj : srcAll) {
+    if (obj == null || obj.isRootObject() || obj.getROI() == null)
+        continue
     try {
-        PathObject copy = PathObjectTools.transformObject(anno, xform, true, true)
-        if (copy != null && copy.getROI() != null)
-            scaled.add(copy)
-        else
-            print "  skipped annotation '${anno.getDisplayedName()}' (null copy or null ROI)"
+        PathObject copy = PathObjectTools.transformObject(obj, xform, true)
+        if (copy != null)
+            transformed.add(copy)
     } catch (Exception e) {
-        print "  failed to scale annotation '${anno.getDisplayedName()}': ${e.getMessage()}"
+        print "  failed to scale '${obj.getDisplayedName()}': ${e.getMessage()}"
     }
 }
 
-if (!scaled.isEmpty()) {
-    newHier.addObjects(scaled)
+print "Source flattened object count: ${srcAll.size()} (transferring ${transformed.size()})."
+
+if (!transformed.isEmpty()) {
+    newHier.addObjects(transformed)
 }
 
-print "newHier now has ${newHier.getAnnotationObjects().size()} annotation(s) before save."
+print "newHier object count before save: ${newHier.getFlattenedObjectList(null).size()}"
 
 newEntry.saveImageData(newImageData)
+project.syncChanges()
 
 // Verify by re-reading from disk
 def verifyData = newEntry.readImageData()
-print "newHier has ${verifyData.getHierarchy().getAnnotationObjects().size()} annotation(s) after re-read."
+print "newHier object count after re-read: ${verifyData.getHierarchy().getFlattenedObjectList(null).size()}"
 
 // ---------- persist + refresh ----------
 project.syncChanges()
@@ -185,6 +195,6 @@ try {
     // running from a non-GUI context -- project.syncChanges() is enough
 }
 
-print "Added project entry '${newEntry.getImageName()}' with ${scaled.size()} annotation(s) " +
+print "Added project entry '${newEntry.getImageName()}' with ${transformed.size()} object(s) " +
       "scaled by ${scale}."
 print "Done."
