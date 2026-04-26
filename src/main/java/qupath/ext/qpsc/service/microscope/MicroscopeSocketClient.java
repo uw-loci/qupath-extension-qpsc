@@ -950,16 +950,20 @@ public class MicroscopeSocketClient implements AutoCloseable {
     /**
      * Moves the stage to the specified Z position.
      *
+     * <p>Uses the <b>primary</b> socket so that Z movement (which blocks
+     * until hardware arrives) does not hold {@code auxSocketLock} and
+     * starve the Live Viewer frame poller.  During live viewing the
+     * primary socket is idle, so there is no contention.
+     *
      * @param z Target Z coordinate in microns
      * @throws IOException if communication fails
      */
     public void moveStageZ(double z) throws IOException {
-        // Use auxiliary socket for stage control operations
         ByteBuffer buffer = ByteBuffer.allocate(4);
         buffer.order(ByteOrder.BIG_ENDIAN);
         buffer.putFloat((float) z);
 
-        executeCommandOnAux(Command.MOVEZ, buffer.array(), 0);
+        executeCommand(Command.MOVEZ, buffer.array(), 0);
         logger.info("Moved stage to Z position: {}", z);
     }
 
@@ -1005,6 +1009,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * Sets the Z stage target position without waiting for the device to arrive.
      * The stage begins ramping toward the target immediately. Used by sweep focus.
      *
+     * <p>Uses the primary socket (same rationale as {@link #moveStageZ}).
+     *
      * @param z Target Z coordinate in microns
      * @throws IOException if communication fails
      */
@@ -1012,7 +1018,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         ByteBuffer buffer = ByteBuffer.allocate(4);
         buffer.order(ByteOrder.BIG_ENDIAN);
         buffer.putFloat((float) z);
-        executeCommandOnAux(Command.MOVZNW, buffer.array(), 0);
+        executeCommand(Command.MOVZNW, buffer.array(), 0);
         logger.debug("Non-blocking Z move to: {}", z);
     }
 

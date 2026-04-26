@@ -156,9 +156,9 @@ public class SweepFocusController {
                 socketClient.moveStageZ(z);
 
                 // Wait for a fresh frame that was captured AFTER the move.
-                // Without this, the same stale frame gets scored at every Z
-                // because moveStageZ monopolizes the aux socket, blocking
-                // the frame poller from fetching new frames.
+                // moveStageZ uses the primary socket so it no longer blocks
+                // the aux-socket frame poller, but we still need a frame
+                // taken at the new Z (not a pre-move stale frame).
                 FrameData f = waitForFreshFrame(preTs);
                 if (f == null) {
                     f = frameSupplier.get();
