@@ -732,7 +732,11 @@ public class CameraControlController {
                         controller.getSocketClient().setIllumination(power);
                         statusLabel.setText("Illumination set to " + power);
                         statusLabel.setStyle("-fx-text-fill: green;");
-                        refreshIllum.run();
+                        // Drive both the single-source row AND the multi-source
+                        // grid via the holder, which is wrapped further down to
+                        // do both refreshes together.
+                        Runnable r = illumRefreshHolder.get();
+                        if (r != null) r.run();
                     } catch (Exception ex) {
                         statusLabel.setText("Failed: " + ex.getMessage());
                         statusLabel.setStyle("-fx-text-fill: red;");
@@ -741,7 +745,68 @@ public class CameraControlController {
                 HBox illumRow = new HBox(8, new Label("Set intensity:"), illumField, illumSetBtn);
                 illumRow.setAlignment(Pos.CENTER_LEFT);
 
-                illumSection.getChildren().addAll(new Separator(), illumHeader, illumInfo, illumRow);
+                // Read-only multi-source status grid (Camera Control v2 phase 3b).
+                // GETCAP returns every illumination source declared in any modality;
+                // render one line per source so the user can see DiaLamp + Lumencor
+                // state without switching profiles. The Set row above still drives
+                // whichever source is currently active per the applied profile --
+                // independent per-device SET would need a new socket command.
+                VBox allSourcesBox = new VBox(2);
+                Label allSourcesHeader = new Label("All sources (read-only):");
+                allSourcesHeader.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+                allSourcesBox.getChildren().add(allSourcesHeader);
+
+                Runnable refreshAllSources = () -> {
+                    Thread t = new Thread(() -> {
+                        try {
+                            String selected = selectedProfileHolder[0];
+                            var cap = controller.getSocketClient()
+                                    .getCapabilities(selected == null ? "" : selected);
+                            if (cap.illumination == null || cap.illumination.isEmpty()) {
+                                Platform.runLater(() -> {
+                                    allSourcesBox.getChildren().retainAll(allSourcesHeader);
+                                    Label none = new Label("  (no sources reported)");
+                                    none.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
+                                    allSourcesBox.getChildren().add(none);
+                                });
+                                return;
+                            }
+                            Platform.runLater(() -> {
+                                allSourcesBox.getChildren().retainAll(allSourcesHeader);
+                                for (var src : cap.illumination) {
+                                    String txt = String.format(
+                                            "  %s: %.1f (range %.1f-%.1f) [%s]",
+                                            src.label != null ? src.label : src.device,
+                                            src.currentPower,
+                                            src.powerRange != null && src.powerRange.length >= 2
+                                                    ? src.powerRange[0] : 0.0,
+                                            src.powerRange != null && src.powerRange.length >= 2
+                                                    ? src.powerRange[1] : 0.0,
+                                            src.isOn ? "ON" : "OFF");
+                                    Label lbl = new Label(txt);
+                                    lbl.setStyle("-fx-font-size: 11px; -fx-text-fill: "
+                                            + (src.isOn ? "#0a7d28" : "#999999") + ";");
+                                    allSourcesBox.getChildren().add(lbl);
+                                }
+                            });
+                        } catch (Exception ex) {
+                            logger.debug("Multi-illum refresh failed: {}", ex.getMessage());
+                        }
+                    }, "CCC-AllIllum-Refresh");
+                    t.setDaemon(true);
+                    t.start();
+                };
+                // Wrap the existing single-source refresh so the multi-source
+                // grid stays in lock-step with profile changes / Set clicks.
+                Runnable wrappedRefreshIllum = () -> {
+                    refreshIllum.run();
+                    refreshAllSources.run();
+                };
+                illumRefreshHolder.set(wrappedRefreshIllum);
+                refreshAllSources.run();
+
+                illumSection.getChildren().addAll(
+                        new Separator(), illumHeader, illumInfo, illumRow, allSourcesBox);
             }
         } catch (Exception ex) {
             logger.debug("Could not load illumination info: {}", ex.getMessage());
