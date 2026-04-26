@@ -603,53 +603,61 @@ public class CameraControlController {
         }
 
         // --- Illumination Display Section ---
+        // The displayed device label reflects the modality of the currently-
+        // selected acquisition profile (Fluorescence -> Lumencor / SOLA, BF
+        // -> DiaLamp, etc.). The label refreshes on every profile combo
+        // change so the user always sees the device that profile-apply will
+        // touch. Fixes the 2026-04-26 report where switching to a
+        // Fluorescence profile still showed "DiaLamp" (the first modality's
+        // illumination in the YAML iteration order).
         VBox illumSection = new VBox(4);
+        // Holders so the refresh runnable defined here can be invoked later
+        // from the profile-combo listener.
+        final java.util.concurrent.atomic.AtomicReference<Runnable> illumRefreshHolder =
+                new java.util.concurrent.atomic.AtomicReference<>(() -> {});
+        // Holder for the currently-selected acquisition profile name; the
+        // profile combo, built later, writes into this so refreshIllum can
+        // resolve modality without forward-referencing the combo itself.
+        final String[] selectedProfileHolder = {null};
         try {
-            var illumResult = controller.getSocketClient().getIllumination();
-            if (illumResult.available()) {
+            var firstIllum = controller.getSocketClient().getIllumination();
+            if (firstIllum.available()) {
                 Label illumHeader = new Label("Illumination");
                 illumHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
-                String illumLabel = "Lamp";
-                try {
-                    var modalities = mgr.getConfigItem("modalities");
-                    if (modalities instanceof Map<?, ?> modMap) {
-                        for (Object modCfg : modMap.values()) {
-                            if (modCfg instanceof Map<?, ?> cfg) {
-                                Object illum = cfg.get("illumination");
-                                if (illum instanceof Map<?, ?> illumMap) {
-                                    Object lbl = illumMap.get("label");
-                                    if (lbl instanceof String s && !s.isEmpty()) {
-                                        illumLabel = s;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } catch (Exception ex) {
-                    // Keep default
-                }
-
-                Label illumInfo = new Label(String.format(
-                        "%s: %.0f (range: %.0f - %.0f) [%s]",
-                        illumLabel,
-                        illumResult.power(),
-                        illumResult.minPower(),
-                        illumResult.maxPower(),
-                        illumResult.isOn() ? "ON" : "OFF"));
+                Label illumInfo = new Label();
                 illumInfo.setStyle("-fx-font-size: 12px;");
 
-                TextField illumField = new TextField(String.format("%.0f", illumResult.power()));
+                TextField illumField = new TextField();
                 illumField.setPrefWidth(80);
                 Button illumSetBtn = new Button("Set");
+
+                Runnable refreshIllum = () -> {
+                    String label = resolveIllumLabelForProfile(mgr, selectedProfileHolder[0]);
+                    try {
+                        var current = controller.getSocketClient().getIllumination();
+                        illumInfo.setText(String.format(
+                                "%s: %.0f (range: %.0f - %.0f) [%s]",
+                                label,
+                                current.power(),
+                                current.minPower(),
+                                current.maxPower(),
+                                current.isOn() ? "ON" : "OFF"));
+                        illumField.setText(String.format("%.0f", current.power()));
+                    } catch (Exception ex) {
+                        illumInfo.setText(label + ": (unavailable)");
+                    }
+                };
+                illumRefreshHolder.set(refreshIllum);
+                refreshIllum.run();
+
                 illumSetBtn.setOnAction(e -> {
                     try {
                         float power = Float.parseFloat(illumField.getText().trim());
                         controller.getSocketClient().setIllumination(power);
-                        illumInfo.setText(String.format("%s: %.0f [%s]", "Lamp", power, power > 0 ? "ON" : "OFF"));
                         statusLabel.setText("Illumination set to " + power);
                         statusLabel.setStyle("-fx-text-fill: green;");
+                        refreshIllum.run();
                     } catch (Exception ex) {
                         statusLabel.setText("Failed: " + ex.getMessage());
                         statusLabel.setStyle("-fx-text-fill: red;");
@@ -743,6 +751,19 @@ public class CameraControlController {
                 refreshProfiles.run();
                 modalityFilterCombo.valueProperty().addListener((obs, oldVal, newVal) -> refreshProfiles.run());
 
+                // Keep the illumination display in sync with the selected
+                // profile's modality.
+                profileCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
+                    selectedProfileHolder[0] = newVal;
+                    Runnable r = illumRefreshHolder.get();
+                    if (r != null) r.run();
+                });
+                // Seed with whatever the combo lands on after the initial
+                // refresh (refreshProfiles set a default value above).
+                selectedProfileHolder[0] = profileCombo.getValue();
+                Runnable initialIllumRefresh = illumRefreshHolder.get();
+                if (initialIllumRefresh != null) initialIllumRefresh.run();
+
                 Button applyProfileBtn = new Button("Apply Profile");
                 applyProfileBtn.setOnAction(e -> {
                     String selected = profileCombo.getValue();
@@ -758,6 +779,11 @@ public class CameraControlController {
                                     Platform.runLater(() -> {
                                         statusLabel.setText("Profile applied: " + selected);
                                         statusLabel.setStyle("-fx-text-fill: green;");
+                                        // Re-fetch illumination state from the
+                                        // server -- intensity / on-off changed
+                                        // when the profile applied.
+                                        Runnable r = illumRefreshHolder.get();
+                                        if (r != null) r.run();
                                     });
                                 } catch (Exception ex) {
                                     Platform.runLater(() -> {
@@ -806,6 +832,78 @@ public class CameraControlController {
 
         dlg.show();
         logger.info("Camera control dialog displayed successfully");
+    }
+
+    /**
+     * Resolve the illumination device label to display for a given
+     * acquisition profile. Looks up the profile's {@code modality} field in
+     * the YAML, then walks the {@code modalities} section for that
+     * modality's {@code illumination.label}. Falls back gracefully (first
+     * available label, then "Lamp") when the profile is null or the
+     * modality has no declared illumination.
+     *
+     * <p>Designed to handle a variety of modalities, cameras, and
+     * illumination types: any modality that declares an
+     * {@code illumination.label} or {@code pockels_cell.label} surfaces
+     * here. Configs that don't declare a label fall through to the next
+     * resolution tier.
+     */
+    @SuppressWarnings("unchecked")
+    private static String resolveIllumLabelForProfile(
+            qupath.ext.qpsc.utilities.MicroscopeConfigManager mgr,
+            String profileName) {
+        try {
+            Object modalitiesObj = mgr.getConfigItem("modalities");
+            if (!(modalitiesObj instanceof Map<?, ?> modMap)) return "Lamp";
+            String modalityFromProfile = null;
+            if (profileName != null) {
+                Object profilesObj = mgr.getConfigItem("acquisition_profiles");
+                if (profilesObj instanceof Map<?, ?> profMap) {
+                    Object profCfg = profMap.get(profileName);
+                    if (profCfg instanceof Map<?, ?> pc) {
+                        Object m = pc.get("modality");
+                        if (m instanceof String ms && !ms.isEmpty()) {
+                            modalityFromProfile = ms;
+                        }
+                    }
+                }
+            }
+
+            // First-tier: exact modality match (case-insensitive).
+            if (modalityFromProfile != null) {
+                for (Map.Entry<?, ?> entry : modMap.entrySet()) {
+                    if (!(entry.getKey() instanceof String mn)) continue;
+                    if (!mn.equalsIgnoreCase(modalityFromProfile)) continue;
+                    String label = extractIllumLabel(entry.getValue());
+                    if (label != null) return label;
+                }
+            }
+
+            // Second-tier: any modality with a label (legacy fallback).
+            for (Object cfg : modMap.values()) {
+                String label = extractIllumLabel(cfg);
+                if (label != null) return label;
+            }
+        } catch (Exception ignored) {
+        }
+        return "Lamp";
+    }
+
+    /** Pull a friendly label from a modality config's illumination or
+     *  pockels_cell section. Returns null when neither has a label. */
+    private static String extractIllumLabel(Object modalityCfg) {
+        if (!(modalityCfg instanceof Map<?, ?> cfg)) return null;
+        for (String key : new String[] {"illumination", "pockels_cell"}) {
+            Object section = cfg.get(key);
+            if (section instanceof Map<?, ?> sm) {
+                Object lbl = sm.get("label");
+                if (lbl instanceof String s && !s.isEmpty()) return s;
+                // Fall back to the device name if no human label is set.
+                Object dev = sm.get("device");
+                if (dev instanceof String d && !d.isEmpty()) return d;
+            }
+        }
+        return null;
     }
 
     /**
