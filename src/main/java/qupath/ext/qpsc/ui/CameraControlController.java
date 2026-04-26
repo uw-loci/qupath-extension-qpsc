@@ -5,6 +5,7 @@ import java.util.*;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Modality;
@@ -695,201 +696,59 @@ public class CameraControlController {
         // resolve modality without forward-referencing the combo itself.
         final String[] selectedProfileHolder = {null};
         try {
-            var firstIllum = controller.getSocketClient().getIllumination();
-            if (firstIllum.available()) {
-                Label illumHeader = new Label("Illumination");
-                illumHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
+            // Camera Control v2 phase 3c: per-source Apply rows built from
+            // GETCAP's illumination list. Replaces the legacy single-source
+            // (active-only) Set row and the read-only status grid with one
+            // editable row per declared source. Each row gets its own Apply
+            // wired to SETILLMD so the user can drive Lumencor while in
+            // Brightfield mode (and vice versa) without first APPLYPRing.
+            // Vendor-agnostic: the layout is built from the capability
+            // dict's fields -- 1 source -> 1 row, 7 sources -> 7 rows --
+            // with no per-device branches.
+            Label illumHeader = new Label("Illumination");
+            illumHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
-                Label illumInfo = new Label();
-                illumInfo.setStyle("-fx-font-size: 12px;");
+            Label activeNote = new Label();
+            activeNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+            activeNote.setText("Active source follows the applied profile; rows below drive each source independently.");
+            activeNote.setWrapText(true);
 
-                // The input widget swaps based on the active source's
-                // value_type from GETCAP: a binary source (on/off only,
-                // e.g. an MM device whose intensity_property == State and
-                // only accepts "0"/"1") gets a checkbox; a continuous
-                // source gets the legacy free-form TextField. This is set
-                // up reactively below so a profile switch from a
-                // continuous source to a binary one rebuilds the row.
-                TextField illumField = new TextField();
-                illumField.setPrefWidth(80);
-                CheckBox illumToggle = new CheckBox("On");
-                Button illumSetBtn = new Button("Set");
-                Label setIntensityLabel = new Label("Set intensity:");
+            VBox sourcesBox = new VBox(4);
 
-                HBox illumRow = new HBox(8, setIntensityLabel, illumField, illumSetBtn);
-                illumRow.setAlignment(Pos.CENTER_LEFT);
-
-                // Holder so refreshIllum can read the resolved value_type
-                // without re-running GETCAP twice (once for the multi-source
-                // grid, once here). Set by the multi-source refresh below.
-                final String[] activeValueTypeHolder = {"continuous"};
-                final double[] activeMaxPowerHolder = {0.0};
-
-                Runnable refreshIllum = () -> {
-                    String label = resolveIllumLabelForProfile(mgr, selectedProfileHolder[0]);
+            Runnable refreshSources = () -> {
+                Thread t = new Thread(() -> {
                     try {
-                        var current = controller.getSocketClient().getIllumination();
-                        illumInfo.setText(String.format(
-                                "Active: %s -- %.2f (range: %.2f - %.2f) [%s]",
-                                label,
-                                current.power(),
-                                current.minPower(),
-                                current.maxPower(),
-                                current.isOn() ? "ON" : "OFF"));
-
-                        // Swap input widget based on value_type from GETCAP.
-                        // The activeValueTypeHolder is populated by the
-                        // multi-source refresh below before this runs.
-                        boolean binary = "binary".equals(activeValueTypeHolder[0]);
-                        if (binary) {
-                            illumToggle.setSelected(current.isOn());
-                            if (illumRow.getChildren().contains(illumField)) {
-                                illumRow.getChildren().setAll(setIntensityLabel, illumToggle, illumSetBtn);
-                            }
-                        } else {
-                            illumField.setText(String.format("%.2f", current.power()));
-                            if (illumRow.getChildren().contains(illumToggle)) {
-                                illumRow.getChildren().setAll(setIntensityLabel, illumField, illumSetBtn);
-                            }
-                        }
-                    } catch (Exception ex) {
-                        illumInfo.setText(label + ": (unavailable)");
-                    }
-                };
-                illumRefreshHolder.set(refreshIllum);
-                refreshIllum.run();
-
-                illumSetBtn.setOnAction(e -> {
-                    try {
-                        float power;
-                        boolean binary = "binary".equals(activeValueTypeHolder[0]);
-                        if (binary) {
-                            power = illumToggle.isSelected()
-                                    ? (float) (activeMaxPowerHolder[0] > 0 ? activeMaxPowerHolder[0] : 1.0)
-                                    : 0f;
-                        } else {
-                            power = Float.parseFloat(illumField.getText().trim());
-                        }
-                        controller.getSocketClient().setIllumination(power);
-                        statusLabel.setText("Illumination set to " + power);
-                        statusLabel.setStyle("-fx-text-fill: green;");
-                        // Drive both the single-source row AND the multi-source
-                        // grid via the holder, which is wrapped further down to
-                        // do both refreshes together.
-                        Runnable r = illumRefreshHolder.get();
-                        if (r != null) r.run();
-                    } catch (Exception ex) {
-                        statusLabel.setText("Failed: " + ex.getMessage());
-                        statusLabel.setStyle("-fx-text-fill: red;");
-                    }
-                });
-
-                // Read-only multi-source status grid (Camera Control v2 phase 3b).
-                // GETCAP returns every illumination source declared in any modality;
-                // render one line per source so the user can see DiaLamp + Lumencor
-                // state without switching profiles. The Set row above still drives
-                // whichever source is currently active per the applied profile --
-                // independent per-device SET would need a new socket command.
-                VBox allSourcesBox = new VBox(2);
-                Label allSourcesHeader = new Label("All sources (read-only):");
-                allSourcesHeader.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
-                allSourcesBox.getChildren().add(allSourcesHeader);
-
-                Runnable refreshAllSources = () -> {
-                    Thread t = new Thread(() -> {
-                        try {
-                            String selected = selectedProfileHolder[0];
-                            var cap = controller.getSocketClient()
-                                    .getCapabilities(selected == null ? "" : selected);
-                            if (cap.illumination == null || cap.illumination.isEmpty()) {
-                                Platform.runLater(() -> {
-                                    allSourcesBox.getChildren().retainAll(allSourcesHeader);
-                                    Label none = new Label("  (no sources reported)");
-                                    none.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
-                                    allSourcesBox.getChildren().add(none);
-                                });
-                                return;
-                            }
-                            // Resolve the active source's value_type so the
-                            // single-source row above can render the correct
-                            // input widget (checkbox vs spinner). Active is
-                            // whichever entry has is_on true, falling back
-                            // to the first if none is on. Captures
-                            // max_intensity for the toggle's "on" value.
-                            String activeType = "continuous";
-                            double activeMax = 0.0;
-                            MicroscopeSocketClient.CapabilityResult.Illumination active = null;
-                            for (var src : cap.illumination) {
-                                if (src.isOn) { active = src; break; }
-                            }
-                            if (active == null && !cap.illumination.isEmpty()) {
-                                active = cap.illumination.get(0);
-                            }
-                            if (active != null) {
-                                if (active.valueType != null) {
-                                    activeType = active.valueType;
-                                }
-                                if (active.powerRange != null && active.powerRange.length >= 2) {
-                                    activeMax = active.powerRange[1];
-                                }
-                            }
-                            final String activeTypeFinal = activeType;
-                            final double activeMaxFinal = activeMax;
+                        String selected = selectedProfileHolder[0];
+                        var cap = controller.getSocketClient()
+                                .getCapabilities(selected == null ? "" : selected);
+                        if (cap.illumination == null || cap.illumination.isEmpty()) {
                             Platform.runLater(() -> {
-                                activeValueTypeHolder[0] = activeTypeFinal;
-                                activeMaxPowerHolder[0] = activeMaxFinal;
-                                // Re-run the single-source refresh now that
-                                // the value_type is known, so the input widget
-                                // swaps to the right kind without waiting for
-                                // the next profile change.
-                                refreshIllum.run();
-                                allSourcesBox.getChildren().retainAll(allSourcesHeader);
-                                for (var src : cap.illumination) {
-                                    String txt;
-                                    if ("binary".equals(src.valueType)) {
-                                        txt = String.format(
-                                                "  %s: [%s] (binary)",
-                                                src.label != null ? src.label : src.device,
-                                                src.isOn ? "ON" : "OFF");
-                                    } else {
-                                        txt = String.format(
-                                                "  %s: %.2f (range %.2f-%.2f) [%s]",
-                                                src.label != null ? src.label : src.device,
-                                                src.currentPower,
-                                                src.powerRange != null && src.powerRange.length >= 2
-                                                        ? src.powerRange[0] : 0.0,
-                                                src.powerRange != null && src.powerRange.length >= 2
-                                                        ? src.powerRange[1] : 0.0,
-                                                src.isOn ? "ON" : "OFF");
-                                    }
-                                    Label lbl = new Label(txt);
-                                    lbl.setStyle("-fx-font-size: 11px; -fx-text-fill: "
-                                            + (src.isOn ? "#0a7d28" : "#999999") + ";");
-                                    allSourcesBox.getChildren().add(lbl);
-                                }
+                                sourcesBox.getChildren().clear();
+                                Label none = new Label("(no illumination sources reported)");
+                                none.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
+                                sourcesBox.getChildren().add(none);
                             });
-                        } catch (Exception ex) {
-                            logger.debug("Multi-illum refresh failed: {}", ex.getMessage());
+                            return;
                         }
-                    }, "CCC-AllIllum-Refresh");
-                    t.setDaemon(true);
-                    t.start();
-                };
-                // Wrap the existing single-source refresh so the multi-source
-                // grid stays in lock-step with profile changes / Set clicks.
-                // Order matters: refreshAllSources resolves the active
-                // value_type (binary vs continuous), then re-fires
-                // refreshIllum on the FX thread so the input widget swap
-                // sees the right value_type.
-                Runnable wrappedRefreshIllum = () -> {
-                    refreshAllSources.run();
-                };
-                illumRefreshHolder.set(wrappedRefreshIllum);
-                refreshAllSources.run();
+                        Platform.runLater(() -> {
+                            sourcesBox.getChildren().clear();
+                            for (var src : cap.illumination) {
+                                sourcesBox.getChildren().add(buildSourceRow(controller, src, illumRefreshHolder));
+                            }
+                        });
+                    } catch (Exception ex) {
+                        logger.debug("Per-source row refresh failed: {}", ex.getMessage());
+                    }
+                }, "CCC-Sources-Refresh");
+                t.setDaemon(true);
+                t.start();
+            };
 
-                illumSection.getChildren().addAll(
-                        new Separator(), illumHeader, illumInfo, illumRow, allSourcesBox);
-            }
+            illumRefreshHolder.set(refreshSources);
+            refreshSources.run();
+
+            illumSection.getChildren().addAll(
+                    new Separator(), illumHeader, activeNote, sourcesBox);
         } catch (Exception ex) {
             logger.debug("Could not load illumination info: {}", ex.getMessage());
         }
@@ -1175,6 +1034,98 @@ public class CameraControlController {
         field.setPrefWidth(55);
         field.setMaxWidth(55);
         return field;
+    }
+
+    /**
+     * Build one editable row for an illumination source from a GETCAP
+     * descriptor. Renders {@code <Label>: <input> [Apply]} where the
+     * input is a CheckBox for {@code value_type == "binary"} and a
+     * TextField with prompt-text-typed range for continuous sources.
+     * Apply calls {@link MicroscopeSocketClient#setIlluminationOnDevice}
+     * with the descriptor's {@code device} -- so the row drives that
+     * specific source regardless of which one the active profile selected.
+     *
+     * <p>The row is purely capability-driven: no per-device or
+     * per-modality branching. New hardware declared in the YAML appears
+     * as a new row with the same primitives.
+     */
+    private static Node buildSourceRow(
+            MicroscopeController controller,
+            MicroscopeSocketClient.CapabilityResult.Illumination src,
+            java.util.concurrent.atomic.AtomicReference<Runnable> refreshHolder) {
+        String displayLabel = src.label != null && !src.label.isEmpty() ? src.label : src.device;
+        Label nameLabel = new Label(displayLabel + ":");
+        nameLabel.setStyle("-fx-font-size: 11px; -fx-min-width: 90px;");
+
+        Label statusLabel = new Label(src.isOn ? "ON" : "OFF");
+        statusLabel.setStyle(
+                "-fx-font-size: 10px; -fx-padding: 0 6 0 6; -fx-text-fill: "
+                        + (src.isOn ? "#0a7d28" : "#999999") + ";");
+
+        boolean binary = "binary".equals(src.valueType);
+        double maxPower = (src.powerRange != null && src.powerRange.length >= 2)
+                ? src.powerRange[1] : 1.0;
+        double minPower = (src.powerRange != null && src.powerRange.length >= 2)
+                ? src.powerRange[0] : 0.0;
+
+        Button applyBtn = new Button("Apply");
+        applyBtn.setStyle("-fx-font-size: 10px;");
+
+        HBox row = new HBox(6, nameLabel);
+        row.setAlignment(Pos.CENTER_LEFT);
+
+        if (binary) {
+            CheckBox toggle = new CheckBox("On");
+            toggle.setSelected(src.isOn);
+            applyBtn.setOnAction(e -> applySourceInBackground(
+                    controller, src.device, toggle.isSelected() ? (float) maxPower : 0f, refreshHolder));
+            row.getChildren().addAll(toggle, applyBtn, statusLabel);
+        } else {
+            TextField field = new TextField(String.format("%.2f", src.currentPower));
+            field.setPrefWidth(80);
+            field.setPromptText(String.format("%.2f-%.2f", minPower, maxPower));
+            Label rangeLabel = new Label(String.format("(%.0f-%.0f)", minPower, maxPower));
+            rangeLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888;");
+            applyBtn.setOnAction(e -> {
+                try {
+                    float v = Float.parseFloat(field.getText().trim());
+                    applySourceInBackground(controller, src.device, v, refreshHolder);
+                } catch (NumberFormatException nfe) {
+                    field.setStyle("-fx-border-color: red; -fx-border-width: 2px;");
+                }
+            });
+            // Clear red border on edit
+            field.textProperty().addListener((obs, oldV, newV) -> field.setStyle(""));
+            row.getChildren().addAll(field, rangeLabel, applyBtn, statusLabel);
+        }
+        return row;
+    }
+
+    /**
+     * Send SETILLMD on a daemon thread and refresh the source rows on
+     * completion so the row repaints with the new ON/OFF state and
+     * current_power. Failures surface in the row's status label color
+     * via the refresh (which re-reads cap.illumination).
+     */
+    private static void applySourceInBackground(
+            MicroscopeController controller,
+            String deviceName,
+            float power,
+            java.util.concurrent.atomic.AtomicReference<Runnable> refreshHolder) {
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        controller.getSocketClient().setIlluminationOnDevice(deviceName, power);
+                    } catch (Exception ex) {
+                        logger.warn("SETILLMD({}, {}) failed: {}", deviceName, power, ex.getMessage());
+                    } finally {
+                        Runnable r = refreshHolder.get();
+                        if (r != null) r.run();
+                    }
+                },
+                "CCC-Source-Apply");
+        t.setDaemon(true);
+        t.start();
     }
 
     /**

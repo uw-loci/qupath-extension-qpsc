@@ -270,6 +270,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
         GETILLM("getillm_"),
         /** Set illumination power (4-byte float) */
         SETILLM("setillm_"),
+        /**
+         * Set illumination power on a NAMED device (independent of which
+         * source the active profile selected). Server walks every modality
+         * to find the matching device by name. Payload: 32-byte device
+         * name + 4-byte big-endian float.
+         */
+        SETILLMD("setilmd_"),
         /** Apply acquisition profile (calls apply_mode_setup on server) */
         APPLYPR("applypr_"),
         /**
@@ -5363,6 +5370,34 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
 
         logger.info("Illumination power set to {}", power);
+    }
+
+    /**
+     * Set illumination power on a NAMED device. Independent of which
+     * source the active profile selected -- lets the dialog tune any
+     * declared source without first APPLYPRing to its modality.
+     *
+     * @param deviceName MM device name (e.g. "DiaLamp", "LappMainBranch1")
+     * @param power      power level; 0 turns the source off
+     * @throws IOException if the server returns ERR_DEVN (unknown device)
+     *                     or ERR_ILLM (other failure)
+     */
+    public void setIlluminationOnDevice(String deviceName, float power) throws IOException {
+        if (deviceName == null || deviceName.isEmpty()) {
+            throw new IllegalArgumentException("deviceName must not be empty");
+        }
+        byte[] payload = new byte[36];
+        byte[] nameBytes = deviceName.getBytes(StandardCharsets.UTF_8);
+        System.arraycopy(nameBytes, 0, payload, 0, Math.min(nameBytes.length, 32));
+        ByteBuffer.wrap(payload, 32, 4).order(ByteOrder.BIG_ENDIAN).putFloat(power);
+
+        byte[] response = executeCommand(Command.SETILLMD, payload, 8);
+        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+        if (!responseStr.startsWith("ACK")) {
+            throw new IOException(
+                    "Failed to set illumination on device '" + deviceName + "': " + responseStr);
+        }
+        logger.info("Illumination on device '{}' set to {}", deviceName, power);
     }
 
     /**
