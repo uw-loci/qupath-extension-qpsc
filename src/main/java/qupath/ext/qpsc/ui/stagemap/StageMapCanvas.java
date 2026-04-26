@@ -87,6 +87,12 @@ public class StageMapCanvas extends StackPane {
     private List<Text> slideLabels = new ArrayList<>();
     private Rectangle insertBorderRect;
 
+    // ========== Acquisition Overlay Layer ==========
+    private ImageView acquisitionOverlayView;
+    private List<AcquisitionThumbnail> acquisitionThumbnails = new ArrayList<>();
+    private boolean acquisitionOverlayVisible = false;
+    private static final double ACQUISITION_OVERLAY_OPACITY = 0.7;
+
     // ========== Macro Overlay Layer ==========
     private ImageView macroOverlayView;
     private AffineTransform macroTransform;
@@ -178,18 +184,26 @@ public class StageMapCanvas extends StackPane {
         insertBorderRect.setStrokeWidth(2);
         insertBorderRect.setVisible(false);
 
-        // Create macro overlay ImageView (behind other overlays)
+        // Create acquisition overlay ImageView (behind macro and shapes)
+        acquisitionOverlayView = new ImageView();
+        acquisitionOverlayView.setOpacity(ACQUISITION_OVERLAY_OPACITY);
+        acquisitionOverlayView.setPreserveRatio(false);
+        acquisitionOverlayView.setVisible(false);
+        acquisitionOverlayView.setMouseTransparent(true);
+
+        // Create macro overlay ImageView (behind shapes but above acquisitions)
         macroOverlayView = new ImageView();
         macroOverlayView.setOpacity(MACRO_OVERLAY_OPACITY);
         macroOverlayView.setPreserveRatio(false);
         macroOverlayView.setVisible(false);
-        macroOverlayView.setMouseTransparent(true); // Don't interfere with click events
+        macroOverlayView.setMouseTransparent(true);
 
-        // Add all shapes to overlay (macroOverlayView first so it renders behind other elements)
+        // Add all shapes to overlay (acquisition first, then macro, then shapes)
         overlayPane
                 .getChildren()
                 .addAll(
-                        macroOverlayView, // Renders first (behind everything)
+                        acquisitionOverlayView, // Behind everything
+                        macroOverlayView, // Behind shapes but above acquisitions
                         insertBorderRect,
                         crosshairCircle,
                         crosshairLineH1,
@@ -641,6 +655,9 @@ public class StageMapCanvas extends StackPane {
         updateCrosshairOverlay();
         updateFOVOverlay();
         updateTargetOverlay();
+        if (acquisitionOverlayVisible) {
+            compositeAndDisplayAcquisitions();
+        }
         if (macroOverlayVisible) {
             updateMacroOverlayPosition();
         }
@@ -783,6 +800,120 @@ public class StageMapCanvas extends StackPane {
         targetLineV.setEndY(sy + CROSSHAIR_LINE_LENGTH);
         targetLineV.setStroke(color);
         targetLineV.setVisible(true);
+    }
+
+    // ========== Acquisition Overlay Methods ==========
+
+    /** Data holder for one acquired image's thumbnail and stage position. */
+    public static class AcquisitionThumbnail {
+        public final String imageName;
+        public final java.awt.image.BufferedImage thumbnail;
+        public final double stageMinX, stageMinY, stageMaxX, stageMaxY;
+
+        public AcquisitionThumbnail(String imageName, java.awt.image.BufferedImage thumbnail,
+                double stageMinX, double stageMinY, double stageMaxX, double stageMaxY) {
+            this.imageName = imageName;
+            this.thumbnail = thumbnail;
+            this.stageMinX = stageMinX;
+            this.stageMinY = stageMinY;
+            this.stageMaxX = stageMaxX;
+            this.stageMaxY = stageMaxY;
+        }
+    }
+
+    /**
+     * Sets the acquisition thumbnail data and composites them into the overlay.
+     */
+    public void setAcquisitionThumbnails(List<AcquisitionThumbnail> thumbnails) {
+        this.acquisitionThumbnails = new ArrayList<>(thumbnails);
+        if (acquisitionOverlayVisible) {
+            compositeAndDisplayAcquisitions();
+        }
+    }
+
+    /** Shows or hides the acquisition overlay. */
+    public void setAcquisitionOverlayVisible(boolean visible) {
+        this.acquisitionOverlayVisible = visible;
+        if (visible && !acquisitionThumbnails.isEmpty()) {
+            compositeAndDisplayAcquisitions();
+        } else {
+            acquisitionOverlayView.setVisible(false);
+        }
+    }
+
+    /** Clears all acquisition thumbnails and hides the overlay. */
+    public void clearAcquisitionOverlay() {
+        acquisitionThumbnails.clear();
+        acquisitionOverlayVisible = false;
+        acquisitionOverlayView.setVisible(false);
+        acquisitionOverlayView.setImage(null);
+        logger.info("Acquisition overlay cleared");
+    }
+
+    /**
+     * Composites all acquisition thumbnails into a single image at their
+     * correct stage positions and displays it via the acquisitionOverlayView.
+     */
+    private void compositeAndDisplayAcquisitions() {
+        if (!acquisitionOverlayVisible || acquisitionThumbnails.isEmpty() || currentInsert == null) {
+            acquisitionOverlayView.setVisible(false);
+            return;
+        }
+
+        // Determine union stage-space bounding box of all thumbnails
+        double allMinX = Double.MAX_VALUE, allMinY = Double.MAX_VALUE;
+        double allMaxX = -Double.MAX_VALUE, allMaxY = -Double.MAX_VALUE;
+        for (AcquisitionThumbnail t : acquisitionThumbnails) {
+            allMinX = Math.min(allMinX, t.stageMinX);
+            allMinY = Math.min(allMinY, t.stageMinY);
+            allMaxX = Math.max(allMaxX, t.stageMaxX);
+            allMaxY = Math.max(allMaxY, t.stageMaxY);
+        }
+
+        // Convert corners to screen coordinates (handles axis inversion)
+        double[] scrA = stageToScreen(allMinX, allMinY);
+        double[] scrB = stageToScreen(allMaxX, allMaxY);
+        if (scrA == null || scrB == null) return;
+
+        double screenX = Math.min(scrA[0], scrB[0]);
+        double screenY = Math.min(scrA[1], scrB[1]);
+        double screenW = Math.abs(scrB[0] - scrA[0]);
+        double screenH = Math.abs(scrB[1] - scrA[1]);
+        if (screenW < 1 || screenH < 1) return;
+
+        int compW = Math.min((int) Math.ceil(screenW), 4096);
+        int compH = Math.min((int) Math.ceil(screenH), 4096);
+        if (compW <= 0 || compH <= 0) return;
+
+        java.awt.image.BufferedImage composite = new java.awt.image.BufferedImage(
+                compW, compH, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        java.awt.Graphics2D g = composite.createGraphics();
+        g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
+                java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+
+        for (AcquisitionThumbnail t : acquisitionThumbnails) {
+            double[] tA = stageToScreen(t.stageMinX, t.stageMinY);
+            double[] tB = stageToScreen(t.stageMaxX, t.stageMaxY);
+            if (tA == null || tB == null) continue;
+
+            int dx = (int) (Math.min(tA[0], tB[0]) - screenX);
+            int dy = (int) (Math.min(tA[1], tB[1]) - screenY);
+            int dw = (int) Math.abs(tB[0] - tA[0]);
+            int dh = (int) Math.abs(tB[1] - tA[1]);
+
+            if (dw > 0 && dh > 0) {
+                g.drawImage(t.thumbnail, dx, dy, dw, dh, null);
+            }
+        }
+        g.dispose();
+
+        javafx.scene.image.Image fxImage = SwingFXUtils.toFXImage(composite, null);
+        acquisitionOverlayView.setImage(fxImage);
+        acquisitionOverlayView.setLayoutX(screenX);
+        acquisitionOverlayView.setLayoutY(screenY);
+        acquisitionOverlayView.setFitWidth(screenW);
+        acquisitionOverlayView.setFitHeight(screenH);
+        acquisitionOverlayView.setVisible(true);
     }
 
     // ========== Macro Overlay Methods ==========

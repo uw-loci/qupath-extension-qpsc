@@ -4,6 +4,7 @@ import java.awt.Desktop;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -81,6 +82,7 @@ public class StageMapWindow {
 
     // ========== Macro Overlay State ==========
     private CheckBox macroOverlayCheckbox;
+    private CheckBox showAcquisitionsCheckbox;
     private BufferedImage currentMacroImage = null;
     private AffineTransform currentMacroTransform = null;
     private String currentMacroSampleName = null;
@@ -325,6 +327,15 @@ public class StageMapWindow {
                 + "Edit the YAML file to set aperture and slide reference points."));
         configButton.setOnAction(e -> openConfigFolder());
 
+        // Reload button - re-reads YAML config and updates display
+        Button reloadButton = new Button("Reload");
+        reloadButton.setStyle("-fx-font-size: 10; -fx-padding: 2 6;");
+        reloadButton.setTooltip(new Tooltip("Reload the YAML configuration from disk.\n"
+                + "Updates insert positions, slide dimensions,\n"
+                + "and stage limits without restarting.\n\n"
+                + "Use this after editing the config file."));
+        reloadButton.setOnAction(e -> reloadConfiguration());
+
         // Help button - opens online documentation
         Button helpButton = DocumentationHelper.createHelpButton("stageMap");
         if (helpButton != null) {
@@ -413,6 +424,7 @@ public class StageMapWindow {
                         applyFlipsCheckbox,
                         macroOverlayCheckbox,
                         configButton,
+                        reloadButton,
                         helpButton);
         return topBar;
     }
@@ -498,8 +510,192 @@ public class StageMapWindow {
         }
     }
 
+    /**
+     * Reloads the YAML configuration from disk, updating insert layout,
+     * slide positions, and stage limits without restarting.
+     */
+    private void reloadConfiguration() {
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath == null || configPath.isEmpty()) {
+                statusLabel.setText("No config file set");
+                statusLabel.setStyle("-fx-text-fill: #f66;");
+                return;
+            }
+
+            MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
+            configManager.reload(configPath);
+
+            // Reload insert registry
+            StageInsertRegistry.loadFromConfig(configManager);
+
+            // Preserve current selection by ID
+            String previousId = (insertComboBox.getValue() != null)
+                    ? insertComboBox.getValue().getId() : null;
+
+            List<StageInsert> inserts = StageInsertRegistry.getAvailableInserts();
+            insertComboBox.setItems(javafx.collections.FXCollections.observableArrayList(inserts));
+
+            StageInsert restored = (previousId != null) ? StageInsertRegistry.getInsert(previousId) : null;
+            if (restored == null) restored = StageInsertRegistry.getDefaultInsert();
+            if (restored != null) {
+                insertComboBox.setValue(restored);
+                canvas.setInsert(restored);
+            }
+
+            updateMovementWarning();
+            loadTransformPresets();
+
+            if (macroOverlayCheckbox.isSelected() && currentMacroImage != null) {
+                applyMacroOverlayToCanvas();
+            }
+
+            statusLabel.setText("Config reloaded");
+            statusLabel.setStyle("-fx-text-fill: #6b6;");
+            logger.info("Configuration reloaded from: {}", configPath);
+
+        } catch (Exception e) {
+            logger.error("Failed to reload configuration: {}", e.getMessage(), e);
+            statusLabel.setText("Reload failed");
+            statusLabel.setStyle("-fx-text-fill: #f66;");
+        }
+    }
+
+    /**
+     * Scans all project images for alignment transforms and loads thumbnails
+     * on a background thread. Updates the canvas on the FX thread when done.
+     */
+    @SuppressWarnings("unchecked")
+    private void loadAndPaintAcquisitions() {
+        statusLabel.setText("Loading acquisitions...");
+        statusLabel.setStyle("-fx-text-fill: #aaa;");
+
+        Thread loader = new Thread(() -> {
+            try {
+                QuPathGUI gui = QuPathGUI.getInstance();
+                if (gui == null || gui.getProject() == null) {
+                    Platform.runLater(() -> {
+                        statusLabel.setText("No project open");
+                        statusLabel.setStyle("-fx-text-fill: #f66;");
+                        showAcquisitionsCheckbox.setSelected(false);
+                    });
+                    return;
+                }
+
+                Project<java.awt.image.BufferedImage> project =
+                        (Project<java.awt.image.BufferedImage>) gui.getProject();
+
+                List<StageMapCanvas.AcquisitionThumbnail> thumbnails = new ArrayList<>();
+                int count = 0;
+
+                for (ProjectImageEntry<java.awt.image.BufferedImage> entry : project.getImageList()) {
+                    String imageName = entry.getImageName();
+                    String strippedName = qupath.lib.common.GeneralTools.stripExtension(imageName);
+
+                    AffineTransform alignment =
+                            AffineTransformManager.loadSlideAlignment(project, strippedName);
+                    if (alignment == null) continue;
+
+                    try (var server = entry.readImageData().getServer()) {
+                        int imgW = server.getWidth();
+                        int imgH = server.getHeight();
+                        double downsample = Math.max(1.0, Math.max(imgW, imgH) / 200.0);
+
+                        var request = qupath.lib.regions.RegionRequest.createInstance(
+                                server.getPath(), downsample, 0, 0, imgW, imgH);
+                        java.awt.image.BufferedImage thumb = server.readRegion(request);
+                        if (thumb == null) continue;
+
+                        thumb = normalizeImage(thumb);
+
+                        // Compute stage bounds from all 4 corners
+                        double[] corners = {0, 0, imgW, 0, imgW, imgH, 0, imgH};
+                        double[] stageCorners = new double[8];
+                        alignment.transform(corners, 0, stageCorners, 0, 4);
+
+                        double minX = Math.min(Math.min(stageCorners[0], stageCorners[2]),
+                                Math.min(stageCorners[4], stageCorners[6]));
+                        double maxX = Math.max(Math.max(stageCorners[0], stageCorners[2]),
+                                Math.max(stageCorners[4], stageCorners[6]));
+                        double minY = Math.min(Math.min(stageCorners[1], stageCorners[3]),
+                                Math.min(stageCorners[5], stageCorners[7]));
+                        double maxY = Math.max(Math.max(stageCorners[1], stageCorners[3]),
+                                Math.max(stageCorners[5], stageCorners[7]));
+
+                        thumbnails.add(new StageMapCanvas.AcquisitionThumbnail(
+                                imageName, thumb, minX, minY, maxX, maxY));
+                        count++;
+                    } catch (Exception e) {
+                        logger.debug("Failed to load thumbnail for '{}': {}", imageName, e.getMessage());
+                    }
+                }
+
+                final int finalCount = count;
+                final List<StageMapCanvas.AcquisitionThumbnail> finalThumbs = thumbnails;
+
+                Platform.runLater(() -> {
+                    canvas.setAcquisitionThumbnails(finalThumbs);
+                    canvas.setAcquisitionOverlayVisible(true);
+                    statusLabel.setText(finalCount + " acquisitions loaded");
+                    statusLabel.setStyle("-fx-text-fill: #6b6;");
+                });
+
+            } catch (Exception e) {
+                logger.error("Failed to load acquisition thumbnails: {}", e.getMessage(), e);
+                Platform.runLater(() -> {
+                    statusLabel.setText("Load failed");
+                    statusLabel.setStyle("-fx-text-fill: #f66;");
+                    showAcquisitionsCheckbox.setSelected(false);
+                });
+            }
+        }, "StageMap-AcquisitionLoader");
+        loader.setDaemon(true);
+        loader.start();
+    }
+
+    /**
+     * Per-image brightness normalization: stretches min/max to 0-255 range
+     * so thumbnails from different modalities and exposures are all visible.
+     */
+    private static java.awt.image.BufferedImage normalizeImage(java.awt.image.BufferedImage img) {
+        int w = img.getWidth();
+        int h = img.getHeight();
+
+        int globalMin = 255;
+        int globalMax = 0;
+
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int rgb = img.getRGB(x, y);
+                int r = (rgb >> 16) & 0xFF;
+                int g = (rgb >> 8) & 0xFF;
+                int b = rgb & 0xFF;
+                int avg = (r + g + b) / 3;
+                globalMin = Math.min(globalMin, avg);
+                globalMax = Math.max(globalMax, avg);
+            }
+        }
+
+        if (globalMax <= globalMin) return img;
+
+        double scale = 255.0 / (globalMax - globalMin);
+
+        java.awt.image.BufferedImage out = new java.awt.image.BufferedImage(
+                w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int rgb = img.getRGB(x, y);
+                int nr = (int) Math.min(255, Math.max(0, (((rgb >> 16) & 0xFF) - globalMin) * scale));
+                int ng = (int) Math.min(255, Math.max(0, (((rgb >> 8) & 0xFF) - globalMin) * scale));
+                int nb = (int) Math.min(255, Math.max(0, ((rgb & 0xFF) - globalMin) * scale));
+                out.setRGB(x, y, (255 << 24) | (nr << 16) | (ng << 8) | nb);
+            }
+        }
+        return out;
+    }
+
     private HBox buildBottomBar() {
-        HBox bottomBar = new HBox(15);
+        HBox bottomBar = new HBox(10);
         bottomBar.setAlignment(Pos.CENTER_LEFT);
         bottomBar.setPadding(new Insets(5, 0, 0, 0));
 
@@ -509,13 +705,40 @@ public class StageMapWindow {
         targetLabel = new Label("");
         targetLabel.setStyle("-fx-text-fill: #7ab; -fx-font-family: monospace;");
 
+        // Acquisition overlay controls
+        showAcquisitionsCheckbox = new CheckBox("Show Acquisitions");
+        showAcquisitionsCheckbox.setStyle("-fx-font-size: 10;");
+        showAcquisitionsCheckbox.setTooltip(new Tooltip(
+                "Paint thumbnails of acquired images at their\n"
+                + "stage positions. Scans all project images with\n"
+                + "alignment transforms and renders a translucent\n"
+                + "overlay showing acquisition coverage."));
+        showAcquisitionsCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            if (Boolean.TRUE.equals(newVal)) {
+                loadAndPaintAcquisitions();
+            } else {
+                canvas.setAcquisitionOverlayVisible(false);
+            }
+        });
+
+        Button clearAcqButton = new Button("Clear");
+        clearAcqButton.setStyle("-fx-font-size: 10; -fx-padding: 1 4;");
+        clearAcqButton.setTooltip(new Tooltip("Clear the acquisition overlay"));
+        clearAcqButton.setOnAction(e -> {
+            canvas.clearAcquisitionOverlay();
+            showAcquisitionsCheckbox.setSelected(false);
+        });
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         statusLabel = new Label("");
         statusLabel.setStyle("-fx-text-fill: #888;");
 
-        bottomBar.getChildren().addAll(positionLabel, targetLabel, spacer, movementWarningLabel, statusLabel);
+        bottomBar.getChildren().addAll(
+                positionLabel, targetLabel,
+                showAcquisitionsCheckbox, clearAcqButton,
+                spacer, movementWarningLabel, statusLabel);
         return bottomBar;
     }
 
