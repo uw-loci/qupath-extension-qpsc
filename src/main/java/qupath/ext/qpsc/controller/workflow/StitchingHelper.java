@@ -1404,11 +1404,21 @@ public class StitchingHelper {
                 }
                 try {
                     if (metadata != null) {
+                        // Pass false/false for flip flags here -- the stitcher
+                        // already baked the flip into the pyramid via
+                        // TileConfigurationTxtStrategy.flipStitchingX/Y. Passing
+                        // metadata.flipX/Y again applies a second
+                        // TransformedServerBuilder flip on import, double-
+                        // flipping the channel TIFF relative to the BF
+                        // single-pass path (which has always passed false here).
+                        // metadata.flipX/Y is still saved by applyImageMetadata
+                        // for downstream consumers that need to know the
+                        // pyramid's stage-relative orientation.
                         QPProjectFunctions.addImageToProjectWithMetadata(
                                 project, f,
                                 metadata.parentEntry,
                                 metadata.xOffset, metadata.yOffset,
-                                metadata.flipX, metadata.flipY,
+                                false, false,
                                 metadata.sampleName,
                                 metadata.modality, metadata.objective,
                                 metadata.angle, metadata.annotationName,
@@ -1447,11 +1457,21 @@ public class StitchingHelper {
                 logger.info("Importing merged multichannel file to project: {}", mergedFile.getName());
 
                 if (metadata != null) {
+                    // Pass false/false for flip flags -- the per-channel
+                    // pyramids were already written with the stitcher's
+                    // flipStitchingX/Y baked in, and ChannelMerger preserves
+                    // pixel layout. Passing metadata.flipX/Y here ran a
+                    // second TransformedServerBuilder flip on the merged
+                    // file, rotating multi-channel acquisitions 180 deg
+                    // relative to the BF single-pass path on any scope
+                    // whose stitcher flags are non-trivial (e.g. OWS3 with
+                    // inverted stage polarity). flipX/Y is still applied to
+                    // metadata for downstream consumers.
                     QPProjectFunctions.addImageToProjectWithMetadata(
                             project, mergedFile,
                             metadata.parentEntry,
                             metadata.xOffset, metadata.yOffset,
-                            metadata.flipX, metadata.flipY,
+                            false, false,
                             metadata.sampleName,
                             metadata.modality, metadata.objective,
                             metadata.angle, metadata.annotationName,
