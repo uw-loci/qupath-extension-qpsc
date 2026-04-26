@@ -1661,7 +1661,7 @@ public class ExistingImageAcquisitionController {
                 validationErrors.remove("detector");
             }
 
-            if (useExistingRadio.isSelected() && transformCombo.getValue() == null) {
+            if (useExistingRadio.isSelected() && transformCombo.getValue() == null && !hasSlideAlignment) {
                 validationErrors.put("transform", "Please select a transform");
             } else {
                 validationErrors.remove("transform");
