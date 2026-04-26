@@ -36,6 +36,7 @@ import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
+import qupath.ext.qpsc.utilities.StageImageTransform;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.ext.qpsc.utilities.TileProcessingUtilities;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
@@ -774,17 +775,17 @@ public class StitchingHelper {
         double xOffset = 0.0;
         double yOffset = 0.0;
 
-        // Check flip status from parent or preferences
-        boolean flipX = false;
-        boolean flipY = false;
-        if (parentEntry != null) {
-            flipX = ImageMetadataManager.isFlippedX(parentEntry);
-            flipY = ImageMetadataManager.isFlippedY(parentEntry);
-        } else {
-            // If no parent, use preferences
-            flipX = QPPreferenceDialog.getFlipMacroXProperty();
-            flipY = QPPreferenceDialog.getFlipMacroYProperty();
-        }
+        // The flip state of the stitched output is determined by the
+        // stitcher (StageImageTransform.stitcherFlipFlags), NOT by the
+        // macro flip preferences. The macro flip preferences control scanner/
+        // macro image display; the stitcher flip accounts for stage polarity
+        // + camera orientation. These can differ (e.g. OWS3 has inverted
+        // stage axes -> stitcher flips, but no scanner -> macro flip = false).
+        boolean[] stitcherFlips = StageImageTransform.current().stitcherFlipFlags();
+        boolean flipX = stitcherFlips[0];
+        boolean flipY = stitcherFlips[1];
+        logger.info("Region stitching flip flags from StageImageTransform: flipX={}, flipY={}",
+                flipX, flipY);
 
         return new StitchingMetadata(
                 parentEntry,
