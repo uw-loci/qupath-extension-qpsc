@@ -533,7 +533,19 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
             try {
                 auxSocket = new Socket();
-                auxSocket.setSoTimeout(readTimeout);
+                // Use a longer read timeout than the primary's default (5s).
+                // Aux commands are quick in the happy case (<100ms for GETXY,
+                // GETZ, GETR), but they share the server's hardware lock with
+                // the primary's tile capture -- so a 3-angle JAI capture
+                // (~10-15s) can block any aux query queued behind it.
+                // executeCommandOnAux tears down the aux on IOException to
+                // preserve protocol sync, which would trigger a poller
+                // reconnect storm (observed on PPM 2026-04-26: StageMap,
+                // LiveViewer-FramePoller, StagePositionManager-Poller all
+                // cycling reconnects during a 203s pyramid write). 30s
+                // reliably distinguishes hardware-lock contention from a
+                // real disconnect.
+                auxSocket.setSoTimeout(Math.max(readTimeout, 30000));
                 auxSocket.setKeepAlive(true);
                 auxSocket.setTcpNoDelay(true);
 
