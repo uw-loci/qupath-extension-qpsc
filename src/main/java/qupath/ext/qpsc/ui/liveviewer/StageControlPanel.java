@@ -1687,6 +1687,35 @@ public class StageControlPanel extends VBox {
                 + "." + currentCameraDetectorId;
     }
 
+    /**
+     * Resolve the first acquisition profile whose modality matches the
+     * given modality string. Used by Save/Load Preset to round-trip
+     * through APPLYPR so the server's _illumination is primed for the
+     * preset's modality before camera settings + illumination power
+     * are written. Returns null if no matching profile exists.
+     */
+    @SuppressWarnings("unchecked")
+    private String findFirstMatchingProfile(String modality) {
+        try {
+            var profiles = mgr.getConfigItem("acquisition_profiles");
+            if (!(profiles instanceof java.util.Map<?, ?> profileMap) || profileMap.isEmpty()) return null;
+            String modalityLower = modality.toLowerCase();
+            for (var entry : profileMap.entrySet()) {
+                if (!(entry.getValue() instanceof java.util.Map<?, ?> profileCfg)) continue;
+                Object profModality = profileCfg.get("modality");
+                if (profModality == null) continue;
+                String profModStr = profModality.toString().toLowerCase();
+                int prefix = Math.min(2, Math.min(modalityLower.length(), profModStr.length()));
+                if (modalityLower.regionMatches(0, profModStr, 0, prefix)) {
+                    return String.valueOf(entry.getKey());
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("findFirstMatchingProfile({}) failed: {}", modality, e.getMessage());
+        }
+        return null;
+    }
+
     /** Save current camera state (exposure + gain + illumination) as a preset. */
     private void saveCurrentPreset(String modality) {
         Thread t = new Thread(
@@ -1699,8 +1728,17 @@ public class StageControlPanel extends VBox {
                         var gainResult = mc.getSocketClient().getGains();
                         var illumResult = mc.getSocketClient().getIllumination();
 
-                        // Build simple JSON-like string: exp|gain|illum
+                        // Build string: profile|exp|gain|illum
+                        // The leading profile name primes the server's
+                        // _illumination via APPLYPR on Load -- without it,
+                        // SETILLM hits whatever device the previous
+                        // workflow last selected (often the wrong one,
+                        // causing ERR_ILLM when the power value is out of
+                        // range for that device).
                         StringBuilder sb = new StringBuilder();
+                        String profileName = findFirstMatchingProfile(modality);
+                        sb.append(profileName != null ? profileName : "");
+                        sb.append("|");
                         sb.append(String.format("%.2f", expResult.unified()));
                         if (expResult.isPerChannel()) {
                             sb.append(String.format(
@@ -1759,12 +1797,51 @@ public class StageControlPanel extends VBox {
                         MicroscopeController mc = MicroscopeController.getInstance();
                         if (mc == null || !mc.isConnected()) throw new Exception("Not connected");
 
-                        // Parse: exp[,r,g,b]|gain,aR,aB|illum
+                        // New format:    profile|exp[,r,g,b]|gain,aR,aB|illum
+                        // Legacy format: exp[,r,g,b]|gain,aR,aB|illum
+                        // Detect by checking whether the first segment
+                        // parses as a float (legacy) or a profile name (new).
                         String[] parts = presetStr.split("\\|");
                         if (parts.length < 2) throw new Exception("Invalid preset format");
 
+                        String savedProfile = null;
+                        int expIdx;
+                        boolean isLegacy;
+                        try {
+                            Float.parseFloat(parts[0].split(",")[0]);
+                            isLegacy = true;
+                        } catch (NumberFormatException nfe) {
+                            isLegacy = false;
+                        }
+                        if (isLegacy) {
+                            expIdx = 0;
+                        } else {
+                            savedProfile = parts[0].isBlank() ? null : parts[0];
+                            expIdx = 1;
+                        }
+                        if (parts.length < expIdx + 2) throw new Exception("Invalid preset format");
+
+                        // Apply the modality's profile FIRST so the server's
+                        // _illumination is primed for the right device.
+                        // Without this, SETILLM lands on whatever was active
+                        // last (often a different modality's source) and
+                        // returns ERR_ILLM when the power is out of range.
+                        if (savedProfile == null) {
+                            savedProfile = findFirstMatchingProfile(modality);
+                        }
+                        final String profileToApply = savedProfile;
+                        if (profileToApply != null) {
+                            try {
+                                mc.withLiveModeHandling(
+                                        () -> mc.getSocketClient().applyProfile(profileToApply));
+                            } catch (Exception apEx) {
+                                logger.warn("applyProfile({}) before preset load failed: {}",
+                                        profileToApply, apEx.getMessage());
+                            }
+                        }
+
                         // Parse exposures
-                        String[] expParts = parts[0].split(",");
+                        String[] expParts = parts[expIdx].split(",");
                         float[] exposures;
                         boolean individual;
                         if (expParts.length >= 4) {
@@ -1780,7 +1857,7 @@ public class StageControlPanel extends VBox {
                         }
 
                         // Parse gains
-                        String[] gainParts = parts[1].split(",");
+                        String[] gainParts = parts[expIdx + 1].split(",");
                         float[] gains = new float[] {
                             Float.parseFloat(gainParts[0]),
                             gainParts.length >= 2 ? Float.parseFloat(gainParts[1]) : 1.0f,
@@ -1792,8 +1869,8 @@ public class StageControlPanel extends VBox {
                                 () -> mc.getSocketClient().setCameraSettings(individual, exposures, gains));
 
                         // Apply illumination if present
-                        if (parts.length >= 3) {
-                            float illumPower = Float.parseFloat(parts[2]);
+                        if (parts.length > expIdx + 2) {
+                            float illumPower = Float.parseFloat(parts[expIdx + 2]);
                             if (illumPower > 0) {
                                 mc.getSocketClient().setIllumination(illumPower);
                             }
