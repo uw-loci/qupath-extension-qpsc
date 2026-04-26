@@ -83,6 +83,13 @@ public class DualProgressDialog {
     // would need it too.
     private final AtomicInteger stepsPerPosition = new AtomicInteger(1);
 
+    // Last tile count we logged the time-estimate line for. updateTimeEstimate()
+    // is driven by a 500ms Timeline tick (and historically by other paths too),
+    // so the same totalCompleted value can hit the "% 25 == 0" gate many times
+    // before the next tile lands. Dedupe by tile count so the log line fires
+    // at most once per milestone.
+    private int lastLoggedEstimateTiles = -1;
+
     // Tile timing tracking for better estimation (uses recent actual timing, no hardcoded values)
     // Dynamic timing window size based on autofocus settings (5x n_steps for that objective)
     private final AtomicInteger timingWindowSize =
@@ -622,8 +629,11 @@ public class DualProgressDialog {
         int steps = stepsPerPosition.get();
         int positionsRemaining = totalTilesRemaining / Math.max(1, steps);
 
-        // Log periodically (every 25 tiles)
-        if (totalCompleted > 0 && totalCompleted % 25 == 0) {
+        // Log periodically (every 25 tiles), but only ONCE per milestone --
+        // updateTimeEstimate fires every 500ms, so without a dedupe guard the
+        // same "550 tiles" line gets written 50 times before the count moves.
+        if (totalCompleted > 0 && totalCompleted % 25 == 0 && totalCompleted != lastLoggedEstimateTiles) {
+            lastLoggedEstimateTiles = totalCompleted;
             logger.info(
                     "Time estimate: {} remaining ({} positions). " + "Avg: {}ms/tile over {} tiles ({}s elapsed)",
                     estimate,
