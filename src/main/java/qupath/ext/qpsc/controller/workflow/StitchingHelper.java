@@ -43,6 +43,7 @@ import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.Project;
+import qupath.lib.roi.interfaces.ROI;
 import qupath.lib.projects.ProjectImageEntry;
 
 /**
@@ -160,8 +161,9 @@ public class StitchingHelper {
 
         // Use sample.sampleName() for file naming (source image name), not sampleName (project folder name)
         String displayName = sample.sampleName();
-        StitchingMetadata metadata =
-                calculateMetadata(annotation, displayName, gui, project, fullResToStage, parentEntry);
+        StitchingMetadata metadata = calculateMetadata(
+                annotation, displayName, gui, project, fullResToStage, parentEntry,
+                sample.modality(), sample.objective());
         return performStitchingInternal(
                 annotation.getName(),
                 sample,
@@ -808,9 +810,9 @@ public class StitchingHelper {
     }
 
     /**
-     * Calculates metadata for a stitched image based on its parent annotation.
-     *
-     * @param sampleName The actual sample folder name (from ProjectInfo)
+     * Calculates metadata for a stitched sub-image based on its parent annotation.
+     * Computes the annotation's stage bounds from the parent's alignment transform
+     * so that the sub-image gets its own auto-registered pixel-to-stage alignment.
      */
     private static StitchingMetadata calculateMetadata(
             PathObject annotation,
@@ -818,31 +820,53 @@ public class StitchingHelper {
             QuPathGUI gui,
             Project<BufferedImage> project,
             AffineTransform fullResToStage,
-            ProjectImageEntry<BufferedImage> capturedParentEntry) {
+            ProjectImageEntry<BufferedImage> capturedParentEntry,
+            String modality,
+            String objective) {
 
         // Use pre-captured parent entry if available (stable across the whole session).
-        // Fall back to gui lookup only if no pre-captured entry was provided.
         ProjectImageEntry<BufferedImage> parentEntry = capturedParentEntry;
         if (parentEntry == null && gui.getViewer().hasServer() && gui.getImageData() != null) {
             parentEntry = project.getEntry(gui.getImageData());
         }
 
-        // Calculate offset from slide corner
+        // Calculate offset (annotation top-left in stage coords)
         double[] offset = TransformationFunctions.calculateAnnotationOffsetFromSlideCorner(annotation, fullResToStage);
 
-        // Check flip status from parent or preferences
-        boolean flipX = false;
-        boolean flipY = false;
-        if (parentEntry != null) {
-            flipX = ImageMetadataManager.isFlippedX(parentEntry);
-            flipY = ImageMetadataManager.isFlippedY(parentEntry);
-        } else {
-            // If no parent, use preferences
-            flipX = QPPreferenceDialog.getFlipMacroXProperty();
-            flipY = QPPreferenceDialog.getFlipMacroYProperty();
+        // Stitcher flip flags (same as bounding-box path -- the stitcher
+        // determines the output image orientation, not the parent's metadata)
+        boolean[] stitcherFlips = StageImageTransform.current().stitcherFlipFlags();
+        boolean flipX = stitcherFlips[0];
+        boolean flipY = stitcherFlips[1];
+
+        // Compute annotation stage bounds so the sub-image gets its own
+        // auto-registered alignment via autoRegisterBoundsTransformIfAvailable.
+        Double stageBoundsX1 = null, stageBoundsY1 = null;
+        Double stageBoundsX2 = null, stageBoundsY2 = null;
+        if (annotation != null && annotation.getROI() != null && fullResToStage != null) {
+            ROI roi = annotation.getROI();
+            double[] topLeft = TransformationFunctions.transformQuPathFullResToStage(
+                    new double[]{roi.getBoundsX(), roi.getBoundsY()}, fullResToStage);
+            double[] botRight = TransformationFunctions.transformQuPathFullResToStage(
+                    new double[]{roi.getBoundsX() + roi.getBoundsWidth(),
+                                 roi.getBoundsY() + roi.getBoundsHeight()}, fullResToStage);
+            // Ensure min/max ordering (transform may have negative scales)
+            stageBoundsX1 = Math.min(topLeft[0], botRight[0]);
+            stageBoundsY1 = Math.min(topLeft[1], botRight[1]);
+            stageBoundsX2 = Math.max(topLeft[0], botRight[0]);
+            stageBoundsY2 = Math.max(topLeft[1], botRight[1]);
+            logger.info("Sub-image annotation stage bounds: ({},{}) -> ({},{})",
+                    String.format("%.1f", stageBoundsX1), String.format("%.1f", stageBoundsY1),
+                    String.format("%.1f", stageBoundsX2), String.format("%.1f", stageBoundsY2));
         }
 
-        return new StitchingMetadata(parentEntry, offset[0], offset[1], flipX, flipY, sampleName);
+        String annotationName = annotation != null ? annotation.getName() : null;
+
+        return new StitchingMetadata(
+                parentEntry, offset[0], offset[1], flipX, flipY, sampleName,
+                modality, objective, null, annotationName, null,
+                stageBoundsX1, stageBoundsY1, stageBoundsX2, stageBoundsY2,
+                null, null);
     }
 
     /**
@@ -1381,15 +1405,14 @@ public class StitchingHelper {
                 try {
                     if (metadata != null) {
                         QPProjectFunctions.addImageToProjectWithMetadata(
-                                project,
-                                f,
+                                project, f,
                                 metadata.parentEntry,
-                                metadata.xOffset,
-                                metadata.yOffset,
-                                false,
-                                false,
+                                metadata.xOffset, metadata.yOffset,
+                                metadata.flipX, metadata.flipY,
                                 metadata.sampleName,
-                                handler);
+                                metadata.modality, metadata.objective,
+                                metadata.angle, metadata.annotationName,
+                                metadata.imageIndex, handler);
                     } else {
                         QPProjectFunctions.addImageToProject(f, project, false, false, handler);
                     }
@@ -1425,15 +1448,14 @@ public class StitchingHelper {
 
                 if (metadata != null) {
                     QPProjectFunctions.addImageToProjectWithMetadata(
-                            project,
-                            mergedFile,
+                            project, mergedFile,
                             metadata.parentEntry,
-                            metadata.xOffset,
-                            metadata.yOffset,
-                            false, // already correctly oriented
-                            false,
+                            metadata.xOffset, metadata.yOffset,
+                            metadata.flipX, metadata.flipY,
                             metadata.sampleName,
-                            handler);
+                            metadata.modality, metadata.objective,
+                            metadata.angle, metadata.annotationName,
+                            metadata.imageIndex, handler);
                 } else {
                     QPProjectFunctions.addImageToProject(mergedFile, project, false, false, handler);
                 }

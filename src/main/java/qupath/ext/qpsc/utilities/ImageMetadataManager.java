@@ -257,8 +257,8 @@ public class ImageMetadataManager {
             metadata.put(DETECTOR_ID, detectorId);
         }
 
-        // If this is a flipped duplicate, store reference to original
-        if (parentEntry != null && (flipX || flipY)) {
+        // Store reference to the parent/source image
+        if (parentEntry != null) {
             metadata.put(ORIGINAL_IMAGE_ID, parentEntry.getID());
         }
 
