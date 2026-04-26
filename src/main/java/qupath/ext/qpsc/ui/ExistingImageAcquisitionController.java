@@ -295,6 +295,50 @@ public class ExistingImageAcquisitionController {
             return t != null;
         }
 
+        /** Returns true when QuPath is using a dark color scheme. */
+        private boolean isDark() {
+            return QuPathStyleManager.getStyleColorScheme() == ColorScheme.DARK;
+        }
+
+        /** Secondary/description text style that works in both light and dark themes. */
+        private String subtleTextStyle() {
+            return "-fx-font-size: 10px; -fx-opacity: 0.65;";
+        }
+
+        /** Info-banner background style for a given semantic color. */
+        private String bannerStyle(String semanticColor) {
+            // semanticColor: "green", "blue", "yellow"
+            boolean dark = isDark();
+            switch (semanticColor) {
+                case "green":
+                    return dark
+                            ? "-fx-background-color: #1B3A1B; -fx-border-color: #2E7D32; -fx-border-width: 0 0 1 0;"
+                            : "-fx-background-color: #E8F5E9; -fx-border-color: #A5D6A7; -fx-border-width: 0 0 1 0;";
+                case "blue":
+                    return dark
+                            ? "-fx-background-color: #1A2A3A; -fx-border-color: #42A5F5; -fx-border-width: 0 0 1 0;"
+                            : "-fx-background-color: #E3F2FD; -fx-border-color: #90CAF9; -fx-border-width: 0 0 1 0;";
+                case "yellow":
+                    return dark
+                            ? "-fx-background-color: #3A3000; -fx-background-radius: 4; -fx-font-size: 11px;"
+                            : bannerStyle("yellow");
+                default:
+                    return "";
+            }
+        }
+
+        /** Accent text color that reads well in both themes. */
+        private String accentColor(String semanticColor) {
+            boolean dark = isDark();
+            switch (semanticColor) {
+                case "green": return dark ? "#66BB6A" : "#2E7D32";
+                case "blue": return dark ? "#64B5F6" : "#1565C0";
+                case "amber": return dark ? "#FFD54F" : "#F57F17";
+                case "red": return dark ? "#EF5350" : "#C62828";
+                default: return dark ? "#B0BEC5" : "#424242";
+            }
+        }
+
         Optional<ExistingImageAcquisitionConfig> buildAndShow() {
             dialog = new Dialog<>();
             dialog.initModality(Modality.APPLICATION_MODAL);
@@ -377,19 +421,17 @@ public class ExistingImageAcquisitionController {
             textLabel.setWrapText(true);
 
             if (hasOpenProject) {
-                variantBanner.setStyle(
-                        "-fx-background-color: #E8F5E9; -fx-border-color: #A5D6A7; " + "-fx-border-width: 0 0 1 0;");
+                variantBanner.setStyle(bannerStyle("green"));
                 iconLabel.setText("[+]");
-                iconLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #2E7D32;");
+                iconLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + accentColor("green") + ";");
                 textLabel.setText("Adding to existing project: " + existingProjectName);
-                textLabel.setStyle("-fx-text-fill: #2E7D32;");
+                textLabel.setStyle("-fx-text-fill: " + accentColor("green") + ";");
             } else {
-                variantBanner.setStyle(
-                        "-fx-background-color: #E3F2FD; -fx-border-color: #90CAF9; " + "-fx-border-width: 0 0 1 0;");
+                variantBanner.setStyle(bannerStyle("blue"));
                 iconLabel.setText("[*]");
-                iconLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #1565C0;");
+                iconLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + accentColor("blue") + ";");
                 textLabel.setText("Creating new project");
-                textLabel.setStyle("-fx-text-fill: #1565C0;");
+                textLabel.setStyle("-fx-text-fill: " + accentColor("blue") + ";");
             }
 
             variantBanner.getChildren().addAll(iconLabel, textLabel);
@@ -611,10 +653,10 @@ public class ExistingImageAcquisitionController {
             comparisonRow.setAlignment(Pos.CENTER_LEFT);
 
             Label existingInfo = new Label("[T] 2-5 min | [A] +/- 20 um");
-            existingInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+            existingInfo.setStyle(subtleTextStyle());
 
             Label manualInfo = new Label("[T] 10-20 min | [A] +/- 5 um");
-            manualInfo.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+            manualInfo.setStyle(subtleTextStyle());
 
             VBox existingOption = new VBox(3, useExistingRadio, existingInfo);
             VBox manualOption = new VBox(3, manualAlignRadio, manualInfo);
@@ -687,7 +729,7 @@ public class ExistingImageAcquisitionController {
                     "This image has stage coordinates from QPSC acquisition. "
                     + "No scanner alignment needed.");
             slideAlignmentInfo.setWrapText(true);
-            slideAlignmentInfo.setStyle("-fx-font-size: 11px; -fx-text-fill: #1B5E20; -fx-padding: 4 0 0 20;");
+            slideAlignmentInfo.setStyle("-fx-font-size: 11px; -fx-text-fill: " + accentColor("green") + "; -fx-padding: 4 0 0 20;");
             slideAlignmentInfo.setVisible(hasSlideAlignment && useExistingRadio.isSelected());
             slideAlignmentInfo.setManaged(hasSlideAlignment && useExistingRadio.isSelected());
 
@@ -696,7 +738,7 @@ public class ExistingImageAcquisitionController {
             recommendationLabel.setWrapText(true);
             recommendationLabel.setPadding(new Insets(8));
             recommendationLabel.setStyle(
-                    "-fx-background-color: #FFF8E1; -fx-background-radius: 4; -fx-font-size: 11px;");
+                    bannerStyle("yellow"));
 
             if (hasSlideAlignment) {
                 recommendationLabel.setText(
@@ -752,20 +794,20 @@ public class ExistingImageAcquisitionController {
                     isUsingRefinedAlignment()
                             ? "    Fastest - use alignment as-is. Accuracy: +/- 5 um (previously refined)"
                             : "    Fastest - use alignment as-is. Accuracy: +/- 20 um");
-            noRefineDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+            noRefineDesc.setStyle(subtleTextStyle());
 
             Label singleTileDesc = new Label("    Verify position with one tile. Accuracy: +/- 5 um");
-            singleTileDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+            singleTileDesc.setStyle(subtleTextStyle());
 
             Label fullManualDesc = new Label("    Complete re-alignment. Accuracy: +/- 2 um");
-            fullManualDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+            fullManualDesc.setStyle(subtleTextStyle());
 
             // Recommendation label
             refinementRecommendationLabel = new Label();
             refinementRecommendationLabel.setWrapText(true);
             refinementRecommendationLabel.setPadding(new Insets(8));
             refinementRecommendationLabel.setStyle(
-                    "-fx-background-color: #FFF8E1; -fx-background-radius: 4; -fx-font-size: 11px;");
+                    bannerStyle("yellow"));
 
             // Set default based on confidence
             updateRefinementRecommendation();
@@ -1169,8 +1211,8 @@ public class ExistingImageAcquisitionController {
                 String level =
                         confidence >= HIGH_CONFIDENCE ? "HIGH" : (confidence >= MEDIUM_CONFIDENCE ? "MEDIUM" : "LOW");
                 String color = confidence >= HIGH_CONFIDENCE
-                        ? "#2E7D32"
-                        : (confidence >= MEDIUM_CONFIDENCE ? "#F57F17" : "#C62828");
+                        ? accentColor("green")
+                        : (confidence >= MEDIUM_CONFIDENCE ? accentColor("amber") : accentColor("red"));
                 confidenceLabel.setText(String.format("Confidence: %s (%.0f%%)", level, confidence * 100));
                 confidenceLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
             } else {
@@ -1355,21 +1397,15 @@ public class ExistingImageAcquisitionController {
             boolean isOutdated = ageInDays > 1;
 
             // Style based on age
-            if (isOutdated) {
-                // Amber warning style for old alignments
-                banner.setStyle(
-                        "-fx-background-color: #FFF8E1; -fx-border-color: #FFD54F; " + "-fx-border-width: 0 0 1 0;");
-            } else {
-                // Blue info style for recent alignments
-                banner.setStyle(
-                        "-fx-background-color: #E3F2FD; -fx-border-color: #90CAF9; " + "-fx-border-width: 0 0 1 0;");
-            }
+            String semantic = isOutdated ? "yellow" : "blue";
+            String accentSemantic = isOutdated ? "amber" : "blue";
+            banner.setStyle(bannerStyle(semantic));
 
             // Icon
             Label iconLabel = new Label(isOutdated ? "[!]" : "[*]");
             iconLabel.setStyle(String.format(
                     "-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: %s;",
-                    isOutdated ? "#F57F17" : "#1565C0"));
+                    accentColor(accentSemantic)));
 
             // Message
             VBox messageBox = new VBox(2);
@@ -1380,7 +1416,7 @@ public class ExistingImageAcquisitionController {
             Label titleLabel = new Label(titleText);
             titleLabel.setStyle(String.format(
                     "-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: %s;",
-                    isOutdated ? "#F57F17" : "#1565C0"));
+                    accentColor(accentSemantic)));
 
             // Date with age indicator
             String ageText;
@@ -1398,7 +1434,7 @@ public class ExistingImageAcquisitionController {
                     ? String.format("Last refined: %s%s", date, ageText.isEmpty() ? "" : " (" + ageText + ")")
                     : "Last refined: Unknown";
             Label detailLabel = new Label(detailText);
-            detailLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #424242;");
+            detailLabel.setStyle("-fx-font-size: 11px; -fx-opacity: 0.75;");
 
             // Recommendation
             String recommendationText = isOutdated
@@ -1407,7 +1443,7 @@ public class ExistingImageAcquisitionController {
             Label recommendationLabel = new Label(recommendationText);
             recommendationLabel.setStyle(String.format(
                     "-fx-font-size: 11px; -fx-font-style: italic; -fx-text-fill: %s;",
-                    isOutdated ? "#F57F17" : "#1565C0"));
+                    accentColor(accentSemantic)));
 
             messageBox.getChildren().addAll(titleLabel, detailLabel, recommendationLabel);
 
@@ -1643,7 +1679,7 @@ public class ExistingImageAcquisitionController {
                 errorListBox.getChildren().clear();
                 validationErrors.forEach((fieldId, errorMsg) -> {
                     Label errorLabel = new Label("- " + errorMsg);
-                    errorLabel.setStyle("-fx-text-fill: #856404;");
+                    errorLabel.setStyle("-fx-text-fill: " + accentColor("amber") + ";");
                     errorListBox.getChildren().add(errorLabel);
                 });
 
