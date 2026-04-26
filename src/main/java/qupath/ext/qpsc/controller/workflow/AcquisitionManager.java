@@ -973,25 +973,36 @@ public class AcquisitionManager {
             logger.info("Estimated {} tiles for annotation {}", tilesPerAngle, annotation.getName());
         }
 
-        // Steps per physical XY position: either the angle count
-        // (PPM) or the channel count (widefield IF), floored at 1.
-        // Python's acquisition workflow writes one file per (tile,
-        // step) pair, so the total file count is tiles * steps. The
-        // two axes are mutually exclusive upstream so we take the
-        // max; if both are zero/empty we fall back to 1 for a plain
-        // single-shot acquisition.
+        // Steps per physical XY position: angle count (PPM) or channel
+        // count (widefield IF), times the Z-plane count when Z-stack is
+        // enabled. Python's acquisition workflow reports one progress
+        // increment per snap, so total snaps per tile = channels *
+        // n_z_planes (or angles * n_z_planes). Angles and channels are
+        // mutually exclusive upstream so we take the max; if both are
+        // zero/empty we fall back to 1 for a plain single-shot acquisition.
         int numChannelsForProgress = (channelExposures != null) ? channelExposures.size() : 0;
         int numAnglesForProgress = (angleExposures != null) ? angleExposures.size() : 0;
-        final int stepsPerPositionForProgress = Math.max(1, Math.max(numChannelsForProgress, numAnglesForProgress));
+        int stepsPerPositionTmp = Math.max(1, Math.max(numChannelsForProgress, numAnglesForProgress));
+        int nZPlanesForProgress = 1;
+        if (PersistentPreferences.isZStackEnabled()) {
+            double zRange = PersistentPreferences.getZStackRange();
+            double zStep = PersistentPreferences.getZStackStep();
+            if (zStep > 0) {
+                nZPlanesForProgress = (int) Math.ceil(zRange / zStep) + 1;
+                stepsPerPositionTmp *= nZPlanesForProgress;
+            }
+        }
+        final int stepsPerPositionForProgress = stepsPerPositionTmp;
         final int expectedFiles = tilesPerAngle * stepsPerPositionForProgress;
 
         logger.info(
-                "Expected files: {} ({} tiles x {} steps/position; angles={}, channels={})",
+                "Expected files: {} ({} tiles x {} steps/position; angles={}, channels={}, z_planes={})",
                 expectedFiles,
                 tilesPerAngle,
                 stepsPerPositionForProgress,
                 numAnglesForProgress,
-                numChannelsForProgress);
+                numChannelsForProgress,
+                nZPlanesForProgress);
 
         // Create progress counter
         AtomicInteger progressCounter = new AtomicInteger(0);
