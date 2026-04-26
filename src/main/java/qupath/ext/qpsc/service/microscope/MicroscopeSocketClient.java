@@ -3332,6 +3332,39 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if communication fails
      */
     public AcquisitionState getAcquisitionStatus() throws IOException {
+        // STATUS is a trivial server-side read of acquisition_states[addr],
+        // but it's processed by the per-client server thread sequentially,
+        // so it can sit behind a long-running command on that same socket
+        // (e.g. a 3-angle JAI tile capture, ~10-15s on PPM 20x). The default
+        // 5s readTimeout is too aggressive for that case -- a timeout here
+        // triggers handleIOException, which marks the connection dead and
+        // schedules a reconnect that re-sends CONFIG. That reconnect storm
+        // is what surfaced the server's same-IP takeover bug on 2026-04-26.
+        // Bump per-call to 30s: the server's STAT path is genuinely fast,
+        // so a 30s wait reliably indicates a real failure (server died,
+        // network broken) rather than legitimate busy.
+        int originalTimeout;
+        synchronized (socketLock) {
+            ensureConnected();
+            originalTimeout = socket.getSoTimeout();
+            socket.setSoTimeout(30000);
+        }
+        try {
+            return getAcquisitionStatusInternal();
+        } finally {
+            synchronized (socketLock) {
+                if (socket != null && !socket.isClosed()) {
+                    try {
+                        socket.setSoTimeout(originalTimeout);
+                    } catch (IOException e) {
+                        logger.warn("Failed to restore socket timeout after STATUS poll", e);
+                    }
+                }
+            }
+        }
+    }
+
+    private AcquisitionState getAcquisitionStatusInternal() throws IOException {
         // First, read initial response to check state
         byte[] initialResponse = executeCommand(Command.STATUS, null, 16);
         String stateStr = new String(initialResponse, StandardCharsets.UTF_8);
