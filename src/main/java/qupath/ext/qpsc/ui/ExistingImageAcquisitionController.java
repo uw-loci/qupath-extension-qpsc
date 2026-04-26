@@ -1149,6 +1149,16 @@ public class ExistingImageAcquisitionController {
         }
 
         private void updateRefinementRecommendation() {
+            // Bounding-box images have auto-registered alignment from known
+            // stage coordinates -- highest possible confidence, no refinement needed.
+            if (hasSlideAlignment) {
+                noRefineRadio.setSelected(true);
+                refinementRecommendationLabel.setText(
+                        "[i] Recommendation: Proceed without refinement "
+                        + "(auto-registered from acquisition coordinates)");
+                return;
+            }
+
             AffineTransformManager.TransformPreset preset = transformCombo.getValue();
             double confidence = preset != null ? AlignmentHelper.calculateConfidence(preset) : 0.5;
 
