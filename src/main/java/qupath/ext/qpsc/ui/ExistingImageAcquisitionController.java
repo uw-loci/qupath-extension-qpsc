@@ -321,7 +321,7 @@ public class ExistingImageAcquisitionController {
                 case "yellow":
                     return dark
                             ? "-fx-background-color: #3A3000; -fx-background-radius: 4; -fx-font-size: 11px;"
-                            : bannerStyle("yellow");
+                            : "-fx-background-color: #FFF9E5; -fx-background-radius: 4; -fx-font-size: 11px;";
                 default:
                     return "";
             }
