@@ -957,6 +957,14 @@ public class StageControlPanel extends VBox {
             cameraStatusLabel.setText("");
             currentCameraModality = modalityCombo.getValue();
             rebuildCameraModContent(currentCameraModality);
+            // Drive the hardware to the new modality: filter cube,
+            // illumination teardown of the previously-active source,
+            // and selection of this modality's illumination as the
+            // server's active _illumination. Without this, the dropdown
+            // only updates UI and the lamp / cube of the previous
+            // modality keeps emitting -- corrupting any live exposure
+            // estimates the user makes from this tab.
+            applyProfileForModality(currentCameraModality);
         });
 
         tab.setContent(cameraContent);
@@ -1685,6 +1693,47 @@ public class StageControlPanel extends VBox {
                 + modality.toLowerCase().replaceAll("[^a-z0-9]", "")
                 + "." + currentCameraObjectiveId
                 + "." + currentCameraDetectorId;
+    }
+
+    /**
+     * Send APPLYPR for a profile matching the given modality so the
+     * server's hardware state (filter cube, illumination, light path
+     * presets) actually follows the dropdown. Runs in a background
+     * thread under withLiveModeHandling. No-op if no matching profile
+     * is configured.
+     */
+    private void applyProfileForModality(String modality) {
+        final String profileToApply = findFirstMatchingProfile(modality);
+        if (profileToApply == null) {
+            logger.debug("Modality switch to '{}': no matching profile, skipping APPLYPR", modality);
+            return;
+        }
+        cameraStatusLabel.setText("Switching to " + profileToApply + "...");
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        MicroscopeController mc = MicroscopeController.getInstance();
+                        if (mc == null || !mc.isConnected()) return;
+                        mc.withLiveModeHandling(
+                                () -> mc.getSocketClient().applyProfile(profileToApply));
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Switched to " + profileToApply);
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                            rebuildCameraModContent(modality);
+                        });
+                        logger.info("Modality switch -> APPLYPR({})", profileToApply);
+                    } catch (Exception ex) {
+                        logger.error("Modality switch APPLYPR({}) failed: {}", profileToApply, ex.getMessage());
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Switch failed: " + ex.getMessage());
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                        });
+                    }
+                },
+                "Modality-Switch");
+        t.setDaemon(true);
+        t.start();
     }
 
     /**
