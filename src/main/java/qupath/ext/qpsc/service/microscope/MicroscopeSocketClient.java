@@ -226,6 +226,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
         GETBIN("getbin__"),
         /** Set camera binning factor (1-byte unsigned payload) */
         SETBIN("setbin__"),
+        /**
+         * Capability query for Camera Control v2: returns a 4-byte length
+         * + UTF-8 JSON describing the camera, illumination sources, and
+         * the active or queried profile's modality. Optional 32-byte
+         * profile-name payload scopes the answer.
+         */
+        GETCAP("getcap__"),
 
         // NOTE: SETWBMD was removed -- JAI hardware AWB cannot be reliably
         // controlled through Pycromanager. Set AWB manually in MicroManager.
@@ -5124,6 +5131,133 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throw new IOException("SETBIN failed: " + responseStr);
         }
         logger.info("Camera binning set to {}", value);
+    }
+
+    // ==================== Capability query (Camera Control v2 phase 2) ====================
+
+    /**
+     * Typed view of the GETCAP JSON. All fields are optional in the wire
+     * format -- a missing key on the server side maps to a {@code null}
+     * field here, and the dialog renders only the sections whose
+     * corresponding fields are non-null. Fields are immutable; callers
+     * should treat the object as read-only.
+     */
+    public static final class CapabilityResult {
+        public static final class Camera {
+            public String name;
+            public String type; // "jai" | "hamamatsu" | "laser_scanning" | "generic"
+            @com.google.gson.annotations.SerializedName("supports_per_channel_exposure")
+            public boolean supportsPerChannelExposure;
+            @com.google.gson.annotations.SerializedName("supports_hardware_white_balance")
+            public boolean supportsHardwareWhiteBalance;
+            @com.google.gson.annotations.SerializedName("available_binnings")
+            public int[] availableBinnings;
+            @com.google.gson.annotations.SerializedName("current_binning")
+            public int currentBinning;
+            @com.google.gson.annotations.SerializedName("exposure_range_ms")
+            public double[] exposureRangeMs;
+            @com.google.gson.annotations.SerializedName("gain_range")
+            public double[] gainRange; // null when camera has no gain control
+        }
+        public static final class Illumination {
+            public String label;
+            public String device;
+            @com.google.gson.annotations.SerializedName("power_range")
+            public double[] powerRange;
+            @com.google.gson.annotations.SerializedName("current_power")
+            public double currentPower;
+            @com.google.gson.annotations.SerializedName("is_on")
+            public boolean isOn;
+        }
+        public static final class Channel {
+            public String id;
+            @com.google.gson.annotations.SerializedName("exposure_ms")
+            public Double exposureMs; // boxed: optional
+            @com.google.gson.annotations.SerializedName("default_intensity")
+            public Double defaultIntensity;
+            // intensity_property is a free-form dict; expose as raw map so
+            // the UI can pass it through without hard-coding a schema.
+            @com.google.gson.annotations.SerializedName("intensity_property")
+            public java.util.Map<String, Object> intensityProperty;
+        }
+        public static final class Modality {
+            public String name;
+            @com.google.gson.annotations.SerializedName("default_wb_mode")
+            public String defaultWbMode;
+            @com.google.gson.annotations.SerializedName("is_multi_angle")
+            public boolean isMultiAngle;
+            public java.util.List<Channel> channels;
+            @com.google.gson.annotations.SerializedName("rotation_angles")
+            public double[] rotationAngles;
+        }
+
+        public Camera camera;
+        public java.util.List<Illumination> illumination;
+        public Modality modality;
+        @com.google.gson.annotations.SerializedName("active_profile")
+        public String activeProfile;
+    }
+
+    /**
+     * Query the server for everything Camera Control v2 needs to render
+     * the dialog: camera capabilities, every illumination source on the
+     * scope, and the modality/channels/angles for the queried profile.
+     *
+     * @param profileName optional profile name to scope the answer
+     *     ("if I were to apply this profile, what controls?"). Pass
+     *     {@code null} or empty to describe the current state instead.
+     * @return parsed capability descriptor; never null
+     * @throws IOException on transport failure or empty/invalid JSON
+     */
+    public CapabilityResult getCapabilities(String profileName) throws IOException {
+        byte[] payload = new byte[32];
+        if (profileName != null && !profileName.isEmpty()) {
+            byte[] nameBytes = profileName.getBytes(StandardCharsets.UTF_8);
+            int len = Math.min(nameBytes.length, 32);
+            System.arraycopy(nameBytes, 0, payload, 0, len);
+        }
+
+        synchronized (socketLock) {
+            ensureConnected();
+            try {
+                output.write(Command.GETCAP.getValue());
+                output.write(payload);
+                output.flush();
+                lastActivityTime.set(System.currentTimeMillis());
+
+                byte[] lengthBytes = new byte[4];
+                input.readFully(lengthBytes);
+                int length = ByteBuffer.wrap(lengthBytes).order(ByteOrder.BIG_ENDIAN).getInt();
+                if (length <= 0) {
+                    throw new IOException("GETCAP: server returned empty payload (likely an error)");
+                }
+                if (length > 1024 * 1024) {
+                    throw new IOException("GETCAP: payload too large (" + length + " bytes)");
+                }
+                byte[] jsonBytes = new byte[length];
+                input.readFully(jsonBytes);
+                lastActivityTime.set(System.currentTimeMillis());
+                consecutiveErrors.set(0);
+
+                String json = new String(jsonBytes, StandardCharsets.UTF_8);
+                CapabilityResult result =
+                        new com.google.gson.Gson().fromJson(json, CapabilityResult.class);
+                if (result == null) {
+                    throw new IOException("GETCAP: failed to parse JSON response");
+                }
+                logger.info(
+                        "GETCAP({}) -> camera={}, type={}, illumination={}x, modality={}",
+                        profileName == null || profileName.isEmpty() ? "<current>" : profileName,
+                        result.camera != null ? result.camera.name : "?",
+                        result.camera != null ? result.camera.type : "?",
+                        result.illumination != null ? result.illumination.size() : 0,
+                        result.modality != null ? result.modality.name : "?");
+                return result;
+            } catch (IOException e) {
+                handleIOException(e);
+                throw e;
+            }
+        }
     }
 
     // ==================== Illumination Control ====================
