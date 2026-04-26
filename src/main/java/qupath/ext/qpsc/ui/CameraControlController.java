@@ -419,8 +419,13 @@ public class CameraControlController {
         wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
         wbMethodLabel.setWrapText(true);
 
-        // Wrap per-angle section so it can be hidden for non-rotation modalities
-        VBox perAngleSection = new VBox(4, new Separator(), settingsHeader, settingsNote, rotationNote, wbMethodLabel);
+        // Wrap per-angle section so it can be hidden for non-rotation modalities.
+        // The initial visibility is the conservative "any modality has rotation"
+        // heuristic above; the profile-combo listener (further down) refines it
+        // via GETCAP once a profile is selected, so non-rotation profiles like
+        // Brightfield_10x correctly hide the per-angle card even when the scope
+        // also has a PPM profile in its config.
+        final VBox perAngleSection = new VBox(4, new Separator(), settingsHeader, settingsNote, rotationNote, wbMethodLabel);
         if (!hasRotationModality) {
             perAngleSection.setVisible(false);
             perAngleSection.setManaged(false);
@@ -440,8 +445,11 @@ public class CameraControlController {
         // Load PPM angles from YAML config (falls back to defaults)
         Map<String, Double> ppmAngles = loadPpmAngles(mgr);
 
-        // Use VBox with individual angle "cards" for clearer grouping
-        VBox anglesContainer = new VBox(10);
+        // Use VBox with individual angle "cards" for clearer grouping.
+        // Final reference so the profile-combo listener (further down) can
+        // toggle visibility together with perAngleSection when the user
+        // picks a non-rotation profile like Brightfield_10x.
+        final VBox anglesContainer = new VBox(10);
         anglesContainer.setPadding(new Insets(10, 0, 10, 0));
 
         for (Map.Entry<String, Double> angleEntry : ppmAngles.entrySet()) {
@@ -818,18 +826,57 @@ public class CameraControlController {
                 refreshProfiles.run();
                 modalityFilterCombo.valueProperty().addListener((obs, oldVal, newVal) -> refreshProfiles.run());
 
+                // Refresh per-angle section visibility from GETCAP whenever
+                // a profile is selected. Replaces the conservative "any
+                // modality in config has rotation" heuristic with the
+                // server's authoritative "this specific profile is
+                // multi-angle" answer. Runs on a daemon thread so a slow
+                // round-trip doesn't freeze the dialog.
+                Runnable refreshSectionVisibilityFromCap = () -> {
+                    String selected = profileCombo.getValue();
+                    if (selected == null || selected.isEmpty()) return;
+                    Thread t = new Thread(
+                            () -> {
+                                try {
+                                    var cap = controller.getSocketClient().getCapabilities(selected);
+                                    boolean isMulti = cap.modality != null && cap.modality.isMultiAngle;
+                                    Platform.runLater(() -> {
+                                        perAngleSection.setVisible(isMulti);
+                                        perAngleSection.setManaged(isMulti);
+                                        anglesContainer.setVisible(isMulti);
+                                        anglesContainer.setManaged(isMulti);
+                                    });
+                                    logger.debug(
+                                            "GETCAP for '{}' -> isMultiAngle={} (per-angle section {})",
+                                            selected, isMulti, isMulti ? "shown" : "hidden");
+                                } catch (Exception ex) {
+                                    // Don't break the dialog if the server is
+                                    // unreachable -- keep whatever visibility
+                                    // the conservative heuristic gave us.
+                                    logger.debug(
+                                            "GETCAP for section visibility failed: {}", ex.getMessage());
+                                }
+                            },
+                            "CCC-Cap-Refresh");
+                    t.setDaemon(true);
+                    t.start();
+                };
+
                 // Keep the illumination display in sync with the selected
-                // profile's modality.
+                // profile's modality, and refresh section visibility from
+                // GETCAP at the same time.
                 profileCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
                     selectedProfileHolder[0] = newVal;
                     Runnable r = illumRefreshHolder.get();
                     if (r != null) r.run();
+                    refreshSectionVisibilityFromCap.run();
                 });
                 // Seed with whatever the combo lands on after the initial
                 // refresh (refreshProfiles set a default value above).
                 selectedProfileHolder[0] = profileCombo.getValue();
                 Runnable initialIllumRefresh = illumRefreshHolder.get();
                 if (initialIllumRefresh != null) initialIllumRefresh.run();
+                refreshSectionVisibilityFromCap.run();
 
                 Button applyProfileBtn = new Button("Apply Profile");
                 applyProfileBtn.setOnAction(e -> {
