@@ -1327,9 +1327,19 @@ public class UnifiedAcquisitionController {
                 int angleCount = qupath.ext.qpsc.modality.ModalityRegistry.getHandler(modality)
                         .getDefaultAngleCount();
 
-                int totalImages = totalTiles * angleCount;
+                // Z-stack multiplier
+                int zPlanes = 1;
+                if (PersistentPreferences.isZStackEnabled()) {
+                    double zRange = PersistentPreferences.getZStackRange();
+                    double zStep = PersistentPreferences.getZStackStep();
+                    if (zStep > 0) {
+                        zPlanes = (int) Math.ceil(zRange / zStep) + 1;
+                    }
+                }
 
-                // Estimate time (rough: 2 seconds per image including movement and exposure)
+                int totalImages = totalTiles * angleCount * zPlanes;
+
+                // Estimate time: ~2s per image for capture+move, plus ~10s per AF tile
                 double estimatedSeconds = totalImages * 2.0;
                 String timeEstimate = formatTime(estimatedSeconds);
 
@@ -1365,7 +1375,11 @@ public class UnifiedAcquisitionController {
                         String.format("Field of View: %.0f x %.0f um (%s)", frameWidth, frameHeight, objective));
                 previewTileGridLabel.setText(String.format(
                         "Tile Grid: %d x %d = %d tiles (%.0f%% overlap)", tilesX, tilesY, totalTiles, overlapPercent));
-                previewAnglesLabel.setText(String.format("Angles: %d (%s modality)", angleCount, modality));
+                String anglesText = String.format("Angles: %d (%s modality)", angleCount, modality);
+                if (zPlanes > 1) {
+                    anglesText += String.format(", Z-planes: %d", zPlanes);
+                }
+                previewAnglesLabel.setText(anglesText);
                 previewTotalImagesLabel.setText(String.format("Total Images: %,d", totalImages));
                 previewTimeLabel.setText("Est. Time: " + timeEstimate);
                 previewStorageLabel.setText("Est. Storage: " + storageEstimate);

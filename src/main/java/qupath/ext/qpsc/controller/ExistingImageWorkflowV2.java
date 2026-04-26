@@ -251,38 +251,16 @@ public class ExistingImageWorkflowV2 {
         }
 
         /**
-         * Handles the case when no annotations are found by showing a dialog with options.
-         * This method will recursively call itself if the user's choice doesn't result in annotations.
+         * Handles the case when no annotations are found by showing a dialog
+         * that lets the user run tissue detection and/or draw annotations
+         * manually, review the results, then confirm.
          */
         private CompletableFuture<WorkflowState> handleNoAnnotations(WorkflowState state, List<String> validClasses) {
-            return UIFunctions.showAnnotationWarningDialog().thenCompose(action -> {
+            return UIFunctions.showAnnotationWarningDialog(gui, validClasses).thenCompose(action -> {
                 switch (action) {
-                    case RUN_TISSUE_DETECTION:
-                        logger.info("User chose to run tissue detection");
-                        // Run tissue detection
-                        state.annotations = AnnotationHelper.runTissueDetection(gui, validClasses);
-
-                        if (state.annotations.isEmpty()) {
-                            logger.warn("Tissue detection did not create any annotations");
-                            // Show dialog again
-                            return handleNoAnnotations(state, validClasses);
-                        }
-
-                        logger.info("Tissue detection created {} annotations", state.annotations.size());
-                        return CompletableFuture.completedFuture(state);
-
-                    case MANUAL_ANNOTATIONS_CREATED:
-                        logger.info("User indicated manual annotations were created");
-                        // Re-check for annotations
+                    case ANNOTATIONS_CONFIRMED:
                         state.annotations = AnnotationHelper.getCurrentValidAnnotations(gui, validClasses);
-
-                        if (state.annotations.isEmpty()) {
-                            logger.warn("Still no annotations found after user indicated creation");
-                            // Show dialog again
-                            return handleNoAnnotations(state, validClasses);
-                        }
-
-                        logger.info("Found {} manual annotations", state.annotations.size());
+                        logger.info("User confirmed {} annotations", state.annotations.size());
                         return CompletableFuture.completedFuture(state);
 
                     case CANCEL:

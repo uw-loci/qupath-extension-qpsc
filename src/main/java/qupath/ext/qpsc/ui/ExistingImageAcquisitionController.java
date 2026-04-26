@@ -1411,18 +1411,31 @@ public class ExistingImageAcquisitionController {
 
                 // Get per-tile image count (angles for PPM, channels for fluorescence/BF-IF)
                 int imagesPerTile = getImagesPerTileForModality(modality);
-                int totalImages = totalTiles * imagesPerTile;
+
+                // Z-stack multiplier
+                int zPlanes = 1;
+                if (PersistentPreferences.isZStackEnabled()) {
+                    double zRange = PersistentPreferences.getZStackRange();
+                    double zStep = PersistentPreferences.getZStackStep();
+                    if (zStep > 0) {
+                        zPlanes = (int) Math.ceil(zRange / zStep) + 1;
+                    }
+                }
+
+                int totalImages = totalTiles * imagesPerTile * zPlanes;
 
                 // Update labels with actual counts
+                String zSuffix = zPlanes > 1 ? String.format(" x %d Z-planes", zPlanes) : "";
                 if (imagesPerTile > 1) {
                     ModalityHandler handler = ModalityRegistry.getHandler(modality);
                     boolean isPpm = handler != null && handler.isMultiAngleModality();
                     String unit = isPpm ? "angles" : "channels";
                     previewTilesLabel.setText(String.format(
-                            "Images: %,d tiles x %d %s = %,d images",
-                            totalTiles, imagesPerTile, unit, totalImages));
+                            "Images: %,d tiles x %d %s%s = %,d images",
+                            totalTiles, imagesPerTile, unit, zSuffix, totalImages));
                 } else {
-                    previewTilesLabel.setText(String.format("Tiles: %,d", totalTiles));
+                    previewTilesLabel.setText(String.format(
+                            "Tiles: %,d%s = %,d images", totalTiles, zSuffix, totalImages));
                 }
 
                 // Time estimate using persistent per-file mean from previous acquisitions.

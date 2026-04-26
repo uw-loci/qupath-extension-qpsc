@@ -1092,89 +1092,138 @@ public class UIFunctions {
      * Enum representing user's choice when no annotations are detected.
      */
     public enum AnnotationAction {
-        RUN_TISSUE_DETECTION,
-        MANUAL_ANNOTATIONS_CREATED,
+        /** User ran tissue detection or drew annotations and confirmed them. */
+        ANNOTATIONS_CONFIRMED,
         CANCEL
     }
 
     /**
-     * Shows a non-modal warning dialog when no annotations are detected.
-     * Gives the user three options:
-     * 1. Run tissue detection script defined in properties
-     * 2. Indicate they've just created manual annotations
-     * 3. Cancel the workflow
+     * Shows a non-modal annotation setup dialog when no annotations are
+     * detected. The dialog stays open while the user runs tissue detection
+     * and/or draws annotations manually, giving them a chance to review
+     * and edit the results before proceeding.
      *
-     * The dialog stays on top but allows interaction with QuPath.
+     * <p>The dialog provides:
+     * <ul>
+     *   <li>"Run Tissue Detection" -- runs the configured script but keeps the
+     *       dialog open so the user can review/edit results in QuPath</li>
+     *   <li>"Use Annotations and Continue" -- checks for annotations and
+     *       proceeds if any are found</li>
+     *   <li>"Cancel" -- aborts the workflow</li>
+     * </ul>
      *
-     * @return CompletableFuture that completes with the user's choice
+     * @param gui          QuPath GUI instance for running tissue detection
+     * @param validClasses annotation classification filter (may be empty)
+     * @return CompletableFuture completing with the user's choice
      */
-    public static CompletableFuture<AnnotationAction> showAnnotationWarningDialog() {
-        logger.info("Showing annotation warning dialog");
+    public static CompletableFuture<AnnotationAction> showAnnotationWarningDialog(
+            QuPathGUI gui, List<String> validClasses) {
+        logger.info("Showing annotation setup dialog");
 
         CompletableFuture<AnnotationAction> future = new CompletableFuture<>();
 
         Platform.runLater(() -> {
             Stage stage = new Stage();
-            stage.initModality(Modality.NONE); // Non-modal - user can interact with QuPath
-            stage.setTitle("No Annotations Detected");
+            stage.initModality(Modality.NONE);
+            stage.setTitle("Annotation Setup");
             stage.setAlwaysOnTop(true);
             stage.setResizable(false);
 
-            VBox layout = new VBox(15);
+            VBox layout = new VBox(12);
             layout.setPadding(new Insets(20));
-            layout.setMinWidth(450);
+            layout.setMinWidth(480);
 
-            // Warning message
-            Label warningLabel = new Label("No annotations detected");
-            warningLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+            Label headerLabel = new Label("No annotations detected");
+            headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
 
-            Label infoLabel = new Label("Annotations are needed for subsequent steps.\nPlease choose an option below:");
+            Label infoLabel = new Label(
+                    "Annotations are needed for acquisition.\n"
+                    + "Run tissue detection or draw annotations manually in QuPath,\n"
+                    + "then click \"Use Annotations\" to continue.");
             infoLabel.setWrapText(true);
 
-            Separator separator = new Separator();
+            Separator sep1 = new Separator();
 
-            // Buttons for each option
-            Button tissueDetectionButton = new Button("Run tissue detection defined in Properties");
-            tissueDetectionButton.setPrefWidth(400);
+            // --- Tissue detection section ---
+            Button tissueDetectionButton = new Button("Run Tissue Detection");
+            tissueDetectionButton.setPrefWidth(440);
+
+            Label statusLabel = new Label("");
+            statusLabel.setWrapText(true);
+            statusLabel.setStyle("-fx-font-size: 12px;");
+
             tissueDetectionButton.setOnAction(e -> {
-                logger.info("User chose to run tissue detection");
-                stage.close();
-                future.complete(AnnotationAction.RUN_TISSUE_DETECTION);
+                tissueDetectionButton.setDisable(true);
+                tissueDetectionButton.setText("Running...");
+                statusLabel.setText("Running tissue detection script...");
+                statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #555;");
+
+                // Run on background thread so the UI stays responsive
+                CompletableFuture.runAsync(() -> {
+                    qupath.ext.qpsc.controller.workflow.AnnotationHelper
+                            .runTissueDetection(gui, validClasses);
+                }).whenCompleteAsync((v, ex) -> {
+                    tissueDetectionButton.setDisable(false);
+                    tissueDetectionButton.setText("Run Tissue Detection");
+                    if (ex != null) {
+                        statusLabel.setText("Tissue detection failed: " + ex.getMessage());
+                        statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #d32f2f;");
+                    } else {
+                        int count = countCurrentAnnotations(gui, validClasses);
+                        if (count > 0) {
+                            statusLabel.setText(String.format(
+                                    "Found %d annotation(s). Review/edit in QuPath, "
+                                    + "then click \"Use Annotations\" below.", count));
+                            statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #28a745;");
+                            headerLabel.setText("Annotations ready");
+                        } else {
+                            statusLabel.setText("No annotations created. "
+                                    + "Try adjusting the tissue detection script or draw manually.");
+                            statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #e65100;");
+                        }
+                    }
+                }, Platform::runLater);
             });
 
-            Button manualAnnotationsButton = new Button("I have just created manual annotations!");
-            manualAnnotationsButton.setPrefWidth(400);
-            manualAnnotationsButton.setOnAction(e -> {
-                logger.info("User indicated manual annotations were created");
-                stage.close();
-                future.complete(AnnotationAction.MANUAL_ANNOTATIONS_CREATED);
+            Separator sep2 = new Separator();
+
+            // --- Action buttons ---
+            Button useAnnotationsButton = new Button("Use Annotations and Continue");
+            useAnnotationsButton.setPrefWidth(440);
+            useAnnotationsButton.setStyle("-fx-font-weight: bold;");
+            useAnnotationsButton.setOnAction(e -> {
+                int count = countCurrentAnnotations(gui, validClasses);
+                if (count > 0) {
+                    logger.info("User confirmed {} annotations", count);
+                    stage.close();
+                    future.complete(AnnotationAction.ANNOTATIONS_CONFIRMED);
+                } else {
+                    statusLabel.setText("No annotations found. Please run tissue detection "
+                            + "or draw annotations in QuPath first.");
+                    statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #d32f2f;");
+                }
             });
 
-            Button cancelButton = new Button("Cancel workflow");
-            cancelButton.setPrefWidth(400);
-            cancelButton.setStyle("-fx-text-fill: #d32f2f;"); // Red text for cancel
+            Button cancelButton = new Button("Cancel Workflow");
+            cancelButton.setPrefWidth(440);
+            cancelButton.setStyle("-fx-text-fill: #d32f2f;");
             cancelButton.setOnAction(e -> {
-                logger.info("User cancelled workflow from annotation warning dialog");
+                logger.info("User cancelled workflow from annotation setup dialog");
                 stage.close();
                 future.complete(AnnotationAction.CANCEL);
             });
 
-            // Handle window close (treat as cancel)
             stage.setOnCloseRequest(e -> {
                 if (!future.isDone()) {
-                    logger.info("Annotation warning dialog closed - treating as cancel");
+                    logger.info("Annotation setup dialog closed - treating as cancel");
                     future.complete(AnnotationAction.CANCEL);
                 }
             });
 
-            layout.getChildren()
-                    .addAll(
-                            warningLabel,
-                            infoLabel,
-                            separator,
-                            tissueDetectionButton,
-                            manualAnnotationsButton,
-                            cancelButton);
+            layout.getChildren().addAll(
+                    headerLabel, infoLabel, sep1,
+                    tissueDetectionButton, statusLabel, sep2,
+                    useAnnotationsButton, cancelButton);
 
             Scene scene = new Scene(layout);
             stage.setScene(scene);
@@ -1182,6 +1231,19 @@ public class UIFunctions {
         });
 
         return future;
+    }
+
+    /**
+     * Counts the current valid annotations in the open image.
+     */
+    private static int countCurrentAnnotations(QuPathGUI gui, List<String> validClasses) {
+        try {
+            return qupath.ext.qpsc.controller.workflow.AnnotationHelper
+                    .getCurrentValidAnnotations(gui, validClasses).size();
+        } catch (Exception e) {
+            logger.debug("Error counting annotations: {}", e.getMessage());
+            return 0;
+        }
     }
 
     /**

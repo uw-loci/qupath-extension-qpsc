@@ -843,41 +843,18 @@ public class ExistingAlignmentPath {
     }
 
     /**
-     * Handles the case when no annotations are found by showing a dialog with options.
-     * This method will recursively call itself if the user's choice doesn't result in annotations.
+     * Handles the case when no annotations are found by showing a dialog
+     * that lets the user run tissue detection and/or draw annotations,
+     * review, then confirm.
      */
     private CompletableFuture<java.util.List<PathObject>> handleNoAnnotationsForTransform() {
-        return UIFunctions.showAnnotationWarningDialog().thenCompose(action -> {
+        // null validClasses = no class filter for alignment
+        return UIFunctions.showAnnotationWarningDialog(gui, null).thenCompose(action -> {
             switch (action) {
-                case RUN_TISSUE_DETECTION:
-                    logger.info("User chose to run tissue detection for alignment");
-                    // Run tissue detection - get ALL annotations (no class filter)
-                    // Class filtering happens later during acquisition, not during alignment
-                    java.util.List<PathObject> annotations =
-                            AnnotationHelper.runTissueDetection(gui, null); // null = no class filter
-
-                    if (annotations.isEmpty()) {
-                        logger.warn("Tissue detection did not create any annotations");
-                        // Show dialog again
-                        return handleNoAnnotationsForTransform();
-                    }
-
-                    logger.info("Tissue detection created {} annotations for alignment", annotations.size());
+                case ANNOTATIONS_CONFIRMED:
+                    java.util.List<PathObject> annotations = getAnnotationsFromCorrectSource();
+                    logger.info("User confirmed {} annotations for alignment", annotations.size());
                     return CompletableFuture.completedFuture(annotations);
-
-                case MANUAL_ANNOTATIONS_CREATED:
-                    logger.info("User indicated manual annotations were created");
-                    // Re-check for annotations from correct source
-                    java.util.List<PathObject> manualAnnotations = getAnnotationsFromCorrectSource();
-
-                    if (manualAnnotations.isEmpty()) {
-                        logger.warn("Still no annotations found after user indicated creation");
-                        // Show dialog again
-                        return handleNoAnnotationsForTransform();
-                    }
-
-                    logger.info("Found {} manual annotations", manualAnnotations.size());
-                    return CompletableFuture.completedFuture(manualAnnotations);
 
                 case CANCEL:
                     logger.info("User cancelled workflow due to no annotations");
