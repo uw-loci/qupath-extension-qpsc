@@ -5414,19 +5414,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
         return startZStack(
                 outputFolder, zStart, zEnd, zStep, modality, anglesStr, wbMode,
                 yamlPath, objective, detector, projection,
-                false, null, null);
+                false, null, null,
+                1, 0.0);
     }
 
     /**
-     * Start a Z-stack acquisition with background-correction parameters.
-     *
-     * @param bgCorrectionEnabled If true, the server applies per-angle
-     *     flat-field correction using images loaded from {@code bgFolder}.
-     * @param bgFolder Path to the background folder (typically resolved via
-     *     {@code BackgroundSettingsReader.resolveBackgroundFolder}). Ignored
-     *     when {@code bgCorrectionEnabled} is false.
-     * @param bgMethod "divide" (flat-field) or "subtract"; null means
-     *     server default (divide).
+     * Backwards-compatible overload that excludes the time-lapse parameters.
+     * Equivalent to {@code startZStack(..., bgCorrectionEnabled, bgFolder,
+     * bgMethod, 1, 0.0)} -- a pure Z-stack with no time-lapse pacing.
      */
     public String startZStack(
             String outputFolder,
@@ -5444,6 +5439,48 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String bgFolder,
             String bgMethod)
             throws IOException {
+        return startZStack(
+                outputFolder, zStart, zEnd, zStep, modality, anglesStr, wbMode,
+                yamlPath, objective, detector, projection,
+                bgCorrectionEnabled, bgFolder, bgMethod,
+                1, 0.0);
+    }
+
+    /**
+     * Start a Z-stack (optionally combined with time-lapse) acquisition.
+     *
+     * @param bgCorrectionEnabled If true, the server applies per-angle
+     *     flat-field correction using images loaded from {@code bgFolder}.
+     * @param bgFolder Path to the background folder (typically resolved via
+     *     {@code BackgroundSettingsReader.resolveBackgroundFolder}). Ignored
+     *     when {@code bgCorrectionEnabled} is false.
+     * @param bgMethod "divide" (flat-field) or "subtract"; null means
+     *     server default (divide).
+     * @param timepoints Number of timepoints to repeat the Z-stack (1 = pure
+     *     Z-stack). When &gt; 1, the server runs a T-outer / Z-inner loop
+     *     and emits a single OME-TIFF per angle with both SizeT and SizeZ.
+     * @param intervalSec Seconds between timepoint START times when
+     *     {@code timepoints > 1}. Pacing is anchored to t0 so slow
+     *     iterations don't accumulate drift.
+     */
+    public String startZStack(
+            String outputFolder,
+            double zStart,
+            double zEnd,
+            double zStep,
+            String modality,
+            String anglesStr,
+            String wbMode,
+            String yamlPath,
+            String objective,
+            String detector,
+            String projection,
+            boolean bgCorrectionEnabled,
+            String bgFolder,
+            String bgMethod,
+            int timepoints,
+            double intervalSec)
+            throws IOException {
         StringBuilder msg = new StringBuilder();
         msg.append("--output ").append(outputFolder);
         msg.append(" --z-start ").append(zStart);
@@ -5460,6 +5497,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
             msg.append(" --bg-correction true");
             if (bgFolder != null) msg.append(" --bg-folder ").append(bgFolder);
             if (bgMethod != null) msg.append(" --bg-method ").append(bgMethod);
+        }
+        if (timepoints > 1) {
+            msg.append(" --timepoints ").append(timepoints);
+            if (intervalSec > 0) msg.append(" --interval ").append(intervalSec);
         }
         msg.append(" ENDOFSTR");
 

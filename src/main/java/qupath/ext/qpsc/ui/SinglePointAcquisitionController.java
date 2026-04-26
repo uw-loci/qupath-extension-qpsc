@@ -340,10 +340,10 @@ public class SinglePointAcquisitionController {
         if (!zEnabled && !tEnabled) {
             return "Enable at least one of Z-stack or Time-lapse.";
         }
-        if (zEnabled && tEnabled) {
-            return "Combined Z-stack + Time-lapse is not yet supported on the server. "
-                    + "Enable only one for now.";
-        }
+        // Combined Z+T is now supported by the server (acquire_z_stack
+        // accepts n_timepoints, interval_seconds and produces a SizeT x
+        // SizeZ OME-TIFF per angle). The dispatch below routes through
+        // the new startZStack overload that carries both sets of params.
         if (outputFolder == null || outputFolder.trim().isEmpty()) {
             return "Please specify an output folder.";
         }
@@ -392,6 +392,13 @@ public class SinglePointAcquisitionController {
                         mc.withLiveModeHandling(() -> {
                             String response;
                             if (zEnabled) {
+                                // Route Z (and combined Z+T) through startZStack.
+                                // When tEnabled, pass the time-lapse params so the
+                                // server runs a T-outer / Z-inner loop and emits
+                                // a single OME-TIFF per angle with both SizeT
+                                // and SizeZ. Pure Z-stack passes timepoints=1.
+                                int tpForZ = tEnabled ? timepoints : 1;
+                                double intervalForZ = tEnabled ? intervalSec : 0.0;
                                 response = mc.getSocketClient()
                                         .startZStack(
                                                 outputFolder,
@@ -404,7 +411,12 @@ public class SinglePointAcquisitionController {
                                                 configPath,
                                                 null,
                                                 null,
-                                                zProjection);
+                                                zProjection,
+                                                false,
+                                                null,
+                                                null,
+                                                tpForZ,
+                                                intervalForZ);
                             } else {
                                 response = mc.getSocketClient()
                                         .startTimeLapse(
