@@ -218,8 +218,8 @@ public class ExistingImageAcquisitionController {
         private VBox modalityContent;
         private ComboBox<String> afStrategyCombo;
 
-        // UI Components - White Balance Section (JAI camera only)
-        private VBox whiteBalanceSection;
+        // UI Components - White Balance (hidden for non-JAI or non-WB modalities)
+        private Label wbLabel;
         private ComboBox<String> wbModeComboBox;
 
         // UI Components - Preview Section
@@ -475,24 +475,47 @@ public class ExistingImageAcquisitionController {
         private void createWbModeCombo() {
             wbModeComboBox = new ComboBox<>();
             wbModeComboBox.getItems().addAll("Off", "Camera AWB", "Simple (90deg)", "Per-angle (PPM)");
+            // Default from modality handler; fall back to saved preference
+            String defaultDisplay = getDefaultWbModeFromModality();
             String savedWBMode = PersistentPreferences.getLastWhiteBalanceMode();
-            if (wbModeComboBox.getItems().contains(savedWBMode)) {
+            if (savedWBMode != null && wbModeComboBox.getItems().contains(savedWBMode)) {
                 wbModeComboBox.setValue(savedWBMode);
             } else {
-                wbModeComboBox.setValue("Per-angle (PPM)");
+                wbModeComboBox.setValue(defaultDisplay);
             }
             WbMode.applyColorCellFactory(wbModeComboBox);
             wbModeComboBox.setTooltip(new Tooltip("White balance mode:\n"
                     + "  Off - No white balance correction\n"
                     + "  Camera AWB - Set in MicroManager before acquisition\n"
                     + "  Simple (90deg) - Use 90deg R:G:B ratios, scaled per angle\n"
-                    + "  Per-angle (PPM) - Independent calibration per angle (default)"));
+                    + "  Per-angle (PPM) - Independent calibration per angle"));
 
             wbModeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
                 if (newVal != null) {
                     PersistentPreferences.setLastWhiteBalanceMode(newVal);
                 }
             });
+        }
+
+        /**
+         * Maps the current modality handler's wire mode to a display name.
+         */
+        private String getDefaultWbModeFromModality() {
+            try {
+                String modality = modalityBox != null ? modalityBox.getValue() : null;
+                if (modality != null) {
+                    var handler = ModalityRegistry.getHandler(modality);
+                    String wireMode = handler.getDefaultWbMode();
+                    for (WbMode wm : WbMode.values()) {
+                        if (wm.getProtocolName().equals(wireMode)) {
+                            return wm.getDisplayName();
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // Fallback silently
+            }
+            return "Off";
         }
 
         private void createHardwareSection() {
@@ -518,6 +541,7 @@ public class ExistingImageAcquisitionController {
                     updateObjectivesForModality(newVal);
                     updateModalityUI(newVal);
                     updateAfStrategyDefaultForModality(newVal);
+                    updateWhiteBalanceVisibility();
                 }
             });
 
@@ -553,7 +577,8 @@ public class ExistingImageAcquisitionController {
             grid.add(detectorBox, 1, row);
             row++;
 
-            grid.add(new Label("WB Mode:"), 0, row);
+            wbLabel = new Label("WB Mode:");
+            grid.add(wbLabel, 0, row);
             grid.add(wbModeComboBox, 1, row);
 
             hardwarePane = new TitledPane("HARDWARE CONFIGURATION", grid);
@@ -1048,12 +1073,13 @@ public class ExistingImageAcquisitionController {
         }
 
         /**
-         * Updates the visibility of the white balance section based on current detector and modality.
-         * White balance section is only shown for JAI cameras.
-         * Per-angle checkbox is only shown for PPM modality.
+         * Updates the visibility and default of the white balance row based on
+         * the current detector and modality.  WB is shown only when the detector
+         * is a JAI camera AND the modality supports white balance (i.e. its
+         * {@code getDefaultWbMode()} is not "off").
          */
         private void updateWhiteBalanceVisibility() {
-            if (whiteBalanceSection == null) {
+            if (wbModeComboBox == null || wbLabel == null) {
                 return; // Not yet initialized
             }
 
@@ -1061,24 +1087,28 @@ public class ExistingImageAcquisitionController {
             String detector = detectorDisplay != null ? extractIdFromDisplayString(detectorDisplay) : null;
             boolean isJAI = configManager.isJAICamera(detector);
 
-            // Show white balance section only for JAI cameras
-            whiteBalanceSection.setVisible(isJAI);
-            whiteBalanceSection.setManaged(isJAI);
-
             String modality = modalityBox.getValue();
             var handler = modality != null ? ModalityRegistry.getHandler(modality) : null;
-            boolean isMultiAngle = handler != null && handler.isMultiAngleModality();
+            String defaultWb = handler != null ? handler.getDefaultWbMode() : "off";
+            boolean modalityUsesWb = !"off".equals(defaultWb);
 
-            // Filter WB modes based on background validity
-            if (wbModeComboBox != null && modality != null && detector != null) {
+            boolean showWb = isJAI && modalityUsesWb;
+            wbLabel.setVisible(showWb);
+            wbLabel.setManaged(showWb);
+            wbModeComboBox.setVisible(showWb);
+            wbModeComboBox.setManaged(showWb);
+
+            // When modality changes, reset the WB default from the handler
+            if (showWb) {
+                String displayDefault = getDefaultWbModeFromModality();
+                wbModeComboBox.setValue(displayDefault);
+                boolean isMultiAngle = handler != null && handler.isMultiAngleModality();
                 filterWbModesByBackgroundValidity(modality, detector, isMultiAngle);
             }
 
             logger.debug(
-                    "White balance visibility updated: JAI={}, multiAngle={}, section visible={}",
-                    isJAI,
-                    isMultiAngle,
-                    whiteBalanceSection.isVisible());
+                    "White balance visibility updated: JAI={}, modalityWB={}, visible={}",
+                    isJAI, modalityUsesWb, showWb);
         }
 
         /**
@@ -1664,15 +1694,15 @@ public class ExistingImageAcquisitionController {
                 }
 
                 // Get white balance settings from ComboBox.
-                // Force "off" when the WB section is hidden (non-JAI cameras,
-                // non-rotation modalities) to prevent stale per_angle defaults
-                // from being sent for brightfield acquisitions.
+                // Force "off" when the WB row is hidden (non-JAI cameras or
+                // modalities that don't use WB, e.g. Fluorescence).
                 String wbMode;
-                if (whiteBalanceSection != null && !whiteBalanceSection.isVisible()) {
+                if (wbModeComboBox == null || !wbModeComboBox.isVisible()) {
                     wbMode = "off";
                 } else {
-                    String wbModeDisplay = wbModeComboBox != null ? wbModeComboBox.getValue() : "Off";
-                    wbMode = WbMode.fromDisplayName(wbModeDisplay).getProtocolName();
+                    String wbModeDisplay = wbModeComboBox.getValue();
+                    wbMode = WbMode.fromDisplayName(wbModeDisplay != null ? wbModeDisplay : "Off")
+                            .getProtocolName();
                 }
                 boolean enableWhiteBalance = !"off".equals(wbMode);
                 boolean perAngleWhiteBalance = "per_angle".equals(wbMode);

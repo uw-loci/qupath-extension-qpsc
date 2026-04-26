@@ -1144,32 +1144,43 @@ public class UnifiedAcquisitionController {
             String detector = detectorDisplay != null ? extractIdFromDisplayString(detectorDisplay) : null;
             boolean isJAI = configManager.isJAICamera(detector);
 
+            String modality = modalityBox.getValue();
+            var handler = modality != null ? ModalityRegistry.getHandler(modality) : null;
+            String defaultWb = handler != null ? handler.getDefaultWbMode() : "off";
+            boolean modalityUsesWb = !"off".equals(defaultWb);
+
             // JAI cameras use the WB mode selector (which also controls bg
             // correction mode). Monochrome detectors use the standalone
             // "Use background correction" checkbox instead.
+            // Hide WB entirely for modalities that don't use it (e.g. Fluorescence).
+            boolean showWb = isJAI && modalityUsesWb;
             if (wbModeComboBox != null) {
-                wbModeComboBox.setVisible(isJAI);
-                wbModeComboBox.setManaged(isJAI);
+                wbModeComboBox.setVisible(showWb);
+                wbModeComboBox.setManaged(showWb);
             }
             if (wbModeLabel != null) {
-                wbModeLabel.setVisible(isJAI);
-                wbModeLabel.setManaged(isJAI);
+                wbModeLabel.setVisible(showWb);
+                wbModeLabel.setManaged(showWb);
             }
             if (monoBgCorrectionCheck != null) {
                 monoBgCorrectionCheck.setVisible(!isJAI);
                 monoBgCorrectionCheck.setManaged(!isJAI);
             }
 
-            String modality = modalityBox.getValue();
-            var handler = modality != null ? ModalityRegistry.getHandler(modality) : null;
+            // Reset WB default from handler when modality changes
+            if (showWb && wbModeComboBox != null) {
+                String displayDefault = getDefaultWbModeFromModality();
+                wbModeComboBox.setValue(displayDefault);
+            }
+
             boolean isMultiAngle = handler != null && handler.isMultiAngleModality();
 
             // Filter WB modes based on background validity (JAI only)
-            if (isJAI && wbModeComboBox != null && modality != null && detector != null) {
+            if (showWb && wbModeComboBox != null && modality != null && detector != null) {
                 filterWbModesByBackgroundValidity(modality, detector, isMultiAngle);
             }
 
-            logger.debug("WB/BG visibility updated: JAI={}, multiAngle={}", isJAI, isMultiAngle);
+            logger.debug("WB/BG visibility updated: JAI={}, modalityWB={}, visible={}", isJAI, modalityUsesWb, showWb);
         }
 
         /**
