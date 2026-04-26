@@ -265,6 +265,9 @@ public class StageMapWindow {
 
         Label insertLabel = new Label("Insert:");
         insertLabel.setStyle("-fx-text-fill: #ccc;");
+        insertLabel.setTooltip(new Tooltip("Stage insert / slide holder type.\n"
+                + "Defines the aperture dimensions and slide positions.\n"
+                + "Configured in the YAML config file."));
 
         insertComboBox = new ComboBox<>();
         insertComboBox.setPrefWidth(200);
@@ -280,6 +283,9 @@ public class StageMapWindow {
         // Preset transform selector -- selects which scanner-to-stage alignment to use for macro overlay
         Label presetLabel = new Label("Preset:");
         presetLabel.setStyle("-fx-text-fill: #ccc;");
+        presetLabel.setTooltip(new Tooltip("Scanner-to-stage transform preset.\n"
+                + "Used to position the macro overlay on the map.\n"
+                + "Created during Microscope Alignment."));
 
         presetComboBox = new ComboBox<>();
         presetComboBox.setPrefWidth(180);
