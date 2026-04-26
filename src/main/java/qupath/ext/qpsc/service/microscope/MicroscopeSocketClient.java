@@ -222,6 +222,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         SETGAIN("setgain_"),
         /** Compound: set mode + exposures + gains atomically */
         SETCAM("setcam__"),
+        /** Get camera binning: available factors + current factor */
+        GETBIN("getbin__"),
+        /** Set camera binning factor (1-byte unsigned payload) */
+        SETBIN("setbin__"),
 
         // NOTE: SETWBMD was removed -- JAI hardware AWB cannot be reliably
         // controlled through Pycromanager. Set AWB manually in MicroManager.
@@ -5039,6 +5043,87 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 exposureIndividual ? "individual" : "unified",
                 java.util.Arrays.toString(exposures),
                 java.util.Arrays.toString(gains));
+    }
+
+    // ==================== Binning ====================
+
+    /**
+     * Result of {@link #getBinning()}: the camera's supported binning
+     * factors plus the currently-active factor. {@code available} is
+     * always non-empty (cameras with no binning support report {@code [1]}
+     * with {@code current==1}).
+     */
+    public static final class BinningResult {
+        public final int[] available;
+        public final int current;
+        public BinningResult(int[] available, int current) {
+            this.available = available;
+            this.current = current;
+        }
+    }
+
+    /**
+     * Query the active camera's available + current binning factors.
+     *
+     * <p>Server response shape (variable-length):
+     * <ul>
+     *   <li>1 byte unsigned: count N of available factors</li>
+     *   <li>N bytes unsigned: each factor (typically 1, 2, 4, 8, ...)</li>
+     *   <li>1 byte unsigned: the currently-active factor</li>
+     * </ul>
+     * On error, the server pads an {@code ERROR:...} string to 16 bytes;
+     * this method maps that to an {@link IOException}.
+     */
+    public BinningResult getBinning() throws IOException {
+        // Read just enough to learn the count, then drain the rest.
+        // executeCommand expects a fixed response length, so we use a
+        // small upper bound (count up to 16 binnings + 2 framing bytes).
+        byte[] head = executeCommand(Command.GETBIN, null, 18);
+        // Detect server error path (16-byte 'ERROR:...' padded with NULs).
+        if (head.length >= 6 && head[0] == 'E' && head[1] == 'R' && head[2] == 'R'
+                && head[3] == 'O' && head[4] == 'R' && head[5] == ':') {
+            String msg = new String(head, StandardCharsets.UTF_8).trim();
+            int z = msg.indexOf('\0');
+            if (z >= 0) msg = msg.substring(0, z);
+            throw new IOException("GETBIN failed: " + msg);
+        }
+        int count = head[0] & 0xFF;
+        if (count < 1 || count > 16) {
+            throw new IOException("GETBIN: invalid count " + count);
+        }
+        if (head.length < count + 2) {
+            throw new IOException(
+                    "GETBIN: short response (" + head.length + " bytes for count "
+                    + count + ")");
+        }
+        int[] available = new int[count];
+        for (int i = 0; i < count; i++) {
+            available[i] = head[1 + i] & 0xFF;
+        }
+        int current = head[1 + count] & 0xFF;
+        return new BinningResult(available, current);
+    }
+
+    /**
+     * Apply a binning factor to the active camera.
+     * Server stops sequence acquisition first if running, then writes
+     * the MM "Binning" property.
+     *
+     * @throws IOException if {@code value} is rejected by the camera or
+     *     the server returns ERR_SETB.
+     */
+    public void setBinning(int value) throws IOException {
+        if (value < 1 || value > 255) {
+            throw new IllegalArgumentException(
+                    "Binning factor must be in 1..255, got " + value);
+        }
+        byte[] payload = new byte[] {(byte) (value & 0xFF)};
+        byte[] response = executeCommand(Command.SETBIN, payload, 8);
+        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+        if (!responseStr.startsWith("ACK")) {
+            throw new IOException("SETBIN failed: " + responseStr);
+        }
+        logger.info("Camera binning set to {}", value);
     }
 
     // ==================== Illumination Control ====================

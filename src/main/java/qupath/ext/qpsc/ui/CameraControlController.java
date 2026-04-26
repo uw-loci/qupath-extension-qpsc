@@ -232,6 +232,72 @@ public class CameraControlController {
 
         content.getChildren().add(selectionGrid);
 
+        // Global status label -- declared early so sections built before
+        // the legacy "Global status label" block (e.g. Binning) can write
+        // to it. The block below where it used to be declared has been
+        // converted to a no-op assignment for clarity.
+        Label statusLabel = new Label();
+        statusLabel.setStyle("-fx-font-size: 11px;");
+
+        // --- Binning ---
+        // Camera Control v2 phase 1: surfaces the camera's MM Binning
+        // property. Hidden when the camera reports no choices (only [1])
+        // so cameras without the property don't grow a useless control.
+        try {
+            MicroscopeSocketClient.BinningResult bin = controller.getSocketClient().getBinning();
+            if (bin.available != null && bin.available.length > 1) {
+                Label binningHeader = new Label("Binning");
+                binningHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
+
+                ComboBox<Integer> binningCombo = new ComboBox<>();
+                for (int v : bin.available) binningCombo.getItems().add(v);
+                binningCombo.setValue(bin.current);
+                binningCombo.setPrefWidth(80);
+
+                Button binningApplyBtn = new Button("Apply");
+                binningApplyBtn.setOnAction(e -> {
+                    Integer chosen = binningCombo.getValue();
+                    if (chosen == null) return;
+                    statusLabel.setText("Setting binning to " + chosen + "...");
+                    statusLabel.setStyle("-fx-text-fill: black;");
+                    Thread t = new Thread(
+                            () -> {
+                                try {
+                                    // Wrap in withLiveModeHandling -- binning
+                                    // changes are typically rejected during
+                                    // sequence acquisition; the wrapper stops
+                                    // streaming, applies, and restarts so the
+                                    // Live Viewer button stays in sync.
+                                    controller.withLiveModeHandling(
+                                            () -> controller.getSocketClient().setBinning(chosen));
+                                    Platform.runLater(() -> {
+                                        statusLabel.setText("Binning set to " + chosen);
+                                        statusLabel.setStyle("-fx-text-fill: green;");
+                                    });
+                                } catch (Exception ex) {
+                                    Platform.runLater(() -> {
+                                        statusLabel.setText("Binning failed: " + ex.getMessage());
+                                        statusLabel.setStyle("-fx-text-fill: red;");
+                                    });
+                                }
+                            },
+                            "CCC-Binning-Apply");
+                    t.setDaemon(true);
+                    t.start();
+                });
+
+                HBox binningRow = new HBox(8,
+                        new Label("Factor:"), binningCombo, binningApplyBtn);
+                binningRow.setAlignment(Pos.CENTER_LEFT);
+                content.getChildren().addAll(new Separator(), binningHeader, binningRow);
+            } else {
+                logger.debug("Camera reports no binning options ({}); hiding binning row",
+                        bin.available != null ? bin.available.length : 0);
+            }
+        } catch (Exception ex) {
+            logger.debug("Could not query camera binning: {}", ex.getMessage());
+        }
+
         // --- Mode Toggles (JAI only) ---
         // Only exposure mode is togglable; gain is always unified with R/B analog adjustment.
         VBox modeBox = new VBox(5);
@@ -361,8 +427,9 @@ public class CameraControlController {
         }
         content.getChildren().add(perAngleSection);
 
-        // Global status label
-        Label statusLabel = new Label();
+        // Status label was hoisted to the top of dialog construction so
+        // sections built before this point (Binning, etc.) can write to it.
+        // Keep the original styles set here as a defensive re-application.
         statusLabel.setStyle("-fx-font-size: 11px;");
 
         // Styles for row differentiation
