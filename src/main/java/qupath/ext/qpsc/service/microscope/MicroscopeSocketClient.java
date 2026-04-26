@@ -5209,6 +5209,17 @@ public class MicroscopeSocketClient implements AutoCloseable {
             public double currentPower;
             @com.google.gson.annotations.SerializedName("is_on")
             public boolean isOn;
+            /**
+             * "binary" -- only valid powers are 0 and max; UI should render a
+             * toggle / checkbox, not a free-form spinner.
+             * "continuous" -- any value in {@link #powerRange} is valid; UI
+             * should render a spinner / slider.
+             * "discrete" -- reserved for future use (small enumerated set of
+             * allowed values; UI should render radio buttons). Defaults to
+             * "continuous" when missing for backward compat.
+             */
+            @com.google.gson.annotations.SerializedName("value_type")
+            public String valueType;
         }
         public static final class Channel {
             public String id;

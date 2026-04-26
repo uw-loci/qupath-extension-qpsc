@@ -703,22 +703,55 @@ public class CameraControlController {
                 Label illumInfo = new Label();
                 illumInfo.setStyle("-fx-font-size: 12px;");
 
+                // The input widget swaps based on the active source's
+                // value_type from GETCAP: a binary source (on/off only,
+                // e.g. an MM device whose intensity_property == State and
+                // only accepts "0"/"1") gets a checkbox; a continuous
+                // source gets the legacy free-form TextField. This is set
+                // up reactively below so a profile switch from a
+                // continuous source to a binary one rebuilds the row.
                 TextField illumField = new TextField();
                 illumField.setPrefWidth(80);
+                CheckBox illumToggle = new CheckBox("On");
                 Button illumSetBtn = new Button("Set");
+                Label setIntensityLabel = new Label("Set intensity:");
+
+                HBox illumRow = new HBox(8, setIntensityLabel, illumField, illumSetBtn);
+                illumRow.setAlignment(Pos.CENTER_LEFT);
+
+                // Holder so refreshIllum can read the resolved value_type
+                // without re-running GETCAP twice (once for the multi-source
+                // grid, once here). Set by the multi-source refresh below.
+                final String[] activeValueTypeHolder = {"continuous"};
+                final double[] activeMaxPowerHolder = {0.0};
 
                 Runnable refreshIllum = () -> {
                     String label = resolveIllumLabelForProfile(mgr, selectedProfileHolder[0]);
                     try {
                         var current = controller.getSocketClient().getIllumination();
                         illumInfo.setText(String.format(
-                                "%s: %.0f (range: %.0f - %.0f) [%s]",
+                                "Active: %s -- %.2f (range: %.2f - %.2f) [%s]",
                                 label,
                                 current.power(),
                                 current.minPower(),
                                 current.maxPower(),
                                 current.isOn() ? "ON" : "OFF"));
-                        illumField.setText(String.format("%.0f", current.power()));
+
+                        // Swap input widget based on value_type from GETCAP.
+                        // The activeValueTypeHolder is populated by the
+                        // multi-source refresh below before this runs.
+                        boolean binary = "binary".equals(activeValueTypeHolder[0]);
+                        if (binary) {
+                            illumToggle.setSelected(current.isOn());
+                            if (illumRow.getChildren().contains(illumField)) {
+                                illumRow.getChildren().setAll(setIntensityLabel, illumToggle, illumSetBtn);
+                            }
+                        } else {
+                            illumField.setText(String.format("%.2f", current.power()));
+                            if (illumRow.getChildren().contains(illumToggle)) {
+                                illumRow.getChildren().setAll(setIntensityLabel, illumField, illumSetBtn);
+                            }
+                        }
                     } catch (Exception ex) {
                         illumInfo.setText(label + ": (unavailable)");
                     }
@@ -728,7 +761,15 @@ public class CameraControlController {
 
                 illumSetBtn.setOnAction(e -> {
                     try {
-                        float power = Float.parseFloat(illumField.getText().trim());
+                        float power;
+                        boolean binary = "binary".equals(activeValueTypeHolder[0]);
+                        if (binary) {
+                            power = illumToggle.isSelected()
+                                    ? (float) (activeMaxPowerHolder[0] > 0 ? activeMaxPowerHolder[0] : 1.0)
+                                    : 0f;
+                        } else {
+                            power = Float.parseFloat(illumField.getText().trim());
+                        }
                         controller.getSocketClient().setIllumination(power);
                         statusLabel.setText("Illumination set to " + power);
                         statusLabel.setStyle("-fx-text-fill: green;");
@@ -742,8 +783,6 @@ public class CameraControlController {
                         statusLabel.setStyle("-fx-text-fill: red;");
                     }
                 });
-                HBox illumRow = new HBox(8, new Label("Set intensity:"), illumField, illumSetBtn);
-                illumRow.setAlignment(Pos.CENTER_LEFT);
 
                 // Read-only multi-source status grid (Camera Control v2 phase 3b).
                 // GETCAP returns every illumination source declared in any modality;
@@ -771,18 +810,58 @@ public class CameraControlController {
                                 });
                                 return;
                             }
+                            // Resolve the active source's value_type so the
+                            // single-source row above can render the correct
+                            // input widget (checkbox vs spinner). Active is
+                            // whichever entry has is_on true, falling back
+                            // to the first if none is on. Captures
+                            // max_intensity for the toggle's "on" value.
+                            String activeType = "continuous";
+                            double activeMax = 0.0;
+                            MicroscopeSocketClient.CapabilityResult.Illumination active = null;
+                            for (var src : cap.illumination) {
+                                if (src.isOn) { active = src; break; }
+                            }
+                            if (active == null && !cap.illumination.isEmpty()) {
+                                active = cap.illumination.get(0);
+                            }
+                            if (active != null) {
+                                if (active.valueType != null) {
+                                    activeType = active.valueType;
+                                }
+                                if (active.powerRange != null && active.powerRange.length >= 2) {
+                                    activeMax = active.powerRange[1];
+                                }
+                            }
+                            final String activeTypeFinal = activeType;
+                            final double activeMaxFinal = activeMax;
                             Platform.runLater(() -> {
+                                activeValueTypeHolder[0] = activeTypeFinal;
+                                activeMaxPowerHolder[0] = activeMaxFinal;
+                                // Re-run the single-source refresh now that
+                                // the value_type is known, so the input widget
+                                // swaps to the right kind without waiting for
+                                // the next profile change.
+                                refreshIllum.run();
                                 allSourcesBox.getChildren().retainAll(allSourcesHeader);
                                 for (var src : cap.illumination) {
-                                    String txt = String.format(
-                                            "  %s: %.1f (range %.1f-%.1f) [%s]",
-                                            src.label != null ? src.label : src.device,
-                                            src.currentPower,
-                                            src.powerRange != null && src.powerRange.length >= 2
-                                                    ? src.powerRange[0] : 0.0,
-                                            src.powerRange != null && src.powerRange.length >= 2
-                                                    ? src.powerRange[1] : 0.0,
-                                            src.isOn ? "ON" : "OFF");
+                                    String txt;
+                                    if ("binary".equals(src.valueType)) {
+                                        txt = String.format(
+                                                "  %s: [%s] (binary)",
+                                                src.label != null ? src.label : src.device,
+                                                src.isOn ? "ON" : "OFF");
+                                    } else {
+                                        txt = String.format(
+                                                "  %s: %.2f (range %.2f-%.2f) [%s]",
+                                                src.label != null ? src.label : src.device,
+                                                src.currentPower,
+                                                src.powerRange != null && src.powerRange.length >= 2
+                                                        ? src.powerRange[0] : 0.0,
+                                                src.powerRange != null && src.powerRange.length >= 2
+                                                        ? src.powerRange[1] : 0.0,
+                                                src.isOn ? "ON" : "OFF");
+                                    }
                                     Label lbl = new Label(txt);
                                     lbl.setStyle("-fx-font-size: 11px; -fx-text-fill: "
                                             + (src.isOn ? "#0a7d28" : "#999999") + ";");
@@ -798,8 +877,11 @@ public class CameraControlController {
                 };
                 // Wrap the existing single-source refresh so the multi-source
                 // grid stays in lock-step with profile changes / Set clicks.
+                // Order matters: refreshAllSources resolves the active
+                // value_type (binary vs continuous), then re-fires
+                // refreshIllum on the FX thread so the input widget swap
+                // sees the right value_type.
                 Runnable wrappedRefreshIllum = () -> {
-                    refreshIllum.run();
                     refreshAllSources.run();
                 };
                 illumRefreshHolder.set(wrappedRefreshIllum);
