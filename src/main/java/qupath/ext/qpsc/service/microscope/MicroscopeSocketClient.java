@@ -3769,14 +3769,22 @@ public class MicroscopeSocketClient implements AutoCloseable {
         AcquisitionState lastState = AcquisitionState.IDLE;
         int retryCount = 0;
         final int maxInitialRetries = 3;
+        // Counter for transient status-read failures during a running
+        // acquisition. Resets to 0 on every successful status read. Allows a
+        // short burst of socket hiccups (e.g. server momentarily blocked on
+        // a long stage move) without failing the whole annotation.
+        // ACQUISITION_TIMEOUT_MS still catches genuinely stuck servers.
+        int transientFailureCount = 0;
+        final int maxTransientFailures = 5;
 
         while (true) {
             try {
                 // Check status
                 AcquisitionState currentState = getAcquisitionStatus();
 
-                // Reset retry count on successful read
+                // Reset retry counters on successful read
                 retryCount = 0;
+                transientFailureCount = 0;
 
                 // Check if terminal state reached
                 if (currentState == AcquisitionState.COMPLETED
@@ -3897,6 +3905,32 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     Thread.sleep(1000); // Wait a bit longer before retry
                     continue;
                 }
+                // Past the startup window: tolerate a short burst of
+                // transient status-read failures (typical cause: server
+                // momentarily blocked on a long stage move or hardware
+                // command, primary socket lock contention). Throwing here
+                // would fail the whole annotation -- which then triggers
+                // MicroscopeSocketClient's auto-reconnect, which sends
+                // CONFIG on a new socket, which (pre-fix) caused the
+                // server's same-IP takeover logic to kill the still-active
+                // acquisition. The progress-timeout in this same loop
+                // (lastProgressUpdateTime vs ACQUISITION_TIMEOUT_MS) is
+                // still the load-bearing dead-server detector.
+                transientFailureCount++;
+                if (transientFailureCount <= maxTransientFailures) {
+                    logger.warn(
+                            "Transient status read failure ({}/{}), retrying after sleep: {}",
+                            transientFailureCount,
+                            maxTransientFailures,
+                            e.getMessage());
+                    Thread.sleep(Math.max(pollIntervalMs, 1000));
+                    continue;
+                }
+                logger.error(
+                        "Status reads have failed {} times consecutively; "
+                                + "giving up on this acquisition. Last error: {}",
+                        transientFailureCount,
+                        e.getMessage());
                 throw e;
             }
         }
