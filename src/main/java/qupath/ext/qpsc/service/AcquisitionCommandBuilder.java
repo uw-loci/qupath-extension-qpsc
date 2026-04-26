@@ -688,6 +688,12 @@ public class AcquisitionCommandBuilder {
                     "--af-tiles", String.valueOf(autofocusNTiles),
                     "--af-steps", String.valueOf(autofocusNSteps),
                     "--af-range", String.valueOf(autofocusSearchRange)));
+        } else if (QPPreferenceDialog.getDisableAllAutofocus()) {
+            // Explicit signal so the server skips _configure_autofocus,
+            // pre-acquisition AF, and every per-tile drift check. Without
+            // this, dropping the triplet just made the server fall back to
+            // YAML defaults and continue running AF normally.
+            args.add("--af-disabled");
         }
 
         // Add save-raw flag if enabled in preferences
