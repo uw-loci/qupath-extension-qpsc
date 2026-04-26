@@ -5411,6 +5411,39 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String detector,
             String projection)
             throws IOException {
+        return startZStack(
+                outputFolder, zStart, zEnd, zStep, modality, anglesStr, wbMode,
+                yamlPath, objective, detector, projection,
+                false, null, null);
+    }
+
+    /**
+     * Start a Z-stack acquisition with background-correction parameters.
+     *
+     * @param bgCorrectionEnabled If true, the server applies per-angle
+     *     flat-field correction using images loaded from {@code bgFolder}.
+     * @param bgFolder Path to the background folder (typically resolved via
+     *     {@code BackgroundSettingsReader.resolveBackgroundFolder}). Ignored
+     *     when {@code bgCorrectionEnabled} is false.
+     * @param bgMethod "divide" (flat-field) or "subtract"; null means
+     *     server default (divide).
+     */
+    public String startZStack(
+            String outputFolder,
+            double zStart,
+            double zEnd,
+            double zStep,
+            String modality,
+            String anglesStr,
+            String wbMode,
+            String yamlPath,
+            String objective,
+            String detector,
+            String projection,
+            boolean bgCorrectionEnabled,
+            String bgFolder,
+            String bgMethod)
+            throws IOException {
         StringBuilder msg = new StringBuilder();
         msg.append("--output ").append(outputFolder);
         msg.append(" --z-start ").append(zStart);
@@ -5423,6 +5456,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if (objective != null) msg.append(" --objective ").append(objective);
         if (detector != null) msg.append(" --detector ").append(detector);
         if (projection != null && !"none".equals(projection)) msg.append(" --projection ").append(projection);
+        if (bgCorrectionEnabled) {
+            msg.append(" --bg-correction true");
+            if (bgFolder != null) msg.append(" --bg-folder ").append(bgFolder);
+            if (bgMethod != null) msg.append(" --bg-method ").append(bgMethod);
+        }
         msg.append(" ENDOFSTR");
 
         return executeChunkedCommand(Command.ZSTACK, msg.toString(), "ZSTACK");
@@ -5454,6 +5492,31 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String objective,
             String detector)
             throws IOException {
+        return startTimeLapse(
+                outputFolder, timepoints, intervalSeconds, modality, anglesStr,
+                wbMode, yamlPath, objective, detector, false, null, null);
+    }
+
+    /**
+     * Start a time-lapse acquisition with background-correction parameters.
+     * See {@link #startZStack(String, double, double, double, String, String,
+     * String, String, String, String, String, boolean, String, String)} for
+     * the {@code bg*} parameter semantics.
+     */
+    public String startTimeLapse(
+            String outputFolder,
+            int timepoints,
+            double intervalSeconds,
+            String modality,
+            String anglesStr,
+            String wbMode,
+            String yamlPath,
+            String objective,
+            String detector,
+            boolean bgCorrectionEnabled,
+            String bgFolder,
+            String bgMethod)
+            throws IOException {
         StringBuilder msg = new StringBuilder();
         msg.append("--output ").append(outputFolder);
         msg.append(" --timepoints ").append(timepoints);
@@ -5464,6 +5527,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if (yamlPath != null) msg.append(" --yaml ").append(yamlPath);
         if (objective != null) msg.append(" --objective ").append(objective);
         if (detector != null) msg.append(" --detector ").append(detector);
+        if (bgCorrectionEnabled) {
+            msg.append(" --bg-correction true");
+            if (bgFolder != null) msg.append(" --bg-folder ").append(bgFolder);
+            if (bgMethod != null) msg.append(" --bg-method ").append(bgMethod);
+        }
         msg.append(" ENDOFSTR");
 
         return executeChunkedCommand(Command.TLAPSE, msg.toString(), "TLAPSE");
