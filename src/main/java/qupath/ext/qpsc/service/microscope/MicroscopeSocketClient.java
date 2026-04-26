@@ -272,6 +272,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
         SETILLM("setillm_"),
         /** Apply acquisition profile (calls apply_mode_setup on server) */
         APPLYPR("applypr_"),
+        /**
+         * Apply a single channel from a profile's channel library:
+         * cube/shutter presets + per-channel illumination + exposure.
+         * Used by Live Viewer per-channel preview. Empty channel id
+         * deactivates all illumination for the profile's modality.
+         * Payload: 32-byte profile name + 32-byte channel id.
+         */
+        APPLYCH("applych_"),
 
         /** Streaming autofocus -- continuous-Z autofocus via streamed frames */
         STRMAFZ("strmafz_"),
@@ -5367,6 +5375,46 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
 
         logger.info("Applied acquisition profile: {}", profileName);
+    }
+
+    /**
+     * Apply a single channel from a profile's channel library: drives the
+     * same hardware state the acquisition workflow uses for that channel
+     * (ConfigGroup presets + per-channel light source / intensity property
+     * writes + exposure). Pass an empty / null channel id to deactivate
+     * all illumination sources declared in the profile's modality (used
+     * for the "None" radio in the Live Viewer's channel grid).
+     *
+     * @param profileName acquisition profile key (e.g. "Fluorescence_10x")
+     * @param channelId   channel id from that profile's modality library
+     *                    (e.g. "FITC"), or null/empty for "deactivate all"
+     * @throws IOException if the server returns ERR_CHAN
+     */
+    public void applyChannel(String profileName, String channelId) throws IOException {
+        byte[] payload = new byte[64];
+        if (profileName != null && !profileName.isEmpty()) {
+            byte[] nameBytes = profileName.getBytes(StandardCharsets.UTF_8);
+            System.arraycopy(nameBytes, 0, payload, 0, Math.min(nameBytes.length, 32));
+        }
+        if (channelId != null && !channelId.isEmpty()) {
+            byte[] idBytes = channelId.getBytes(StandardCharsets.UTF_8);
+            System.arraycopy(idBytes, 0, payload, 32, Math.min(idBytes.length, 32));
+        }
+
+        byte[] response = executeCommand(Command.APPLYCH, payload, 8);
+        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+
+        if (!responseStr.startsWith("ACK")) {
+            throw new IOException(
+                    "Failed to apply channel '"
+                            + (channelId == null ? "<none>" : channelId)
+                            + "' from profile '" + profileName + "': " + responseStr);
+        }
+
+        logger.info(
+                "Applied channel '{}' from profile '{}'",
+                channelId == null || channelId.isEmpty() ? "<none>" : channelId,
+                profileName);
     }
 
     // ==================== White Balance Mode Control ====================

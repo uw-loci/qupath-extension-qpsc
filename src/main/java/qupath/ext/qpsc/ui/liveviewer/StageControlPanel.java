@@ -1228,6 +1228,13 @@ public class StageControlPanel extends VBox {
             header.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
             cameraModContent.getChildren().add(header);
 
+            // Resolve the profile we'll send APPLYCH against. The radio
+            // button drives hardware via the profile's channel library; we
+            // pick the first profile that matches the active modality. If
+            // none exists, channel switching is disabled (status label
+            // explains why).
+            final String resolvedProfile = findFirstMatchingProfile(modality);
+
             ToggleGroup previewGroup = new ToggleGroup();
             GridPane grid = new GridPane();
             grid.setHgap(6);
@@ -1245,7 +1252,27 @@ public class StageControlPanel extends VBox {
             grid.add(expCol, 2, 0);
             grid.add(intCol, 3, 0);
 
-            int row = 1;
+            // "None" row: explicit deactivate-all option so the user can
+            // close the shutter / turn off illumination from the dialog.
+            // Without this the ToggleGroup forces exactly one channel
+            // selected at all times.
+            RadioButton noneRadio = new RadioButton();
+            noneRadio.setToggleGroup(previewGroup);
+            noneRadio.setSelected(true); // Start in deactivated state.
+            Label noneLabel = new Label("(None — deactivate all)");
+            noneLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888;");
+            noneRadio.setOnAction(e -> {
+                if (resolvedProfile == null) {
+                    cameraStatusLabel.setText("No matching profile for modality " + modality);
+                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                    return;
+                }
+                applyChannelInBackground(resolvedProfile, "");
+            });
+            grid.add(noneRadio, 0, 1);
+            grid.add(noneLabel, 1, 1);
+
+            int row = 2;
             for (qupath.ext.qpsc.modality.Channel ch : channels) {
                 RadioButton previewRadio = new RadioButton();
                 previewRadio.setToggleGroup(previewGroup);
@@ -1298,15 +1325,17 @@ public class StageControlPanel extends VBox {
 
                 previewRadio.setOnAction(e -> {
                     qupath.ext.qpsc.preferences.PersistentPreferences.setLastFocusChannelId(ch.id());
-                    try {
-                        MicroscopeController.getInstance()
-                                .getSocketClient()
-                                .setExposures(new float[] {expSpinner.getValue().floatValue()});
-                    } catch (Exception ex) {
-                        logger.debug("Could not push exposure for preview channel {}: {}", ch.id(), ex.getMessage());
+                    if (resolvedProfile == null) {
+                        cameraStatusLabel.setText("No matching profile for modality " + modality);
+                        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                        return;
                     }
-                    cameraStatusLabel.setText("Preview channel set to " + ch.id());
-                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                    // Drive the hardware to this channel: cube/shutter switch +
+                    // per-channel illumination + exposure all happen on the
+                    // server via apply_channel_hardware_state. The legacy
+                    // setExposures fallback was insufficient -- it didn't
+                    // change the cube or the active light source.
+                    applyChannelInBackground(resolvedProfile, ch.id());
                 });
 
                 grid.add(previewRadio, 0, row);
@@ -1702,6 +1731,42 @@ public class StageControlPanel extends VBox {
      * thread under withLiveModeHandling. No-op if no matching profile
      * is configured.
      */
+    /**
+     * Send APPLYCH for a single channel from the given profile's library
+     * on a daemon thread. Empty channel id deactivates all illumination
+     * for the profile's modality (used by the "None" radio). Wrapped in
+     * withLiveModeHandling so the streaming live view is properly stopped
+     * around the cube/shutter switch and resumed afterwards.
+     */
+    private void applyChannelInBackground(String profileName, String channelId) {
+        if (profileName == null) return;
+        String label = (channelId == null || channelId.isEmpty()) ? "None" : channelId;
+        cameraStatusLabel.setText("Applying " + label + "...");
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        MicroscopeController mc = MicroscopeController.getInstance();
+                        if (mc == null || !mc.isConnected()) return;
+                        mc.withLiveModeHandling(
+                                () -> mc.getSocketClient().applyChannel(profileName, channelId));
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Applied: " + label);
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                        });
+                    } catch (Exception ex) {
+                        logger.error("APPLYCH({}, {}) failed: {}", profileName, label, ex.getMessage());
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Channel apply failed: " + ex.getMessage());
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                        });
+                    }
+                },
+                "Channel-Apply");
+        t.setDaemon(true);
+        t.start();
+    }
+
     private void applyProfileForModality(String modality) {
         final String profileToApply = findFirstMatchingProfile(modality);
         if (profileToApply == null) {
