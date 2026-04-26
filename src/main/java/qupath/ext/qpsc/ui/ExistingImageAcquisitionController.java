@@ -620,6 +620,7 @@ public class ExistingImageAcquisitionController {
             row++;
 
             wbLabel = new Label("WB Mode:");
+            wbLabel.setTooltip(new Tooltip("White balance mode for acquisition"));
             grid.add(wbLabel, 0, row);
             grid.add(wbModeComboBox, 1, row);
 

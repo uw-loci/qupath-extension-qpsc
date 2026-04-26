@@ -499,6 +499,7 @@ public class UnifiedAcquisitionController {
 
             // WB Mode - moved here from Advanced Options for visibility
             wbModeLabel = new Label("WB Mode:");
+            wbModeLabel.setTooltip(new Tooltip("White balance mode for acquisition"));
             grid.add(wbModeLabel, 0, row);
             grid.add(wbModeComboBox, 1, row);
             row++;

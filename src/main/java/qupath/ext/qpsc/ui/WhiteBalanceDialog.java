@@ -578,6 +578,7 @@ public class WhiteBalanceDialog {
 
         Label cameraLabel = new Label("Camera:");
         cameraLabel.setPrefWidth(120);
+        cameraLabel.setTooltip(new Tooltip("Select the camera for white balance calibration"));
 
         ComboBox<String> cameraCombo = new ComboBox<>();
         cameraCombo.setId("cameraCombo");
@@ -611,6 +612,7 @@ public class WhiteBalanceDialog {
 
         // Tolerance
         Label toleranceLabel = new Label("Tolerance:");
+        toleranceLabel.setTooltip(new Tooltip("Acceptable deviation from target intensity"));
         Spinner<Double> toleranceSpinner = new Spinner<>(0.1, 50.0, toleranceProperty.get(), 0.5);
         toleranceSpinner.setId("tolerance");
         toleranceSpinner.setEditable(true);
@@ -628,6 +630,7 @@ public class WhiteBalanceDialog {
 
         // Output folder - default to config file directory if no saved preference
         Label outputLabel = new Label("Output Folder:");
+        outputLabel.setTooltip(new Tooltip("Folder where white balance calibration files are saved"));
 
         TextField outputField = new TextField();
         outputField.setId("outputPath");
@@ -664,6 +667,7 @@ public class WhiteBalanceDialog {
 
         // Objective selection - calibration results are objective-specific
         Label objectiveLabel = new Label("Objective:");
+        objectiveLabel.setTooltip(new Tooltip("Select the objective for calibration (exposures are objective-specific)"));
 
         ComboBox<String> objectiveCombo = new ComboBox<>();
         objectiveCombo.setId("wbObjective");
@@ -748,6 +752,7 @@ public class WhiteBalanceDialog {
 
         Label expLabel = new Label("Base Exposure (ms):");
         expLabel.setPrefWidth(140);
+        expLabel.setTooltip(new Tooltip("Starting exposure for all channels"));
 
         double defaultExp = Double.isNaN(simpleExposureProperty.get()) ? 20.0 : simpleExposureProperty.get();
         Spinner<Double> expSpinner = new Spinner<>(0.1, 500.0, defaultExp, 1.0);
@@ -764,6 +769,7 @@ public class WhiteBalanceDialog {
 
         Label targetLabel = new Label("Target Intensity:");
         targetLabel.setPrefWidth(140);
+        targetLabel.setTooltip(new Tooltip("Target mean intensity for all channels (0-255)"));
 
         Spinner<Double> targetSpinner = new Spinner<>(0.0, 255.0, targetIntensityProperty.get(), 1.0);
         targetSpinner.setId("targetIntensity");
@@ -782,6 +788,8 @@ public class WhiteBalanceDialog {
 
         Label smallAngleLabel = new Label("Small-Angle Target:");
         smallAngleLabel.setPrefWidth(140);
+        smallAngleLabel.setTooltip(new Tooltip("Target intensity for positive, negative, and crossed angles.\n"
+                + "Lower values reduce saturation risk. Typical range: 120-180."));
 
         Spinner<Double> smallAngleSpinner = new Spinner<>(50.0, 255.0, ppmPositiveTargetProperty.get(), 5.0);
         smallAngleSpinner.setEditable(true);

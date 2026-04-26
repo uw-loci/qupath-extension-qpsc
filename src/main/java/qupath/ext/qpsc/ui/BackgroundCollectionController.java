@@ -298,6 +298,7 @@ public class BackgroundCollectionController {
         modalityPane.setVgap(10);
 
         Label modalityLabel = new Label("Modality:");
+        modalityLabel.setTooltip(new Tooltip("Select the imaging modality for background collection"));
         modalityComboBox = new ComboBox<>();
         // Get available modalities from configuration
         try {
@@ -334,6 +335,7 @@ public class BackgroundCollectionController {
 
         // Objective selection
         Label objectiveLabel = new Label("Objective:");
+        objectiveLabel.setTooltip(new Tooltip("Select the objective for background collection"));
         objectiveComboBox = new ComboBox<>();
         objectiveComboBox.setPromptText("Select objective...");
         objectiveComboBox.setDisable(true); // Disabled until modality is selected
@@ -343,6 +345,7 @@ public class BackgroundCollectionController {
 
         // Output path selection
         Label outputLabel = new Label("Output folder:");
+        outputLabel.setTooltip(new Tooltip("Folder where background images are saved"));
         outputPathField = new TextField();
         outputPathField.setPromptText("Select folder for background images...");
         outputPathField.setPrefWidth(300);
@@ -361,6 +364,8 @@ public class BackgroundCollectionController {
 
         // WB mode dropdown - replaces checkbox with full mode selection
         Label wbModeLabel = new Label("White Balance Mode:");
+        wbModeLabel.setTooltip(new Tooltip("White balance mode for background acquisition.\n"
+                + "Backgrounds must be collected with the SAME mode used for acquisition."));
         wbModeComboBox = new ComboBox<>();
         wbModeComboBox.getItems().addAll("Off", "Camera AWB", "Simple (90deg)", "Per-angle (PPM)");
         String savedWBMode = PersistentPreferences.getLastWhiteBalanceMode();
