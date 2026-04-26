@@ -5,6 +5,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import javafx.animation.PauseTransition;
+import javafx.application.ColorScheme;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -28,6 +29,7 @@ import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.SampleNameValidator;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.gui.prefs.QuPathStyleManager;
 
 /**
  * Unified acquisition controller that consolidates sample setup, hardware selection,
@@ -198,6 +200,24 @@ public class UnifiedAcquisitionController {
             }
         }
 
+        private boolean isDark() {
+            return QuPathStyleManager.getStyleColorScheme() == ColorScheme.DARK;
+        }
+
+        private String subtleTextStyle() {
+            return "-fx-font-size: 11px; -fx-opacity: 0.65;";
+        }
+
+        private String accentColor(String semantic) {
+            boolean dark = isDark();
+            switch (semantic) {
+                case "green": return dark ? "#66BB6A" : "#28a745";
+                case "red": return dark ? "#EF5350" : "#C62828";
+                case "amber": return dark ? "#FFD54F" : "#856404";
+                default: return dark ? "#B0BEC5" : "#666";
+            }
+        }
+
         Optional<UnifiedAcquisitionResult> buildAndShow() {
             dialog = new Dialog<>();
             dialog.initModality(Modality.APPLICATION_MODAL);
@@ -341,7 +361,7 @@ public class UnifiedAcquisitionController {
                 row++;
 
                 Label infoLabel = new Label("A new project will be created for this sample.");
-                infoLabel.setStyle("-fx-font-style: italic; -fx-font-size: 11px; -fx-text-fill: gray;");
+                infoLabel.setStyle("-fx-font-style: italic; " + subtleTextStyle());
                 grid.add(infoLabel, 0, row, 2, 1);
             } else {
                 folderField = new TextField(existingProjectFolder.getParent());
@@ -354,7 +374,7 @@ public class UnifiedAcquisitionController {
                 row++;
 
                 Label locationLabel = new Label(existingProjectFolder.getParent());
-                locationLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
+                locationLabel.setStyle(subtleTextStyle());
                 grid.add(new Label("Location:"), 0, row);
                 grid.add(locationLabel, 1, row);
                 row++;
@@ -503,7 +523,7 @@ public class UnifiedAcquisitionController {
             // Pixel size mismatch warning
             Label pixelSizeWarning = new Label();
             pixelSizeWarning.setWrapText(true);
-            pixelSizeWarning.setStyle("-fx-text-fill: #C62828; -fx-font-weight: bold; -fx-font-size: 11px;");
+            pixelSizeWarning.setStyle("-fx-text-fill: " + accentColor("red") + "; -fx-font-weight: bold; -fx-font-size: 11px;");
             pixelSizeWarning.setVisible(false);
             pixelSizeWarning.setManaged(false);
             grid.add(pixelSizeWarning, 0, row, 2, 1);
@@ -605,7 +625,7 @@ public class UnifiedAcquisitionController {
             // Description label for center+size mode
             Label centerModeDescription = new Label("The center position defines the midpoint of the acquisition area. "
                     + "Tiles extend equally in all directions from this point.");
-            centerModeDescription.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+            centerModeDescription.setStyle(subtleTextStyle());
             centerModeDescription.setWrapText(true);
 
             // === Center + Size Mode Pane ===
@@ -765,7 +785,7 @@ public class UnifiedAcquisitionController {
 
             // Calculated bounds label
             calculatedBoundsLabel = new Label("Enter coordinates to see calculated bounds");
-            calculatedBoundsLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
+            calculatedBoundsLabel.setStyle(subtleTextStyle());
 
             // Validation listeners for Start+Size mode
             startXField.textProperty().addListener((obs, old, newVal) -> {
@@ -847,7 +867,7 @@ public class UnifiedAcquisitionController {
             previewTimeLabel = new Label("Est. Time: --");
             previewStorageLabel = new Label("Est. Storage: --");
             previewErrorLabel = new Label("Enter valid coordinates to see preview");
-            previewErrorLabel.setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
+            previewErrorLabel.setStyle("-fx-font-style: italic; -fx-opacity: 0.65;");
         }
 
         private TitledPane createPreviewSection() {
@@ -863,7 +883,8 @@ public class UnifiedAcquisitionController {
                     previewStorageLabel,
                     previewErrorLabel);
             previewContent.setPadding(new Insets(10));
-            previewContent.setStyle("-fx-background-color: #f8f9fa; -fx-border-color: #dee2e6; -fx-border-width: 1px;");
+            previewContent.setStyle("-fx-background-color: " + (isDark() ? "#333" : "#f8f9fa")
+                    + "; -fx-border-color: " + (isDark() ? "#555" : "#dee2e6") + "; -fx-border-width: 1px;");
 
             TitledPane previewPane = new TitledPane("ACQUISITION PREVIEW", previewContent);
             previewPane.setExpanded(true);
@@ -899,7 +920,7 @@ public class UnifiedAcquisitionController {
             // === MODALITY-SPECIFIC SECTION ===
             modalityContentBox = new VBox(5);
             Label placeholder = new Label("Modality-specific options will appear here when a modality is selected.");
-            placeholder.setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
+            placeholder.setStyle("-fx-font-style: italic; -fx-opacity: 0.65;");
             modalityContentBox.getChildren().add(placeholder);
 
             advancedContent.getChildren().addAll(afGrid, new Separator(), modalityContentBox);
@@ -991,14 +1012,15 @@ public class UnifiedAcquisitionController {
 
         private void createErrorSummaryPanel() {
             errorSummaryPanel = new VBox(5);
-            errorSummaryPanel.setStyle("-fx-background-color: #fff3cd; " + "-fx-border-color: #ffc107; "
+            errorSummaryPanel.setStyle("-fx-background-color: " + (isDark() ? "#4a3800" : "#fff3cd") + "; "
+                    + "-fx-border-color: " + (isDark() ? "#806000" : "#ffc107") + "; "
                     + "-fx-border-width: 1px; "
                     + "-fx-padding: 10px;");
             errorSummaryPanel.setVisible(false);
             errorSummaryPanel.setManaged(false);
 
             Label errorTitle = new Label("Please fix the following errors:");
-            errorTitle.setStyle("-fx-font-weight: bold; -fx-text-fill: #856404;");
+            errorTitle.setStyle("-fx-font-weight: bold; -fx-text-fill: " + accentColor("amber") + ";");
 
             errorListBox = new VBox(3);
             errorSummaryPanel.getChildren().addAll(errorTitle, errorListBox);
@@ -1096,7 +1118,7 @@ public class UnifiedAcquisitionController {
             } else {
                 modalityUI = null;
                 Label noOptions = new Label("No additional options for " + modality + " modality.");
-                noOptions.setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
+                noOptions.setStyle("-fx-font-style: italic; -fx-opacity: 0.65;");
                 modalityContentBox.getChildren().add(noOptions);
             }
 
@@ -1378,7 +1400,7 @@ public class UnifiedAcquisitionController {
                 calculatedBoundsLabel.setText(String.format(
                         "Bounds: (%.1f, %.1f) to (%.1f, %.1f)  [center: %.1f, %.1f]",
                         x1, y1, x2, y2, (x1 + x2) / 2.0, (y1 + y2) / 2.0));
-                calculatedBoundsLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #28a745;");
+                calculatedBoundsLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + accentColor("green") + ";");
 
                 // Update preview labels
                 previewRegionLabel.setText(String.format("Region: %.2f x %.2f mm", width / 1000.0, height / 1000.0));
@@ -1538,7 +1560,7 @@ public class UnifiedAcquisitionController {
                 errorListBox.getChildren().clear();
                 validationErrors.forEach((fieldId, errorMsg) -> {
                     Label errorLabel = new Label("- " + errorMsg);
-                    errorLabel.setStyle("-fx-text-fill: #856404;");
+                    errorLabel.setStyle("-fx-text-fill: " + accentColor("amber") + ";");
                     errorListBox.getChildren().add(errorLabel);
                 });
 
