@@ -569,9 +569,16 @@ public class DualProgressDialog {
             return;
         }
 
-        // Use actual rolling average -- no statistical decomposition needed.
-        // The rolling average naturally captures AF frequency since AF tiles
-        // are included in the window at their real occurrence rate.
+        // Use the rolling allTileTimes mean instead of (elapsed /
+        // totalCompleted). The latter folds in everything that happened
+        // BEFORE tile 1 finished -- pre-acquisition AF, dialog modals,
+        // manual focus response time -- producing wildly inflated
+        // per-tile estimates after a long pause at the start (e.g. user
+        // takes 30s to click Skip on a manual focus prompt -> 30s gets
+        // divided into the per-tile mean and the dialog says "5 hours
+        // remaining" for a 12-tile acquisition). allTileTimes already
+        // excludes the first tile and reflects only the steady-state
+        // tile-to-tile cadence.
         long elapsedMs = now - workflowStartTime.get();
         int totalCompleted = totalTilesCompleted.get();
         if (totalCompleted == 0 || elapsedMs == 0) {
@@ -579,7 +586,16 @@ public class DualProgressDialog {
             return;
         }
 
-        double avgMsPerTile = (double) elapsedMs / totalCompleted;
+        double avgMsPerTile;
+        if (!allTileTimes.isEmpty()) {
+            long sum = 0;
+            for (Long t : allTileTimes) sum += t;
+            avgMsPerTile = (double) sum / allTileTimes.size();
+        } else {
+            // Pre-first-tile fallback. Should only fire on tile 1, where
+            // we don't have a sample yet but still want to show something.
+            avgMsPerTile = (double) elapsedMs / totalCompleted;
+        }
 
         // Calculate remaining work
         int currentProgress = currentAnnotationProgress.get();
