@@ -198,6 +198,23 @@ If you see this error despite Live Viewer working:
 - **Orange** "Auxiliary only" -- Live Viewer works; primary reconnects on demand
 - **Gray** "Disconnected" -- no connection to server
 
+#### Q: "Read timed out" / "Acquisition failed" / `WinError 10053` mid-acquisition with multi-annotation runs
+
+**A:** This was a known failure mode through 2026-04-25. Three independent issues stacked:
+
+- The Java client's primary `getAcquisitionStatus` poll used a 5s read timeout. During a 3-angle JAI tile capture (~10-15s on PPM 20x), the server-side STAT handler queued behind the workflow command on the same client thread, so the poll timed out even though the server was healthy.
+- The auxiliary socket's commands (GETXY/GETZ/etc.) shared the server's hardware lock with the primary's tile capture and hit the same 5s timeout, triggering `cleanupAuxiliary` and a reconnect storm from StageMap, LiveViewer-FramePoller, and StagePositionManager-Poller.
+- The server's same-IP CONFIG takeover guard checked only the most recent CONFIG-sender's acquisition state. With the dual-socket layout, the auxiliary often became the "active" addr while acquisition ran on the primary -- a takeover could then proceed and kill the in-flight workflow.
+
+**As of 2026-04-26, all three are fixed:**
+- Primary `getAcquisitionStatus` per-call timeout bumped to 30s.
+- Auxiliary socket read timeout bumped to 30s.
+- Server CONFIG takeover guard now scans every connection from the same IP for an active workflow before allowing a takeover; rejected attempts come back as `CFG_BLCK: BLOCKED: Active acquisition on (...)`.
+
+If you still see the symptom:
+1. Make sure both the QPSC JAR and the Python server are at or after these changes (server commit `a980062`, QPSC `2208ef0` and `9e5cc48`).
+2. Check the server log for `CONFIG: Refusing same-IP takeover ... actively running acquisition` lines -- those indicate the guard is doing its job and the workflow is *not* being interrupted; the Java side may still log retry warnings until the next status poll succeeds.
+
 #### Q: Server crashes during acquisition with "UnicodeEncodeError"
 
 **A:** This is a Windows encoding issue. The fix is already in the code, but if you see it:

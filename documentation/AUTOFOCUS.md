@@ -321,7 +321,7 @@ Autofocus parameters are configured **per objective** in the autofocus YAML file
 | `tissue_area_threshold` | Min tissue coverage fraction | 0.05-0.30 |
 | `sweep_range_um` | Z range for drift check | 6-10 |
 | `sweep_n_steps` | Steps in drift check | 6-10 |
-| `edge_retries` | Additional sweep attempts on boundary peaks (0=disable, 2=default) | 0-3 |
+| `edge_retries` | Additional sweep attempts on boundary peaks. Applies to BOTH the dense pre-acquisition AF and the mid-acquisition sweep-drift check. Each retry doubles the search range and shifts the center toward the inferred peak direction; sweeps are clamped to the configured stage Z limits, and retries that have nowhere new to search are skipped. (0=disable, 2=default) | 0-3 |
 | `gap_index_multiplier` | Force AF after this x `n_tiles` without AF (safety net) | 2-5 (default 3) |
 | `gap_spatial_multiplier` | Force AF when nearest AF exceeds this x grid spacing (fragment safety net) | 1.5-3.0 (default 2.0) |
 
@@ -365,6 +365,12 @@ See the [Autofocus Editor](tools/autofocus-editor.md) for detailed parameter des
 - The search range may not be centered near the correct focus. This can happen if the Z hint is far from reality.
 - Check the server log for the Z hint value. If it's consistently wrong, verify that the acquisition completed successfully on prior annotations (failed AF can corrupt the tilt model).
 - Increase `search_range_um` if the correct focus is outside the search window.
+
+### Pre-acquisition AF pops a manual focus dialog ("peak at edge" / "peak too close to start/end")
+- This means the Z hint inherited from the previous annotation is more than half a search window away from the true focus for this region.
+- As of 2026-04-26, the dense pre-acq AF auto-retries with `edge_retries` widen-and-shift attempts before falling through to the manual dialog. The retries are logged at WARNING level (`Edge retry N/M: center X -> Y, range A -> B`).
+- If you are still seeing the manual dialog, either: (a) the stage Z limits prevent any further expansion (the retry log will say so explicitly), (b) the failure mode isn't a directional edge (e.g. flat scoring curve), or (c) `edge_retries` is set to 0. Bump `edge_retries` to 2-3 in `autofocus_<scope>.yml` for slides with significant region-to-region Z drift.
+- If the bumped retries still don't reach the true focus, the underlying `search_range_um` is probably too narrow for the slide's Z drift -- raise it in the YAML.
 
 ### All tiles show "no tissue detected"
 - Lower `texture_threshold` (try 0.003-0.005 for low-contrast samples)
