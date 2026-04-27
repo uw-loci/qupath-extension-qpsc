@@ -205,6 +205,14 @@ When autofocus fails (both primary and fallback metrics), the system can request
 
 This can be disabled with the **"No Manual Autofocus"** preference (Extensions > QP Scope > Preferences), in which case failures automatically use the current Z position.
 
+## Disable All Autofocus
+
+The **"Disable All Autofocus"** preference (Extensions > QP Scope > Preferences > "Disable All Autofocus (Danger)") suppresses *every* AF call for an acquisition, not just manual fallback. When ticked, the Java side emits `--af-disabled` on the wire (in place of the `--af-tiles`/`--af-steps`/`--af-range` triplet). The server's `_configure_autofocus` short-circuits on this flag: no autofocus YAML load required, no AF positions scheduled, no pre-acquisition AF, no per-tile drift checks, no manual-focus prompts. Use only when Z drift over the acquisition window is known to be small or you're staging a hint-Z manually. Server log shows a single `Autofocus DISABLED for this acquisition` line at workflow start.
+
+## Last-Tile AF Skip
+
+When a tile scheduled for AF lands at the end of the position list (e.g. spatial-coverage AF picks `[0, 11]` for a 12-tile acquisition), the corrected Z would never be applied to a subsequent tile. The server skips AF in that case automatically, saving ~3-5s per acquisition. Server log shows `Skipping AF at final position N/N (no downstream tiles to use the result)`.
+
 ---
 
 ## Modality-Aware Autofocus

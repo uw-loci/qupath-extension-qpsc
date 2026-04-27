@@ -130,6 +130,7 @@ The ACQUIRE payload is a flag-based string:
 --af-tiles 9
 --af-steps 20
 --af-range 10.0
+--af-disabled
 --hint-z -3245.5
 --z-stack
 --z-start -5.0
@@ -139,6 +140,8 @@ The ACQUIRE payload is a flag-based string:
 --save-raw true
 ENDOFSTR
 ```
+
+`--af-disabled` is mutually exclusive with the `--af-tiles`/`--af-steps`/`--af-range` triplet. When the Java side's "Disable Autofocus" preference is on, the triplet is omitted and `--af-disabled` is sent in its place. The server short-circuits `_configure_autofocus` (no YAML load required, no AF positions scheduled), so no pre-acquisition AF fires, no per-tile drift checks run, and no manual-focus prompts appear.
 
 ### Camera Control
 
@@ -150,8 +153,58 @@ ENDOFSTR
 | SETGAIN | `setgain_` | gain string | ack |
 | GETMODE | `getmode_` | none | mode flags |
 | SETMODE | `setmode_` | mode string | ack |
+| SETCAM | `setcam__` | mode + exposures + gains | ack |
 | SNAP | `snap____` | exposure bytes | image data |
 | GETCAM | `getcam__` | none | camera name string |
+| GETBIN | `getbin__` | none | 1-byte count + N bytes binnings + 1-byte current |
+| SETBIN | `setbin__` | 1-byte unsigned binning factor | `ACK_____` / `ERR_SETB` |
+| GETCAP | `getcap__` | optional 32-byte profile name (null-padded UTF-8); empty = current state | 4-byte big-endian length + UTF-8 JSON capability dict |
+
+**Binning** (`GETBIN` / `SETBIN`, Camera Control v2 phase 1): cameras whose MM device exposes a `Binning` property report it through these commands. Cameras without binning support return `[1]` from `GETBIN` and no-op `SETBIN`. Binning factors are unsigned bytes (1..255). The server stops live-mode streaming before applying `SETBIN`.
+
+**Capability query** (`GETCAP`, phase 2): single round-trip that returns everything the Camera Control v2 dialog needs to render — camera capabilities, every illumination source declared in the config, and the modality / channels / rotation angles for the queried profile. JSON shape:
+
+```json
+{
+  "camera": {
+    "name": "...", "type": "jai" | "hamamatsu" | "laser_scanning" | "generic",
+    "supports_per_channel_exposure": bool,
+    "supports_hardware_white_balance": bool,
+    "available_binnings": [int, ...],
+    "current_binning": int,
+    "exposure_range_ms": [float, float],
+    "gain_range": [float, float] | null
+  },
+  "illumination": [
+    {"label": str, "device": str, "power_range": [float, float],
+     "current_power": float, "is_on": bool,
+     "value_type": "binary" | "continuous" | "discrete"}
+  ],
+  "modality": {
+    "name": str, "default_wb_mode": str,
+    "is_multi_angle": bool,
+    "channels": [{"id": str, "exposure_ms": float, ...}] | null,
+    "rotation_angles": [float, ...] | null
+  },
+  "active_profile": str | null
+}
+```
+
+`value_type` tells the client which input widget to render: `"binary"` → checkbox (only valid powers are 0 and `power_range[1]`); `"continuous"` → spinner / text field; `"discrete"` → reserved for a future enumerated-set source (radio buttons). Empty payload returns the current state via the server's tracked `_active_profile`; non-empty payload describes what the profile would render after Apply (no actual hardware change).
+
+### Illumination & Profile
+
+| Command | Wire Format | Payload | Response |
+|---------|------------|---------|----------|
+| GETILLM | `getillm_` | none | 14 bytes: avail flag + 3 floats (power/min/max) + 1-byte is_on |
+| SETILLM | `setillm_` | 4-byte big-endian float | `ACK_____` / `ERR_ILLM` |
+| SETILLMD | `setilmd_` | 32-byte device name + 4-byte float | `ACK_____` / `ERR_DEVN` / `ERR_ILLM` |
+| APPLYPR | `applypr_` | 32-byte profile name | `ACK_____` / `ERR_PROF` |
+| APPLYCH | `applych_` | 32-byte profile name + 32-byte channel id | `ACK_____` / `ERR_CHAN` |
+
+**SETILLM** drives whichever source the active profile selected (the legacy single-source endpoint). **SETILLMD** drives a NAMED source independently; the server walks every modality, builds each illumination via `_build_illumination_from_config`, finds the device-name match, and calls `set_power` on it. Lets the dialog tune any declared source without first APPLYPRing to its modality. Note: if the source's optical path is not currently selected, the value is staged but no light reaches the sample until the user APPLYPRs the matching profile.
+
+**APPLYCH** applies a single channel from a profile's library — `mm_setup_presets` (cube turret, shutter, etc.) + `device_properties` (per-channel light source + intensity) + per-channel exposure, all via the same `apply_channel_hardware_state` helper the acquisition workflow uses. Empty channel id calls `_disable_all_modality_illuminations` to fully unset (used by the Live Viewer's "None" channel radio).
 
 ### Live Mode
 

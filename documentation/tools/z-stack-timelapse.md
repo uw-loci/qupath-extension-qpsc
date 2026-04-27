@@ -47,20 +47,24 @@ The info label shows total acquisition duration.
 
 Individual TIFF files named `t00000_T<elapsed>s.tif` with metadata including timepoint index and elapsed time.
 
-## PPM Support
+## Modality Support
 
-Both Z-stack and time-lapse support PPM multi-angle acquisition. When the modality is set to PPM, all configured rotation angles are acquired at each Z plane or time point. Files are suffixed with the angle: `z0000_Z10.0_angle90.tif`.
+Both Z-stack and time-lapse support every modality the acquisition workflow handles:
+
+- **PPM / multi-angle:** all configured rotation angles are acquired at each Z plane or time point. Files suffixed with the angle: `z0000_Z10.0_angle90.tif`.
+- **Brightfield (single-angle, single-channel):** standard Z-stack-then-project per tile.
+- **Widefield IF / fluorescence (multi-channel):** Z-stack runs *per channel* (commit `e8e3799`). For each tile, the workflow iterates channels (channel-outer, Z-inner ordering minimizes filter wheel changes), accumulates Z planes per channel, and applies the configured projection per channel. Stage Z is restored to center between channels. Saturation runaway detection fires once per tile per channel.
 
 ## Per-Tile Z-Stacks (Multi-Tile Acquisition)
 
-The main QPSC acquisition workflow also supports Z-stacks at every tile position. This is essential for SHG and multiphoton imaging where tissue extends through multiple focal planes.
+The main QPSC acquisition workflow supports Z-stacks at every tile position. This is essential for SHG and multiphoton imaging where tissue extends through multiple focal planes, and for thick-section fluorescence where the signal is distributed across Z.
 
 When Z-stack parameters are included in an acquisition command (`--z-stack --z-start --z-end --z-step`), the system:
 
-1. Performs autofocus at each tile position to find the optimal Z
-2. Acquires multiple Z-planes centered on the autofocus result
-3. Computes a projection (e.g., max intensity) to produce a single 2D tile
-4. Saves the projected tile for stitching (same pipeline as 2D acquisition)
+1. Performs autofocus at each tile position to find the optimal Z (or skips when `--af-disabled`).
+2. Acquires multiple Z-planes centered on the autofocus result -- per channel for IF, per angle for PPM, single-pass for BF.
+3. Computes a projection (e.g., max intensity) to produce a single 2D tile (per channel / angle when applicable).
+4. Saves the projected tile for stitching (same pipeline as 2D acquisition).
 
 ### Projection Types
 
@@ -72,9 +76,19 @@ When Z-stack parameters are included in an acquisition command (`--z-stack --z-s
 | **Mean** | `--z-projection mean` | Average across Z (noise reduction) | General denoising |
 | **Std deviation** | `--z-projection std` | Variability across Z | Highlighting Z-localized structures |
 
+### Output Layout
+
+Per-tile output structure depends on the modality:
+
+| Modality | Projected output | Raw Z planes (with `--save-raw`) |
+|---|---|---|
+| Brightfield (single-shot) | `<output>/<tile>.tif` | `<output>/z000/<tile>.tif`, `z001/`, ... |
+| PPM (multi-angle) | `<output>/<angle>/<tile>.tif` | `<output>/<angle>/z000/<tile>.tif`, ... |
+| Widefield IF (channels) | `<output>/<channel>/<tile>.tif` | `<output>/<channel>/z000/<tile>.tif`, ... |
+
 ### Raw Z-Plane Storage
 
-Add `--save-raw` to save individual Z-planes alongside the projected tiles. Planes are stored in `z000/`, `z001/`, etc. subdirectories within each angle folder.
+Add `--save-raw` to save individual Z-planes alongside the projected tiles. Planes land in `z000/`, `z001/`, etc. subdirectories under the appropriate per-angle / per-channel / output directory (see table above).
 
 ## Future Expansion
 

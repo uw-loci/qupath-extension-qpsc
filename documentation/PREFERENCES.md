@@ -31,7 +31,7 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Microscope Server Port](#microscope-server-port) | Integer | 5000 | Server port number |
 | [Auto-connect to Server](#auto-connect-to-server) | Boolean | ON | Connect on QuPath startup |
 | [No Manual Autofocus (Danger)](#no-manual-autofocus-danger) | Boolean | OFF | Skip manual focus dialogs |
-| Disable All Autofocus (Danger) | Boolean | OFF | Disable ALL autofocus during acquisition |
+| [Disable All Autofocus (Danger)](#disable-all-autofocus-danger) | Boolean | OFF | Send `--af-disabled` on the wire so server runs zero AF |
 | Save Raw Tiles | Boolean | OFF | Save unprocessed tiles alongside corrected |
 | Warn On Low Disk Space | Boolean | ON | Alert when disk space is low before acquisition |
 | [Image name includes: Objective](#image-name-includes-objective) | Boolean | OFF | Add objective to filename |
@@ -641,6 +641,33 @@ When enabled, the manual autofocus dialog never appears. If autofocus fails, the
 - Entire regions may be out of focus
 - No user intervention possible during acquisition
 - Quality control must be performed after acquisition
+
+---
+
+### Disable All Autofocus (Danger)
+
+| Property | Value |
+|----------|-------|
+| Type | Boolean |
+| Default | OFF |
+| Requires Restart | No |
+
+**Description:**
+**WARNING:** Enabling this means *no* autofocus will run on the acquisition. Z drift will not be corrected. Use only when you've manually staged a known-good Z (or when running a fast scan over a sample whose drift over the acquisition window is negligible).
+
+When enabled, the Java side emits `--af-disabled` on the ACQUIRE wire payload (in place of the `--af-tiles`/`--af-steps`/`--af-range` triplet). The server's `_configure_autofocus` short-circuits on this flag: no autofocus YAML load required, no AF positions scheduled, no pre-acquisition AF, no per-tile drift checks, no manual-focus prompts. Server log shows a single `Autofocus DISABLED for this acquisition` line at workflow start.
+
+This is broader than [No Manual Autofocus](#no-manual-autofocus-danger): No-Manual still runs AF and only suppresses the user prompt on failure; Disable-All-Autofocus skips AF entirely.
+
+**Only enable for:**
+- Test runs with a manually-set Z
+- Samples where Z drift over the acquisition is known-small
+- Diagnostic runs (debugging acquisition timing without AF noise)
+
+**Risks:**
+- No drift correction at all
+- Sample drift over a long acquisition will gradually defocus
+- No way for the system to recover from a Z mistake
 
 ---
 

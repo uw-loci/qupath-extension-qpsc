@@ -122,8 +122,8 @@ Shows the current hardware and provides modality-dependent camera controls.
 | Option | Type | Description |
 |--------|------|-------------|
 | Detector / Objective | Label | Read-only display of the current detector and objective (auto-detected from MicroManager pixel size) |
-| Modality | Dropdown | Select the imaging modality (PPM, Brightfield, etc.). Content below changes based on selection. |
-| Full Camera Control | Button | Opens the full [Camera Control](camera-control.md) dialog for detailed exposure and gain adjustments |
+| Modality | Dropdown | Select the imaging modality (PPM, Brightfield, Fluorescence, etc.). Changing the dropdown sends `APPLYPR` to actually drive the hardware -- the cube turret moves, the light path switches, the previous source is turned off, and the new modality's source becomes active. (Previously the dropdown was UI-only and the lamp stayed on the previous modality, so any tuning values you typed were calibrated against unfiltered light.) |
+| Full Camera Control | Button | Opens the full [Camera Control](camera-control.md) dialog for detailed exposure / gain / binning / illumination adjustments |
 
 **PPM modality content:**
 
@@ -138,9 +138,20 @@ Shows the current hardware and provides modality-dependent camera controls.
 |--------|------|-------------|
 | Brightfield WB | Button | Applies the single white balance preset (no rotation). |
 
+**Fluorescence / widefield IF modality content (per-channel preview):**
+
+When a fluorescence-style modality has a channel library declared in YAML (`modalities.<name>.channels`), the panel renders one row per channel:
+
+| Option | Type | Description |
+|--------|------|-------------|
+| Profile | Dropdown + Apply | Pick the acquisition profile (e.g. `Fluorescence_10x`) whose channel library to use; Apply runs `APPLYPR` and switches the cube + epi shutter + light source. |
+| (None -- deactivate all) | Radio | Selecting this sends `APPLYCH` with an empty channel id, which calls `_disable_all_modality_illuminations` to turn off every source declared in the modality. Default-selected on dialog open. |
+| Per-channel rows | Radio + Spinner + Spinner | One row per channel id (DAPI, FITC, ...). The radio button now drives hardware via `APPLYCH`: the cube/shutter presets run, the per-channel light source switches, the per-channel intensity property is written, and the per-channel exposure is applied -- all on the server in `apply_channel_hardware_state`, the same helper the acquisition workflow uses. The exposure spinner round-trips to the live camera; the intensity spinner persists to PersistentPreferences for the next acquisition (independent live tuning of the channel's intensity property requires SETILLMD on the channel's intensity device, scheduled if friction surfaces). |
+| Save / Load Preset | Buttons | Save: stores `profile|exp|gain|illum` keyed by modality + objective + detector. Load: runs `APPLYPR` for the saved profile *before* writing `SETCAM` and `SETILLM`, so the right cube + light path are in place when the preset's illumination power lands. Legacy preset format (no leading profile) auto-resolves to the first profile matching the section's modality. |
+
 **Other modalities:** Show a placeholder message indicating presets are not yet configured.
 
-When a preset is applied, the live feed pauses briefly while the camera settings are updated, then resumes automatically.
+When a preset or channel is applied, the live feed pauses briefly while the camera settings update, then resumes automatically (`withLiveModeHandling`).
 
 ### Noise Stats Panel
 

@@ -390,6 +390,22 @@ For multi-channel IF / BF+IF acquisitions where the merge failed and each per-ch
 3. `n_tiles=5` means autofocus every 5 tiles instead of every 2 tiles
 4. Faster acquisition but less frequent focus updates
 
+#### Q: I checked "Disable Autofocus" but the manual focus dialog still appeared
+
+**A:** Fixed 2026-04-26. The Java side previously dropped the `--af-tiles`/`--af-steps`/`--af-range` triplet but didn't tell the server "no AF at all", so the server fell back to YAML defaults and ran AF normally (including the manual-focus prompt on the first failure). Now the Java side sends an explicit `--af-disabled` flag the server short-circuits on. If you still see manual focus prompts after this fix, confirm: (1) the QuPath build is current (commit `98edcf2` or later), (2) the server is current (commit `b5ae861` or later), (3) "Disable Autofocus" is actually checked in Preferences (Extensions > QP Scope > Preferences > "Disable All Autofocus (Danger)"). Server log should show a single `Autofocus DISABLED for this acquisition` line at workflow start.
+
+#### Q: Time-remaining estimate is wildly off after a slow start
+
+**A:** Fixed 2026-04-26 (commit `df1092f`). The mid-run estimator previously computed `(now - workflowStartTime) / totalTilesCompleted`, which folded everything that happened *before* the first tile finished -- pre-acquisition AF, blocking modals, manual-focus dialog wait time -- into the per-tile mean. A 30-second pause at the start could turn a 12-tile / 4 s-per-tile acquisition into "5 hours remaining" once the first tile finished. Now the estimator uses the rolling `allTileTimes` mean (already collected with tile 1 excluded for this exact reason). The first-tile fallback keeps the legacy formula because there's no sample yet, but from tile 2 onward the estimate reflects steady-state cadence only.
+
+#### Q: Z-stack with fluorescence channels saves only one image per tile (no Z planes)
+
+**A:** Fixed 2026-04-26 (commit `e8e3799`). The widefield IF tile path was snapping once per channel and ignoring `ctx.z_offsets` entirely, so Z-stack settings on fluorescence acquisitions silently dropped to single-plane (logs showed "264 total images" but only 24 saved when channels=2, planes=11). Now the channel loop iterates Z planes per channel, accumulates, and applies the configured projection. Output: one projected file per `<output>/<channel>/<tile>.tif`; with `--save-raw` also `<output>/<channel>/z000/`, etc.
+
+#### Q: Z-stack progress dialog shows 34/12 positions
+
+**A:** Fixed 2026-04-26 (commit `e86ae06`). `AcquisitionManager.monitorAcquisition` was computing `stepsPerPosition` as `max(channels, angles)` and ignoring Z-planes entirely. With FITC + Cy5 + 11 Z-planes the server reported 264 progress increments but Java divided by 2 instead of 22, overshooting the 12-position denominator. Now the multiplier includes `ceil(zRange/zStep) + 1` when Z-stack is enabled, matching the existing logic in `BoundedAcquisitionWorkflow`.
+
 ### Stitching Issues
 
 #### Q: Stitching takes forever - QuPath freezes
@@ -413,6 +429,18 @@ For multi-channel IF / BF+IF acquisitions where the merge failed and each per-ch
 1. Add overlap percentage in acquisition settings (try 10%)
 2. Overlap helps stitching algorithm blend tiles smoothly
 3. More overlap = better stitching but longer acquisition time
+
+#### Q: Fluorescence existing-image acquisition is rotated 180 degrees relative to its parent brightfield image
+
+**A:** Fixed 2026-04-26 (commit `d94ea94`). The channel-merge import path (`StitchingHelper.importMergedImageOnly`) was passing `metadata.flipX, metadata.flipY` to `addImageToProjectWithMetadata`, but the per-channel pyramids were already written with the stitcher's `flipStitchingX/Y` baked in. The result was a second `TransformedServerBuilder` flip on top of the already-flipped merged file -- a 180° net rotation on any scope whose `stitcherFlipFlags` are non-trivial (e.g. OWS3 with inverted stage polarity). The BF single-pass path was always correct because it imported with `false, false`. Now both paths agree. If you still see rotated FL output after the fix, check that you're on commit `d94ea94` or later and re-run the affected acquisition.
+
+#### Q: Camera Control preset Load fails with `ERR_ILLM` after a different-modality acquisition
+
+**A:** Fixed 2026-04-26 (commit `d88fdd8`). The preset format previously stored `exp|gain|illum` with no modality binding, so loading a Brightfield preset after a Fluorescence acquisition routed power calibrated for DiaLamp into the Epi LED (which raised in `set_power` and surfaced as `ERR_ILLM`). The new format prepends the active profile name (`profile|exp|gain|illum`) and the Load path runs `APPLYPR` for the saved profile *before* `SETCAM`/`SETILLM`. Legacy presets still load (the leading segment is detected by whether it parses as a float) and auto-resolve to the first profile matching the section's modality.
+
+#### Q: Camera Control "Set intensity" field accepted any number but Apply gave `Cannot set property "State" to "1.000000"`
+
+**A:** Fixed 2026-04-26 (commits `f5be41e` / `e010910` / `698e487`). Some MM device adapters expose only an enumerated `State` property with discrete values like `"0"` / `"1"` and no continuous intensity knob. Configs declare these by pointing `state_property` and `intensity_property` at the same MM property name. The old `set_power` flow wrote `State="1"` (string, OK) then `State=1.0` (float, serialized by pycromanager as `"1.000000"`) which MM rejected. Now `DevicePropertyIllumination._is_binary()` detects this case and skips the float intensity write entirely. The Camera Control dialog also reads `value_type` from `GETCAP` and renders a checkbox instead of a TextField for binary sources, so users can't type invalid values in the first place.
 
 #### Q: Stitching fails - "TileConfiguration.txt not found"
 
