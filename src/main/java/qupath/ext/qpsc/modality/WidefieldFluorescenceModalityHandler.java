@@ -117,4 +117,16 @@ public class WidefieldFluorescenceModalityHandler implements ModalityHandler {
         // Future: flat-field correction, channel registration, etc.
         return List.of();
     }
+
+    /**
+     * Fluorescence detectors are typically monochrome sCMOS sensors -- the
+     * "channel" identity comes from the active filter cube (DAPI/FITC/etc.),
+     * not from a Bayer pattern. Saturation is reported per filter-cube
+     * channel rather than collapsed into a single worst column.
+     */
+    @Override
+    public ChannelDisplay channelDisplay(boolean rgbCamera) {
+        return ChannelDisplay.PER_CHANNEL;
+    }
 }
+

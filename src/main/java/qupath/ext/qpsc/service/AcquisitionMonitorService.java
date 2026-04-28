@@ -97,7 +97,7 @@ public final class AcquisitionMonitorService {
 
                 // Show saturation summary if detected
                 if (config.tileDirPath != null) {
-                    showSaturationSummaryIfNeeded(socketClient, config.tileDirPath);
+                    showSaturationSummaryIfNeeded(socketClient, config.tileDirPath, config.modality);
                 }
 
                 // Notify caller-specific completion handler
@@ -129,7 +129,7 @@ public final class AcquisitionMonitorService {
      * Show the saturation summary dialog if saturation was detected.
      */
     private static void showSaturationSummaryIfNeeded(
-            MicroscopeSocketClient socketClient, String tileDirPath) {
+            MicroscopeSocketClient socketClient, String tileDirPath, String modality) {
         try {
             String satSummary = socketClient.getFormattedSaturationSummary();
             if (satSummary == null) return;
@@ -139,7 +139,7 @@ public final class AcquisitionMonitorService {
             java.io.File reportFile = new java.io.File(reportPath);
 
             if (reportFile.exists()) {
-                SaturationSummaryDialog.show(reportPath, satSummary);
+                SaturationSummaryDialog.show(reportPath, satSummary, modality);
             } else {
                 Platform.runLater(() -> {
                     javafx.scene.control.Alert alert =
@@ -182,6 +182,7 @@ public final class AcquisitionMonitorService {
         long timeoutMs = 300_000;
         Runnable onCompleted;
         Runnable onCancelled;
+        String modality;
 
         private MonitorConfig() {}
 
@@ -242,5 +243,12 @@ public final class AcquisitionMonitorService {
             this.onCancelled = cb;
             return this;
         }
+
+        /** Modality identifier ("ppm_10x", etc.) for saturation dialog dispatch. */
+        public MonitorConfig modality(String modality) {
+            this.modality = modality;
+            return this;
+        }
     }
 }
+

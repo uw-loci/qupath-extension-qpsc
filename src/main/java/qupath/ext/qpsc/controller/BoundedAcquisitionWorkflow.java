@@ -481,6 +481,7 @@ public class BoundedAcquisitionWorkflow {
                                                         null,
                                                         UIFunctions::showManualFocusDialog))
                                                 .tileDir(tileDirPath)
+                                                .modality(enhancedModality)
                                                 .pollInterval(500)
                                                 .timeout(300000));
 

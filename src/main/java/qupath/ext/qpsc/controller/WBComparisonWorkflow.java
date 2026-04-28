@@ -453,6 +453,7 @@ public class WBComparisonWorkflow {
                                 logger.error("[{}] Failed to send SKIPAF response", wbMode, e);
                             }
                         })
+                        .modality(modality)
                         .pollInterval(ACQUISITION_POLL_INTERVAL_MS)
                         .timeout(ACQUISITION_TIMEOUT_MS));
         logger.info("[{}] Acquisition completed", wbMode);

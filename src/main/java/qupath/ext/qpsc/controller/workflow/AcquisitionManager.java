@@ -1169,7 +1169,7 @@ public class AcquisitionManager {
                         java.io.File reportFile = new java.io.File(reportPath);
                         if (reportFile.exists()) {
                             // Show detailed scrollable dialog with per-tile data
-                            SaturationSummaryDialog.show(reportPath, satSummary);
+                            SaturationSummaryDialog.show(reportPath, satSummary, state.sample.modality());
                         } else {
                             // Fallback: use a proper dialog instead of a toast notification
                             // (toast notifications truncate long text)
@@ -1922,6 +1922,25 @@ public class AcquisitionManager {
             } catch (Exception ignored) {
                 // see note above
             }
+        }
+
+        // Per-channel percentile / mean / std / dynamic_range stats. Forwarded
+        // through verbatim from the NDJSON; the Python side names them
+        // p1_R/G/B/gray, p99_R/G/B/gray, mean_*, std_*, dynamic_range_*.
+        // Surfaces dim-tile under-exposure (low p99) alongside saturation in
+        // the same QuPath measurement table.
+        for (String prefix : new String[]{"p1_", "p99_", "mean_", "std_", "dynamic_range_"}) {
+            for (String suffix : new String[]{"R", "G", "B", "gray"}) {
+                String key = prefix + suffix;
+                Number val = (Number) entry.get(key);
+                if (val != null) {
+                    detection.getMeasurements().put(key, val.doubleValue());
+                }
+            }
+        }
+        Boolean underexposed = (Boolean) entry.get("underexposed");
+        if (underexposed != null) {
+            detection.getMeasurements().put("underexposed", underexposed ? 1.0 : 0.0);
         }
     }
 
