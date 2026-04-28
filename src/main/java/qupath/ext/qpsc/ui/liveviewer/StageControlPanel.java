@@ -1415,12 +1415,16 @@ public class StageControlPanel extends VBox {
     /** Resolve the detector ID for a given modality. */
     private String resolveDetector(String modality) {
         // Use the detected detector (matched from MM pixel size) when available.
-        // Only fall back to the first hardware detector when detection failed.
+        // When detection fails, defer to getActiveDetector() (PersistentPreferences
+        // last-detector or the unique hardware detector) rather than iterator-first.
+        // The 2026-04-27 silent-first-detector incident showed that hash-iteration
+        // order is not safe to use as a stand-in for user intent -- and presets
+        // are keyed by detector, so saving under the wrong key strands them.
         if (currentCameraDetectorId != null && !"Unknown".equals(currentCameraDetectorId)) {
             return currentCameraDetectorId;
         }
-        var dets = mgr.getAvailableDetectors();
-        return (dets != null && !dets.isEmpty()) ? dets.iterator().next() : "Unknown";
+        String active = mgr.getActiveDetector();
+        return active != null ? active : "Unknown";
     }
 
     // --- Shared Camera Tab builders ---

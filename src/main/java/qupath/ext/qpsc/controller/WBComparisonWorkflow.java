@@ -796,9 +796,23 @@ public class WBComparisonWorkflow {
     }
 
     private static String resolveDetector(MicroscopeConfigManager configManager, String modality, String objective) {
+        // Defer to getActiveDetector() so WB comparison targets the same
+        // detector profile the WB / BG dialogs persist. Returns null when
+        // multiple detectors exist and the user has not picked one --
+        // throw rather than guess (the silent-first iterator.next() pattern
+        // is what produced the 2026-04-27 dim-images incident).
+        String detector = configManager.getActiveDetector();
+        if (detector != null) return detector;
         Set<String> detectors = configManager.getAvailableDetectors();
-        if (!detectors.isEmpty()) return detectors.iterator().next();
-        throw new RuntimeException("No detectors available for " + modality + "/" + objective);
+        if (detectors.isEmpty()) {
+            throw new RuntimeException("No detectors available for " + modality + "/" + objective);
+        }
+        throw new RuntimeException(
+                "Multiple detectors available " + detectors
+                        + " for " + modality + "/" + objective
+                        + " but none selected -- run a WB calibration or open Background Collection "
+                        + "first so PersistentPreferences.lastDetector is set, or extend WB comparison "
+                        + "to expose its own detector picker.");
     }
 
     private static List<AngleExposure> resolveAngleExposures(

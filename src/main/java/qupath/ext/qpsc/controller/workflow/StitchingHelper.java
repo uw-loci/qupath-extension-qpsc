@@ -789,6 +789,15 @@ public class StitchingHelper {
         logger.info("Region stitching flip flags from StageImageTransform: flipX={}, flipY={}",
                 flipX, flipY);
 
+        // Stamp source microscope (config name) + active detector so the
+        // stitched image carries enough metadata for cross-system alignment
+        // and per-detector flip / WB lookup. Detector follows the user's
+        // most-recent dropdown choice (the same source the WB and BG
+        // dialogs use post-2026-04-27 fix).
+        String sourceMicroscope = resolveSourceMicroscope();
+        String detector = qupath.ext.qpsc.preferences.PersistentPreferences.getLastDetector();
+        if (detector != null && detector.isEmpty()) detector = null;
+
         return new StitchingMetadata(
                 parentEntry,
                 xOffset,
@@ -806,7 +815,28 @@ public class StitchingHelper {
                 stageBoundsX2Um,
                 stageBoundsY2Um,
                 null, // fovXUm -- not available in region path
-                null);
+                null, // fovYUm
+                detector,
+                sourceMicroscope);
+    }
+
+    /**
+     * Resolve the source-microscope identifier for stitched-image metadata.
+     * Reads {@code MicroscopeConfigManager.getMicroscopeName()} from the
+     * active config; on any failure returns {@code null} so the metadata
+     * field is omitted rather than populated with a wrong value.
+     */
+    private static String resolveSourceMicroscope() {
+        try {
+            String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath == null || configPath.isEmpty()) return null;
+            String name = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(configPath)
+                    .getMicroscopeName();
+            return (name == null || name.isEmpty() || "Unknown".equals(name)) ? null : name;
+        } catch (Exception e) {
+            logger.debug("Could not resolve source microscope name for stitching metadata: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -862,11 +892,15 @@ public class StitchingHelper {
 
         String annotationName = annotation != null ? annotation.getName() : null;
 
+        String sourceMicroscope = resolveSourceMicroscope();
+        String detector = qupath.ext.qpsc.preferences.PersistentPreferences.getLastDetector();
+        if (detector != null && detector.isEmpty()) detector = null;
+
         return new StitchingMetadata(
                 parentEntry, offset[0], offset[1], flipX, flipY, sampleName,
                 modality, objective, null, annotationName, null,
                 stageBoundsX1, stageBoundsY1, stageBoundsX2, stageBoundsY2,
-                null, null);
+                null, null, detector, sourceMicroscope);
     }
 
     /**
@@ -1422,7 +1456,8 @@ public class StitchingHelper {
                                 metadata.sampleName,
                                 metadata.modality, metadata.objective,
                                 metadata.angle, metadata.annotationName,
-                                metadata.imageIndex, handler);
+                                metadata.imageIndex, handler,
+                                metadata.detector, metadata.sourceMicroscope);
                     } else {
                         QPProjectFunctions.addImageToProject(f, project, false, false, handler);
                     }
@@ -1475,7 +1510,8 @@ public class StitchingHelper {
                             metadata.sampleName,
                             metadata.modality, metadata.objective,
                             metadata.angle, metadata.annotationName,
-                            metadata.imageIndex, handler);
+                            metadata.imageIndex, handler,
+                            metadata.detector, metadata.sourceMicroscope);
                 } else {
                     QPProjectFunctions.addImageToProject(mergedFile, project, false, false, handler);
                 }

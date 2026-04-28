@@ -693,6 +693,26 @@ public class MicroscopeAlignmentWorkflow {
                             .orElse(null);
 
                     if (newEntry != null) {
+                        // Stamp the source microscope/scanner that produced this
+                        // macro image so cross-system alignment workflows can
+                        // recover the origin scope. selectedScanner is the user's
+                        // explicit choice from MicroscopeSelectionDialog (e.g.
+                        // "Ocus40").
+                        if (selectedScanner != null && !selectedScanner.isEmpty()) {
+                            try {
+                                newEntry.getMetadata()
+                                        .put(qupath.ext.qpsc.utilities.ImageMetadataManager.SOURCE_MICROSCOPE,
+                                                selectedScanner);
+                                project.syncChanges();
+                                logger.info(
+                                        "Stamped source_microscope='{}' on alignment macro image",
+                                        selectedScanner);
+                            } catch (Exception metaEx) {
+                                logger.warn(
+                                        "Could not stamp source_microscope on macro image: {}",
+                                        metaEx.getMessage());
+                            }
+                        }
                         gui.openImageEntry(newEntry);
                         logger.info("Reopened image with flips applied");
                     }

@@ -199,6 +199,30 @@ public interface ModalityHandler {
     }
 
     /**
+     * Returns true if this modality expects every tile to fill the dynamic
+     * range of the detector. When true, the acquisition server may flag
+     * suspiciously dim tiles (median far below the calibration target) as
+     * a likely sign of stale calibration / wrong detector profile -- the
+     * 2026-04-27 silent-first-detector incident produced exactly this
+     * pattern and would have been caught by such a check.
+     *
+     * <p>When false, dim tiles are normal and expected: a fluorescence
+     * channel imaging rare cell types is supposed to be mostly dark, a
+     * laser-scanning channel may be sparse, and an under-exposure warning
+     * would be noise. Default is {@code false} to keep new modalities safe.
+     *
+     * <p>Implementations should override this to {@code true} only when
+     * the imaging contract is "every tile, full dynamic range" -- e.g.
+     * brightfield, polarized brightfield (PPM), histology stains.
+     *
+     * @return {@code true} for uniformly bright modalities (PPM,
+     *         brightfield), {@code false} otherwise
+     */
+    default boolean expectsUniformBrightness() {
+        return false;
+    }
+
+    /**
      * Generates a filename-safe suffix string for the specified rotation angle.
      *
      * <p>This method creates human-readable suffixes used in image filenames to distinguish

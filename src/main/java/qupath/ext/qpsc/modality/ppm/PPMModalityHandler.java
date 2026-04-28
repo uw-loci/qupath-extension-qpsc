@@ -46,6 +46,12 @@ public class PPMModalityHandler implements ModalityHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(PPMModalityHandler.class);
 
+    /** PPM expects every angle's tile to fill the dynamic range -- dim tiles indicate stale WB calibration. */
+    @Override
+    public boolean expectsUniformBrightness() {
+        return true;
+    }
+
     /**
      * Retrieves PPM rotation angles and their associated decimal exposure times.
      *

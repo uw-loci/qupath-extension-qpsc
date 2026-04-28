@@ -488,6 +488,50 @@ public class QPProjectFunctions {
             Integer imageIndex,
             qupath.ext.qpsc.modality.ModalityHandler modalityHandler)
             throws IOException {
+        return addImageToProjectWithMetadata(
+                project,
+                imageFile,
+                parentEntry,
+                xOffset,
+                yOffset,
+                isFlippedX,
+                isFlippedY,
+                sampleName,
+                modality,
+                objective,
+                angle,
+                annotationName,
+                imageIndex,
+                modalityHandler,
+                null,
+                null);
+    }
+
+    /**
+     * Adds an image to a project with comprehensive metadata, including the
+     * detector that captured it and the source microscope/scanner that
+     * produced it. Pass {@code detectorId} so per-detector flip / WB lookup
+     * works downstream, and {@code sourceMicroscope} so cross-system
+     * alignment workflows can answer "which scope produced this image?".
+     */
+    public static ProjectImageEntry<BufferedImage> addImageToProjectWithMetadata(
+            Project<BufferedImage> project,
+            File imageFile,
+            ProjectImageEntry<BufferedImage> parentEntry,
+            double xOffset,
+            double yOffset,
+            boolean isFlippedX,
+            boolean isFlippedY,
+            String sampleName,
+            String modality,
+            String objective,
+            String angle,
+            String annotationName,
+            Integer imageIndex,
+            qupath.ext.qpsc.modality.ModalityHandler modalityHandler,
+            String detectorId,
+            String sourceMicroscope)
+            throws IOException {
 
         if (project == null) {
             logger.error("Cannot add image: project is null");
@@ -535,7 +579,9 @@ public class QPProjectFunctions {
                     objective,
                     angle,
                     annotationName,
-                    imageIndex);
+                    imageIndex,
+                    detectorId,
+                    sourceMicroscope);
 
             // Stamp active PPM calibration on PPM images
             if (modality != null && modality.toLowerCase().startsWith("ppm")) {

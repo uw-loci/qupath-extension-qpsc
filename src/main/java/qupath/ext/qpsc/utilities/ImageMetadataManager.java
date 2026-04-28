@@ -55,6 +55,15 @@ public class ImageMetadataManager {
     // Detector that captured this image (per-detector flip, WB lookup, etc.)
     public static final String DETECTOR_ID = "detector_id";
 
+    // Source microscope/scanner that produced this image (e.g. "PPM", "OWS3",
+    // "CAMM", "Ocus40"). Required for cross-system alignment workflows: an
+    // Ocus40 macro image used as the alignment source must record "Ocus40",
+    // and the resulting acquired tiles on PPM must record "PPM" -- otherwise
+    // pick-on-one / image-on-another is ambiguous. Source-of-truth is
+    // {@code MicroscopeConfigManager.getMicroscopeName()} for acquisitions
+    // and the user's MicroscopeSelectionDialog choice for imported macros.
+    public static final String SOURCE_MICROSCOPE = "source_microscope";
+
     // Camera field of view at acquisition time (microns). Needed for
     // coordinate propagation when the microscope is not connected.
     public static final String FOV_X_UM = "fov_x_um";
@@ -139,6 +148,41 @@ public class ImageMetadataManager {
                 angle,
                 annotationName,
                 imageIndex,
+                null,
+                null);
+    }
+
+    /**
+     * Backwards-compat overload: detector but no source microscope.
+     */
+    public static void applyImageMetadata(
+            ProjectImageEntry<?> entry,
+            ProjectImageEntry<?> parentEntry,
+            double xOffset,
+            double yOffset,
+            boolean flipX,
+            boolean flipY,
+            String sampleName,
+            String modality,
+            String objective,
+            String angle,
+            String annotationName,
+            Integer imageIndex,
+            String detectorId) {
+        applyImageMetadata(
+                entry,
+                parentEntry,
+                xOffset,
+                yOffset,
+                flipX,
+                flipY,
+                sampleName,
+                modality,
+                objective,
+                angle,
+                annotationName,
+                imageIndex,
+                detectorId,
                 null);
     }
 
@@ -160,6 +204,10 @@ public class ImageMetadataManager {
      * @param imageIndex The image index number
      * @param detectorId The detector that captured this image (null if unknown).
      *                   Stored for per-detector flip lookup in future workflows.
+     * @param sourceMicroscope The microscope/scanner that produced this image
+     *                   (e.g. "PPM", "OWS3", "Ocus40"). Stored for cross-system
+     *                   alignment and downstream pick-on-one/image-on-another
+     *                   workflows. {@code null} skips the field.
      */
     public static void applyImageMetadata(
             ProjectImageEntry<?> entry,
@@ -174,7 +222,8 @@ public class ImageMetadataManager {
             String angle,
             String annotationName,
             Integer imageIndex,
-            String detectorId) {
+            String detectorId,
+            String sourceMicroscope) {
         if (entry == null) {
             logger.error("Cannot apply metadata to null entry");
             return;
@@ -255,6 +304,19 @@ public class ImageMetadataManager {
 
         if (detectorId != null && !detectorId.isEmpty()) {
             metadata.put(DETECTOR_ID, detectorId);
+        }
+
+        if (sourceMicroscope != null && !sourceMicroscope.isEmpty()) {
+            metadata.put(SOURCE_MICROSCOPE, sourceMicroscope);
+        } else if (parentEntry != null) {
+            // If the caller didn't supply a source but the parent image has
+            // one, inherit it. Lets a sub-acquisition derived from a parent
+            // tile carry the parent's source forward without each call site
+            // having to re-resolve it.
+            String parentSource = parentEntry.getMetadata().get(SOURCE_MICROSCOPE);
+            if (parentSource != null && !parentSource.isEmpty()) {
+                metadata.put(SOURCE_MICROSCOPE, parentSource);
+            }
         }
 
         // Store reference to the parent/source image

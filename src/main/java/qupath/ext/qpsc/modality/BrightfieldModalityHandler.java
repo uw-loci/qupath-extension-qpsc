@@ -30,6 +30,12 @@ public class BrightfieldModalityHandler implements ModalityHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(BrightfieldModalityHandler.class);
 
+    /** Brightfield expects every tile to fill the dynamic range -- dim tiles are a calibration symptom. */
+    @Override
+    public boolean expectsUniformBrightness() {
+        return true;
+    }
+
     @Override
     public CompletableFuture<List<AngleExposure>> getRotationAngles(
             String modalityName, String objective, String detector, String wbMode) {

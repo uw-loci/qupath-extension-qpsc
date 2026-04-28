@@ -2499,6 +2499,60 @@ public class MicroscopeConfigManager {
         logger.debug("Found {} detectors: {}", detectors.size(), detectors);
         return detectors;
     }
+
+    /**
+     * Resolve the "active" detector for code paths that historically picked
+     * {@code getAvailableDetectors().iterator().next()} as a stand-in for user
+     * intent. The 2026-04-27 silent-first-detector incident showed that pattern
+     * is unsafe: the iteration order tracks hash bucket layout, so adding a
+     * second detector silently retargets writes (WB calibration, background
+     * collection paths) to the wrong YAML profile.
+     *
+     * <p>Resolution order:
+     * <ol>
+     *   <li>If {@code getHardwareDetectors()} declares exactly one detector,
+     *       return it (no ambiguity to resolve).</li>
+     *   <li>If {@code PersistentPreferences.getLastDetector()} matches a
+     *       known detector, return it (the user picked it most recently in
+     *       a dialog).</li>
+     *   <li>Otherwise return {@code null} -- callers MUST handle this by
+     *       prompting the user or refusing to proceed. Returning the first
+     *       hash-iterated entry is exactly the bug we are escaping.</li>
+     * </ol>
+     *
+     * <p>Read-only diagnostic / logging sites that just need <em>some</em>
+     * detector for a debug message can keep using the iterator-first pattern;
+     * this helper exists for code that will write to a detector-keyed YAML
+     * section, build a detector-keyed file path, persist a preset under a
+     * detector-keyed key, or otherwise commit user intent.
+     *
+     * @return the active detector ID, or {@code null} if it cannot be
+     *         resolved unambiguously
+     */
+    public String getActiveDetector() {
+        Set<String> detectors = getHardwareDetectors();
+        if (detectors == null || detectors.isEmpty()) {
+            logger.warn("getActiveDetector: no hardware detectors declared in config");
+            return null;
+        }
+        if (detectors.size() == 1) {
+            return detectors.iterator().next();
+        }
+        try {
+            String last = qupath.ext.qpsc.preferences.PersistentPreferences.getLastDetector();
+            if (last != null && !last.isEmpty() && detectors.contains(last)) {
+                return last;
+            }
+        } catch (Exception e) {
+            logger.debug("getActiveDetector: PersistentPreferences lookup failed: {}", e.getMessage());
+        }
+        logger.warn(
+                "getActiveDetector: {} detectors available {} but none recorded in "
+                        + "PersistentPreferences.getLastDetector(); refusing to guess",
+                detectors.size(),
+                detectors);
+        return null;
+    }
     /**
      * Check if white balance is enabled for a specific modality/objective/detector combination.
      *
