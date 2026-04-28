@@ -964,9 +964,9 @@ The following features and improvements are planned for upcoming releases:
 
 ## Getting Help
 
+- **General support and feature requests**: post on the [image.sc forum](https://forum.image.sc/) with the `#qupath` tag and mention `@Mike_Nelson` to flag the topic for my attention
 - **Troubleshooting Guide**: [documentation/TROUBLESHOOTING.md](documentation/TROUBLESHOOTING.md) - Comprehensive FAQ and error reference
-- **Bug Reports & Feature Requests**: [GitHub Issues](https://github.com/uw-loci/qupath-extension-qpsc/issues)
-- **QuPath Community**: [image.sc Forum](https://forum.image.sc/tag/qupath) (tag: qupath)
+- **Bug Reports**: [GitHub Issues](https://github.com/uw-loci/qupath-extension-qpsc/issues)
 - **Micro-Manager Help**: [Micro-Manager Documentation](https://micro-manager.org/wiki/Documentation)
 
 When reporting issues, please include:
