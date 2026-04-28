@@ -497,7 +497,17 @@ public class StageMapWindow {
                 return;
             }
 
-            if (Desktop.isDesktopSupported()) {
+            // On Windows, Desktop.getDesktop().open(folder) routes through the
+            // shell "open" verb / DDE, which frequently raises an already-open
+            // Explorer window instead of opening a new one at the target path.
+            // Invoke explorer.exe directly with /select,<file> so a fresh
+            // window opens with the config file highlighted regardless of any
+            // pre-existing Explorer windows.
+            if (qupath.lib.common.GeneralTools.isWindows()) {
+                new ProcessBuilder("explorer.exe", "/select,", configFile.getAbsolutePath())
+                        .start();
+                logger.info("Opened Explorer at config file: {}", configFile.getAbsolutePath());
+            } else if (Desktop.isDesktopSupported()) {
                 Desktop.getDesktop().open(configFolder);
                 logger.info("Opened config folder: {}", configFolder.getAbsolutePath());
             } else {
