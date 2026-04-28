@@ -223,6 +223,70 @@ public interface ModalityHandler {
     }
 
     /**
+     * Per-modality classification of how to interpret saturation at a given
+     * acquisition angle. PPM uncrossed (~90 deg) tiles are intentionally
+     * bright and saturation there is normal/expected; the small polarisation
+     * angles (+/-7) and crossed (0) angle are low-signal and saturation is a
+     * real defect. Other modalities collapse to {@link SaturationRole#SIGNAL_NORMAL}.
+     *
+     * <p>Stays in lock-step with the Python helper
+     * {@code _saturation_role_for(modality, angle)} in
+     * {@code microscope_command_server/acquisition/workflow.py}; both must
+     * use the same |angle - 90| < 2 tolerance for PPM uncrossed detection.
+     *
+     * @param angleDeg acquisition angle in degrees
+     * @return saturation role for this angle on this modality
+     */
+    default SaturationRole classifyAngleSaturation(double angleDeg) {
+        return SaturationRole.SIGNAL_NORMAL;
+    }
+
+    /** How to display saturation per channel in the QuPath measurement table and dialog. */
+    enum ChannelDisplay {
+        /** Collapse R/G/B into a single worst-channel column (PPM: channel identity does not matter). */
+        AGGREGATE,
+        /** One column per channel using {@link #channelLabel(int, boolean)} (fluorescence: channel identity matters). */
+        PER_CHANNEL,
+        /** Single grayscale saturation column for monochrome cameras. */
+        MONOCHROME
+    }
+
+    /** How to interpret saturation on a tile -- drives QuPath measurement filtering and dialog grouping. */
+    enum SaturationRole {
+        /** Faint signal expected; saturation indicates calibration drift or hot pixels. */
+        SIGNAL_LOW,
+        /** Intentionally bright (PPM uncrossed, deliberate background); saturation is OK. */
+        SIGNAL_HIGH,
+        /** Ordinary acquisition; saturation is bad but not a calibration smell. */
+        SIGNAL_NORMAL,
+        /** Reference frame captured for calibration purposes only. */
+        CALIBRATION_REFERENCE
+    }
+
+    /**
+     * How saturation should be shown for this modality. Default depends on the
+     * camera type: per-channel for RGB, monochrome for everything else.
+     * Modalities where channel identity is signal (fluorescence) keep
+     * PER_CHANNEL; modalities where it's noise (PPM) override to AGGREGATE.
+     */
+    default ChannelDisplay channelDisplay(boolean rgbCamera) {
+        return rgbCamera ? ChannelDisplay.PER_CHANNEL : ChannelDisplay.MONOCHROME;
+    }
+
+    /**
+     * Human-readable label for a channel index. Default: "R"/"G"/"B" for RGB,
+     * "Gray" for monochrome. Fluorescence overrides to return the configured
+     * fluorophore name (e.g. "DAPI", "FITC") so QuPath measurements appear
+     * as {@code saturation_DAPI_pct} instead of {@code saturation_R_pct}.
+     */
+    default String channelLabel(int channelIdx, boolean rgbCamera) {
+        if (rgbCamera) {
+            return new String[]{"R", "G", "B"}[channelIdx];
+        }
+        return "Gray";
+    }
+
+    /**
      * Generates a filename-safe suffix string for the specified rotation angle.
      *
      * <p>This method creates human-readable suffixes used in image filenames to distinguish

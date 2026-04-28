@@ -1206,6 +1206,21 @@ public class AcquisitionManager {
                         logger.warn("Could not load tile measurements: {}", e.getMessage());
                     }
 
+                    // Persist the populated tile measurements to the project so they
+                    // survive close/reopen. Tile detections are otherwise ephemeral
+                    // (regenerated from annotation bounds on next open) and the
+                    // measurements just attached would be lost on the next session.
+                    try {
+                        var imageData = QP.getCurrentImageData();
+                        var entry = QP.getProjectEntry();
+                        if (imageData != null && entry != null) {
+                            entry.saveImageData(imageData);
+                            logger.info("Saved tile measurements for {} to project", annotation.getName());
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Could not persist tile measurements to project: {}", e.getMessage());
+                    }
+
                     return true;
 
                 case CANCELLED:
@@ -1854,6 +1869,59 @@ public class AcquisitionManager {
         Number satWorst = (Number) entry.get("saturation_worst_pct");
         if (satWorst != null) {
             detection.getMeasurements().put("saturation_worst_pct", satWorst.doubleValue());
+        }
+
+        // Per-role saturation aggregates -- the user's primary filter for PPM:
+        // saturation_role_low_pct lets you find tiles where small-angle channels
+        // saturated, ignoring the (intentionally bright) uncrossed angle.
+        Number satRoleLow = (Number) entry.get("saturation_role_low_pct");
+        if (satRoleLow != null) {
+            detection.getMeasurements().put("saturation_role_low_pct", satRoleLow.doubleValue());
+        }
+        Number satRoleHigh = (Number) entry.get("saturation_role_high_pct");
+        if (satRoleHigh != null) {
+            detection.getMeasurements().put("saturation_role_high_pct", satRoleHigh.doubleValue());
+        }
+        Number satRoleNormal = (Number) entry.get("saturation_role_normal_pct");
+        if (satRoleNormal != null) {
+            detection.getMeasurements().put("saturation_role_normal_pct", satRoleNormal.doubleValue());
+        }
+
+        // saturation_role: numeric code for filtering ("signal_low"=0, "signal_normal"=1,
+        // "signal_high"=2, "calibration_reference"=3). String label is also stored in
+        // metadata so the dialog and downstream tools can show the human-readable name.
+        String roleLabel = (String) entry.get("saturation_role");
+        if (roleLabel != null) {
+            double roleCode;
+            switch (roleLabel) {
+                case "signal_low" -> roleCode = 0.0;
+                case "signal_normal" -> roleCode = 1.0;
+                case "signal_high" -> roleCode = 2.0;
+                case "calibration_reference" -> roleCode = 3.0;
+                default -> roleCode = 1.0;
+            }
+            detection.getMeasurements().put("saturation_role_code", roleCode);
+            try {
+                detection.getMetadata().put("saturation_role", roleLabel);
+            } catch (Exception ignored) {
+                // getMetadata() returns the read-only metadata map on some QuPath
+                // versions; falling back to measurements only is fine.
+            }
+        }
+
+        // Acquisition order + timestamp -- enables sort-by-acquisition-order in
+        // QuPath to spot drift across a long run.
+        Number acqOrder = (Number) entry.get("acq_order_index");
+        if (acqOrder != null) {
+            detection.getMeasurements().put("acq_order_index", acqOrder.doubleValue());
+        }
+        String acqTs = (String) entry.get("acq_timestamp_iso");
+        if (acqTs != null) {
+            try {
+                detection.getMetadata().put("acq_timestamp_iso", acqTs);
+            } catch (Exception ignored) {
+                // see note above
+            }
         }
     }
 

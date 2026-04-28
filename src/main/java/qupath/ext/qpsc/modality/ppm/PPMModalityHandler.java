@@ -53,6 +53,34 @@ public class PPMModalityHandler implements ModalityHandler {
     }
 
     /**
+     * PPM uncrossed (~90 deg) is intentionally bright, often acting as
+     * background reference -- saturation there is normal/expected. Small
+     * polarisation angles (+/-7) and crossed (0) are low-signal where
+     * saturation indicates a real defect (sample artefact, calibration
+     * drift). Stays in lock-step with the Python helper
+     * {@code _saturation_role_for(modality, angle)} which uses the same
+     * 2-degree tolerance for uncrossed detection.
+     */
+    @Override
+    public SaturationRole classifyAngleSaturation(double angleDeg) {
+        if (Math.abs(Math.abs(angleDeg) - 90.0) < 2.0) {
+            return SaturationRole.SIGNAL_HIGH;
+        }
+        return SaturationRole.SIGNAL_LOW;
+    }
+
+    /**
+     * PPM treats the JAI's R/G/B as three filtered views of the same field;
+     * the user does not care which channel saturated, only that any did.
+     * Aggregating into a single worst-channel column matches that mental
+     * model and keeps the QuPath measurement table tidy.
+     */
+    @Override
+    public ChannelDisplay channelDisplay(boolean rgbCamera) {
+        return ChannelDisplay.AGGREGATE;
+    }
+
+    /**
      * Retrieves PPM rotation angles and their associated decimal exposure times.
      *
      * <p>This method loads the PPM angle sequence from the microscope configuration
