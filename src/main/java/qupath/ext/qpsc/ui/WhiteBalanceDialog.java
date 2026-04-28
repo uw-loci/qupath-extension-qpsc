@@ -305,6 +305,9 @@ public class WhiteBalanceDialog {
                 // Shared - objective (used by both Simple and PPM)
                 ComboBox<?> objectiveCombo =
                         (ComboBox<?>) sharedPane.getContent().lookup("#wbObjective");
+                // Shared - detector (used by both Simple and PPM)
+                ComboBox<?> detectorCombo =
+                        (ComboBox<?>) sharedPane.getContent().lookup("#wbDetector");
                 // PPM WB - per-angle targets
                 Spinner<?> posTargetSpinner = (Spinner<?>) ppmPane.getContent().lookup("#positiveTarget");
                 Spinner<?> negTargetSpinner = (Spinner<?>) ppmPane.getContent().lookup("#negativeTarget");
@@ -398,27 +401,27 @@ public class WhiteBalanceDialog {
                     double exposureSoftCap = (Double) exposureSoftCapSpinner.getValue();
                     double boostedMaxGain = (Double) boostedMaxGainSpinner.getValue();
 
-                    // Get objective and derive detector (shared by both modes)
+                    // Get objective and detector (shared by both modes). Both come
+                    // from the user's explicit dropdown selection -- never iterator-
+                    // first, which silently mis-targeted Teledyne when JAI was
+                    // intended (2026-04-27 incident).
                     String selectedObjective = objectiveCombo.getValue() != null
                             ? objectiveCombo.getValue().toString()
                             : null;
-                    String selectedDetector = null;
-                    if (selectedObjective != null) {
-                        try {
-                            String cfgPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-                            if (cfgPath != null && !cfgPath.isEmpty()) {
-                                MicroscopeConfigManager cfgMgr = MicroscopeConfigManager.getInstance(cfgPath);
-                                Set<String> detectors = cfgMgr.getAvailableDetectors();
-                                if (!detectors.isEmpty()) {
-                                    selectedDetector = detectors.iterator().next();
-                                }
-                            }
-                        } catch (Exception e) {
-                            logger.warn(
-                                    "Could not determine detector for objective {}: {}",
-                                    selectedObjective,
-                                    e.getMessage());
-                        }
+                    String selectedDetector = detectorCombo.getValue() != null
+                            ? detectorCombo.getValue().toString()
+                            : null;
+
+                    if (selectedDetector == null || selectedDetector.isEmpty()) {
+                        Alert alert = new Alert(Alert.AlertType.ERROR);
+                        alert.setTitle("White Balance: missing detector");
+                        alert.setHeaderText("No detector selected");
+                        alert.setContentText(
+                                "Pick a detector in Shared Settings before running calibration. "
+                                        + "Calibration is written into the detector-specific YAML section, "
+                                        + "so picking the wrong one leaves the active detector with stale values.");
+                        alert.showAndWait();
+                        return null;
                     }
 
                     // Save shared preferences (output path is auto-derived, not saved)
@@ -427,6 +430,7 @@ public class WhiteBalanceDialog {
                     if (selectedObjective != null && !selectedObjective.isEmpty()) {
                         PersistentPreferences.setLastObjective(selectedObjective);
                     }
+                    PersistentPreferences.setLastDetector(selectedDetector);
 
                     // Save advanced preferences
                     maxGainDbProperty.set(maxGain);
@@ -713,6 +717,50 @@ public class WhiteBalanceDialog {
         grid.add(objectiveLabel, 0, row);
         grid.add(objectiveCombo, 1, row);
         grid.add(objectiveNote, 2, row);
+        row++;
+
+        // Detector selection - calibration is also detector-specific. Without this
+        // dropdown, the dialog used to silently pick whichever detector iterator()
+        // returned first, which on the PPM scope landed on Teledyne instead of JAI
+        // and left the JAI YAML stale (2026-04-27 incident).
+        Label detectorLabel = new Label("Detector:");
+        detectorLabel.setTooltip(
+                new Tooltip("Select the detector for calibration (exposures + gain are detector-specific)"));
+
+        ComboBox<String> detectorCombo = new ComboBox<>();
+        detectorCombo.setId("wbDetector");
+        detectorCombo.setPrefWidth(350);
+        detectorCombo.setTooltip(
+                new Tooltip("Select the detector for calibration (exposures + gain are detector-specific)"));
+
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath != null && !configPath.isEmpty()) {
+                MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
+                Set<String> detectors = configManager.getAvailableDetectors();
+                if (!detectors.isEmpty()) {
+                    detectorCombo
+                            .getItems()
+                            .addAll(detectors.stream().sorted().toList());
+                    String savedDetector = PersistentPreferences.getLastDetector();
+                    if (savedDetector != null && !savedDetector.isEmpty() && detectors.contains(savedDetector)) {
+                        detectorCombo.setValue(savedDetector);
+                    } else {
+                        detectorCombo.getSelectionModel().selectFirst();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not load detectors for WB dialog: {}", e.getMessage());
+        }
+
+        Label detectorNote = new Label("(calibration is detector-specific)");
+        detectorNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        detectorNote.setTooltip(new Tooltip("Calibration is detector-specific"));
+
+        grid.add(detectorLabel, 0, row);
+        grid.add(detectorCombo, 1, row);
+        grid.add(detectorNote, 2, row);
 
         TitledPane pane = new TitledPane("Shared Settings", grid);
         pane.setCollapsible(true);

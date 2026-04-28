@@ -48,8 +48,10 @@ public class BackgroundCollectionController {
 
     private ComboBox<String> modalityComboBox;
     private ComboBox<String> objectiveComboBox;
+    private ComboBox<String> detectorComboBox;
     private TextField outputPathField;
     private ComboBox<String> wbModeComboBox;
+    private VBox exposurePaneRoot; // exposure label + validation label + exposure controls; hidden when WB owns exposures
     private VBox exposureControlsPane;
     private List<AngleExposure> currentAngleExposures = new ArrayList<>();
     private List<TextField> exposureFields = new ArrayList<>();
@@ -156,6 +158,26 @@ public class BackgroundCollectionController {
                     }
                 });
 
+                // Detector listener: storage path + WB validity panel + exposure
+                // controls are all detector-scoped, so refresh everything that
+                // sources from `detectorComboBox.getValue()`.
+                detectorComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+                    if (newVal != null && !newVal.isEmpty()) {
+                        PersistentPreferences.setLastDetector(newVal);
+                    }
+                    // Camera-type (JAI vs mono) is detector-specific, so re-evaluate
+                    // both the WB controls and target-intensity visibility plus the
+                    // exposure pane (which is hidden for RGB+WB-on).
+                    loadTargetIntensityFromConfig();
+                    updateTargetIntensityVisibility();
+                    updateWbControlsVisibility();
+                    updateExposurePaneVisibility();
+                    if (modalityComboBox.getValue() != null && objectiveComboBox.getValue() != null) {
+                        updateExposureControlsWithBackground(
+                                modalityComboBox.getValue(), objectiveComboBox.getValue());
+                    }
+                });
+
                 outputPathField.textProperty().addListener((obs, oldVal, newVal) -> {
                     boolean isValid = modalityComboBox.getValue() != null
                             && objectiveComboBox.getValue() != null
@@ -226,6 +248,7 @@ public class BackgroundCollectionController {
                                         .executeBackgroundAcquisitionDirect(
                                                 result.modality(),
                                                 result.objective(),
+                                                result.detector(),
                                                 result.angleExposures(),
                                                 result.outputPath(),
                                                 result.wbMode(),
@@ -343,6 +366,35 @@ public class BackgroundCollectionController {
         modalityPane.add(objectiveLabel, 0, 1);
         modalityPane.add(objectiveComboBox, 1, 1);
 
+        // Detector selection -- background storage path + WB lookup are detector-specific.
+        // Without this dropdown the dialog used to silently pick whichever detector
+        // iterator() returned first, which on the PPM scope was masking JAI vs
+        // Teledyne mistakes (2026-04-27 incident).
+        Label detectorLabel = new Label("Detector:");
+        detectorLabel.setTooltip(new Tooltip(
+                "Select the detector for background collection.\n"
+                        + "Backgrounds are stored under <output>/<detector>/<modality>/<objective>/<wbMode>/, "
+                        + "and per-angle WB calibration is detector-specific."));
+        detectorComboBox = new ComboBox<>();
+        detectorComboBox.setPromptText("Select detector...");
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
+            Set<String> availableDetectors = configManager.getAvailableDetectors();
+            detectorComboBox.getItems().addAll(availableDetectors.stream().sorted().toList());
+            String lastDetector = PersistentPreferences.getLastDetector();
+            if (lastDetector != null && !lastDetector.isEmpty() && availableDetectors.contains(lastDetector)) {
+                detectorComboBox.setValue(lastDetector);
+            } else if (!availableDetectors.isEmpty()) {
+                detectorComboBox.getSelectionModel().selectFirst();
+            }
+        } catch (Exception e) {
+            logger.error("Failed to load available detectors for background dialog", e);
+        }
+
+        modalityPane.add(detectorLabel, 0, 2);
+        modalityPane.add(detectorComboBox, 1, 2);
+
         // Output path selection
         Label outputLabel = new Label("Output folder:");
         outputLabel.setTooltip(new Tooltip("Folder where background images are saved"));
@@ -356,8 +408,8 @@ public class BackgroundCollectionController {
         HBox outputPane = new HBox(10, outputPathField, browseButton);
         outputPane.setAlignment(Pos.CENTER_LEFT);
 
-        modalityPane.add(outputLabel, 0, 2);
-        modalityPane.add(outputPane, 1, 2);
+        modalityPane.add(outputLabel, 0, 3);
+        modalityPane.add(outputPane, 1, 3);
 
         // Set default output path
         setDefaultOutputPath();
@@ -396,6 +448,7 @@ public class BackgroundCollectionController {
                 logger.info("WB mode changed to: {} - reloading exposure values", newVal);
                 updateExposureControlsWithBackground(modality, objective);
             }
+            updateExposurePaneVisibility();
         });
 
         // Target intensity field (for monochrome cameras only -- RGB cameras use WB calibration)
@@ -429,6 +482,12 @@ public class BackgroundCollectionController {
         wbValidityPanel = new VBox(2);
         wbValidityPanel.setPadding(new Insets(5, 0, 5, 0));
 
+        // Wrap the exposure label + validation + controls so we can hide the
+        // whole block when an RGB camera + WB-on owns exposures (calibrated
+        // values come from imageprocessing YAML; showing them invites editing
+        // and breaks WB / acquisition exposure parity).
+        exposurePaneRoot = new VBox(8, exposureLabel, backgroundValidationLabel, exposureControlsPane);
+
         content.getChildren()
                 .addAll(
                         instructionLabel,
@@ -438,11 +497,29 @@ public class BackgroundCollectionController {
                         wbValidityPanel,
                         targetIntensityRow,
                         new Separator(),
-                        exposureLabel,
-                        backgroundValidationLabel,
-                        exposureControlsPane);
+                        exposurePaneRoot);
+
+        // Initial visibility pass: depends on detector + WB mode, both of which
+        // are now resolved.
+        updateExposurePaneVisibility();
 
         return content;
+    }
+
+    /**
+     * Hide the exposure pane when the camera is RGB AND WB mode is Simple or Per-angle:
+     * those exposures live in the WB calibration and editing them here would split
+     * background-tile exposures from acquisition exposures. Show it for Off / Camera AWB
+     * (user controls) and for monochrome cameras (Target Intensity drives single exposure).
+     */
+    private void updateExposurePaneVisibility() {
+        if (exposurePaneRoot == null) return;
+        boolean wbOwnsExposures = isRgbCamera()
+                && (WbMode.fromDisplayName(wbModeComboBox.getValue()) == WbMode.SIMPLE
+                        || WbMode.fromDisplayName(wbModeComboBox.getValue()) == WbMode.PER_ANGLE);
+        boolean show = !wbOwnsExposures;
+        exposurePaneRoot.setVisible(show);
+        exposurePaneRoot.setManaged(show);
     }
 
     /**
@@ -486,10 +563,10 @@ public class BackgroundCollectionController {
             String baseBackgroundFolder = configManager.getBackgroundCorrectionFolder(modality);
 
             if (baseBackgroundFolder != null) {
-                // Get detector for this modality/objective combination
-                Set<String> detectors = configManager.getAvailableDetectors();
-                if (!detectors.isEmpty()) {
-                    String detector = detectors.iterator().next();
+                // Detector comes from the user's dropdown selection so the
+                // dialog targets the correct detector profile (Issue 2 / 2026-04-27).
+                String detector = detectorComboBox != null ? detectorComboBox.getValue() : null;
+                if (detector != null && !detector.isEmpty()) {
                     // Look up backgrounds for the currently selected WB mode
                     String selectedWbMode =
                             WbMode.fromDisplayName(wbModeComboBox.getValue()).getProtocolName();
@@ -521,20 +598,8 @@ public class BackgroundCollectionController {
         // Get default angles and exposures
         logger.debug("Requesting rotation angles for modality: {}", modality);
 
-        // Get detector for hardware-specific lookup
-        String detector = null;
-        try {
-            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
-            Set<String> detectors = configManager.getAvailableDetectors();
-            if (!detectors.isEmpty()) {
-                detector = detectors.iterator().next();
-            }
-        } catch (Exception e) {
-            logger.debug("Could not determine detector for hardware-specific lookup", e);
-        }
-
-        final String finalDetector = detector;
+        // Detector for hardware-specific defaults: take the user's selection.
+        final String finalDetector = detectorComboBox != null ? detectorComboBox.getValue() : null;
         // Capture existingBackgroundSettings in final variable for use in callback
         final BackgroundSettingsReader.BackgroundSettings capturedSettings = existingBackgroundSettings;
         logger.info(
@@ -787,11 +852,10 @@ public class BackgroundCollectionController {
                 return;
             }
 
-            Set<String> detectors = configManager.getAvailableDetectors();
-            if (detectors.isEmpty()) {
+            String detector = detectorComboBox != null ? detectorComboBox.getValue() : null;
+            if (detector == null || detector.isEmpty()) {
                 return;
             }
-            String detector = detectors.iterator().next();
 
             List<BackgroundValidityChecker.WbModeValidity> validities = BackgroundValidityChecker.checkAllModes(
                     baseBackgroundFolder, modality, objective, detector, configManager);
@@ -923,10 +987,15 @@ public class BackgroundCollectionController {
         try {
             String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
             var configManager = MicroscopeConfigManager.getInstance(configPath);
-            Set<String> detectors = configManager.getHardwareDetectors();
-            if (detectors == null || detectors.isEmpty()) return;
-
-            String detId = detectors.iterator().next();
+            // Prefer the user's dropdown selection so target-intensity follows the
+            // active detector. Fall back to any hardware detector if the dialog
+            // isn't fully initialized yet.
+            String detId = detectorComboBox != null ? detectorComboBox.getValue() : null;
+            if (detId == null || detId.isEmpty()) {
+                Set<String> detectors = configManager.getHardwareDetectors();
+                if (detectors == null || detectors.isEmpty()) return;
+                detId = detectors.iterator().next();
+            }
             var merged = configManager.getMergedDetectorSection();
             if (merged instanceof java.util.Map<?, ?> detMap) {
                 Object detCfg = detMap.get(detId);
@@ -953,9 +1022,14 @@ public class BackgroundCollectionController {
         try {
             String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
             var configManager = MicroscopeConfigManager.getInstance(configPath);
-            Set<String> detectors = configManager.getHardwareDetectors();
-            if (detectors != null && !detectors.isEmpty()) {
-                String detId = detectors.iterator().next();
+            String detId = detectorComboBox != null ? detectorComboBox.getValue() : null;
+            if (detId == null || detId.isEmpty()) {
+                Set<String> detectors = configManager.getHardwareDetectors();
+                if (detectors != null && !detectors.isEmpty()) {
+                    detId = detectors.iterator().next();
+                }
+            }
+            if (detId != null && !detId.isEmpty()) {
                 var merged = configManager.getMergedDetectorSection();
                 if (merged instanceof java.util.Map<?, ?> detMap) {
                     Object detCfg = detMap.get(detId);
@@ -1094,8 +1168,26 @@ public class BackgroundCollectionController {
                 }
             }
 
+            String detector = detectorComboBox != null ? detectorComboBox.getValue() : null;
+            if (detector == null || detector.isEmpty()) {
+                Dialogs.showErrorMessage(
+                        "Background Collection: missing detector",
+                        "Pick a detector before acquiring backgrounds. Backgrounds are stored "
+                                + "and looked up under <output>/<detector>/<modality>/<objective>/<wbMode>/, "
+                                + "so the detector must be explicit.");
+                return null;
+            }
+            PersistentPreferences.setLastDetector(detector);
+
             return new BackgroundCollectionResult(
-                    modality, objective, finalExposures, outputPath, usePerAngleWB, wbMode, targetIntensity);
+                    modality,
+                    objective,
+                    detector,
+                    finalExposures,
+                    outputPath,
+                    usePerAngleWB,
+                    wbMode,
+                    targetIntensity);
 
         } catch (Exception e) {
             logger.error("Error creating result", e);

@@ -75,6 +75,7 @@ public class BackgroundCollectionWorkflow {
                                     executeBackgroundAcquisition(
                                             result.modality(),
                                             result.objective(),
+                                            result.detector(),
                                             result.angleExposures(),
                                             result.outputPath(),
                                             result.wbMode(),
@@ -109,11 +110,13 @@ public class BackgroundCollectionWorkflow {
     public static void executeBackgroundAcquisitionDirect(
             String modality,
             String objective,
+            String detector,
             List<AngleExposure> angleExposures,
             String outputPath,
             String wbMode,
             double targetIntensity) {
-        executeBackgroundAcquisition(modality, objective, angleExposures, outputPath, wbMode, targetIntensity);
+        executeBackgroundAcquisition(
+                modality, objective, detector, angleExposures, outputPath, wbMode, targetIntensity);
     }
 
     /**
@@ -129,15 +132,17 @@ public class BackgroundCollectionWorkflow {
     private static void executeBackgroundAcquisition(
             String modality,
             String objective,
+            String detector,
             List<AngleExposure> angleExposures,
             String outputPath,
             String wbMode,
             double targetIntensity) {
         logger.info(
-                "Executing background acquisition for modality '{}' with {} angles, wbMode={}",
+                "Executing background acquisition for modality '{}' with {} angles, wbMode={}, detector={}",
                 modality,
                 angleExposures.size(),
-                wbMode);
+                wbMode,
+                detector);
 
         // Stop live viewer before background acquisition -- the server will snap images
         // which stops continuous acquisition at the hardware level. Without this, the
@@ -160,13 +165,20 @@ public class BackgroundCollectionWorkflow {
             String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             var configManager = MicroscopeConfigManager.getInstance(configFileLocation);
 
-            // Create proper folder structure
-            String detector = null;
-            if (objective != null) {
+            // Detector now comes from the caller (BackgroundCollectionController
+            // dropdown). Fall back to first-available only if the caller didn't
+            // pass one (legacy paths) so we still produce a usable folder.
+            if (detector == null || detector.isEmpty()) {
                 Set<String> availableDetectors = configManager.getAvailableDetectors();
                 detector = availableDetectors.isEmpty()
                         ? null
                         : availableDetectors.iterator().next();
+                if (detector != null) {
+                    logger.warn(
+                            "BackgroundCollectionWorkflow: caller did not pass detector; "
+                                    + "falling back to first available '{}'",
+                            detector);
+                }
             }
 
             String finalOutputPath = outputPath;
@@ -287,6 +299,7 @@ public class BackgroundCollectionWorkflow {
     public record BackgroundCollectionResult(
             String modality,
             String objective,
+            String detector,
             List<AngleExposure> angleExposures,
             String outputPath,
             boolean usePerAngleWhiteBalance,
