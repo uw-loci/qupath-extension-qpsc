@@ -1128,6 +1128,16 @@ public class BackgroundCollectionController {
                     Dialogs.showErrorMessage("Invalid Exposure", "Please enter a valid numeric exposure value.");
                     return null;
                 }
+            } else if (exposureFields.isEmpty() && !currentAngleExposures.isEmpty()) {
+                // RGB + WB-on (Simple/Per-angle): the exposure pane is hidden because
+                // exposures live in the WB calibration. exposureFields is empty, but
+                // currentAngleExposures was populated from the calibration -- send those
+                // through verbatim so the server collects backgrounds at every angle
+                // with the calibrated per-channel exposures. Without this branch,
+                // finalExposures stays empty, the server falls back to a single
+                // brightfield at angle=0, and acquisition uses one wrong-angle
+                // background to "correct" all polarization angles.
+                finalExposures.addAll(currentAngleExposures);
             } else {
                 for (int i = 0; i < exposureFields.size(); i++) {
                     try {
