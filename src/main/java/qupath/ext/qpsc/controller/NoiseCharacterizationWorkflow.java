@@ -282,15 +282,7 @@ public class NoiseCharacterizationWorkflow {
                 boolean openFolder = Dialogs.showConfirmDialog("Noise Characterization Complete", resultMsg.toString());
 
                 if (openFolder) {
-                    try {
-                        File resultsDir = new File(resultPath);
-                        if (resultsDir.exists()) {
-                            Desktop.getDesktop().open(resultsDir);
-                        }
-                    } catch (Exception e) {
-                        logger.error("Failed to open results folder", e);
-                        Dialogs.showErrorMessage("Error", "Failed to open results folder: " + e.getMessage());
-                    }
+                    qupath.ext.qpsc.ui.UIFunctions.revealInFileBrowser(new File(resultPath));
                 }
             });
 

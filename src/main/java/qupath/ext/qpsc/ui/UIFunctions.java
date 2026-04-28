@@ -1292,4 +1292,55 @@ public class UIFunctions {
         });
         return alert.showAndWait();
     }
+
+    /**
+     * Reveals a file or folder in the platform file browser.
+     *
+     * <p>Use this instead of {@code Desktop.getDesktop().open(...)} for
+     * file-system targets. On Windows, {@code Desktop.open} routes through
+     * the shell "open" verb / DDE and frequently raises an already-open
+     * Explorer window instead of opening a new one at the requested path,
+     * so the user just sees a stale unrelated window flash forward. This
+     * helper invokes {@code explorer.exe /select,<file>} on Windows so a
+     * fresh window opens every time with the target highlighted. On macOS
+     * it uses {@code open -R} (reveal in Finder); on Linux/other platforms
+     * it falls back to {@code Desktop.open} on the parent folder.
+     *
+     * <p>If {@code target} is itself a directory, that directory is opened
+     * (and selected on Windows / revealed on macOS).
+     *
+     * @param target file or folder to reveal; null or non-existent paths log and no-op.
+     * @return true if a reveal command was dispatched; false on error or no-op.
+     */
+    public static boolean revealInFileBrowser(java.io.File target) {
+        if (target == null) return false;
+        if (!target.exists()) {
+            org.slf4j.LoggerFactory.getLogger(UIFunctions.class)
+                    .warn("revealInFileBrowser: path does not exist: {}", target);
+            return false;
+        }
+        try {
+            String absPath = target.getAbsolutePath();
+            if (qupath.lib.common.GeneralTools.isWindows()) {
+                new ProcessBuilder("explorer.exe", "/select,", absPath).start();
+                return true;
+            }
+            if (qupath.lib.common.GeneralTools.isMac()) {
+                new ProcessBuilder("open", "-R", absPath).start();
+                return true;
+            }
+            // Linux/other: open the containing folder via Desktop, since most
+            // file managers don't have a portable "select" verb.
+            java.io.File openTarget = target.isDirectory() ? target : target.getParentFile();
+            if (openTarget != null && java.awt.Desktop.isDesktopSupported()) {
+                java.awt.Desktop.getDesktop().open(openTarget);
+                return true;
+            }
+            return false;
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(UIFunctions.class)
+                    .error("revealInFileBrowser failed for {}: {}", target, e.getMessage(), e);
+            return false;
+        }
+    }
 }

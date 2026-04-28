@@ -569,20 +569,7 @@ public class WhiteBalanceWorkflow {
      * Opens a folder in the system file explorer.
      */
     private static void openFolder(String path) {
-        try {
-            File folder = new File(path);
-            if (folder.exists()) {
-                if (Desktop.isDesktopSupported()) {
-                    Desktop.getDesktop().open(folder);
-                } else {
-                    logger.warn("Desktop not supported, cannot open folder");
-                }
-            } else {
-                logger.warn("Folder does not exist: {}", path);
-            }
-        } catch (IOException e) {
-            logger.error("Failed to open folder: {}", path, e);
-        }
+        qupath.ext.qpsc.ui.UIFunctions.revealInFileBrowser(new File(path));
     }
 
     /**

@@ -517,15 +517,8 @@ public class PPMSensitivityTestWorkflow {
 
                 Optional<ButtonType> result = alert.showAndWait();
                 if (result.isPresent() && result.get() == openFolderBtn) {
-                    try {
-                        Path resultPath = Paths.get(resultDir);
-                        if (Files.exists(resultPath)) {
-                            java.awt.Desktop.getDesktop().open(resultPath.toFile());
-                        }
-                    } catch (IOException e) {
-                        logger.error("Failed to open results folder", e);
-                        Dialogs.showErrorMessage("Error", "Could not open folder: " + e.getMessage());
-                    }
+                    qupath.ext.qpsc.ui.UIFunctions.revealInFileBrowser(
+                            Paths.get(resultDir).toFile());
                 }
             });
 

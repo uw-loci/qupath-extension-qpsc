@@ -443,17 +443,11 @@ public class CalibrationResultDialog {
             Button openFolderButton = new Button(buttonLabel);
             final String folderToOpen = folderPath;
             openFolderButton.setOnAction(event -> {
-                try {
-                    File folder = new File(folderToOpen);
-                    if (!folder.exists()) {
-                        folder = folder.getParentFile();
-                    }
-                    if (folder != null && folder.exists()) {
-                        Desktop.getDesktop().open(folder);
-                    }
-                } catch (Exception e) {
-                    logger.error("Failed to open folder", e);
+                File folder = new File(folderToOpen);
+                if (!folder.exists()) {
+                    folder = folder.getParentFile();
                 }
+                qupath.ext.qpsc.ui.UIFunctions.revealInFileBrowser(folder);
             });
             // Insert at beginning of button bar
             buttonBar.getChildren().add(0, openFolderButton);
@@ -474,17 +468,9 @@ public class CalibrationResultDialog {
         // Open Folder button (success path only - error path adds its own)
         if (isSuccess && result.calibrationPath() != null) {
             Button openFolderButton = new Button("Open Folder");
-            openFolderButton.setOnAction(event -> {
-                try {
-                    File calibFile = new File(result.calibrationPath());
-                    File parentDir = calibFile.getParentFile();
-                    if (parentDir != null && parentDir.exists()) {
-                        Desktop.getDesktop().open(parentDir);
-                    }
-                } catch (Exception e) {
-                    logger.error("Failed to open folder", e);
-                }
-            });
+            openFolderButton.setOnAction(event ->
+                    qupath.ext.qpsc.ui.UIFunctions.revealInFileBrowser(
+                            new File(result.calibrationPath())));
             buttonBar.getChildren().add(openFolderButton);
         }
 

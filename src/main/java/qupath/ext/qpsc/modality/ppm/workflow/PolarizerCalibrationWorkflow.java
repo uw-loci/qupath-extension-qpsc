@@ -463,16 +463,8 @@ public class PolarizerCalibrationWorkflow {
                 if (result.isPresent() && result.get() == writeYamlBtn) {
                     writeOffsetToYaml(parsedOffset);
                 } else if (result.isPresent() && result.get() == openFolderBtn) {
-                    try {
-                        Path reportFilePath = Paths.get(reportPath);
-                        Path parentDir = reportFilePath.getParent();
-                        if (parentDir != null && Files.exists(parentDir)) {
-                            java.awt.Desktop.getDesktop().open(parentDir.toFile());
-                        }
-                    } catch (IOException e) {
-                        logger.error("Failed to open report folder", e);
-                        Dialogs.showErrorMessage("Error", "Could not open folder: " + e.getMessage());
-                    }
+                    qupath.ext.qpsc.ui.UIFunctions.revealInFileBrowser(
+                            Paths.get(reportPath).toFile());
                 }
             });
 
