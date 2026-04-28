@@ -1001,22 +1001,32 @@ public class MicroscopeSocketClient implements AutoCloseable {
         buffer.order(ByteOrder.BIG_ENDIAN);
         buffer.putFloat((float) z);
 
-        // Long-distance Z moves on the PI Z stage can take up to ~30s when
-        // they share MMCore device-property contention with a running
-        // Live-Viewer sequence acquisition (10s wait_z busy-poll + 20s
-        // wait_for_device fallback on the server). The primary socket
-        // default readTimeout is 5s -- without this override we drop the
-        // connection mid-move and trigger a reconnect storm.
+        // The server pauses Live-Viewer sequence acquisition for the
+        // duration of the Z move (frees MMCore so long-distance moves
+        // complete promptly instead of stretching out to ~30s under
+        // device-property contention). Mirror that pause locally on
+        // streamingActiveProperty so the Live Viewer's "Live: ON"
+        // indicator flips to OFF during the move and back to ON after.
+        boolean wasStreaming = isStreamingActive();
+        if (wasStreaming) {
+            setStreamingActive(false);
+        }
+
+        // 60s timeout headroom in case the server pause/resume fails
+        // and we fall back to the slow wait_z + wait_for_device path.
         synchronized (socketLock) {
             ensureConnected();
             int originalTimeout = socket.getSoTimeout();
-            socket.setSoTimeout(60000); // 60s for long-distance Z moves
+            socket.setSoTimeout(60000);
             try {
                 executeCommand(Command.MOVEZ, buffer.array(), 0);
             } finally {
                 try {
                     socket.setSoTimeout(originalTimeout);
                 } catch (IOException ignored) {
+                }
+                if (wasStreaming) {
+                    setStreamingActive(true);
                 }
             }
         }
