@@ -142,15 +142,53 @@ public class SetupWizardDialog {
         sb.getChildren().add(title);
 
         for (int i = 0; i < steps.size(); i++) {
+            final int targetIndex = i;
             Label lbl = new Label((i + 1) + ". " + steps.get(i).getTitle());
             lbl.setPadding(new Insets(4, 8, 4, 8));
             lbl.setMaxWidth(Double.MAX_VALUE);
             lbl.setStyle("-fx-font-size: 12;");
+            // Click-to-jump: walk forward through steps, validating each.
+            // Backwards jumps always allowed. Forward jumps stop at the
+            // first invalid step so the user lands where the problem is.
+            lbl.setOnMouseClicked(e -> jumpToStep(targetIndex));
             sidebarLabels.add(lbl);
             sb.getChildren().add(lbl);
         }
 
         return sb;
+    }
+
+    /**
+     * Click-to-jump from the sidebar. Backward jumps run the current
+     * step's onLeave() and show the target. Forward jumps run validate()
+     * + onLeave() on every step from current to target-1; if any
+     * validate() returns non-null, navigation stops at that step and
+     * the error is shown -- same semantics as repeatedly clicking Next.
+     */
+    private void jumpToStep(int targetIndex) {
+        if (targetIndex == currentStepIndex) return;
+        if (targetIndex < 0 || targetIndex >= steps.size()) return;
+
+        if (targetIndex < currentStepIndex) {
+            steps.get(currentStepIndex).onLeave();
+            showStep(targetIndex);
+            return;
+        }
+        // Forward jump: validate and commit each intermediate step.
+        for (int i = currentStepIndex; i < targetIndex; i++) {
+            WizardStep step = steps.get(i);
+            String error = step.validate();
+            if (error != null) {
+                showStep(i);
+                errorLabel.setText("Cannot jump past step " + (i + 1)
+                        + " (" + step.getTitle() + "): " + error);
+                errorLabel.setVisible(true);
+                errorLabel.setManaged(true);
+                return;
+            }
+            step.onLeave();
+        }
+        showStep(targetIndex);
     }
 
     private Node buildButtonBar() {
@@ -189,16 +227,18 @@ public class SetupWizardDialog {
         currentStepIndex = index;
         WizardStep step = steps.get(index);
 
-        // Update sidebar highlighting
+        // Update sidebar highlighting + cursor cue (clickable on every
+        // entry except the current one).
         for (int i = 0; i < sidebarLabels.size(); i++) {
             Label lbl = sidebarLabels.get(i);
             if (i == index) {
                 lbl.setStyle("-fx-font-size: 12; -fx-font-weight: bold; "
-                        + "-fx-background-color: -fx-accent; -fx-background-radius: 3;");
+                        + "-fx-background-color: -fx-accent; -fx-background-radius: 3; "
+                        + "-fx-cursor: default;");
             } else if (i < index) {
-                lbl.setStyle("-fx-font-size: 12; -fx-opacity: 0.6;");
+                lbl.setStyle("-fx-font-size: 12; -fx-opacity: 0.6; -fx-cursor: hand;");
             } else {
-                lbl.setStyle("-fx-font-size: 12;");
+                lbl.setStyle("-fx-font-size: 12; -fx-cursor: hand;");
             }
         }
 
