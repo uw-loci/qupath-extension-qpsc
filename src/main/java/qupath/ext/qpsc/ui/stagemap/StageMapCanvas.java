@@ -22,7 +22,6 @@ import javafx.scene.text.Text;
 import javafx.scene.text.TextAlignment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.utilities.FlipResolver;
 
 /**
  * Stage map visualization using WritableImage + Shape nodes.
@@ -994,17 +993,27 @@ public class StageMapCanvas extends StackPane {
      * Applies a visual flip transform to the entire canvas.
      */
     public void setFlipsApplied(boolean applied) {
+        // Backward-compat overload: caller didn't supply the axis values, default to no flip when
+        // applied is false, or flip both axes when applied is true and we have no other context.
+        // Prefer the new {@link #setFlipsApplied(boolean, boolean, boolean)} so the parent window
+        // can resolve flip per (entry/preset/detector) and pass real values.
+        setFlipsApplied(applied, applied, applied);
+    }
+
+    /**
+     * Apply (or remove) flips on the Stage Map rendering using explicit per-axis values.
+     *
+     * @param applied  whether flipping is in effect at all (drives the toggle / log)
+     * @param flipX    if true and {@code applied}, flip the X axis (horizontal mirror)
+     * @param flipY    if true and {@code applied}, flip the Y axis (vertical mirror)
+     */
+    public void setFlipsApplied(boolean applied, boolean flipX, boolean flipY) {
         this.flipsApplied = applied;
-        // Use JavaFX scale transforms to flip the rendering
-        // The flip preferences determine which axes to flip
-        // The canvas itself does not know which preset is active in StageMapWindow; the parent
-        // window already calls setFlipsApplied based on its own resolver. Resolve via global pref.
-        boolean flipX = applied && FlipResolver.resolveFlipX(null, null, null);
-        boolean flipY = applied && FlipResolver.resolveFlipY(null, null, null);
-        // Flip the entire StackPane so all child layers flip together
-        this.setScaleX(flipX ? -1 : 1);
-        this.setScaleY(flipY ? -1 : 1);
-        logger.info("Stage Map flips applied: {} (flipX={}, flipY={})", applied, flipX, flipY);
+        boolean effX = applied && flipX;
+        boolean effY = applied && flipY;
+        this.setScaleX(effX ? -1 : 1);
+        this.setScaleY(effY ? -1 : 1);
+        logger.info("Stage Map flips applied: {} (flipX={}, flipY={})", applied, effX, effY);
     }
 
     /** Returns whether flips are currently applied. */

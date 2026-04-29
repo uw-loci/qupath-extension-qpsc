@@ -404,16 +404,19 @@ public class StageMapWindow {
                 + "    to the Live Viewer\n\n"
                 + "Reads flip settings from scanner configuration."));
 
-        // Read initial state via FlipResolver. presetComboBox is not yet populated at this point
-        // in construction, so we pass null preset; resolver falls through to global pref.
-        boolean flipX = FlipResolver.resolveFlipX(null, null, null);
-        boolean flipY = FlipResolver.resolveFlipY(null, null, null);
-        applyFlipsCheckbox.setSelected(flipX || flipY);
+        // Initial checked state -- pulled from open entry metadata if any. Preset dropdown
+        // is not yet populated at this point in construction, so the dropdown leg of
+        // resolveCurrentFlipAxes() is a no-op until applyInitialFlipState runs after show().
+        boolean[] initialAxes = resolveCurrentFlipAxes();
+        applyFlipsCheckbox.setSelected(initialAxes[0] || initialAxes[1]);
 
         applyFlipsCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
             logger.info("Apply Flips toggled: {}", newVal);
             if (canvas != null) {
-                canvas.setFlipsApplied(newVal);
+                // Resolve actual flip axes from the live context so the canvas uses the right
+                // mirror direction. Priority: open image entry metadata, then active preset.
+                boolean[] axes = resolveCurrentFlipAxes();
+                canvas.setFlipsApplied(newVal, axes[0], axes[1]);
             }
         });
 
@@ -871,13 +874,53 @@ public class StageMapWindow {
      * Must be called after stage.show() so the StackPane scale transforms take effect.
      */
     private void applyInitialFlipState() {
-        AffineTransformManager.TransformPreset activePreset = presetComboBox != null ? presetComboBox.getValue() : null;
-        boolean flipX = FlipResolver.resolveFlipX(null, activePreset, null);
-        boolean flipY = FlipResolver.resolveFlipY(null, activePreset, null);
-        if ((flipX || flipY) && canvas != null) {
-            canvas.setFlipsApplied(true);
-            logger.info("Applied initial flip state: flipX={}, flipY={}", flipX, flipY);
+        boolean[] axes = resolveCurrentFlipAxes();
+        if ((axes[0] || axes[1]) && canvas != null) {
+            canvas.setFlipsApplied(true, axes[0], axes[1]);
+            logger.info("Applied initial flip state: flipX={}, flipY={}", axes[0], axes[1]);
         }
+    }
+
+    /**
+     * Resolve the currently-effective {flipX, flipY} for the Stage Map view.
+     *
+     * <p>Resolution order:
+     * <ol>
+     *   <li>{@code flip_x}/{@code flip_y} metadata on the open project entry (recorded truth)</li>
+     *   <li>{@code flipMacroX/Y} on the preset selected in the dropdown</li>
+     *   <li>Default: {@code false}</li>
+     * </ol>
+     *
+     * <p>We intentionally do not try to auto-find a preset by source-scanner here -- that
+     * metadata is unreliable on existing image entries. The user picks the preset in the
+     * dropdown; the toggle responds to that choice.
+     *
+     * @return a 2-element array {@code {flipX, flipY}}; never null
+     */
+    private boolean[] resolveCurrentFlipAxes() {
+        try {
+            QuPathGUI gui = QuPathGUI.getInstance();
+            if (gui != null && gui.getProject() != null && gui.getImageData() != null) {
+                @SuppressWarnings("unchecked")
+                Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+                ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+                if (entry != null && entry.getMetadata().get(ImageMetadataManager.FLIP_X) != null) {
+                    return new boolean[] {
+                        ImageMetadataManager.isFlippedX(entry), ImageMetadataManager.isFlippedY(entry)
+                    };
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Failed to look up open image entry for flip resolution: {}", e.getMessage());
+        }
+
+        AffineTransformManager.TransformPreset activePreset =
+                presetComboBox != null ? presetComboBox.getValue() : null;
+        if (activePreset != null && activePreset.hasFlipState()) {
+            return new boolean[] {activePreset.getFlipMacroX(), activePreset.getFlipMacroY()};
+        }
+
+        return new boolean[] {false, false};
     }
 
     private void startPositionPolling() {
