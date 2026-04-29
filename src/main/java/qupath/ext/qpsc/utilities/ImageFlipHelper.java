@@ -132,9 +132,40 @@ public class ImageFlipHelper {
             // Always ensure base_image is set on the current entry
             ensureBaseImageSet(currentEntry, project);
 
-            // If no flipping required, we're done (base_image is now set)
+            // If no flipping required: confirm the currently-open entry is the unflipped one
+            // for this base_image. If the user toggled off after toggling on, switch back to
+            // the unflipped sibling so the viewer matches the answer.
             if (!requiresFlipX && !requiresFlipY) {
-                logger.info("No image flipping required by preferences");
+                boolean curFlipX = ImageMetadataManager.isFlippedX(currentEntry);
+                boolean curFlipY = ImageMetadataManager.isFlippedY(currentEntry);
+                if (!curFlipX && !curFlipY) {
+                    logger.info("No image flipping required and current entry is already unflipped");
+                    return true;
+                }
+                String unflippedBase = currentEntry.getMetadata().get(ImageMetadataManager.BASE_IMAGE);
+                if (unflippedBase == null || unflippedBase.isBlank()) {
+                    unflippedBase = qupath.lib.common.GeneralTools.stripExtension(currentEntry.getImageName());
+                }
+                for (ProjectImageEntry<BufferedImage> sibling : project.getImageList()) {
+                    if (sibling.equals(currentEntry)) {
+                        continue;
+                    }
+                    String sBase = sibling.getMetadata().get(ImageMetadataManager.BASE_IMAGE);
+                    if (sBase == null || sBase.isBlank()) {
+                        sBase = qupath.lib.common.GeneralTools.stripExtension(sibling.getImageName());
+                    }
+                    if (!unflippedBase.equals(sBase)) {
+                        continue;
+                    }
+                    boolean sFlipX = ImageMetadataManager.isFlippedX(sibling);
+                    boolean sFlipY = ImageMetadataManager.isFlippedY(sibling);
+                    String sName = sibling.getImageName();
+                    if (!sFlipX && !sFlipY && sName != null && !sName.contains("(flipped")) {
+                        logger.info("Switching back to unflipped entry '{}'", sName);
+                        return openAndVerifyEntry(gui, project, sibling);
+                    }
+                }
+                logger.info("No flipping required and no unflipped sibling found; keeping current entry");
                 return true;
             }
 
@@ -191,6 +222,43 @@ public class ImageFlipHelper {
                 }
 
                 return true;
+            }
+
+            // Before creating a new duplicate, look across the project for any sibling entry
+            // (same base_image) whose flip metadata already matches the requested combo. The
+            // user may have run this workflow before and we should not duplicate the entry.
+            String baseImage = currentEntry.getMetadata().get(ImageMetadataManager.BASE_IMAGE);
+            if (baseImage == null || baseImage.isBlank()) {
+                baseImage = qupath.lib.common.GeneralTools.stripExtension(currentEntry.getImageName());
+            }
+            for (ProjectImageEntry<BufferedImage> sibling : project.getImageList()) {
+                if (sibling.equals(currentEntry)) {
+                    continue;
+                }
+                String siblingBase = sibling.getMetadata().get(ImageMetadataManager.BASE_IMAGE);
+                if (siblingBase == null || siblingBase.isBlank()) {
+                    siblingBase = qupath.lib.common.GeneralTools.stripExtension(sibling.getImageName());
+                }
+                if (!baseImage.equals(siblingBase)) {
+                    continue;
+                }
+                boolean siblingFlipX = ImageMetadataManager.isFlippedX(sibling);
+                boolean siblingFlipY = ImageMetadataManager.isFlippedY(sibling);
+                // Name-based fallback when metadata absent on older entries.
+                String siblingName = sibling.getImageName();
+                if (!siblingFlipX && !siblingFlipY && siblingName != null && siblingName.contains("(flipped")) {
+                    siblingFlipX = siblingName.contains("flipped X") || siblingName.contains("flipped XY");
+                    siblingFlipY = siblingName.contains("flipped Y") || siblingName.contains("flipped XY");
+                }
+                if (siblingFlipX == requiresFlipX && siblingFlipY == requiresFlipY) {
+                    logger.info(
+                            "Found existing matching entry '{}' for flipX={}, flipY={} -- opening it instead "
+                                    + "of creating a duplicate",
+                            siblingName,
+                            requiresFlipX,
+                            requiresFlipY);
+                    return openAndVerifyEntry(gui, project, sibling);
+                }
             }
 
             // Image needs to be flipped - create duplicate

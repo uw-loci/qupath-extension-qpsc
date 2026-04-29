@@ -231,8 +231,8 @@ public class MicroscopeAlignmentWorkflow {
      * @param expectedScale    expected scale (image pixel size in um)
      * @param scaleXOk         true if scaleX magnitude matches expected within 1%
      * @param scaleYOk         true if scaleY magnitude matches expected within 1%
-     * @param scaleXNegative   true if scaleX is negative (possible flip misconfiguration)
-     * @param scaleYNegative   true if scaleY is negative (possible flip misconfiguration)
+     * @param scaleXNegative   true if scaleX sign disagrees with the expected sign (given stage X polarity)
+     * @param scaleYNegative   true if scaleY sign disagrees with the expected sign (given stage Y polarity)
      * @param maxResidualUm    maximum back-projection residual across all alignment points (um)
      * @param meanResidualUm   mean back-projection residual (um)
      * @param numPoints        number of alignment points used
@@ -263,9 +263,15 @@ public class MicroscopeAlignmentWorkflow {
         double sx = transform.getScaleX();
         double sy = transform.getScaleY();
 
-        // Scale sign check -- on a flipped image the scale should be positive
-        boolean sxNeg = sx < 0;
-        boolean syNeg = sy < 0;
+        // Scale sign check. The expected sign depends on stage-axis inversion: when the stage X
+        // axis is inverted, a positive pixel-X step maps to a negative stage-X command, so a
+        // negative scale is correct. We flag a sign as suspicious only if it disagrees with the
+        // configured stage polarity.
+        qupath.ext.qpsc.utilities.StagePolarity stagePolarity = QPPreferenceDialog.getStagePolarityProperty();
+        boolean expectNegX = stagePolarity != null && stagePolarity.invertX;
+        boolean expectNegY = stagePolarity != null && stagePolarity.invertY;
+        boolean sxNeg = (sx < 0) != expectNegX;
+        boolean syNeg = (sy < 0) != expectNegY;
 
         // Scale magnitude check -- should match pixel size within 1%
         double tolerance = 0.01;
@@ -342,9 +348,9 @@ public class MicroscopeAlignmentWorkflow {
         if (quality.hasWarnings()) {
             sb.append(String.format("%n--- Suggestions ---%n"));
             if (quality.scaleXNegative() || quality.scaleYNegative()) {
-                sb.append("- Scale is negative -- this may indicate a flip/inversion\n");
-                sb.append("  misconfiguration. Check the flip_x/flip_y settings in\n");
-                sb.append("  your scanner configuration file.\n");
+                sb.append("- Affine scale sign disagrees with the configured stage polarity.\n");
+                sb.append("  This usually means the macro flip checkboxes need to be re-answered\n");
+                sb.append("  or the Inverted-X/Y stage preferences are wrong for this microscope.\n");
             }
             if (!quality.scaleXOk() || !quality.scaleYOk()) {
                 sb.append("- Scale magnitude does not match the image pixel size.\n");
@@ -1152,30 +1158,34 @@ public class MicroscopeAlignmentWorkflow {
             MacroOrientationDialog.MacroFlip macroFlip) {
 
         try {
-            // Step 1: Get or detect data bounds (required for accurate alignment)
+            // Step 1: Get or detect data bounds (required for accurate alignment).
+            // Fallback chain: macro detection -> tissue-detection script -> full image dimensions.
+            // The full-image fallback is correct for slide scanners whose macro covers the entire
+            // mounted slide (Ocus40, most SVS-style scanners). It produces a slightly looser
+            // mapping than the cropped data region but avoids hard-failing the workflow.
             Rectangle dataBounds = macroImageResults.dataBounds();
             if (dataBounds == null) {
-                // Attempt to detect bounds now
                 String tissueScript = QPPreferenceDialog.getTissueDetectionScriptProperty();
                 String scriptDir = (tissueScript != null && !tissueScript.isBlank())
                         ? new File(tissueScript).getParent()
                         : null;
                 if (scriptDir != null) {
-                    logger.info("Detecting data bounds...");
+                    logger.info("Detecting data bounds via tissue detection script...");
                     final String scriptDirFinal = scriptDir;
                     dataBounds = UIFunctions.executeWithProgress(
                             "Processing Image",
                             "Detecting image boundaries...\nAnalyzing image data - this may take a moment for large images.",
                             () -> ImageProcessing.detectOcus40DataBounds(gui, scriptDirFinal));
-                } else {
-                    logger.warn("Tissue detection script preference is not set; cannot auto-detect data bounds.");
                 }
-
                 if (dataBounds == null) {
-                    throw new IllegalStateException(
-                            "Cannot create transform without data bounds detection. "
-                                    + "Set the tissue detection script in QPSC preferences, or ensure macro analysis "
-                                    + "produced data bounds before reaching alignment save.");
+                    int w = gui.getImageData().getServer().getWidth();
+                    int h = gui.getImageData().getServer().getHeight();
+                    dataBounds = new Rectangle(0, 0, w, h);
+                    logger.info(
+                            "No tissue-detection script configured and no detected bounds; "
+                                    + "falling back to full image dimensions: {}x{}",
+                            w,
+                            h);
                 }
             }
 
