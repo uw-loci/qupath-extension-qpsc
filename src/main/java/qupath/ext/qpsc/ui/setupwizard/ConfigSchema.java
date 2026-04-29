@@ -31,8 +31,13 @@ public final class ConfigSchema {
      * Schema version. Bump this when the config structure changes.
      * The wizard writes this into generated configs as a comment for traceability.
      * Tests verify that templates match this version.
+     *
+     * <p>v3 (2026-04-29): added stage.streaming_af.* block. Pre-v3
+     * configs are auto-migrated on first load by
+     * {@link qupath.ext.qpsc.utilities.MicroscopeConfigManager} -- see
+     * its constructor / loader for the migration logic.
      */
-    public static final int SCHEMA_VERSION = 2;
+    public static final int SCHEMA_VERSION = 3;
 
     // ======================== MAIN CONFIG (config_<name>.yml) ========================
 
@@ -49,6 +54,15 @@ public final class ConfigSchema {
         {"stage", "limits", "y_um", "high"},
         {"stage", "limits", "z_um", "low"},
         {"stage", "limits", "z_um", "high"},
+        // v3: streaming-AF probe results (auto-migrated from legacy
+        // hardcoded constants when missing). speed_property is left
+        // optional -- legitimately null on stages with no writable
+        // speed property -- but the four numeric/value keys must
+        // always be populated.
+        {"stage", "streaming_af", "enabled"},
+        {"stage", "streaming_af", "slow_speed_value"},
+        {"stage", "streaming_af", "slow_speed_um_per_s"},
+        {"stage", "streaming_af", "normal_speed_value"},
     };
 
     /** Hardware sub-keys required per objective. */

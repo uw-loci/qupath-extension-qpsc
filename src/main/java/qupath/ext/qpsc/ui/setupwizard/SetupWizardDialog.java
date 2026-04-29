@@ -74,6 +74,7 @@ public class SetupWizardDialog {
         steps.add(new HardwareStep(data, catalog));
         steps.add(new PixelSizeStep(data, catalog));
         steps.add(new StageStep(data, catalog));
+        steps.add(new ProbeStageAfStep(data, catalog));
         steps.add(new ModalityStep(data, catalog));
         steps.add(new ServerStep(data, catalog));
         steps.add(new ReviewStep(data, catalog));

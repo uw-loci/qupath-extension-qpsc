@@ -152,6 +152,13 @@ public class QPPreferenceDialog {
     private static final BooleanProperty suppressExposureWarningProperty =
             PathPrefs.createPersistentPreference("suppressExposureWarning", false);
 
+    // Set true once the user has been shown the streaming-AF auto-migration
+    // notification. Prevents the "your config was migrated to v3 -- run
+    // Re-probe Stage AF" dialog from re-firing on every QuPath launch
+    // after the first migration.
+    private static final BooleanProperty streamingAfMigrationAcknowledgedProperty =
+            PathPrefs.createPersistentPreference("streamingAfMigrationAcknowledged", false);
+
     // --- Notification / Alert preferences ---
     private static final String ALERTS_CATEGORY = "QuPath SCope Alerts";
     private static final String PPM_CATEGORY = "PPM (Polarized Light Microscopy)";
@@ -648,6 +655,14 @@ public class QPPreferenceDialog {
 
     public static void setSuppressExposureWarning(boolean suppress) {
         suppressExposureWarningProperty.set(suppress);
+    }
+
+    public static boolean getStreamingAfMigrationAcknowledged() {
+        return streamingAfMigrationAcknowledgedProperty.get();
+    }
+
+    public static void setStreamingAfMigrationAcknowledged(boolean acknowledged) {
+        streamingAfMigrationAcknowledgedProperty.set(acknowledged);
     }
 
     /**

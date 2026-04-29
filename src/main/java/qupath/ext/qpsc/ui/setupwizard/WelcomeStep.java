@@ -2,6 +2,7 @@ package qupath.ext.qpsc.ui.setupwizard;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -16,6 +17,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 
 /**
  * Step 1: Welcome and basic directory/microscope setup.
@@ -149,7 +151,18 @@ public class WelcomeStep implements WizardStep {
 
     @Override
     public void onEnter() {
-        // Populate fields from data (e.g., when navigating back)
+        // First-launch seed from the active config preference: if the
+        // user already has a microscope configured (config_<name>.yml
+        // path stored in QPPreferenceDialog), parse the path to derive
+        // both the configuration directory and microscope name so the
+        // wizard does not start blank. The full WizardData pre-pop
+        // happens in onLeave once these two values are in WizardData.
+        if (data.configDirectory == null && data.microscopeName.isEmpty()) {
+            seedFromPreferences();
+        }
+
+        // Populate fields from data (handles navigating back as well as
+        // the freshly-seeded values from above).
         if (data.configDirectory != null) {
             directoryField.setText(data.configDirectory.toString());
         }
@@ -158,6 +171,38 @@ public class WelcomeStep implements WizardStep {
         }
         if (!data.microscopeType.isEmpty()) {
             typeCombo.setValue(data.microscopeType);
+        }
+    }
+
+    /**
+     * Parse the active microscope config file preference to seed the
+     * directory + name fields. Preference value looks like
+     * {@code C:/QPSC/microscope_configurations/config_PPM.yml}; from
+     * that we extract parent directory and the name between
+     * {@code config_} and {@code .yml}.
+     */
+    private void seedFromPreferences() {
+        String configFile = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        if (configFile == null || configFile.isBlank()) {
+            return;
+        }
+        try {
+            Path p = Paths.get(configFile);
+            Path parent = p.getParent();
+            String fname = p.getFileName() == null ? "" : p.getFileName().toString();
+            if (parent != null) {
+                data.configDirectory = parent;
+            }
+            if (fname.startsWith("config_") && fname.endsWith(".yml")) {
+                data.microscopeName = fname.substring(
+                        "config_".length(), fname.length() - ".yml".length());
+            }
+            logger.debug(
+                    "WelcomeStep: seeded from preferences (file={}) -> dir={}, name={}",
+                    configFile, data.configDirectory, data.microscopeName);
+        } catch (Exception e) {
+            logger.debug("WelcomeStep: could not seed from preference '{}': {}",
+                    configFile, e.toString());
         }
     }
 
@@ -172,5 +217,18 @@ public class WelcomeStep implements WizardStep {
                 data.microscopeName,
                 data.microscopeType,
                 data.configDirectory);
+
+        // Pre-populate every WizardData field from the existing
+        // config_<name>.yml on disk (if any). Lets a re-run / reinstall
+        // pick up where the user left off instead of forcing them to
+        // re-enter limits, objectives, modalities, probe results, etc.
+        // No-op when this is a fresh install.
+        try {
+            WizardDataLoader.loadFromExistingConfigs(
+                    data.configDirectory, data.microscopeName, data);
+        } catch (Throwable t) {
+            logger.warn("Wizard pre-population failed; continuing with defaults: {}",
+                    t.toString());
+        }
     }
 }

@@ -344,6 +344,24 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
+        // Re-probe Stage AF (rewrites stage.streaming_af.* in the active config)
+        MenuItem probeStageAfOption = new MenuItem(res.getString("menu.probeStageAf"));
+        probeStageAfOption.setDisable(!configValid);
+        setMenuItemTooltip(
+                probeStageAfOption,
+                "Re-run the streaming-autofocus stage probe on the configured rig and "
+                        + "rewrite stage.streaming_af.* in the active config_<scope>.yml. "
+                        + "Use after the setup wizard auto-migrated legacy defaults that "
+                        + "don't match your stage hardware (e.g. on a Nikon Ti2 with an "
+                        + "mm/sec speed enum).");
+        probeStageAfOption.setOnAction(e -> {
+            try {
+                QPScopeController.getInstance().startWorkflow("probeStageAf");
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        });
+
         // Camera control dialog (view and apply camera settings)
         MenuItem cameraControlOption = new MenuItem(res.getString("menu.cameraControl"));
         setMenuItemTooltip(
@@ -373,7 +391,8 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         new SeparatorMenuItem(),
                         // Autofocus tools
                         autofocusEditorOption,
-                        autofocusBenchmarkOption);
+                        autofocusBenchmarkOption,
+                        probeStageAfOption);
 
         // Z-Stack / Time-Lapse (needs microscope)
         // Default path is now SinglePointAcquisitionController -- it honors the

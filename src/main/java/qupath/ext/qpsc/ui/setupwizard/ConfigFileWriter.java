@@ -184,6 +184,24 @@ public final class ConfigFileWriter {
         zLimits.put("high", data.stageLimitZHigh);
         limits.put("z_um", zLimits);
         stage.put("limits", limits);
+
+        // Streaming-AF block: populated by the wizard probe step. We
+        // always emit a block (even when not probed) so v3 schema
+        // validation passes. Null fields are written explicitly so the
+        // YAML reader on the Python side can distinguish "no probe yet"
+        // from "block missing entirely".
+        Map<String, Object> streamingAf = new LinkedHashMap<>();
+        streamingAf.put("enabled",
+                data.streamingAfEnabled != null ? data.streamingAfEnabled : true);
+        streamingAf.put("speed_property", data.streamingAfSpeedProperty);
+        streamingAf.put("slow_speed_value",
+                data.streamingAfSlowSpeedValue != null ? data.streamingAfSlowSpeedValue : "1");
+        streamingAf.put("slow_speed_um_per_s",
+                data.streamingAfSlowSpeedUmPerS != null ? data.streamingAfSlowSpeedUmPerS : 11.5);
+        streamingAf.put("normal_speed_value",
+                data.streamingAfNormalSpeedValue != null ? data.streamingAfNormalSpeedValue : "100");
+        stage.put("streaming_af", streamingAf);
+
         config.put("stage", stage);
 
         // Slide size

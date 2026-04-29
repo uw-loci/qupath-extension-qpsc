@@ -45,6 +45,18 @@ public class WizardData {
     public double stageLimitZLow = -5000;
     public double stageLimitZHigh = 0;
 
+    // ====== Step 5b: Streaming Autofocus (probed via PRBSAFZ) ======
+    // Populated by ProbeStageAfStep / ProbeStageAfWorkflow. Maps to
+    // stage.streaming_af.* in config_<scope>.yml. The streaming-AF
+    // handler reads these instead of hardcoded constants. enabled=null
+    // means "not yet probed"; auto-migration in MicroscopeConfigManager
+    // fills in legacy defaults so old v2 configs still validate at v3.
+    public Boolean streamingAfEnabled = null;
+    public String streamingAfSpeedProperty = null;       // null = no writable speed prop
+    public String streamingAfSlowSpeedValue = null;      // raw stage value (e.g. "1" or "0.50mm/sec")
+    public Double streamingAfSlowSpeedUmPerS = null;     // actual velocity in um/s
+    public String streamingAfNormalSpeedValue = null;    // raw stage value to restore
+
     // ====== Step 6: Modalities ======
     /**
      * Each map contains: "name" (String key like "ppm"), "type" (String like "polarized"),

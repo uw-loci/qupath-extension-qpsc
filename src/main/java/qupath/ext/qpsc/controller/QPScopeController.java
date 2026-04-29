@@ -207,6 +207,10 @@ public class QPScopeController {
                 logger.debug("Launching setup wizard");
                 qupath.ext.qpsc.ui.setupwizard.SetupWizardDialog.show();
             }
+            case "probeStageAf" -> {
+                logger.debug("Launching re-probe stage AF workflow");
+                ProbeStageAfWorkflow.run();
+            }
             default -> {
                 logger.warn("Unknown workflow mode: {}", mode);
             }

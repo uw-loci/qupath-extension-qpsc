@@ -67,6 +67,9 @@ public class MicroscopeConfigManager {
     private MicroscopeConfigManager(String configPath) {
         this.configPath = configPath;
         this.configData = loadConfig(configPath);
+        // One-shot migration of pre-v3 configs (stage.streaming_af missing).
+        // Mutates configData in place + writes the migrated YAML to disk.
+        migrateStreamingAfIfNeeded(configPath, this.configData);
         String resPath = computeResourcePath(configPath);
         this.resourceData = loadConfig(resPath);
 
@@ -165,6 +168,9 @@ public class MicroscopeConfigManager {
         // This prevents a race where a reader sees an empty map between
         // clear() and putAll() on a concurrent thread.
         Map<String, Object> newConfig = loadConfig(configPath);
+        // Migrate before any reader sees the new config (idempotent on
+        // already-migrated v3 files).
+        migrateStreamingAfIfNeeded(configPath, newConfig);
         String resPath = computeResourcePath(configPath);
         Map<String, Object> newResources = loadConfig(resPath);
         Map<String, Map<String, Object>> newAutofocus = loadAutofocusConfig(configPath);
@@ -277,6 +283,111 @@ public class MicroscopeConfigManager {
             logger.error("Error parsing YAML: {}", path, e);
         }
         return new LinkedHashMap<>();
+    }
+
+    /**
+     * One-shot auto-migration: write legacy streaming-AF defaults into a
+     * pre-v3 config that lacks the {@code stage.streaming_af} block.
+     *
+     * <p>Mutates {@code configData} in place and persists the migrated
+     * YAML back to disk. Idempotent on already-migrated configs.
+     *
+     * <p>Defaults match the constants previously hardcoded in
+     * {@code streaming_focus.py} (Prior 1-100% scale, 11.5 um/s slow
+     * speed). They are correct for PPM and wrong for any other vendor;
+     * a one-time JavaFX dialog (gated by the
+     * {@code streamingAfMigrationAcknowledged} preference) directs the
+     * user to "Re-probe Stage AF" to verify.
+     *
+     * @return true if migration was applied (new keys written + file
+     *         persisted), false if the block was already present.
+     */
+    @SuppressWarnings("unchecked")
+    private static boolean migrateStreamingAfIfNeeded(String configPath, Map<String, Object> configData) {
+        if (configData == null || configData.isEmpty()) {
+            return false;
+        }
+        Object stageObj = configData.get("stage");
+        if (!(stageObj instanceof Map)) {
+            // No stage block at all -- a deeper config problem; let
+            // validation flag it. Don't try to migrate.
+            return false;
+        }
+        Map<String, Object> stage = (Map<String, Object>) stageObj;
+        Object saObj = stage.get("streaming_af");
+        Map<String, Object> sa = (saObj instanceof Map) ? (Map<String, Object>) saObj : null;
+
+        boolean missing = (sa == null);
+        boolean incomplete = sa != null && (
+                !sa.containsKey("enabled") ||
+                !sa.containsKey("slow_speed_value") ||
+                !sa.containsKey("slow_speed_um_per_s") ||
+                !sa.containsKey("normal_speed_value")
+        );
+        if (!missing && !incomplete) {
+            return false;
+        }
+
+        Map<String, Object> defaults = new LinkedHashMap<>();
+        if (sa != null) defaults.putAll(sa);
+        defaults.putIfAbsent("enabled", true);
+        defaults.putIfAbsent("speed_property", null);
+        defaults.putIfAbsent("slow_speed_value", "1");
+        defaults.putIfAbsent("slow_speed_um_per_s", 11.5);
+        defaults.putIfAbsent("normal_speed_value", "100");
+        stage.put("streaming_af", defaults);
+
+        try {
+            Yaml yaml = new Yaml();
+            try (Writer w = new FileWriter(configPath, StandardCharsets.UTF_8)) {
+                yaml.dump(configData, w);
+            }
+            logger.warn("[CONFIG] auto-migrated {}: added stage.streaming_af with legacy "
+                    + "defaults. Run 'Re-probe Stage AF' from the QuPath SCope menu to verify "
+                    + "these values match your hardware.", configPath);
+            notifyStreamingAfMigrationOnce();
+        } catch (Exception e) {
+            logger.error("Failed to persist streaming_af auto-migration to {}: {}",
+                    configPath, e.toString());
+        }
+        return true;
+    }
+
+    /**
+     * Fire a one-time JavaFX info dialog announcing the auto-migration.
+     * Gated by a persistent preference so the dialog only appears once.
+     * No-ops cleanly when JavaFX isn't ready (e.g., headless tests).
+     */
+    private static void notifyStreamingAfMigrationOnce() {
+        try {
+            if (qupath.ext.qpsc.preferences.QPPreferenceDialog.getStreamingAfMigrationAcknowledged()) {
+                return;
+            }
+        } catch (Throwable t) {
+            return;
+        }
+        try {
+            javafx.application.Platform.runLater(() -> {
+                try {
+                    javafx.scene.control.Alert a = new javafx.scene.control.Alert(
+                            javafx.scene.control.Alert.AlertType.INFORMATION);
+                    a.setTitle("Streaming AF migration");
+                    a.setHeaderText("Microscope config updated to schema v3.");
+                    a.setContentText(
+                            "Legacy streaming-autofocus defaults (Prior 1-100% scale, "
+                            + "11.5 um/s slow speed) were written into your config. They "
+                            + "are correct for PPM and likely wrong for other stages.\n\n"
+                            + "Run 'Re-probe Stage AF' from the QuPath SCope menu to "
+                            + "calibrate for your hardware.");
+                    a.showAndWait();
+                } catch (Throwable inner) {
+                    logger.debug("notifyStreamingAfMigrationOnce alert failed: {}", inner.toString());
+                }
+            });
+            qupath.ext.qpsc.preferences.QPPreferenceDialog.setStreamingAfMigrationAcknowledged(true);
+        } catch (Throwable t) {
+            logger.debug("notifyStreamingAfMigrationOnce skipped ({})", t.toString());
+        }
     }
 
     /**
@@ -944,6 +1055,40 @@ public class MicroscopeConfigManager {
                 "No valid pixel size found for objective '%s' with detector '%s'. "
                         + "Please check hardware configuration.",
                 objective, detector));
+    }
+
+    // ====== Streaming-AF (stage.streaming_af.*) =====================
+    // Populated by the setup-wizard probe step (or auto-migrated to
+    // legacy defaults on first load of a pre-v3 config). The
+    // streaming-autofocus Python handler reads these from YAML; these
+    // getters exist for callers in the Java side that want to reflect
+    // the current values back to the user (e.g., the wizard's
+    // pre-populated review screen, the standalone Re-probe workflow's
+    // confirmation dialog, troubleshooting tooling).
+
+    /** Whether streaming AF should attempt the slow-speed sweep on this rig. */
+    public Boolean getStreamingAfEnabled() {
+        return getBoolean("stage", "streaming_af", "enabled");
+    }
+
+    /** Name of the writable speed property (or null if the stage has none). */
+    public String getStreamingAfSpeedProperty() {
+        return getString("stage", "streaming_af", "speed_property");
+    }
+
+    /** Raw stage value to set during the slow sweep (e.g. "1" or "0.50mm/sec"). */
+    public String getStreamingAfSlowSpeedValue() {
+        return getString("stage", "streaming_af", "slow_speed_value");
+    }
+
+    /** Actual velocity in um/s when the slow value is set. */
+    public Double getStreamingAfSlowSpeedUmPerS() {
+        return getDouble("stage", "streaming_af", "slow_speed_um_per_s");
+    }
+
+    /** Raw stage value to restore after the slow sweep. */
+    public String getStreamingAfNormalSpeedValue() {
+        return getString("stage", "streaming_af", "normal_speed_value");
     }
 
     /**

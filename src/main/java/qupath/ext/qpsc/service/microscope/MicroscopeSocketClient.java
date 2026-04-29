@@ -19,6 +19,8 @@ import javafx.beans.property.ReadOnlyBooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 
 /**
@@ -299,6 +301,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         /** Streaming autofocus -- continuous-Z autofocus via streamed frames */
         STRMAFZ("strmafz_"),
+
+        /**
+         * Setup-wizard probe: discovers the focus stage's writable speed
+         * property, parses its allowed values, time-verifies via 1-um
+         * round-trip, and recommends slow/normal speed values to write
+         * into config_<scope>.yml under stage.streaming_af.
+         */
+        PRBSAFZ("prbsafz_"),
 
         /** Rapid scan -- fast tiled brightfield acquisition, no AF, no Z */
         RPDSCAN("rpdscan_");
@@ -1692,6 +1702,213 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 }
             }
         }
+    }
+
+    /**
+     * Outcome of a {@link #probeStageAf} call. Mirrors the JSON payload
+     * the Python PRBSAFZ handler returns. All fields except
+     * {@code focusDevice} can be null when the probe has nothing to
+     * report (e.g., no writable speed property on the stage).
+     */
+    public static final class ProbeStageAfResult {
+        public final String focusDevice;
+        public final String speedProperty;
+        public final String currentValue;
+        public final List<String> allowedValues;
+        public final String classification;
+        public final String slowSpeedValue;
+        public final String normalSpeedValue;
+        public final Double slowSpeedUmPerS;
+        public final Double slowSpeedUmPerSMeasured;
+        public final boolean enabled;
+        public final String viabilityReason;
+        public final String verifyNote;
+        public final List<String> warnings;
+
+        public ProbeStageAfResult(
+                String focusDevice,
+                String speedProperty,
+                String currentValue,
+                List<String> allowedValues,
+                String classification,
+                String slowSpeedValue,
+                String normalSpeedValue,
+                Double slowSpeedUmPerS,
+                Double slowSpeedUmPerSMeasured,
+                boolean enabled,
+                String viabilityReason,
+                String verifyNote,
+                List<String> warnings) {
+            this.focusDevice = focusDevice;
+            this.speedProperty = speedProperty;
+            this.currentValue = currentValue;
+            this.allowedValues = allowedValues;
+            this.classification = classification;
+            this.slowSpeedValue = slowSpeedValue;
+            this.normalSpeedValue = normalSpeedValue;
+            this.slowSpeedUmPerS = slowSpeedUmPerS;
+            this.slowSpeedUmPerSMeasured = slowSpeedUmPerSMeasured;
+            this.enabled = enabled;
+            this.viabilityReason = viabilityReason;
+            this.verifyNote = verifyNote;
+            this.warnings = warnings;
+        }
+    }
+
+    /**
+     * Setup-wizard probe of the focus stage's streaming-AF speed
+     * property. Sends PRBSAFZ; the server discovers the writable speed
+     * property, parses its allowed values, time-verifies via a 1-um
+     * round-trip, computes viability, and returns a JSON payload.
+     *
+     * <p>The wizard step writes the result into
+     * {@code stage.streaming_af.*} of {@code config_<scope>.yml}, after
+     * which {@code streaming_focus.py} reads YAML values instead of
+     * hardcoded constants.
+     *
+     * @param yamlPath        absolute path to the active microscope yaml
+     *                        (used by the server for Z-limit safety
+     *                        during the round-trip move). May be null.
+     * @param sweepRangeUm    sweep range used in the viability check;
+     *                        pass NaN/non-positive to use server default.
+     * @param cameraFps       camera frame rate used in the viability
+     *                        check; pass NaN/non-positive for server
+     *                        default.
+     * @return parsed result; never null.
+     * @throws IOException on socket failure or FAILED response.
+     */
+    public ProbeStageAfResult probeStageAf(
+            String yamlPath, double sweepRangeUm, double cameraFps) throws IOException {
+        StringBuilder msgBuilder = new StringBuilder();
+        if (yamlPath != null && !yamlPath.isEmpty()) {
+            msgBuilder.append("--yaml ").append(yamlPath);
+        }
+        if (!Double.isNaN(sweepRangeUm) && sweepRangeUm > 0) {
+            if (msgBuilder.length() > 0) msgBuilder.append(' ');
+            msgBuilder.append("--sweep-range ").append(sweepRangeUm);
+        }
+        if (!Double.isNaN(cameraFps) && cameraFps > 0) {
+            if (msgBuilder.length() > 0) msgBuilder.append(' ');
+            msgBuilder.append("--camera-fps ").append(cameraFps);
+        }
+        if (msgBuilder.length() > 0) msgBuilder.append(' ');
+        msgBuilder.append(END_MARKER);
+        String message = msgBuilder.toString();
+        byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
+
+        logger.info("Sending PRBSAFZ command: {}", message);
+
+        synchronized (socketLock) {
+            ensureConnected();
+
+            int originalTimeout = readTimeout;
+            try {
+                if (socket != null) {
+                    // Probe runs a round-trip stage move + property
+                    // queries; budget generously for slow stages.
+                    socket.setSoTimeout(60000);
+                }
+
+                output.write(Command.PRBSAFZ.getValue());
+                output.flush();
+                Thread.sleep(50);
+                output.write(messageBytes);
+                output.flush();
+                lastActivityTime.set(System.currentTimeMillis());
+
+                // The JSON payload can be larger than 1KiB on stages
+                // with many allowed values; read until we have a full
+                // response or the stream ends.
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = input.read(buffer)) > 0) {
+                    baos.write(buffer, 0, bytesRead);
+                    // Server sends one response and pauses; treat any
+                    // pause >0 as "we have the whole reply".
+                    if (input.available() == 0) break;
+                }
+                if (baos.size() == 0) {
+                    throw new IOException("PRBSAFZ: no response from server");
+                }
+                String response = baos.toString(StandardCharsets.UTF_8).trim();
+                logger.info("PRBSAFZ response ({} bytes): {}",
+                        response.length(),
+                        response.length() > 200 ? response.substring(0, 200) + "..." : response);
+                lastActivityTime.set(System.currentTimeMillis());
+
+                if (response.startsWith("SUCCESS:")) {
+                    String json = response.substring("SUCCESS:".length());
+                    return parseProbeStageAfJson(json);
+                } else if (response.startsWith("FAILED:")) {
+                    String reason = response.substring("FAILED:".length());
+                    throw new IOException("PRBSAFZ FAILED: " + reason);
+                } else {
+                    throw new IOException("PRBSAFZ: unknown response prefix: " + response);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("PRBSAFZ interrupted", e);
+            } finally {
+                if (socket != null) {
+                    try {
+                        socket.setSoTimeout(originalTimeout);
+                    } catch (IOException e) {
+                        logger.warn("Failed to restore socket timeout after PRBSAFZ", e);
+                    }
+                }
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ProbeStageAfResult parseProbeStageAfJson(String json) throws IOException {
+        Gson gson = new Gson();
+        Map<String, Object> m;
+        try {
+            m = gson.fromJson(json, Map.class);
+        } catch (JsonSyntaxException e) {
+            throw new IOException("PRBSAFZ: malformed JSON payload: " + json, e);
+        }
+        if (m == null) {
+            throw new IOException("PRBSAFZ: empty JSON payload");
+        }
+        return new ProbeStageAfResult(
+                stringOrNull(m.get("focus_device")),
+                stringOrNull(m.get("speed_property")),
+                stringOrNull(m.get("current_value")),
+                stringListOrEmpty(m.get("allowed_values")),
+                stringOrNull(m.get("classification")),
+                stringOrNull(m.get("slow_speed_value")),
+                stringOrNull(m.get("normal_speed_value")),
+                doubleOrNull(m.get("slow_speed_um_per_s")),
+                doubleOrNull(m.get("slow_speed_um_per_s_measured")),
+                Boolean.TRUE.equals(m.get("enabled")),
+                stringOrNull(m.get("viability_reason")),
+                stringOrNull(m.get("verify_note")),
+                stringListOrEmpty(m.get("warnings"))
+        );
+    }
+
+    private static String stringOrNull(Object o) {
+        if (o == null) return null;
+        String s = o.toString();
+        return s.isEmpty() ? null : s;
+    }
+
+    private static Double doubleOrNull(Object o) {
+        if (o instanceof Number) return ((Number) o).doubleValue();
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> stringListOrEmpty(Object o) {
+        if (!(o instanceof List)) return java.util.Collections.emptyList();
+        List<String> out = new java.util.ArrayList<>();
+        for (Object x : (List<Object>) o) {
+            if (x != null) out.add(x.toString());
+        }
+        return out;
     }
 
     /**
