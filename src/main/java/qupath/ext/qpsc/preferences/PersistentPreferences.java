@@ -32,12 +32,6 @@ public class PersistentPreferences {
 
     private static final StringProperty selectedScannerProperty =
             PathPrefs.createPersistentPreference("selectedScanner", "Generic");
-    private static final StringProperty savedTransformNameProperty =
-            PathPrefs.createPersistentPreference("savedMicroscopeTransform", "");
-
-    public static String getSavedTransformName() {
-        return savedTransformNameProperty.get();
-    }
 
     public static String getSelectedScannerProperty() {
         return selectedScannerProperty.get();
@@ -51,11 +45,6 @@ public class PersistentPreferences {
         return selectedScannerProperty;
     }
 
-    public static void setSavedTransformName(String name) {
-        savedTransformNameProperty.set(name);
-    }
-
-    // Add getter for scanner property (already exists but let's ensure it's complete)
     public static String getSelectedScanner() {
         return selectedScannerProperty.get();
     }

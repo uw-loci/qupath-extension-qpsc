@@ -482,61 +482,6 @@ public class AffineTransformManager {
     }
 
     /**
-     * Loads a saved transform from preferences if available.
-     * Retrieves the transform name from preferences and loads it from the transform manager.
-     * The caller is responsible for applying the transform (e.g., via
-     * MicroscopeController.setCurrentTransform).
-     *
-     * @return The loaded AffineTransform if successful, or null if no saved transform exists
-     *         or cannot be loaded
-     */
-    public static AffineTransform loadSavedTransformFromPreferences() {
-        String savedTransformName = PersistentPreferences.getSavedTransformName();
-        if (savedTransformName == null || savedTransformName.isEmpty()) {
-            logger.debug("No saved transform name in preferences");
-            return null;
-        }
-
-        try {
-            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            AffineTransformManager manager = new AffineTransformManager(new File(configPath).getParent());
-
-            TransformPreset savedPreset = manager.getTransform(savedTransformName);
-
-            if (savedPreset != null) {
-                logger.info("Loaded saved microscope alignment: {}", savedTransformName);
-                return savedPreset.getTransform();
-            } else {
-                logger.warn("Saved transform '{}' not found in transform manager", savedTransformName);
-                return null;
-            }
-        } catch (Exception e) {
-            logger.error("Error loading saved transform", e);
-            return null;
-        }
-    }
-
-    /**
-     * Checks if a valid saved transform exists in preferences.
-     * Verifies both that a transform name is saved and that it can be loaded.
-     *
-     * @return true if a transform is saved and can be successfully loaded, false otherwise
-     */
-    public static boolean hasSavedTransform() {
-        String savedName = PersistentPreferences.getSavedTransformName();
-        if (savedName == null || savedName.isEmpty()) {
-            return false;
-        }
-
-        try {
-            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            AffineTransformManager manager = new AffineTransformManager(new File(configPath).getParent());
-            return manager.getTransform(savedName) != null;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-    /**
      * Saves a slide-specific alignment transform and its associated processed macro image to the project folder.
      *
      * <p>This method creates a persistent record of the alignment between macro coordinates and stage coordinates

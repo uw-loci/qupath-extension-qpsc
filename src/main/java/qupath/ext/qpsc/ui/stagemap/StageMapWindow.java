@@ -927,9 +927,6 @@ public class StageMapWindow {
                 String target = (mgr != null) ? mgr.getMicroscopeName() : null;
                 AffineTransformManager mgr2 = new AffineTransformManager(new File(configPath).getParent());
                 activePreset = mgr2.getBestPresetForPair(source, target);
-                if (activePreset != null) {
-                    PersistentPreferences.setSavedTransformName(activePreset.getName());
-                }
             }
         } catch (Exception e) {
             logger.warn("Failed to resolve preset for source='{}': {}", source, e.getMessage());
@@ -1432,32 +1429,20 @@ public class StageMapWindow {
 
             logger.info("Macro overlay: resolved sample name '{}', loading data...", sampleName);
 
-            // Load the preset transform (macro -> stage) from saved_transforms.json.
-            // The preset IS the macro-to-stage transform and also tells us which scanner was used.
+            // Use the preset resolved by the Source dropdown. activePreset is the
+            // most-recent (sourceScanner -> currentMicroscope) match.
             AffineTransform overlayTransform = null;
             String scannerName = null;
-            String presetName = PersistentPreferences.getSavedTransformName();
-            if (presetName != null && !presetName.isEmpty()) {
-                try {
-                    String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-                    AffineTransformManager manager = new AffineTransformManager(new File(configPath).getParent());
-                    AffineTransformManager.TransformPreset preset = manager.getTransform(presetName);
-                    if (preset != null) {
-                        overlayTransform = preset.getTransform();
-                        scannerName = preset.getMountingMethod();
-                        logger.info(
-                                "Macro overlay: loaded preset '{}' (scanner: {}, scale: {} um/px)",
-                                presetName,
-                                scannerName,
-                                String.format("%.4f", overlayTransform.getScaleX()));
-                    } else {
-                        logger.warn("Macro overlay: preset '{}' not found in saved_transforms.json", presetName);
-                    }
-                } catch (Exception e) {
-                    logger.warn("Macro overlay: failed to load preset '{}': {}", presetName, e.getMessage());
-                }
+            if (activePreset != null) {
+                overlayTransform = activePreset.getTransform();
+                scannerName = activePreset.getMountingMethod();
+                logger.info(
+                        "Macro overlay: using preset '{}' (scanner: {}, scale: {} um/px)",
+                        activePreset.getName(),
+                        scannerName,
+                        String.format("%.4f", overlayTransform.getScaleX()));
             } else {
-                logger.info("Macro overlay: no preset transform name saved in preferences");
+                logger.info("Macro overlay: no source selected / no matching preset for this microscope");
             }
 
             // Load macro image. Prefer raw macro from QuPath (process on-the-fly with

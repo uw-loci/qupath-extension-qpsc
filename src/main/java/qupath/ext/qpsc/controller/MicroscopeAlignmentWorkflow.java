@@ -1326,7 +1326,10 @@ public class MicroscopeAlignmentWorkflow {
                     selectedScanner);
 
             transformManager.savePreset(preset);
-            PersistentPreferences.setSavedTransformName(transformName);
+            // Persist source scanner so subsequent Stage Map opens default to it.
+            if (selectedScanner != null && !selectedScanner.isEmpty()) {
+                PersistentPreferences.setSelectedScanner(selectedScanner);
+            }
             logger.info("Saved transform: {}", transformName);
 
             // Step 9: Notify user
