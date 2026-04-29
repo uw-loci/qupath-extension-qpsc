@@ -78,6 +78,7 @@ public class StageMapWindow {
     private AffineTransformManager.TransformPreset activePreset;
     /** Suppresses side effects (metadata write, persistent pref) when setting source programmatically. */
     private boolean suppressSourceSelectionWrite = false;
+    private boolean suppressFlipCheckboxListener = false;
     /** Apply Flips checkbox -- promoted to a field so init/source-change paths can sync its state. */
     private CheckBox applyFlipsCheckbox;
     private Label positionLabel;
@@ -414,6 +415,10 @@ public class StageMapWindow {
         applyFlipsCheckbox.setSelected(initialAxes[0] || initialAxes[1]);
 
         applyFlipsCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            // Programmatic setSelected from applySourceSelection / applyInitialFlipState
+            // already calls canvas.setFlipsApplied directly with the resolved axes;
+            // re-running here would just repeat the work and log an extra "toggled" line.
+            if (suppressFlipCheckboxListener) return;
             logger.info("Apply Flips toggled: {}", newVal);
             if (canvas != null) {
                 // Resolve actual flip axes from the live context so the canvas uses the right
@@ -961,7 +966,12 @@ public class StageMapWindow {
         boolean[] axes = resolveCurrentFlipAxes();
         boolean shouldFlip = axes[0] || axes[1];
         if (applyFlipsCheckbox != null) {
-            applyFlipsCheckbox.setSelected(shouldFlip);
+            suppressFlipCheckboxListener = true;
+            try {
+                applyFlipsCheckbox.setSelected(shouldFlip);
+            } finally {
+                suppressFlipCheckboxListener = false;
+            }
         }
         if (canvas != null) {
             canvas.setFlipsApplied(shouldFlip, axes[0], axes[1]);
@@ -977,6 +987,10 @@ public class StageMapWindow {
      */
     private void onOpenedImageChanged() {
         if (sourceComboBox == null || sourceComboBox.isDisabled()) return;
+        // Defense-in-depth: if the dropdown hasn't been populated yet, the
+        // sources.contains(...) checks below would silently fail and we'd
+        // ignore an entry's source_microscope metadata.
+        if (sourceComboBox.getItems().isEmpty()) return;
         try {
             QuPathGUI gui = QuPathGUI.getInstance();
             if (gui == null || gui.getProject() == null || gui.getImageData() == null) return;
@@ -1014,7 +1028,12 @@ public class StageMapWindow {
         boolean[] axes = resolveCurrentFlipAxes();
         boolean shouldFlip = axes[0] || axes[1];
         if (applyFlipsCheckbox != null) {
-            applyFlipsCheckbox.setSelected(shouldFlip);
+            suppressFlipCheckboxListener = true;
+            try {
+                applyFlipsCheckbox.setSelected(shouldFlip);
+            } finally {
+                suppressFlipCheckboxListener = false;
+            }
         }
         if (canvas != null) {
             canvas.setFlipsApplied(shouldFlip, axes[0], axes[1]);

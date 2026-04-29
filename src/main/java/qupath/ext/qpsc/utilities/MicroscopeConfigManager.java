@@ -141,6 +141,21 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * Reloads from the singleton's current {@link #configPath}. Atomic against
+     * {@link #getInstance(String)} and {@link #reload(String)} since all three
+     * are synchronized on the same monitor -- callers that need "refresh from
+     * disk in place" should use this rather than {@code reload(getConfigPath())}
+     * which has a read-then-act window.
+     */
+    public synchronized void reload() {
+        if (configPath == null || configPath.isBlank()) {
+            logger.warn("reload() called on uninitialized singleton; nothing to reload");
+            return;
+        }
+        reload(configPath);
+    }
+
+    /**
      * Reloads the microscope YAML, shared LOCI resources, external autofocus settings, and imageprocessing settings.
      *
      * @param configPath Path to the microscope YAML file.

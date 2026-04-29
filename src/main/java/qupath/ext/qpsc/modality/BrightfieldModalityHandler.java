@@ -97,12 +97,10 @@ public class BrightfieldModalityHandler implements ModalityHandler {
             }
             mgr = MicroscopeConfigManager.getInstance(configPath);
         }
-        String configPath = mgr.getConfigPath();
-        if (configPath != null && !configPath.isBlank()) {
-            // Reload so we see the latest background collection output even if
-            // it was written during this session.
-            mgr.reload(configPath);
-        }
+        // Reload so we see the latest background collection output even if
+        // it was written during this session. No-arg form is atomic against
+        // concurrent getInstance(newPath) / reload(otherPath) callers.
+        mgr.reload();
 
         boolean bgEnabled = mgr.isBackgroundCorrectionEnabled(modalityName);
         BackgroundExposureMatch match = mgr.findBackgroundExposures(modalityName, objective, detector);

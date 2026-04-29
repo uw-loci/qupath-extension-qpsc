@@ -1306,25 +1306,37 @@ public class StageControlPanel extends VBox {
                     intSpinner.setTooltip(new Tooltip("No intensity_property declared for this channel in the YAML."));
                 }
 
-                // Persist exposure to PersistentPreferences on change; the next
-                // acquisition picks it up via channel_overrides.
-                expSpinner.valueProperty().addListener((obs, oldV, newV) -> {
-                    if (newV == null) return;
+                // Debounce spinner edits: dragging the arrows fires the
+                // listener on every interpolated value (50-100/sec), and each
+                // fire previously spawned a daemon thread + socket round-trip.
+                // PauseTransition coalesces -- only the last value seen in a
+                // 150 ms quiet window actually goes to the wire.
+                final double[] pendingExp = {Double.NaN};
+                final PauseTransition expDebounce = new PauseTransition(Duration.millis(150));
+                expDebounce.setOnFinished(e -> {
+                    double v = pendingExp[0];
+                    if (Double.isNaN(v)) return;
                     try {
-                        // Apply to live view too via setExposures (single-axis).
-                        MicroscopeController.getInstance().getSocketClient().setExposures(new float[] {newV.floatValue()
-                        });
-                        cameraStatusLabel.setText("Channel " + ch.id() + " exposure -> " + newV + " ms");
+                        MicroscopeController.getInstance().getSocketClient().setExposures(new float[] {(float) v});
+                        cameraStatusLabel.setText("Channel " + ch.id() + " exposure -> " + v + " ms");
                         cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
                     } catch (Exception ex) {
                         cameraStatusLabel.setText("Exposure update failed: " + ex.getMessage());
                         cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
                     }
                 });
+                expSpinner.valueProperty().addListener((obs, oldV, newV) -> {
+                    if (newV == null) return;
+                    pendingExp[0] = newV;
+                    expDebounce.playFromStart();
+                });
 
-                intSpinner.valueProperty().addListener((obs, oldV, newV) -> {
-                    if (newV == null || ch.intensityProperty() == null) return;
-                    qupath.ext.qpsc.preferences.PersistentPreferences.setLastChannelIntensity(modality, ch.id(), newV);
+                final double[] pendingInt = {Double.NaN};
+                final PauseTransition intDebounce = new PauseTransition(Duration.millis(150));
+                intDebounce.setOnFinished(e -> {
+                    double v = pendingInt[0];
+                    if (Double.isNaN(v) || ch.intensityProperty() == null) return;
+                    qupath.ext.qpsc.preferences.PersistentPreferences.setLastChannelIntensity(modality, ch.id(), v);
 
                     // Drive the hardware live via SETPROP. We write directly
                     // to the channel's intensity_property so the user sees
@@ -1332,7 +1344,6 @@ public class StageControlPanel extends VBox {
                     // background thread because socket I/O on the FX thread
                     // freezes the slider UI under load.
                     final qupath.ext.qpsc.modality.PropertyRef pr = ch.intensityProperty();
-                    final double v = newV;
                     Thread t = new Thread(
                             () -> {
                                 try {
@@ -1361,6 +1372,11 @@ public class StageControlPanel extends VBox {
                             "LiveViewer-SetIntensity");
                     t.setDaemon(true);
                     t.start();
+                });
+                intSpinner.valueProperty().addListener((obs, oldV, newV) -> {
+                    if (newV == null) return;
+                    pendingInt[0] = newV;
+                    intDebounce.playFromStart();
                 });
 
                 previewRadio.setOnAction(e -> {
