@@ -277,6 +277,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
          * name + 4-byte big-endian float.
          */
         SETILLMD("setilmd_"),
+        /**
+         * Generic Micro-Manager set_property: write any (device, property,
+         * value) directly. Used by the Live Viewer per-channel intensity
+         * spinner so a fluorescence channel's intensity_property
+         * (e.g. DLED.Intensity-385nm) can be tuned in real time without
+         * a full APPLYCH round-trip. Payload: 32-byte device + 32-byte
+         * property + 64-byte value (all UTF-8, null-padded). Total 128 bytes.
+         */
+        SETPROP("setprop_"),
         /** Apply acquisition profile (calls apply_mode_setup on server) */
         APPLYPR("applypr_"),
         /**
@@ -5438,6 +5447,47 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     "Failed to set illumination on device '" + deviceName + "': " + responseStr);
         }
         logger.info("Illumination on device '{}' set to {}", deviceName, power);
+    }
+
+    /**
+     * Generic Micro-Manager {@code core.set_property(device, property, value)}
+     * over the wire. Supports any device + property the running MM Core
+     * exposes; the value is sent as a UTF-8 string (MM normalizes numerics
+     * internally).
+     *
+     * <p>The Live Viewer per-channel intensity spinner uses this to tune
+     * a fluorescence channel's {@code intensity_property} (e.g.
+     * {@code DLED.Intensity-385nm}) in real time, where the channel-level
+     * {@link #applyChannel} would be too coarse.
+     *
+     * @param device   MM device name (e.g. "DLED")
+     * @param property MM property name (e.g. "Intensity-385nm")
+     * @param value    new value as a string (e.g. "25" or "Open")
+     * @throws IOException on communication failure or server ERR_PROP
+     */
+    public void setProperty(String device, String property, String value) throws IOException {
+        if (device == null || device.isEmpty()) {
+            throw new IllegalArgumentException("device must not be empty");
+        }
+        if (property == null || property.isEmpty()) {
+            throw new IllegalArgumentException("property must not be empty");
+        }
+        if (value == null) value = "";
+        byte[] payload = new byte[128];
+        byte[] devBytes = device.getBytes(StandardCharsets.UTF_8);
+        byte[] propBytes = property.getBytes(StandardCharsets.UTF_8);
+        byte[] valBytes = value.getBytes(StandardCharsets.UTF_8);
+        System.arraycopy(devBytes, 0, payload, 0, Math.min(devBytes.length, 32));
+        System.arraycopy(propBytes, 0, payload, 32, Math.min(propBytes.length, 32));
+        System.arraycopy(valBytes, 0, payload, 64, Math.min(valBytes.length, 64));
+
+        byte[] response = executeCommand(Command.SETPROP, payload, 8);
+        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
+        if (!responseStr.startsWith("ACK")) {
+            throw new IOException("Failed to set " + device + "." + property + " <- " + value
+                    + ": " + responseStr);
+        }
+        logger.info("set_property: {}.{} <- {}", device, property, value);
     }
 
     /**

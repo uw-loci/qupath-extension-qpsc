@@ -1197,15 +1197,14 @@ public class StageControlPanel extends VBox {
      * to the single-exposure layout when the modality has no channel
      * library declared.
      *
-     * <p>Live preview note: real-time per-channel hardware state changes
-     * (set_config + set_property while live view is streaming) require a
-     * SETPROP / APPLYCHANNEL socket command that does not exist yet in
-     * {@code MicroscopeSocketClient}. Exposure changes DO round-trip
-     * through {@code setExposures}. Intensity changes are persisted
-     * locally via {@code PersistentPreferences.setLastChannelIntensity}
-     * and feed into the next BoundedAcquisition command's
-     * {@code --channel-intensities} flag. This is the Phase D1 scope
-     * compromise; full live control is tracked as a follow-up.
+     * <p>Live preview path: the radio drives cube/shutter/light source via
+     * APPLYCH; the exposure spinner drives the camera via SETEXP; the
+     * intensity spinner writes the channel's {@code intensity_property}
+     * directly via SETPROP so the live preview brightens/dims in real
+     * time. The intensity value is also persisted to
+     * {@code PersistentPreferences.setLastChannelIntensity} so the next
+     * BoundedAcquisition command's {@code --channel-intensities} flag
+     * inherits the user's tuning.
      */
     private void buildFluorescenceCameraContent(String modality) {
         // Profile selector (for channel switching: bf_20x -> fl_20x, etc.)
@@ -1278,21 +1277,28 @@ public class StageControlPanel extends VBox {
                 RadioButton previewRadio = new RadioButton();
                 previewRadio.setToggleGroup(previewGroup);
                 previewRadio.setTooltip(new Tooltip("Mark " + ch.displayName() + " as the active preview channel. "
-                        + "Full live preview pending a SETPROP socket command; "
-                        + "today this persists the choice for the next acquisition."));
+                        + "Switches cube/shutter/light source via APPLYCH; "
+                        + "the per-channel Exp/Intensity spinners then drive the hardware live."));
 
-                Label channelLabel = new Label(ch.displayName() != null ? ch.displayName() : ch.id());
+                // Show the channel id only -- displayName carries the wavelength
+                // ("DAPI (385 nm)") which doubles the column width and pushes
+                // the spinners into a single-character editor in cramped layouts.
+                Label channelLabel = new Label(ch.id());
                 channelLabel.setStyle("-fx-font-size: 10px;");
+                if (ch.displayName() != null && !ch.displayName().equals(ch.id())) {
+                    channelLabel.setTooltip(new Tooltip(ch.displayName()));
+                }
 
+                // Default vertical arrows (stacked on the right) eat ~12 px;
+                // split-arrows-horizontal eats ~50 px and leaves the editor
+                // showing one digit. Use the default skin and a wider editor.
                 Spinner<Double> expSpinner = new Spinner<>(0.1, 10000.0, ch.defaultExposureMs(), 1.0);
-                expSpinner.setPrefWidth(80);
+                expSpinner.setPrefWidth(95);
                 expSpinner.setEditable(true);
-                expSpinner.getStyleClass().add("split-arrows-horizontal");
 
                 Spinner<Double> intSpinner = new Spinner<>(0.0, 100000.0, resolveChannelIntensity(ch), 1.0);
-                intSpinner.setPrefWidth(80);
+                intSpinner.setPrefWidth(95);
                 intSpinner.setEditable(true);
-                intSpinner.getStyleClass().add("split-arrows-horizontal");
                 // Disable intensity spinner if the channel has no intensityProperty.
                 // There's nothing for the spinner to write to in that case.
                 if (ch.intensityProperty() == null) {
@@ -1319,9 +1325,42 @@ public class StageControlPanel extends VBox {
                 intSpinner.valueProperty().addListener((obs, oldV, newV) -> {
                     if (newV == null || ch.intensityProperty() == null) return;
                     qupath.ext.qpsc.preferences.PersistentPreferences.setLastChannelIntensity(modality, ch.id(), newV);
-                    cameraStatusLabel.setText(
-                            "Channel " + ch.id() + " intensity -> " + newV + " (saved; applied on next acquisition)");
-                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #555555;");
+
+                    // Drive the hardware live via SETPROP. We write directly
+                    // to the channel's intensity_property so the user sees
+                    // the live preview brighten/dim as they spin. Done on a
+                    // background thread because socket I/O on the FX thread
+                    // freezes the slider UI under load.
+                    final qupath.ext.qpsc.modality.PropertyRef pr = ch.intensityProperty();
+                    final double v = newV;
+                    Thread t = new Thread(
+                            () -> {
+                                try {
+                                    MicroscopeController mc = MicroscopeController.getInstance();
+                                    if (mc == null || !mc.isConnected()) return;
+                                    String valueStr = (v == Math.floor(v) && !Double.isInfinite(v))
+                                            ? Integer.toString((int) v)
+                                            : Double.toString(v);
+                                    mc.withLiveModeHandling(() ->
+                                            mc.getSocketClient().setProperty(pr.device(), pr.property(), valueStr));
+                                    Platform.runLater(() -> {
+                                        cameraStatusLabel.setText(
+                                                "Channel " + ch.id() + " intensity -> " + v);
+                                        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                                    });
+                                } catch (Exception ex) {
+                                    logger.warn(
+                                            "SETPROP({}.{} <- {}) failed: {}",
+                                            pr.device(), pr.property(), v, ex.getMessage());
+                                    Platform.runLater(() -> {
+                                        cameraStatusLabel.setText("Intensity update failed: " + ex.getMessage());
+                                        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                                    });
+                                }
+                            },
+                            "LiveViewer-SetIntensity");
+                    t.setDaemon(true);
+                    t.start();
                 });
 
                 previewRadio.setOnAction(e -> {
@@ -1348,9 +1387,8 @@ public class StageControlPanel extends VBox {
 
             cameraModContent.getChildren().add(grid);
 
-            Label liveNote = new Label("Note: intensity changes save to preferences and apply on "
-                    + "the next acquisition. Full live-preview intensity "
-                    + "control needs a SETPROP socket command (pending).");
+            Label liveNote = new Label("Tip: select a channel radio first to switch the cube/light path; "
+                    + "then the Exp/Intensity spinners drive the hardware live via SETEXP/SETPROP.");
             liveNote.setWrapText(true);
             liveNote.setStyle("-fx-font-size: 9px; -fx-text-fill: gray; -fx-font-style: italic;");
             cameraModContent.getChildren().addAll(new Separator(), liveNote);

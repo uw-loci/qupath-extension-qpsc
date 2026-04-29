@@ -152,15 +152,41 @@ public class HistogramView extends VBox {
 
     /**
      * Updates the histogram from a new frame. Throttled to max ~5 Hz.
+     * Auto-scale is applied only if {@link ContrastSettings#isAutoScale()} is on.
      *
      * @param frame The current frame data
      */
     public void updateHistogram(FrameData frame) {
-        long now = System.currentTimeMillis();
-        if (now - lastHistogramUpdateMs < HISTOGRAM_THROTTLE_MS) {
-            return;
+        recompute(frame, false, true);
+    }
+
+    /**
+     * Tile-display variant: bypass the throttle and ALWAYS apply auto-scale,
+     * regardless of {@link ContrastSettings#isAutoScale()}. Used by the
+     * "Show Tiles" path so each acquired tile gets a fresh contrast range
+     * without first stealing the user's live-mode min/max sliders.
+     *
+     * <p>Why force auto-scale: a fluorescence tile's intensity range is
+     * unrelated to whatever live preview was on screen (different exposure,
+     * different illumination, different channel). The default contrast
+     * settings carried over from live preview render every tile as flat
+     * gray. The user explicitly asked for an auto-scale per tile so the
+     * histogram below also reflects the tile content.
+     */
+    public void updateHistogramAndAutoScale(FrameData frame) {
+        recompute(frame, true, false);
+    }
+
+    private void recompute(FrameData frame, boolean forceAutoScale, boolean obeyThrottle) {
+        if (obeyThrottle) {
+            long now = System.currentTimeMillis();
+            if (now - lastHistogramUpdateMs < HISTOGRAM_THROTTLE_MS) {
+                return;
+            }
+            lastHistogramUpdateMs = now;
+        } else {
+            lastHistogramUpdateMs = System.currentTimeMillis();
         }
-        lastHistogramUpdateMs = now;
 
         currentMaxValue = frame.maxValue();
 
@@ -243,8 +269,8 @@ public class HistogramView extends VBox {
             }
         }
 
-        // Auto-scale if enabled
-        if (contrastSettings.isAutoScale()) {
+        // Auto-scale if enabled (or forced by the tile-display caller).
+        if (forceAutoScale || contrastSettings.isAutoScale()) {
             contrastSettings.applyAutoScale(histogram, frame);
         }
 

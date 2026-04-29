@@ -475,6 +475,15 @@ public class LiveViewerWindow {
                 String fileName = tileFile.getName();
                 Platform.runLater(() -> {
                     if (instance != null) {
+                        // Drive histogram + auto-scale FIRST so renderFrame
+                        // picks up the tile-derived contrast range. Without
+                        // this, fluorescence tiles render as flat gray
+                        // because the live-mode contrast carries over and
+                        // the 16-bit signal lives in a tiny percentile range
+                        // (e.g. 100-500 out of 65535).
+                        if (instance.histogramView != null) {
+                            instance.histogramView.updateHistogramAndAutoScale(frame);
+                        }
                         instance.renderFrame(frame);
                         instance.updateStatus("Tile: " + fileName);
                     }
