@@ -55,12 +55,28 @@ public class ImageFlipHelper {
      */
     public static CompletableFuture<Boolean> validateAndFlipIfNeeded(
             QuPathGUI gui, Project<BufferedImage> project, String sampleName) {
+        return validateAndFlipIfNeeded(
+                gui,
+                project,
+                sampleName,
+                FlipResolver.resolveFlipX(null, null, null),
+                FlipResolver.resolveFlipY(null, null, null));
+    }
+
+    /**
+     * Variant that takes explicit flip requirements -- used by the orientation dialog
+     * which captures the flip from the user interactively.
+     */
+    public static CompletableFuture<Boolean> validateAndFlipIfNeeded(
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            String sampleName,
+            boolean explicitFlipX,
+            boolean explicitFlipY) {
 
         return CompletableFuture.supplyAsync(() -> {
-            // Get flip requirements via FlipResolver. No entry/preset/detector context here --
-            // this validation runs early at project creation. Falls through to global pref.
-            boolean requiresFlipX = FlipResolver.resolveFlipX(null, null, null);
-            boolean requiresFlipY = FlipResolver.resolveFlipY(null, null, null);
+            boolean requiresFlipX = explicitFlipX;
+            boolean requiresFlipY = explicitFlipY;
 
             // Check if we're in a project
             if (project == null) {

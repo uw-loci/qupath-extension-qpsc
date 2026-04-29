@@ -126,60 +126,43 @@ public class MicroscopeAlignmentWorkflow {
                             defaultSampleName = projectDir.getName();
                         }
                     }
-                    final String defaultSampleNameFinal = defaultSampleName;
-
-                    // First step: ask the user about macro orientation. Compare the macro to the
-                    // Live View and tick which axes need flipping. Seed from any prior preset for
-                    // the same (sourceScanner, targetMicroscope) pair when one exists.
-                    MacroOrientationDialog.MacroFlip seedFlip = FlipResolver.seedFlipForNewAlignment(
-                                    transformManager, selectedScanner, currentMicroscope)
-                            .map(arr -> new MacroOrientationDialog.MacroFlip(arr[0], arr[1]))
-                            .orElse(null);
-                    final BufferedImage macroPreview = macroImage;
-                    MacroOrientationDialog.show(macroPreview, seedFlip)
-                            .thenCompose(macroFlip -> {
-                                if (macroFlip == null) {
-                                    logger.info("User cancelled at orientation step");
+                    // The orientation dialog is shown LATER in processAlignmentWithProject, after
+                    // the project exists, so the user can toggle and see the flipped duplicate
+                    // immediately. Until then we use no-flip as a starting assumption -- detection
+                    // and project creation work fine on the original image.
+                    MacroOrientationDialog.MacroFlip initialFlip =
+                            new MacroOrientationDialog.MacroFlip(false, false);
+                    SampleSetupController.showDialog(defaultSampleName)
+                            .thenCompose(sampleSetup -> {
+                                if (sampleSetup == null) {
+                                    logger.info("User cancelled at sample setup");
                                     return CompletableFuture.<CombinedConfig>completedFuture(null);
                                 }
-                                logger.info(
-                                        "Macro orientation captured: flipX={}, flipY={}",
-                                        macroFlip.flipX(),
-                                        macroFlip.flipY());
 
-                                // Continue with sample setup dialog...
-                                return SampleSetupController.showDialog(defaultSampleNameFinal)
-                                        .thenCompose(sampleSetup -> {
-                                            if (sampleSetup == null) {
-                                                logger.info("User cancelled at sample setup");
-                                                return CompletableFuture.<CombinedConfig>completedFuture(null);
+                                // Now show alignment dialog with proper parameters
+                                return MacroImageController.showAlignmentDialog(
+                                                gui, transformManager, currentMicroscope)
+                                        .thenApply(alignConfig -> {
+                                            if (alignConfig == null) {
+                                                return null;
                                             }
 
-                                            // Now show alignment dialog with proper parameters
-                                            return MacroImageController.showAlignmentDialog(
-                                                            gui, transformManager, currentMicroscope)
-                                                    .thenApply(alignConfig -> {
-                                                        if (alignConfig == null) {
-                                                            return null;
-                                                        }
+                                            // Run detection NOW before project creation
+                                            MacroImageResults macroImageResults = performDetection(
+                                                    gui,
+                                                    alignConfig,
+                                                    selectedScanner,
+                                                    microscopeSelection.configPath(),
+                                                    initialFlip);
 
-                                                        // Run detection NOW before project creation
-                                                        MacroImageResults macroImageResults = performDetection(
-                                                                gui,
-                                                                alignConfig,
-                                                                selectedScanner,
-                                                                microscopeSelection.configPath(),
-                                                                macroFlip);
-
-                                                        // Package everything together with the selected scanner
-                                                        return new CombinedConfig(
-                                                                sampleSetup,
-                                                                alignConfig,
-                                                                macroImageResults,
-                                                                selectedScanner,
-                                                                microscopeSelection.configPath(),
-                                                                macroFlip);
-                                                    });
+                                            // Package everything together with the selected scanner
+                                            return new CombinedConfig(
+                                                    sampleSetup,
+                                                    alignConfig,
+                                                    macroImageResults,
+                                                    selectedScanner,
+                                                    microscopeSelection.configPath(),
+                                                    initialFlip);
                                         });
                             })
                             .thenAccept(combinedConfig -> {
@@ -734,71 +717,72 @@ public class MicroscopeAlignmentWorkflow {
                             projectsFolderPath, sampleName, sampleSetup.modality());
                 }
 
-                // Ensure the user is viewing the flipped image (if flipping is configured).
-                // The Live Viewer and eyepiece show the optically flipped view, so the
-                // QuPath image must match for the user to identify corresponding features
-                // during alignment point selection.
-                //
-                // IMPORTANT: The flip opens a new image entry which requires the FX thread.
-                // We must NOT block the FX thread waiting for it. Instead, chain the
-                // remaining workflow steps as a callback after the flip completes.
-                if (flipX || flipY) {
-                    @SuppressWarnings("unchecked")
-                    Project<BufferedImage> currentProject = (Project<BufferedImage>) gui.getProject();
-                    if (currentProject != null) {
-                        // Capture variables needed by the continuation
-                        final Map<String, Object> finalProjectDetails = projectDetails;
-                        ImageFlipHelper.validateAndFlipIfNeeded(gui, currentProject, sampleSetup.sampleName())
-                                .thenAccept(flipResult -> {
-                                    if (Boolean.TRUE.equals(flipResult)) {
-                                        logger.info(
-                                                "Flipped image loaded for alignment (matches Live Viewer orientation)");
-                                    } else {
-                                        logger.warn("Image flip returned false - alignment may use wrong orientation");
-                                    }
-                                    // Continue the rest of the workflow on the FX thread
-                                    // after the flipped image is loaded
-                                    Platform.runLater(() -> continueAlignmentAfterFlip(
-                                            gui,
-                                            sampleSetup,
-                                            alignConfig,
-                                            detectionResultsHolder,
-                                            selectedScanner,
-                                            selectedScannerConfigPath,
-                                            finalProjectDetails,
-                                            transformManager,
-                                            combinedConfig.macroFlip()));
-                                })
-                                .exceptionally(ex -> {
-                                    logger.error("Failed to create flipped image: {}", ex.getMessage());
-                                    // Continue anyway on the original image
-                                    Platform.runLater(() -> continueAlignmentAfterFlip(
-                                            gui,
-                                            sampleSetup,
-                                            alignConfig,
-                                            detectionResultsHolder,
-                                            selectedScanner,
-                                            selectedScannerConfigPath,
-                                            finalProjectDetails,
-                                            transformManager,
-                                            combinedConfig.macroFlip()));
-                                    return null;
-                                });
-                        return; // Don't fall through -- continuation handles the rest
-                    }
-                }
+                // Show the non-modal orientation dialog. Toggling a checkbox creates (or finds)
+                // the matching flipped duplicate and switches the QuPath viewer to it, so the
+                // user can verify against the Live View before clicking OK. The captured answer
+                // becomes the workflow's macroFlip and is saved into the preset later.
+                @SuppressWarnings("unchecked")
+                Project<BufferedImage> projectForFlip = (Project<BufferedImage>) gui.getProject();
+                final Map<String, Object> finalProjectDetails = projectDetails;
+                final String sampleNameForFlip = sampleSetup.sampleName();
 
-                // No flip needed -- continue directly
-                continueAlignmentAfterFlip(
-                        gui,
-                        sampleSetup,
-                        alignConfig,
-                        detectionResultsHolder,
-                        selectedScanner,
-                        selectedScannerConfigPath,
-                        projectDetails,
-                        transformManager,
-                        combinedConfig.macroFlip());
+                MacroOrientationDialog.MacroFlip seedFlip = FlipResolver.seedFlipForNewAlignment(
+                                transformManager,
+                                selectedScanner,
+                                MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty())
+                                        .getString("microscope", "name"))
+                        .map(arr -> new MacroOrientationDialog.MacroFlip(arr[0], arr[1]))
+                        .orElse(combinedConfig.macroFlip());
+
+                java.util.function.BiConsumer<Boolean, Boolean> onToggle = (newFlipX, newFlipY) -> {
+                    if (projectForFlip == null) {
+                        logger.warn("No project available to switch flipped entry on toggle");
+                        return;
+                    }
+                    logger.info("Orientation dialog toggle: flipX={}, flipY={}", newFlipX, newFlipY);
+                    ImageFlipHelper.validateAndFlipIfNeeded(
+                                    gui, projectForFlip, sampleNameForFlip, newFlipX, newFlipY)
+                            .thenAccept(ok -> logger.info(
+                                    "validateAndFlipIfNeeded({}, {}) -> {}", newFlipX, newFlipY, ok))
+                            .exceptionally(ex -> {
+                                logger.error(
+                                        "Failed to switch flipped entry on toggle: {}", ex.getMessage());
+                                return null;
+                            });
+                };
+
+                MacroOrientationDialog.show(gui.getStage(), seedFlip, onToggle)
+                        .thenAccept(finalFlip -> {
+                            if (finalFlip == null) {
+                                logger.info("User cancelled at orientation step");
+                                Platform.runLater(() -> {
+                                    UIFunctions.notifyUserOfError(
+                                            "Alignment cancelled at orientation step.", "Alignment Cancelled");
+                                });
+                                return;
+                            }
+                            logger.info(
+                                    "Orientation captured: flipX={}, flipY={}",
+                                    finalFlip.flipX(),
+                                    finalFlip.flipY());
+                            // Ensure the right entry is open one more time (idempotent if already correct)
+                            ImageFlipHelper.validateAndFlipIfNeeded(
+                                            gui,
+                                            projectForFlip,
+                                            sampleNameForFlip,
+                                            finalFlip.flipX(),
+                                            finalFlip.flipY())
+                                    .whenComplete((ok, ex) -> Platform.runLater(() -> continueAlignmentAfterFlip(
+                                            gui,
+                                            sampleSetup,
+                                            alignConfig,
+                                            detectionResultsHolder,
+                                            selectedScanner,
+                                            selectedScannerConfigPath,
+                                            finalProjectDetails,
+                                            transformManager,
+                                            finalFlip)));
+                        });
 
             } catch (Exception e) {
                 logger.error("Error in alignment workflow", e);
