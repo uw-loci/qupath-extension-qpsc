@@ -8,8 +8,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
@@ -477,47 +475,24 @@ public class BackgroundSettingsReader {
      * - "LOCI_OBJECTIVE_OLYMPUS_10X_001" -> "10x"
      * - "LOCI_OBJECTIVE_OLYMPUS_20X_POL_001" -> "20x"
      * - "LOCI_OBJECTIVE_OLYMPUS_40X_POL_001" -> "40x"
+     *
+     * <p>Delegates to {@link ObjectiveUtils#extractMagnification} for the
+     * actual extraction so the regex lives in one place; this wrapper
+     * supplies the "unknown" path-segment fallback that the reader uses to
+     * keep file paths well-formed even when extraction fails.
      */
     private static String extractMagnificationFromObjective(String objective) {
-        if (objective == null) return "unknown";
-
-        // Look for pattern like "10X", "20X", "40X"
-        Pattern pattern = Pattern.compile("(\\d+)X", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = pattern.matcher(objective);
-
-        if (matcher.find()) {
-            return matcher.group(1).toLowerCase() + "x"; // "20X" -> "20x"
-        }
-
-        // Fallback: return "unknown" if pattern not found
-        return "unknown";
+        String mag = ObjectiveUtils.extractMagnification(objective);
+        return mag == null ? "unknown" : mag;
     }
 
     /**
-     * Strip a trailing magnification suffix ({@code _10x}, {@code _20X}, etc.) from a
-     * modality id to get the on-disk family form. Family names may contain underscores
-     * (e.g. {@code BF_IF}), so we only strip a terminal {@code _<digits><x|X>} segment.
-     * Matches the convention in {@code MicroscopeConfigManager.getBackgroundCorrectionEntry}
-     * and the Python server's background-file writer layout.
+     * Strip a trailing magnification suffix from a modality id to get the
+     * on-disk family form. Delegates to {@link HardwareKey#stripMagnificationSuffix}
+     * so the regex lives in one place across the codebase.
      */
     private static String modalityFamily(String modality) {
-        if (modality == null) {
-            return null;
-        }
-        int idx = modality.lastIndexOf('_');
-        if (idx <= 0 || idx >= modality.length() - 2) {
-            return modality;
-        }
-        char last = modality.charAt(modality.length() - 1);
-        if (last != 'x' && last != 'X') {
-            return modality;
-        }
-        for (int i = idx + 1; i < modality.length() - 1; i++) {
-            if (!Character.isDigit(modality.charAt(i))) {
-                return modality;
-            }
-        }
-        return modality.substring(0, idx);
+        return HardwareKey.stripMagnificationSuffix(modality);
     }
 
     /**

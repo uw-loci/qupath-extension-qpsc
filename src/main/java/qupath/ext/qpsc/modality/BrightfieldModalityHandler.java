@@ -1,7 +1,6 @@
 package qupath.ext.qpsc.modality;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
@@ -9,6 +8,8 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
+import qupath.ext.qpsc.utilities.BackgroundExposureMatch;
+import qupath.ext.qpsc.utilities.HardwareKey;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.images.ImageData;
 
@@ -59,49 +60,91 @@ public class BrightfieldModalityHandler implements ModalityHandler {
     }
 
     /**
-     * Resolve the brightfield exposure value, preferring the most recent
-     * background collection's adaptive-exposure result over generic preferences.
+     * Resolve the brightfield exposure value.
+     *
+     * <p>Resolution policy:
+     * <ol>
+     *   <li>If background correction is enabled for this modality and a
+     *       calibration row matches at any tier, return that exposure.
+     *       Tier-2 matches (objective drift) log a WARN with both objective
+     *       IDs but proceed - the on-disk background TIFF is shared across
+     *       all objectives at this magnification, so the calibrated exposure
+     *       is appropriate to reuse.</li>
+     *   <li>If background correction is enabled but no calibration row
+     *       matches, throw {@link BackgroundCalibrationMismatchException}.
+     *       Silently falling back to a stale generic preference would run
+     *       acquisition at the wrong exposure and corrupt flat-field
+     *       correction without any visible warning - the previous bug class
+     *       this method is designed to prevent.</li>
+     *   <li>If background correction is disabled, return
+     *       {@link PersistentPreferences#getLastUnifiedExposureMs()}. This is
+     *       the legitimate no-BG path; the preference value is the user's
+     *       last interactive exposure choice.</li>
+     * </ol>
      */
     private double resolveExposureMs(String modalityName, String objective, String detector) {
-        try {
+        // Prefer the already-initialized singleton (avoids touching the
+        // JavaFX-backed preference layer from headless contexts like tests).
+        // The singleton is keyed by config path and is the source of truth
+        // for the microscope currently in use.
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        if (mgr == null) {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            if (configPath != null) {
-                MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
-                // Reload so we see the latest background collection output even if
-                // it was written during this session.
-                mgr.reload(configPath);
-                Map<Double, Double> bgExposures = mgr.getBackgroundExposures(modalityName, objective, detector);
-                if (bgExposures != null && !bgExposures.isEmpty()) {
-                    // Brightfield has a single angle (0.0). Prefer the 0.0 entry
-                    // if present, otherwise take the first available entry --
-                    // background collection writes a single-angle entry for
-                    // non-rotation modalities.
-                    Double exposure = bgExposures.get(0.0);
-                    if (exposure == null) {
-                        exposure = bgExposures.values().iterator().next();
-                    }
-                    logger.info(
-                            "Brightfield using background collection exposure: {} ms (modality={}, objective={}, detector={})",
-                            exposure,
-                            modalityName,
-                            objective,
-                            detector);
-                    return exposure;
-                }
+            if (configPath == null || configPath.isBlank()) {
+                double fallback = PersistentPreferences.getLastUnifiedExposureMs();
+                logger.info("Brightfield: no config available, using PersistentPreferences fallback: {} ms", fallback);
+                return fallback;
             }
-        } catch (Exception e) {
-            logger.warn(
-                    "Failed to read background exposures for brightfield; falling back to PersistentPreferences: {}",
-                    e.getMessage());
+            mgr = MicroscopeConfigManager.getInstance(configPath);
+        }
+        String configPath = mgr.getConfigPath();
+        if (configPath != null && !configPath.isBlank()) {
+            // Reload so we see the latest background collection output even if
+            // it was written during this session.
+            mgr.reload(configPath);
+        }
+
+        boolean bgEnabled = mgr.isBackgroundCorrectionEnabled(modalityName);
+        BackgroundExposureMatch match = mgr.findBackgroundExposures(modalityName, objective, detector);
+
+        if (match != null) {
+            Double exposure = match.exposures().get(0.0);
+            if (exposure == null) {
+                exposure = match.exposures().values().iterator().next();
+            }
+
+            if (match.isObjectiveDrift()) {
+                logger.warn(
+                        "Brightfield BG calibration objective drift: stored objective '{}' (mag={}) but requested '{}' (mag={}). "
+                                + "Reusing calibrated exposure {} ms because both objectives share the same background TIFF on disk. "
+                                + "Re-run Background Collection if illumination geometry differs.",
+                        match.stored().objective(), match.stored().magnification(),
+                        match.requested().objective(), match.requested().magnification(),
+                        exposure);
+            } else {
+                logger.info(
+                        "Brightfield using background collection exposure: {} ms (tier={}, modality={}, objective={}, detector={})",
+                        exposure, match.tier(), modalityName, objective, detector);
+            }
+            return exposure;
+        }
+
+        if (bgEnabled) {
+            HardwareKey requested = HardwareKey.from(modalityName, objective, detector);
+            String message = String.format(
+                    "Background correction is enabled for '%s' but no matching calibration row was found for "
+                            + "objective='%s' detector='%s'. Run Background Collection for this hardware combination, "
+                            + "or disable background correction in the imageprocessing config.",
+                    modalityName, objective, detector);
+            logger.error("Brightfield exposure resolution failed: {}", message);
+            throw new BackgroundCalibrationMismatchException(message, requested);
         }
 
         double fallback = PersistentPreferences.getLastUnifiedExposureMs();
         logger.info(
-                "Brightfield using PersistentPreferences.lastUnifiedExposureMs fallback: {} ms (no matching background_exposures for modality={}, objective={}, detector={})",
-                fallback,
-                modalityName,
-                objective,
-                detector);
+                "Brightfield BG correction disabled; using PersistentPreferences.lastUnifiedExposureMs: {} ms "
+                        + "(modality={}, objective={}, detector={})",
+                fallback, modalityName, objective, detector);
         return fallback;
     }
 

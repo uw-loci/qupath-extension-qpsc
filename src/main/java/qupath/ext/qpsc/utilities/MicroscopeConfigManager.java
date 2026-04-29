@@ -748,20 +748,33 @@ public class MicroscopeConfigManager {
     }
 
     /**
-     * Get the final exposures saved by the most recent background collection,
-     * if and only if that collection targeted the same modality/objective/detector.
+     * Look up the final exposures saved by the most recent background
+     * collection, against a tiered key-match policy.
      *
      * <p>The Python server writes these values to
-     * {@code calibration_targets.background_exposures} in the imageprocessing YAML
-     * after each successful background collection. The adaptive-exposure loop
-     * tunes exposure time to hit the user's target intensity (e.g. 30000 counts
-     * in 16-bit), so these values represent the camera settings that will
-     * produce a well-exposed image under the same illumination conditions.
+     * {@code calibration_targets.background_exposures} in the imageprocessing
+     * YAML after each successful background collection. The adaptive-exposure
+     * loop tunes exposure time to hit the user's target intensity, so the
+     * stored exposures represent the camera settings that will produce a
+     * well-exposed image under the same illumination conditions.
      *
-     * <p>Acquisition should prefer these exposures over ModalityHandler defaults
-     * whenever available and matching -- otherwise the tiled acquisition will
-     * use a different exposure than the background was collected at, breaking
-     * flat-field correction consistency.
+     * <p>Match tiers - see {@link BackgroundExposureMatch.Tier} for full
+     * semantics:
+     * <ol>
+     *   <li>EXACT - all four axes (modality family, magnification, detector,
+     *       full objective ID) match.</li>
+     *   <li>FAMILY - magnification differs only by suffix on the modality
+     *       string; objective + detector identical.</li>
+     *   <li>MAGNIFICATION - objective IDs differ but resolve to the same
+     *       magnification; family + detector identical. The on-disk
+     *       background TIFF is shared across all objectives at this
+     *       magnification anyway, so the exposure value is appropriate to
+     *       reuse - logged at WARN for traceability.</li>
+     * </ol>
+     *
+     * <p>Detector mismatch and modality-family mismatch are always hard
+     * rejects. Cross-detector reuse is unsafe (different QE / well depth);
+     * cross-modality reuse is physically meaningless.
      *
      * <p>The YAML structure written by
      * {@code save_background_exposures_to_yaml} is:
@@ -769,9 +782,10 @@ public class MicroscopeConfigManager {
      * calibration_targets:
      *   background_exposures:
      *     last_calibrated: 2026-04-09T15:30:00
-     *     modality: Brightfield_10x
+     *     modality: Brightfield
      *     objective: LOCI_OBJECTIVE_OLYMPUS_10X_001
      *     detector: HAMAMATSU_DCAM_01
+     *     magnification: 10x        # optional; derived from objective if absent
      *     angles:
      *       &lt;angle_name&gt;:
      *         angle_degrees: 0.0
@@ -779,15 +793,17 @@ public class MicroscopeConfigManager {
      *         achieved_intensity: 29500
      * </pre>
      *
-     * @param modality  modality name to match (e.g. {@code "Brightfield_10x"})
+     * @param modality  modality name to match (e.g. {@code "Brightfield"} or
+     *                  {@code "Brightfield_10x"} - both forms work)
      * @param objective objective ID to match
      * @param detector  detector ID to match
-     * @return map of angle degrees to exposure_ms, or {@code null} if no stored
-     *         background exposures exist OR they were collected for a different
-     *         modality/objective/detector combination
+     * @return a {@link BackgroundExposureMatch} carrying the exposures and the
+     *         tier at which the match succeeded, or {@code null} if no
+     *         calibration row exists OR the requested {modality family,
+     *         detector} combo cannot be reconciled with the stored row.
      */
     @SuppressWarnings("unchecked")
-    public Map<Double, Double> getBackgroundExposures(String modality, String objective, String detector) {
+    public BackgroundExposureMatch findBackgroundExposures(String modality, String objective, String detector) {
         if (imageprocessingData == null) {
             return null;
         }
@@ -801,33 +817,30 @@ public class MicroscopeConfigManager {
         }
         Map<String, Object> bg = (Map<String, Object>) bgExp;
 
-        // Only use these exposures if the stored collection matches the
-        // current modality/objective/detector -- background_exposures is a
-        // single-entry section that gets overwritten by each new collection,
-        // so using a mismatched set would be worse than falling back to
-        // defaults.
         Object storedModality = bg.get("modality");
         Object storedObjective = bg.get("objective");
         Object storedDetector = bg.get("detector");
-        if (modality != null && storedModality != null && !modality.equals(storedModality.toString())) {
+        Object storedMagnification = bg.get("magnification");
+
+        HardwareKey requested = HardwareKey.from(modality, objective, detector);
+        HardwareKey stored = HardwareKey.ofStored(
+                storedModality != null ? storedModality.toString() : null,
+                storedObjective != null ? storedObjective.toString() : null,
+                storedDetector != null ? storedDetector.toString() : null,
+                storedMagnification != null ? storedMagnification.toString() : null);
+
+        // Detector and modality family are hard axes -- never softened.
+        if (detector != null && stored.detector() != null && !detector.equals(stored.detector())) {
             logger.debug(
-                    "Background exposures stored for modality '{}' but requested '{}' -- ignoring",
-                    storedModality,
-                    modality);
+                    "Background exposures stored for detector '{}' but requested '{}' -- hard reject",
+                    stored.detector(), detector);
             return null;
         }
-        if (objective != null && storedObjective != null && !objective.equals(storedObjective.toString())) {
+        if (requested.modalityFamily() != null && stored.modalityFamily() != null
+                && !requested.modalityFamily().equals(stored.modalityFamily())) {
             logger.debug(
-                    "Background exposures stored for objective '{}' but requested '{}' -- ignoring",
-                    storedObjective,
-                    objective);
-            return null;
-        }
-        if (detector != null && storedDetector != null && !detector.equals(storedDetector.toString())) {
-            logger.debug(
-                    "Background exposures stored for detector '{}' but requested '{}' -- ignoring",
-                    storedDetector,
-                    detector);
+                    "Background exposures stored for modality family '{}' but requested '{}' -- hard reject",
+                    stored.modalityFamily(), requested.modalityFamily());
             return null;
         }
 
@@ -853,13 +866,45 @@ public class MicroscopeConfigManager {
         if (result.isEmpty()) {
             return null;
         }
+
+        // Pick the strongest tier the data supports.
+        BackgroundExposureMatch.Tier tier;
+        if (requested.matchesExact(stored)) {
+            tier = BackgroundExposureMatch.Tier.EXACT;
+        } else if (requested.matchesFamilyObjective(stored)) {
+            tier = BackgroundExposureMatch.Tier.FAMILY;
+        } else if (requested.matchesFamilyMagnification(stored)) {
+            tier = BackgroundExposureMatch.Tier.MAGNIFICATION;
+        } else {
+            // Family + detector aligned (we already gated on those above) but
+            // neither objective ID nor magnification could be reconciled.
+            // Refuse rather than guess.
+            logger.warn(
+                    "Background exposures stored for objective '{}' (mag={}) cannot match requested '{}' (mag={}) -- "
+                            + "no shared magnification, refusing reuse",
+                    stored.objective(), stored.magnification(),
+                    requested.objective(), requested.magnification());
+            return null;
+        }
+
         logger.debug(
-                "Loaded {} background exposure(s) from calibration_targets for {}/{}/{}",
-                result.size(),
-                modality,
-                objective,
-                detector);
-        return result;
+                "Loaded {} background exposure(s) from calibration_targets at tier {} for {}/{}/{}",
+                result.size(), tier, modality, objective, detector);
+        return new BackgroundExposureMatch(result, tier, requested, stored);
+    }
+
+    /**
+     * Convenience accessor returning just the angle-to-exposure map, dropping
+     * tier metadata. Treats anything from EXACT through MAGNIFICATION as a
+     * match. Prefer {@link #findBackgroundExposures} when callers need to
+     * differentiate match strength (e.g. to log objective drift).
+     *
+     * @return map of angle degrees to exposure_ms, or {@code null} if no
+     *         compatible calibration row exists.
+     */
+    public Map<Double, Double> getBackgroundExposures(String modality, String objective, String detector) {
+        BackgroundExposureMatch match = findBackgroundExposures(modality, objective, detector);
+        return match == null ? null : match.exposures();
     }
 
     /**
@@ -1393,25 +1438,11 @@ public class MicroscopeConfigManager {
      * Strip a trailing magnification suffix ({@code _10x}, {@code _20X}, etc.) from a
      * modality id to get the family form. Family names may contain underscores
      * (e.g. {@code BF_IF}), so we only strip a terminal {@code _<digits><x|X>} segment.
+     * Delegates to {@link HardwareKey#stripMagnificationSuffix} so the rule lives
+     * in one place across the codebase.
      */
     private static String modalityFamily(String modality) {
-        if (modality == null) {
-            return null;
-        }
-        int idx = modality.lastIndexOf('_');
-        if (idx <= 0 || idx >= modality.length() - 2) {
-            return modality;
-        }
-        char last = modality.charAt(modality.length() - 1);
-        if (last != 'x' && last != 'X') {
-            return modality;
-        }
-        for (int i = idx + 1; i < modality.length() - 1; i++) {
-            if (!Character.isDigit(modality.charAt(i))) {
-                return modality;
-            }
-        }
-        return modality.substring(0, idx);
+        return HardwareKey.stripMagnificationSuffix(modality);
     }
 
     /**
