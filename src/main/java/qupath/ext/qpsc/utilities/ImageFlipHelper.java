@@ -57,9 +57,10 @@ public class ImageFlipHelper {
             QuPathGUI gui, Project<BufferedImage> project, String sampleName) {
 
         return CompletableFuture.supplyAsync(() -> {
-            // Get flip requirements from preferences
-            boolean requiresFlipX = QPPreferenceDialog.getFlipMacroXProperty();
-            boolean requiresFlipY = QPPreferenceDialog.getFlipMacroYProperty();
+            // Get flip requirements via FlipResolver. No entry/preset/detector context here --
+            // this validation runs early at project creation. Falls through to global pref.
+            boolean requiresFlipX = FlipResolver.resolveFlipX(null, null, null);
+            boolean requiresFlipY = FlipResolver.resolveFlipY(null, null, null);
 
             // Check if we're in a project
             if (project == null) {

@@ -481,8 +481,9 @@ public class ExistingAlignmentPath {
      * Applies flips to macro image based on preferences.
      */
     private BufferedImage applyFlips(BufferedImage image) {
-        boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
-        boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+        var preset = state.alignmentChoice != null ? state.alignmentChoice.selectedTransform() : null;
+        boolean flipX = FlipResolver.resolveFlipX(null, preset, null);
+        boolean flipY = FlipResolver.resolveFlipY(null, preset, null);
 
         BufferedImage processedImage;
         if (flipX || flipY) {
@@ -633,8 +634,9 @@ public class ExistingAlignmentPath {
      */
     @SuppressWarnings("unchecked")
     private boolean verifyCorrectImageIsOpen() {
-        boolean requiresFlipX = QPPreferenceDialog.getFlipMacroXProperty();
-        boolean requiresFlipY = QPPreferenceDialog.getFlipMacroYProperty();
+        var preset = state.alignmentChoice != null ? state.alignmentChoice.selectedTransform() : null;
+        boolean requiresFlipX = FlipResolver.resolveFlipX(null, preset, null);
+        boolean requiresFlipY = FlipResolver.resolveFlipY(null, preset, null);
 
         // If no flipping required, any image is acceptable
         if (!requiresFlipX && !requiresFlipY) {
@@ -880,8 +882,9 @@ public class ExistingAlignmentPath {
      */
     @SuppressWarnings("unchecked")
     private java.util.List<PathObject> getAnnotationsFromCorrectSource() {
-        boolean requiresFlipX = QPPreferenceDialog.getFlipMacroXProperty();
-        boolean requiresFlipY = QPPreferenceDialog.getFlipMacroYProperty();
+        var preset = state.alignmentChoice != null ? state.alignmentChoice.selectedTransform() : null;
+        boolean requiresFlipX = FlipResolver.resolveFlipX(null, preset, null);
+        boolean requiresFlipY = FlipResolver.resolveFlipY(null, preset, null);
 
         // If no flip required, get ALL annotations from current GUI hierarchy
         // NOTE: Do NOT filter by class - alignment needs all annotations regardless of class

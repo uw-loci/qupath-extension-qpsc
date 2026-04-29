@@ -498,9 +498,9 @@ public class MicroscopeAlignmentWorkflow {
             if (configFlipY != null) flipY = configFlipY;
             logger.info("Using flip settings from scanner config: flipX={}, flipY={}", flipX, flipY);
         } catch (Exception e) {
-            // Fall back to preference
-            flipX = QPPreferenceDialog.getFlipMacroXProperty();
-            flipY = QPPreferenceDialog.getFlipMacroYProperty();
+            // Fall back via FlipResolver (no entry/preset/detector context here -> global pref).
+            flipX = FlipResolver.resolveFlipX(null, null, null);
+            flipY = FlipResolver.resolveFlipY(null, null, null);
             logger.info("Using flip settings from preferences (no scanner config): flipX={}, flipY={}", flipX, flipY);
         }
         // Override with entry metadata if available
@@ -633,9 +633,9 @@ public class MicroscopeAlignmentWorkflow {
                     if (configFlipY != null) flipY = configFlipY;
                     logger.info("Using flip settings from scanner config: flipX={}, flipY={}", flipX, flipY);
                 } catch (Exception e) {
-                    // Fall back to preference
-                    flipX = QPPreferenceDialog.getFlipMacroXProperty();
-                    flipY = QPPreferenceDialog.getFlipMacroYProperty();
+                    // Fall back via FlipResolver (preset/detector/global pref chain).
+                    flipX = FlipResolver.resolveFlipX(null, null, null);
+                    flipY = FlipResolver.resolveFlipY(null, null, null);
                     logger.info(
                             "Using flip settings from preferences (no scanner config): flipX={}, flipY={}",
                             flipX,
@@ -829,9 +829,9 @@ public class MicroscopeAlignmentWorkflow {
                 if (configFlipY != null) flipY = configFlipY;
                 logger.info("Using flip settings from scanner config: flipX={}, flipY={}", flipX, flipY);
             } catch (Exception e) {
-                // Fall back to preference
-                flipX = QPPreferenceDialog.getFlipMacroXProperty();
-                flipY = QPPreferenceDialog.getFlipMacroYProperty();
+                // Fall back via FlipResolver (preset/detector/global pref chain).
+                flipX = FlipResolver.resolveFlipX(null, null, null);
+                flipY = FlipResolver.resolveFlipY(null, null, null);
                 logger.info(
                         "Using flip settings from preferences (no scanner config): flipX={}, flipY={}", flipX, flipY);
             }
@@ -1034,8 +1034,8 @@ public class MicroscopeAlignmentWorkflow {
             if (configFlipX != null) flipX = configFlipX;
             if (configFlipY != null) flipY = configFlipY;
         } catch (Exception e) {
-            flipX = QPPreferenceDialog.getFlipMacroXProperty();
-            flipY = QPPreferenceDialog.getFlipMacroYProperty();
+            flipX = FlipResolver.resolveFlipX(null, null, null);
+            flipY = FlipResolver.resolveFlipY(null, null, null);
         }
         logger.info(
                 "Creating alignment tiles: opticalFlip=({}, {}), stageInverted=({}, {})",
@@ -1187,17 +1187,26 @@ public class MicroscopeAlignmentWorkflow {
             Rectangle dataBounds = macroImageResults.dataBounds();
             if (dataBounds == null) {
                 // Attempt to detect bounds now
-                String scriptDir = new File(QPPreferenceDialog.getTissueDetectionScriptProperty()).getParent();
+                String tissueScript = QPPreferenceDialog.getTissueDetectionScriptProperty();
+                String scriptDir = (tissueScript != null && !tissueScript.isBlank())
+                        ? new File(tissueScript).getParent()
+                        : null;
                 if (scriptDir != null) {
                     logger.info("Detecting data bounds...");
+                    final String scriptDirFinal = scriptDir;
                     dataBounds = UIFunctions.executeWithProgress(
                             "Processing Image",
                             "Detecting image boundaries...\nAnalyzing image data - this may take a moment for large images.",
-                            () -> ImageProcessing.detectOcus40DataBounds(gui, scriptDir));
+                            () -> ImageProcessing.detectOcus40DataBounds(gui, scriptDirFinal));
+                } else {
+                    logger.warn("Tissue detection script preference is not set; cannot auto-detect data bounds.");
                 }
 
                 if (dataBounds == null) {
-                    throw new IllegalStateException("Cannot create transform without data bounds detection");
+                    throw new IllegalStateException(
+                            "Cannot create transform without data bounds detection. "
+                                    + "Set the tissue detection script in QPSC preferences, or ensure macro analysis "
+                                    + "produced data bounds before reaching alignment save.");
                 }
             }
 
@@ -1316,6 +1325,12 @@ public class MicroscopeAlignmentWorkflow {
                     macroImageResults.macroHeight(),
                     isValid ? "PASSED" : "WARNING");
 
+            // Capture the flip state that was active during this alignment so the preset can
+            // be reloaded and reapplied without depending on the global preference. Flip is a
+            // (sourceScanner, targetMicroscope) pair property -- see FlipResolver.
+            Boolean flipMacroXAtSave = QPPreferenceDialog.getFlipMacroXProperty();
+            Boolean flipMacroYAtSave = QPPreferenceDialog.getFlipMacroYProperty();
+
             AffineTransformManager.TransformPreset preset = new AffineTransformManager.TransformPreset(
                     transformName,
                     MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty())
@@ -1325,7 +1340,10 @@ public class MicroscopeAlignmentWorkflow {
                     description,
                     config.greenBoxParams(),
                     1.0, // zScale default (no Z scaling)
-                    0.0); // zOffset default (no Z offset)
+                    0.0, // zOffset default (no Z offset)
+                    flipMacroXAtSave,
+                    flipMacroYAtSave,
+                    selectedScanner);
 
             transformManager.savePreset(preset);
             PersistentPreferences.setSavedTransformName(transformName);

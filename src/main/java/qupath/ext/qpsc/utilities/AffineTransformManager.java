@@ -66,18 +66,62 @@ public class AffineTransformManager {
         private final Double zScale;
         /** Z offset for 3D transforms (null = default 0.0). Wrapper type for Gson backward compat. */
         private final Double zOffset;
+        /** Macro-image X flip captured at alignment time (null = old preset, fall back to global pref). */
+        private final Boolean flipMacroX;
+        /** Macro-image Y flip captured at alignment time (null = old preset, fall back to global pref). */
+        private final Boolean flipMacroY;
+        /** Source scanner that produced the macro image, e.g. "Ocus40" (null = old preset). */
+        private final String sourceScanner;
 
         /**
-         * Full constructor with all parameters including Z scale and offset for 3D transform support.
+         * Full constructor including per-pair flip state and source scanner.
+         *
+         * <p>Macro flip is a property of the (sourceScanner -> microscope) pair: the same scanner
+         * may need different X/Y flips for different target microscopes. Capturing the flip with
+         * the preset means the alignment is reproducible without relying on the global preference.
          *
          * @param name Preset name
-         * @param microscope Microscope identifier
+         * @param microscope Target microscope identifier
          * @param mountingMethod Mounting/scanner method
          * @param transform 2D affine transform
          * @param notes Free-text notes
          * @param greenBoxParams Green box detection parameters
          * @param zScale Z scale factor (1.0 = no Z scaling)
          * @param zOffset Z offset in micrometers (0.0 = no offset)
+         * @param flipMacroX Macro X flip used during this alignment (null = unrecorded)
+         * @param flipMacroY Macro Y flip used during this alignment (null = unrecorded)
+         * @param sourceScanner Source scanner (e.g. "Ocus40"); null when not captured
+         */
+        public TransformPreset(
+                String name,
+                String microscope,
+                String mountingMethod,
+                AffineTransform transform,
+                String notes,
+                GreenBoxDetector.DetectionParams greenBoxParams,
+                double zScale,
+                double zOffset,
+                Boolean flipMacroX,
+                Boolean flipMacroY,
+                String sourceScanner) {
+            this.name = name;
+            this.microscope = microscope;
+            this.mountingMethod = mountingMethod;
+            this.transform = new AffineTransform(transform);
+            this.createdDate = new Date();
+            this.notes = notes;
+            this.greenBoxParams = greenBoxParams;
+            this.zScale = (zScale == 1.0) ? null : zScale; // null = default 1.0 (omit from JSON)
+            this.zOffset = (zOffset == 0.0) ? null : zOffset; // null = default 0.0 (omit from JSON)
+            this.flipMacroX = flipMacroX;
+            this.flipMacroY = flipMacroY;
+            this.sourceScanner = sourceScanner;
+        }
+
+        /**
+         * Backward-compatible constructor for callers that have not yet been migrated to record
+         * per-pair flip state. Stores null for flipMacroX, flipMacroY, sourceScanner -- callers
+         * of {@link FlipResolver} will fall through to detector config / global pref.
          */
         public TransformPreset(
                 String name,
@@ -88,15 +132,8 @@ public class AffineTransformManager {
                 GreenBoxDetector.DetectionParams greenBoxParams,
                 double zScale,
                 double zOffset) {
-            this.name = name;
-            this.microscope = microscope;
-            this.mountingMethod = mountingMethod;
-            this.transform = new AffineTransform(transform);
-            this.createdDate = new Date();
-            this.notes = notes;
-            this.greenBoxParams = greenBoxParams;
-            this.zScale = (zScale == 1.0) ? null : zScale; // null = default 1.0 (omit from JSON)
-            this.zOffset = (zOffset == 0.0) ? null : zOffset; // null = default 0.0 (omit from JSON)
+            this(name, microscope, mountingMethod, transform, notes, greenBoxParams,
+                    zScale, zOffset, null, null, null);
         }
 
         // Getters
@@ -141,6 +178,34 @@ public class AffineTransformManager {
         /** Whether this preset has non-default Z parameters. */
         public boolean has3DTransform() {
             return getZScale() != 1.0 || getZOffset() != 0.0;
+        }
+
+        /**
+         * Macro X flip captured when this preset was saved. {@code null} for presets saved before
+         * per-pair flip support was introduced -- callers should fall back to detector config /
+         * global pref via {@link FlipResolver}.
+         */
+        public Boolean getFlipMacroX() {
+            return flipMacroX;
+        }
+
+        /** Macro Y flip captured when this preset was saved. See {@link #getFlipMacroX()}. */
+        public Boolean getFlipMacroY() {
+            return flipMacroY;
+        }
+
+        /**
+         * Source scanner that produced the macro image (e.g. "Ocus40"), captured when this preset
+         * was saved. {@code null} for old presets; in that case the scanner is encoded only in the
+         * preset name.
+         */
+        public String getSourceScanner() {
+            return sourceScanner;
+        }
+
+        /** True when this preset has captured per-pair flip values (not an older preset). */
+        public boolean hasFlipState() {
+            return flipMacroX != null && flipMacroY != null;
         }
 
         /** Creates an {@link AffineTransform3D} combining the 2D XY transform with Z scale/offset. */
@@ -221,11 +286,18 @@ public class AffineTransformManager {
             var type = new TypeToken<Map<String, TransformPreset>>() {}.getType();
             Map<String, TransformPreset> loaded = gson.fromJson(json, type);
 
-            // Verify all presets have green box params
+            // Verify all presets have green box params; warn about presets lacking per-pair flip
+            // state so users know to re-save them with the current flip values captured.
             if (loaded != null) {
                 loaded.forEach((key, preset) -> {
                     if (preset.getGreenBoxParams() == null) {
                         logger.warn("Transform preset {} is missing green box params", key);
+                    }
+                    if (!preset.hasFlipState()) {
+                        logger.warn(
+                                "Transform preset '{}' was saved before per-pair flip support; "
+                                        + "using global pref for flip until re-saved.",
+                                key);
                     }
                 });
             }

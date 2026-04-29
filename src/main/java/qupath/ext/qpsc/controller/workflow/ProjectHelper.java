@@ -14,6 +14,7 @@ import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AnnotationPreservationService;
+import qupath.ext.qpsc.utilities.FlipResolver;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
@@ -133,8 +134,10 @@ public class ProjectHelper {
         Platform.runLater(() -> {
             try {
                 Map<String, Object> projectDetails;
-                boolean flippedX = QPPreferenceDialog.getFlipMacroXProperty();
-                boolean flippedY = QPPreferenceDialog.getFlipMacroYProperty();
+                // Project setup runs before any image entry exists, so resolver falls through to
+                // detector config (if known) and finally the global pref.
+                boolean flippedX = FlipResolver.resolveFlipX(null, null, null);
+                boolean flippedY = FlipResolver.resolveFlipY(null, null, null);
 
                 logger.debug("Flip settings - X: {}, Y: {}", flippedX, flippedY);
 

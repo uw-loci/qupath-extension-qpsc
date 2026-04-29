@@ -53,6 +53,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.VirtualJoystick;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
+import qupath.ext.qpsc.utilities.FlipResolver;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
@@ -2979,8 +2980,10 @@ public class StageControlPanel extends VBox {
                     if (currentEntry != null) {
                         boolean imageFlipX = ImageMetadataManager.isFlippedX(currentEntry);
                         boolean imageFlipY = ImageMetadataManager.isFlippedY(currentEntry);
-                        boolean prefFlipX = QPPreferenceDialog.getFlipMacroXProperty();
-                        boolean prefFlipY = QPPreferenceDialog.getFlipMacroYProperty();
+                        // Resolve "what the alignment was calibrated with" via FlipResolver. No
+                        // preset/detector context here -- equivalent to global pref today.
+                        boolean prefFlipX = FlipResolver.resolveFlipX(null, null, null);
+                        boolean prefFlipY = FlipResolver.resolveFlipY(null, null, null);
 
                         int imgWidth = gui.getImageData().getServer().getWidth();
                         int imgHeight = gui.getImageData().getServer().getHeight();

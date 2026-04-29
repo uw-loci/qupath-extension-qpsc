@@ -22,7 +22,7 @@ import javafx.scene.text.Text;
 import javafx.scene.text.TextAlignment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.FlipResolver;
 
 /**
  * Stage map visualization using WritableImage + Shape nodes.
@@ -997,8 +997,10 @@ public class StageMapCanvas extends StackPane {
         this.flipsApplied = applied;
         // Use JavaFX scale transforms to flip the rendering
         // The flip preferences determine which axes to flip
-        boolean flipX = applied && QPPreferenceDialog.getFlipMacroXProperty();
-        boolean flipY = applied && QPPreferenceDialog.getFlipMacroYProperty();
+        // The canvas itself does not know which preset is active in StageMapWindow; the parent
+        // window already calls setFlipsApplied based on its own resolver. Resolve via global pref.
+        boolean flipX = applied && FlipResolver.resolveFlipX(null, null, null);
+        boolean flipY = applied && FlipResolver.resolveFlipY(null, null, null);
         // Flip the entire StackPane so all child layers flip together
         this.setScaleX(flipX ? -1 : 1);
         this.setScaleY(flipY ? -1 : 1);

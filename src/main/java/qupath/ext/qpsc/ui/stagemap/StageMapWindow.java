@@ -29,6 +29,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
+import qupath.ext.qpsc.utilities.FlipResolver;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -403,9 +404,10 @@ public class StageMapWindow {
                 + "    to the Live Viewer\n\n"
                 + "Reads flip settings from scanner configuration."));
 
-        // Read initial state from preferences
-        boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
-        boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+        // Read initial state via FlipResolver. presetComboBox is not yet populated at this point
+        // in construction, so we pass null preset; resolver falls through to global pref.
+        boolean flipX = FlipResolver.resolveFlipX(null, null, null);
+        boolean flipY = FlipResolver.resolveFlipY(null, null, null);
         applyFlipsCheckbox.setSelected(flipX || flipY);
 
         applyFlipsCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
@@ -531,6 +533,16 @@ public class StageMapWindow {
             MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
             configManager.reload(configPath);
 
+            // Tell the Python server to re-read the YAML too, so its
+            // stage limits and other config stay in sync with Java.
+            boolean serverReconfigOk = true;
+            try {
+                MicroscopeController.getInstance().sendReconfig();
+            } catch (Exception reconfigEx) {
+                serverReconfigOk = false;
+                logger.warn("Server config reload failed (non-fatal): {}", reconfigEx.getMessage());
+            }
+
             // Reload insert registry
             StageInsertRegistry.loadFromConfig(configManager);
 
@@ -555,8 +567,13 @@ public class StageMapWindow {
                 applyMacroOverlayToCanvas();
             }
 
-            statusLabel.setText("Config reloaded");
-            statusLabel.setStyle("-fx-text-fill: #6b6;");
+            if (serverReconfigOk) {
+                statusLabel.setText("Config reloaded");
+                statusLabel.setStyle("-fx-text-fill: #6b6;");
+            } else {
+                statusLabel.setText("Config reloaded (server reconfig failed)");
+                statusLabel.setStyle("-fx-text-fill: #f66;");
+            }
             logger.info("Configuration reloaded from: {}", configPath);
 
         } catch (Exception e) {
@@ -854,8 +871,9 @@ public class StageMapWindow {
      * Must be called after stage.show() so the StackPane scale transforms take effect.
      */
     private void applyInitialFlipState() {
-        boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
-        boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+        AffineTransformManager.TransformPreset activePreset = presetComboBox != null ? presetComboBox.getValue() : null;
+        boolean flipX = FlipResolver.resolveFlipX(null, activePreset, null);
+        boolean flipY = FlipResolver.resolveFlipY(null, activePreset, null);
         if ((flipX || flipY) && canvas != null) {
             canvas.setFlipsApplied(true);
             logger.info("Applied initial flip state: flipX={}, flipY={}", flipX, flipY);
@@ -1391,8 +1409,9 @@ public class StageMapWindow {
         //   - If BOTH are set, they cancel out (double-flip = no flip).
         // On the PPM/single_h insert both axes are inverted AND both optical flips are set,
         // so XOR gives false for both -- equivalent to 180-degree rotation already handled.
-        boolean prefFlipX = QPPreferenceDialog.getFlipMacroXProperty();
-        boolean prefFlipY = QPPreferenceDialog.getFlipMacroYProperty();
+        AffineTransformManager.TransformPreset activePreset = presetComboBox != null ? presetComboBox.getValue() : null;
+        boolean prefFlipX = FlipResolver.resolveFlipX(null, activePreset, null);
+        boolean prefFlipY = FlipResolver.resolveFlipY(null, activePreset, null);
         StageInsert insert = insertComboBox.getValue();
         boolean axisInvertedX = insert != null && insert.isXAxisInverted();
         boolean axisInvertedY = insert != null && insert.isYAxisInverted();

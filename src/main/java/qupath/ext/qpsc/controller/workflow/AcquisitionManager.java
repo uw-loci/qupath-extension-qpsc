@@ -43,6 +43,7 @@ import qupath.ext.qpsc.ui.SaturationSummaryDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.utilities.AcquisitionSpaceCheck;
+import qupath.ext.qpsc.utilities.FlipResolver;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.LiveTileMeasurementPoller;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -1676,30 +1677,13 @@ public class AcquisitionManager {
     }
 
     /**
-     * Gets the flip-X status for the current acquisition context.
-     *
-     * <p>Fallback chain:
-     * <ol>
-     *   <li>Cached parent entry metadata (viewer-independent)</li>
-     *   <li>Per-detector config from resources_LOCI.yml (hardware-specific optical flip)</li>
-     *   <li>Global preference (legacy fallback for unconfigured systems)</li>
-     * </ol>
+     * Gets the flip-X status for the current acquisition context. Delegates to
+     * {@link FlipResolver}, which composes per-image metadata, the active preset (if any),
+     * the detector YAML config, and the global preference.
      */
     private boolean getParentFlipX() {
-        // 1. Try cached parent entry (viewer-independent, stable during acquisition)
-        if (parentEntry != null) {
-            return ImageMetadataManager.isFlippedX(parentEntry);
-        }
-        // 2. Try per-detector config (hardware optical flip)
         String detectorId = state.sample != null ? state.sample.detector() : null;
-        if (detectorId != null) {
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-            if (mgr != null) {
-                return mgr.getDetectorFlipX(detectorId);
-            }
-        }
-        // 3. Fall back to global preference
-        return QPPreferenceDialog.getFlipMacroXProperty();
+        return FlipResolver.resolveFlipX(parentEntry, null, detectorId);
     }
 
     /**
@@ -1708,20 +1692,8 @@ public class AcquisitionManager {
      * @see #getParentFlipX()
      */
     private boolean getParentFlipY() {
-        // 1. Try cached parent entry (viewer-independent, stable during acquisition)
-        if (parentEntry != null) {
-            return ImageMetadataManager.isFlippedY(parentEntry);
-        }
-        // 2. Try per-detector config
         String detectorId = state.sample != null ? state.sample.detector() : null;
-        if (detectorId != null) {
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-            if (mgr != null) {
-                return mgr.getDetectorFlipY(detectorId);
-            }
-        }
-        // 3. Fall back to global preference
-        return QPPreferenceDialog.getFlipMacroYProperty();
+        return FlipResolver.resolveFlipY(parentEntry, null, detectorId);
     }
 
     /**

@@ -430,9 +430,11 @@ public class ImageMetadataManager {
             return false;
         }
 
-        // Get flip requirements from QPPreferenceDialog
-        boolean requiresFlipX = QPPreferenceDialog.getFlipMacroXProperty();
-        boolean requiresFlipY = QPPreferenceDialog.getFlipMacroYProperty();
+        // Resolve required flip via FlipResolver. Pass null for entry so the resolver does NOT
+        // short-circuit to the entry's own metadata (that would make validation tautological);
+        // we want the system-expected flip from preset/detector/global pref to compare against.
+        boolean requiresFlipX = FlipResolver.resolveFlipX(null, null, null);
+        boolean requiresFlipY = FlipResolver.resolveFlipY(null, null, null);
 
         // If no flipping required, all images are valid
         if (!requiresFlipX && !requiresFlipY) {

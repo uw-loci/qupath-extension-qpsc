@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.utilities.FlipResolver;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
@@ -196,10 +197,12 @@ public class SingleTileRefinement {
             flipY = ImageMetadataManager.isFlippedY(currentEntry);
             logger.debug("Using flip status from image metadata: flipX={}, flipY={}", flipX, flipY);
         } else {
-            // Fallback to global preferences if no image entry available
-            flipX = QPPreferenceDialog.getFlipMacroXProperty();
-            flipY = QPPreferenceDialog.getFlipMacroYProperty();
-            logger.debug("No image entry, using global preferences: flipX={}, flipY={}", flipX, flipY);
+            // No image entry: defer to FlipResolver (preset/detector/global pref chain).
+            @SuppressWarnings("unchecked")
+            ProjectImageEntry<java.awt.image.BufferedImage> nullEntry = null;
+            flipX = FlipResolver.resolveFlipX(nullEntry, null, null);
+            flipY = FlipResolver.resolveFlipY(nullEntry, null, null);
+            logger.debug("No image entry, resolved via FlipResolver: flipX={}, flipY={}", flipX, flipY);
         }
 
         logger.info(
@@ -237,9 +240,13 @@ public class SingleTileRefinement {
                 || (currentEntry != null && currentEntry.getImageName().startsWith(baseImageName + "."));
 
         if (!currentImageIsFlipped && isBaseImage) {
-            // Viewing unflipped original WSI -- need flip correction for the transform
-            boolean prefFlipX = QPPreferenceDialog.getFlipMacroXProperty();
-            boolean prefFlipY = QPPreferenceDialog.getFlipMacroYProperty();
+            // Viewing unflipped original WSI -- need flip correction for the transform.
+            // Use FlipResolver so future work can thread an active preset; behaves identically
+            // to the global pref today since preset/detector aren't in scope here.
+            @SuppressWarnings("unchecked")
+            ProjectImageEntry<java.awt.image.BufferedImage> nullEntry = null;
+            boolean prefFlipX = FlipResolver.resolveFlipX(nullEntry, null, null);
+            boolean prefFlipY = FlipResolver.resolveFlipY(nullEntry, null, null);
             if (prefFlipX) {
                 correctedCoords[0] -= frameWidth;
                 logger.debug("Applied flipX correction: X {} -> {}", tileCoords[0], correctedCoords[0]);

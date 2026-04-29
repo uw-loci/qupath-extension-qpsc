@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.FlipResolver;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.GreenBoxDetector;
@@ -216,9 +217,10 @@ public class MacroImageController {
         // Enable/disable green box detection
         CheckBox enableGreenBox = new CheckBox("Use green box detection for initial positioning");
         enableGreenBox.setSelected(true);
-        // Get flip settings for display
-        boolean flipX = QPPreferenceDialog.getFlipMacroXProperty();
-        boolean flipY = QPPreferenceDialog.getFlipMacroYProperty();
+        // Get flip settings for display via FlipResolver. The alignment dialog runs before any
+        // preset is selected for this image, so resolver falls through to detector/global pref.
+        boolean flipX = FlipResolver.resolveFlipX(null, null, null);
+        boolean flipY = FlipResolver.resolveFlipY(null, null, null);
 
         // Detection parameters - CHANGED TO MULTI-COLUMN LAYOUT
         GridPane paramsGrid = new GridPane();
@@ -898,14 +900,28 @@ public class MacroImageController {
         detailsArea.setPrefRowCount(4);
         detailsArea.setWrapText(true);
 
-        // Update details when selection changes
+        // Update details when selection changes; surface the captured flip state so the user
+        // can confirm the preset matches the (source-scanner -> target-microscope) pair they
+        // expect. Older presets without flip state show "(not recorded)" so it's obvious.
         transformCombo.getSelectionModel().selectedItemProperty().addListener((obs, old, preset) -> {
             if (preset != null) {
+                String flipDescription;
+                if (preset.hasFlipState()) {
+                    flipDescription = String.format(
+                            "X=%s, Y=%s", preset.getFlipMacroX(), preset.getFlipMacroY());
+                } else {
+                    flipDescription = "(not recorded; falls back to global pref)";
+                }
+                String scannerLine = preset.getSourceScanner() != null
+                        ? "Source scanner: " + preset.getSourceScanner() + "\n"
+                        : "";
                 detailsArea.setText(String.format(
-                        "Microscope: %s\nMounting: %s\nCreated: %s\nNotes: %s",
+                        "Microscope: %s\nMounting: %s\n%sCreated: %s\nMacro flip: %s\nNotes: %s",
                         preset.getMicroscope(),
                         preset.getMountingMethod(),
+                        scannerLine,
                         preset.getCreatedDate(),
+                        flipDescription,
                         preset.getNotes()));
             } else {
                 detailsArea.clear();

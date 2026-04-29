@@ -206,18 +206,17 @@ public class QPPreferenceDialog {
         items.add(new PropertyItemBuilder<>(flipMacroXProperty, Boolean.class)
                 .name("Flip macro image X")
                 .category(CATEGORY)
-                .description("Flip macro/overview image horizontally for coordinate alignment. "
-                        + "For per-detector optical flip, configure flip_x in resources_LOCI.yml. "
-                        + "This setting applies to overview images from slide scanners and serves "
-                        + "as a fallback when detector-specific flip is not configured.")
+                .description("Default macro X flip used as a seed when no per-pair alignment preset "
+                        + "applies. Macro flip is properly a property of the (source scanner -> target "
+                        + "microscope) pair: a saved alignment preset captures the flip used at "
+                        + "alignment time, and that preset value takes priority over this preference. "
+                        + "Per-detector optical flip lives in resources_LOCI.yml (flip_x).")
                 .build());
         items.add(new PropertyItemBuilder<>(flipMacroYProperty, Boolean.class)
                 .name("Flip macro image Y")
                 .category(CATEGORY)
-                .description("Flip macro/overview image vertically for coordinate alignment. "
-                        + "For per-detector optical flip, configure flip_y in resources_LOCI.yml. "
-                        + "This setting applies to overview images from slide scanners and serves "
-                        + "as a fallback when detector-specific flip is not configured.")
+                .description("Default macro Y flip used as a seed when no per-pair alignment preset "
+                        + "applies. See \"Flip macro image X\" for the full priority order.")
                 .build());
         items.add(new PropertyItemBuilder<>(stageInvertedXProperty, Boolean.class)
                 .name("Inverted X stage")
