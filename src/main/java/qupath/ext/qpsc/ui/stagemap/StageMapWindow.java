@@ -67,7 +67,19 @@ public class StageMapWindow {
     private Stage stage;
     private StageMapCanvas canvas;
     private ComboBox<StageInsert> insertComboBox;
-    private ComboBox<AffineTransformManager.TransformPreset> presetComboBox;
+    /**
+     * Source-microscope dropdown. Lists distinct source scanners that have a saved alignment
+     * preset for the current target microscope. The selected source is what drives macro overlay
+     * positioning and Apply-Flips orientation; we look up the most-recent matching preset under
+     * the hood and store it in {@link #activePreset}.
+     */
+    private ComboBox<String> sourceComboBox;
+    /** Active preset resolved from {sourceComboBox value, current target microscope}. */
+    private AffineTransformManager.TransformPreset activePreset;
+    /** Suppresses side effects (metadata write, persistent pref) when setting source programmatically. */
+    private boolean suppressSourceSelectionWrite = false;
+    /** Apply Flips checkbox -- promoted to a field so init/source-change paths can sync its state. */
+    private CheckBox applyFlipsCheckbox;
     private Label positionLabel;
     private Label targetLabel;
     private Label statusLabel;
@@ -281,40 +293,31 @@ public class StageMapWindow {
             updateMovementWarning();
         });
 
-        // Preset transform selector -- selects which scanner-to-stage alignment to use for macro overlay
-        Label presetLabel = new Label("Preset:");
+        // Source microscope/scanner selector. Lists distinct source scanners that have an
+        // alignment preset for the current target microscope. The dropdown drives macro overlay
+        // orientation and the Apply-Flips toggle; the matching preset is resolved internally.
+        Label presetLabel = new Label("Source:");
         presetLabel.setStyle("-fx-text-fill: #ccc;");
-        presetLabel.setTooltip(new Tooltip("Scanner-to-stage transform preset.\n"
-                + "Used to position the macro overlay on the map.\n"
-                + "Created during Microscope Alignment."));
+        presetLabel.setTooltip(new Tooltip("Source scanner that produced the macro image.\n"
+                + "Used to look up the matching alignment preset for\n"
+                + "this microscope, and to stamp source_microscope\n"
+                + "metadata on the open image when missing."));
 
-        presetComboBox = new ComboBox<>();
-        presetComboBox.setPrefWidth(180);
-        presetComboBox.setTooltip(new Tooltip("Select a saved scanner-to-stage transform preset.\n"
-                + "This determines how the macro overlay is positioned\n"
-                + "on the stage map.\n\n"
-                + "Presets are created during Microscope Alignment."));
-        presetComboBox.setCellFactory(lv -> new ListCell<>() {
-            @Override
-            protected void updateItem(AffineTransformManager.TransformPreset item, boolean empty) {
-                super.updateItem(item, empty);
-                setText(empty || item == null ? null : item.getName() + " (" + item.getMountingMethod() + ")");
+        sourceComboBox = new ComboBox<>();
+        sourceComboBox.setPrefWidth(180);
+        sourceComboBox.setTooltip(new Tooltip("Source scanner that produced the macro image.\n"
+                + "Selecting one resolves to the most recent alignment\n"
+                + "preset for (source -> this microscope) and uses it for\n"
+                + "overlay placement and flip orientation."));
+        sourceComboBox.setOnAction(e -> {
+            if (suppressSourceSelectionWrite) {
+                return;
             }
-        });
-        presetComboBox.setButtonCell(new ListCell<>() {
-            @Override
-            protected void updateItem(AffineTransformManager.TransformPreset item, boolean empty) {
-                super.updateItem(item, empty);
-                setText(empty || item == null ? null : item.getName() + " (" + item.getMountingMethod() + ")");
+            String selected = sourceComboBox.getValue();
+            if (selected == null || selected.isEmpty()) {
+                return;
             }
-        });
-        presetComboBox.setOnAction(e -> {
-            AffineTransformManager.TransformPreset selected = presetComboBox.getValue();
-            if (selected != null) {
-                PersistentPreferences.setSavedTransformName(selected.getName());
-                logger.info("Stage Map preset changed to: '{}' ({})", selected.getName(), selected.getMountingMethod());
-                checkMacroOverlayAvailability();
-            }
+            applySourceSelection(selected, /* writeMetadata */ true);
         });
 
         // Movement direction warning label - shows when Live View controls move opposite to expected
@@ -391,7 +394,7 @@ public class StageMapWindow {
         });
 
         // Apply Flips checkbox -- flips the map, overlay, and coordinate system
-        CheckBox applyFlipsCheckbox = new CheckBox("Apply Flips");
+        applyFlipsCheckbox = new CheckBox("Apply Flips");
         applyFlipsCheckbox.setStyle("-fx-text-fill: #C62828; -fx-font-weight: bold; "
                 + "-fx-border-color: #C62828; -fx-border-width: 1; -fx-border-radius: 2; "
                 + "-fx-padding: 2 4;");
@@ -430,7 +433,7 @@ public class StageMapWindow {
                         insertLabel,
                         insertComboBox,
                         presetLabel,
-                        presetComboBox,
+                        sourceComboBox,
                         spacer,
                         applyFlipsCheckbox,
                         macroOverlayCheckbox,
@@ -800,72 +803,209 @@ public class StageMapWindow {
     }
 
     /**
-     * Loads transform presets for the current microscope into the preset ComboBox.
-     * Filters to show only presets matching the configured microscope name.
-     * Restores the previously selected preset from preferences if available.
+     * Populates the Source dropdown with the distinct source scanners that have at least one
+     * alignment preset for the current target microscope. Tries (in order) the open entry's
+     * {@code source_microscope} metadata, then the persistent default, then the first listed
+     * source as the initial selection.
      */
     private void loadTransformPresets() {
-        if (presetComboBox == null) return;
+        if (sourceComboBox == null) return;
 
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            logger.info("Source dropdown: loading from configPath='{}'", configPath);
             if (configPath == null || configPath.isEmpty()) {
-                logger.info("No microscope config - preset selector disabled");
-                presetComboBox.setDisable(true);
-                presetComboBox.setTooltip(new Tooltip(
+                logger.info("Source dropdown: no microscope config -- disabled");
+                sourceComboBox.setDisable(true);
+                sourceComboBox.setTooltip(new Tooltip(
                         "No microscope configuration loaded.\n" + "Set a configuration file in QuPath preferences."));
                 return;
             }
 
-            // Get microscope name for filtering
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-            String microscopeName = (mgr != null) ? mgr.getMicroscopeName() : null;
+            String targetMicroscope = (mgr != null) ? mgr.getMicroscopeName() : null;
+            logger.info("Source dropdown: target microscope = '{}'", targetMicroscope);
 
-            // Load transforms
-            AffineTransformManager transformManager = new AffineTransformManager(new File(configPath).getParent());
+            File configDir = new File(configPath).getParentFile();
+            AffineTransformManager transformManager = new AffineTransformManager(configDir.getAbsolutePath());
 
-            java.util.List<AffineTransformManager.TransformPreset> presets;
-            if (microscopeName != null && !"Unknown".equals(microscopeName)) {
-                presets = transformManager.getTransformsForMicroscope(microscopeName);
-                logger.info("Loaded {} presets for microscope '{}'", presets.size(), microscopeName);
+            List<String> sources;
+            if (targetMicroscope != null && !"Unknown".equals(targetMicroscope)) {
+                sources = transformManager.getDistinctSourceScannersForMicroscope(targetMicroscope);
             } else {
-                presets = new java.util.ArrayList<>(transformManager.getAllTransforms());
-                presets.sort(java.util.Comparator.comparing(AffineTransformManager.TransformPreset::getName));
-                logger.info("No microscope name available - showing all {} presets", presets.size());
+                sources = transformManager.getAllTransforms().stream()
+                        .map(AffineTransformManager.TransformPreset::getSourceScanner)
+                        .filter(s -> s != null && !s.isEmpty())
+                        .distinct()
+                        .sorted()
+                        .toList();
             }
+            logger.info(
+                    "Source dropdown: {} scanner(s) available for target '{}': {}",
+                    sources.size(),
+                    targetMicroscope,
+                    sources);
 
-            if (presets.isEmpty()) {
-                presetComboBox.setDisable(true);
-                presetComboBox.setTooltip(new Tooltip("No transform presets available.\n"
-                        + "Create one using Microscope Alignment\n"
-                        + "in the Existing Image workflow."));
+            if (sources.isEmpty()) {
+                sourceComboBox.setDisable(true);
+                sourceComboBox.setTooltip(new Tooltip("No source scanners with an alignment for this microscope.\n"
+                        + "Create one via Microscope Alignment workflow."));
                 return;
             }
 
-            presetComboBox.setDisable(false);
-            presetComboBox.setItems(FXCollections.observableArrayList(presets));
-
-            // Restore saved selection
-            String savedName = PersistentPreferences.getSavedTransformName();
-            if (savedName != null && !savedName.isEmpty()) {
-                presets.stream()
-                        .filter(p -> p.getName().equals(savedName))
-                        .findFirst()
-                        .ifPresent(presetComboBox::setValue);
+            sourceComboBox.setDisable(false);
+            suppressSourceSelectionWrite = true;
+            try {
+                sourceComboBox.setItems(FXCollections.observableArrayList(sources));
+            } finally {
+                suppressSourceSelectionWrite = false;
             }
 
-            // If nothing selected but presets exist, select first
-            if (presetComboBox.getValue() == null && !presets.isEmpty()) {
-                presetComboBox.getSelectionModel().selectFirst();
-                AffineTransformManager.TransformPreset first = presetComboBox.getValue();
-                if (first != null) {
-                    PersistentPreferences.setSavedTransformName(first.getName());
-                    logger.info("Auto-selected first preset: '{}'", first.getName());
+            String initial = pickInitialSource(sources);
+            if (initial != null) {
+                applySourceSelection(initial, /* writeMetadata */ false);
+            }
+        } catch (Exception e) {
+            logger.error("Error loading source scanner list: {}", e.getMessage(), e);
+            sourceComboBox.setDisable(true);
+        }
+    }
+
+    /**
+     * Picks the source to show on dropdown init. Priority:
+     * <ol>
+     *   <li>{@code source_microscope} on the currently-open project entry</li>
+     *   <li>The persistent default ({@link PersistentPreferences#getSelectedScanner()})</li>
+     *   <li>First entry in {@code sources}</li>
+     * </ol>
+     */
+    private String pickInitialSource(List<String> sources) {
+        try {
+            QuPathGUI gui = QuPathGUI.getInstance();
+            if (gui != null && gui.getProject() != null && gui.getImageData() != null) {
+                @SuppressWarnings("unchecked")
+                Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+                ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+                if (entry != null) {
+                    String fromEntry = entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+                    if (fromEntry != null && sources.contains(fromEntry)) {
+                        return fromEntry;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        String fromPref = PersistentPreferences.getSelectedScanner();
+        if (fromPref != null && sources.contains(fromPref)) {
+            return fromPref;
+        }
+        return sources.isEmpty() ? null : sources.get(0);
+    }
+
+    /**
+     * Apply a source-microscope selection: update the dropdown value (suppressing recursion),
+     * resolve the matching preset, persist the default, optionally stamp metadata on the open
+     * entry, and refresh dependent UI.
+     *
+     * @param source        source scanner name (must be one of the dropdown items)
+     * @param writeMetadata when true, stamp {@code source_microscope} on the open entry and
+     *                      sync the project; when false, only update UI state (used during
+     *                      programmatic init / dropdown population)
+     */
+    private void applySourceSelection(String source, boolean writeMetadata) {
+        suppressSourceSelectionWrite = true;
+        try {
+            sourceComboBox.setValue(source);
+        } finally {
+            suppressSourceSelectionWrite = false;
+        }
+
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath != null && !configPath.isEmpty()) {
+                MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+                String target = (mgr != null) ? mgr.getMicroscopeName() : null;
+                AffineTransformManager mgr2 = new AffineTransformManager(new File(configPath).getParent());
+                activePreset = mgr2.getBestPresetForPair(source, target);
+                if (activePreset != null) {
+                    PersistentPreferences.setSavedTransformName(activePreset.getName());
                 }
             }
         } catch (Exception e) {
-            logger.error("Error loading transform presets: {}", e.getMessage(), e);
-            presetComboBox.setDisable(true);
+            logger.warn("Failed to resolve preset for source='{}': {}", source, e.getMessage());
+            activePreset = null;
+        }
+
+        if (writeMetadata) {
+            PersistentPreferences.setSelectedScanner(source);
+            try {
+                QuPathGUI gui = QuPathGUI.getInstance();
+                if (gui != null && gui.getProject() != null && gui.getImageData() != null) {
+                    @SuppressWarnings("unchecked")
+                    Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+                    ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+                    if (entry != null) {
+                        entry.getMetadata().put(ImageMetadataManager.SOURCE_MICROSCOPE, source);
+                        project.syncChanges();
+                        logger.info(
+                                "Stamped source_microscope='{}' on open entry '{}'", source, entry.getImageName());
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to stamp source_microscope on open entry: {}", e.getMessage());
+            }
+        }
+
+        logger.info(
+                "Source selection: '{}' -> preset '{}'",
+                source,
+                activePreset != null ? activePreset.getName() : "(none)");
+
+        boolean[] axes = resolveCurrentFlipAxes();
+        boolean shouldFlip = axes[0] || axes[1];
+        if (applyFlipsCheckbox != null) {
+            applyFlipsCheckbox.setSelected(shouldFlip);
+        }
+        if (canvas != null) {
+            canvas.setFlipsApplied(shouldFlip, axes[0], axes[1]);
+        }
+        checkMacroOverlayAvailability();
+    }
+
+    /**
+     * Called when the QuPath viewer image changes. Rule 2: if the new entry has
+     * {@code source_microscope} metadata, sync the dropdown to it (without re-writing).
+     * If it doesn't, and we have a persistent default, stamp the default onto the entry
+     * so subsequent reads are deterministic.
+     */
+    private void onOpenedImageChanged() {
+        if (sourceComboBox == null || sourceComboBox.isDisabled()) return;
+        try {
+            QuPathGUI gui = QuPathGUI.getInstance();
+            if (gui == null || gui.getProject() == null || gui.getImageData() == null) return;
+            @SuppressWarnings("unchecked")
+            Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+            ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+            if (entry == null) return;
+
+            String fromEntry = entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+            List<String> sources = sourceComboBox.getItems();
+
+            if (fromEntry != null && !fromEntry.isEmpty()) {
+                if (sources.contains(fromEntry)
+                        && !fromEntry.equals(sourceComboBox.getValue())) {
+                    applySourceSelection(fromEntry, /* writeMetadata */ false);
+                }
+                return;
+            }
+
+            // No source on the entry -- apply the persistent default and stamp it.
+            String defaultSource = PersistentPreferences.getSelectedScanner();
+            if (defaultSource != null && !defaultSource.isEmpty() && sources.contains(defaultSource)) {
+                applySourceSelection(defaultSource, /* writeMetadata */ true);
+            }
+        } catch (Exception e) {
+            logger.debug("onOpenedImageChanged: {}", e.getMessage());
         }
     }
 
@@ -875,9 +1015,15 @@ public class StageMapWindow {
      */
     private void applyInitialFlipState() {
         boolean[] axes = resolveCurrentFlipAxes();
-        if ((axes[0] || axes[1]) && canvas != null) {
-            canvas.setFlipsApplied(true, axes[0], axes[1]);
-            logger.info("Applied initial flip state: flipX={}, flipY={}", axes[0], axes[1]);
+        boolean shouldFlip = axes[0] || axes[1];
+        if (applyFlipsCheckbox != null) {
+            applyFlipsCheckbox.setSelected(shouldFlip);
+        }
+        if (canvas != null) {
+            canvas.setFlipsApplied(shouldFlip, axes[0], axes[1]);
+            if (shouldFlip) {
+                logger.info("Applied initial flip state: flipX={}, flipY={}", axes[0], axes[1]);
+            }
         }
     }
 
@@ -914,8 +1060,6 @@ public class StageMapWindow {
             logger.debug("Failed to look up open image entry for flip resolution: {}", e.getMessage());
         }
 
-        AffineTransformManager.TransformPreset activePreset =
-                presetComboBox != null ? presetComboBox.getValue() : null;
         if (activePreset != null && activePreset.hasFlipState()) {
             return new boolean[] {activePreset.getFlipMacroX(), activePreset.getFlipMacroY()};
         }
@@ -1211,6 +1355,7 @@ public class StageMapWindow {
         if (gui != null) {
             imageChangeListener = (obs, oldImage, newImage) -> {
                 logger.info("Image changed in QuPath viewer - rechecking macro overlay availability");
+                onOpenedImageChanged();
                 checkMacroOverlayAvailability();
             };
             gui.imageDataProperty().addListener(imageChangeListener);
@@ -1452,9 +1597,9 @@ public class StageMapWindow {
         //   - If BOTH are set, they cancel out (double-flip = no flip).
         // On the PPM/single_h insert both axes are inverted AND both optical flips are set,
         // so XOR gives false for both -- equivalent to 180-degree rotation already handled.
-        AffineTransformManager.TransformPreset activePreset = presetComboBox != null ? presetComboBox.getValue() : null;
-        boolean prefFlipX = FlipResolver.resolveFlipX(null, activePreset, null);
-        boolean prefFlipY = FlipResolver.resolveFlipY(null, activePreset, null);
+        boolean[] resolved = resolveCurrentFlipAxes();
+        boolean prefFlipX = resolved[0];
+        boolean prefFlipY = resolved[1];
         StageInsert insert = insertComboBox.getValue();
         boolean axisInvertedX = insert != null && insert.isXAxisInverted();
         boolean axisInvertedY = insert != null && insert.isYAxisInverted();

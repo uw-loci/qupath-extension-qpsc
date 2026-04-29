@@ -370,6 +370,43 @@ public class AffineTransformManager {
     }
 
     /**
+     * Distinct, sorted source-scanner names that have at least one preset whose target is
+     * {@code targetMicroscope}. Presets with no captured {@code sourceScanner} are excluded.
+     *
+     * @param targetMicroscope the target microscope (e.g. "PPM", "OWS3"); null returns empty
+     * @return source scanners (e.g. ["Ocus40", "ScanScope"]); never null
+     */
+    public List<String> getDistinctSourceScannersForMicroscope(String targetMicroscope) {
+        if (targetMicroscope == null) return List.of();
+        return transforms.values().stream()
+                .filter(t -> targetMicroscope.equals(t.getMicroscope()))
+                .map(TransformPreset::getSourceScanner)
+                .filter(s -> s != null && !s.isEmpty())
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    /**
+     * Returns the most-recently-created preset matching ({@code sourceScanner}, {@code targetMicroscope}),
+     * or {@code null} if none. When several presets exist for the pair, the latest {@code createdDate}
+     * wins -- this is the tiebreaker used by the Stage Map source selector.
+     *
+     * @param sourceScanner    source scanner name, e.g. "Ocus40"
+     * @param targetMicroscope target microscope name, e.g. "PPM"
+     * @return matching preset or null
+     */
+    public TransformPreset getBestPresetForPair(String sourceScanner, String targetMicroscope) {
+        if (sourceScanner == null || targetMicroscope == null) return null;
+        return transforms.values().stream()
+                .filter(t -> targetMicroscope.equals(t.getMicroscope())
+                        && sourceScanner.equals(t.getSourceScanner()))
+                .max(Comparator.comparing(
+                        TransformPreset::getCreatedDate, Comparator.nullsFirst(Comparator.naturalOrder())))
+                .orElse(null);
+    }
+
+    /**
      * Gets all available transform presets.
      *
      * @return Unmodifiable collection of all presets
