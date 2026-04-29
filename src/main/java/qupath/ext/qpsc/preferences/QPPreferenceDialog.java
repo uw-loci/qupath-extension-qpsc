@@ -49,10 +49,12 @@ public class QPPreferenceDialog {
 
     // --- Preference definitions ---
 
-    private static final BooleanProperty flipMacroXProperty =
-            PathPrefs.createPersistentPreference("isFlippedXProperty", false);
-    private static final BooleanProperty flipMacroYProperty =
-            PathPrefs.createPersistentPreference("isFlippedYProperty", false);
+    // NOTE: Macro flip is no longer a persistent preference. It is captured per-alignment via
+    // the orientation question shown at the start of the Microscope Alignment workflow, then
+    // saved into the AffineTransformPreset alongside the affine transform. Downstream reads go
+    // through FlipResolver, which composes per-image metadata, the active preset, the detector
+    // YAML config, and (as a safe default for fresh contexts) `false`.
+
     // Stage axis inversion: whether positive stage commands move opposite to the visual convention.
     // CRITICAL: The persisted key strings ("isInvertedXProperty" etc.) must NOT change --
     // they are stored in user config files and changing them would reset user preferences.
@@ -203,21 +205,9 @@ public class QPPreferenceDialog {
         ObservableList<org.controlsfx.control.PropertySheet.Item> items =
                 qupath.getPreferencePane().getPropertySheet().getItems();
 
-        items.add(new PropertyItemBuilder<>(flipMacroXProperty, Boolean.class)
-                .name("Flip macro image X")
-                .category(CATEGORY)
-                .description("Default macro X flip used as a seed when no per-pair alignment preset "
-                        + "applies. Macro flip is properly a property of the (source scanner -> target "
-                        + "microscope) pair: a saved alignment preset captures the flip used at "
-                        + "alignment time, and that preset value takes priority over this preference. "
-                        + "Per-detector optical flip lives in resources_LOCI.yml (flip_x).")
-                .build());
-        items.add(new PropertyItemBuilder<>(flipMacroYProperty, Boolean.class)
-                .name("Flip macro image Y")
-                .category(CATEGORY)
-                .description("Default macro Y flip used as a seed when no per-pair alignment preset "
-                        + "applies. See \"Flip macro image X\" for the full priority order.")
-                .build());
+        // Macro flip preferences removed in 0.4.x -- the flip is captured per-alignment in the
+        // orientation question at the start of the Microscope Alignment workflow and saved into
+        // the AffineTransformPreset.
         items.add(new PropertyItemBuilder<>(stageInvertedXProperty, Boolean.class)
                 .name("Inverted X stage")
                 .category(CATEGORY)
@@ -553,13 +543,7 @@ public class QPPreferenceDialog {
     }
 
     // --- Typed getters for use throughout your code ---
-    public static boolean getFlipMacroXProperty() {
-        return flipMacroXProperty.get();
-    }
-
-    public static boolean getFlipMacroYProperty() {
-        return flipMacroYProperty.get();
-    }
+    // (Flip macro X/Y getters removed -- read flip via FlipResolver instead.)
 
     /** Returns true if the stage X axis is inverted (stage inversion, not optical flip). */
     public static boolean getStageInvertedXProperty() {

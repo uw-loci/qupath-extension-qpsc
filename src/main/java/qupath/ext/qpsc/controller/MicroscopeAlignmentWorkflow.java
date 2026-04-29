@@ -126,37 +126,60 @@ public class MicroscopeAlignmentWorkflow {
                             defaultSampleName = projectDir.getName();
                         }
                     }
+                    final String defaultSampleNameFinal = defaultSampleName;
 
-                    // Continue with sample setup dialog...
-                    SampleSetupController.showDialog(defaultSampleName)
-                            .thenCompose(sampleSetup -> {
-                                if (sampleSetup == null) {
-                                    logger.info("User cancelled at sample setup");
-                                    return CompletableFuture.completedFuture(null);
+                    // First step: ask the user about macro orientation. Compare the macro to the
+                    // Live View and tick which axes need flipping. Seed from any prior preset for
+                    // the same (sourceScanner, targetMicroscope) pair when one exists.
+                    MacroOrientationDialog.MacroFlip seedFlip = FlipResolver.seedFlipForNewAlignment(
+                                    transformManager, selectedScanner, currentMicroscope)
+                            .map(arr -> new MacroOrientationDialog.MacroFlip(arr[0], arr[1]))
+                            .orElse(null);
+                    final BufferedImage macroPreview = macroImage;
+                    MacroOrientationDialog.show(macroPreview, seedFlip)
+                            .thenCompose(macroFlip -> {
+                                if (macroFlip == null) {
+                                    logger.info("User cancelled at orientation step");
+                                    return CompletableFuture.<CombinedConfig>completedFuture(null);
                                 }
+                                logger.info(
+                                        "Macro orientation captured: flipX={}, flipY={}",
+                                        macroFlip.flipX(),
+                                        macroFlip.flipY());
 
-                                // Now show alignment dialog with proper parameters
-                                return MacroImageController.showAlignmentDialog(
-                                                gui, transformManager, currentMicroscope)
-                                        .thenApply(alignConfig -> {
-                                            if (alignConfig == null) {
-                                                return null;
+                                // Continue with sample setup dialog...
+                                return SampleSetupController.showDialog(defaultSampleNameFinal)
+                                        .thenCompose(sampleSetup -> {
+                                            if (sampleSetup == null) {
+                                                logger.info("User cancelled at sample setup");
+                                                return CompletableFuture.<CombinedConfig>completedFuture(null);
                                             }
 
-                                            // Run detection NOW before project creation
-                                            MacroImageResults macroImageResults = performDetection(
-                                                    gui,
-                                                    alignConfig,
-                                                    selectedScanner,
-                                                    microscopeSelection.configPath());
+                                            // Now show alignment dialog with proper parameters
+                                            return MacroImageController.showAlignmentDialog(
+                                                            gui, transformManager, currentMicroscope)
+                                                    .thenApply(alignConfig -> {
+                                                        if (alignConfig == null) {
+                                                            return null;
+                                                        }
 
-                                            // Package everything together with the selected scanner
-                                            return new CombinedConfig(
-                                                    sampleSetup,
-                                                    alignConfig,
-                                                    macroImageResults,
-                                                    selectedScanner,
-                                                    microscopeSelection.configPath());
+                                                        // Run detection NOW before project creation
+                                                        MacroImageResults macroImageResults = performDetection(
+                                                                gui,
+                                                                alignConfig,
+                                                                selectedScanner,
+                                                                microscopeSelection.configPath(),
+                                                                macroFlip);
+
+                                                        // Package everything together with the selected scanner
+                                                        return new CombinedConfig(
+                                                                sampleSetup,
+                                                                alignConfig,
+                                                                macroImageResults,
+                                                                selectedScanner,
+                                                                microscopeSelection.configPath(),
+                                                                macroFlip);
+                                                    });
                                         });
                             })
                             .thenAccept(combinedConfig -> {
@@ -197,7 +220,8 @@ public class MicroscopeAlignmentWorkflow {
             MacroImageController.AlignmentConfig alignmentConfig,
             MacroImageResults macroImageResults,
             String selectedScanner,
-            String selectedScannerConfigPath) {}
+            String selectedScannerConfigPath,
+            MacroOrientationDialog.MacroFlip macroFlip) {}
 
     /**
      * Container for detection results that need to survive project creation.
@@ -405,7 +429,8 @@ public class MicroscopeAlignmentWorkflow {
             QuPathGUI gui,
             MacroImageController.AlignmentConfig config,
             String selectedScanner,
-            String selectedScannerConfigPath) {
+            String selectedScannerConfigPath,
+            MacroOrientationDialog.MacroFlip macroFlip) {
 
         logger.info("Performing detection while macro image is available");
 
@@ -488,22 +513,11 @@ public class MicroscopeAlignmentWorkflow {
                 croppedResult.getCropOffsetX(),
                 croppedResult.getCropOffsetY());
 
-        // Get flip settings: scanner config -> entry metadata -> preference fallback
-        boolean flipX = false;
-        boolean flipY = false;
-        try {
-            Boolean configFlipX = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "flip_x");
-            Boolean configFlipY = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "flip_y");
-            if (configFlipX != null) flipX = configFlipX;
-            if (configFlipY != null) flipY = configFlipY;
-            logger.info("Using flip settings from scanner config: flipX={}, flipY={}", flipX, flipY);
-        } catch (Exception e) {
-            // Fall back via FlipResolver (no entry/preset/detector context here -> global pref).
-            flipX = FlipResolver.resolveFlipX(null, null, null);
-            flipY = FlipResolver.resolveFlipY(null, null, null);
-            logger.info("Using flip settings from preferences (no scanner config): flipX={}, flipY={}", flipX, flipY);
-        }
-        // Override with entry metadata if available
+        // Flip comes from the orientation dialog answered at workflow start. If the user is
+        // already viewing a flipped entry whose metadata says otherwise, prefer the metadata so
+        // the alignment math matches what's actually being displayed.
+        boolean flipX = macroFlip != null ? macroFlip.flipX() : false;
+        boolean flipY = macroFlip != null ? macroFlip.flipY() : false;
         if (gui.getProject() != null && gui.getImageData() != null) {
             @SuppressWarnings("unchecked")
             Project<BufferedImage> proj = (Project<BufferedImage>) gui.getProject();
@@ -514,6 +528,7 @@ public class MicroscopeAlignmentWorkflow {
                 logger.info("Using flip state from entry metadata: flipX={}, flipY={}", flipX, flipY);
             }
         }
+        logger.info("Detection flip settings: flipX={}, flipY={}", flipX, flipY);
 
         // save a copy of the cropped macro image for future use/realignment
         BufferedImage processedMacroImage = null;
@@ -622,25 +637,11 @@ public class MicroscopeAlignmentWorkflow {
                 // Create a mutable holder for detection results that may be updated
                 final MacroImageResults[] detectionResultsHolder = {detectionResults};
 
-                // Get flip settings: scanner config -> entry metadata -> preference fallback
-                boolean flipX = false;
-                boolean flipY = false;
-                try {
-                    Map<String, Object> scannerConfig = MinorFunctions.loadYamlFile(selectedScannerConfigPath);
-                    Boolean configFlipX = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "flip_x");
-                    Boolean configFlipY = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "flip_y");
-                    if (configFlipX != null) flipX = configFlipX;
-                    if (configFlipY != null) flipY = configFlipY;
-                    logger.info("Using flip settings from scanner config: flipX={}, flipY={}", flipX, flipY);
-                } catch (Exception e) {
-                    // Fall back via FlipResolver (preset/detector/global pref chain).
-                    flipX = FlipResolver.resolveFlipX(null, null, null);
-                    flipY = FlipResolver.resolveFlipY(null, null, null);
-                    logger.info(
-                            "Using flip settings from preferences (no scanner config): flipX={}, flipY={}",
-                            flipX,
-                            flipY);
-                }
+                // Flip comes from the orientation dialog answered by the user at workflow start.
+                boolean flipX = combinedConfig.macroFlip().flipX();
+                boolean flipY = combinedConfig.macroFlip().flipY();
+                logger.info(
+                        "Using flip settings from orientation dialog: flipX={}, flipY={}", flipX, flipY);
                 // Override with entry metadata if available
                 if (gui.getProject() != null && gui.getImageData() != null) {
                     @SuppressWarnings("unchecked")
@@ -765,7 +766,8 @@ public class MicroscopeAlignmentWorkflow {
                                             selectedScanner,
                                             selectedScannerConfigPath,
                                             finalProjectDetails,
-                                            transformManager));
+                                            transformManager,
+                                            combinedConfig.macroFlip()));
                                 })
                                 .exceptionally(ex -> {
                                     logger.error("Failed to create flipped image: {}", ex.getMessage());
@@ -778,7 +780,8 @@ public class MicroscopeAlignmentWorkflow {
                                             selectedScanner,
                                             selectedScannerConfigPath,
                                             finalProjectDetails,
-                                            transformManager));
+                                            transformManager,
+                                            combinedConfig.macroFlip()));
                                     return null;
                                 });
                         return; // Don't fall through -- continuation handles the rest
@@ -794,7 +797,8 @@ public class MicroscopeAlignmentWorkflow {
                         selectedScanner,
                         selectedScannerConfigPath,
                         projectDetails,
-                        transformManager);
+                        transformManager,
+                        combinedConfig.macroFlip());
 
             } catch (Exception e) {
                 logger.error("Error in alignment workflow", e);
@@ -816,26 +820,13 @@ public class MicroscopeAlignmentWorkflow {
             String selectedScanner,
             String selectedScannerConfigPath,
             Map<String, Object> projectDetails,
-            AffineTransformManager transformManager) {
+            AffineTransformManager transformManager,
+            MacroOrientationDialog.MacroFlip macroFlip) {
         try {
-            // Get flip settings: scanner config -> entry metadata -> preference fallback
-            boolean flipX = false;
-            boolean flipY = false;
-            try {
-                Map<String, Object> scannerConfig = MinorFunctions.loadYamlFile(selectedScannerConfigPath);
-                Boolean configFlipX = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "flip_x");
-                Boolean configFlipY = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "flip_y");
-                if (configFlipX != null) flipX = configFlipX;
-                if (configFlipY != null) flipY = configFlipY;
-                logger.info("Using flip settings from scanner config: flipX={}, flipY={}", flipX, flipY);
-            } catch (Exception e) {
-                // Fall back via FlipResolver (preset/detector/global pref chain).
-                flipX = FlipResolver.resolveFlipX(null, null, null);
-                flipY = FlipResolver.resolveFlipY(null, null, null);
-                logger.info(
-                        "Using flip settings from preferences (no scanner config): flipX={}, flipY={}", flipX, flipY);
-            }
-            // Override with entry metadata if available
+            // Flip comes from the orientation dialog answered at workflow start. If the user is
+            // already viewing a flipped entry whose metadata says otherwise, prefer the metadata.
+            boolean flipX = macroFlip != null ? macroFlip.flipX() : false;
+            boolean flipY = macroFlip != null ? macroFlip.flipY() : false;
             if (gui.getProject() != null && gui.getImageData() != null) {
                 @SuppressWarnings("unchecked")
                 Project<BufferedImage> proj = (Project<BufferedImage>) gui.getProject();
@@ -846,6 +837,7 @@ public class MicroscopeAlignmentWorkflow {
                     logger.info("Using flip state from entry metadata: flipX={}, flipY={}", flipX, flipY);
                 }
             }
+            logger.info("continueAlignmentAfterFlip: flipX={}, flipY={}", flipX, flipY);
 
             // Only run tissue detection if there are no existing annotations
             boolean hasExistingAnnotations =
@@ -910,7 +902,8 @@ public class MicroscopeAlignmentWorkflow {
                     stageInvertedX,
                     stageInvertedY,
                     null, // Pass null for bounds
-                    selectedScannerConfigPath);
+                    selectedScannerConfigPath,
+                    macroFlip);
 
             // Build an existing transform estimate for auto-move (if refining an existing transform)
             AffineTransform existingTransformEstimate = null;
@@ -985,7 +978,8 @@ public class MicroscopeAlignmentWorkflow {
                                     detectionResultsHolder[0],
                                     macroPixelSize,
                                     transformManager,
-                                    selectedScanner);
+                                    selectedScanner,
+                                    macroFlip);
 
                             removeAlignmentTiles(gui);
                         });
@@ -1016,27 +1010,17 @@ public class MicroscopeAlignmentWorkflow {
             boolean stageInvertedX,
             boolean stageInvertedY,
             Rectangle dataBounds,
-            String selectedScannerConfigPath) {
+            String selectedScannerConfigPath,
+            MacroOrientationDialog.MacroFlip macroFlip) {
 
         // First, try to get tissue annotations specifically
         var tissueAnnotations = gui.getViewer().getHierarchy().getAnnotationObjects().stream()
                 .filter(a -> a.getClassification() != null && "Tissue".equals(a.getClassification()))
                 .toList();
 
-        // Log both optical flip (for image orientation) and stage inversion (for tile traversal)
-        // Try scanner config first, fall back to preferences
-        boolean flipX = false;
-        boolean flipY = false;
-        try {
-            Map<String, Object> scannerConfig = MinorFunctions.loadYamlFile(selectedScannerConfigPath);
-            Boolean configFlipX = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "flip_x");
-            Boolean configFlipY = MinorFunctions.getYamlBoolean(scannerConfig, "macro", "flip_y");
-            if (configFlipX != null) flipX = configFlipX;
-            if (configFlipY != null) flipY = configFlipY;
-        } catch (Exception e) {
-            flipX = FlipResolver.resolveFlipX(null, null, null);
-            flipY = FlipResolver.resolveFlipY(null, null, null);
-        }
+        // Flip comes from the orientation dialog answered at workflow start.
+        boolean flipX = macroFlip != null ? macroFlip.flipX() : false;
+        boolean flipY = macroFlip != null ? macroFlip.flipY() : false;
         logger.info(
                 "Creating alignment tiles: opticalFlip=({}, {}), stageInverted=({}, {})",
                 flipX,
@@ -1180,7 +1164,8 @@ public class MicroscopeAlignmentWorkflow {
             MacroImageResults macroImageResults,
             double macroPixelSize,
             AffineTransformManager transformManager,
-            String selectedScanner) {
+            String selectedScanner,
+            MacroOrientationDialog.MacroFlip macroFlip) {
 
         try {
             // Step 1: Get or detect data bounds (required for accurate alignment)
@@ -1325,11 +1310,10 @@ public class MicroscopeAlignmentWorkflow {
                     macroImageResults.macroHeight(),
                     isValid ? "PASSED" : "WARNING");
 
-            // Capture the flip state that was active during this alignment so the preset can
-            // be reloaded and reapplied without depending on the global preference. Flip is a
-            // (sourceScanner, targetMicroscope) pair property -- see FlipResolver.
-            Boolean flipMacroXAtSave = QPPreferenceDialog.getFlipMacroXProperty();
-            Boolean flipMacroYAtSave = QPPreferenceDialog.getFlipMacroYProperty();
+            // Capture the flip state from the orientation dialog answered at workflow start.
+            // Flip is a (sourceScanner, targetMicroscope) pair property -- see FlipResolver.
+            Boolean flipMacroXAtSave = macroFlip != null ? macroFlip.flipX() : null;
+            Boolean flipMacroYAtSave = macroFlip != null ? macroFlip.flipY() : null;
 
             AffineTransformManager.TransformPreset preset = new AffineTransformManager.TransformPreset(
                     transformName,

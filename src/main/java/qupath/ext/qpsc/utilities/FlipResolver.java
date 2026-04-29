@@ -4,7 +4,6 @@ import java.awt.image.BufferedImage;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager.TransformPreset;
 import qupath.lib.projects.ProjectImageEntry;
 
@@ -27,14 +26,15 @@ import qupath.lib.projects.ProjectImageEntry;
  *       the alignment that produced the preset captured its flip state.
  *   <li><b>Per-detector YAML config</b> ({@link MicroscopeConfigManager#getDetectorFlipX(String)}).
  *       Hardware-side optical flip; defaults to false if not set in YAML.
- *   <li><b>Global preference</b> ({@link QPPreferenceDialog#getFlipMacroXProperty()}). Last-resort
- *       seed used only when nothing more specific is known.
+ *   <li><b>Default {@code false}.</b> No global preference exists for macro flip -- the flip is
+ *       captured per-alignment via the orientation question at the start of the alignment
+ *       workflow and persisted into the preset.
  * </ol>
  *
- * <p>This mirrors the chain previously inlined in {@code AcquisitionManager.getParentFlipX/Y},
- * with the new "active preset" step inserted at priority 2 so that switching between presets
- * for the same source scanner -> different target microscopes (e.g. Ocus40 -> OWS3 vs.
- * Ocus40 -> CAMM-PPM) gives different flip values without the user touching the global pref.
+ * <p>This replaces the chain previously inlined in {@code AcquisitionManager.getParentFlipX/Y}.
+ * Per-pair flip lives on the saved preset so switching presets between source scanner -> target
+ * microscope pairs (e.g. Ocus40 -> OWS3 vs. Ocus40 -> CAMM-PPM) gives different flip values
+ * without any global state.
  *
  * @since 0.4.x
  */
@@ -69,8 +69,8 @@ public final class FlipResolver {
                 return mgr.getDetectorFlipX(detectorId);
             }
         }
-        // 4. Global pref as last-resort seed.
-        return QPPreferenceDialog.getFlipMacroXProperty();
+        // 4. Safe default: no flip. Alignment workflow will overwrite via orientation dialog.
+        return false;
     }
 
     /** Resolve the macro Y flip; see {@link #resolveFlipX(ProjectImageEntry, TransformPreset, String)}. */
@@ -88,7 +88,7 @@ public final class FlipResolver {
                 return mgr.getDetectorFlipY(detectorId);
             }
         }
-        return QPPreferenceDialog.getFlipMacroYProperty();
+        return false;
     }
 
     /**
