@@ -1159,10 +1159,12 @@ public class MicroscopeAlignmentWorkflow {
 
         try {
             // Step 1: Get or detect data bounds (required for accurate alignment).
-            // Fallback chain: macro detection -> tissue-detection script -> full image dimensions.
-            // The full-image fallback is correct for slide scanners whose macro covers the entire
-            // mounted slide (Ocus40, most SVS-style scanners). It produces a slightly looser
-            // mapping than the cropped data region but avoids hard-failing the workflow.
+            //
+            // SAFETY: Do NOT fall back to full image dimensions here. The macro->stage transform
+            // is built from the green-box center mapped to the data-region center; using the wrong
+            // data region produces stage commands that can drive the objective to the slide LABEL
+            // or off-slide entirely on a real microscope. Fail loudly so the user is forced to set
+            // the tissue-detection script or otherwise produce real bounds.
             Rectangle dataBounds = macroImageResults.dataBounds();
             if (dataBounds == null) {
                 String tissueScript = QPPreferenceDialog.getTissueDetectionScriptProperty();
@@ -1176,16 +1178,16 @@ public class MicroscopeAlignmentWorkflow {
                             "Processing Image",
                             "Detecting image boundaries...\nAnalyzing image data - this may take a moment for large images.",
                             () -> ImageProcessing.detectOcus40DataBounds(gui, scriptDirFinal));
+                } else {
+                    logger.warn("Tissue detection script preference is not set; cannot auto-detect data bounds.");
                 }
+
                 if (dataBounds == null) {
-                    int w = gui.getImageData().getServer().getWidth();
-                    int h = gui.getImageData().getServer().getHeight();
-                    dataBounds = new Rectangle(0, 0, w, h);
-                    logger.info(
-                            "No tissue-detection script configured and no detected bounds; "
-                                    + "falling back to full image dimensions: {}x{}",
-                            w,
-                            h);
+                    throw new IllegalStateException(
+                            "Cannot create transform without data bounds detection. "
+                                    + "Set the tissue detection script in QPSC preferences, or ensure macro analysis "
+                                    + "produced data bounds before reaching alignment save. "
+                                    + "Saving with full-image bounds is unsafe -- it can drive the stage to the label.");
                 }
             }
 
