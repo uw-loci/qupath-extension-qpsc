@@ -104,6 +104,13 @@ public class StageMapCanvas extends StackPane {
     private double macroOverlayXOffsetUm = 0; // X offset of overlay vs slide rect (from scanner config)
     private double macroOverlayYOffsetUm = 0; // Y offset of overlay vs slide rect (from scanner config)
 
+    // Anchor-based placement metadata. NaN = legacy preset, fall back to
+    // 4-corner / config-offset paths in updateMacroOverlayPosition.
+    private double anchorMacroX = Double.NaN; // green-box X center in displayed-flipped macro
+    private double anchorMacroY = Double.NaN; // green-box Y center in displayed-flipped macro
+    private double anchorStageX = Double.NaN; // stage X micrometers the anchor maps to
+    private double anchorStageY = Double.NaN; // stage Y micrometers
+
     // ========== State ==========
     private StageInsert currentInsert;
     private double currentStageX = Double.NaN;
@@ -944,6 +951,39 @@ public class StageMapCanvas extends StackPane {
             double pixelSizeUm,
             double xOffsetUm,
             double yOffsetUm) {
+        // Backward-compatible overload: no anchor metadata supplied. Forwards
+        // to the full setter with NaN anchors so updateMacroOverlayPosition
+        // takes the legacy 4-corner / config-offset paths.
+        setMacroOverlay(macroImage, transform, transformFlipX, transformFlipY,
+                pixelSizeUm, xOffsetUm, yOffsetUm,
+                Double.NaN, Double.NaN, Double.NaN, Double.NaN);
+    }
+
+    /**
+     * Sets the macro overlay with full anchor metadata for transform-frame-immune
+     * placement. When {@code anchorMacroX/Y} and {@code anchorStageX/Y} are not
+     * NaN, the overlay is positioned by anchoring the named display pixel at
+     * the stageToScreen position of the named stage point and extending at
+     * the fixed {@code pixelSizeUm}. Otherwise falls through to the legacy
+     * 4-corner placement (which uses the saved transform's corner mappings).
+     *
+     * @param anchorMacroX displayed (flipped) macro X coord, or NaN to disable anchor
+     * @param anchorMacroY displayed macro Y coord, or NaN
+     * @param anchorStageX stage X micrometers the anchor pixel maps to, or NaN
+     * @param anchorStageY stage Y micrometers, or NaN
+     */
+    public void setMacroOverlay(
+            BufferedImage macroImage,
+            AffineTransform transform,
+            boolean transformFlipX,
+            boolean transformFlipY,
+            double pixelSizeUm,
+            double xOffsetUm,
+            double yOffsetUm,
+            double anchorMacroX,
+            double anchorMacroY,
+            double anchorStageX,
+            double anchorStageY) {
         if (macroImage == null || transform == null) {
             logger.info(
                     "setMacroOverlay called with null args (image={}, transform={}) - clearing",
@@ -961,18 +1001,31 @@ public class StageMapCanvas extends StackPane {
         this.macroPixelSizeUm = pixelSizeUm;
         this.macroOverlayXOffsetUm = xOffsetUm;
         this.macroOverlayYOffsetUm = yOffsetUm;
+        this.anchorMacroX = anchorMacroX;
+        this.anchorMacroY = anchorMacroY;
+        this.anchorStageX = anchorStageX;
+        this.anchorStageY = anchorStageY;
         this.macroOverlayVisible = true;
 
+        boolean haveAnchor = !Double.isNaN(anchorMacroX) && !Double.isNaN(anchorMacroY)
+                && !Double.isNaN(anchorStageX) && !Double.isNaN(anchorStageY)
+                && pixelSizeUm > 0;
         logger.info(
                 "Setting macro overlay: {}x{} pixels, pixelSize={} um, "
-                        + "offset=({}, {}) um, flipCorrection=({}, {})",
+                        + "offset=({}, {}) um, flipCorrection=({}, {}), "
+                        + "anchor={}",
                 macroWidth,
                 macroHeight,
                 pixelSizeUm,
                 xOffsetUm,
                 yOffsetUm,
                 transformFlipX,
-                transformFlipY);
+                transformFlipY,
+                haveAnchor
+                        ? String.format(
+                                "macro(%.2f, %.2f) <-> stage(%.2f, %.2f)",
+                                anchorMacroX, anchorMacroY, anchorStageX, anchorStageY)
+                        : "(none, legacy preset)");
 
         // Convert BufferedImage to JavaFX Image
         javafx.scene.image.Image fxImage = SwingFXUtils.toFXImage(macroImage, null);
@@ -1025,6 +1078,10 @@ public class StageMapCanvas extends StackPane {
         boolean wasVisible = macroOverlayVisible;
         macroOverlayVisible = false;
         macroTransform = null;
+        anchorMacroX = Double.NaN;
+        anchorMacroY = Double.NaN;
+        anchorStageX = Double.NaN;
+        anchorStageY = Double.NaN;
         macroOverlayView.setVisible(false);
         macroOverlayView.setImage(null);
         if (wasVisible) {
@@ -1096,6 +1153,59 @@ public class StageMapCanvas extends StackPane {
         double sh = targetSlide.getHeightUm() * scale;
 
         double overlayX, overlayY, overlayW, overlayH;
+
+        boolean haveAnchor = !Double.isNaN(anchorMacroX) && !Double.isNaN(anchorMacroY)
+                && !Double.isNaN(anchorStageX) && !Double.isNaN(anchorStageY)
+                && macroPixelSizeUm > 0;
+
+        if (haveAnchor) {
+            // Anchor-based positioning: place the macro so that the displayed
+            // pixel (anchorMacroX, anchorMacroY) sits exactly at the screen
+            // position corresponding to the stage point (anchorStageX,
+            // anchorStageY), and extend the macro at the fixed pixelSizeUm.
+            //
+            // This anchor is the alignment build point: green-box center on
+            // the displayed macro <-> data-region center in stage. That
+            // mapping is forced exact by saveGeneralTransform, so the overlay
+            // is correct at the anchor regardless of any frame error or
+            // extrapolation drift in the saved macro->stage transform.
+            //
+            // The 4-corner path (below) is more sensitive: corners are far
+            // from the build anchor and any small scale-direction error
+            // amplifies. The user reported (2026-04-30) that the cursor
+            // landed outside the green box on the macro overlay even though
+            // the stage was inside the alignment annotation -- exactly the
+            // failure mode that 4-corner extrapolation produces when the
+            // transform isn't perfect everywhere.
+            double[] anchorScreen = stageToScreen(anchorStageX, anchorStageY);
+            if (anchorScreen == null) {
+                logger.warn("Anchor stage point ({}, {}) -> null screen; falling through to corners",
+                        anchorStageX, anchorStageY);
+            } else {
+                double pxPerMacroPx = macroPixelSizeUm * scale;
+                overlayW = macroWidth * pxPerMacroPx;
+                overlayH = macroHeight * pxPerMacroPx;
+                overlayX = anchorScreen[0] - anchorMacroX * pxPerMacroPx;
+                overlayY = anchorScreen[1] - anchorMacroY * pxPerMacroPx;
+
+                logger.info(
+                        "Macro overlay (anchor-based): macro pixel ({}, {}) at screen ({}, {}); overlay ({}, {}) {}x{} px",
+                        String.format("%.1f", anchorMacroX),
+                        String.format("%.1f", anchorMacroY),
+                        String.format("%.1f", anchorScreen[0]),
+                        String.format("%.1f", anchorScreen[1]),
+                        String.format("%.1f", overlayX),
+                        String.format("%.1f", overlayY),
+                        String.format("%.1f", overlayW),
+                        String.format("%.1f", overlayH));
+
+                macroOverlayView.setX(overlayX);
+                macroOverlayView.setY(overlayY);
+                macroOverlayView.setFitWidth(overlayW);
+                macroOverlayView.setFitHeight(overlayH);
+                return;
+            }
+        }
 
         if (macroTransform != null) {
             // Transform-driven positioning: place the overlay where the saved

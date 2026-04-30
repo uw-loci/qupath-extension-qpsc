@@ -101,6 +101,13 @@ public class StageMapWindow {
     private AffineTransform currentMacroTransform = null;
     private String currentMacroSampleName = null;
     private String currentMacroScannerName = null;
+    // Anchor metadata from the active preset (NaN for legacy presets, in which
+    // case StageMapCanvas falls back to its 4-corner / config-offset paths).
+    private double currentMacroAnchorMacroX = Double.NaN;
+    private double currentMacroAnchorMacroY = Double.NaN;
+    private double currentMacroAnchorStageX = Double.NaN;
+    private double currentMacroAnchorStageY = Double.NaN;
+    private double currentMacroPresetPixelSizeUm = Double.NaN;
     private ChangeListener<ImageData<?>> imageChangeListener = null;
 
     // ========== Configuration ==========
@@ -1408,6 +1415,11 @@ public class StageMapWindow {
             currentMacroTransform = null;
             currentMacroSampleName = null;
             currentMacroScannerName = null;
+            currentMacroAnchorMacroX = Double.NaN;
+            currentMacroAnchorMacroY = Double.NaN;
+            currentMacroAnchorStageX = Double.NaN;
+            currentMacroAnchorStageY = Double.NaN;
+            currentMacroPresetPixelSizeUm = Double.NaN;
 
             QuPathGUI gui = QuPathGUI.getInstance();
             if (gui == null) {
@@ -1488,6 +1500,31 @@ public class StageMapWindow {
                 currentMacroTransform = overlayTransform;
                 currentMacroSampleName = sampleName;
                 currentMacroScannerName = scannerName;
+                // Pull the anchor metadata if the preset has it; legacy presets
+                // return NaN here, which causes StageMapCanvas to fall back to
+                // the 4-corner placement path.
+                if (activePreset != null && activePreset.hasOverlayAnchor()) {
+                    currentMacroAnchorMacroX = activePreset.getGreenBoxDisplayCenterX();
+                    currentMacroAnchorMacroY = activePreset.getGreenBoxDisplayCenterY();
+                    currentMacroAnchorStageX = activePreset.getStageAnchorX();
+                    currentMacroAnchorStageY = activePreset.getStageAnchorY();
+                    currentMacroPresetPixelSizeUm = activePreset.getMacroPixelSizeUm();
+                    logger.info(
+                            "Macro overlay anchor from preset: macro=({}, {}), stage=({}, {}), pixelSize={} um",
+                            String.format("%.2f", currentMacroAnchorMacroX),
+                            String.format("%.2f", currentMacroAnchorMacroY),
+                            String.format("%.2f", currentMacroAnchorStageX),
+                            String.format("%.2f", currentMacroAnchorStageY),
+                            String.format("%.4f", currentMacroPresetPixelSizeUm));
+                } else {
+                    currentMacroAnchorMacroX = Double.NaN;
+                    currentMacroAnchorMacroY = Double.NaN;
+                    currentMacroAnchorStageX = Double.NaN;
+                    currentMacroAnchorStageY = Double.NaN;
+                    currentMacroPresetPixelSizeUm = Double.NaN;
+                    logger.info(
+                            "Macro overlay anchor: preset has no anchor metadata (legacy preset) -- 4-corner placement will be used");
+                }
                 macroOverlayCheckbox.setDisable(false);
                 logger.info("Macro overlay available for sample '{}' - checkbox enabled", sampleName);
 
@@ -1798,8 +1835,26 @@ public class StageMapWindow {
             }
         }
 
+        // Prefer the preset's recorded macroPixelSize when available; this is
+        // the value used at alignment time and removes any chance of config
+        // drift between alignment and overlay render.
+        double effectivePixelSizeUm =
+                !Double.isNaN(currentMacroPresetPixelSizeUm) && currentMacroPresetPixelSizeUm > 0
+                        ? currentMacroPresetPixelSizeUm
+                        : pixelSizeUm;
+
         canvas.setMacroOverlay(
-                currentMacroImage, currentMacroTransform, axInvX, axInvY, pixelSizeUm, xOffsetUm, yOffsetUm);
+                currentMacroImage,
+                currentMacroTransform,
+                axInvX,
+                axInvY,
+                effectivePixelSizeUm,
+                xOffsetUm,
+                yOffsetUm,
+                currentMacroAnchorMacroX,
+                currentMacroAnchorMacroY,
+                currentMacroAnchorStageX,
+                currentMacroAnchorStageY);
     }
 
     /**

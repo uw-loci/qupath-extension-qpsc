@@ -73,24 +73,81 @@ public class AffineTransformManager {
         /** Source scanner that produced the macro image, e.g. "Ocus40" (null = old preset). */
         private final String sourceScanner;
 
+        // ---- Anchor metadata (added 2026-04-30) ---------------------------
+        // The Stage Map macro overlay is placed on screen by anchoring on the
+        // alignment build point: the green-box center on the displayed-flipped
+        // macro <-> the data-region center in stage. Both coordinates were
+        // computed during saveGeneralTransform but not persisted before --
+        // recovering them required re-applying the saved macro->stage transform,
+        // which is unsafe when the transform was built in the wrong frame
+        // (a class of bug observed on 2026-04-30 when alignment ran with the
+        // un-flipped entry open). Storing these explicitly makes Stage Map
+        // placement immune to any extrapolation or frame error in the
+        // transform itself.
+
+        /** Green-box X center in the orientation-dialog flipped (displayed) macro frame, or null for legacy presets. */
+        private final Double greenBoxDisplayCenterX;
+        /** Green-box Y center in the displayed macro frame, or null for legacy presets. */
+        private final Double greenBoxDisplayCenterY;
+        /** Stage X micrometer position the green-box center maps to (i.e. data-region stage center). */
+        private final Double stageAnchorX;
+        /** Stage Y micrometer position the green-box center maps to. */
+        private final Double stageAnchorY;
+        /** Cropped macro pixel width at alignment time, or null for legacy presets. */
+        private final Integer macroDisplayWidth;
+        /** Cropped macro pixel height at alignment time, or null for legacy presets. */
+        private final Integer macroDisplayHeight;
+        /** Macro pixel size in micrometers at alignment time (e.g. 81.0 for Ocus40), or null for legacy presets. */
+        private final Double macroPixelSizeUm;
+
         /**
-         * Full constructor including per-pair flip state and source scanner.
-         *
-         * <p>Macro flip is a property of the (sourceScanner -> microscope) pair: the same scanner
-         * may need different X/Y flips for different target microscopes. Capturing the flip with
-         * the preset means the alignment is reproducible without relying on the global preference.
-         *
-         * @param name Preset name
-         * @param microscope Target microscope identifier
-         * @param mountingMethod Mounting/scanner method
-         * @param transform 2D affine transform
-         * @param notes Free-text notes
-         * @param greenBoxParams Green box detection parameters
-         * @param zScale Z scale factor (1.0 = no Z scaling)
-         * @param zOffset Z offset in micrometers (0.0 = no offset)
-         * @param flipMacroX Macro X flip used during this alignment (null = unrecorded)
-         * @param flipMacroY Macro Y flip used during this alignment (null = unrecorded)
-         * @param sourceScanner Source scanner (e.g. "Ocus40"); null when not captured
+         * Full constructor including anchor metadata for transform-frame-immune
+         * Stage Map overlay placement.
+         */
+        public TransformPreset(
+                String name,
+                String microscope,
+                String mountingMethod,
+                AffineTransform transform,
+                String notes,
+                GreenBoxDetector.DetectionParams greenBoxParams,
+                double zScale,
+                double zOffset,
+                Boolean flipMacroX,
+                Boolean flipMacroY,
+                String sourceScanner,
+                Double greenBoxDisplayCenterX,
+                Double greenBoxDisplayCenterY,
+                Double stageAnchorX,
+                Double stageAnchorY,
+                Integer macroDisplayWidth,
+                Integer macroDisplayHeight,
+                Double macroPixelSizeUm) {
+            this.name = name;
+            this.microscope = microscope;
+            this.mountingMethod = mountingMethod;
+            this.transform = new AffineTransform(transform);
+            this.createdDate = new Date();
+            this.notes = notes;
+            this.greenBoxParams = greenBoxParams;
+            this.zScale = (zScale == 1.0) ? null : zScale; // null = default 1.0 (omit from JSON)
+            this.zOffset = (zOffset == 0.0) ? null : zOffset; // null = default 0.0 (omit from JSON)
+            this.flipMacroX = flipMacroX;
+            this.flipMacroY = flipMacroY;
+            this.sourceScanner = sourceScanner;
+            this.greenBoxDisplayCenterX = greenBoxDisplayCenterX;
+            this.greenBoxDisplayCenterY = greenBoxDisplayCenterY;
+            this.stageAnchorX = stageAnchorX;
+            this.stageAnchorY = stageAnchorY;
+            this.macroDisplayWidth = macroDisplayWidth;
+            this.macroDisplayHeight = macroDisplayHeight;
+            this.macroPixelSizeUm = macroPixelSizeUm;
+        }
+
+        /**
+         * Backward-compatible constructor preserving the pre-anchor signature.
+         * Anchor fields are stored as null; the placement code falls back to
+         * the legacy 4-corner path for these presets.
          */
         public TransformPreset(
                 String name,
@@ -104,18 +161,9 @@ public class AffineTransformManager {
                 Boolean flipMacroX,
                 Boolean flipMacroY,
                 String sourceScanner) {
-            this.name = name;
-            this.microscope = microscope;
-            this.mountingMethod = mountingMethod;
-            this.transform = new AffineTransform(transform);
-            this.createdDate = new Date();
-            this.notes = notes;
-            this.greenBoxParams = greenBoxParams;
-            this.zScale = (zScale == 1.0) ? null : zScale; // null = default 1.0 (omit from JSON)
-            this.zOffset = (zOffset == 0.0) ? null : zOffset; // null = default 0.0 (omit from JSON)
-            this.flipMacroX = flipMacroX;
-            this.flipMacroY = flipMacroY;
-            this.sourceScanner = sourceScanner;
+            this(name, microscope, mountingMethod, transform, notes, greenBoxParams,
+                    zScale, zOffset, flipMacroX, flipMacroY, sourceScanner,
+                    null, null, null, null, null, null, null);
         }
 
         /**
@@ -206,6 +254,55 @@ public class AffineTransformManager {
         /** True when this preset has captured per-pair flip values (not an older preset). */
         public boolean hasFlipState() {
             return flipMacroX != null && flipMacroY != null;
+        }
+
+        /** Green-box X center in the displayed (flipped) macro frame, or NaN if not captured. */
+        public double getGreenBoxDisplayCenterX() {
+            return greenBoxDisplayCenterX != null ? greenBoxDisplayCenterX : Double.NaN;
+        }
+
+        /** Green-box Y center in the displayed macro frame, or NaN if not captured. */
+        public double getGreenBoxDisplayCenterY() {
+            return greenBoxDisplayCenterY != null ? greenBoxDisplayCenterY : Double.NaN;
+        }
+
+        /** Stage X micrometer anchor (data-region center in stage), or NaN if not captured. */
+        public double getStageAnchorX() {
+            return stageAnchorX != null ? stageAnchorX : Double.NaN;
+        }
+
+        /** Stage Y micrometer anchor, or NaN if not captured. */
+        public double getStageAnchorY() {
+            return stageAnchorY != null ? stageAnchorY : Double.NaN;
+        }
+
+        /** Cropped macro pixel width at alignment time, or -1 if not captured. */
+        public int getMacroDisplayWidth() {
+            return macroDisplayWidth != null ? macroDisplayWidth : -1;
+        }
+
+        /** Cropped macro pixel height at alignment time, or -1 if not captured. */
+        public int getMacroDisplayHeight() {
+            return macroDisplayHeight != null ? macroDisplayHeight : -1;
+        }
+
+        /** Macro pixel size in micrometers at alignment time, or NaN if not captured. */
+        public double getMacroPixelSizeUm() {
+            return macroPixelSizeUm != null ? macroPixelSizeUm : Double.NaN;
+        }
+
+        /**
+         * True when this preset has the full anchor metadata required for
+         * transform-frame-immune Stage Map overlay placement (added 2026-04-30).
+         * Legacy presets without this data fall back to 4-corner placement.
+         */
+        public boolean hasOverlayAnchor() {
+            return greenBoxDisplayCenterX != null
+                    && greenBoxDisplayCenterY != null
+                    && stageAnchorX != null
+                    && stageAnchorY != null
+                    && macroPixelSizeUm != null
+                    && macroPixelSizeUm > 0;
         }
 
         /** Creates an {@link AffineTransform3D} combining the 2D XY transform with Z scale/offset. */

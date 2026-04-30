@@ -1381,6 +1381,26 @@ public class MicroscopeAlignmentWorkflow {
             Boolean flipMacroXAtSave = macroFlip != null ? macroFlip.flipX() : null;
             Boolean flipMacroYAtSave = macroFlip != null ? macroFlip.flipY() : null;
 
+            // Anchor metadata for transform-frame-immune Stage Map overlay
+            // placement. greenBoxCenterX/Y here are post-mirror values from the
+            // 565bcc4 reconciliation, so they live in the orientation-dialog
+            // flipped frame (the same frame the user sees when the Stage Map
+            // displays the macro). stageCenter is fullResToStage applied to
+            // the data-region center -- the alignment build anchor. Persisting
+            // these explicitly means the Stage Map can place the overlay by
+            // anchoring on the known-correct point and extending at the fixed
+            // macroPixelSize, without re-applying the saved macro->stage
+            // transform at points that may extrapolate badly.
+            logger.info(
+                    "Saved preset anchor: macro=({}, {}), stage=({}, {}), macroDims={}x{}, pixelSize={} um/px",
+                    String.format("%.2f", greenBoxCenterX),
+                    String.format("%.2f", greenBoxCenterY),
+                    String.format("%.2f", stageCenter.getX()),
+                    String.format("%.2f", stageCenter.getY()),
+                    macroImageResults.macroWidth(),
+                    macroImageResults.macroHeight(),
+                    String.format("%.4f", macroPixelSize));
+
             AffineTransformManager.TransformPreset preset = new AffineTransformManager.TransformPreset(
                     transformName,
                     MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty())
@@ -1393,7 +1413,14 @@ public class MicroscopeAlignmentWorkflow {
                     0.0, // zOffset default (no Z offset)
                     flipMacroXAtSave,
                     flipMacroYAtSave,
-                    selectedScanner);
+                    selectedScanner,
+                    greenBoxCenterX,
+                    greenBoxCenterY,
+                    stageCenter.getX(),
+                    stageCenter.getY(),
+                    macroImageResults.macroWidth(),
+                    macroImageResults.macroHeight(),
+                    macroPixelSize);
 
             transformManager.savePreset(preset);
             // Persist source scanner so subsequent Stage Map opens default to it.
