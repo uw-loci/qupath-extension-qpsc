@@ -13,35 +13,58 @@ import qupath.lib.scripting.QP;
 public class ImageProcessing {
     private static final Logger logger = LoggerFactory.getLogger(ImageProcessing.class);
     /**
-     * Detects the actual data bounds in an Ocus40 image by identifying and excluding white padding.
-     * This is necessary because Ocus40 scanners add asymmetric white padding when creating pyramidal images.
+     * Detects the data bounding box of an acquired full-resolution image using a
+     * user-supplied pixel classifier. Generic across scanners and modalities -- the
+     * classifier defines what counts as "background" so the inverse becomes the
+     * data region.
      *
-     * <p>The method runs a pixel classifier to detect white background regions, then creates an inverse
-     * annotation representing the actual data area. This handles the common case where padding is added
-     * to accommodate tile boundaries at different pyramid levels.</p>
+     * <p>Per-scanner / per-modality the right classifier differs:
+     * <ul>
+     *   <li><b>Ocus40 brightfield</b>: white-background classifier (e.g. {@code WhiteBackground.json})
+     *       to exclude the asymmetric white padding added during pyramid generation.</li>
+     *   <li><b>Aperio SVS brightfield</b>: same -- white-on-tissue classifier.</li>
+     *   <li><b>Hamamatsu mrxs</b>: black-border classifier; tissue sits inside a dark frame.</li>
+     *   <li><b>Widefield fluorescence</b>: dark-background classifier marks the background, the
+     *       inverse is the lit tissue/signal region.</li>
+     * </ul>
      *
-     * <p>If no whitespace is detected (image has no edge padding), the method returns the full image
-     * bounds. This is a normal condition for images that were cropped to tissue boundaries and should
-     * not be treated as an error.</p>
+     * <p>The user picks the appropriate classifier via the
+     * {@code dataBoundsClassifierProperty} preference and swaps it when changing
+     * sample class.
      *
-     * <p><b>Important:</b> This method operates on the image as it exists in QuPath, which means
-     * any flips applied during import have already been performed. The returned bounds are in
-     * the flipped coordinate system, which matches the green box detection coordinates.</p>
+     * <p>Algorithm:
+     * <ol>
+     *   <li>Run {@code createAnnotationsFromPixelClassifier} on the open image,
+     *       producing one or more annotations classed as "Other" (= background).</li>
+     *   <li>{@code makeInverseAnnotation()} -- the complement is the data region.</li>
+     *   <li>Tag the data region as "Bounds" and return its bounding box.</li>
+     * </ol>
      *
-     * @param gui The QuPath GUI instance with already-flipped image
-     * @param scriptDirectory Directory containing the WhiteBackground.json classifier
-     * @return Rectangle representing the actual data bounds (x, y, width, height) in flipped coordinates.
-     *         Returns full image bounds (0, 0, width, height) if no whitespace detected.
-     *         Returns null only if classifier file is missing or an exception occurs.
+     * <p>If no background is detected (e.g. the image was cropped to data already),
+     * the method returns the full image bounds.
+     *
+     * <p><b>Coordinate frame:</b> the method operates on the image as it exists in
+     * QuPath, which means any flips applied during import have already been
+     * performed. The returned bounds are in the flipped coordinate system, which
+     * matches the green-box detection coordinates.
+     *
+     * @param gui The QuPath GUI instance with the acquired image open.
+     * @param classifierPathStr Absolute path to the pixel classifier {@code .json}.
+     * @return Rectangle of the data region in image pixels (flipped frame).
+     *         Returns full image bounds when no background was detected.
+     *         Returns null only if the classifier file is missing or an exception occurred.
      */
-    public static Rectangle detectOcus40DataBounds(QuPathGUI gui, String scriptDirectory) {
-        logger.info("Detecting Ocus40 data bounds using white background classifier");
+    public static Rectangle detectImageDataBounds(QuPathGUI gui, String classifierPathStr) {
+        logger.info("Detecting image data bounds via pixel classifier: {}", classifierPathStr);
 
         try {
-            // Build the classifier path
-            Path classifierPath = Paths.get(scriptDirectory, "WhiteBackground.json");
+            if (classifierPathStr == null || classifierPathStr.isBlank()) {
+                logger.error("Data bounds classifier path is null or blank");
+                return null;
+            }
+            Path classifierPath = Paths.get(classifierPathStr);
             if (!Files.exists(classifierPath)) {
-                logger.error("WhiteBackground.json not found at: {}", classifierPath);
+                logger.error("Pixel classifier file not found at: {}", classifierPath);
                 return null;
             }
 

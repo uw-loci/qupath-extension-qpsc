@@ -18,6 +18,7 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Microscope Config File](#microscope-config-file) | File | - | Path to microscope YAML config |
 | [Projects Folder](#projects-folder) | Directory | - | Root folder for slide projects |
 | [Tissue Detection Script](#tissue-detection-script) | File | - | Optional Groovy script for tissue detection |
+| [Data Bounds Classifier](#data-bounds-classifier) | File (.json) | - | Pixel classifier that finds the data region on acquired images (alignment workflow) |
 | [Tissue Artifact Filter Enabled](#tissue-artifact-filter-enabled) | Boolean | ON | Use artifact-aware tissue detection |
 | [Tissue Two-Pass Refine](#tissue-two-pass-refine) | Boolean | OFF | Apply second refinement pass |
 | [Tissue Median Kernel](#tissue-median-kernel) | Integer | 17 | Median filter kernel size |
@@ -300,6 +301,37 @@ ProjectsFolder/
 
 **Description:**
 Optional Groovy script for automatic tissue detection before imaging. If specified, this script runs to identify tissue regions.
+
+---
+
+### Data Bounds Classifier
+
+| Property | Value |
+|----------|-------|
+| Type | File (.json pixel classifier) |
+| Default | (none) |
+| Requires Restart | No |
+
+**Description:**
+A QuPath pixel classifier (`.json`) that segments the full-resolution acquired-slide image into "background/padding" vs "data" regions. The Microscope Alignment workflow uses this to compute the **bounding box of the actual data area** on the SVS/OME-TIFF; that box is paired with the green-box center detected on the macro image to build a safe macro-to-stage transform.
+
+**Why this matters:** without an accurate data bounding box, the alignment math falls back to "use the entire image" -- which on a typical SVS includes the slide label and would let the stage drive into the label area. The workflow therefore refuses to save a transform when this preference is unset.
+
+**Choosing a classifier per scanner / modality:** different sample classes have different "background" appearances. One classifier per sample class is fine; swap the preference when you switch sample classes. Examples:
+
+| Sample class | Background appearance | Classifier intent |
+|---|---|---|
+| Ocus40 brightfield | White pyramid padding around tissue | Detect white -> inverse = tissue |
+| Aperio SVS brightfield | White slide regions outside tissue | Same: white -> inverse = tissue |
+| Hamamatsu mrxs brightfield | Black border around tissue | Detect black -> inverse = tissue |
+| Widefield fluorescence | Dark/zero pixels outside lit area | Detect dark -> inverse = signal |
+| Laser-scanning multi-channel | Dark zero-signal pixels | Same as widefield fluorescence |
+
+**Building one:** in QuPath, train a 2-class pixel classifier (e.g. "Other" = background, anything else = data) on a representative full-resolution image, save as JSON, and point this preference at it. The alignment workflow runs `createAnnotationsFromPixelClassifier` then `makeInverseAnnotation()` -- so the classifier only needs to identify the background class accurately; the data class falls out by inversion.
+
+**Behavior when the image has no padding:** if the classifier finds no background, the workflow uses the full image bounds (correct for already-cropped images).
+
+**Note:** previously this functionality was hard-coded to `WhiteBackground.json` and inferred from the Tissue Detection Script's directory. As of 2026-04-29 it is a first-class preference. Existing rigs with `WhiteBackground.json` should point this preference directly at that file.
 
 ---
 

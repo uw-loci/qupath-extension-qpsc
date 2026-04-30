@@ -496,32 +496,31 @@ public class ExistingAlignmentPath {
     }
 
     /**
-     * Detects actual data bounds, excluding white padding.
+     * Detects actual data bounds, excluding background/padding, via the
+     * user-supplied "Data Bounds Classifier" pixel classifier (.json).
+     * Generic across scanners and modalities -- the user picks the right
+     * classifier for the current sample class via QPSC preferences.
      */
     private Rectangle detectDataBounds(GreenBoxContext context, int reportedWidth, int reportedHeight) {
-        String scannerName = state.alignmentChoice.selectedTransform().getMountingMethod();
-
-        // Special handling for Ocus40 scanner
-        if ("Ocus40".equalsIgnoreCase(scannerName)) {
-            try {
-                String tissueScriptPath = QPPreferenceDialog.getTissueDetectionScriptProperty();
-                if (tissueScriptPath != null && !tissueScriptPath.isBlank()) {
-                    File scriptFile = new File(tissueScriptPath);
-                    String scriptDirectory = scriptFile.getParent();
-
-                    Rectangle bounds = UIFunctions.executeWithProgress(
-                            "Processing Image",
-                            "Detecting image boundaries...\nThis may take a moment for large images.",
-                            () -> ImageProcessing.detectOcus40DataBounds(gui, scriptDirectory));
-                    if (bounds != null) {
-                        return bounds;
-                    }
+        try {
+            String classifierPath = QPPreferenceDialog.getDataBoundsClassifierProperty();
+            if (classifierPath != null && !classifierPath.isBlank()) {
+                final String classifierPathFinal = classifierPath;
+                Rectangle bounds = UIFunctions.executeWithProgress(
+                        "Processing Image",
+                        "Detecting image boundaries...\nThis may take a moment for large images.",
+                        () -> ImageProcessing.detectImageDataBounds(gui, classifierPathFinal));
+                if (bounds != null) {
+                    return bounds;
                 }
-            } catch (Exception e) {
+            } else {
                 logger.warn(
-                        "Ocus40 detection failed!!!! Using green box without changes to bounds, which will likely be wrong",
-                        e);
+                        "Data Bounds Classifier preference is not set; falling back to green-box-derived bounds, which is approximate");
             }
+        } catch (Exception e) {
+            logger.warn(
+                    "Data bounds detection failed; falling back to green-box-derived bounds, which is approximate",
+                    e);
         }
 
         // Fallback calculation based on green box size

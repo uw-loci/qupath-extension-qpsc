@@ -86,6 +86,23 @@ public class QPPreferenceDialog {
     private static final StringProperty tissueDetectionScriptProperty =
             PathPrefs.createPersistentPreference("tissueDetectionScriptProperty", "");
 
+    /**
+     * Path to a QuPath pixel classifier (.json) that segments the full-resolution
+     * acquired-slide image into "background" vs "data" regions. Used by
+     * {@link qupath.ext.qpsc.utilities.ImageProcessing#detectImageDataBounds} during
+     * Microscope Alignment to compute the data region's bounding box -- which is
+     * paired with the macro green-box center to build a safe macro->stage transform.
+     *
+     * <p>Per-scanner / per-modality: different scanners pad differently (Ocus40
+     * adds asymmetric white pyramid padding; Aperio SVS surrounds tissue with a
+     * black border; fluorescence widefield has no padding at all but a
+     * dark-background classifier identifies signal). One classifier per
+     * scanner/modality combination is fine -- swap the preference when you swap
+     * sample types.
+     */
+    private static final StringProperty dataBoundsClassifierProperty =
+            PathPrefs.createPersistentPreference("dataBoundsClassifierProperty", "");
+
     private static final BooleanProperty saveRawTilesProperty =
             PathPrefs.createPersistentPreference("saveRawTilesProperty", false);
 
@@ -300,6 +317,23 @@ public class QPPreferenceDialog {
                 .name("Tissue Detection Script")
                 .category(CATEGORY)
                 .description("Groovy script for tissue detection before imaging.")
+                .build());
+
+        items.add(new PropertyItemBuilder<>(dataBoundsClassifierProperty, String.class)
+                .propertyType(PropertyItemBuilder.PropertyType.FILE)
+                .name("Data Bounds Classifier")
+                .category(CATEGORY)
+                .description("Pixel classifier (.json) that separates the acquired data "
+                        + "region from background/padding on the full-resolution image. "
+                        + "Used by Microscope Alignment to compute the data bounding box.\n\n"
+                        + "Different sample classes need different classifiers:\n"
+                        + "  - Ocus40 brightfield: WhiteBackground.json (white pyramid padding)\n"
+                        + "  - Aperio SVS brightfield: also white-background\n"
+                        + "  - Hamamatsu mrxs: usually black-border\n"
+                        + "  - Widefield fluorescence: dark-background classifier\n\n"
+                        + "The workflow runs the classifier, marks the foreground/data class, "
+                        + "and uses its bounding box as the SVS data region. Swap this "
+                        + "preference whenever you swap sample classes.")
                 .build());
 
         items.add(new PropertyItemBuilder<>(tileHandlingMethodProperty, String.class)
@@ -703,6 +737,16 @@ public class QPPreferenceDialog {
 
     public static String getTissueDetectionScriptProperty() {
         return tissueDetectionScriptProperty.get();
+    }
+
+    /**
+     * Path to the pixel classifier (.json) used to find the data bounding box on
+     * acquired full-resolution images during Microscope Alignment. See the
+     * preference description for guidance on per-scanner / per-modality choice.
+     * @return Absolute path string, or empty if not configured.
+     */
+    public static String getDataBoundsClassifierProperty() {
+        return dataBoundsClassifierProperty.get();
     }
 
     public static String getTileHandlingMethodProperty() {

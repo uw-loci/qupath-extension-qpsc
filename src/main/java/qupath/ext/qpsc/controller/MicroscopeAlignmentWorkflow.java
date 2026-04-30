@@ -1167,26 +1167,25 @@ public class MicroscopeAlignmentWorkflow {
             // the tissue-detection script or otherwise produce real bounds.
             Rectangle dataBounds = macroImageResults.dataBounds();
             if (dataBounds == null) {
-                String tissueScript = QPPreferenceDialog.getTissueDetectionScriptProperty();
-                String scriptDir = (tissueScript != null && !tissueScript.isBlank())
-                        ? new File(tissueScript).getParent()
-                        : null;
-                if (scriptDir != null) {
-                    logger.info("Detecting data bounds via tissue detection script...");
-                    final String scriptDirFinal = scriptDir;
+                String classifierPath = QPPreferenceDialog.getDataBoundsClassifierProperty();
+                if (classifierPath != null && !classifierPath.isBlank()) {
+                    logger.info("Detecting data bounds via classifier: {}", classifierPath);
+                    final String classifierPathFinal = classifierPath;
                     dataBounds = UIFunctions.executeWithProgress(
                             "Processing Image",
                             "Detecting image boundaries...\nAnalyzing image data - this may take a moment for large images.",
-                            () -> ImageProcessing.detectOcus40DataBounds(gui, scriptDirFinal));
+                            () -> ImageProcessing.detectImageDataBounds(gui, classifierPathFinal));
                 } else {
-                    logger.warn("Tissue detection script preference is not set; cannot auto-detect data bounds.");
+                    logger.warn("Data Bounds Classifier preference is not set; cannot auto-detect data bounds.");
                 }
 
                 if (dataBounds == null) {
                     throw new IllegalStateException(
-                            "Cannot create transform without data bounds detection. "
-                                    + "Set the tissue detection script in QPSC preferences, or ensure macro analysis "
-                                    + "produced data bounds before reaching alignment save. "
+                            "Cannot create transform without data bounds. "
+                                    + "Set 'Data Bounds Classifier' in QPSC preferences -- a pixel "
+                                    + "classifier (.json) that separates the acquired data region "
+                                    + "from background/padding (white pyramid padding for Ocus40, "
+                                    + "dark background for fluorescence, etc.). "
                                     + "Saving with full-image bounds is unsafe -- it can drive the stage to the label.");
                 }
             }
