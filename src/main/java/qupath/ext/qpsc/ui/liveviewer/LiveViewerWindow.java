@@ -1140,11 +1140,30 @@ public class LiveViewerWindow {
 
         if (!QPPreferenceDialog.getSuppressExposureWarning()) {
             try {
-                var exposures = controller.getSocketClient().getExposures();
-                double exposureMs = exposures.unified();
-                if (exposures.isPerChannel()) {
-                    exposureMs = Math.max(
-                            exposureMs, Math.max(exposures.red(), Math.max(exposures.green(), exposures.blue())));
+                // Trust the user's UI intent: read the per-channel spinner
+                // snapshot directly. APPLYCH and modality-profile re-applies
+                // can revert MMCore to channel-library defaults, so an
+                // un-flushed spinner edit (still inside the 150 ms debounce)
+                // would otherwise produce a spurious "exposure too long"
+                // dialog when the user has actually dialed exposure down
+                // for fast AF. Force-flush the debounce first so MMCore
+                // matches the spinner before AF fires its own server-side
+                // exposure check.
+                double exposureMs;
+                if (stageControlPanel != null) {
+                    stageControlPanel.flushPendingExposureSync();
+                    exposureMs = stageControlPanel.getCurrentChannelExposureMs();
+                } else {
+                    exposureMs = Double.NaN;
+                }
+                if (Double.isNaN(exposureMs)) {
+                    var exposures = controller.getSocketClient().getExposures();
+                    exposureMs = exposures.unified();
+                    if (exposures.isPerChannel()) {
+                        exposureMs = Math.max(
+                                exposureMs,
+                                Math.max(exposures.red(), Math.max(exposures.green(), exposures.blue())));
+                    }
                 }
                 if (exposureMs > 40.0) {
                     streamingFocusButton.setStyle("-fx-base: #F44336;");

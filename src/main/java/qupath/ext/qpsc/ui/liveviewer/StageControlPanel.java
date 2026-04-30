@@ -6,7 +6,9 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -35,6 +37,7 @@ import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.control.TextInputDialog;
+import javafx.scene.control.Toggle;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
@@ -796,6 +799,76 @@ public class StageControlPanel extends VBox {
         return currentCameraDetectorId;
     }
 
+    // ---- Per-channel preview state (Camera tab) -----------------------
+    // Populated as channels are built in buildCameraTab so callers
+    // (e.g. LiveViewerWindow's streaming-AF preflight) can query the
+    // currently-selected channel's spinner value without a socket
+    // round-trip to MMCore. The 150 ms PauseTransition debounce keeps
+    // socket load bounded under spinner-drag.
+
+    private ToggleGroup cameraChannelGroup;
+    private final Map<String, RadioButton> cameraChannelRadios = new HashMap<>();
+    private final Map<String, Spinner<Double>> cameraChannelExpSpinners = new HashMap<>();
+    private final Map<String, PauseTransition> cameraChannelExpDebounces = new HashMap<>();
+    private final Map<String, Double> cameraChannelExpPending = new HashMap<>();
+
+    /**
+     * Returns the per-channel exposure (ms) the user has dialed in for the
+     * currently-selected channel radio. Returns NaN if the "None" radio is
+     * selected, no channel radios exist, or the camera tab has not been
+     * built yet. Callers should fall back to MMCore's exposure
+     * ({@code MicroscopeSocketClient.getExposures()}) when this returns NaN.
+     */
+    public double getCurrentChannelExposureMs() {
+        if (cameraChannelGroup == null) return Double.NaN;
+        Toggle selected = cameraChannelGroup.getSelectedToggle();
+        if (!(selected instanceof RadioButton rb)) return Double.NaN;
+        String chId = null;
+        for (Map.Entry<String, RadioButton> e : cameraChannelRadios.entrySet()) {
+            if (e.getValue() == rb) {
+                chId = e.getKey();
+                break;
+            }
+        }
+        if (chId == null) return Double.NaN; // "None" radio is not in the map
+        Spinner<Double> sp = cameraChannelExpSpinners.get(chId);
+        return sp == null ? Double.NaN : sp.getValue();
+    }
+
+    /**
+     * If a per-channel exposure debounce is queued for the currently-selected
+     * channel, fire it synchronously now. Used by callers that need MMCore to
+     * match the spinner value before issuing a hardware operation (e.g.
+     * streaming-AF preflight). No-op if the camera tab has not been built,
+     * the "None" radio is selected, or no edit is pending.
+     */
+    public void flushPendingExposureSync() {
+        if (cameraChannelGroup == null) return;
+        Toggle selected = cameraChannelGroup.getSelectedToggle();
+        if (!(selected instanceof RadioButton rb)) return;
+        String chId = null;
+        for (Map.Entry<String, RadioButton> e : cameraChannelRadios.entrySet()) {
+            if (e.getValue() == rb) {
+                chId = e.getKey();
+                break;
+            }
+        }
+        if (chId == null) return;
+        PauseTransition deb = cameraChannelExpDebounces.get(chId);
+        Double pending = cameraChannelExpPending.get(chId);
+        if (deb == null || pending == null || Double.isNaN(pending)) return;
+        // Stop the timer so it doesn't double-fire, then run the action
+        // body inline. Mirrors what the debounce handler does.
+        deb.stop();
+        cameraChannelExpPending.remove(chId);
+        try {
+            MicroscopeController.getInstance().getSocketClient().setExposures(new float[] {pending.floatValue()});
+            logger.info("flushPendingExposureSync: channel {} exposure -> {} ms", chId, pending);
+        } catch (Exception ex) {
+            logger.warn("flushPendingExposureSync: setExposures failed: {}", ex.toString());
+        }
+    }
+
     /**
      * Builds the Camera tab with modality dropdown and modality-specific content.
      */
@@ -1235,7 +1308,16 @@ public class StageControlPanel extends VBox {
             // explains why).
             final String resolvedProfile = findFirstMatchingProfile(modality);
 
-            ToggleGroup previewGroup = new ToggleGroup();
+            // Reset per-channel preview state for the freshly-built tab.
+            // The Camera tab is rebuilt on modality switch; we drop any
+            // stale entries so getCurrentChannelExposureMs() / flush
+            // don't reference a previous modality's channels.
+            cameraChannelRadios.clear();
+            cameraChannelExpSpinners.clear();
+            cameraChannelExpDebounces.clear();
+            cameraChannelExpPending.clear();
+            cameraChannelGroup = new ToggleGroup();
+            ToggleGroup previewGroup = cameraChannelGroup;
             GridPane grid = new GridPane();
             grid.setHgap(6);
             grid.setVgap(4);
@@ -1310,15 +1392,19 @@ public class StageControlPanel extends VBox {
                 // listener on every interpolated value (50-100/sec), and each
                 // fire previously spawned a daemon thread + socket round-trip.
                 // PauseTransition coalesces -- only the last value seen in a
-                // 150 ms quiet window actually goes to the wire.
-                final double[] pendingExp = {Double.NaN};
+                // 150 ms quiet window actually goes to the wire. The pending
+                // value is also stored in cameraChannelExpPending so
+                // flushPendingExposureSync() can fire SETEXP synchronously
+                // when streaming-AF needs MMCore to match the spinner.
+                final String chIdLocal = ch.id();
                 final PauseTransition expDebounce = new PauseTransition(Duration.millis(150));
                 expDebounce.setOnFinished(e -> {
-                    double v = pendingExp[0];
-                    if (Double.isNaN(v)) return;
+                    Double pending = cameraChannelExpPending.remove(chIdLocal);
+                    if (pending == null || Double.isNaN(pending)) return;
+                    double v = pending;
                     try {
                         MicroscopeController.getInstance().getSocketClient().setExposures(new float[] {(float) v});
-                        cameraStatusLabel.setText("Channel " + ch.id() + " exposure -> " + v + " ms");
+                        cameraStatusLabel.setText("Channel " + chIdLocal + " exposure -> " + v + " ms");
                         cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
                     } catch (Exception ex) {
                         cameraStatusLabel.setText("Exposure update failed: " + ex.getMessage());
@@ -1327,9 +1413,12 @@ public class StageControlPanel extends VBox {
                 });
                 expSpinner.valueProperty().addListener((obs, oldV, newV) -> {
                     if (newV == null) return;
-                    pendingExp[0] = newV;
+                    cameraChannelExpPending.put(chIdLocal, newV);
                     expDebounce.playFromStart();
                 });
+                cameraChannelExpSpinners.put(chIdLocal, expSpinner);
+                cameraChannelExpDebounces.put(chIdLocal, expDebounce);
+                cameraChannelRadios.put(chIdLocal, previewRadio);
 
                 final double[] pendingInt = {Double.NaN};
                 final PauseTransition intDebounce = new PauseTransition(Duration.millis(150));
