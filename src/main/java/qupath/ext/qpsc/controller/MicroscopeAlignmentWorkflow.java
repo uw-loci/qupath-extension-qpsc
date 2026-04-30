@@ -1247,11 +1247,36 @@ public class MicroscopeAlignmentWorkflow {
             // 2. Scale from pixels to micrometers
             // 3. Translate to stage position (in micrometers)
 
+            // The macro->stage scale must agree in sign with the full-res->stage
+            // scale: both inputs (flipped macro, flipped full-res) live in the
+            // same optically-flipped pixel frame, so the sign that maps "right
+            // in the displayed image" to "stage direction" is identical for
+            // both. Magnitude differs only by the macro/full-res pixel ratio.
+            //
+            // Source of truth: pull the sign from fullResToStageTransform. This
+            // avoids re-deriving stageInverted/flip XOR rules at this site and
+            // stays correct if upstream changes how the full-res scale is built
+            // (e.g. when alignment runs on the unflipped vs flipped image).
+            // Pre-fix bug: this site hard-coded positive macroPixelSize, so on
+            // OWS3 (stage inverted on both axes, alignment on flipped image)
+            // full-res scale was -0.250552 but macro scale was +81 -- the same
+            // slide point mapped to different stage points depending on which
+            // transform you went through, and the Stage Map overlay landed in
+            // the wrong place.
+            double scaleSignX = Math.signum(fullResToStageTransform.getScaleX());
+            double scaleSignY = Math.signum(fullResToStageTransform.getScaleY());
+            double sxMacro = (scaleSignX == 0 ? 1.0 : scaleSignX) * macroPixelSize;
+            double syMacro = (scaleSignY == 0 ? 1.0 : scaleSignY) * macroPixelSize;
+            logger.info(
+                    "Macro->stage scale signs derived from fullRes->stage: sx={}, sy={}",
+                    scaleSignX,
+                    scaleSignY);
+
             // Since AffineTransform methods apply in reverse order, we do:
             // First: translate to stage position
             macroToStageTransform.translate(stageCenter.getX(), stageCenter.getY());
-            // Second: scale pixels to micrometers
-            macroToStageTransform.scale(macroPixelSize, macroPixelSize);
+            // Second: scale pixels to micrometers (sign matches fullRes->stage)
+            macroToStageTransform.scale(sxMacro, syMacro);
             // Third: move green box center to origin
             macroToStageTransform.translate(-greenBoxCenterX, -greenBoxCenterY);
 
