@@ -1097,9 +1097,67 @@ public class StageMapCanvas extends StackPane {
 
         double overlayX, overlayY, overlayW, overlayH;
 
-        if (macroPixelSizeUm > 0) {
-            // Scanner-config-driven positioning: use pixel size for physical dimensions
-            // and config offset to position relative to slide rectangle.
+        if (macroTransform != null) {
+            // Transform-driven positioning: place the overlay where the saved
+            // macro->stage transform actually maps the macro corners. The
+            // transform encodes the manually-aligned mapping from displayed
+            // (flipped) macro pixels to stage micrometers, so this is the
+            // single source of truth for "where is each macro pixel in stage".
+            //
+            // Previously the overlay was placed using slide_rect_left + a
+            // scanner-config offset, which on rigs whose slide_size_um is
+            // smaller than the cropped macro extent (e.g. OWS3: 40x20 mm slide
+            // rect vs 76x25 mm macro) caused the macro's label/holder portion
+            // to fall inside the slide rectangle. Using the transform makes
+            // the macro overlay coincide with the actual physical stage
+            // region the alignment maps to, regardless of slide_size_um.
+            //
+            // Transform is purely scale+translate (no rotation/shear), so the
+            // macro bounding box in stage is the AABB of the four corners. We
+            // map each corner through the transform to stage, then through
+            // stageToScreen to get screen coords, then take the screen AABB.
+            // Stage axis inversion (handled inside stageToScreen) means screen
+            // min/max may come from different macro corners than stage min/max
+            // -- we take min/max in SCREEN space directly.
+            double[][] corners = {
+                {0, 0},
+                {macroWidth, 0},
+                {0, macroHeight},
+                {macroWidth, macroHeight}
+            };
+            double minScreenX = Double.POSITIVE_INFINITY;
+            double minScreenY = Double.POSITIVE_INFINITY;
+            double maxScreenX = Double.NEGATIVE_INFINITY;
+            double maxScreenY = Double.NEGATIVE_INFINITY;
+            for (double[] c : corners) {
+                double[] stagePt = new double[2];
+                macroTransform.transform(c, 0, stagePt, 0, 1);
+                double[] scr = stageToScreen(stagePt[0], stagePt[1]);
+                if (scr == null) continue;
+                if (scr[0] < minScreenX) minScreenX = scr[0];
+                if (scr[1] < minScreenY) minScreenY = scr[1];
+                if (scr[0] > maxScreenX) maxScreenX = scr[0];
+                if (scr[1] > maxScreenY) maxScreenY = scr[1];
+            }
+            overlayX = minScreenX;
+            overlayY = minScreenY;
+            overlayW = maxScreenX - minScreenX;
+            overlayH = maxScreenY - minScreenY;
+
+            logger.info(
+                    "Macro overlay (transform-driven) on '{}': screen ({}, {}) {}x{} px from saved macro->stage transform",
+                    targetSlide.getName(),
+                    String.format("%.1f", overlayX),
+                    String.format("%.1f", overlayY),
+                    String.format("%.1f", overlayW),
+                    String.format("%.1f", overlayH));
+        } else if (macroPixelSizeUm > 0) {
+            // Legacy fallback: scanner-config-driven positioning when no saved
+            // transform is available (e.g. first run before alignment). Uses
+            // slide rect + scanner-config offset. Known to misplace the macro
+            // when slide_size_um differs from the cropped macro extent -- the
+            // transform-driven path above is preferred whenever we have a
+            // saved alignment.
             double macroPhysicalW = macroWidth * macroPixelSizeUm;
             double macroPhysicalH = macroHeight * macroPixelSizeUm;
 
@@ -1109,7 +1167,7 @@ public class StageMapCanvas extends StackPane {
             overlayY = sy + (sh - overlayH) / 2.0 + macroOverlayYOffsetUm * scale;
 
             logger.info(
-                    "Macro overlay (config-driven) on '{}': physical {}x{} um, "
+                    "Macro overlay (config-driven fallback) on '{}': physical {}x{} um, "
                             + "offset ({}, {}) um, screen ({}, {}) {}x{} px",
                     targetSlide.getName(),
                     String.format("%.0f", macroPhysicalW),
