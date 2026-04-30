@@ -104,10 +104,81 @@ def find_alignment_dirs(root: Path):
             yield p
 
 
+def retag_file(json_path: Path, from_scope: str, to_scope: str, dry_run: bool = False) -> str:
+    """Retag a previously-migrated alignment file from one scope to another.
+
+    Only files with ``migrated_from_legacy: true`` AND ``microscope == from_scope``
+    are eligible -- this guarantees we only touch files the migration script
+    itself created and never overwrite a real alignment that happens to be
+    on from_scope. Renames the JSON (and companion PNG) from
+    ``<sample>_<from>_alignment.{json,png}`` to ``<sample>_<to>_alignment.{json,png}``.
+
+    Returns one of: 'retagged', 'skipped-not-migrated', 'skipped-wrong-scope', 'error'.
+    """
+    try:
+        with json_path.open('r', encoding='utf-8') as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"  ERROR reading {json_path.name}: {e}")
+        return 'error'
+
+    if not data.get('migrated_from_legacy'):
+        print(f"  SKIP  {json_path.name} (not a legacy-migration product)")
+        return 'skipped-not-migrated'
+    if data.get('microscope') != from_scope:
+        print(f"  SKIP  {json_path.name} (scope is '{data.get('microscope')}', not '{from_scope}')")
+        return 'skipped-wrong-scope'
+
+    sample = data.get('sampleName')
+    if not sample:
+        # Recover from filename: <sample>_<from_scope>_alignment.json
+        stem = json_path.stem
+        suffix = f"_{from_scope}_alignment"
+        if stem.endswith(suffix):
+            sample = stem[: -len(suffix)]
+        else:
+            print(f"  ERROR {json_path.name}: cannot determine sampleName")
+            return 'error'
+
+    new_name = f"{sample}_{to_scope}_alignment.json"
+    new_json = json_path.parent / new_name
+
+    if new_json.exists() and new_json.resolve() != json_path.resolve():
+        print(f"  ERROR {json_path.name}: target {new_name} already exists; refusing to overwrite")
+        return 'error'
+
+    data['microscope'] = to_scope
+    data.setdefault('retagged_history', []).append({'from': from_scope, 'to': to_scope})
+
+    if dry_run:
+        print(f"  DRY   {json_path.name} -> {new_name}")
+        return 'retagged'
+
+    with new_json.open('w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)
+
+    legacy_png = json_path.parent / f"{sample}_{from_scope}_alignment.png"
+    if legacy_png.exists():
+        new_png = json_path.parent / f"{sample}_{to_scope}_alignment.png"
+        if not new_png.exists():
+            legacy_png.rename(new_png)
+            print(f"  PNG   {legacy_png.name} -> {new_png.name}")
+
+    if json_path.resolve() != new_json.resolve():
+        json_path.unlink()
+    print(f"  OK    {json_path.name} -> {new_name}")
+    return 'retagged'
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('path', help="alignmentFiles directory, or a parent dir if --recursive")
-    ap.add_argument('microscope', help="Scope name to stamp (e.g. PPM, OWS3, Ocus40)")
+    ap.add_argument('microscope',
+                    help="Scope name to stamp (target scope for the migration / retag)")
+    ap.add_argument('--from', dest='from_scope', default=None,
+                    help="Retag mode: only files previously migrated under this scope are affected. "
+                         "Use this to fix a wrong-scope migration -- e.g. --from OWS3 PPM moves the "
+                         "files the previous migration stamped as OWS3 to PPM.")
     ap.add_argument('--recursive', '-r', action='store_true',
                     help="Walk path recursively for every alignmentFiles subfolder")
     ap.add_argument('--dry-run', '-n', action='store_true',
@@ -129,24 +200,36 @@ def main():
             print(f"Warning: '{root.name}' is not named 'alignmentFiles'; processing it anyway.")
         dirs = [root]
 
-    counts = {'migrated': 0, 'skipped-already-scoped': 0,
-              'skipped-different-scope': 0, 'error': 0}
-
-    for d in dirs:
-        legacy = sorted(p for p in d.glob('*_alignment.json')
-                        if not p.stem.endswith(f"_{args.microscope}_alignment"))
-        # Filter out files that ARE already scoped (e.g. <sample>_<otherScope>_alignment.json)
-        # only the truly-unscoped <sample>_alignment.json matter
-        legacy = [p for p in legacy if not _looks_scoped(p)]
-
-        if not legacy:
-            print(f"\n[{d}] no legacy unscoped files")
-            continue
-
-        print(f"\n[{d}] {len(legacy)} candidate(s) to migrate -> {args.microscope}")
-        for jp in legacy:
-            result = migrate_file(jp, args.microscope, dry_run=args.dry_run)
-            counts[result] = counts.get(result, 0) + 1
+    if args.from_scope:
+        # Retag mode
+        counts = {'retagged': 0, 'skipped-not-migrated': 0,
+                  'skipped-wrong-scope': 0, 'error': 0}
+        from_suffix = f"_{args.from_scope}_alignment.json"
+        for d in dirs:
+            candidates = sorted(p for p in d.glob('*_alignment.json')
+                                if p.name.endswith(from_suffix))
+            if not candidates:
+                print(f"\n[{d}] no files ending '{from_suffix}'")
+                continue
+            print(f"\n[{d}] {len(candidates)} candidate(s) to retag {args.from_scope} -> {args.microscope}")
+            for jp in candidates:
+                result = retag_file(jp, args.from_scope, args.microscope, dry_run=args.dry_run)
+                counts[result] = counts.get(result, 0) + 1
+    else:
+        # Initial migration mode (legacy unscoped -> scoped)
+        counts = {'migrated': 0, 'skipped-already-scoped': 0,
+                  'skipped-different-scope': 0, 'error': 0}
+        for d in dirs:
+            legacy = sorted(p for p in d.glob('*_alignment.json')
+                            if not p.stem.endswith(f"_{args.microscope}_alignment"))
+            legacy = [p for p in legacy if not _looks_scoped(p)]
+            if not legacy:
+                print(f"\n[{d}] no legacy unscoped files")
+                continue
+            print(f"\n[{d}] {len(legacy)} candidate(s) to migrate -> {args.microscope}")
+            for jp in legacy:
+                result = migrate_file(jp, args.microscope, dry_run=args.dry_run)
+                counts[result] = counts.get(result, 0) + 1
 
     print("\nSummary:")
     for k, v in counts.items():
