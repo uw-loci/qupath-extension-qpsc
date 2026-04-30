@@ -33,6 +33,10 @@ gradle.properties
 # Java
 hs_err*.log
 
+# Python
+__pycache__/
+*.pyc
+
 # Other
 *.tmp
 *.bak
