@@ -220,7 +220,9 @@ public class MicroscopeAlignmentWorkflow {
             int originalMacroWidth,
             int originalMacroHeight,
             Rectangle dataBounds,
-            BufferedImage processedMacroImag) {}
+            BufferedImage processedMacroImag,
+            boolean greenBoxDetectedWithFlipX,
+            boolean greenBoxDetectedWithFlipY) {}
 
     /**
      * Holds alignment quality metrics computed from the completed transform and the
@@ -604,8 +606,9 @@ public class MicroscopeAlignmentWorkflow {
                 originalMacroWidth,
                 originalMacroHeight,
                 dataBounds,
-                processedMacroImage // Add this
-                );
+                processedMacroImage, // Add this
+                flipX,
+                flipY);
     }
 
     /**
@@ -1222,9 +1225,52 @@ public class MicroscopeAlignmentWorkflow {
             logger.info("Scale relationship: {} macro pixels = 1 full-res pixel", pixelScale);
 
             // Step 4: Calculate center points
-            // Green box center in macro image coordinates
+            // Green box center in macro image coordinates.
+            //
+            // The saved macro->stage transform must operate in the SAME pixel
+            // frame the Stage Map renders in -- i.e. the orientation-dialog
+            // macroFlip frame. The Stage Map applies macroFlip to the macro
+            // before drawing, then runs clicks through this transform to drive
+            // the stage. If the transform was built in a different frame, the
+            // overlay positions are wrong AND clicks land at wrong stage
+            // coords.
+            //
+            // performDetection runs early (before the orientation dialog), so
+            // the green box was detected in whatever frame the open entry
+            // happened to be in: (false,false) when the un-flipped entry was
+            // open, or the entry's metadata flips when the flipped one was.
+            // Reconcile here: if the detection-time flip differs from the
+            // final macroFlip, mirror the green-box position into the final
+            // frame.
             double greenBoxCenterX = greenBox.getBoundsX() + greenBox.getBoundsWidth() / 2.0;
             double greenBoxCenterY = greenBox.getBoundsY() + greenBox.getBoundsHeight() / 2.0;
+
+            boolean detectedFlipX = macroImageResults.greenBoxDetectedWithFlipX();
+            boolean detectedFlipY = macroImageResults.greenBoxDetectedWithFlipY();
+            boolean finalFlipX = macroFlip != null && macroFlip.flipX();
+            boolean finalFlipY = macroFlip != null && macroFlip.flipY();
+            int macroW = macroImageResults.macroWidth();
+            int macroH = macroImageResults.macroHeight();
+            if (detectedFlipX != finalFlipX) {
+                double mirrored = macroW - greenBoxCenterX;
+                logger.info(
+                        "Green box X frame mismatch: detected with flipX={} but final macroFlip.x={}; mirroring {} -> {}",
+                        detectedFlipX,
+                        finalFlipX,
+                        greenBoxCenterX,
+                        mirrored);
+                greenBoxCenterX = mirrored;
+            }
+            if (detectedFlipY != finalFlipY) {
+                double mirrored = macroH - greenBoxCenterY;
+                logger.info(
+                        "Green box Y frame mismatch: detected with flipY={} but final macroFlip.y={}; mirroring {} -> {}",
+                        detectedFlipY,
+                        finalFlipY,
+                        greenBoxCenterY,
+                        mirrored);
+                greenBoxCenterY = mirrored;
+            }
 
             // Data region center in full-resolution image coordinates
             double fullResCenterX = dataBounds.x + dataBounds.width / 2.0;
