@@ -4,7 +4,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
@@ -207,38 +206,14 @@ public class StageInsertRegistry {
                     DEFAULT_SLIDE_MARGIN_UM,
                     List.of(slide));
 
-            // Inherit axis inversion from the global QPSC stage-polarity prefs.
-            // For instruments without a measured slide_holder block (the
-            // synthesized fallback path), there's no aperture-corner data to
-            // detect inversion from, so the defaults of false would render the
-            // Stage Map with stage Y+ going downward on screen even when the
-            // hardware has Y inverted. Reading the stage-polarity prefs lets
-            // the synthetic insert agree with what the alignment workflow uses
-            // for its fullRes->stage transform (stageInverted=(true,true) on
-            // OWS3, per the alignment log on 2026-05-01) without requiring the
-            // user to physically measure the holder corners.
-            try {
-                synth.setAxisInversion(
-                        QPPreferenceDialog.getStageInvertedXProperty(),
-                        QPPreferenceDialog.getStageInvertedYProperty());
-            } catch (Exception e) {
-                logger.debug(
-                        "Could not read stage polarity prefs for synthetic insert; "
-                                + "leaving defaults (false, false): {}",
-                        e.getMessage());
-            }
-
             logger.info(
-                    "Synthesized insert: aperture={}x{} mm, origin=({}, {}) um, slide={}x{} mm centered, "
-                            + "axisInverted=({}, {})",
+                    "Synthesized insert: aperture={}x{} mm, origin=({}, {}) um, " + "slide={}x{} mm centered",
                     String.format("%.1f", apertureWidthUm / 1000.0),
                     String.format("%.1f", apertureHeightUm / 1000.0),
                     String.format("%.0f", Math.min(xLow, xHigh)),
                     String.format("%.0f", Math.min(yLow, yHigh)),
                     String.format("%.1f", slideWidthUm / 1000.0),
-                    String.format("%.1f", slideHeightUm / 1000.0),
-                    synth.isXAxisInverted(),
-                    synth.isYAxisInverted());
+                    String.format("%.1f", slideHeightUm / 1000.0));
 
             return synth;
         } catch (Exception e) {
