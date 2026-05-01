@@ -1554,10 +1554,18 @@ public class AcquisitionManager {
 
     /**
      * Safely retrieves the dialog from the CompletableFuture with timeout handling.
+     *
+     * <p>Timeout is generous (60s) because if the workflow just auto-created or
+     * auto-opened a flipped duplicate via ImageFlipHelper, the JavaFX thread is
+     * busy loading the new SVS image data via TransformedServerBuilder. Observed
+     * on OWS3 2026-05-01: opening the freshly-created flipped duplicate pinned
+     * the JavaFX thread for ~9 seconds, so the previous 5s budget tripped a
+     * spurious TimeoutException and aborted the entire acquisition right after
+     * tile generation completed.
      */
     private DualProgressDialog getDialogSafely(CompletableFuture<DualProgressDialog> dialogSetup) {
         try {
-            return dialogSetup.get(5, TimeUnit.SECONDS);
+            return dialogSetup.get(60, TimeUnit.SECONDS);
         } catch (Exception e) {
             logger.error("Failed to setup dual progress dialog", e);
             return null;
