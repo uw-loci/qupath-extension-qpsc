@@ -1348,16 +1348,14 @@ python -m microscope_command_server.server --port 5000
 **Check:**
 1. Alignment 3-tile prediction was perfect when you ran `Microscope Alignment` (sanity check that the underlying transform is correct).
 2. Open the QuPath log (Help -> Show Log) and watch the Stage Map render lines:
-   - `Synthesized insert: ... axisInverted=(X, Y)` -- only appears when the microscope config has no explicit `slide_holder` / `inserts:` block. The `(X, Y)` should match `Edit -> Preferences -> QPSC` `Inverted X stage` / `Inverted Y stage`.
    - `Macro overlay (anchor-based): macro pixel (...) at screen (...); sign=(sX=..., sY=...) m00=... m11=... dirX=... dirY=...` -- when this fires the Stage Map is using the alignment build anchor, not corner extrapolation.
    - `Macro overlay anchor: preset has no anchor metadata (legacy preset) -- 4-corner placement will be used` -- the saved preset predates anchor metadata; re-run `Microscope Alignment` to regenerate it.
 
-**Solutions in order of likelihood:**
+**Solutions:**
 
-- **Cursor mirrored across the slide center, macro overlay also looks rotated:** the synthesized insert's axis inversion doesn't match your hardware. Set `Inverted X stage` / `Inverted Y stage` in QPSC preferences correctly, then restart QuPath or close/reopen the Stage Map so the insert is rebuilt. Microscopes with an explicit `inserts:` block in the YAML ignore these preferences for Stage Map geometry.
 - **Cursor and green box agree at one point but disagree elsewhere:** the saved preset is on the legacy 4-corner path. Re-run `Microscope Alignment` -- the new preset will have anchor metadata and the Stage Map will pin on the build point.
-- **Macro overlay Y direction disagrees with Live Viewer Y direction:** check both the QPSC `Inverted Y stage` preference and the macro `flipMacroY` setting captured at alignment time. The two interact via the saved transform's `m11` sign and the insert's Y inversion. See `claude-reports/2026-05-01_stagemap-anchor-overlay-and-synthesized-insert.md` for the full chain.
 - **Saved preset isn't picked up after running alignment without clicking Reload:** older builds (before commit `2c5d7c1`, 2026-05-01) cached `activePreset` in memory. Pull the latest extension; the post-save image-change handler now re-resolves from disk.
+- **Macro overlay Y orientation disagrees with the Live Viewer:** known cosmetic mismatch on instruments without an explicit `slide_holder` / `inserts:` block in the YAML. The cursor positions correctly across the slide, but the macro IMAGE itself may render Y-mirrored from what the camera shows. This does not affect alignment correctness or stage moves; it's a display-only discrepancy between the scanner's macro Y direction and the camera's Y direction. Adding a measured `inserts:` block to the YAML lets `fromConfigMap` detect axis inversion from aperture corners and resolves it.
 
 **Background:** The Stage Map macro overlay placement, the `stageToScreen` direction used by the cursor, and the saved `macro->stage` transform must all agree on stage Y direction. The full layering is documented in `claude-reports/2026-05-01_stagemap-anchor-overlay-and-synthesized-insert.md` and the YAML/preference table in `claude-reports/2026-03-10_coordinate-system-terminology-standardization.md`.
 
