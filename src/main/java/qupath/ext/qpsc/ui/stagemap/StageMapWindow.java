@@ -1421,6 +1421,28 @@ public class StageMapWindow {
             currentMacroAnchorStageY = Double.NaN;
             currentMacroPresetPixelSizeUm = Double.NaN;
 
+            // Always refresh activePreset from disk so a recently-saved alignment is picked
+            // up on the next overlay refresh. Without this, the in-memory preset object
+            // cached at Stage Map open time would shadow newer anchor metadata that the
+            // alignment workflow just wrote to saved_transforms.json.
+            try {
+                String src = sourceComboBox != null ? sourceComboBox.getValue() : null;
+                String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                if (src != null && !src.isEmpty() && configPath != null && !configPath.isEmpty()) {
+                    MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+                    String target = mgr != null ? mgr.getMicroscopeName() : null;
+                    AffineTransformManager refreshed =
+                            new AffineTransformManager(new File(configPath).getParent());
+                    AffineTransformManager.TransformPreset fresh =
+                            refreshed.getBestPresetForPair(src, target);
+                    if (fresh != null) {
+                        activePreset = fresh;
+                    }
+                }
+            } catch (Exception e) {
+                logger.debug("Could not refresh activePreset before macro overlay check: {}", e.getMessage());
+            }
+
             QuPathGUI gui = QuPathGUI.getInstance();
             if (gui == null) {
                 logger.info("Macro overlay: QuPath GUI not available");
@@ -1459,6 +1481,36 @@ public class StageMapWindow {
             }
 
             logger.info("Macro overlay: resolved sample name '{}', loading data...", sampleName);
+
+            // Re-resolve activePreset from disk: AffineTransformManager is not a
+            // singleton, so the saved-transforms file can change underneath us
+            // (e.g. after a Microscope Alignment run wrote a new preset with
+            // anchor metadata). Reading the cached activePreset would otherwise
+            // serve the pre-save copy and force the legacy 4-corner placement
+            // path even though the new preset has anchor data.
+            try {
+                String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                String selectedSource =
+                        sourceComboBox != null ? (String) sourceComboBox.getValue() : null;
+                MicroscopeConfigManager mcm = MicroscopeConfigManager.getInstanceIfAvailable();
+                String targetMicroscope = (mcm != null) ? mcm.getMicroscopeName() : null;
+                if (configPath != null
+                        && !configPath.isEmpty()
+                        && selectedSource != null
+                        && targetMicroscope != null) {
+                    AffineTransformManager fresh =
+                            new AffineTransformManager(new File(configPath).getParent());
+                    AffineTransformManager.TransformPreset refreshed =
+                            fresh.getBestPresetForPair(selectedSource, targetMicroscope);
+                    if (refreshed != null) {
+                        activePreset = refreshed;
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn(
+                        "Macro overlay: failed to refresh activePreset from disk: {}",
+                        e.getMessage());
+            }
 
             // Use the preset resolved by the Source dropdown. activePreset is the
             // most-recent (sourceScanner -> currentMicroscope) match.
