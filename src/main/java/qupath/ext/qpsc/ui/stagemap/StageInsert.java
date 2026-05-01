@@ -314,6 +314,18 @@ public class StageInsert {
         return yAxisInverted;
     }
 
+    /**
+     * Overrides the auto-detected axis inversion. Used by the synthetic-insert
+     * path in {@link StageInsertRegistry#synthesizeFromStageLimits} where there
+     * is no aperture-corner data to derive inversion from -- the synthesized
+     * insert reads the global QPSC stage-polarity prefs instead so the Stage
+     * Map renders with the same Y direction the alignment workflow assumes.
+     */
+    void setAxisInversion(boolean xInverted, boolean yInverted) {
+        this.xAxisInverted = xInverted;
+        this.yAxisInverted = yInverted;
+    }
+
     // ========== View Bounds ==========
 
     /**
