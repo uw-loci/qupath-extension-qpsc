@@ -125,6 +125,11 @@ Same procedure as X: set a new Y position via MM script and observe which direct
 - You've verified that positive Y commands move the stage the wrong way.
 - Default is ON because many common stages (e.g. Nikon Ti2) ship with this wiring convention.
 
+**Stage Map insert geometry note (2026-05-01):**
+If your microscope config has no `slide_holder` / `inserts:` block — i.e. the Stage Map is built from `stage.limits` + `slide_size_um` instead of measured aperture corners — then `Inverted X stage` and `Inverted Y stage` are also used to set the synthesized insert's axis inversion. With incorrect polarity preferences in this case, the Stage Map cursor renders mirrored across the slide and the macro overlay appears Y-flipped relative to the camera even though the alignment math is correct. Set the polarity preferences correctly *before* opening the Stage Map; if you change them later, restart QuPath or close/reopen the Stage Map so the synthesized insert is rebuilt.
+
+Microscopes with an explicit `inserts:` block (e.g. PPM) auto-detect axis inversion from their measured aperture corners and ignore these preferences for Stage Map rendering.
+
 ---
 
 ### Camera orientation
