@@ -197,25 +197,30 @@ public class StageInsertRegistry {
             StageInsert.SlidePosition slide = new StageInsert.SlidePosition(
                     "Slide 1", slideXOffsetMm, slideYOffsetMm, slideWidthUm / 1000.0, slideHeightUm / 1000.0, 0);
 
+            StageInsert synth = new StageInsert(
+                    "single_h",
+                    "Single Slide (from stage limits)",
+                    apertureWidthUm / 1000.0,
+                    apertureHeightUm / 1000.0,
+                    Math.min(xLow, xHigh),
+                    Math.min(yLow, yHigh),
+                    DEFAULT_SLIDE_MARGIN_UM,
+                    List.of(slide));
+
             // Inherit axis inversion from the global QPSC stage-polarity prefs.
-            // For instruments without a measured slide_holder block, there is
-            // no aperture-corner data to derive inversion from, so the
-            // hardcoded default of false rendered the Stage Map with stage Y+
-            // going downward on screen even when the hardware has Y inverted
-            // (e.g. OWS3 alignment uses stageInverted=(true,true)).
-            //
-            // CRITICAL: when an axis is inverted, the insert origin must be
-            // the HIGH-stage end of the range, not the low end. stageToScreen
-            // computes insertCoord as (origin - stage) when inverted, so the
-            // origin needs to sit where stage X (or Y) is largest -- mirroring
-            // what fromConfigMap does at line ~131/154 of StageInsert.java.
-            // Using Math.min for both axes regardless of inversion places the
-            // origin at the wrong corner and pushes the macro off-canvas.
-            boolean invertX = false;
-            boolean invertY = false;
+            // For instruments without a measured slide_holder block (the
+            // synthesized fallback path), there's no aperture-corner data to
+            // detect inversion from, so the defaults of false would render the
+            // Stage Map with stage Y+ going downward on screen even when the
+            // hardware has Y inverted. Reading the stage-polarity prefs lets
+            // the synthetic insert agree with what the alignment workflow uses
+            // for its fullRes->stage transform (stageInverted=(true,true) on
+            // OWS3, per the alignment log on 2026-05-01) without requiring the
+            // user to physically measure the holder corners.
             try {
-                invertX = QPPreferenceDialog.getStageInvertedXProperty();
-                invertY = QPPreferenceDialog.getStageInvertedYProperty();
+                synth.setAxisInversion(
+                        QPPreferenceDialog.getStageInvertedXProperty(),
+                        QPPreferenceDialog.getStageInvertedYProperty());
             } catch (Exception e) {
                 logger.debug(
                         "Could not read stage polarity prefs for synthetic insert; "
@@ -223,31 +228,17 @@ public class StageInsertRegistry {
                         e.getMessage());
             }
 
-            double originXUm = invertX ? Math.max(xLow, xHigh) : Math.min(xLow, xHigh);
-            double originYUm = invertY ? Math.max(yLow, yHigh) : Math.min(yLow, yHigh);
-
-            StageInsert synth = new StageInsert(
-                    "single_h",
-                    "Single Slide (from stage limits)",
-                    apertureWidthUm / 1000.0,
-                    apertureHeightUm / 1000.0,
-                    originXUm,
-                    originYUm,
-                    DEFAULT_SLIDE_MARGIN_UM,
-                    List.of(slide));
-            synth.setAxisInversion(invertX, invertY);
-
             logger.info(
                     "Synthesized insert: aperture={}x{} mm, origin=({}, {}) um, slide={}x{} mm centered, "
                             + "axisInverted=({}, {})",
                     String.format("%.1f", apertureWidthUm / 1000.0),
                     String.format("%.1f", apertureHeightUm / 1000.0),
-                    String.format("%.0f", originXUm),
-                    String.format("%.0f", originYUm),
+                    String.format("%.0f", Math.min(xLow, xHigh)),
+                    String.format("%.0f", Math.min(yLow, yHigh)),
                     String.format("%.1f", slideWidthUm / 1000.0),
                     String.format("%.1f", slideHeightUm / 1000.0),
-                    invertX,
-                    invertY);
+                    synth.isXAxisInverted(),
+                    synth.isYAxisInverted());
 
             return synth;
         } catch (Exception e) {
