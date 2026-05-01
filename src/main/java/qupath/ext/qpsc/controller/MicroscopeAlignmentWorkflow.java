@@ -1429,12 +1429,33 @@ public class MicroscopeAlignmentWorkflow {
             }
             logger.info("Saved transform: {}", transformName);
 
+            // Step 8.5: Verify the saved preset round-trips correctly. This is the same path
+            // the Stage Map will exercise next time it's opened: reload the manager from disk,
+            // look up the preset by name, apply the saved macro->stage transform to the
+            // captured green-box center, and confirm it produces the captured stage anchor.
+            // If any check fails, the alignment is functionally broken at reuse time -- warn
+            // the user immediately rather than letting them discover it during acquisition.
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            String verificationFailure = verifySavedPresetRoundTrip(
+                    configPath, transformName, preset, greenBoxCenterX, greenBoxCenterY, stageCenter);
+
             // Step 9: Notify user
             String finalTransformName = transformName;
+            String finalVerificationFailure = verificationFailure;
             Platform.runLater(() -> {
-                qupath.fx.dialogs.Dialogs.showInfoNotification(
-                        "Transform Saved",
-                        String.format("Successfully saved alignment transform: %s", finalTransformName));
+                if (finalVerificationFailure != null) {
+                    UIFunctions.notifyUserOfError(
+                            "Alignment was saved but failed reload-and-reuse verification:\n\n"
+                                    + finalVerificationFailure
+                                    + "\n\nThe Stage Map and downstream acquisitions may misposition the stage. "
+                                    + "Re-run the alignment before acquiring.",
+                            "Alignment Verification Failed");
+                } else {
+                    qupath.fx.dialogs.Dialogs.showInfoNotification(
+                            "Transform Saved",
+                            String.format(
+                                    "Successfully saved alignment transform: %s (verified)", finalTransformName));
+                }
             });
 
         } catch (Exception e) {
@@ -1443,6 +1464,134 @@ public class MicroscopeAlignmentWorkflow {
                 UIFunctions.notifyUserOfError("Failed to save transform: " + e.getMessage(), "Save Error");
             });
         }
+    }
+
+    /**
+     * Verifies that a just-saved preset round-trips correctly through disk: reload the manager,
+     * look up the preset by name, and confirm that
+     * <ol>
+     *   <li>the preset is present on disk under the expected name,</li>
+     *   <li>the saved {@code AffineTransform} maps the captured green-box center to the
+     *       captured stage anchor within {@code 1.0 um},</li>
+     *   <li>the anchor metadata (greenBoxDisplayCenter, stageAnchor, macroPixelSizeUm)
+     *       deserializes with the same values it was saved with,</li>
+     *   <li>flip state and source scanner are preserved.</li>
+     * </ol>
+     *
+     * <p>This catches a class of bug where the save itself appears to succeed (no exception),
+     * but the reloaded preset is unusable -- e.g. Gson skipping a non-deserializable field, the
+     * transform-frame logic producing a transform that doesn't honor the captured anchor, or
+     * the in-memory and on-disk objects diverging. Without this check the user only finds out
+     * during the next Stage Map open or acquisition.
+     *
+     * @param configPath        path to the microscope YAML (its parent dir holds saved_transforms.json)
+     * @param transformName     name of the preset just saved
+     * @param savedPreset       the in-memory preset object that was passed to savePreset()
+     * @param expectedMacroX    the captured green-box X (macro pixels, displayed/flipped frame)
+     * @param expectedMacroY    the captured green-box Y
+     * @param expectedStage     the captured stage anchor (data-region center in stage um)
+     * @return {@code null} if all checks pass, or a human-readable description of the first failure
+     */
+    private static String verifySavedPresetRoundTrip(
+            String configPath,
+            String transformName,
+            AffineTransformManager.TransformPreset savedPreset,
+            double expectedMacroX,
+            double expectedMacroY,
+            Point2D expectedStage) {
+        if (configPath == null || configPath.isBlank()) {
+            return "no microscope config path -- cannot reload to verify";
+        }
+        try {
+            AffineTransformManager reloaded =
+                    new AffineTransformManager(new File(configPath).getParent());
+            AffineTransformManager.TransformPreset onDisk = reloaded.getTransform(transformName);
+            if (onDisk == null) {
+                return String.format("preset '%s' not found after reload from disk", transformName);
+            }
+
+            // Round-trip: apply reloaded transform to the captured green-box center and check
+            // it lands on the captured stage anchor. This is the exact arithmetic the Stage
+            // Map will perform when placing the macro overlay.
+            AffineTransform reloadedTransform = onDisk.getTransform();
+            Point2D mapped = reloadedTransform.transform(
+                    new Point2D.Double(expectedMacroX, expectedMacroY), null);
+            double dx = mapped.getX() - expectedStage.getX();
+            double dy = mapped.getY() - expectedStage.getY();
+            double err = Math.sqrt(dx * dx + dy * dy);
+            if (err > 1.0) {
+                return String.format(
+                        "Round-trip transform error %.3f um (>1 um threshold). "
+                                + "Macro (%.2f, %.2f) -> stage (%.2f, %.2f), expected (%.2f, %.2f).",
+                        err,
+                        expectedMacroX,
+                        expectedMacroY,
+                        mapped.getX(),
+                        mapped.getY(),
+                        expectedStage.getX(),
+                        expectedStage.getY());
+            }
+
+            // Anchor metadata must survive Gson serialization unchanged.
+            if (!onDisk.hasOverlayAnchor()) {
+                return "reloaded preset reports hasOverlayAnchor() = false -- anchor fields did not "
+                        + "deserialize. Stage Map will fall back to 4-corner placement.";
+            }
+            if (!almostEqual(onDisk.getGreenBoxDisplayCenterX(), expectedMacroX, 0.01)
+                    || !almostEqual(onDisk.getGreenBoxDisplayCenterY(), expectedMacroY, 0.01)) {
+                return String.format(
+                        "anchor macro mismatch: saved (%.2f, %.2f), reloaded (%.2f, %.2f)",
+                        expectedMacroX,
+                        expectedMacroY,
+                        onDisk.getGreenBoxDisplayCenterX(),
+                        onDisk.getGreenBoxDisplayCenterY());
+            }
+            if (!almostEqual(onDisk.getStageAnchorX(), expectedStage.getX(), 0.01)
+                    || !almostEqual(onDisk.getStageAnchorY(), expectedStage.getY(), 0.01)) {
+                return String.format(
+                        "anchor stage mismatch: saved (%.2f, %.2f), reloaded (%.2f, %.2f)",
+                        expectedStage.getX(),
+                        expectedStage.getY(),
+                        onDisk.getStageAnchorX(),
+                        onDisk.getStageAnchorY());
+            }
+            double savedPx = savedPreset.getMacroPixelSizeUm();
+            double diskPx = onDisk.getMacroPixelSizeUm();
+            if (!Double.isNaN(savedPx) && !almostEqual(diskPx, savedPx, 0.001)) {
+                return String.format("macroPixelSizeUm mismatch: saved %.4f, reloaded %.4f", savedPx, diskPx);
+            }
+
+            // Flip state and source scanner must round-trip too -- they drive overlay
+            // orientation (flips) and Source dropdown lookup.
+            if (!java.util.Objects.equals(onDisk.getFlipMacroX(), savedPreset.getFlipMacroX())
+                    || !java.util.Objects.equals(onDisk.getFlipMacroY(), savedPreset.getFlipMacroY())) {
+                return String.format(
+                        "flip state mismatch: saved (X=%s, Y=%s), reloaded (X=%s, Y=%s)",
+                        savedPreset.getFlipMacroX(),
+                        savedPreset.getFlipMacroY(),
+                        onDisk.getFlipMacroX(),
+                        onDisk.getFlipMacroY());
+            }
+            if (!java.util.Objects.equals(onDisk.getSourceScanner(), savedPreset.getSourceScanner())) {
+                return String.format(
+                        "sourceScanner mismatch: saved '%s', reloaded '%s'",
+                        savedPreset.getSourceScanner(), onDisk.getSourceScanner());
+            }
+
+            logger.info(
+                    "Round-trip verification passed for preset '{}': "
+                            + "reload + transform + anchor metadata all consistent (err={} um)",
+                    transformName,
+                    String.format("%.4f", err));
+            return null;
+        } catch (Exception e) {
+            logger.error("Round-trip verification threw exception", e);
+            return "verification threw " + e.getClass().getSimpleName() + ": " + e.getMessage();
+        }
+    }
+
+    private static boolean almostEqual(double a, double b, double tol) {
+        return Math.abs(a - b) <= tol;
     }
 
     /**
