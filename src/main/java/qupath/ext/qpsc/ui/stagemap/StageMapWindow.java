@@ -1055,26 +1055,18 @@ public class StageMapWindow {
      *
      * <p>Resolution order:
      * <ol>
-     *   <li>{@code flipMacroX/Y} on the preset selected in the dropdown -- this is the
-     *       *macro frame* the saved alignment was built in, so it's the right frame for
-     *       rendering the macro overlay regardless of which derived entry is currently
-     *       open in the QuPath viewer.</li>
-     *   <li>{@code flip_x}/{@code flip_y} metadata on the open project entry -- only used
-     *       as a fallback when no preset is selected. Note: an Existing Image Workflow
-     *       sub-acquisition entry has its own flip metadata that describes the sub-acq
-     *       image, NOT the parent macro's alignment frame; relying on it for the macro
-     *       overlay would render the macro in the wrong frame and put the saved anchor
-     *       pixel at the wrong location (observed 2026-05-01 on OWS3 sub-acq view).</li>
+     *   <li>{@code flip_x}/{@code flip_y} metadata on the open project entry (recorded truth)</li>
+     *   <li>{@code flipMacroX/Y} on the preset selected in the dropdown</li>
      *   <li>Default: {@code false}</li>
      * </ol>
+     *
+     * <p>We intentionally do not try to auto-find a preset by source-scanner here -- that
+     * metadata is unreliable on existing image entries. The user picks the preset in the
+     * dropdown; the toggle responds to that choice.
      *
      * @return a 2-element array {@code {flipX, flipY}}; never null
      */
     private boolean[] resolveCurrentFlipAxes() {
-        if (activePreset != null && activePreset.hasFlipState()) {
-            return new boolean[] {activePreset.getFlipMacroX(), activePreset.getFlipMacroY()};
-        }
-
         try {
             QuPathGUI gui = QuPathGUI.getInstance();
             if (gui != null && gui.getProject() != null && gui.getImageData() != null) {
@@ -1089,6 +1081,10 @@ public class StageMapWindow {
             }
         } catch (Exception e) {
             logger.debug("Failed to look up open image entry for flip resolution: {}", e.getMessage());
+        }
+
+        if (activePreset != null && activePreset.hasFlipState()) {
+            return new boolean[] {activePreset.getFlipMacroX(), activePreset.getFlipMacroY()};
         }
 
         return new boolean[] {false, false};
