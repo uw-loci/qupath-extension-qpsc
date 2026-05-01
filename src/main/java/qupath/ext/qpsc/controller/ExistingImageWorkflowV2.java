@@ -476,10 +476,24 @@ public class ExistingImageWorkflowV2 {
                         }
                         state.projectInfo = projectInfo;
 
-                        // Validate and flip image if needed (important for correct coordinates)
+                        // Validate and flip image if needed (important for correct coordinates).
+                        // Pass the active preset's flip state explicitly -- the 3-arg overload
+                        // calls FlipResolver(null,null,null) which defaults to (false,false), so
+                        // the workflow would never auto-open or create the flipped duplicate even
+                        // when the saved alignment was built in a flipped frame. Observed on OWS3
+                        // 2026-05-01: acquisition ran on the unflipped base while the saved
+                        // transform was built in the flipped-X frame, sending the stage to the
+                        // X-mirror of the intended location.
                         @SuppressWarnings("unchecked")
                         Project<BufferedImage> project = (Project<BufferedImage>) projectInfo.getCurrentProject();
-                        return ImageFlipHelper.validateAndFlipIfNeeded(gui, project, state.sample);
+                        AffineTransformManager.TransformPreset presetForFlip = state.alignmentChoice != null
+                                ? state.alignmentChoice.selectedTransform()
+                                : null;
+                        boolean requiresFlipX = FlipResolver.resolveFlipX(null, presetForFlip, null);
+                        boolean requiresFlipY = FlipResolver.resolveFlipY(null, presetForFlip, null);
+                        String sampleNameForFlip = state.sample != null ? state.sample.sampleName() : null;
+                        return ImageFlipHelper.validateAndFlipIfNeeded(
+                                gui, project, sampleNameForFlip, requiresFlipX, requiresFlipY);
                     })
                     .thenCompose(validated -> {
                         if (!validated) {
@@ -658,10 +672,18 @@ public class ExistingImageWorkflowV2 {
                         }
                         state.projectInfo = projectInfo;
 
-                        // Validate and flip image if needed
+                        // Validate and flip image if needed -- pass preset flip state explicitly
+                        // (see processSlideSpecificAlignment for the OWS3 incident this avoids).
                         @SuppressWarnings("unchecked")
                         Project<BufferedImage> proj = (Project<BufferedImage>) projectInfo.getCurrentProject();
-                        return ImageFlipHelper.validateAndFlipIfNeeded(gui, proj, state.sample);
+                        AffineTransformManager.TransformPreset presetForFlip = state.alignmentChoice != null
+                                ? state.alignmentChoice.selectedTransform()
+                                : null;
+                        boolean requiresFlipX = FlipResolver.resolveFlipX(null, presetForFlip, null);
+                        boolean requiresFlipY = FlipResolver.resolveFlipY(null, presetForFlip, null);
+                        String sampleNameForFlip2 = state.sample != null ? state.sample.sampleName() : null;
+                        return ImageFlipHelper.validateAndFlipIfNeeded(
+                                gui, proj, sampleNameForFlip2, requiresFlipX, requiresFlipY);
                     })
                     .thenCompose(validated -> {
                         if (!validated) {
