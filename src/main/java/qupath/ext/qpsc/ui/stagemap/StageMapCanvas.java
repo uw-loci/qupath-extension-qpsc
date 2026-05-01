@@ -1182,14 +1182,48 @@ public class StageMapCanvas extends StackPane {
                 logger.warn("Anchor stage point ({}, {}) -> null screen; falling through to corners",
                         anchorStageX, anchorStageY);
             } else {
+                // The anchor pins the displayed-macro pixel (anchorMacroX,
+                // anchorMacroY) to anchorScreen exactly. To make the rest of
+                // the macro coincide with stage at its true direction, we
+                // also need the macro pixel axis to point the same way as the
+                // stage->screen axis: increasing displayed-macro-X must end up
+                // at the screen-X corresponding to the stage-X you'd get by
+                // applying the saved macro->stage transform and then
+                // stageToScreen. That direction is sign(m00) * dirX where
+                // dirX = -1 for insert-X-inverted, +1 otherwise. When sX
+                // (resp. sY) is negative, ImageView.setScaleX(-1) (resp.
+                // setScaleY(-1)) mirrors the rendered content around the
+                // ImageView's center, which combined with the shifted
+                // overlayX/Y below puts displayed pixels in the right screen
+                // direction. Without this we observed (OWS3, 2026-05-01) the
+                // macro reflected through the anchor: cursor appeared
+                // diagonally mirrored from physical position at any
+                // non-anchor point, even though the anchor itself coincided.
+                double dirX = currentInsert != null && currentInsert.isXAxisInverted() ? -1.0 : 1.0;
+                double dirY = currentInsert != null && currentInsert.isYAxisInverted() ? -1.0 : 1.0;
+                double m00 = macroTransform != null ? macroTransform.getScaleX() : 1.0;
+                double m11 = macroTransform != null ? macroTransform.getScaleY() : 1.0;
+                double sX = dirX * Math.signum(m00 != 0 ? m00 : 1.0);
+                double sY = dirY * Math.signum(m11 != 0 ? m11 : 1.0);
+
                 double pxPerMacroPx = macroPixelSizeUm * scale;
                 overlayW = macroWidth * pxPerMacroPx;
                 overlayH = macroHeight * pxPerMacroPx;
-                overlayX = anchorScreen[0] - anchorMacroX * pxPerMacroPx;
-                overlayY = anchorScreen[1] - anchorMacroY * pxPerMacroPx;
+
+                if (sX >= 0) {
+                    overlayX = anchorScreen[0] - anchorMacroX * pxPerMacroPx;
+                } else {
+                    overlayX = anchorScreen[0] - (macroWidth - anchorMacroX) * pxPerMacroPx;
+                }
+                if (sY >= 0) {
+                    overlayY = anchorScreen[1] - anchorMacroY * pxPerMacroPx;
+                } else {
+                    overlayY = anchorScreen[1] - (macroHeight - anchorMacroY) * pxPerMacroPx;
+                }
 
                 logger.info(
-                        "Macro overlay (anchor-based): macro pixel ({}, {}) at screen ({}, {}); overlay ({}, {}) {}x{} px",
+                        "Macro overlay (anchor-based): macro pixel ({}, {}) at screen ({}, {}); "
+                                + "overlay ({}, {}) {}x{} px; sign=(sX={}, sY={}) m00={} m11={} dirX={} dirY={}",
                         String.format("%.1f", anchorMacroX),
                         String.format("%.1f", anchorMacroY),
                         String.format("%.1f", anchorScreen[0]),
@@ -1197,12 +1231,15 @@ public class StageMapCanvas extends StackPane {
                         String.format("%.1f", overlayX),
                         String.format("%.1f", overlayY),
                         String.format("%.1f", overlayW),
-                        String.format("%.1f", overlayH));
+                        String.format("%.1f", overlayH),
+                        sX, sY, m00, m11, dirX, dirY);
 
                 macroOverlayView.setX(overlayX);
                 macroOverlayView.setY(overlayY);
                 macroOverlayView.setFitWidth(overlayW);
                 macroOverlayView.setFitHeight(overlayH);
+                macroOverlayView.setScaleX(sX >= 0 ? 1.0 : -1.0);
+                macroOverlayView.setScaleY(sY >= 0 ? 1.0 : -1.0);
                 return;
             }
         }
@@ -1305,10 +1342,25 @@ public class StageMapCanvas extends StackPane {
                     String.format("%.1f", overlayH));
         }
 
+        // Compute the same axis-direction signs as the anchor branch so the
+        // 4-corner / fallback paths render the macro pixels in the correct
+        // direction. AABB placement gets the bounding rectangle right but
+        // ImageView still draws pixel (0,0) at the top-left of that rect; if
+        // the macro->stage transform demands the opposite direction, mirror
+        // via setScaleX/setScaleY. For PPM (m00 > 0, dirX > 0) this is a no-op.
+        double dirX = currentInsert != null && currentInsert.isXAxisInverted() ? -1.0 : 1.0;
+        double dirY = currentInsert != null && currentInsert.isYAxisInverted() ? -1.0 : 1.0;
+        double m00 = macroTransform != null ? macroTransform.getScaleX() : 1.0;
+        double m11 = macroTransform != null ? macroTransform.getScaleY() : 1.0;
+        double sX = dirX * Math.signum(m00 != 0 ? m00 : 1.0);
+        double sY = dirY * Math.signum(m11 != 0 ? m11 : 1.0);
+
         macroOverlayView.setX(overlayX);
         macroOverlayView.setY(overlayY);
         macroOverlayView.setFitWidth(overlayW);
         macroOverlayView.setFitHeight(overlayH);
+        macroOverlayView.setScaleX(sX >= 0 ? 1.0 : -1.0);
+        macroOverlayView.setScaleY(sY >= 0 ? 1.0 : -1.0);
     }
 
     // ========== Size Handling ==========
