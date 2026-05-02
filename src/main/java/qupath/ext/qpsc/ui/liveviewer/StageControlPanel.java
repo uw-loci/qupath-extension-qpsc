@@ -1598,6 +1598,18 @@ public class StageControlPanel extends VBox {
                 cameraStatusLabel.setText("Exposure: " + exp + " ms");
                 cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
                 logger.info("Set exposure to {} ms", exp);
+                try {
+                    var verify = MicroscopeController.getInstance().getSocketClient().getExposures();
+                    logger.info(
+                            "Set exposure verify: GETEXP unified={} red={} green={} blue={} (perChannel={})",
+                            verify.unified(),
+                            verify.red(),
+                            verify.green(),
+                            verify.blue(),
+                            verify.isPerChannel());
+                } catch (Exception verifyEx) {
+                    logger.warn("Set exposure verify GETEXP failed: {}", verifyEx.toString());
+                }
             } catch (Exception ex) {
                 cameraStatusLabel.setText("Failed: " + ex.getMessage());
                 cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
