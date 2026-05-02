@@ -240,12 +240,32 @@ public class ExistingAlignmentPath {
         @SuppressWarnings("unchecked")
         Project<BufferedImage> project = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
 
-        return ImageFlipHelper.validateAndFlipIfNeeded(gui, project, state.sample)
+        // Resolve required flips from the active preset, not the no-arg default.
+        // The 3-arg ImageFlipHelper.validateAndFlipIfNeeded(gui, project, sample) overload
+        // calls FlipResolver.resolveFlipX/Y(null, null, null), which falls through to false
+        // because there is no entry / preset / detector context. That meant ExistingAlignmentPath
+        // never opened (or created) the flipped duplicate even when the saved preset says it
+        // should -- the green box and data bounds were then detected against the unflipped
+        // base, but composed with the preset's macro->stage which expects flipped-frame input,
+        // producing an X-mirrored fullRes->stage transform. Same defect ecc67ab fixed in
+        // ExistingImageWorkflowV2.processSlideSpecificAlignment; this is the rebuild path.
+        AffineTransformManager.TransformPreset presetForFlip = state.alignmentChoice != null
+                ? state.alignmentChoice.selectedTransform()
+                : null;
+        boolean requiresFlipX = FlipResolver.resolveFlipX(null, presetForFlip, null);
+        boolean requiresFlipY = FlipResolver.resolveFlipY(null, presetForFlip, null);
+
+        String sampleNameForFlip = state.sample != null ? state.sample.sampleName() : null;
+        return ImageFlipHelper.validateAndFlipIfNeeded(
+                        gui, project, sampleNameForFlip, requiresFlipX, requiresFlipY)
                 .thenApply(validated -> {
                     if (!validated) {
                         throw new RuntimeException("Image validation and flip preparation failed");
                     }
-                    logger.info("Image flip validation complete - ready for operations");
+                    logger.info(
+                            "Image flip validation complete (requiredFlipX={}, requiredFlipY={}) - ready for operations",
+                            requiresFlipX,
+                            requiresFlipY);
                     return context;
                 });
     }
