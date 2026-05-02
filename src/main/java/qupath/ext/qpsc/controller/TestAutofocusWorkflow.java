@@ -405,14 +405,21 @@ public class TestAutofocusWorkflow {
         alert.getDialogPane().setContent(content);
         alert.getDialogPane().setMinWidth(500);
 
-        // Add "Open Plot" and "Close" buttons
-        alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.YES, javafx.scene.control.ButtonType.NO);
-
-        // Customize button text
-        ((javafx.scene.control.Button) alert.getDialogPane().lookupButton(javafx.scene.control.ButtonType.YES))
-                .setText("Open Plot");
-        ((javafx.scene.control.Button) alert.getDialogPane().lookupButton(javafx.scene.control.ButtonType.NO))
-                .setText("Close");
+        // Show "Open Plot" only when a diagnostic plot was produced.
+        // Sweep drift check is designed for speed and skips the plot, so
+        // an "Open Plot" button there would be a silent no-op.
+        if (plotPath != null) {
+            alert.getButtonTypes().setAll(
+                    javafx.scene.control.ButtonType.YES, javafx.scene.control.ButtonType.NO);
+            ((javafx.scene.control.Button) alert.getDialogPane().lookupButton(javafx.scene.control.ButtonType.YES))
+                    .setText("Open Plot");
+            ((javafx.scene.control.Button) alert.getDialogPane().lookupButton(javafx.scene.control.ButtonType.NO))
+                    .setText("Close");
+        } else {
+            alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.OK);
+            ((javafx.scene.control.Button) alert.getDialogPane().lookupButton(javafx.scene.control.ButtonType.OK))
+                    .setText("Close");
+        }
 
         // Show dialog and handle response
         alert.showAndWait().ifPresent(response -> {
