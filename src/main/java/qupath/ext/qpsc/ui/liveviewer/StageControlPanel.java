@@ -1374,7 +1374,12 @@ public class StageControlPanel extends VBox {
                 // Default vertical arrows (stacked on the right) eat ~12 px;
                 // split-arrows-horizontal eats ~50 px and leaves the editor
                 // showing one digit. Use the default skin and a wider editor.
-                Spinner<Double> expSpinner = new Spinner<>(0.1, 10000.0, ch.defaultExposureMs(), 1.0);
+                //
+                // Initialize from persisted last-edit so spinners stay
+                // consistent with what was tuned in a previous session
+                // (and also across modality rebuilds within one session).
+                double initialExp = resolveChannelExposureMs(modality, ch);
+                Spinner<Double> expSpinner = new Spinner<>(0.1, 10000.0, initialExp, 1.0);
                 expSpinner.setPrefWidth(95);
                 expSpinner.setEditable(true);
 
@@ -1402,6 +1407,8 @@ public class StageControlPanel extends VBox {
                     Double pending = cameraChannelExpPending.remove(chIdLocal);
                     if (pending == null || Double.isNaN(pending)) return;
                     double v = pending;
+                    qupath.ext.qpsc.preferences.PersistentPreferences.setLastChannelExposureMs(
+                            modality, chIdLocal, v);
                     try {
                         MicroscopeController.getInstance().getSocketClient().setExposures(new float[] {(float) v});
                         cameraStatusLabel.setText("Channel " + chIdLocal + " exposure -> " + v + " ms");
@@ -1432,17 +1439,20 @@ public class StageControlPanel extends VBox {
                     // the live preview brighten/dim as they spin. Done on a
                     // background thread because socket I/O on the FX thread
                     // freezes the slider UI under load.
+                    //
+                    // Note: NO withLiveModeHandling here. Stopping/restarting
+                    // continuous acquisition on every spinner edit caused a
+                    // visible brightness blip on Enter (the camera resync
+                    // briefly lost the LED state). DLED Intensity-XXXnm
+                    // accepts writes during live mode without issue.
                     final qupath.ext.qpsc.modality.PropertyRef pr = ch.intensityProperty();
                     Thread t = new Thread(
                             () -> {
                                 try {
                                     MicroscopeController mc = MicroscopeController.getInstance();
                                     if (mc == null || !mc.isConnected()) return;
-                                    String valueStr = (v == Math.floor(v) && !Double.isInfinite(v))
-                                            ? Integer.toString((int) v)
-                                            : Double.toString(v);
-                                    mc.withLiveModeHandling(() ->
-                                            mc.getSocketClient().setProperty(pr.device(), pr.property(), valueStr));
+                                    String valueStr = formatIntensityValue(v);
+                                    mc.getSocketClient().setProperty(pr.device(), pr.property(), valueStr);
                                     Platform.runLater(() -> {
                                         cameraStatusLabel.setText(
                                                 "Channel " + ch.id() + " intensity -> " + v);
@@ -1477,10 +1487,19 @@ public class StageControlPanel extends VBox {
                     }
                     // Drive the hardware to this channel: cube/shutter switch +
                     // per-channel illumination + exposure all happen on the
-                    // server via apply_channel_hardware_state. The legacy
-                    // setExposures fallback was insufficient -- it didn't
-                    // change the cube or the active light source.
-                    applyChannelInBackground(resolvedProfile, ch.id());
+                    // server via apply_channel_hardware_state. Then push the
+                    // spinner values back to hardware so the user's tunings
+                    // win over the YAML defaults APPLYCH just wrote --
+                    // otherwise FITC -> TRITC -> FITC re-applies FITC's YAML
+                    // defaults each visit and the user's edits are lost.
+                    Double expOverride = expSpinner.getValue();
+                    Double intOverride = (ch.intensityProperty() != null) ? intSpinner.getValue() : null;
+                    applyChannelInBackground(
+                            resolvedProfile,
+                            ch.id(),
+                            expOverride,
+                            ch.intensityProperty(),
+                            intOverride);
                 });
 
                 grid.add(previewRadio, 0, row);
@@ -1533,6 +1552,20 @@ public class StageControlPanel extends VBox {
             }
         }
         return 0.0;
+    }
+
+    /**
+     * Resolves the exposure spinner's initial value for a channel: first the
+     * persisted last-edit (per modality + channel), then the channel's
+     * YAML-declared {@code defaultExposureMs()}. Mirrors
+     * {@link #resolveChannelIntensity}, so an FITC tune-up survives a
+     * modality rebuild instead of snapping back to 80 ms every time.
+     */
+    private double resolveChannelExposureMs(String modality, qupath.ext.qpsc.modality.Channel channel) {
+        Double saved = qupath.ext.qpsc.preferences.PersistentPreferences.getLastChannelExposureMs(
+                modality, channel.id());
+        if (saved != null && saved > 0) return saved;
+        return channel.defaultExposureMs();
     }
 
     /** Generic fallback for unknown/future modalities -- basic exposure + illumination + presets. */
@@ -1892,6 +1925,37 @@ public class StageControlPanel extends VBox {
      * around the cube/shutter switch and resumed afterwards.
      */
     private void applyChannelInBackground(String profileName, String channelId) {
+        applyChannelInBackground(profileName, channelId, null, null, null);
+    }
+
+    /**
+     * Apply a channel and then push the user's tuned exposure / intensity to
+     * hardware so the displayed spinner values match what the camera actually
+     * uses.
+     *
+     * <p>APPLYCH writes the channel's YAML defaults (exposure_ms +
+     * Intensity-XXXnm). Without this restore step, switching FITC -> TRITC
+     * -> FITC re-applies FITC's YAML defaults each time and ignores any
+     * spinner edits the user made between switches. Symptom: TRITC click
+     * goes super bright (YAML says 30) until the user nudges the spinner,
+     * which then drops the signal to whatever was displayed.
+     *
+     * <p>Both overrides are optional. Pass {@code null} to skip a write
+     * (e.g. the "None -- deactivate all" radio doesn't push anything).
+     *
+     * @param profileName       APPLYCH profile name
+     * @param channelId         APPLYCH channel id (or null/empty for None)
+     * @param exposureOverride  exposure (ms) to write after APPLYCH, or null
+     * @param intensityProperty channel's intensity_property (device, property)
+     *                          for the SETPROP override, or null
+     * @param intensityOverride intensity value to write to that property, or null
+     */
+    private void applyChannelInBackground(
+            String profileName,
+            String channelId,
+            Double exposureOverride,
+            qupath.ext.qpsc.modality.PropertyRef intensityProperty,
+            Double intensityOverride) {
         if (profileName == null) return;
         String label = (channelId == null || channelId.isEmpty()) ? "None" : channelId;
         cameraStatusLabel.setText("Applying " + label + "...");
@@ -1901,8 +1965,23 @@ public class StageControlPanel extends VBox {
                     try {
                         MicroscopeController mc = MicroscopeController.getInstance();
                         if (mc == null || !mc.isConnected()) return;
-                        mc.withLiveModeHandling(
-                                () -> mc.getSocketClient().applyChannel(profileName, channelId));
+                        mc.withLiveModeHandling(() -> {
+                            mc.getSocketClient().applyChannel(profileName, channelId);
+                            // Restore user tunings inside the same live-mode
+                            // pause so the camera doesn't briefly run with
+                            // YAML-default exposure before our override lands.
+                            if (exposureOverride != null) {
+                                mc.getSocketClient().setExposures(
+                                        new float[] {exposureOverride.floatValue()});
+                            }
+                            if (intensityProperty != null && intensityOverride != null) {
+                                String valueStr = formatIntensityValue(intensityOverride);
+                                mc.getSocketClient().setProperty(
+                                        intensityProperty.device(),
+                                        intensityProperty.property(),
+                                        valueStr);
+                            }
+                        });
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Applied: " + label);
                             cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
@@ -1918,6 +1997,19 @@ public class StageControlPanel extends VBox {
                 "Channel-Apply");
         t.setDaemon(true);
         t.start();
+    }
+
+    /**
+     * Format an intensity spinner value as a Micro-Manager property string.
+     * Integer-valued doubles drop the trailing ".0" so DLED.Intensity-475nm
+     * receives "30" rather than "30.0" -- some MM drivers reject the latter
+     * with "Invalid property value".
+     */
+    private static String formatIntensityValue(double v) {
+        if (v == Math.floor(v) && !Double.isInfinite(v)) {
+            return Integer.toString((int) v);
+        }
+        return Double.toString(v);
     }
 
     private void applyProfileForModality(String modality) {

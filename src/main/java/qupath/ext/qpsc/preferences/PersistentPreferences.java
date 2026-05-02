@@ -528,6 +528,50 @@ public class PersistentPreferences {
         lastChannelIntensitiesSaved.setValue(String.join(";", rebuilt));
     }
 
+    // Per-channel exposure override persisted from the Live Viewer Camera tab.
+    // Same delimited-blob layout as the intensity store -- keyed by
+    // (modality, channelId) so DAPI's exposure under Fluorescence vs BF_IF
+    // can diverge.
+    private static final StringProperty lastChannelExposuresSaved =
+            PathPrefs.createPersistentPreference("LastChannelExposures", "");
+
+    public static Double getLastChannelExposureMs(String modality, String channelId) {
+        if (modality == null || channelId == null) return null;
+        String blob = lastChannelExposuresSaved.getValue();
+        if (blob == null || blob.isEmpty()) return null;
+        String needle = modality + ":" + channelId + "=";
+        for (String entry : blob.split(";")) {
+            if (entry.startsWith(needle)) {
+                try {
+                    return Double.parseDouble(entry.substring(needle.length()));
+                } catch (NumberFormatException ex) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    public static void setLastChannelExposureMs(String modality, String channelId, double value) {
+        if (modality == null || channelId == null) return;
+        String blob = lastChannelExposuresSaved.getValue();
+        if (blob == null) blob = "";
+        String key = modality + ":" + channelId + "=";
+        java.util.List<String> rebuilt = new java.util.ArrayList<>();
+        boolean replaced = false;
+        for (String entry : blob.split(";")) {
+            if (entry.isEmpty()) continue;
+            if (entry.startsWith(key)) {
+                rebuilt.add(key + value);
+                replaced = true;
+            } else {
+                rebuilt.add(entry);
+            }
+        }
+        if (!replaced) rebuilt.add(key + value);
+        lastChannelExposuresSaved.setValue(String.join(";", rebuilt));
+    }
+
     // Last focus channel id (no modality scoping -- single value, the
     // BoundingBox workflow picks it up via this one key). Used by the
     // Live Viewer Camera tab's per-channel preview radio.
