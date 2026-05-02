@@ -43,8 +43,8 @@ public class AffineTransformationController {
      */
     private static final List<AlignmentPoint> alignmentPoints = new ArrayList<>();
 
-    /** Maximum translation shift (um) between consecutive refinements before warning. */
-    private static final double TRANSLATION_SHIFT_WARN_UM = 2000.0;
+    /** Maximum residual (um) before warning that the transform is degrading. */
+    private static final double RESIDUAL_WARN_UM = 200.0;
 
     /**
      * Returns an unmodifiable snapshot of the alignment points collected during the
@@ -296,10 +296,17 @@ public class AffineTransformationController {
                                 tileName));
 
                         // Compute residuals for all previous points against the new transform
+                        double maxResidualUm = computeMaxResidual(newTransform);
                         logResiduals(newTransform);
 
-                        // Check translation stability between consecutive transforms
-                        checkTranslationStability(currentTransform, newTransform, tileName);
+                        // Translation shift between transforms is informational, not an error.
+                        // The first refinement always recenters translation; on a stage with
+                        // axis inversion the shift can be ~slide-width um even when the new
+                        // point is perfectly consistent with the previous one. The actual
+                        // health metric is the residual: if predictions still match measured
+                        // positions, the transform is good regardless of how its translation
+                        // term moved.
+                        checkTransformHealth(currentTransform, newTransform, tileName, maxResidualUm);
 
                         tileFuture.complete(newTransform);
                     } catch (Exception e) {
@@ -341,27 +348,52 @@ public class AffineTransformationController {
     }
 
     /**
-     * Compares the translation components of two consecutive transforms and logs a
-     * warning if the shift exceeds {@link #TRANSLATION_SHIFT_WARN_UM}.
+     * Returns the worst (largest) back-projection residual across all recorded alignment points
+     * against the supplied transform, in micrometers. Returns 0 if no points are recorded.
+     */
+    private static double computeMaxResidual(AffineTransform transform) {
+        double max = 0;
+        for (AlignmentPoint pt : alignmentPoints) {
+            Point2D predicted = transform.transform(pt.pixelPoint(), null);
+            max = Math.max(max, predicted.distance(pt.stagePoint()));
+        }
+        return max;
+    }
+
+    /**
+     * Reports transform health after a refinement. The residual is the meaningful metric:
+     * if back-projection residuals are small the transform is good regardless of how the
+     * translation term moved between iterations. The translation delta is logged at info
+     * level for traceability but no longer triggers a warning -- on a stage with axis
+     * inversion the first refinement reliably produces a slide-width-scale translation
+     * delta even when the alignment is perfect, which the previous warning misreported.
      *
      * @param previousTransform the transform before refinement
      * @param newTransform      the transform after refinement
      * @param tileName          name of the tile used for this refinement (for logging)
+     * @param maxResidualUm     the worst back-projection residual across all alignment points
      */
-    private static void checkTranslationStability(
-            AffineTransform previousTransform, AffineTransform newTransform, String tileName) {
+    private static void checkTransformHealth(
+            AffineTransform previousTransform,
+            AffineTransform newTransform,
+            String tileName,
+            double maxResidualUm) {
         double dTx = Math.abs(newTransform.getTranslateX() - previousTransform.getTranslateX());
         double dTy = Math.abs(newTransform.getTranslateY() - previousTransform.getTranslateY());
         double shift = Math.sqrt(dTx * dTx + dTy * dTy);
-        if (shift > TRANSLATION_SHIFT_WARN_UM) {
+        logger.info(
+                "Transform after tile '{}': translation shift={} um, max residual={} um",
+                tileName,
+                String.format("%.1f", shift),
+                String.format("%.1f", maxResidualUm));
+        if (maxResidualUm > RESIDUAL_WARN_UM) {
             logger.warn(
-                    "Large translation shift after tile '{}': {} um "
-                            + "(threshold: {} um). This may indicate a misaligned point.",
+                    "Alignment residual after tile '{}' is {} um (>{} um threshold). "
+                            + "The transform does not consistently predict measured stage positions; "
+                            + "consider re-running the alignment.",
                     tileName,
-                    String.format("%.1f", shift),
-                    String.format("%.0f", TRANSLATION_SHIFT_WARN_UM));
-        } else {
-            logger.info("Translation shift after tile '{}': {} um [stable]", tileName, String.format("%.1f", shift));
+                    String.format("%.1f", maxResidualUm),
+                    String.format("%.0f", RESIDUAL_WARN_UM));
         }
     }
 }
