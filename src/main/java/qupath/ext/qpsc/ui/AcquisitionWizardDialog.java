@@ -275,6 +275,22 @@ public class AcquisitionWizardDialog {
                         "Align...",
                         this::onAlignment));
 
+        // Reference-only tooltip on the alignment age indicator. Days-since
+        // is the only signal we report; physical perturbations (bumping the
+        // stage, swapping inserts, anything that changes pixel<->stage geometry)
+        // invalidate alignment without the software being able to detect it.
+        Tooltip alignmentAgeTooltip = new Tooltip(
+                "Reference only -- this is the time since the last full microscope\n"
+                        + "alignment. The software cannot detect physical changes that\n"
+                        + "would break the alignment (bumping the stage or table,\n"
+                        + "swapping inserts, changing optics, etc.). When in doubt,\n"
+                        + "re-run Microscope Alignment.");
+        alignmentAgeTooltip.setShowDelay(javafx.util.Duration.millis(250));
+        alignmentAgeTooltip.setShowDuration(javafx.util.Duration.seconds(20));
+        StepRow alignmentRow = stepRows.get(STEP_ALIGNMENT);
+        Tooltip.install(alignmentRow.statusLabel, alignmentAgeTooltip);
+        Tooltip.install(alignmentRow.statusDot, alignmentAgeTooltip);
+
         root.getChildren().add(stepsBox);
 
         // -- Autofocus override --

@@ -5,7 +5,6 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
-import qupath.ext.qpsc.controller.workflow.AlignmentHelper;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
@@ -251,10 +250,18 @@ public class CalibrationChecker {
     // Microscope alignment
     // ------------------------------------------------------------------
 
+    /** Number of days after which the alignment age turns yellow. */
+    public static final int ALIGNMENT_AGE_WARN_DAYS = 14;
+
     /**
-     * Checks whether a microscope alignment transform exists.
+     * Checks whether a microscope alignment transform exists and reports its
+     * age in days since creation. Quality scoring was removed because the
+     * stored "confidence" was a static base value plus an age decay -- it
+     * never reflected actual fit quality, so the displayed percentage was
+     * misleading. The age is the only signal we can report honestly without
+     * persisting per-alignment quality metrics.
      *
-     * @return step status with details about the best available transform
+     * @return step status with the days-since-last-alignment message
      */
     public static StepStatus checkAlignment() {
         try {
@@ -263,7 +270,6 @@ public class CalibrationChecker {
                 return new StepStatus(Status.NOT_READY, "No microscope config file set");
             }
 
-            // Get the config directory for the transform manager
             java.io.File configFile = new java.io.File(configPath);
             String configDir = configFile.getParent();
             if (configDir == null) {
@@ -275,40 +281,43 @@ public class CalibrationChecker {
 
             if (allTransforms.isEmpty()) {
                 return new StepStatus(
-                        Status.NOT_READY, "No alignment transforms found - run Microscope Alignment first");
+                        Status.NOT_READY, "No alignment found - run Microscope Alignment first");
             }
 
-            // Find the best (most recent / highest confidence) transform
-            AffineTransformManager.TransformPreset best = null;
-            double bestConfidence = -1;
+            // Most recent transform wins. A transform without a createdDate
+            // sorts last (treated as oldest/unknown).
+            AffineTransformManager.TransformPreset newest = null;
             for (var preset : allTransforms) {
-                double conf = AlignmentHelper.calculateConfidence(preset);
-                if (conf > bestConfidence) {
-                    bestConfidence = conf;
-                    best = preset;
+                if (preset.getCreatedDate() == null) continue;
+                if (newest == null
+                        || preset.getCreatedDate().after(newest.getCreatedDate())) {
+                    newest = preset;
                 }
             }
 
-            if (best == null) {
-                return new StepStatus(Status.NOT_READY, "No usable alignment transforms found");
+            if (newest == null) {
+                return new StepStatus(
+                        Status.WARNING, "Alignment age unknown - consider recalibrating");
             }
 
-            int pct = (int) (bestConfidence * 100);
-            String name = best.getName();
+            java.time.LocalDate createdLocal = newest.getCreatedDate()
+                    .toInstant()
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .toLocalDate();
+            long days = java.time.temporal.ChronoUnit.DAYS.between(createdLocal, java.time.LocalDate.now());
+            if (days < 0) days = 0; // clock skew safety
 
-            if (bestConfidence >= 0.7) {
-                return new StepStatus(
-                        Status.READY, String.format("Alignment '%s' available (%d%% confidence)", name, pct));
-            } else if (bestConfidence >= 0.4) {
-                return new StepStatus(
-                        Status.WARNING,
-                        String.format("Alignment '%s' is aging (%d%% confidence) - consider recalibrating", name, pct));
+            String message;
+            if (days == 0) {
+                message = "Aligned today";
+            } else if (days == 1) {
+                message = "Aligned 1 day ago";
             } else {
-                return new StepStatus(
-                        Status.WARNING,
-                        String.format(
-                                "Alignment '%s' is stale (%d%% confidence) - recalibration recommended", name, pct));
+                message = String.format("Aligned %d days ago", days);
             }
+
+            Status level = (days >= ALIGNMENT_AGE_WARN_DAYS) ? Status.WARNING : Status.READY;
+            return new StepStatus(level, message);
 
         } catch (Exception e) {
             logger.debug("Error checking alignment status", e);
