@@ -131,6 +131,21 @@ public class MicroscopeSocketClient implements AutoCloseable {
     private volatile boolean userAlertedAboutConnectionIssue = false;
     private static final int ERROR_THRESHOLD_FOR_ALERT = 3;
 
+    /**
+     * When {@code true}, automatic reconnection is suspended because the server
+     * has been unresponsive in a way that auto-retry cannot resolve (typically
+     * MicroManager itself crashed). The user has been notified via modal and
+     * must click Retry to clear this state. While set:
+     * <ul>
+     *   <li>{@link #scheduleReconnection()} bails immediately</li>
+     *   <li>The health-check loop skips its retry path</li>
+     *   <li>{@link #ensureAuxConnected()} fast-fails instead of looping</li>
+     * </ul>
+     * Cleared by {@link #userTriggeredReconnect()} (UI button) or by a
+     * successful manual {@link #connect()}.
+     */
+    private volatile boolean serverUnresponsiveSuspended = false;
+
     // Configuration
     private final int maxReconnectAttempts;
     private final long reconnectDelayMs;
@@ -685,6 +700,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
     private void ensureAuxConnected() throws IOException {
         if (auxConnected.get()) {
             return;
+        }
+        if (serverUnresponsiveSuspended) {
+            throw new IOException(
+                    "Microscope server unresponsive (MicroManager likely crashed). "
+                            + "Restart MicroManager + the Python server, then click Retry.");
         }
         // Enforce cooldown after failed attempts to prevent reconnection floods
         long now = System.currentTimeMillis();
@@ -3317,6 +3337,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * progress) are silently dropped.
      */
     private void scheduleReconnection() {
+        if (serverUnresponsiveSuspended) {
+            logger.debug("Reconnection suspended (server unresponsive). Use userTriggeredReconnect() to retry.");
+            return;
+        }
         if (!reconnecting.compareAndSet(false, true)) {
             logger.debug("Reconnection already in progress, skipping duplicate request");
             return;
@@ -3325,6 +3349,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         reconnectExecutor.submit(() -> {
             try {
                 int attempts = 0;
+                int configTimeoutAttempts = 0;
+                String lastFailureMessage = null;
 
                 while (attempts < maxReconnectAttempts && !connected.get() && !shuttingDown.get()) {
                     attempts++;
@@ -3344,22 +3370,115 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         mainReconnectBackoffMs = reconnectDelayMs;
                         break;
                     } catch (Exception e) {
-                        logger.warn("Reconnection attempt {} failed: {}", attempts, e.getMessage());
+                        lastFailureMessage = e.getMessage();
+                        logger.warn("Reconnection attempt {} failed: {}", attempts, lastFailureMessage);
+                        if (looksLikeServerHang(e)) {
+                            configTimeoutAttempts++;
+                        }
                         // Exponential backoff, capped at 30s
                         mainReconnectBackoffMs = Math.min(mainReconnectBackoffMs * 2, MAIN_RECONNECT_BACKOFF_MAX_MS);
                     }
                 }
 
                 if (!connected.get() && !shuttingDown.get()) {
-                    logger.error(
-                            "Failed to reconnect after {} attempts (next health check " + "in ~{}s may retry)",
-                            maxReconnectAttempts,
-                            healthCheckIntervalMs / 1000);
+                    // Distinguish "server is down" from "server is hung but accepting
+                    // connections" (= MicroManager itself crashed). Hang signature is
+                    // every attempt timing out on CONFIG. In that case, suspend further
+                    // automatic reconnection and surface a clear modal -- continuing
+                    // to retry just spams the log with the same useless timeout.
+                    if (configTimeoutAttempts >= attempts && configTimeoutAttempts > 0) {
+                        serverUnresponsiveSuspended = true;
+                        logger.error(
+                                "Microscope server accepting connections but not responding to CONFIG "
+                                        + "after {} attempts. MicroManager likely crashed. Suspending "
+                                        + "automatic reconnection until user retries.",
+                                attempts);
+                        showServerUnresponsiveModal(lastFailureMessage);
+                    } else {
+                        logger.error(
+                                "Failed to reconnect after {} attempts (next health check in ~{}s may retry)",
+                                maxReconnectAttempts,
+                                healthCheckIntervalMs / 1000);
+                    }
                 }
             } finally {
                 reconnecting.set(false);
             }
         });
+    }
+
+    /** Heuristic: does this exception look like the server-hung-on-MM-crash signature? */
+    private static boolean looksLikeServerHang(Throwable t) {
+        for (Throwable c = t; c != null; c = c.getCause()) {
+            String msg = c.getMessage();
+            if (msg != null
+                    && (msg.contains("Timeout waiting for CONFIG response")
+                            || msg.contains("Failed to configure server"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Show a single modal alerting the user that the microscope server is unresponsive,
+     * with a Retry button that clears {@link #serverUnresponsiveSuspended} and triggers
+     * a fresh reconnection attempt.
+     */
+    private void showServerUnresponsiveModal(String lastFailureMessage) {
+        javafx.application.Platform.runLater(() -> {
+            try {
+                java.awt.Toolkit.getDefaultToolkit().beep();
+            } catch (Exception ignored) {
+            }
+            javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+                    javafx.scene.control.Alert.AlertType.ERROR);
+            alert.setTitle("Microscope Server Unresponsive");
+            alert.setHeaderText("MicroManager appears to have crashed.");
+            alert.setContentText(
+                    "The microscope server is accepting connections but not responding to commands. "
+                            + "This typically means MicroManager itself has crashed or lost its "
+                            + "connection to the camera.\n\n"
+                            + "To recover:\n"
+                            + "  1. Restart MicroManager\n"
+                            + "  2. Restart the Python microscope server\n"
+                            + "  3. Click Retry below\n\n"
+                            + (lastFailureMessage != null ? "Last error: " + lastFailureMessage + "\n\n" : "")
+                            + "Automatic reconnection has been suspended to prevent log spam.");
+            javafx.scene.control.ButtonType retry = new javafx.scene.control.ButtonType(
+                    "Retry", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
+            javafx.scene.control.ButtonType dismiss = new javafx.scene.control.ButtonType(
+                    "Dismiss", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+            alert.getButtonTypes().setAll(retry, dismiss);
+            alert.showAndWait().ifPresent(bt -> {
+                if (bt == retry) {
+                    userTriggeredReconnect();
+                }
+            });
+        });
+    }
+
+    /**
+     * Public hook -- clears the {@link #serverUnresponsiveSuspended} flag and kicks off a
+     * fresh reconnection cycle. Intended to be called from a UI Reconnect action (the
+     * modal's Retry button, a menu item, etc.) after the user has restarted MicroManager
+     * and the Python server.
+     */
+    public void userTriggeredReconnect() {
+        if (!serverUnresponsiveSuspended) {
+            // Caller hit Retry but we weren't actually suspended -- just connect normally.
+            scheduleReconnection();
+            return;
+        }
+        logger.info("User triggered reconnect; clearing serverUnresponsiveSuspended flag");
+        serverUnresponsiveSuspended = false;
+        mainReconnectBackoffMs = reconnectDelayMs;
+        scheduleReconnection();
+    }
+
+    /** True when the client has stopped auto-reconnecting and is waiting for the user. */
+    public boolean isServerUnresponsiveSuspended() {
+        return serverUnresponsiveSuspended;
     }
 
     /**
@@ -3368,7 +3487,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
     private void startHealthMonitoring() {
         healthCheckExecutor.scheduleWithFixedDelay(
                 () -> {
-                    if (connected.get() && !shuttingDown.get()) {
+                    if (serverUnresponsiveSuspended || shuttingDown.get()) {
+                        return;
+                    }
+                    if (connected.get()) {
                         long idleTime = System.currentTimeMillis() - lastActivityTime.get();
 
                         // Perform health check if idle for too long
