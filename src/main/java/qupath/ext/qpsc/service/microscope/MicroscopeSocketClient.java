@@ -5839,10 +5839,32 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if communication fails
      */
     public boolean isLiveModeRunning() throws IOException {
-        byte[] response = executeCommand(Command.GETLIVE, null, 1);
-        boolean isLive = response[0] == 1;
-        logger.debug("Live mode status: {}", isLive ? "ON" : "OFF");
-        return isLive;
+        // Override per-call to 30 s. The default 5 s primary timeout is too tight for this
+        // call when the server is mid-cleanup (e.g. tearing down a continuous-acquisition
+        // session before transitioning to acquisition mode); a transient 5+ s delay is normal
+        // there. Witnessed on 2026-05-02 OWS3 acquisition: stopAllLiveViewing -> isLiveModeRunning
+        // timed out at 5 s, triggering a reconnection storm that the server's same-IP takeover
+        // path could not recover from. Matches the per-call override on getAcquisitionStatus.
+        synchronized (socketLock) {
+            ensureConnected();
+            int originalTimeout = readTimeout;
+            try {
+                if (socket != null && !socket.isClosed()) {
+                    socket.setSoTimeout(30000);
+                }
+                byte[] response = executeCommand(Command.GETLIVE, null, 1);
+                boolean isLive = response[0] == 1;
+                logger.debug("Live mode status: {}", isLive ? "ON" : "OFF");
+                return isLive;
+            } finally {
+                if (socket != null && !socket.isClosed()) {
+                    try {
+                        socket.setSoTimeout(originalTimeout);
+                    } catch (IOException ignored) {
+                    }
+                }
+            }
+        }
     }
 
     /**
