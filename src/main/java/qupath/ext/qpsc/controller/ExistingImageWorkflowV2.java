@@ -408,9 +408,103 @@ public class ExistingImageWorkflowV2 {
                     logger.info(
                             "Found slide-specific alignment - confidence: {}",
                             String.format("%.2f", state.alignmentConfidence));
+                    return state;
                 }
+                // No alignment for the active scope. Check whether one exists for a
+                // *different* scope that we can route through the macro frame to here.
+                tryComposeCrossScopeAlignment(state);
                 return state;
             });
+        }
+
+        /**
+         * Cross-scope path: when no per-slide alignment exists for the active microscope
+         * but one was built for another microscope on the same sample, attempt to compose
+         * a {@code pixel -> activeStage} transform via the shared macro frame.
+         *
+         * <p>Mutates {@code state}: on success, sets {@link WorkflowState#useExistingSlideAlignment},
+         * {@link WorkflowState#transform}, {@link WorkflowState#crossScope}, and the
+         * source/target microscope diagnostics. On failure, leaves state untouched.
+         */
+        private void tryComposeCrossScopeAlignment(WorkflowState state) {
+            try {
+                String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                if (configPath == null || configPath.isEmpty()) {
+                    return;
+                }
+                String activeMicroscope = MicroscopeConfigManager.getInstance(configPath).getMicroscopeName();
+                if (activeMicroscope == null || activeMicroscope.isEmpty() || "Unknown".equals(activeMicroscope)) {
+                    return;
+                }
+                Project<BufferedImage> project = gui.getProject();
+                if (project == null || project.getPath() == null) {
+                    return;
+                }
+                String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+                if (imageName == null) {
+                    return;
+                }
+                java.io.File projectDir = project.getPath().toFile().getParentFile();
+                List<AffineTransformManager.SlideAlignmentRecord> records =
+                        AffineTransformManager.loadAllSlideAlignmentsFromDirectory(projectDir, imageName);
+                if (records.isEmpty()) {
+                    return;
+                }
+
+                AffineTransformManager mgr =
+                        new AffineTransformManager(new java.io.File(configPath).getParent());
+
+                for (AffineTransformManager.SlideAlignmentRecord record : records) {
+                    String sourceMicroscope = record.getMicroscope();
+                    if (sourceMicroscope == null || activeMicroscope.equals(sourceMicroscope)) {
+                        continue;
+                    }
+                    // Find a (sourceScanner) shared by a preset on the active scope AND a preset
+                    // on the source scope. The macro source must agree -- the composition routes
+                    // pixels through the shared macro frame.
+                    List<String> targetScanners = mgr.getDistinctSourceScannersForMicroscope(activeMicroscope);
+                    for (String scanner : targetScanners) {
+                        AffineTransformManager.TransformPreset tgtPreset =
+                                mgr.getBestPresetForPair(scanner, activeMicroscope);
+                        AffineTransformManager.TransformPreset srcPreset =
+                                mgr.getBestPresetForPair(scanner, sourceMicroscope);
+                        if (tgtPreset == null || srcPreset == null) continue;
+                        if (!tgtPreset.hasFlipState() || !srcPreset.hasFlipState()) continue;
+                        try {
+                            AffineTransform composed = CrossScopeTransformBuilder.compose(
+                                    record.getTransform(), srcPreset, tgtPreset);
+                            state.useExistingSlideAlignment = true;
+                            state.transform = composed;
+                            state.crossScope = true;
+                            state.crossScopeSourceMicroscope = sourceMicroscope;
+                            state.alignmentConfidence = 0.7;
+                            state.alignmentSource = String.format(
+                                    "Cross-scope %s -> %s via %s (src=%s, tgt=%s)",
+                                    sourceMicroscope,
+                                    activeMicroscope,
+                                    scanner,
+                                    srcPreset.getName(),
+                                    tgtPreset.getName());
+                            logger.info(
+                                    "Cross-scope alignment composed: {} -> {} via {} (source per-slide file: {})",
+                                    sourceMicroscope,
+                                    activeMicroscope,
+                                    scanner,
+                                    record.getFile().getName());
+                            return;
+                        } catch (Exception e) {
+                            logger.warn(
+                                    "Cross-scope compose failed for src='{}' tgt='{}' scanner='{}': {}",
+                                    srcPreset.getName(),
+                                    tgtPreset.getName(),
+                                    scanner,
+                                    e.getMessage());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Cross-scope alignment probe failed: {}", e.getMessage(), e);
+            }
         }
 
         /**
@@ -486,6 +580,16 @@ public class ExistingImageWorkflowV2 {
                         // X-mirror of the intended location.
                         @SuppressWarnings("unchecked")
                         Project<BufferedImage> project = (Project<BufferedImage>) projectInfo.getCurrentProject();
+                        if (state.crossScope) {
+                            // Cross-scope: the composed transform consumes pixel coords in the
+                            // open entry's current frame (the source per-slide alignment was built
+                            // against this same entry on the source microscope). Flipping to match
+                            // the *target* preset would mis-frame the composed transform's input.
+                            logger.info(
+                                    "Cross-scope alignment in use ({}); skipping flip swap and preset-frame verify",
+                                    state.alignmentSource);
+                            return CompletableFuture.completedFuture(true);
+                        }
                         AffineTransformManager.TransformPreset presetForFlip = state.alignmentChoice != null
                                 ? state.alignmentChoice.selectedTransform()
                                 : null;
@@ -1174,6 +1278,19 @@ public class ExistingImageWorkflowV2 {
         public boolean useExistingSlideAlignment;
         public double alignmentConfidence;
         public String alignmentSource;
+
+        /**
+         * Cross-scope acquisition: true when {@link #transform} was composed from a
+         * per-slide alignment built for a *different* microscope plus a saved preset
+         * pair sharing a source scanner. In this mode the open entry must be left
+         * alone -- the composed transform expects pixel input in the entry's current
+         * frame, and {@code verifyOpenEntryMatchesPreset} would mistakenly treat the
+         * target microscope's preset flip as the alignment frame and abort.
+         *
+         * @see CrossScopeTransformBuilder
+         */
+        public boolean crossScope;
+        public String crossScopeSourceMicroscope;
         public RefinementSelectionController.RefinementChoice refinementChoice =
                 RefinementSelectionController.RefinementChoice.NONE;
         public GreenBoxDetector.DetectionParams greenBoxParams;

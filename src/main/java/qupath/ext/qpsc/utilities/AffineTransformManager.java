@@ -933,6 +933,97 @@ public class AffineTransformManager {
     }
 
     /**
+     * A per-slide alignment record paired with the microscope it was built against.
+     * Used by the cross-scope path to surface alignments built for *other* microscopes
+     * than the active one -- those would be filtered out by
+     * {@link #loadSlideAlignmentFromDirectory(File, String)}.
+     */
+    public static class SlideAlignmentRecord {
+        private final AffineTransform transform;
+        private final String microscope;
+        private final File file;
+
+        public SlideAlignmentRecord(AffineTransform transform, String microscope, File file) {
+            this.transform = transform;
+            this.microscope = microscope;
+            this.file = file;
+        }
+
+        public AffineTransform getTransform() {
+            return transform;
+        }
+
+        public String getMicroscope() {
+            return microscope;
+        }
+
+        public File getFile() {
+            return file;
+        }
+    }
+
+    /**
+     * Loads every per-slide alignment found in {@code projectDir/alignmentFiles} for the
+     * given sample, regardless of which microscope it was built against. Records whose
+     * JSON has no {@code microscope} field are skipped (legacy/ambiguous, see
+     * {@link #readAlignmentJson(File, String)}).
+     *
+     * <p>Used by cross-scope acquisition: an alignment built for microscope A can be
+     * composed with a saved preset pair to drive microscope B, provided both presets
+     * share a {@code sourceScanner} (the macro source).
+     *
+     * @param projectDir project root containing the {@code alignmentFiles} directory
+     * @param sampleName sample / image name; matches {@code <sample>_<scope>_alignment.json}
+     * @return list of records, possibly empty; never null
+     */
+    public static List<SlideAlignmentRecord> loadAllSlideAlignmentsFromDirectory(
+            File projectDir, String sampleName) {
+        if (projectDir == null || !projectDir.exists() || sampleName == null) {
+            return List.of();
+        }
+        File alignmentDir = new File(projectDir, "alignmentFiles");
+        if (!alignmentDir.exists()) {
+            return List.of();
+        }
+        File[] candidates = alignmentDir.listFiles((d, n) -> n.startsWith(sampleName + "_") && n.endsWith("_alignment.json"));
+        if (candidates == null || candidates.length == 0) {
+            return List.of();
+        }
+        List<SlideAlignmentRecord> out = new ArrayList<>();
+        for (File f : candidates) {
+            // Filename pattern: <sample>_<scope>_alignment.json. Anything between the
+            // sample-trailing underscore and "_alignment.json" is the scope token.
+            String name = f.getName();
+            String middle = name.substring(sampleName.length() + 1, name.length() - "_alignment.json".length());
+            // The legacy unscoped file has filename <sample>_alignment.json -- the prefix
+            // filter above won't match (no second underscore), so we don't need to handle
+            // it here. Re-saving under a scope-aware path is the intended migration.
+            if (middle.isEmpty()) continue;
+            try {
+                String json = new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
+                Type mapType = new TypeToken<Map<String, Object>>() {}.getType();
+                Map<String, Object> data = new Gson().fromJson(json, mapType);
+                if (data == null) continue;
+                Object scopeObj = data.get("microscope");
+                String fileScope = scopeObj instanceof String ? (String) scopeObj : null;
+                if (fileScope == null) {
+                    logger.debug("loadAllSlideAlignments: skipping {} -- no microscope field", f.getName());
+                    continue;
+                }
+                @SuppressWarnings("unchecked")
+                List<Double> tv = (List<Double>) data.get("transform");
+                if (tv == null || tv.size() != 6) continue;
+                AffineTransform t = new AffineTransform(
+                        tv.get(0), tv.get(1), tv.get(2), tv.get(3), tv.get(4), tv.get(5));
+                out.add(new SlideAlignmentRecord(t, fileScope, f));
+            } catch (Exception e) {
+                logger.warn("loadAllSlideAlignments: failed to parse {}: {}", f.getName(), e.getMessage());
+            }
+        }
+        return out;
+    }
+
+    /**
      * Gets the creation date of a slide-specific alignment from a project.
      *
      * @param project The QuPath project
