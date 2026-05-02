@@ -1150,12 +1150,12 @@ public class LiveViewerWindow {
                 // matches the spinner before AF fires its own server-side
                 // exposure check.
                 double exposureMs;
+                double spinnerExposure = Double.NaN;
                 if (stageControlPanel != null) {
                     stageControlPanel.flushPendingExposureSync();
-                    exposureMs = stageControlPanel.getCurrentChannelExposureMs();
-                } else {
-                    exposureMs = Double.NaN;
+                    spinnerExposure = stageControlPanel.getCurrentChannelExposureMs();
                 }
+                exposureMs = spinnerExposure;
                 if (Double.isNaN(exposureMs)) {
                     var exposures = controller.getSocketClient().getExposures();
                     exposureMs = exposures.unified();
@@ -1164,6 +1164,17 @@ public class LiveViewerWindow {
                                 exposureMs,
                                 Math.max(exposures.red(), Math.max(exposures.green(), exposures.blue())));
                     }
+                    logger.info(
+                            "Streaming AF preflight: spinner=NaN, falling back to MMCore exposures "
+                                    + "unified={} red={} green={} blue={} -> using {} ms",
+                            exposures.unified(),
+                            exposures.red(),
+                            exposures.green(),
+                            exposures.blue(),
+                            exposureMs);
+                } else {
+                    logger.info(
+                            "Streaming AF preflight: using per-channel spinner exposure = {} ms", spinnerExposure);
                 }
                 if (exposureMs > 40.0) {
                     streamingFocusButton.setStyle("-fx-base: #F44336;");
