@@ -1770,30 +1770,23 @@ public class StageControlPanel extends VBox {
             var profiles = mgr.getConfigItem("acquisition_profiles");
             if (!(profiles instanceof java.util.Map<?, ?> profileMap) || profileMap.isEmpty()) return null;
 
-            // Filter profiles matching this modality
+            // Filter profiles to ONLY those declaring this exact modality.
+            // Mixing modalities here lets the user end up on Brightfield_10x
+            // while the modality combo still says Fluorescence -- the radio
+            // buttons then drive the wrong hardware path. The modality combo
+            // (above) is the single source of truth for cross-modality
+            // switching; this Profile: dropdown is just for picking the
+            // objective within the current modality.
             java.util.List<String> matchingProfiles = new java.util.ArrayList<>();
             String modalityLower = modality.toLowerCase();
             for (var entry : profileMap.entrySet()) {
                 String profileName = String.valueOf(entry.getKey());
                 if (entry.getValue() instanceof java.util.Map<?, ?> profileCfg) {
                     Object profModality = profileCfg.get("modality");
-                    if (profModality != null) {
-                        String profModStr = profModality.toString().toLowerCase();
-                        // Match if profile modality starts with same prefix as current modality
-                        if (profModStr.startsWith(modalityLower.substring(0, Math.min(2, modalityLower.length())))
-                                || modalityLower.startsWith(
-                                        profModStr.substring(0, Math.min(2, profModStr.length())))) {
-                            matchingProfiles.add(profileName);
-                        }
+                    if (profModality != null
+                            && profModality.toString().toLowerCase().equals(modalityLower)) {
+                        matchingProfiles.add(profileName);
                     }
-                }
-            }
-
-            // Also add ALL profiles so user can switch modalities from here
-            for (var entry : profileMap.entrySet()) {
-                String profileName = String.valueOf(entry.getKey());
-                if (!matchingProfiles.contains(profileName)) {
-                    matchingProfiles.add(profileName);
                 }
             }
 
