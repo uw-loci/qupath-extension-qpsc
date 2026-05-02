@@ -358,13 +358,25 @@ public class MacroImageUtility {
             ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
             if (entry != null) {
                 String originalId = ImageMetadataManager.getOriginalImageId(entry);
+                String baseImage = ImageMetadataManager.getBaseImage(entry);
+                logger.info(
+                        "retrieveMacroImage: entry='{}' original_image_id='{}' base_image='{}'",
+                        entry.getImageName(),
+                        originalId,
+                        baseImage);
                 if (originalId != null) {
-                    logger.info("Current image is a derived entry - retrieving macro from source");
+                    logger.info(
+                            "retrieveMacroImage: derived entry detected via original_image_id, tracing to source");
                     BufferedImage macro = retrieveMacroImageFromProject(gui, project);
                     if (macro != null) {
+                        logger.info(
+                                "retrieveMacroImage: SOURCE-TRACE path returning {}x{}",
+                                macro.getWidth(),
+                                macro.getHeight());
                         return macro;
                     }
-                    // Fall through to direct retrieval if project chain fails
+                    logger.warn(
+                            "retrieveMacroImage: source-trace failed, falling through to current entry's server");
                 }
             }
         }
@@ -374,7 +386,13 @@ public class MacroImageUtility {
             if (imageData == null) return null;
 
             var associatedList = imageData.getServer().getAssociatedImageList();
-            if (associatedList == null) return null;
+            if (associatedList == null) {
+                logger.info("retrieveMacroImage: current entry's server reports no associated images");
+                return null;
+            }
+            logger.info(
+                    "retrieveMacroImage: CURRENT-ENTRY-SERVER path, associated images={}",
+                    associatedList);
 
             // Find macro image key
             String macroKey = null;
@@ -389,8 +407,13 @@ public class MacroImageUtility {
 
             // Try to retrieve it
             Object image = imageData.getServer().getAssociatedImage(macroKey);
-            if (image instanceof BufferedImage) {
-                return (BufferedImage) image;
+            if (image instanceof BufferedImage bi) {
+                logger.info(
+                        "retrieveMacroImage: CURRENT-ENTRY-SERVER returning macro key='{}', dims {}x{}",
+                        macroKey,
+                        bi.getWidth(),
+                        bi.getHeight());
+                return bi;
             }
 
             // Try variations if needed

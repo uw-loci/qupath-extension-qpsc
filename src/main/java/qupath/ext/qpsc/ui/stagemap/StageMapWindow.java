@@ -1008,10 +1008,21 @@ public class StageMapWindow {
 
             String fromEntry = entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
             List<String> sources = sourceComboBox.getItems();
+            String currentDropdown = sourceComboBox.getValue();
+            logger.info(
+                    "onOpenedImageChanged: entry='{}' source_microscope='{}' current dropdown='{}' available={}",
+                    entry.getImageName(),
+                    fromEntry,
+                    currentDropdown,
+                    sources);
 
             if (fromEntry != null && !fromEntry.isEmpty()) {
                 if (sources.contains(fromEntry)
                         && !fromEntry.equals(sourceComboBox.getValue())) {
+                    logger.info(
+                            "onOpenedImageChanged: switching dropdown '{}' -> '{}' due to entry's source_microscope",
+                            currentDropdown,
+                            fromEntry);
                     applySourceSelection(fromEntry, /* writeMetadata */ false);
                 }
                 return;
@@ -1020,6 +1031,9 @@ public class StageMapWindow {
             // No source on the entry -- apply the persistent default and stamp it.
             String defaultSource = PersistentPreferences.getSelectedScanner();
             if (defaultSource != null && !defaultSource.isEmpty() && sources.contains(defaultSource)) {
+                logger.info(
+                        "onOpenedImageChanged: entry has no source_microscope; stamping default '{}'",
+                        defaultSource);
                 applySourceSelection(defaultSource, /* writeMetadata */ true);
             }
         } catch (Exception e) {
@@ -1074,9 +1088,30 @@ public class StageMapWindow {
                 Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
                 ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
                 if (entry != null && entry.getMetadata().get(ImageMetadataManager.FLIP_X) != null) {
-                    return new boolean[] {
+                    boolean[] axes = {
                         ImageMetadataManager.isFlippedX(entry), ImageMetadataManager.isFlippedY(entry)
                     };
+                    logger.info(
+                            "resolveCurrentFlipAxes: entry='{}' base_image='{}' original_image_id='{}' source_microscope='{}' "
+                                    + "FLIP_X='{}' FLIP_Y='{}' -> ENTRY-META wins ({}, {})",
+                            entry.getImageName(),
+                            entry.getMetadata().get(ImageMetadataManager.BASE_IMAGE),
+                            entry.getMetadata().get(ImageMetadataManager.ORIGINAL_IMAGE_ID),
+                            entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE),
+                            entry.getMetadata().get(ImageMetadataManager.FLIP_X),
+                            entry.getMetadata().get(ImageMetadataManager.FLIP_Y),
+                            axes[0],
+                            axes[1]);
+                    return axes;
+                }
+                if (entry != null) {
+                    logger.info(
+                            "resolveCurrentFlipAxes: entry='{}' base_image='{}' original_image_id='{}' source_microscope='{}' "
+                                    + "FLIP_X=null -> falling through to preset",
+                            entry.getImageName(),
+                            entry.getMetadata().get(ImageMetadataManager.BASE_IMAGE),
+                            entry.getMetadata().get(ImageMetadataManager.ORIGINAL_IMAGE_ID),
+                            entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE));
                 }
             }
         } catch (Exception e) {
@@ -1084,9 +1119,16 @@ public class StageMapWindow {
         }
 
         if (activePreset != null && activePreset.hasFlipState()) {
-            return new boolean[] {activePreset.getFlipMacroX(), activePreset.getFlipMacroY()};
+            boolean[] axes = {activePreset.getFlipMacroX(), activePreset.getFlipMacroY()};
+            logger.info(
+                    "resolveCurrentFlipAxes: PRESET wins (preset='{}', flip=({}, {}))",
+                    activePreset.getName(),
+                    axes[0],
+                    axes[1]);
+            return axes;
         }
 
+        logger.info("resolveCurrentFlipAxes: no entry metadata, no preset -> default (false, false)");
         return new boolean[] {false, false};
     }
 
