@@ -493,7 +493,25 @@ public class ExistingImageWorkflowV2 {
                         boolean requiresFlipY = FlipResolver.resolveFlipY(null, presetForFlip, null);
                         String sampleNameForFlip = state.sample != null ? state.sample.sampleName() : null;
                         return ImageFlipHelper.validateAndFlipIfNeeded(
-                                gui, project, sampleNameForFlip, requiresFlipX, requiresFlipY);
+                                        gui, project, sampleNameForFlip, requiresFlipX, requiresFlipY)
+                                .thenApply(validated -> {
+                                    // Post-swap verification: confirm the open entry's pixel frame
+                                    // actually matches the saved alignment's expected frame. The saved
+                                    // per-slide fullRes->stage transform was built in the flip frame
+                                    // of whatever entry was open at save time; running acquisition
+                                    // from a mismatched frame produces an X-mirrored stage target
+                                    // (verified 2026-05-02: Go-to-Centroid on the unflipped entry
+                                    // lands at the X-mirror of where the same annotation lands on
+                                    // the flipped duplicate, and acquisition follows the same wrong
+                                    // path). validateAndFlipIfNeeded is supposed to swap to the
+                                    // flipped entry but the swap can race the worker thread that
+                                    // reads gui.getImageData() downstream.
+                                    if (validated) {
+                                        verifyOpenEntryMatchesPreset(
+                                                gui, project, requiresFlipX, requiresFlipY);
+                                    }
+                                    return validated;
+                                });
                     })
                     .thenCompose(validated -> {
                         if (!validated) {
@@ -683,7 +701,13 @@ public class ExistingImageWorkflowV2 {
                         boolean requiresFlipY = FlipResolver.resolveFlipY(null, presetForFlip, null);
                         String sampleNameForFlip2 = state.sample != null ? state.sample.sampleName() : null;
                         return ImageFlipHelper.validateAndFlipIfNeeded(
-                                gui, proj, sampleNameForFlip2, requiresFlipX, requiresFlipY);
+                                        gui, proj, sampleNameForFlip2, requiresFlipX, requiresFlipY)
+                                .thenApply(validated -> {
+                                    if (validated) {
+                                        verifyOpenEntryMatchesPreset(gui, proj, requiresFlipX, requiresFlipY);
+                                    }
+                                    return validated;
+                                });
                     })
                     .thenCompose(validated -> {
                         if (!validated) {
@@ -1017,6 +1041,111 @@ public class ExistingImageWorkflowV2 {
 
             cleanup();
             return null;
+        }
+
+        /**
+         * Verifies that the QuPath GUI's currently-open project entry has the flip metadata
+         * the saved alignment preset requires. Aborts the workflow with a clear modal if not.
+         *
+         * <p>The saved per-slide {@code fullRes->stage} transform was built in the pixel frame
+         * of whatever entry was open at save time. Running acquisition from a mismatched frame
+         * sends unflipped pixel coords through a flipped-frame transform (or vice versa),
+         * producing an X-mirrored stage target. {@link ImageFlipHelper#validateAndFlipIfNeeded}
+         * is supposed to swap to the matching entry, but the swap is asynchronous on the FX
+         * thread and the worker thread that reads {@code gui.getImageData()} downstream can
+         * race the swap and read stale data. Verified 2026-05-02 OWS3: Go-to-Centroid lands
+         * at the X-mirror on the unflipped entry but at the correct location on the flipped
+         * duplicate, and the acquisition follows whichever entry is actually open.
+         *
+         * <p>The user explicitly asked us to detect this case and either auto-switch reliably
+         * or warn. Auto-switch's reliability is what's currently broken, so we surface a
+         * clear instruction instead: switch manually and re-run.
+         */
+        private void verifyOpenEntryMatchesPreset(
+                QuPathGUI gui,
+                Project<BufferedImage> project,
+                boolean requiresFlipX,
+                boolean requiresFlipY) {
+            if (gui == null || project == null) return;
+            ImageData<BufferedImage> openData = gui.getImageData();
+            ProjectImageEntry<BufferedImage> openEntry = openData != null ? project.getEntry(openData) : null;
+            if (openEntry == null) {
+                logger.warn(
+                        "verifyOpenEntryMatchesPreset: no open entry found in project; skipping check");
+                return;
+            }
+            boolean openFlipX = ImageMetadataManager.isFlippedX(openEntry);
+            boolean openFlipY = ImageMetadataManager.isFlippedY(openEntry);
+            if (openFlipX == requiresFlipX && openFlipY == requiresFlipY) {
+                logger.info(
+                        "verifyOpenEntryMatchesPreset: open entry='{}' flip=({}, {}) matches preset requirement",
+                        openEntry.getImageName(),
+                        openFlipX,
+                        openFlipY);
+                return;
+            }
+
+            // Find the sibling entry that DOES match the preset's flip frame so we can name
+            // it in the error message. The user has confirmed that running from the matching
+            // sibling produces the correct acquisition.
+            String baseImage = ImageMetadataManager.getBaseImage(openEntry);
+            if (baseImage == null || baseImage.isBlank()) {
+                baseImage = qupath.lib.common.GeneralTools.stripExtension(openEntry.getImageName());
+            }
+            String matchingSiblingName = null;
+            for (ProjectImageEntry<BufferedImage> sibling : project.getImageList()) {
+                if (sibling.equals(openEntry)) continue;
+                String siblingBase = ImageMetadataManager.getBaseImage(sibling);
+                if (siblingBase == null || siblingBase.isBlank()) {
+                    siblingBase = qupath.lib.common.GeneralTools.stripExtension(sibling.getImageName());
+                }
+                if (!baseImage.equals(siblingBase)) continue;
+                if (ImageMetadataManager.isFlippedX(sibling) == requiresFlipX
+                        && ImageMetadataManager.isFlippedY(sibling) == requiresFlipY) {
+                    matchingSiblingName = sibling.getImageName();
+                    break;
+                }
+            }
+
+            String requirement = String.format(
+                    "flipX=%s, flipY=%s", requiresFlipX, requiresFlipY);
+            String openState = String.format(
+                    "flipX=%s, flipY=%s", openFlipX, openFlipY);
+            String message;
+            if (matchingSiblingName != null) {
+                message = String.format(
+                        "The currently open image '%s' (%s) does not match the alignment's "
+                                + "expected pixel frame (%s).%n%n"
+                                + "Switch to '%s' in the QuPath project view, then re-run the "
+                                + "acquisition. Acquiring from the wrong frame produces an X-mirrored "
+                                + "stage target.",
+                        openEntry.getImageName(),
+                        openState,
+                        requirement,
+                        matchingSiblingName);
+            } else {
+                message = String.format(
+                        "The currently open image '%s' (%s) does not match the alignment's "
+                                + "expected pixel frame (%s) and no matching sibling was found "
+                                + "in the project.%n%n"
+                                + "Run Microscope Alignment to create the flipped duplicate, or open "
+                                + "the correct flipped version of this slide and re-run.",
+                        openEntry.getImageName(),
+                        openState,
+                        requirement);
+            }
+            logger.error(
+                    "verifyOpenEntryMatchesPreset: MISMATCH -- open entry='{}' flip=({}, {}), "
+                            + "preset requires flip=({}, {}); matching sibling='{}'",
+                    openEntry.getImageName(),
+                    openFlipX,
+                    openFlipY,
+                    requiresFlipX,
+                    requiresFlipY,
+                    matchingSiblingName);
+            Platform.runLater(() -> Dialogs.showErrorMessage(
+                    "Wrong image open for this alignment", message));
+            throw new RuntimeException("Open entry's flip frame does not match alignment preset");
         }
     }
 
