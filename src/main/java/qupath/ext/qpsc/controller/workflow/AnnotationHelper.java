@@ -149,9 +149,37 @@ public class AnnotationHelper {
             return Collections.emptyList();
         }
 
-        // Enhanced logging to help diagnose tile positioning issues
+        // Enhanced logging to help diagnose tile positioning issues.
+        // Includes the project entry name + flip metadata in addition to the underlying server
+        // path: a flipped duplicate's TransformedImageServer reports the same path as the
+        // unflipped base SVS, so the path alone cannot tell us whether annotations are being
+        // read in the flipped or unflipped pixel frame. The entry name + FLIP_X/Y disambiguate.
         String imageName = gui.getImageData().getServer().getPath();
-        logger.info("Retrieving annotations from image: {}", imageName);
+        String entryDescription = "<no project>";
+        if (gui.getProject() != null) {
+            try {
+                @SuppressWarnings("unchecked")
+                qupath.lib.projects.Project<java.awt.image.BufferedImage> proj =
+                        (qupath.lib.projects.Project<java.awt.image.BufferedImage>) gui.getProject();
+                qupath.lib.projects.ProjectImageEntry<java.awt.image.BufferedImage> entry =
+                        proj.getEntry(gui.getImageData());
+                if (entry != null) {
+                    entryDescription = String.format(
+                            "name='%s' FLIP_X='%s' FLIP_Y='%s' base_image='%s' original_image_id='%s'",
+                            entry.getImageName(),
+                            entry.getMetadata().get(qupath.ext.qpsc.utilities.ImageMetadataManager.FLIP_X),
+                            entry.getMetadata().get(qupath.ext.qpsc.utilities.ImageMetadataManager.FLIP_Y),
+                            entry.getMetadata().get(qupath.ext.qpsc.utilities.ImageMetadataManager.BASE_IMAGE),
+                            entry.getMetadata()
+                                    .get(qupath.ext.qpsc.utilities.ImageMetadataManager.ORIGINAL_IMAGE_ID));
+                } else {
+                    entryDescription = "<no matching project entry for current ImageData>";
+                }
+            } catch (Exception e) {
+                entryDescription = "<entry lookup error: " + e.getMessage() + ">";
+            }
+        }
+        logger.info("Retrieving annotations from image: server={} entry=[{}]", imageName, entryDescription);
 
         var hierarchy = gui.getImageData().getHierarchy();
         var allAnnotations = hierarchy.getAnnotationObjects();

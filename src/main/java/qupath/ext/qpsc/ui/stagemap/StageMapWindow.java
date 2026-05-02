@@ -1087,24 +1087,51 @@ public class StageMapWindow {
                 @SuppressWarnings("unchecked")
                 Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
                 ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
-                if (entry != null && entry.getMetadata().get(ImageMetadataManager.FLIP_X) != null) {
-                    boolean[] axes = {
-                        ImageMetadataManager.isFlippedX(entry), ImageMetadataManager.isFlippedY(entry)
-                    };
-                    logger.info(
-                            "resolveCurrentFlipAxes: entry='{}' base_image='{}' original_image_id='{}' source_microscope='{}' "
-                                    + "FLIP_X='{}' FLIP_Y='{}' -> ENTRY-META wins ({}, {})",
-                            entry.getImageName(),
-                            entry.getMetadata().get(ImageMetadataManager.BASE_IMAGE),
-                            entry.getMetadata().get(ImageMetadataManager.ORIGINAL_IMAGE_ID),
-                            entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE),
-                            entry.getMetadata().get(ImageMetadataManager.FLIP_X),
-                            entry.getMetadata().get(ImageMetadataManager.FLIP_Y),
-                            axes[0],
-                            axes[1]);
-                    return axes;
-                }
                 if (entry != null) {
+                    // For DERIVED entries (sub-acquisitions, flipped duplicates -- anything with
+                    // original_image_id set), the FLIP_X/Y metadata describes the entry's OWN
+                    // pixel orientation, NOT the alignment-time macro frame. Sub-acquisitions
+                    // always carry FLIP_X='0' / FLIP_Y='0' (canonical stage-aligned orientation),
+                    // which is wrong to feed into the macro overlay flip path -- the macro
+                    // overlay is rendered in the alignment-time frame, which lives on the preset
+                    // as flipMacroX/Y. Per-entry FLIP_X/Y leaks into resolveCurrentFlipAxes and
+                    // makes the macro render with opposite X flip on a sub-acquisition vs its
+                    // parent, even though the macro source bytes are identical.
+                    //
+                    // Restores the rationale of commit 8db7cd7 but scoped to derived entries
+                    // only, so the parent base entry's behavior is unchanged.
+                    boolean isDerived = entry.getMetadata().get(ImageMetadataManager.ORIGINAL_IMAGE_ID) != null;
+                    if (isDerived && activePreset != null && activePreset.hasFlipState()) {
+                        boolean[] axes = {activePreset.getFlipMacroX(), activePreset.getFlipMacroY()};
+                        logger.info(
+                                "resolveCurrentFlipAxes: entry='{}' is DERIVED (original_image_id='{}') -> PRESET wins "
+                                        + "(preset='{}', flip=({}, {})); ignoring entry FLIP_X='{}' FLIP_Y='{}'",
+                                entry.getImageName(),
+                                entry.getMetadata().get(ImageMetadataManager.ORIGINAL_IMAGE_ID),
+                                activePreset.getName(),
+                                axes[0],
+                                axes[1],
+                                entry.getMetadata().get(ImageMetadataManager.FLIP_X),
+                                entry.getMetadata().get(ImageMetadataManager.FLIP_Y));
+                        return axes;
+                    }
+                    if (entry.getMetadata().get(ImageMetadataManager.FLIP_X) != null) {
+                        boolean[] axes = {
+                            ImageMetadataManager.isFlippedX(entry), ImageMetadataManager.isFlippedY(entry)
+                        };
+                        logger.info(
+                                "resolveCurrentFlipAxes: entry='{}' base_image='{}' original_image_id='{}' source_microscope='{}' "
+                                        + "FLIP_X='{}' FLIP_Y='{}' -> ENTRY-META wins ({}, {})",
+                                entry.getImageName(),
+                                entry.getMetadata().get(ImageMetadataManager.BASE_IMAGE),
+                                entry.getMetadata().get(ImageMetadataManager.ORIGINAL_IMAGE_ID),
+                                entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE),
+                                entry.getMetadata().get(ImageMetadataManager.FLIP_X),
+                                entry.getMetadata().get(ImageMetadataManager.FLIP_Y),
+                                axes[0],
+                                axes[1]);
+                        return axes;
+                    }
                     logger.info(
                             "resolveCurrentFlipAxes: entry='{}' base_image='{}' original_image_id='{}' source_microscope='{}' "
                                     + "FLIP_X=null -> falling through to preset",
