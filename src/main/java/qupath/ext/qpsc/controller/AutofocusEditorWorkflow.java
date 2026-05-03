@@ -491,20 +491,47 @@ public class AutofocusEditorWorkflow {
     private static class ModalityBinding {
         String modalityKey;
         String strategyName;
-        Map<String, Object> overrides;
+        Map<String, Object> overrides; // validity_params overrides only
+        // score_metric / on_failure overrides applied at the same precedence
+        // as validity_params -- per-modality wins over the strategy's
+        // default but loses to per-objective YAML score_metric. Null
+        // means "do not override; use strategy default".
+        String scoreMetricOverride;
+        String onFailureOverride;
 
         ModalityBinding(String modalityKey, String strategyName, Map<String, Object> overrides) {
+            this(modalityKey, strategyName, overrides, null, null);
+        }
+
+        ModalityBinding(String modalityKey, String strategyName, Map<String, Object> overrides,
+                        String scoreMetricOverride, String onFailureOverride) {
             this.modalityKey = modalityKey;
             this.strategyName = strategyName != null ? strategyName : "dense_texture";
             this.overrides = overrides != null ? new LinkedHashMap<>(overrides) : new LinkedHashMap<>();
+            this.scoreMetricOverride = scoreMetricOverride;
+            this.onFailureOverride = onFailureOverride;
+        }
+
+        boolean hasAnyOverride() {
+            return !overrides.isEmpty()
+                    || (scoreMetricOverride != null && !scoreMetricOverride.isEmpty())
+                    || (onFailureOverride != null && !onFailureOverride.isEmpty());
         }
 
         Map<String, Object> toYamlMap() {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("strategy", strategyName);
-            if (!overrides.isEmpty()) {
+            if (hasAnyOverride()) {
                 Map<String, Object> ov = new LinkedHashMap<>();
-                ov.put("validity_params", new LinkedHashMap<>(overrides));
+                if (scoreMetricOverride != null && !scoreMetricOverride.isEmpty()) {
+                    ov.put("score_metric", scoreMetricOverride);
+                }
+                if (onFailureOverride != null && !onFailureOverride.isEmpty()) {
+                    ov.put("on_failure", onFailureOverride);
+                }
+                if (!overrides.isEmpty()) {
+                    ov.put("validity_params", new LinkedHashMap<>(overrides));
+                }
                 map.put("overrides", ov);
             }
             return map;
@@ -675,7 +702,13 @@ public class AutofocusEditorWorkflow {
 
         // Gap index multiplier: safety-net force-AF threshold in scan-order space
         Label gapIndexLabel = new Label("gap_index_multiplier:");
-        Spinner<Integer> gapIndexSpinner = new Spinner<>(1, 10, 3, 1);
+        // Range was (1, 10) -- too tight for low-frequency safety nets
+        // on long acquisitions. Operators with 200+ tile grids
+        // legitimately want gap_index_multiplier in the 10-30 range
+        // to suppress wasted AF on dense well-focused regions while
+        // still catching long gaps. Cap at 50 (any higher is suspicious;
+        // user can hand-edit YAML if they really need it).
+        Spinner<Integer> gapIndexSpinner = new Spinner<>(1, 50, 3, 1);
         gapIndexSpinner.setEditable(true);
         gapIndexSpinner.setPrefWidth(100);
         gapIndexSpinner.setTooltip(new Tooltip("Safety net: forces an extra autofocus when the scan has gone\n"
@@ -1407,8 +1440,12 @@ public class AutofocusEditorWorkflow {
         dialog.getDialogPane().setContent(mainLayout);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
-        // OK button behavior - save if changed
+        // OK button behavior - save if changed.
+        // Rename to "Save and Close" so novices stop reading "OK" as
+        // dismiss-without-saving (recurring confusion in usability
+        // sessions). Functional behaviour unchanged.
         Button okButton = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
+        okButton.setText("Save and Close");
         okButton.setOnAction(e -> {
             writeButton.fire(); // Trigger save
         });
@@ -1548,6 +1585,8 @@ public class AutofocusEditorWorkflow {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> m = (Map<String, Object>) entry.getValue();
                 Map<String, Object> overrides = new LinkedHashMap<>();
+                String scoreOv = null;
+                String failureOv = null;
                 if (m.get("overrides") != null) {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> ov = (Map<String, Object>) m.get("overrides");
@@ -1556,8 +1595,14 @@ public class AutofocusEditorWorkflow {
                         Map<String, Object> vp = (Map<String, Object>) ov.get("validity_params");
                         overrides.putAll(vp);
                     }
+                    Object sm = ov.get("score_metric");
+                    if (sm != null) scoreOv = String.valueOf(sm);
+                    Object of = ov.get("on_failure");
+                    if (of != null) failureOv = String.valueOf(of);
                 }
-                result.put(entry.getKey(), new ModalityBinding(entry.getKey(), (String) m.get("strategy"), overrides));
+                result.put(entry.getKey(), new ModalityBinding(
+                        entry.getKey(), (String) m.get("strategy"),
+                        overrides, scoreOv, failureOv));
             }
             logger.info("Loaded {} modality bindings from {}", result.size(), autofocusFile.getName());
         } catch (Exception e) {
@@ -1909,8 +1954,57 @@ public class AutofocusEditorWorkflow {
         overrideGrid.setHgap(6);
         overrideGrid.setVgap(4);
         overrideGrid.setPadding(new Insets(4, 0, 0, 20));
-        overrideGrid.setVisible(!mb.overrides.isEmpty());
-        overrideGrid.setManaged(!mb.overrides.isEmpty());
+        boolean anyOv = mb.hasAnyOverride();
+        overrideGrid.setVisible(anyOv);
+        overrideGrid.setManaged(anyOv);
+
+        // score_metric and on_failure overrides. Both null => use the
+        // strategy's default. Sentinel "(use strategy default)" combo
+        // entry maps to null on save. Manifest-sourced metric list +
+        // hardcoded ON_FAILURE_MODES (only three valid values).
+        FocusMetricsManifest bindingManifest = FocusMetricsManifest.get(null);
+        GridPane bindingOverrideGrid = new GridPane();
+        bindingOverrideGrid.setHgap(6);
+        bindingOverrideGrid.setVgap(4);
+        bindingOverrideGrid.setPadding(new Insets(4, 0, 0, 20));
+        bindingOverrideGrid.setVisible(anyOv);
+        bindingOverrideGrid.setManaged(anyOv);
+        final String SENTINEL = "(use strategy default)";
+
+        Label scoreOvLabel = new Label("score_metric override:");
+        ComboBox<String> scoreOvCombo = new ComboBox<>();
+        scoreOvCombo.getItems().add(SENTINEL);
+        for (FocusMetricsManifest.MetricSpec ms : bindingManifest.metricsForDropdown()) {
+            scoreOvCombo.getItems().add(ms.name);
+        }
+        scoreOvCombo.setValue(mb.scoreMetricOverride == null ? SENTINEL : mb.scoreMetricOverride);
+        scoreOvCombo.setPrefWidth(200);
+        scoreOvCombo.setTooltip(new Tooltip(
+                "Per-modality override for the strategy's score_metric default.\n"
+                        + "Loses to per-objective YAML score_metric (per-objective wins).\n"
+                        + "Pick the sentinel to inherit the strategy's metric."));
+        scoreOvCombo.valueProperty().addListener((obs, o, n) -> {
+            mb.scoreMetricOverride = (n == null || SENTINEL.equals(n)) ? null : n;
+        });
+        bindingOverrideGrid.add(scoreOvLabel, 0, 0);
+        bindingOverrideGrid.add(scoreOvCombo, 1, 0);
+
+        Label failOvLabel = new Label("on_failure override:");
+        ComboBox<String> failOvCombo = new ComboBox<>();
+        failOvCombo.getItems().add(SENTINEL);
+        failOvCombo.getItems().addAll(ON_FAILURE_MODES);
+        failOvCombo.setValue(mb.onFailureOverride == null ? SENTINEL : mb.onFailureOverride);
+        failOvCombo.setPrefWidth(200);
+        failOvCombo.setTooltip(new Tooltip(
+                "Per-modality override for the strategy's on_failure default.\n"
+                        + "Useful when the same strategy needs to defer for one\n"
+                        + "modality but proceed for another. Pick the sentinel to\n"
+                        + "inherit the strategy's setting."));
+        failOvCombo.valueProperty().addListener((obs, o, n) -> {
+            mb.onFailureOverride = (n == null || SENTINEL.equals(n)) ? null : n;
+        });
+        bindingOverrideGrid.add(failOvLabel, 0, 1);
+        bindingOverrideGrid.add(failOvCombo, 1, 1);
 
         // Self-referencing Runnable via single-element array (Java lambda limitation).
         Runnable[] rebuildHolder = new Runnable[1];
@@ -1955,16 +2049,22 @@ public class AutofocusEditorWorkflow {
             boolean show = overrideCheck.isSelected();
             overrideGrid.setVisible(show);
             overrideGrid.setManaged(show);
+            bindingOverrideGrid.setVisible(show);
+            bindingOverrideGrid.setManaged(show);
             if (show && mb.overrides.isEmpty()) {
                 rebuildHolder[0].run();
             }
             if (!show) {
                 mb.overrides.clear();
+                mb.scoreMetricOverride = null;
+                mb.onFailureOverride = null;
+                scoreOvCombo.setValue(SENTINEL);
+                failOvCombo.setValue(SENTINEL);
             }
         });
         rebuildHolder[0].run();
 
-        container.getChildren().addAll(row, overrideGrid);
+        container.getChildren().addAll(row, bindingOverrideGrid, overrideGrid);
         return container;
     }
 
