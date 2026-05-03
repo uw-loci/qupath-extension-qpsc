@@ -809,8 +809,12 @@ public class StageControlPanel extends VBox {
     private ToggleGroup cameraChannelGroup;
     private final Map<String, RadioButton> cameraChannelRadios = new HashMap<>();
     private final Map<String, Spinner<Double>> cameraChannelExpSpinners = new HashMap<>();
+    private final Map<String, Spinner<Double>> cameraChannelIntSpinners = new HashMap<>();
+    private final Map<String, qupath.ext.qpsc.modality.Channel> cameraChannelDefs = new HashMap<>();
     private final Map<String, PauseTransition> cameraChannelExpDebounces = new HashMap<>();
     private final Map<String, Double> cameraChannelExpPending = new HashMap<>();
+    /** Active acquisition-profile selection in the Camera tab Profile dropdown. */
+    private volatile String cameraActiveProfile;
 
     /**
      * Returns the per-channel exposure (ms) the user has dialed in for the
@@ -1256,6 +1260,12 @@ public class StageControlPanel extends VBox {
             logger.debug("Could not load brightfield presets: {}", e.getMessage());
         }
 
+        // Save current illumination (live GETILLM value) into the active
+        // acquisition profile in the YAML. Without this, BG and tiled
+        // acquisition reload the YAML's profile.illumination_intensity and
+        // ignore whatever the user just tuned in the Camera tab.
+        cameraModContent.getChildren().addAll(new Separator(), buildBrightfieldSaveToProfileButton(modality));
+
         // Save/Load preset buttons
         cameraModContent.getChildren().addAll(new Separator(), buildPresetButtons(modality));
 
@@ -1314,6 +1324,8 @@ public class StageControlPanel extends VBox {
             // don't reference a previous modality's channels.
             cameraChannelRadios.clear();
             cameraChannelExpSpinners.clear();
+            cameraChannelIntSpinners.clear();
+            cameraChannelDefs.clear();
             cameraChannelExpDebounces.clear();
             cameraChannelExpPending.clear();
             cameraChannelGroup = new ToggleGroup();
@@ -1424,6 +1436,8 @@ public class StageControlPanel extends VBox {
                     expDebounce.playFromStart();
                 });
                 cameraChannelExpSpinners.put(chIdLocal, expSpinner);
+                cameraChannelIntSpinners.put(chIdLocal, intSpinner);
+                cameraChannelDefs.put(chIdLocal, ch);
                 cameraChannelExpDebounces.put(chIdLocal, expDebounce);
                 cameraChannelRadios.put(chIdLocal, previewRadio);
 
@@ -1516,6 +1530,12 @@ public class StageControlPanel extends VBox {
             liveNote.setWrapText(true);
             liveNote.setStyle("-fx-font-size: 9px; -fx-text-fill: gray; -fx-font-style: italic;");
             cameraModContent.getChildren().addAll(new Separator(), liveNote);
+
+            // Persist the spinner-tuned values to YAML so they survive
+            // restarts and feed BG / acquisition. Hover the button for the
+            // exact list of fields written for this modality.
+            cameraModContent.getChildren().addAll(
+                    new Separator(), buildFluorescenceSaveToProfileButton(modality));
         } else {
             // Fallback for profiles without a channel library.
             cameraModContent.getChildren().add(buildExposureControl());
@@ -1566,6 +1586,230 @@ public class StageControlPanel extends VBox {
                 modality, channel.id());
         if (saved != null && saved > 0) return saved;
         return channel.defaultExposureMs();
+    }
+
+    /**
+     * Build a "Save to profile" button for the brightfield Camera tab.
+     * Writes the live illumination level (read via GETILLM) to
+     * {@code acquisition_profiles.<active_profile>.illumination_intensity}
+     * in the microscope YAML, calls reload on both the Java config manager
+     * and the Python server (RECONFG), then rebuilds the tab so dropdowns
+     * reflect the new state.
+     */
+    private Node buildBrightfieldSaveToProfileButton(String modality) {
+        Button saveBtn = new Button("Save Intensity to Profile");
+        saveBtn.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
+        saveBtn.setTooltip(new Tooltip(
+                "Persists the LIVE lamp intensity (whatever GETILLM reports right now) "
+                + "to acquisition_profiles." + (cameraActiveProfile == null ? "<profile>" : cameraActiveProfile)
+                + ".illumination_intensity in your microscope YAML.\n\n"
+                + "Why it matters: Background Collection and tiled Acquisition both pull "
+                + "this value from the YAML profile (apply_profile_illumination + "
+                + "apply_mode_setup) -- they do NOT inherit whatever the Camera tab last "
+                + "tuned in live preview. Save here so a 700 Camera-tab tune-up actually "
+                + "drives BG and acquisition at 700.\n\n"
+                + "After save: the Java MicroscopeConfigManager reloads from disk and "
+                + "the server runs RECONFG so both sides see the new value immediately.\n\n"
+                + "Note: brightfield exposure is NOT saved -- BF exposure is determined "
+                + "per-acquisition by the adaptive-exposure loop targeting the detector's "
+                + "background_target_intensity, not by a profile-level field."));
+        saveBtn.setOnAction(e -> doSaveBrightfieldProfile(modality));
+        HBox row = new HBox(4, saveBtn);
+        row.setAlignment(Pos.CENTER_LEFT);
+        return row;
+    }
+
+    private void doSaveBrightfieldProfile(String modality) {
+        final String profileKey = cameraActiveProfile;
+        if (profileKey == null) {
+            cameraStatusLabel.setText("No profile selected -- cannot save");
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+            return;
+        }
+        final String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        if (configPath == null || configPath.isBlank()) {
+            cameraStatusLabel.setText("No config path configured");
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+            return;
+        }
+        cameraStatusLabel.setText("Saving illumination to " + profileKey + "...");
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        MicroscopeController mc = MicroscopeController.getInstance();
+                        if (mc == null || !mc.isConnected()) throw new java.io.IOException("Not connected");
+                        var illum = mc.getSocketClient().getIllumination();
+                        if (!illum.available()) {
+                            throw new java.io.IOException("Server reports no illumination configured");
+                        }
+                        double power = illum.power();
+                        var result = qupath.ext.qpsc.utilities.ConfigYamlEditor.setProfileScalar(
+                                java.nio.file.Paths.get(configPath),
+                                profileKey,
+                                "illumination_intensity",
+                                power);
+                        // Reload on BOTH sides so the next BG / acquisition actually sees the new value.
+                        mgr.reload(configPath);
+                        try {
+                            mc.getSocketClient().sendReconfig();
+                        } catch (Exception reconfigEx) {
+                            logger.warn("RECONFG after save failed: {}", reconfigEx.getMessage());
+                        }
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Saved: " + result.message);
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                            rebuildCameraModContent(modality);
+                        });
+                    } catch (Exception ex) {
+                        logger.error("Save brightfield profile failed: {}", ex.getMessage(), ex);
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Save failed: " + ex.getMessage());
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                        });
+                    }
+                },
+                "Save-Profile-BF");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * Build a "Save all channels to YAML" button for the fluorescence
+     * Camera tab. Walks every channel row in the tab and writes its
+     * Exp/Intensity values to {@code modalities.<modality>.channels[*]}
+     * in the microscope YAML (exposure_ms + the device_properties value
+     * matching the channel's intensity_property), then reloads both sides.
+     */
+    private Node buildFluorescenceSaveToProfileButton(String modality) {
+        Button saveBtn = new Button("Save Channels to YAML");
+        saveBtn.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
+        StringBuilder lines = new StringBuilder();
+        for (var ch : cameraChannelDefs.values()) {
+            lines.append("  ").append(ch.id());
+            if (ch.intensityProperty() != null) {
+                lines.append(" -> exposure_ms + ")
+                        .append(ch.intensityProperty().device())
+                        .append(".")
+                        .append(ch.intensityProperty().property());
+            } else {
+                lines.append(" -> exposure_ms only");
+            }
+            lines.append("\n");
+        }
+        saveBtn.setTooltip(new Tooltip(
+                "Persists the CURRENT spinner values for every channel below to "
+                + "modalities." + modality + ".channels[*] in your microscope YAML.\n\n"
+                + "Each channel writes:\n"
+                + "  exposure_ms (from the Exp spinner)\n"
+                + "  device_properties[intensity_property].value (from the Intensity spinner)\n\n"
+                + "Channels saved this session:\n" + lines.toString()
+                + "\nAcquisition reads these via apply_channel_hardware_state, so the "
+                + "next BG/tile run will use exactly what you tuned in live preview "
+                + "(no more spinner-vs-hardware drift).\n\n"
+                + "After save: the Java MicroscopeConfigManager reloads from disk and "
+                + "the server runs RECONFG so both sides see the new values immediately.\n\n"
+                + "Note: profile-level channel_overrides (per-objective tuning) are NOT "
+                + "touched -- this writes the modality-level base only."));
+        saveBtn.setOnAction(e -> doSaveFluorescenceChannels(modality));
+        HBox row = new HBox(4, saveBtn);
+        row.setAlignment(Pos.CENTER_LEFT);
+        return row;
+    }
+
+    private void doSaveFluorescenceChannels(String modality) {
+        final String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        if (configPath == null || configPath.isBlank()) {
+            cameraStatusLabel.setText("No config path configured");
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+            return;
+        }
+        if (cameraChannelDefs.isEmpty()) {
+            cameraStatusLabel.setText("No channels to save");
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+            return;
+        }
+        // Snapshot spinner state on the FX thread so the worker reads
+        // immutable values; otherwise the user dragging arrows during the
+        // save races the writer.
+        java.util.Map<String, Double> expSnap = new java.util.LinkedHashMap<>();
+        java.util.Map<String, Double> intSnap = new java.util.LinkedHashMap<>();
+        java.util.Map<String, qupath.ext.qpsc.modality.Channel> defSnap = new java.util.LinkedHashMap<>();
+        for (var entry : cameraChannelDefs.entrySet()) {
+            String id = entry.getKey();
+            defSnap.put(id, entry.getValue());
+            Spinner<Double> exp = cameraChannelExpSpinners.get(id);
+            Spinner<Double> in = cameraChannelIntSpinners.get(id);
+            if (exp != null && exp.getValue() != null) expSnap.put(id, exp.getValue());
+            if (in != null && in.getValue() != null) intSnap.put(id, in.getValue());
+        }
+        cameraStatusLabel.setText("Saving " + defSnap.size() + " channels...");
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        java.nio.file.Path path = java.nio.file.Paths.get(configPath);
+                        int writes = 0;
+                        StringBuilder summary = new StringBuilder();
+                        for (var entry : defSnap.entrySet()) {
+                            String id = entry.getKey();
+                            qupath.ext.qpsc.modality.Channel ch = entry.getValue();
+                            Double exp = expSnap.get(id);
+                            if (exp != null) {
+                                var r = qupath.ext.qpsc.utilities.ConfigYamlEditor.setChannelExposureMs(
+                                        path, modality, id, exp);
+                                if (r.changed) writes++;
+                                summary.append(id).append(" exp ").append(r.message).append("; ");
+                            }
+                            Double intensity = intSnap.get(id);
+                            if (intensity != null && ch.intensityProperty() != null) {
+                                String valueStr = (intensity == Math.floor(intensity)
+                                                && !Double.isInfinite(intensity))
+                                        ? Long.toString((long) (double) intensity)
+                                        : Double.toString(intensity);
+                                var r = qupath.ext.qpsc.utilities.ConfigYamlEditor.setChannelDevicePropertyValue(
+                                        path,
+                                        modality,
+                                        id,
+                                        ch.intensityProperty().device(),
+                                        ch.intensityProperty().property(),
+                                        valueStr);
+                                if (r.changed) writes++;
+                                summary.append(id).append(" int ").append(r.message).append("; ");
+                            }
+                        }
+                        // Reload both sides
+                        mgr.reload(configPath);
+                        try {
+                            MicroscopeController mc = MicroscopeController.getInstance();
+                            if (mc != null && mc.isConnected()) {
+                                mc.getSocketClient().sendReconfig();
+                            }
+                        } catch (Exception reconfigEx) {
+                            logger.warn("RECONFG after save failed: {}", reconfigEx.getMessage());
+                        }
+                        final int finalWrites = writes;
+                        final String finalSummary = summary.toString();
+                        logger.info("Save channels to YAML: {} write(s). Detail: {}", finalWrites, finalSummary);
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText(
+                                    "Saved " + finalWrites + " field(s) to YAML + reloaded server");
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                            rebuildCameraModContent(modality);
+                        });
+                    } catch (Exception ex) {
+                        logger.error("Save fluorescence channels failed: {}", ex.getMessage(), ex);
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Save failed: " + ex.getMessage());
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                        });
+                    }
+                },
+                "Save-Profile-FL");
+        t.setDaemon(true);
+        t.start();
     }
 
     /** Generic fallback for unknown/future modalities -- basic exposure + illumination + presets. */
@@ -1830,6 +2074,10 @@ public class StageControlPanel extends VBox {
             ComboBox<String> profileCombo = new ComboBox<>();
             profileCombo.getItems().addAll(matchingProfiles);
             profileCombo.setValue(matchingProfiles.get(0));
+            cameraActiveProfile = matchingProfiles.get(0);
+            profileCombo.valueProperty().addListener((obs, oldV, newV) -> {
+                if (newV != null) cameraActiveProfile = newV;
+            });
             profileCombo.setMaxWidth(Double.MAX_VALUE);
             profileCombo.setStyle("-fx-font-size: 10px;");
             HBox.setHgrow(profileCombo, javafx.scene.layout.Priority.ALWAYS);
