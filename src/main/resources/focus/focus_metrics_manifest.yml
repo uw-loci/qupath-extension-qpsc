@@ -1,0 +1,250 @@
+# ========== FOCUS METRICS MANIFEST ==========
+#
+# Canonical registry of focus metrics, validity checks, and strategies
+# for all QPSC autofocus paths. Single source of truth shared by:
+#
+#   - microscope_imageprocessing.focus  (Python implementation)
+#   - qupath-extension-qpsc            (Java GUI dropdown / tooltip / header)
+#
+# Edit this file to add or remove a metric; do NOT hardcode metric
+# names, validity-check params, or strategy templates in Python or Java
+# code. Both languages discover this file at runtime and refuse unknown
+# names.
+#
+# Discovery order (Python and Java both use the same logic):
+#   1. $QPSC_CONFIG_DIR/focus_metrics_manifest.yml  (env override)
+#   2. <directory of active config_<scope>.yml>/focus_metrics_manifest.yml
+#   3. packaged default bundled with microscope_imageprocessing
+#
+# Schema version is bumped on any breaking change (added required field,
+# renamed top-level key). Additive changes (new metric, new param) keep
+# the same schema version.
+#
+# Conventions:
+#   - Canonical names are lowercase, underscore-separated.
+#   - 'group' bucketing drives the GUI dropdown layout
+#       (recommended | advanced | special).
+#   - 'badge' is a human-readable sensitivity hint for the GUI
+#       (high | medium | low | na).
+#   - 'supported_paths' lists which AF code paths can run the metric:
+#       streaming  -> microscope_command_server.streaming_focus
+#       standard   -> microscope_control.pycromanager.autofocus_sweep
+#       strategy   -> microscope_imageprocessing.focus.strategies
+#   - 'requires' names the heaviest dependency the metric pulls in
+#       (numpy < scipy < skimage < scipy+skimage).
+#   - 'role: fallback' means the metric is auto-computed alongside the
+#       primary in the standard AF path and used when peak validation
+#       fails (currently p98_p2 only).
+#
+# Loaders that encounter a name in 'removed_aliases' should raise
+# UnknownMetricError naming the canonical replacement; never silently
+# translate. Run scripts/migrate_autofocus_yaml.py to update existing
+# YAMLs.
+
+schema_version: 1
+
+metrics:
+  - name: tenengrad
+    group: recommended
+    badge: high
+    best_for: |
+      Brightfield, PPM at typical magnifications. Streaming-AF default.
+      Sum of squared Sobel gradients -- inherently high-pass, immune to
+      lamp vignette.
+    avoid_when: |
+      Very dark or sparse fluorescence -- gradient signal is weak.
+    requires: numpy
+    supported_paths: [streaming, standard, strategy]
+
+  - name: laplacian_variance
+    group: recommended
+    badge: high
+    best_for: |
+      Lower magnifications (10x and below) on brightfield.
+      Variance of the Laplacian-filtered image; high-pass.
+    avoid_when: |
+      High magnification brightfield -- sensitivity falls off as features
+      become large compared to the kernel.
+    requires: scipy
+    supported_paths: [streaming, standard, strategy]
+
+  - name: brenner_gradient
+    group: recommended
+    badge: medium
+    best_for: |
+      Fast checks, low-contrast and dark-field samples.
+      Sum of squared lag-2 horizontal differences.
+    avoid_when: |
+      Samples needing fine peak resolution -- robust but coarse.
+    requires: numpy
+    supported_paths: [streaming, standard, strategy]
+
+  - name: normalized_variance
+    group: advanced
+    badge: medium
+    best_for: |
+      High-magnification brightfield with dim or non-uniform illumination
+      where var/mean stays focus-sensitive.
+    avoid_when: |
+      Low magnifications on brightfield -- known to fail because the lamp
+      vignette dominates var/mean. Confirmed on OWS3 BF 10x 2026-05-01.
+    requires: numpy
+    supported_paths: [streaming, standard]
+
+  - name: vollath_f5
+    group: advanced
+    badge: medium
+    best_for: |
+      Samples with periodic or striated structure. Autocorrelation at
+      lag 1 minus N*mean^2.
+    avoid_when: |
+      Cell smears, amorphous tissue.
+    requires: numpy
+    supported_paths: [streaming]
+
+  - name: sobel
+    group: advanced
+    badge: medium
+    best_for: |
+      High-contrast features, edge-rich tissue.
+    avoid_when: |
+      Smooth gradients without edges.
+    requires: skimage
+    supported_paths: [standard, strategy]
+
+  - name: p98_p2
+    group: special
+    badge: medium
+    best_for: |
+      Histogram-spread fallback. Always computed alongside the primary
+      metric in the standard AF path and used when peak validation
+      fails on the primary -- no extra acquisition cost.
+    avoid_when: |
+      Picking it as a primary unless you specifically want histogram-
+      spread behavior.
+    requires: numpy
+    supported_paths: [standard]
+    role: fallback
+
+  - name: robust_sharpness_metric
+    group: advanced
+    badge: high
+    best_for: |
+      Modality-aware multi-metric strategies (used by dense_texture).
+      Median filter + Otsu mask + sharpness on the masked region.
+    avoid_when: |
+      Non-strategy / ad-hoc paths.
+    requires: scipy+skimage
+    supported_paths: [strategy]
+
+  - name: hybrid_sharpness_metric
+    group: advanced
+    badge: high
+    best_for: |
+      Modality-aware combination of Brenner + soft tissue mask + Gaussian
+      smoothing.
+    avoid_when: |
+      Non-strategy / ad-hoc paths.
+    requires: scipy+skimage
+    supported_paths: [strategy]
+
+  - name: none
+    group: special
+    badge: na
+    best_for: Used by the manual_only strategy (no scoring needed).
+    avoid_when: Anywhere else.
+    requires: numpy
+    supported_paths: [strategy]
+
+# Names that USED to be valid but were renamed during the 2026-05-02
+# consolidation. Loaders MUST raise UnknownMetricError naming the new
+# name; do not silently translate. The migration script
+# (scripts/migrate_autofocus_yaml.py) walks autofocus_*.yml files and
+# rewrites these in place.
+removed_aliases:
+  volath5: vollath_f5            # missing second 'l' in Vollath
+  tenenbaum_gradient: tenengrad  # full academic name; tenengrad is canonical
+
+validity_checks:
+  - name: texture_and_area
+    description: |
+      Requires both gradient texture AND tissue-area fraction. Default
+      validity check for dense_texture (H&E, IHC, PPM, confluent IF).
+    params:
+      texture_threshold:        { type: float, default: 0.010, range: [0.0, 1.0] }
+      tissue_area_threshold:    { type: float, default: 0.200, range: [0.0, 1.0] }
+      rgb_brightness_threshold: { type: float, default: 240.0, range: [0.0, 255.0] }
+      tissue_mask_range:        { type: list_of_float, length: 2, default: [0.10, 0.90] }
+      median_floor:             { type: float, default: 15.0,  range: [0.0, 65535.0] }
+
+  - name: bright_spot_count
+    description: |
+      Counts bright local maxima above adaptive (median + k*MAD)
+      background. Default validity check for sparse_signal (scattered
+      fluorescent objects on dark background).
+    params:
+      spot_sigma_above_bg:    { type: float, default: 5.0,  range: [0.0, 100.0] }
+      spot_min_separation_px: { type: int,   default: 8,    range: [1, 1024] }
+      min_spots:              { type: int,   default: 3,    range: [1, 1000] }
+      min_peak_intensity:     { type: float, default: 20.0, range: [0.0, 65535.0] }
+      bright_pixel_floor:     { type: float, default: 50.0, range: [0.0, 65535.0] }
+
+  - name: total_gradient_energy
+    description: |
+      Whole-FOV gradient magnitude above a floor. Default validity check
+      for dark_field (SHG, dark-field contrast, laser scanning).
+    params:
+      min_gradient_energy: { type: float, default: 0.002, range: [0.0, 1.0] }
+
+  - name: always_false
+    description: |
+      Always fails (used by manual_only). Forces the manual focus
+      dialog every time at the cost of any AF automation.
+    params: {}
+
+strategies:
+  # The four shipped strategies. Custom strategies in autofocus_<scope>.yml
+  # must reference one of the above validity_checks and a metric from the
+  # `metrics:` section.
+  - name: dense_texture
+    description: H&E, IHC, PPM, confluent IF. Requires both gradient texture AND a significant tissue-area fraction.
+    score_metric_default: laplacian_variance
+    validity_check: texture_and_area
+    on_failure: defer
+
+  - name: sparse_signal
+    description: Scattered fluorescent objects on dark background (beads, pollen, FISH spots, single cells).
+    score_metric_default: laplacian_variance
+    validity_check: bright_spot_count
+    on_failure: proceed
+
+  - name: dark_field
+    description: Background-dominated signal (SHG, dark-field contrast). Validity = total gradient energy above a floor.
+    score_metric_default: brenner_gradient
+    validity_check: total_gradient_energy
+    on_failure: proceed
+
+  - name: manual_only
+    description: Skip auto entirely -- always prompts for manual focus.
+    score_metric_default: none
+    validity_check: always_false
+    on_failure: manual
+
+# Streaming-AF default metric per modality. Per-objective YAML entries
+# may still set score_metric to override this. Modality lookup is
+# case-insensitive; longest-prefix-wins for keys with shared prefixes.
+modality_defaults:
+  brightfield:    tenengrad
+  bf:             tenengrad
+  ppm:            tenengrad
+  polarized:      tenengrad
+  fluorescence:   vollath_f5
+  fluorescent:    vollath_f5
+  widefield:      vollath_f5
+  wf:             vollath_f5
+  laser_scanning: vollath_f5
+  lsm:            vollath_f5
+  shg:            vollath_f5
+  multiphoton:    vollath_f5
+  '1p':           vollath_f5
+  '2p':           vollath_f5

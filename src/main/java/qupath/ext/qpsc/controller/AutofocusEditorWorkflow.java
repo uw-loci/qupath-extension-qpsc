@@ -19,6 +19,7 @@ import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
+import qupath.ext.qpsc.utilities.FocusMetricsManifest;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 
@@ -192,9 +193,133 @@ public class AutofocusEditorWorkflow {
         }
     }
 
+    /**
+     * Hardcoded fallback list. Used only when {@link FocusMetricsManifest}
+     * fails to load (degraded path). Live combos source from the manifest
+     * so the GUI dropdown matches the runtime registry exactly.
+     */
     private static final String[] SCORE_METRICS = {
-        "laplacian_variance", "normalized_variance", "brenner_gradient", "sobel", "p98_p2", "none"
+        "tenengrad", "laplacian_variance", "brenner_gradient", "normalized_variance",
+        "vollath_f5", "sobel", "p98_p2", "robust_sharpness_metric",
+        "hybrid_sharpness_metric", "none"
     };
+
+    /**
+     * Build the manifest-sourced score-metric ComboBox. Items are
+     * grouped (Recommended, Advanced, Special) with non-selectable
+     * separators; tooltip is one short sentence; the caller wires up
+     * a "Help me pick" button via {@link #showMetricHelpDialog}.
+     */
+    private static ComboBox<String> buildScoreMetricCombo(
+            String currentValue, FocusMetricsManifest manifest) {
+        ComboBox<String> combo = new ComboBox<>();
+        FocusMetricsManifest.Group lastGroup = null;
+        for (FocusMetricsManifest.MetricSpec m : manifest.metricsForDropdown()) {
+            if (lastGroup != null && lastGroup != m.group) {
+                combo.getItems().add("--- " + groupLabel(m.group) + " ---");
+            } else if (lastGroup == null) {
+                combo.getItems().add("--- " + groupLabel(m.group) + " ---");
+            }
+            combo.getItems().add(m.name);
+            lastGroup = m.group;
+        }
+        // Skip-separator behaviour: clicking a "---" header reverts to
+        // the previous value rather than committing a non-metric string.
+        combo.setCellFactory(lv -> new ListCell<>() {
+            @Override protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty ? null : item);
+                if (item != null && item.startsWith("---")) {
+                    setDisable(true);
+                    setStyle("-fx-font-weight: bold; -fx-text-fill: gray;");
+                } else {
+                    setDisable(false);
+                    setStyle("");
+                }
+            }
+        });
+        combo.setValue(currentValue);
+        combo.setPrefWidth(200);
+        return combo;
+    }
+
+    private static String groupLabel(FocusMetricsManifest.Group g) {
+        switch (g) {
+            case RECOMMENDED: return "Recommended";
+            case ADVANCED:    return "Advanced";
+            case SPECIAL:     return "Special";
+            default:          return "Other";
+        }
+    }
+
+    /**
+     * "Help me pick" dialog: renders the manifest's best_for /
+     * avoid_when text so users see the same guidance the YAML carries.
+     * Replaces the wall-of-text inline tooltip that drifted from the
+     * actual metric set.
+     */
+    private static void showMetricHelpDialog(FocusMetricsManifest manifest) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Focus metric guide");
+        alert.setHeaderText("Pick a metric for your sample");
+        VBox content = new VBox(8);
+        content.setPadding(new Insets(8));
+        for (FocusMetricsManifest.Group g : new FocusMetricsManifest.Group[]{
+                FocusMetricsManifest.Group.RECOMMENDED,
+                FocusMetricsManifest.Group.ADVANCED,
+                FocusMetricsManifest.Group.SPECIAL}) {
+            List<FocusMetricsManifest.MetricSpec> bucket = manifest.metricsByGroup(g);
+            if (bucket.isEmpty()) continue;
+            Label header = new Label(groupLabel(g));
+            header.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
+            content.getChildren().add(header);
+            for (FocusMetricsManifest.MetricSpec m : bucket) {
+                VBox card = new VBox(2);
+                card.setPadding(new Insets(2, 0, 6, 12));
+                Label name = new Label(m.name + "  [" + m.badge + "]");
+                name.setStyle("-fx-font-weight: bold; -fx-font-family: monospace;");
+                card.getChildren().add(name);
+                if (!m.bestFor.isEmpty()) {
+                    Label bf = new Label("Best for: " + m.bestFor.replace("\n", " "));
+                    bf.setWrapText(true);
+                    card.getChildren().add(bf);
+                }
+                if (!m.avoidWhen.isEmpty()) {
+                    Label aw = new Label("Avoid: " + m.avoidWhen.replace("\n", " "));
+                    aw.setWrapText(true);
+                    aw.setStyle("-fx-text-fill: #B0463F;");
+                    card.getChildren().add(aw);
+                }
+                content.getChildren().add(card);
+            }
+        }
+        ScrollPane scroll = new ScrollPane(content);
+        scroll.setFitToWidth(true);
+        scroll.setPrefSize(620, 480);
+        alert.getDialogPane().setContent(scroll);
+        alert.getDialogPane().setMinWidth(640);
+        alert.showAndWait();
+    }
+
+    /**
+     * Returns the per-objective resolution preview: shows what metric
+     * the runtime will actually use given a (modality, picked metric)
+     * pair. Updates as the user changes either dropdown.
+     */
+    private static String resolutionPreviewText(
+            FocusMetricsManifest manifest, String modality, String pickedMetric) {
+        String effective = manifest.resolveEffectiveMetric(modality, pickedMetric, "tenengrad");
+        String src;
+        if (pickedMetric != null && !pickedMetric.isEmpty() && !"none".equalsIgnoreCase(pickedMetric)
+                && manifest.getMetrics().containsKey(pickedMetric)) {
+            src = "per-objective YAML";
+        } else if (modality != null && manifest.modalityDefault(modality).isPresent()) {
+            src = "modality default for '" + modality + "'";
+        } else {
+            src = "fallback";
+        }
+        return "-> effective: " + effective + "  (source: " + src + ")";
+    }
 
     private static final String[] VALIDITY_CHECKS = {
         "texture_and_area", "bright_spot_count", "total_gradient_energy", "always_false"
@@ -547,37 +672,32 @@ public class AutofocusEditorWorkflow {
         tissueGrid.add(tissueAreaThresholdDesc, 2, 1);
 
         // Add score_metric to tissue/shared grid (used by both standard AF and sweep drift check)
+        // Items + grouping sourced from focus_metrics_manifest.yml so the
+        // dropdown matches the runtime registry. The configDir is the
+        // active microscope's config directory, which is also where a
+        // per-scope manifest override (if any) would live.
+        FocusMetricsManifest manifest = FocusMetricsManifest.get(configDir.toPath());
         Label scoreMetricLabel = new Label("score_metric:");
-        ComboBox<String> scoreMetricCombo = new ComboBox<>();
-        scoreMetricCombo
-                .getItems()
-                .addAll("normalized_variance", "laplacian_variance", "sobel", "brenner_gradient", "p98_p2");
-        scoreMetricCombo.setValue("normalized_variance");
-        scoreMetricCombo.setPrefWidth(200);
-        scoreMetricCombo.setTooltip(new Tooltip("Algorithm for measuring image sharpness.\n"
-                + "Used by BOTH standard autofocus and sweep drift check.\n\n"
-                + "normalized_variance (recommended):\n"
-                + "  + Best sensitivity (145% signal at 20x)\n"
-                + "  + Works well on dim and bright tissue\n"
-                + "  + Amplifies changes on low-contrast samples\n\n"
-                + "laplacian_variance (~5ms):\n"
-                + "  + Good for 10x or lower magnification\n"
-                + "  - Poor sensitivity at 20x+ (<2% signal)\n\n"
-                + "sobel (~5ms):\n"
-                + "  + Edge-sensitive metric (40% signal)\n"
-                + "  + Good for high-contrast features\n\n"
-                + "brenner_gradient (~3ms):\n"
-                + "  + Fastest option (12% signal)\n"
-                + "  - Lower sensitivity\n\n"
-                + "p98_p2 (histogram spread):\n"
-                + "  + Good sensitivity (70% signal)\n"
-                + "  + Simple and robust"));
-        Label scoreMetricDesc = new Label("(Focus metric - shared by standard AF and sweep)");
-        scoreMetricDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        ComboBox<String> scoreMetricCombo = buildScoreMetricCombo("laplacian_variance", manifest);
+        scoreMetricCombo.setTooltip(new Tooltip(
+                "Focus metric used by standard AF + sweep drift check.\n"
+                        + "Click 'Help me pick' for the manifest's per-metric guide."));
+        Button scoreMetricHelp = new Button("Help me pick");
+        scoreMetricHelp.setOnAction(e -> showMetricHelpDialog(manifest));
+        Label scoreMetricResolution = new Label(resolutionPreviewText(manifest, null,
+                scoreMetricCombo.getValue()));
+        scoreMetricResolution.setStyle("-fx-font-size: 10px; -fx-font-style: italic; -fx-text-fill: gray;");
+        scoreMetricCombo.valueProperty().addListener((obs, o, n) -> {
+            if (n != null && !n.startsWith("---")) {
+                scoreMetricResolution.setText(resolutionPreviewText(manifest, null, n));
+            }
+        });
+        HBox scoreMetricRow = new HBox(8, scoreMetricCombo, scoreMetricHelp);
+        scoreMetricRow.setAlignment(Pos.CENTER_LEFT);
 
         tissueGrid.add(scoreMetricLabel, 0, 2);
-        tissueGrid.add(scoreMetricCombo, 1, 2);
-        tissueGrid.add(scoreMetricDesc, 2, 2);
+        tissueGrid.add(scoreMetricRow, 1, 2);
+        tissueGrid.add(scoreMetricResolution, 2, 2);
 
         TitledPane tissuePane = new TitledPane("Tissue Detection & Shared Settings", tissueGrid);
         tissuePane.setCollapsible(false);
@@ -1368,17 +1488,33 @@ public class AutofocusEditorWorkflow {
         grid.add(new Label("Description:"), 0, row);
         grid.add(descArea, 1, row++);
 
-        ComboBox<String> scoreCombo = new ComboBox<>();
-        scoreCombo.getItems().addAll(SCORE_METRICS);
-        scoreCombo.setValue(sd.scoreMetric);
-        scoreCombo.setOnAction(e -> sd.scoreMetric = scoreCombo.getValue());
-        scoreCombo.setTooltip(new Tooltip("Focus quality metric used to evaluate each Z position.\n\n"
-                + "laplacian_variance: Default. Second-derivative sharpness.\n"
-                + "normalized_variance: Variance divided by mean intensity.\n"
-                + "brenner_gradient: Good for low-contrast / dark-field.\n"
-                + "none: Used by manual_only (no scoring needed)."));
+        // Manifest-sourced grouped dropdown + "Help me pick" + resolution
+        // preview, identical pattern to the per-objective combo above.
+        // Manifest is loaded with null configDir here -- the strategy
+        // card is independent of which scope is active.
+        FocusMetricsManifest strategyManifest = FocusMetricsManifest.get(null);
+        ComboBox<String> scoreCombo = buildScoreMetricCombo(sd.scoreMetric, strategyManifest);
+        scoreCombo.valueProperty().addListener((obs, o, n) -> {
+            if (n != null && !n.startsWith("---")) sd.scoreMetric = n;
+        });
+        scoreCombo.setTooltip(new Tooltip(
+                "Default focus metric for this strategy. The per-modality binding\n"
+                        + "or per-objective YAML can still override at runtime.\n"
+                        + "Click 'Help me pick' for the manifest's per-metric guide."));
+        Button scoreHelp = new Button("Help me pick");
+        scoreHelp.setOnAction(e -> showMetricHelpDialog(strategyManifest));
+        Label scoreResolution = new Label(resolutionPreviewText(strategyManifest, null, sd.scoreMetric));
+        scoreResolution.setStyle("-fx-font-size: 10px; -fx-font-style: italic; -fx-text-fill: gray;");
+        scoreCombo.valueProperty().addListener((obs, o, n) -> {
+            if (n != null && !n.startsWith("---")) {
+                scoreResolution.setText(resolutionPreviewText(strategyManifest, null, n));
+            }
+        });
+        HBox scoreRow = new HBox(8, scoreCombo, scoreHelp);
+        scoreRow.setAlignment(Pos.CENTER_LEFT);
         grid.add(new Label("Score metric:"), 0, row);
-        grid.add(scoreCombo, 1, row++);
+        grid.add(scoreRow, 1, row);
+        grid.add(scoreResolution, 2, row++);
 
         ComboBox<String> validityCombo = new ComboBox<>();
         validityCombo.getItems().addAll(VALIDITY_CHECKS);
