@@ -1,5 +1,6 @@
 package qupath.ext.qpsc.utilities;
 
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.*;
 import org.slf4j.Logger;
@@ -713,6 +714,107 @@ public class ImageMetadataManager {
         }
 
         return entry.getMetadata().get(BASE_IMAGE);
+    }
+
+    /**
+     * Returns every base-like sibling of the given base image -- the unflipped
+     * original plus any flipped duplicates ({@code (flipped X)}, {@code (flipped Y)},
+     * {@code (flipped XY)}). Sub-acquisition entries (acquisition tiles, regions)
+     * are filtered out.
+     *
+     * <p>An entry qualifies as a base-like sibling if either:
+     * <ul>
+     *   <li>its {@code base_image} metadata equals {@code baseName} AND its
+     *       stripped image name equals {@code baseName} OR matches the
+     *       {@code <baseName>.<ext>} or {@code <baseName>.<ext> (flipped …)} pattern;</li>
+     *   <li>its stripped image name equals {@code baseName} (legacy entries
+     *       lacking {@code base_image} metadata).</li>
+     * </ul>
+     *
+     * @param project the QuPath project; null returns an empty list
+     * @param baseName the base image name (without extension) to match against
+     * @return list of sibling entries (may be empty); ordering follows project order
+     */
+    public static List<ProjectImageEntry<BufferedImage>> getSiblingsByBaseImage(
+            Project<BufferedImage> project, String baseName) {
+        if (project == null || baseName == null || baseName.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<ProjectImageEntry<BufferedImage>> siblings = new ArrayList<>();
+        for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
+            String imageName = entry.getImageName();
+            if (imageName == null) continue;
+            String entryStripped = GeneralTools.stripExtension(imageName);
+            String rawBase = getBaseImage(entry);
+
+            String effectiveBase = (rawBase != null && !rawBase.isEmpty()) ? rawBase : entryStripped;
+            if (!baseName.equals(effectiveBase)) continue;
+
+            // Filter out sub-acquisitions: keep only entries whose stripped name
+            // is exactly baseName (the original SVS) or starts with baseName and
+            // contains "(flipped" (e.g. "MetroHealth_142.svs (flipped X)" strips
+            // to "MetroHealth_142.svs (flipped X)").
+            boolean isBaseVariant = entryStripped.equals(baseName)
+                    || imageName.startsWith(baseName + ".")
+                    || (imageName.startsWith(baseName) && imageName.contains("(flipped"));
+            if (!isBaseVariant) continue;
+
+            siblings.add(entry);
+        }
+
+        if (logger.isInfoEnabled()) {
+            String list = siblings.stream()
+                    .map(ProjectImageEntry::getImageName)
+                    .reduce((a, b) -> a + ", " + b)
+                    .orElse("(none)");
+            logger.info("getSiblingsByBaseImage('{}'): {} sibling(s) -> {}",
+                    baseName, siblings.size(), list);
+        }
+        return siblings;
+    }
+
+    /**
+     * Returns the unique base-like sibling of {@code baseName} whose
+     * {@code FLIP_X}/{@code FLIP_Y} metadata matches {@code flipX}/{@code flipY}.
+     *
+     * <p>Falls back to a name-pattern match for legacy entries that lack flip
+     * metadata: an entry named {@code "<base>.svs"} is treated as
+     * {@code (false, false)}; {@code "<base>.svs (flipped X)"} as
+     * {@code (true, false)}; etc.
+     *
+     * @param project the QuPath project
+     * @param baseName the base image name (without extension)
+     * @param flipX desired flip-X state
+     * @param flipY desired flip-Y state
+     * @return matching entry, or null if none exists
+     */
+    public static ProjectImageEntry<BufferedImage> findSiblingWithFlip(
+            Project<BufferedImage> project, String baseName,
+            boolean flipX, boolean flipY) {
+        for (ProjectImageEntry<BufferedImage> entry : getSiblingsByBaseImage(project, baseName)) {
+            String fxStr = entry.getMetadata().get(FLIP_X);
+            String fyStr = entry.getMetadata().get(FLIP_Y);
+
+            boolean entryFx;
+            boolean entryFy;
+            if (fxStr != null || fyStr != null) {
+                entryFx = "1".equals(fxStr);
+                entryFy = "1".equals(fyStr);
+            } else {
+                // Legacy entry lacking metadata: derive from name
+                String name = entry.getImageName();
+                if (name == null) name = "";
+                boolean nameXY = name.contains("(flipped XY)");
+                entryFx = nameXY || name.contains("(flipped X)");
+                entryFy = nameXY || name.contains("(flipped Y)");
+            }
+
+            if (entryFx == flipX && entryFy == flipY) {
+                return entry;
+            }
+        }
+        return null;
     }
 
     /**

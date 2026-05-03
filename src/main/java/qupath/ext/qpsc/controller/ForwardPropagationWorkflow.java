@@ -13,9 +13,11 @@ import javafx.scene.layout.*;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
@@ -401,43 +403,42 @@ public class ForwardPropagationWorkflow {
                                 .append("\n");
                     }
                 } else {
-                    // Back: sub-images -> base
-                    try {
-                        ImageData<BufferedImage> baseData = base.readImageData();
-                        PathObjectHierarchy baseHierarchy = baseData.getHierarchy();
-                        int beforeCount = baseHierarchy.getAllObjects(false).size();
-
-                        for (ProjectImageEntry<BufferedImage> sub : selectedSubs) {
-                            try {
-                                List<PathObject> subObjects =
-                                        loadFilteredObjects(sub, selectedClasses, includeUnclassified);
-                                if (subObjects.isEmpty()) continue;
-                                int count = propagateBack(alignment, subObjects, sub, baseData);
-                                totalCount += count;
-                                String msg = String.format(
-                                        "  %s -> %s: %d objects\n", sub.getImageName(), base.getImageName(), count);
-                                results.append(msg);
-                                logger.info(msg.trim());
-                            } catch (Exception ex) {
-                                String msg = String.format(
-                                        "  %s -> %s: FAILED (%s)\n",
-                                        sub.getImageName(), base.getImageName(), ex.getMessage());
-                                results.append(msg);
-                                logger.error(msg.trim());
+                    // Back: sub-images -> ALL base-like siblings (fan-out).
+                    // The single `base` chosen by the dialog is no longer load-bearing;
+                    // propagateBackFanOut resolves the canonical sibling itself from the
+                    // active microscope's preset and delta-flips into every other sibling.
+                    int groupTotal = 0;
+                    boolean anyPropagated = false;
+                    for (ProjectImageEntry<BufferedImage> sub : selectedSubs) {
+                        try {
+                            List<PathObject> subObjects =
+                                    loadFilteredObjects(sub, selectedClasses, includeUnclassified);
+                            if (subObjects.isEmpty()) continue;
+                            FanOutResult fo = propagateBackFanOut(
+                                    project, baseName, alignment, subObjects, sub, true);
+                            groupTotal += fo.totalObjects;
+                            totalCount += fo.totalObjects;
+                            for (String line : fo.perSiblingLog) {
+                                results.append(line).append("\n");
                             }
+                            if (fo.siblingsAutoCreated > 0) {
+                                String autoMsg = String.format(
+                                        "  (auto-created %d sibling(s) for fan-out)\n",
+                                        fo.siblingsAutoCreated);
+                                results.append(autoMsg);
+                                logger.info(autoMsg.trim());
+                            }
+                            anyPropagated = anyPropagated || fo.siblingsUpdated > 0;
+                        } catch (Exception ex) {
+                            String msg = String.format(
+                                    "  %s -> [fan-out]: FAILED (%s)\n",
+                                    sub.getImageName(), ex.getMessage());
+                            results.append(msg);
+                            logger.error(msg.trim(), ex);
                         }
-
-                        // Save base image data if objects were added
-                        int afterCount = baseHierarchy.getAllObjects(false).size();
-                        if (afterCount > beforeCount) {
-                            base.saveImageData(baseData);
-                        }
+                    }
+                    if (groupTotal > 0 || anyPropagated) {
                         groupCount++;
-                    } catch (Exception ex) {
-                        results.append(baseName)
-                                .append(": base read error: ")
-                                .append(ex.getMessage())
-                                .append("\n");
                     }
                 }
             }
@@ -673,6 +674,240 @@ public class ForwardPropagationWorkflow {
         }
 
         return propagated.size();
+    }
+
+    /** Aggregate result of a multi-sibling back-prop fan-out. */
+    public static class FanOutResult {
+        public final int totalObjects;
+        public final int siblingsUpdated;
+        public final int siblingsAutoCreated;
+        public final List<String> perSiblingLog;
+
+        FanOutResult(int totalObjects, int siblingsUpdated, int siblingsAutoCreated, List<String> perSiblingLog) {
+            this.totalObjects = totalObjects;
+            this.siblingsUpdated = siblingsUpdated;
+            this.siblingsAutoCreated = siblingsAutoCreated;
+            this.perSiblingLog = perSiblingLog;
+        }
+    }
+
+    /**
+     * Back-propagation that fans out across every base-like sibling of
+     * {@code baseName} (unflipped, flipped X, flipped Y, flipped XY).
+     *
+     * <p>Workflow:
+     * <ol>
+     *   <li>Resolve the canonical target by reading the active microscope's
+     *       saved {@link AffineTransformManager.TransformPreset} for the source
+     *       scanner used by this slide alignment, and finding the sibling whose
+     *       FLIP_X/FLIP_Y match the preset's flipMacroX/flipMacroY. If absent,
+     *       auto-create it via {@link QPProjectFunctions#createFlippedDuplicate}
+     *       (when {@code allowAutoCreate} is true).</li>
+     *   <li>Run the existing single-target {@code propagateBack} math against
+     *       the canonical target.</li>
+     *   <li>For every other sibling, take the just-propagated annotations
+     *       (already in the canonical sibling's pixel frame) and re-flip them
+     *       by the XOR delta of (canonical flip) vs (sibling flip).</li>
+     * </ol>
+     *
+     * <p>Newly auto-created siblings start empty; this fan-out is the first
+     * write into them. Any existing annotations on other siblings are preserved
+     * and the propagated objects are appended.
+     *
+     * @param project the QuPath project (used to find / create siblings)
+     * @param baseName the base image name (without extension)
+     * @param baseToStage the per-slide alignment for the active microscope
+     * @param sourceObjects sub-image-frame objects to back-propagate
+     * @param subEntry the sub-acquisition entry these objects came from
+     * @param allowAutoCreate whether missing siblings may be auto-created
+     * @return aggregate result; never null
+     */
+    public static FanOutResult propagateBackFanOut(
+            Project<BufferedImage> project,
+            String baseName,
+            AffineTransform baseToStage,
+            List<PathObject> sourceObjects,
+            ProjectImageEntry<BufferedImage> subEntry,
+            boolean allowAutoCreate)
+            throws Exception {
+
+        List<String> perSiblingLog = new ArrayList<>();
+
+        // 1. Determine the canonical (alignment-frame) flip for this active microscope.
+        boolean canonicalFlipX = false;
+        boolean canonicalFlipY = false;
+        String activeMicroscope = null;
+        AffineTransformManager.TransformPreset activePreset = null;
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath != null && !configPath.isEmpty()) {
+                MicroscopeConfigManager configMgr = MicroscopeConfigManager.getInstance(configPath);
+                activeMicroscope = configMgr.getMicroscopeName();
+                AffineTransformManager mgr =
+                        new AffineTransformManager(new java.io.File(configPath).getParent());
+                // The slide alignment was built for the active microscope. Pick the most-recent
+                // preset for any source scanner -- they should all share the same target-microscope
+                // flip frame, so any of them gives us the canonical flip. Prefer one with a
+                // recorded flip state.
+                List<String> scanners = mgr.getDistinctSourceScannersForMicroscope(activeMicroscope);
+                for (String scanner : scanners) {
+                    AffineTransformManager.TransformPreset p = mgr.getBestPresetForPair(scanner, activeMicroscope);
+                    if (p != null && p.hasFlipState()) {
+                        activePreset = p;
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not load active microscope preset for canonical-flip resolution: {}", e.getMessage());
+        }
+        if (activePreset != null) {
+            canonicalFlipX = Boolean.TRUE.equals(activePreset.getFlipMacroX());
+            canonicalFlipY = Boolean.TRUE.equals(activePreset.getFlipMacroY());
+            logger.info(
+                    "BackProp fan-out: alignment expects flipX={} flipY={} based on preset '{}' (microscope={})",
+                    canonicalFlipX, canonicalFlipY, activePreset.getName(), activeMicroscope);
+        } else {
+            logger.warn("BackProp fan-out: no active preset with flip state found; "
+                    + "treating canonical frame as unflipped (legacy behavior).");
+        }
+
+        // 2. Find or create the canonical sibling.
+        ProjectImageEntry<BufferedImage> canonical =
+                ImageMetadataManager.findSiblingWithFlip(project, baseName, canonicalFlipX, canonicalFlipY);
+        int siblingsAutoCreated = 0;
+
+        if (canonical == null) {
+            if (!allowAutoCreate) {
+                throw new IllegalStateException(String.format(
+                        "No sibling of '%s' with flipX=%s, flipY=%s exists, and auto-create is disabled.",
+                        baseName, canonicalFlipX, canonicalFlipY));
+            }
+            // Find the unflipped root to seed the duplicate.
+            ProjectImageEntry<BufferedImage> root =
+                    ImageMetadataManager.findSiblingWithFlip(project, baseName, false, false);
+            if (root == null) {
+                // Project has no unflipped sibling; pick whatever exists and undo to root by name.
+                List<ProjectImageEntry<BufferedImage>> siblings =
+                        ImageMetadataManager.getSiblingsByBaseImage(project, baseName);
+                if (siblings.isEmpty()) {
+                    throw new IllegalStateException("No siblings of base '" + baseName + "' found in project.");
+                }
+                root = siblings.get(0);
+                logger.warn("No unflipped sibling for '{}'; seeding canonical from '{}'",
+                        baseName, root.getImageName());
+            }
+            String sampleName = ImageMetadataManager.getSampleName(root);
+            if (sampleName == null) sampleName = baseName;
+            logger.warn("Auto-creating canonical sibling for '{}' (flipX={}, flipY={}) from '{}'",
+                    baseName, canonicalFlipX, canonicalFlipY, root.getImageName());
+            canonical = QPProjectFunctions.createFlippedDuplicate(
+                    project, root, canonicalFlipX, canonicalFlipY, sampleName);
+            if (canonical == null) {
+                throw new IllegalStateException(
+                        "Failed to auto-create canonical sibling for base '" + baseName + "'.");
+            }
+            project.syncChanges();
+            siblingsAutoCreated++;
+        }
+
+        // 3. Run the back-prop math against the canonical sibling.
+        ImageData<BufferedImage> canonicalData = canonical.readImageData();
+        PathObjectHierarchy canonicalHierarchy = canonicalData.getHierarchy();
+        int beforeCount = canonicalHierarchy.getAllObjects(false).size();
+        int writtenToCanonical = propagateBack(baseToStage, sourceObjects, subEntry, canonicalData);
+        int afterCount = canonicalHierarchy.getAllObjects(false).size();
+        int totalObjects = writtenToCanonical;
+        int siblingsUpdated = 0;
+        if (afterCount > beforeCount) {
+            canonical.saveImageData(canonicalData);
+            siblingsUpdated++;
+            perSiblingLog.add(String.format("  %s -> %s: %d objects (canonical, flipX=%s, flipY=%s)",
+                    subEntry.getImageName(), canonical.getImageName(),
+                    writtenToCanonical, canonicalFlipX, canonicalFlipY));
+        } else {
+            perSiblingLog.add(String.format("  %s -> %s: 0 objects (canonical, no overlap)",
+                    subEntry.getImageName(), canonical.getImageName()));
+        }
+
+        // 4. Capture the propagated objects from the canonical hierarchy so we can
+        // delta-flip them into the other siblings.
+        List<PathObject> canonicalPropagated;
+        if (writtenToCanonical > 0) {
+            // The objects we just wrote are the last `writtenToCanonical` additions.
+            // Pull them by intersecting the hierarchy with the prior set.
+            List<PathObject> all = new ArrayList<>(canonicalHierarchy.getAllObjects(false));
+            canonicalPropagated = all.subList(Math.max(0, all.size() - writtenToCanonical), all.size());
+        } else {
+            canonicalPropagated = Collections.emptyList();
+        }
+
+        // 5. Fan out to remaining siblings.
+        if (!canonicalPropagated.isEmpty()) {
+            int baseWidth = canonicalData.getServer().getWidth();
+            int baseHeight = canonicalData.getServer().getHeight();
+
+            List<ProjectImageEntry<BufferedImage>> allSiblings =
+                    ImageMetadataManager.getSiblingsByBaseImage(project, baseName);
+            for (ProjectImageEntry<BufferedImage> sibling : allSiblings) {
+                if (sibling == canonical) continue;
+
+                String fxStr = sibling.getMetadata().get(ImageMetadataManager.FLIP_X);
+                String fyStr = sibling.getMetadata().get(ImageMetadataManager.FLIP_Y);
+                boolean siblingFx;
+                boolean siblingFy;
+                if (fxStr != null || fyStr != null) {
+                    siblingFx = "1".equals(fxStr);
+                    siblingFy = "1".equals(fyStr);
+                } else {
+                    String n = sibling.getImageName();
+                    if (n == null) n = "";
+                    boolean nameXY = n.contains("(flipped XY)");
+                    siblingFx = nameXY || n.contains("(flipped X)");
+                    siblingFy = nameXY || n.contains("(flipped Y)");
+                }
+
+                boolean deltaX = siblingFx ^ canonicalFlipX;
+                boolean deltaY = siblingFy ^ canonicalFlipY;
+                logger.info("Fan-out target: {} (flipX={}, flipY={}); delta from canonical: ({}, {})",
+                        sibling.getImageName(), siblingFx, siblingFy, deltaX, deltaY);
+
+                AffineTransform delta = (deltaX || deltaY)
+                        ? createFlip(deltaX, deltaY, baseWidth, baseHeight)
+                        : null;
+
+                ImageData<BufferedImage> sibData = sibling.readImageData();
+                PathObjectHierarchy sibHierarchy = sibData.getHierarchy();
+                int sibBefore = sibHierarchy.getAllObjects(false).size();
+                List<PathObject> toAdd = new ArrayList<>(canonicalPropagated.size());
+                for (PathObject obj : canonicalPropagated) {
+                    PathObject copy = (delta == null)
+                            ? PathObjectTools.transformObject(obj, new AffineTransform(), true, true)
+                            : PathObjectTools.transformObject(obj, delta, true, true);
+                    if (copy == null || copy.getROI() == null || copy.getROI().isEmpty()) continue;
+                    toAdd.add(copy);
+                }
+                if (!toAdd.isEmpty()) {
+                    sibHierarchy.addObjects(toAdd);
+                    sibling.saveImageData(sibData);
+                    int added = sibHierarchy.getAllObjects(false).size() - sibBefore;
+                    totalObjects += added;
+                    if (added > 0) siblingsUpdated++;
+                    perSiblingLog.add(String.format("  %s -> %s: %d objects (delta flipX=%s, flipY=%s)",
+                            subEntry.getImageName(), sibling.getImageName(), added, deltaX, deltaY));
+                } else {
+                    perSiblingLog.add(String.format("  %s -> %s: 0 objects (after delta-flip)",
+                            subEntry.getImageName(), sibling.getImageName()));
+                }
+            }
+        }
+
+        if (siblingsAutoCreated > 0) {
+            project.syncChanges();
+        }
+        logger.info("Fan-out complete: {} siblings updated, {} auto-created, {} total objects",
+                siblingsUpdated, siblingsAutoCreated, totalObjects);
+        return new FanOutResult(totalObjects, siblingsUpdated, siblingsAutoCreated, perSiblingLog);
     }
 
     // ------------------------------------------------------------------
