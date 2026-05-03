@@ -1188,7 +1188,8 @@ public class LiveViewerWindow {
                         exposures.green(),
                         exposures.blue(),
                         exposures.isPerChannel());
-                if (exposureMs > 40.0) {
+                double maxExposureMs = QPPreferenceDialog.getStreamingMaxExposureMs();
+                if (exposureMs > maxExposureMs) {
                     streamingFocusButton.setStyle("-fx-base: #F44336;");
                     sweepFocusButton.setVisible(true);
                     sweepFocusButton.setManaged(true);
@@ -1196,9 +1197,9 @@ public class LiveViewerWindow {
                     javafx.scene.control.CheckBox dontShow =
                             new javafx.scene.control.CheckBox("Do not show this message again");
                     javafx.scene.control.Label msgLabel = new javafx.scene.control.Label(String.format(
-                            "Current exposure (%.1f ms) is too long for fast autofocus.\n"
-                                    + "Falling back to Sweep Focus automatically.",
-                            exposureMs));
+                            "Current exposure (%.1f ms) is above the streaming AF threshold "
+                                    + "(%.1f ms).\nFalling back to Sweep Focus automatically.",
+                            exposureMs, maxExposureMs));
                     msgLabel.setWrapText(true);
                     javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(8, msgLabel, dontShow);
 

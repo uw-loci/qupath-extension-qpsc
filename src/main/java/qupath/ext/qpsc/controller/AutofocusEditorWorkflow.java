@@ -321,6 +321,133 @@ public class AutofocusEditorWorkflow {
         return "-> effective: " + effective + "  (source: " + src + ")";
     }
 
+    /**
+     * Build the Streaming Autofocus pane shown on the Per-Objective tab.
+     *
+     * <p>Streaming AF is the Live Viewer's "Autofocus" button -- a fast
+     * continuous-Z scan during stage motion. It is NOT used during
+     * acquisition (acquisition uses Standard + Sweep above).
+     *
+     * <p>Stage-side knobs live in {@code config_<scope>.yml} under
+     * {@code stage.streaming_af}. Editing those requires touching the
+     * main config file, not the autofocus YAML this dialog writes;
+     * surfacing them read-only here lets operators see what governs
+     * streaming on this rig without having to pop open the YAML.
+     *
+     * <p>The exposure threshold IS editable here: it's a Java preference
+     * that controls when the Live Viewer auto-falls back from streaming
+     * to Sweep Focus.
+     */
+    private static TitledPane buildStreamingAfPane(File configFile) {
+        VBox content = new VBox(8);
+        content.setPadding(new Insets(8));
+
+        Label intro = new Label(
+                "Streaming AF is the Live Viewer 'Autofocus' button -- a fast\n"
+                        + "continuous-Z scan. Not used during acquisition (that's\n"
+                        + "Standard + Sweep above).");
+        intro.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
+
+        // --- Editable: exposure threshold preference ---
+        GridPane editGrid = new GridPane();
+        editGrid.setHgap(10);
+        editGrid.setVgap(6);
+        Label expLabel = new Label("Max exposure (ms):");
+        Spinner<Double> expSpinner = new Spinner<>(1.0, 1000.0,
+                QPPreferenceDialog.getStreamingMaxExposureMs(), 5.0);
+        expSpinner.setEditable(true);
+        expSpinner.setPrefWidth(120);
+        expSpinner.valueProperty().addListener((obs, o, n) -> {
+            if (n != null) QPPreferenceDialog.setStreamingMaxExposureMs(n);
+        });
+        expSpinner.setTooltip(new Tooltip(
+                "Live Viewer auto-falls back to Sweep Focus when the active\n"
+                        + "exposure exceeds this threshold. 40 ms is the historical\n"
+                        + "default (works for most brightfield + PPM). Long-exposure\n"
+                        + "fluorescence may want this lower (forces sweep more often)\n"
+                        + "or higher experimentally; sweep always works regardless."));
+        Label expDesc = new Label("(streaming refuses above this; auto-falls back to Sweep)");
+        expDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        editGrid.add(expLabel, 0, 0);
+        editGrid.add(expSpinner, 1, 0);
+        editGrid.add(expDesc, 2, 0);
+
+        // --- Read-only: stage.streaming_af block from main config ---
+        Label rigHeader = new Label("Stage configuration (read-only, from "
+                + configFile.getName() + " -> stage.streaming_af):");
+        rigHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-padding: 6 0 0 0;");
+
+        GridPane rigGrid = new GridPane();
+        rigGrid.setHgap(10);
+        rigGrid.setVgap(4);
+        Map<String, Object> stageBlock = readStreamingAfStageBlock(configFile);
+        if (stageBlock.isEmpty()) {
+            Label missing = new Label("(no stage.streaming_af block found -- "
+                    + "streaming AF will use legacy hardcoded defaults)");
+            missing.setStyle("-fx-font-style: italic; -fx-text-fill: gray;");
+            rigGrid.add(missing, 0, 0, 2, 1);
+        } else {
+            int r = 0;
+            for (String key : new String[]{
+                    "enabled", "speed_property", "slow_speed_value",
+                    "slow_speed_um_per_s", "normal_speed_value"}) {
+                Label k = new Label(key + ":");
+                k.setStyle("-fx-font-family: monospace;");
+                Object v = stageBlock.get(key);
+                Label val = new Label(v == null ? "(unset)" : String.valueOf(v));
+                val.setStyle(v == null
+                        ? "-fx-text-fill: gray; -fx-font-style: italic;"
+                        : "-fx-font-family: monospace;");
+                rigGrid.add(k, 0, r);
+                rigGrid.add(val, 1, r);
+                r++;
+            }
+            Label hint = new Label(
+                    "Edit these in " + configFile.getName() + " under stage.streaming_af.\n"
+                            + "Re-open this dialog after saving to see the new values.");
+            hint.setStyle("-fx-font-size: 10px; -fx-text-fill: gray; -fx-padding: 4 0 0 0;");
+            rigGrid.add(hint, 0, r, 2, 1);
+        }
+
+        Label sweepRangeNote = new Label(
+                "Per-objective: 'sweep_range_um' above (Sweep Drift Check section)\n"
+                        + "is also the default scan window for streaming AF when the\n"
+                        + "Live Viewer's range dropdown is set to 'Auto'.");
+        sweepRangeNote.setStyle("-fx-font-size: 11px; -fx-text-fill: -fx-text-base-color; "
+                + "-fx-padding: 6 0 0 0;");
+
+        content.getChildren().addAll(intro, new Separator(), editGrid,
+                rigHeader, rigGrid, sweepRangeNote);
+
+        TitledPane pane = new TitledPane("Streaming Autofocus (Live Viewer Only)", content);
+        pane.setCollapsible(true);
+        pane.setExpanded(false);
+        return pane;
+    }
+
+    /**
+     * Read the {@code stage.streaming_af} block from the main microscope
+     * config YAML. Returns an empty map on any read / parse failure --
+     * the caller renders an explanatory note when the block is absent.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> readStreamingAfStageBlock(File configFile) {
+        if (configFile == null || !configFile.isFile()) return Collections.emptyMap();
+        try (java.io.InputStream in = new java.io.FileInputStream(configFile)) {
+            Object loaded = new Yaml().load(in);
+            if (!(loaded instanceof Map)) return Collections.emptyMap();
+            Object stage = ((Map<String, Object>) loaded).get("stage");
+            if (!(stage instanceof Map)) return Collections.emptyMap();
+            Object block = ((Map<String, Object>) stage).get("streaming_af");
+            if (!(block instanceof Map)) return Collections.emptyMap();
+            return (Map<String, Object>) block;
+        } catch (IOException e) {
+            logger.warn("Could not read streaming_af block from {}: {}",
+                    configFile, e.getMessage());
+            return Collections.emptyMap();
+        }
+    }
+
     private static final String[] VALIDITY_CHECKS = {
         "texture_and_area", "bright_spot_count", "total_gradient_energy", "always_false"
     };
@@ -1169,6 +1296,17 @@ public class AutofocusEditorWorkflow {
         TitledPane sweepPane = new TitledPane("Sweep Drift Check (In-Acquisition Focus Correction)", sweepContent);
         sweepPane.setCollapsible(false);
 
+        // ===== STREAMING AUTOFOCUS SECTION =====
+        // Streaming AF is the Live Viewer "Autofocus" button -- a fast,
+        // continuous-Z scan during stage motion. NOT used during
+        // acquisition; that's what STANDARD + SWEEP above are for.
+        // Stage-side knobs (slow_speed_value, normal_speed_value,
+        // speed_property, slow_speed_um_per_s) live in
+        // config_<scope>.yml under stage.streaming_af; this section
+        // surfaces the current values read-only so operators can see
+        // what governs streaming on this rig.
+        TitledPane streamingPane = buildStreamingAfPane(configFile);
+
         // "Validate Autofocus" button -- runs both sweep + recovery test
         Button validateButton = new Button("Validate Autofocus Settings");
         validateButton.setTooltip(new Tooltip("Test your autofocus settings on the current tissue.\n\n"
@@ -1237,7 +1375,7 @@ public class AutofocusEditorWorkflow {
         objectiveRow.setAlignment(Pos.CENTER_LEFT);
 
         VBox sectionsBox = new VBox(10);
-        sectionsBox.getChildren().addAll(acquisitionPane, tissuePane, standardPane, sweepPane);
+        sectionsBox.getChildren().addAll(acquisitionPane, tissuePane, standardPane, sweepPane, streamingPane);
 
         VBox tab1Content = new VBox(10);
         tab1Content.setPadding(new Insets(10));

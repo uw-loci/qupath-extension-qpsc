@@ -169,6 +169,15 @@ public class QPPreferenceDialog {
     private static final BooleanProperty suppressExposureWarningProperty =
             PathPrefs.createPersistentPreference("suppressExposureWarning", false);
 
+    // Streaming-AF max exposure threshold (ms). When the active exposure
+    // exceeds this, the Live Viewer auto-falls back to Sweep Focus
+    // because streaming AF cannot satisfy the blur budget at higher
+    // exposures. 40 ms historical default; surfaced here so fluorescence
+    // operators can lower it (forces sweep more often) or raise it
+    // experimentally without recompiling.
+    private static final javafx.beans.property.DoubleProperty streamingMaxExposureMsProperty =
+            PathPrefs.createPersistentPreference("streamingMaxExposureMs", 40.0);
+
     // Set true once the user has been shown the streaming-AF auto-migration
     // notification. Prevents the "your config was migrated to v3 -- run
     // Re-probe Stage AF" dialog from re-firing on every QuPath launch
@@ -685,6 +694,14 @@ public class QPPreferenceDialog {
 
     public static boolean getSuppressExposureWarning() {
         return suppressExposureWarningProperty.get();
+    }
+
+    public static double getStreamingMaxExposureMs() {
+        return streamingMaxExposureMsProperty.get();
+    }
+
+    public static void setStreamingMaxExposureMs(double ms) {
+        streamingMaxExposureMsProperty.set(ms);
     }
 
     public static void setSuppressExposureWarning(boolean suppress) {
