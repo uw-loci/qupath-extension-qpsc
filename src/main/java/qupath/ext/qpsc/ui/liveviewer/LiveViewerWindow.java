@@ -1196,7 +1196,8 @@ public class LiveViewerWindow {
                     javafx.scene.control.CheckBox dontShow =
                             new javafx.scene.control.CheckBox("Do not show this message again");
                     javafx.scene.control.Label msgLabel = new javafx.scene.control.Label(String.format(
-                            "Current exposure (%.1f ms) is too long for fast autofocus.\n" + "Try Sweep Focus instead.",
+                            "Current exposure (%.1f ms) is too long for fast autofocus.\n"
+                                    + "Falling back to Sweep Focus automatically.",
                             exposureMs));
                     msgLabel.setWrapText(true);
                     javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(8, msgLabel, dontShow);
@@ -1211,6 +1212,13 @@ public class LiveViewerWindow {
                     if (dontShow.isSelected()) {
                         QPPreferenceDialog.setSuppressExposureWarning(true);
                     }
+
+                    // Auto-fallback: long exposures are common on fluorescence,
+                    // and forcing the user to read a warning then click a
+                    // separate button is friction every time. Sweep Focus
+                    // works at any exposure -- chain to it directly.
+                    updateStatus("Autofocus: switching to Sweep Focus (exposure too long for streaming)");
+                    handleSweepFocus();
                     return;
                 }
             } catch (java.io.IOException ex) {
@@ -1284,20 +1292,36 @@ public class LiveViewerWindow {
                         stageControlPanel.refreshPositions();
                     }
                     if (outcome == RefineFocusController.Outcome.FAILED) {
-                        // UNAVAILABLE / pre-flight refusal -- show fallback
-                        // buttons so the user has an alternative path.
-                        streamingFocusButton.setText("NO FOCUS");
-                        streamingFocusButton.setStyle("-fx-font-size: 11; -fx-base: #FF9800;");
-                        streamingFocusButton.setTooltip(new Tooltip(msg + "\nUse Sweep Focus instead."));
+                        // UNAVAILABLE / pre-flight refusal -- streaming
+                        // refused (typically: exposure budget violation,
+                        // saturation, no stage speed property). Sweep
+                        // Focus has no such pre-flight, so it usually
+                        // works where streaming refused. Auto-chain to
+                        // it instead of forcing the user to click a
+                        // separate button after reading a notification.
+                        streamingFocusButton.setText("Autofocus");
+                        streamingFocusButton.setStyle("");
+                        streamingFocusButton.setTooltip(new Tooltip(
+                                "Streaming AF refused; auto-fell back to Sweep Focus.\n"
+                                        + "Reason: " + msg));
                         streamingFocusButton.setDisable(!liveActive);
 
-                        sweepFocusButton.setVisible(true);
-                        sweepFocusButton.setManaged(true);
                         String reason = msg;
                         if (reason.startsWith("Autofocus unavailable: ")) {
                             reason = reason.substring("Autofocus unavailable: ".length());
                         }
-                        Dialogs.showInfoNotification("Autofocus: no focus found", reason);
+                        if (liveActive) {
+                            updateStatus("Autofocus: streaming unavailable (" + reason
+                                    + "); switching to Sweep Focus");
+                            handleSweepFocus();
+                        } else {
+                            // Live mode was toggled off mid-attempt --
+                            // can't run sweep either. Surface the original
+                            // notification so the user sees what happened.
+                            sweepFocusButton.setVisible(true);
+                            sweepFocusButton.setManaged(true);
+                            Dialogs.showInfoNotification("Autofocus: no focus found", reason);
+                        }
                     } else if (outcome == RefineFocusController.Outcome.ERROR) {
                         streamingFocusButton.setText("FAILED");
                         streamingFocusButton.setStyle("-fx-font-size: 11; -fx-base: #F44336;");
