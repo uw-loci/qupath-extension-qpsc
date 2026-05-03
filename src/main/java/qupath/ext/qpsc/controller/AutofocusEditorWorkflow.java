@@ -81,6 +81,14 @@ public class AutofocusEditorWorkflow {
         int gapIndexMultiplier;
         double gapSpatialMultiplier;
 
+        // Standard-AF fallback metric. Default true: p98_p2 is always
+        // computed alongside the primary metric, and the system falls
+        // back to it if the primary's peak validation fails. Operators
+        // can opt out per objective by writing
+        // {@code p98_p2_fallback_enabled: false} in the YAML; the field
+        // is additive (omitted in legacy files = true).
+        boolean p98P2FallbackEnabled = true;
+
         AutofocusSettings(
                 String objective,
                 int nSteps,
@@ -621,23 +629,23 @@ public class AutofocusEditorWorkflow {
             if (existingSettings.containsKey(obj)) {
                 AutofocusSettings existing = existingSettings.get(obj);
                 logger.info("  FOUND in existingSettings: n_steps={}", existing.nSteps);
-                workingSettings.put(
+                AutofocusSettings copy = new AutofocusSettings(
                         obj,
-                        new AutofocusSettings(
-                                obj,
-                                existing.nSteps,
-                                existing.searchRangeUm,
-                                existing.nTiles,
-                                existing.interpStrength,
-                                existing.interpKind,
-                                existing.scoreMetric,
-                                existing.textureThreshold,
-                                existing.tissueAreaThreshold,
-                                existing.sweepRangeUm,
-                                existing.sweepNSteps,
-                                existing.edgeRetries,
-                                existing.gapIndexMultiplier,
-                                existing.gapSpatialMultiplier));
+                        existing.nSteps,
+                        existing.searchRangeUm,
+                        existing.nTiles,
+                        existing.interpStrength,
+                        existing.interpKind,
+                        existing.scoreMetric,
+                        existing.textureThreshold,
+                        existing.tissueAreaThreshold,
+                        existing.sweepRangeUm,
+                        existing.sweepNSteps,
+                        existing.edgeRetries,
+                        existing.gapIndexMultiplier,
+                        existing.gapSpatialMultiplier);
+                copy.p98P2FallbackEnabled = existing.p98P2FallbackEnabled;
+                workingSettings.put(obj, copy);
             } else {
                 logger.info("  NOT FOUND in existingSettings - using defaults");
                 workingSettings.put(
@@ -874,6 +882,28 @@ public class AutofocusEditorWorkflow {
         tissueGrid.add(scoreMetricRow, 1, 2);
         tissueGrid.add(scoreMetricResolution, 2, 2);
 
+        // Standard-AF p98_p2 fallback opt-out. Always-computed alongside
+        // the primary metric; the system falls back to it when the
+        // primary's peak validation fails. Default ON; turning it off
+        // writes p98_p2_fallback_enabled: false into the YAML so the
+        // server skips the fallback path for this objective.
+        Label p98FallbackLabel = new Label("p98_p2 fallback:");
+        CheckBox p98FallbackCheck = new CheckBox("Use p98_p2 if primary peak fails");
+        p98FallbackCheck.setSelected(true);
+        p98FallbackCheck.setTooltip(new Tooltip(
+                "Standard-AF safety net. p98_p2 is always computed alongside\n"
+                        + "the primary metric. When this is enabled, the AF system\n"
+                        + "uses the p98_p2 peak whenever the primary metric's\n"
+                        + "Z-curve cannot be validated (no clear peak / monotonic\n"
+                        + "drift / saturation). Disable only if your primary metric\n"
+                        + "is well-tuned and you'd rather see the failure than\n"
+                        + "accept a histogram-spread fallback."));
+        Label p98FallbackDesc = new Label("(falls back to p98_p2 when primary peak validation fails)");
+        p98FallbackDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        tissueGrid.add(p98FallbackLabel, 0, 3);
+        tissueGrid.add(p98FallbackCheck, 1, 3);
+        tissueGrid.add(p98FallbackDesc, 2, 3);
+
         TitledPane tissuePane = new TitledPane("Tissue Detection & Shared Settings", tissueGrid);
         tissuePane.setCollapsible(false);
 
@@ -1070,23 +1100,23 @@ public class AutofocusEditorWorkflow {
                 int gapIndexMult = gapIndexSpinner.getValue();
                 double gapSpatialMult = Double.parseDouble(gapSpatialField.getText());
 
-                workingSettings.put(
+                AutofocusSettings updated = new AutofocusSettings(
                         currentObjective[0],
-                        new AutofocusSettings(
-                                currentObjective[0],
-                                nSteps,
-                                searchRange,
-                                nTiles,
-                                interpStrength,
-                                interpKind,
-                                scoreMetric,
-                                textureThreshold,
-                                tissueAreaThreshold,
-                                sweepRange,
-                                sweepNSteps,
-                                edgeRetries,
-                                gapIndexMult,
-                                gapSpatialMult));
+                        nSteps,
+                        searchRange,
+                        nTiles,
+                        interpStrength,
+                        interpKind,
+                        scoreMetric,
+                        textureThreshold,
+                        tissueAreaThreshold,
+                        sweepRange,
+                        sweepNSteps,
+                        edgeRetries,
+                        gapIndexMult,
+                        gapSpatialMult);
+                updated.p98P2FallbackEnabled = p98FallbackCheck.isSelected();
+                workingSettings.put(currentObjective[0], updated);
             } catch (NumberFormatException ex) {
                 logger.warn("Invalid numeric input when saving settings");
             }
@@ -1171,6 +1201,7 @@ public class AutofocusEditorWorkflow {
                 edgeRetriesSpinner.getValueFactory().setValue(settings.edgeRetries);
                 gapIndexSpinner.getValueFactory().setValue(settings.gapIndexMultiplier);
                 gapSpatialField.setText(String.valueOf(settings.gapSpatialMultiplier));
+                p98FallbackCheck.setSelected(settings.p98P2FallbackEnabled);
                 refreshDerivedDisplay.run();
                 if (existingSettings.containsKey(selectedObjective)) {
                     statusLabel.setText("Loaded existing settings for " + selectedObjective);
@@ -1446,11 +1477,61 @@ public class AutofocusEditorWorkflow {
         tab3.setContent(new ScrollPane(tab3Content));
 
         // ===== Tabbed layout =====
-        TabPane tabPane = new TabPane(tab1, tab2, tab3);
+        TabPane tabPane = new TabPane();
         tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         tabPane.setPrefHeight(550);
 
-        mainLayout.getChildren().addAll(tabPane, statusLabel, new Separator(), buttonRow);
+        // Simple/Advanced toggle. Sticky preference: operators who only
+        // open the editor to tune n_steps and score_metric stay in
+        // Simple by default; users who need strategy/binding editing
+        // flip to Advanced once and don't see Simple again. Hides
+        // Strategies / Modality Bindings tabs and the Streaming AF
+        // section, plus the per-row interp_*, edge_retries, and gap_*
+        // fields that almost no one tunes.
+        CheckBox advancedToggle = new CheckBox("Show advanced settings");
+        advancedToggle.setSelected(QPPreferenceDialog.getAutofocusEditorAdvancedMode());
+        advancedToggle.setTooltip(new Tooltip(
+                "Simple: per-objective tab only, with the most-edited fields.\n"
+                        + "Advanced: also shows the Strategies tab, Modality Bindings tab,\n"
+                        + "Streaming AF section, plus the interp_* / edge_retries /\n"
+                        + "gap_* fine-tuning fields. Setting persists across sessions."));
+
+        List<javafx.scene.Node> advancedNodes = new ArrayList<>();
+        advancedNodes.add(interpStrengthLabel);
+        advancedNodes.add(interpStrengthSpinner);
+        advancedNodes.add(interpStrengthDesc);
+        advancedNodes.add(interpKindLabel);
+        advancedNodes.add(interpKindCombo);
+        advancedNodes.add(interpKindDesc);
+        advancedNodes.add(edgeRetriesLabel);
+        advancedNodes.add(edgeRetriesSpinner);
+        advancedNodes.add(edgeRetriesDesc);
+        advancedNodes.add(gapIndexLabel);
+        advancedNodes.add(gapIndexSpinner);
+        advancedNodes.add(gapIndexDesc);
+        advancedNodes.add(gapSpatialLabel);
+        advancedNodes.add(gapSpatialField);
+        advancedNodes.add(gapSpatialDesc);
+        advancedNodes.add(streamingPane);
+
+        Runnable applyAdvancedMode = () -> {
+            boolean adv = advancedToggle.isSelected();
+            for (javafx.scene.Node n : advancedNodes) {
+                n.setVisible(adv);
+                n.setManaged(adv);
+            }
+            tabPane.getTabs().setAll(tab1);
+            if (adv) {
+                tabPane.getTabs().addAll(tab2, tab3);
+            }
+        };
+        advancedToggle.selectedProperty().addListener((obs, o, n) -> {
+            QPPreferenceDialog.setAutofocusEditorAdvancedMode(n);
+            applyAdvancedMode.run();
+        });
+        applyAdvancedMode.run();
+
+        mainLayout.getChildren().addAll(advancedToggle, tabPane, statusLabel, new Separator(), buttonRow);
 
         dialog.getDialogPane().setContent(mainLayout);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -1794,6 +1875,28 @@ public class AutofocusEditorWorkflow {
         grid.add(paramsBox, 0, row, 2, 1);
         row++;
 
+        Button duplicateBtn = new Button("Duplicate");
+        duplicateBtn.setTooltip(new Tooltip(
+                "Create a new strategy seeded with this strategy's score_metric,\n"
+                        + "validity_check, validity_params, and on_failure. The clone\n"
+                        + "name is " + sd.name + "_copy (or _copy_2, _copy_3, ...) and you\n"
+                        + "can rename or edit it freely afterwards."));
+        duplicateBtn.setOnAction(e -> {
+            String cloneKey = uniqueCloneName(sd.name, allStrategies.keySet());
+            StrategyDefinition clone = new StrategyDefinition(
+                    cloneKey,
+                    sd.description,
+                    sd.scoreMetric,
+                    sd.validityCheck,
+                    new LinkedHashMap<>(sd.validityParams),
+                    sd.onFailure);
+            allStrategies.put(cloneKey, clone);
+            cardsBox.getChildren().clear();
+            for (StrategyDefinition s : allStrategies.values()) {
+                cardsBox.getChildren().add(buildStrategyCard(s, allStrategies, cardsBox));
+            }
+        });
+
         Button deleteBtn = new Button("Delete Strategy");
         deleteBtn.setStyle("-fx-text-fill: red;");
         deleteBtn.setOnAction(e -> {
@@ -1808,11 +1911,29 @@ public class AutofocusEditorWorkflow {
                 cardsBox.getChildren().add(empty);
             }
         });
-        grid.add(deleteBtn, 1, row);
+        HBox actionRow = new HBox(8, duplicateBtn, deleteBtn);
+        actionRow.setAlignment(Pos.CENTER_LEFT);
+        grid.add(actionRow, 1, row);
 
         TitledPane pane = new TitledPane(sd.name, grid);
         pane.setExpanded(false);
         return pane;
+    }
+
+    /**
+     * Generate a unique clone name like {@code dense_texture_copy} (or
+     * {@code dense_texture_copy_2}, ...) given the existing strategy
+     * keys. Used by the strategy-card "Duplicate" button.
+     */
+    private static String uniqueCloneName(String source, Set<String> existing) {
+        String base = source + "_copy";
+        if (!existing.contains(base)) return base;
+        for (int i = 2; i < 1000; i++) {
+            String candidate = base + "_" + i;
+            if (!existing.contains(candidate)) return candidate;
+        }
+        // Pathological fallback.
+        return base + "_" + System.currentTimeMillis();
     }
 
     private static Map<String, Object> getDefaultValidityParams(String validityCheck) {
@@ -2396,8 +2517,12 @@ public class AutofocusEditorWorkflow {
                                 ? ((Number) entry.get("gap_spatial_multiplier")).doubleValue()
                                 : 2.0;
 
+                        // Additive opt-out: missing key = legacy behaviour = enabled.
+                        boolean p98Fallback = !entry.containsKey("p98_p2_fallback_enabled")
+                                || Boolean.TRUE.equals(entry.get("p98_p2_fallback_enabled"));
+
                         logger.info(
-                                "Loaded from YAML - objective='{}', n_steps={}, search_range={}, sweep_range={}, sweep_n_steps={}, edge_retries={}, gap_index={}, gap_spatial={}",
+                                "Loaded from YAML - objective='{}', n_steps={}, search_range={}, sweep_range={}, sweep_n_steps={}, edge_retries={}, gap_index={}, gap_spatial={}, p98_fallback={}",
                                 objective,
                                 nSteps,
                                 searchRange,
@@ -2405,25 +2530,26 @@ public class AutofocusEditorWorkflow {
                                 sweepNSteps,
                                 edgeRetries,
                                 gapIndexMultiplier,
-                                gapSpatialMultiplier);
+                                gapSpatialMultiplier,
+                                p98Fallback);
 
-                        settings.put(
+                        AutofocusSettings loaded = new AutofocusSettings(
                                 objective,
-                                new AutofocusSettings(
-                                        objective,
-                                        nSteps,
-                                        searchRange,
-                                        nTiles,
-                                        interpStrength,
-                                        interpKind,
-                                        scoreMetric,
-                                        textureThreshold,
-                                        tissueAreaThreshold,
-                                        sweepRangeUm,
-                                        sweepNSteps,
-                                        edgeRetries,
-                                        gapIndexMultiplier,
-                                        gapSpatialMultiplier));
+                                nSteps,
+                                searchRange,
+                                nTiles,
+                                interpStrength,
+                                interpKind,
+                                scoreMetric,
+                                textureThreshold,
+                                tissueAreaThreshold,
+                                sweepRangeUm,
+                                sweepNSteps,
+                                edgeRetries,
+                                gapIndexMultiplier,
+                                gapSpatialMultiplier);
+                        loaded.p98P2FallbackEnabled = p98Fallback;
+                        settings.put(objective, loaded);
                     }
                 }
             }
@@ -2465,6 +2591,7 @@ public class AutofocusEditorWorkflow {
             entry.put("edge_retries", setting.edgeRetries);
             entry.put("gap_index_multiplier", setting.gapIndexMultiplier);
             entry.put("gap_spatial_multiplier", setting.gapSpatialMultiplier);
+            entry.put("p98_p2_fallback_enabled", setting.p98P2FallbackEnabled);
             afSettingsList.add(entry);
         }
 

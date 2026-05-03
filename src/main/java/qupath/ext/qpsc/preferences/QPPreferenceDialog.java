@@ -192,6 +192,13 @@ public class QPPreferenceDialog {
     private static final BooleanProperty autofocusYamlMigrationAcknowledgedProperty =
             PathPrefs.createPersistentPreference("autofocusYamlMigrationAcknowledged", false);
 
+    // Sticky Simple/Advanced toggle for the autofocus editor.
+    // Default false = Simple mode (hides niche tuning fields and the
+    // Strategies / Modalities tabs). Persists across sessions so each
+    // operator gets the layout they last used.
+    private static final BooleanProperty autofocusEditorAdvancedModeProperty =
+            PathPrefs.createPersistentPreference("autofocusEditorAdvancedMode", false);
+
     // --- Notification / Alert preferences ---
     private static final String ALERTS_CATEGORY = "QuPath SCope Alerts";
     private static final String PPM_CATEGORY = "PPM (Polarized Light Microscopy)";
@@ -729,6 +736,14 @@ public class QPPreferenceDialog {
 
     public static void setAutofocusYamlMigrationAcknowledged(boolean acknowledged) {
         autofocusYamlMigrationAcknowledgedProperty.set(acknowledged);
+    }
+
+    public static boolean getAutofocusEditorAdvancedMode() {
+        return autofocusEditorAdvancedModeProperty.get();
+    }
+
+    public static void setAutofocusEditorAdvancedMode(boolean advanced) {
+        autofocusEditorAdvancedModeProperty.set(advanced);
     }
 
     /**
