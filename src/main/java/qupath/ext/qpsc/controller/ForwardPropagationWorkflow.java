@@ -405,44 +405,54 @@ public class ForwardPropagationWorkflow {
 
         List<String> perSiblingLog = new ArrayList<>();
 
-        // 1. Determine the canonical (alignment-frame) flip for this active microscope.
+        // 1. Determine the canonical (alignment-frame) flip. Two sources, in priority:
+        //    (a) the per-slide JSON's recorded flipMacroX/Y if present (phase 3),
+        //    (b) the active microscope preset's flipMacroX/Y (legacy fallback).
         boolean canonicalFlipX = false;
         boolean canonicalFlipY = false;
+        boolean canonicalFromJson = false;
         String activeMicroscope = null;
-        AffineTransformManager.TransformPreset activePreset = null;
-        try {
-            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            if (configPath != null && !configPath.isEmpty()) {
-                MicroscopeConfigManager configMgr = MicroscopeConfigManager.getInstance(configPath);
-                activeMicroscope = configMgr.getMicroscopeName();
-                AffineTransformManager mgr =
-                        new AffineTransformManager(new java.io.File(configPath).getParent());
-                // The slide alignment was built for the active microscope. Pick the most-recent
-                // preset for any source scanner -- they should all share the same target-microscope
-                // flip frame, so any of them gives us the canonical flip. Prefer one with a
-                // recorded flip state.
-                List<String> scanners = mgr.getDistinctSourceScannersForMicroscope(activeMicroscope);
-                for (String scanner : scanners) {
-                    AffineTransformManager.TransformPreset p = mgr.getBestPresetForPair(scanner, activeMicroscope);
-                    if (p != null && p.hasFlipState()) {
-                        activePreset = p;
-                        break;
+
+        AffineTransformManager.SlideAlignmentResult slideResult =
+                AffineTransformManager.loadSlideAlignmentWithFrame(project, baseName);
+        if (slideResult != null && slideResult.hasFlipFrame()) {
+            canonicalFlipX = Boolean.TRUE.equals(slideResult.getFlipMacroX());
+            canonicalFlipY = Boolean.TRUE.equals(slideResult.getFlipMacroY());
+            canonicalFromJson = true;
+            logger.info("BackProp fan-out: alignment frame from slide JSON: flipX={}, flipY={}",
+                    canonicalFlipX, canonicalFlipY);
+        } else {
+            AffineTransformManager.TransformPreset activePreset = null;
+            try {
+                String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                if (configPath != null && !configPath.isEmpty()) {
+                    MicroscopeConfigManager configMgr = MicroscopeConfigManager.getInstance(configPath);
+                    activeMicroscope = configMgr.getMicroscopeName();
+                    AffineTransformManager mgr =
+                            new AffineTransformManager(new java.io.File(configPath).getParent());
+                    List<String> scanners = mgr.getDistinctSourceScannersForMicroscope(activeMicroscope);
+                    for (String scanner : scanners) {
+                        AffineTransformManager.TransformPreset p = mgr.getBestPresetForPair(scanner, activeMicroscope);
+                        if (p != null && p.hasFlipState()) {
+                            activePreset = p;
+                            break;
+                        }
                     }
                 }
+            } catch (Exception e) {
+                logger.warn("Could not load active microscope preset for canonical-flip resolution: {}", e.getMessage());
             }
-        } catch (Exception e) {
-            logger.warn("Could not load active microscope preset for canonical-flip resolution: {}", e.getMessage());
+            if (activePreset != null) {
+                canonicalFlipX = Boolean.TRUE.equals(activePreset.getFlipMacroX());
+                canonicalFlipY = Boolean.TRUE.equals(activePreset.getFlipMacroY());
+                logger.warn("BackProp fan-out: per-slide JSON lacks flip frame; falling back to preset '{}': flipX={}, flipY={}. Re-save alignment to capture per-slide frame.",
+                        activePreset.getName(), canonicalFlipX, canonicalFlipY);
+            } else {
+                logger.warn("BackProp fan-out: no flip frame available (no slide JSON, no preset); treating as unflipped (legacy).");
+            }
         }
-        if (activePreset != null) {
-            canonicalFlipX = Boolean.TRUE.equals(activePreset.getFlipMacroX());
-            canonicalFlipY = Boolean.TRUE.equals(activePreset.getFlipMacroY());
-            logger.info(
-                    "BackProp fan-out: alignment expects flipX={} flipY={} based on preset '{}' (microscope={})",
-                    canonicalFlipX, canonicalFlipY, activePreset.getName(), activeMicroscope);
-        } else {
-            logger.warn("BackProp fan-out: no active preset with flip state found; "
-                    + "treating canonical frame as unflipped (legacy behavior).");
-        }
+        // Mark `canonicalFromJson` as used to suppress unused-warning analyzers; informational only.
+        if (canonicalFromJson) logger.debug("Canonical flip frame resolved from per-slide JSON.");
 
         // 2. Find or create the canonical sibling.
         ProjectImageEntry<BufferedImage> canonical =
@@ -483,7 +493,28 @@ public class ForwardPropagationWorkflow {
             siblingsAutoCreated++;
         }
 
-        // 3. Run the back-prop math against the canonical sibling.
+        // 3. Run the back-prop math against the canonical sibling. Validate first
+        // that the chosen sibling's flip metadata still agrees with the alignment
+        // frame -- protects against silently mis-targeting if the sibling's
+        // metadata was edited or got out of sync.
+        boolean canonicalEntryFlipX = ImageMetadataManager.isFlippedX(canonical);
+        boolean canonicalEntryFlipY = ImageMetadataManager.isFlippedY(canonical);
+        if (canonicalEntryFlipX != canonicalFlipX || canonicalEntryFlipY != canonicalFlipY) {
+            // Best-effort tolerance for legacy entries lacking explicit metadata --
+            // fall back to name-pattern flip from findSiblingWithFlip's logic.
+            String name = canonical.getImageName() != null ? canonical.getImageName() : "";
+            boolean nameXY = name.contains("(flipped XY)");
+            boolean nameFx = nameXY || name.contains("(flipped X)");
+            boolean nameFy = nameXY || name.contains("(flipped Y)");
+            if (nameFx != canonicalFlipX || nameFy != canonicalFlipY) {
+                throw new IllegalStateException(String.format(
+                        "Canonical sibling '%s' (flipX=%s, flipY=%s) does not match alignment frame "
+                                + "(flipX=%s, flipY=%s). Re-run alignment or fix the entry's FLIP_X/FLIP_Y metadata.",
+                        canonical.getImageName(), canonicalEntryFlipX, canonicalEntryFlipY,
+                        canonicalFlipX, canonicalFlipY));
+            }
+        }
+
         ImageData<BufferedImage> canonicalData = canonical.readImageData();
         PathObjectHierarchy canonicalHierarchy = canonicalData.getHierarchy();
         int beforeCount = canonicalHierarchy.getAllObjects(false).size();

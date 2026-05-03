@@ -13,6 +13,7 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.AffineTransformationController;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
+import qupath.ext.qpsc.utilities.FlipResolver;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MinorFunctions;
@@ -219,13 +220,20 @@ public class ManualAlignmentPath {
                     }
 
                     if (imageName != null) {
+                        // Capture the macro flip frame this manual alignment was built in
+                        // (no preset; falls through to detector / global pref).
+                        boolean flipMacroX = FlipResolver.resolveFlipX(null, null, null);
+                        boolean flipMacroY = FlipResolver.resolveFlipY(null, null, null);
                         AffineTransformManager.saveSlideAlignment(
                                 project,
                                 imageName, // Use image name without extension for base_image compatibility
                                 state.sample.modality(),
                                 transform,
-                                null);
-                        logger.info("Saved slide-specific transform for image: {}", imageName);
+                                null,
+                                flipMacroX,
+                                flipMacroY);
+                        logger.info("Saved slide-specific transform for image: {} (flipMacroX={}, flipMacroY={})",
+                                imageName, flipMacroX, flipMacroY);
                     } else {
                         logger.warn("Cannot save slide-specific transform - no image name available");
                     }

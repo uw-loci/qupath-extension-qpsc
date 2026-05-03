@@ -701,6 +701,29 @@ public class AffineTransformManager {
             String modality,
             AffineTransform transform,
             BufferedImage processedMacroImage) {
+        saveSlideAlignment(project, sampleName, modality, transform, processedMacroImage, null, null);
+    }
+
+    /**
+     * Save a per-slide alignment plus the flip frame the alignment was built in.
+     *
+     * <p>The {@code flipMacroX}/{@code flipMacroY} fields capture the macro-image
+     * flip that was active during alignment. Back-propagation reads these to
+     * decide which sibling (unflipped, flipped X, flipped Y, flipped XY) is
+     * the canonical input frame for the saved transform. When null, the
+     * loader falls back to the active microscope preset's flipMacroX/Y.
+     *
+     * @param flipMacroX flip-X state at alignment time, or null to omit the field
+     * @param flipMacroY flip-Y state at alignment time, or null to omit the field
+     */
+    public static void saveSlideAlignment(
+            Project<BufferedImage> project,
+            String sampleName,
+            String modality,
+            AffineTransform transform,
+            BufferedImage processedMacroImage,
+            Boolean flipMacroX,
+            Boolean flipMacroY) {
 
         try {
             // Get project folder
@@ -753,6 +776,8 @@ public class AffineTransformManager {
                 transform.getTranslateX(),
                 transform.getTranslateY()
             });
+            if (flipMacroX != null) alignmentData.put("flipMacroX", flipMacroX);
+            if (flipMacroY != null) alignmentData.put("flipMacroY", flipMacroY);
 
             // Mark that the saved macro image is in raw format (no display flips baked in).
             // Old alignment files without this flag have preference flips baked into the PNG.
@@ -866,6 +891,108 @@ public class AffineTransformManager {
 
         logger.debug("No slide-specific alignment found for sample '{}' under {}", sampleName, alignmentDir);
         return null;
+    }
+
+    /**
+     * Per-slide alignment plus the flip frame it was built in.
+     *
+     * <p>{@code flipMacroX} / {@code flipMacroY} are null when the JSON predates
+     * the per-slide flip-frame schema (i.e. legacy file). Callers should fall
+     * back to the active microscope preset's flipMacroX/Y in that case.
+     */
+    public static class SlideAlignmentResult {
+        private final AffineTransform transform;
+        private final Boolean flipMacroX;
+        private final Boolean flipMacroY;
+
+        public SlideAlignmentResult(AffineTransform transform, Boolean flipMacroX, Boolean flipMacroY) {
+            this.transform = transform;
+            this.flipMacroX = flipMacroX;
+            this.flipMacroY = flipMacroY;
+        }
+
+        public AffineTransform getTransform() { return transform; }
+        public Boolean getFlipMacroX() { return flipMacroX; }
+        public Boolean getFlipMacroY() { return flipMacroY; }
+        public boolean hasFlipFrame() { return flipMacroX != null && flipMacroY != null; }
+    }
+
+    /**
+     * Like {@link #loadSlideAlignment(Project, String)} but also surfaces the
+     * recorded flip frame (or nulls if the JSON is from before phase 3).
+     */
+    public static SlideAlignmentResult loadSlideAlignmentWithFrame(
+            Project<BufferedImage> project, String sampleName) {
+        try {
+            File projectDir = project.getPath().toFile().getParentFile();
+            return loadSlideAlignmentWithFrameFromDirectory(projectDir, sampleName);
+        } catch (Exception e) {
+            logger.error("Failed to load slide alignment with frame", e);
+            return null;
+        }
+    }
+
+    /** Directory-based variant; mirrors {@link #loadSlideAlignmentFromDirectory(File, String)}. */
+    public static SlideAlignmentResult loadSlideAlignmentWithFrameFromDirectory(
+            File projectDir, String sampleName) {
+        if (projectDir == null || !projectDir.exists() || sampleName == null) return null;
+        File alignmentDir = new File(projectDir, "alignmentFiles");
+        if (!alignmentDir.exists()) return null;
+
+        String activeMicroscope = null;
+        try {
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr != null) activeMicroscope = mgr.getMicroscopeName();
+        } catch (Exception ignore) {
+        }
+
+        if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
+            File scoped = new File(alignmentDir, sampleName + "_" + activeMicroscope + "_alignment.json");
+            if (scoped.exists()) {
+                SlideAlignmentResult r = readAlignmentJsonWithFrame(scoped, activeMicroscope);
+                if (r != null) return r;
+            }
+        }
+        File legacy = new File(alignmentDir, sampleName + "_alignment.json");
+        if (legacy.exists()) {
+            return readAlignmentJsonWithFrame(legacy, activeMicroscope);
+        }
+        return null;
+    }
+
+    /**
+     * Read a slide alignment JSON and return both the transform and the
+     * recorded flip frame (or nulls). Mirrors the validation in
+     * {@link #readAlignmentJson(File, String)}.
+     */
+    private static SlideAlignmentResult readAlignmentJsonWithFrame(File alignmentFile, String activeMicroscope) {
+        try {
+            String json = new String(Files.readAllBytes(alignmentFile.toPath()), StandardCharsets.UTF_8);
+            Type mapType = new TypeToken<Map<String, Object>>() {}.getType();
+            Map<String, Object> data = new Gson().fromJson(json, mapType);
+            if (data == null) return null;
+
+            Object scopeObj = data.get("microscope");
+            String fileScope = scopeObj instanceof String ? (String) scopeObj : null;
+            if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
+                if (fileScope == null) return null;
+                if (!fileScope.equals(activeMicroscope)) return null;
+            }
+
+            @SuppressWarnings("unchecked")
+            List<Double> tv = (List<Double>) data.get("transform");
+            if (tv == null || tv.size() != 6) return null;
+
+            AffineTransform transform = new AffineTransform(
+                    tv.get(0), tv.get(1), tv.get(2), tv.get(3), tv.get(4), tv.get(5));
+
+            Boolean fx = data.get("flipMacroX") instanceof Boolean ? (Boolean) data.get("flipMacroX") : null;
+            Boolean fy = data.get("flipMacroY") instanceof Boolean ? (Boolean) data.get("flipMacroY") : null;
+            return new SlideAlignmentResult(transform, fx, fy);
+        } catch (Exception e) {
+            logger.error("Error reading slide alignment file {}: {}", alignmentFile, e.getMessage());
+            return null;
+        }
     }
 
     /**

@@ -433,13 +433,23 @@ public class ExistingAlignmentPath {
         // Get the processed macro image from the state
         BufferedImage processedMacroImage = context.getProcessedMacroImage();
 
+        // Capture the macro flip frame the alignment was built in so back-prop can
+        // pick the correct sibling without consulting external state. See
+        // claude-reports/2026-05-03_propagation-manager-rework for context.
+        var preset = state.alignmentChoice != null ? state.alignmentChoice.selectedTransform() : null;
+        boolean flipMacroX = FlipResolver.resolveFlipX(null, preset, null);
+        boolean flipMacroY = FlipResolver.resolveFlipY(null, preset, null);
+
         AffineTransformManager.saveSlideAlignment(
                 project,
                 imageName, // Use image name without extension for base_image compatibility
                 state.sample.modality(),
                 state.transform,
-                processedMacroImage);
-        logger.info("Saved slide-specific alignment for image: {}", imageName);
+                processedMacroImage,
+                flipMacroX,
+                flipMacroY);
+        logger.info("Saved slide-specific alignment for image: {} (flipMacroX={}, flipMacroY={})",
+                imageName, flipMacroX, flipMacroY);
     }
 
     // Helper methods
