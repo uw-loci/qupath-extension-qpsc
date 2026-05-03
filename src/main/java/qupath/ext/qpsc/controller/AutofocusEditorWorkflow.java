@@ -1737,6 +1737,21 @@ public class AutofocusEditorWorkflow {
             pg.setHgap(6);
             pg.setVgap(4);
             int pr = 0;
+            // Manifest is the source of truth for the param TYPE (int /
+            // float / list_of_float) and RANGE. The editor was previously
+            // building a TextField for every key, which let users type
+            // "abc" into min_spots and only catch the error at YAML load
+            // time. Now: int -> Spinner<Integer>, float -> Spinner<Double>
+            // with min/max from the manifest, list_of_float -> two-element
+            // numeric editor.
+            FocusMetricsManifest paramManifest = FocusMetricsManifest.get(null);
+            FocusMetricsManifest.ValidityCheckSpec vspec = paramManifest.getValidityChecks().get(sd.validityCheck);
+            Map<String, FocusMetricsManifest.ParamSpec> paramSpecs = new LinkedHashMap<>();
+            if (vspec != null) {
+                for (FocusMetricsManifest.ParamSpec ps : vspec.params) {
+                    paramSpecs.put(ps.name, ps);
+                }
+            }
             Map<String, Object> defaults = getDefaultValidityParams(sd.validityCheck);
             Map<String, Object> merged = new LinkedHashMap<>(defaults);
             merged.putAll(sd.validityParams);
@@ -1745,25 +1760,8 @@ public class AutofocusEditorWorkflow {
             for (Map.Entry<String, Object> param : sd.validityParams.entrySet()) {
                 String key = param.getKey();
                 pg.add(new Label(key + ":"), 0, pr);
-                if (param.getValue() instanceof List) {
-                    @SuppressWarnings("unchecked")
-                    List<Number> list = (List<Number>) param.getValue();
-                    TextField tf = new TextField(formatList(list));
-                    tf.setPrefWidth(150);
-                    tf.textProperty().addListener((obs, o, n) -> sd.validityParams.put(key, parseList(n)));
-                    pg.add(tf, 1, pr);
-                } else {
-                    TextField tf = new TextField(String.valueOf(param.getValue()));
-                    tf.setPrefWidth(150);
-                    tf.textProperty().addListener((obs, o, n) -> {
-                        try {
-                            sd.validityParams.put(key, Double.parseDouble(n));
-                        } catch (NumberFormatException ex) {
-                            sd.validityParams.put(key, n);
-                        }
-                    });
-                    pg.add(tf, 1, pr);
-                }
+                FocusMetricsManifest.ParamSpec spec = paramSpecs.get(key);
+                pg.add(buildParamEditor(key, param.getValue(), spec, sd.validityParams), 1, pr);
                 pr++;
             }
             if (pr == 0) {
@@ -1827,6 +1825,128 @@ public class AutofocusEditorWorkflow {
                 break;
         }
         return defaults;
+    }
+
+    /**
+     * Build a typed editor for a single validity-check parameter.
+     * Manifest's ParamSpec drives the editor type and range:
+     *   - "int"          -> Spinner&lt;Integer&gt; clamped to range
+     *   - "float"        -> Spinner&lt;Double&gt; clamped to range
+     *   - "list_of_float"-> two-element list editor (HBox of TextFields)
+     *   - unknown / null -> fallback TextField (legacy path)
+     *
+     * The editor mutates {@code targetMap.put(key, ...)} on every valid
+     * change so the parent dialog's save path picks up live edits
+     * without an explicit commit step.
+     */
+    private static javafx.scene.Node buildParamEditor(
+            String key, Object initialValue,
+            FocusMetricsManifest.ParamSpec spec,
+            Map<String, Object> targetMap) {
+        // No spec -> fall back to the legacy TextField behaviour so an
+        // unknown YAML key still appears editable.
+        if (spec == null || spec.type == null) {
+            return _legacyTextEditor(key, initialValue, targetMap);
+        }
+        switch (spec.type) {
+            case "int": {
+                int min = spec.rangeMin != null ? spec.rangeMin.intValue() : Integer.MIN_VALUE;
+                int max = spec.rangeMax != null ? spec.rangeMax.intValue() : Integer.MAX_VALUE;
+                int initial = toInt(initialValue, spec.defaultValue, 0);
+                Spinner<Integer> sp = new Spinner<>(min, max, initial, 1);
+                sp.setEditable(true);
+                sp.setPrefWidth(150);
+                sp.valueProperty().addListener((obs, o, n) -> {
+                    if (n != null) targetMap.put(key, n);
+                });
+                return sp;
+            }
+            case "float": {
+                double min = spec.rangeMin != null ? spec.rangeMin : -Double.MAX_VALUE;
+                double max = spec.rangeMax != null ? spec.rangeMax : Double.MAX_VALUE;
+                double initial = toDouble(initialValue, spec.defaultValue, 0.0);
+                // Step is range / 100 with a sensible floor; lets sub-unit
+                // params (like 0.005) still be tunable without typing.
+                double step = Math.max((max - min) / 100.0, 0.001);
+                Spinner<Double> sp = new Spinner<>(min, max, initial, step);
+                sp.setEditable(true);
+                sp.setPrefWidth(150);
+                sp.valueProperty().addListener((obs, o, n) -> {
+                    if (n != null) targetMap.put(key, n);
+                });
+                return sp;
+            }
+            case "list_of_float": {
+                int len = spec.length != null ? spec.length : 2;
+                @SuppressWarnings("unchecked")
+                List<Number> initial = initialValue instanceof List
+                        ? (List<Number>) initialValue
+                        : (spec.defaultValue instanceof List
+                            ? (List<Number>) spec.defaultValue
+                            : Collections.emptyList());
+                HBox row = new HBox(4);
+                row.setAlignment(Pos.CENTER_LEFT);
+                List<TextField> fields = new ArrayList<>();
+                for (int i = 0; i < len; i++) {
+                    double v = i < initial.size() ? initial.get(i).doubleValue() : 0.0;
+                    TextField tf = new TextField(String.valueOf(v));
+                    tf.setPrefWidth(70);
+                    fields.add(tf);
+                    row.getChildren().add(tf);
+                }
+                Runnable commit = () -> {
+                    List<Double> list = new ArrayList<>();
+                    boolean ok = true;
+                    for (TextField tf : fields) {
+                        try { list.add(Double.parseDouble(tf.getText().trim())); }
+                        catch (NumberFormatException ex) { ok = false; break; }
+                    }
+                    if (ok) {
+                        targetMap.put(key, list);
+                        for (TextField tf : fields) tf.setStyle("");
+                    } else {
+                        for (TextField tf : fields) tf.setStyle("-fx-border-color: #F44336;");
+                    }
+                };
+                for (TextField tf : fields) {
+                    tf.textProperty().addListener((obs, o, n) -> commit.run());
+                }
+                return row;
+            }
+            default:
+                return _legacyTextEditor(key, initialValue, targetMap);
+        }
+    }
+
+    private static TextField _legacyTextEditor(
+            String key, Object initialValue, Map<String, Object> targetMap) {
+        TextField tf = new TextField(String.valueOf(initialValue));
+        tf.setPrefWidth(150);
+        tf.textProperty().addListener((obs, o, n) -> {
+            try { targetMap.put(key, Double.parseDouble(n)); }
+            catch (NumberFormatException ex) { targetMap.put(key, n); }
+        });
+        return tf;
+    }
+
+    private static int toInt(Object value, Object fallback, int finalFallback) {
+        if (value instanceof Number) return ((Number) value).intValue();
+        if (value instanceof String) {
+            try { return Integer.parseInt(((String) value).trim()); }
+            catch (NumberFormatException ignored) {}
+        }
+        if (fallback instanceof Number) return ((Number) fallback).intValue();
+        return finalFallback;
+    }
+
+    private static double toDouble(Object value, Object fallback, double finalFallback) {
+        if (value instanceof Number) return ((Number) value).doubleValue();
+        if (value instanceof String) {
+            try { return Double.parseDouble(((String) value).trim()); }
+            catch (NumberFormatException ignored) {}
+        }
+        if (fallback instanceof Number) return ((Number) fallback).doubleValue();
+        return finalFallback;
     }
 
     private static String formatList(List<? extends Number> list) {
@@ -2010,29 +2130,25 @@ public class AutofocusEditorWorkflow {
         Runnable[] rebuildHolder = new Runnable[1];
         rebuildHolder[0] = () -> {
             overrideGrid.getChildren().clear();
+            // Look up the strategy's validity check so the manifest's
+            // ParamSpec can drive the editor type (same logic as the
+            // strategy card uses).
+            StrategyDefinition refStrategy = strategies.get(mb.strategyName);
+            String vcheck = refStrategy != null ? refStrategy.validityCheck : null;
+            FocusMetricsManifest.ValidityCheckSpec vspec = vcheck != null
+                    ? bindingManifest.getValidityChecks().get(vcheck) : null;
+            Map<String, FocusMetricsManifest.ParamSpec> specsByName = new LinkedHashMap<>();
+            if (vspec != null) {
+                for (FocusMetricsManifest.ParamSpec ps : vspec.params) {
+                    specsByName.put(ps.name, ps);
+                }
+            }
             int pr = 0;
             for (Map.Entry<String, Object> param : mb.overrides.entrySet()) {
                 String key = param.getKey();
                 overrideGrid.add(new Label(key + ":"), 0, pr);
-                if (param.getValue() instanceof List) {
-                    @SuppressWarnings("unchecked")
-                    List<Number> list = (List<Number>) param.getValue();
-                    TextField tf = new TextField(formatList(list));
-                    tf.setPrefWidth(150);
-                    tf.textProperty().addListener((obs, o, n) -> mb.overrides.put(key, parseList(n)));
-                    overrideGrid.add(tf, 1, pr);
-                } else {
-                    TextField tf = new TextField(String.valueOf(param.getValue()));
-                    tf.setPrefWidth(150);
-                    tf.textProperty().addListener((obs, o, n) -> {
-                        try {
-                            mb.overrides.put(key, Double.parseDouble(n));
-                        } catch (NumberFormatException ex) {
-                            mb.overrides.put(key, n);
-                        }
-                    });
-                    overrideGrid.add(tf, 1, pr);
-                }
+                overrideGrid.add(buildParamEditor(
+                        key, param.getValue(), specsByName.get(key), mb.overrides), 1, pr);
                 pr++;
             }
             if (pr == 0 && overrideCheck.isSelected()) {
