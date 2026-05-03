@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -13,11 +15,13 @@ import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.stage.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.FocusMetricsManifest;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -579,6 +583,17 @@ public class AutofocusEditorWorkflow {
         File autofocusFile = new File(configDir, "autofocus_" + microscopeName + ".yml");
 
         logger.info("Autofocus editor using config: {}", autofocusFile.getAbsolutePath());
+
+        // Detect legacy metric aliases (e.g. volath5 -> vollath_f5) BEFORE
+        // loading: if the user accepts migration, the file is rewritten in
+        // place so the loaders below see canonical names.
+        FocusMetricsManifest migrationManifest = FocusMetricsManifest.get(configDir.toPath());
+        Map<String, String> deprecatedFound = findDeprecatedAliasesInFile(autofocusFile, migrationManifest);
+        if (!deprecatedFound.isEmpty()) {
+            qupath.lib.gui.QuPathGUI guiForBanner = qupath.lib.gui.QuPathGUI.getInstance();
+            Window ownerForBanner = guiForBanner != null ? guiForBanner.getStage() : null;
+            maybeShowMigrationBanner(autofocusFile, deprecatedFound, ownerForBanner);
+        }
 
         // Load objectives from main config
         MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
@@ -2184,6 +2199,137 @@ public class AutofocusEditorWorkflow {
         return container;
     }
 
+    // =========================================================================
+    // Legacy-alias migration (volath5 -> vollath_f5, tenenbaum_gradient ->
+    // tenengrad, ...). Driven by FocusMetricsManifest.removed_aliases.
+    // =========================================================================
+
+    /**
+     * Scan the autofocus YAML for any {@code score_metric: <legacy>}
+     * lines whose value matches a {@code removed_aliases} entry in the
+     * manifest. Returns a map of {@code old -> canonical} replacements
+     * actually present in the file (empty if none).
+     *
+     * <p>Pattern is anchored to {@code score_metric:} so docstrings,
+     * comments mentioning the old name, etc. are left alone -- mirrors
+     * the {@code microscope_configurations/scripts/migrate_autofocus_yaml.py}
+     * regex used by the M5 migration script.
+     */
+    private static Map<String, String> findDeprecatedAliasesInFile(
+            File file, FocusMetricsManifest manifest) {
+        Map<String, String> found = new LinkedHashMap<>();
+        if (file == null || !file.exists() || manifest == null
+                || manifest.getRemovedAliases().isEmpty()) {
+            return found;
+        }
+        String text;
+        try {
+            text = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            logger.warn("Could not read autofocus file for migration check: {}", e.getMessage());
+            return found;
+        }
+        for (Map.Entry<String, String> e : manifest.getRemovedAliases().entrySet()) {
+            Pattern p = aliasPattern(e.getKey());
+            if (p.matcher(text).find()) {
+                found.put(e.getKey(), e.getValue());
+            }
+        }
+        return found;
+    }
+
+    /**
+     * Rewrite the autofocus YAML in place, replacing every legacy alias
+     * with its canonical name. Saves a {@code <file>.pre-migration}
+     * backup first. No-op if no replacements actually fire.
+     */
+    private static boolean migrateAliasesInFile(File file, Map<String, String> aliases)
+            throws IOException {
+        String original = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+        String text = original;
+        for (Map.Entry<String, String> e : aliases.entrySet()) {
+            Pattern p = aliasPattern(e.getKey());
+            text = p.matcher(text).replaceAll(
+                    "$1" + Matcher.quoteReplacement(e.getValue()) + "$2");
+        }
+        if (text.equals(original)) return false;
+        File backup = new File(file.getAbsolutePath() + ".pre-migration");
+        Files.copy(file.toPath(), backup.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        Files.write(file.toPath(), text.getBytes(StandardCharsets.UTF_8));
+        logger.info("Migrated autofocus YAML aliases in {} ({} replacement(s)); backup at {}",
+                file.getName(), aliases.size(), backup.getName());
+        return true;
+    }
+
+    private static Pattern aliasPattern(String oldName) {
+        // Multiline mode so $ matches end-of-line, not end-of-text.
+        return Pattern.compile(
+                "(?m)(\\bscore_metric\\s*:\\s*['\"]?)"
+                        + Pattern.quote(oldName)
+                        + "(['\"]?\\s*(?:#.*)?$)");
+    }
+
+    /**
+     * Show a one-time banner offering to migrate legacy alias names to
+     * their canonical replacements. Three buttons:
+     * <ul>
+     *   <li>Migrate now -- back up and rewrite the YAML</li>
+     *   <li>Not now -- leave the file as-is for this session</li>
+     *   <li>Don't ask again -- set the persistent suppress preference</li>
+     * </ul>
+     */
+    private static void maybeShowMigrationBanner(
+            File file, Map<String, String> found, Window owner) {
+        if (found.isEmpty()) return;
+        if (QPPreferenceDialog.getAutofocusYamlMigrationAcknowledged()) {
+            logger.info(
+                    "Autofocus YAML in {} contains legacy aliases {}; banner suppressed by preference.",
+                    file.getName(), found.keySet());
+            return;
+        }
+        StringBuilder body = new StringBuilder();
+        body.append("This autofocus YAML uses metric names that have been renamed:\n\n");
+        for (Map.Entry<String, String> e : found.entrySet()) {
+            body.append("  ").append(e.getKey())
+                    .append("  ->  ").append(e.getValue()).append("\n");
+        }
+        body.append("\nThe runtime no longer accepts the old names and will refuse the file.\n\n");
+        body.append("Migrate now? A backup will be saved as ")
+                .append(file.getName()).append(".pre-migration");
+
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Autofocus YAML Migration");
+        alert.setHeaderText(file.getName() + ": legacy metric names detected");
+        alert.setContentText(body.toString());
+        ButtonType migrate = new ButtonType("Migrate now", ButtonBar.ButtonData.YES);
+        ButtonType notNow = new ButtonType("Not now", ButtonBar.ButtonData.CANCEL_CLOSE);
+        ButtonType dontAsk = new ButtonType("Don't ask again", ButtonBar.ButtonData.NO);
+        alert.getButtonTypes().setAll(migrate, notNow, dontAsk);
+        Optional<ButtonType> choice = UIFunctions.showAlertOverParent(alert, owner);
+        if (choice.isPresent() && choice.get() == migrate) {
+            try {
+                migrateAliasesInFile(file, found);
+                Alert ok = new Alert(Alert.AlertType.INFORMATION,
+                        "Migrated " + found.size() + " alias(es). Backup saved as "
+                                + file.getName() + ".pre-migration");
+                ok.setTitle("Migration Complete");
+                ok.setHeaderText(null);
+                UIFunctions.showAlertOverParent(ok, owner);
+            } catch (IOException ex) {
+                logger.error("Failed to migrate autofocus YAML", ex);
+                Alert err = new Alert(Alert.AlertType.ERROR,
+                        "Failed to migrate: " + ex.getMessage());
+                err.setTitle("Migration Failed");
+                err.setHeaderText(null);
+                UIFunctions.showAlertOverParent(err, owner);
+            }
+        } else if (choice.isPresent() && choice.get() == dontAsk) {
+            QPPreferenceDialog.setAutofocusYamlMigrationAcknowledged(true);
+            logger.info("User dismissed autofocus YAML migration banner permanently.");
+        }
+    }
+
     /**
      * Load autofocus settings from YAML file
      */
@@ -2351,37 +2497,12 @@ public class AutofocusEditorWorkflow {
 
         Yaml yaml = new Yaml(options);
 
-        // Write with header comment
+        // Write with manifest-sourced header comment so the comment block
+        // can never drift from the actual metric / strategy / modality
+        // vocabulary the runtime accepts.
         try (FileWriter writer = new FileWriter(autofocusFile, StandardCharsets.UTF_8)) {
-            writer.write("# ========== AUTOFOCUS CONFIGURATION ==========\n");
-            writer.write("# Autofocus parameters per objective\n");
-            writer.write("# These settings control autofocus behavior during image acquisition\n");
-            writer.write("#\n");
-            writer.write("# STANDARD AUTOFOCUS (initial focus on first tissue position):\n");
-            writer.write("#   n_steps: Number of Z positions to sample (higher = more accurate but slower)\n");
-            writer.write("#   search_range_um: Total Z range to search in micrometers\n");
-            writer.write("#   interp_strength: Interpolation density factor (typical: 50-200)\n");
-            writer.write("#   interp_kind: Interpolation method - 'linear', 'quadratic', or 'cubic'\n");
-            writer.write("#\n");
-            writer.write("# SWEEP DRIFT CHECK (in-acquisition focus correction):\n");
-            writer.write("#   sweep_range_um: Total Z range for drift check (default 10 = +/-5um)\n");
-            writer.write("#   sweep_n_steps: Number of Z positions to sample (default 6)\n");
-            writer.write("#\n");
-            writer.write("# SHARED:\n");
-            writer.write("#   n_tiles: Autofocus runs every N tiles (lower = more frequent)\n");
-            writer.write("#            Also sets af_min_distance = n_tiles x mean(camera FOV)\n");
-            writer.write("#   score_metric: 'normalized_variance' (recommended), 'laplacian_variance',\n");
-            writer.write("#                 'sobel', 'brenner_gradient', or 'p98_p2'\n");
-            writer.write("#   texture_threshold: Min texture variance for tissue detection (0.005-0.030)\n");
-            writer.write("#   tissue_area_threshold: Min tissue coverage fraction (0.05-0.30)\n");
-            writer.write("#\n");
-            writer.write("# AF SAFETY NETS (force an extra autofocus when the planned grid is sparse):\n");
-            writer.write("#   gap_index_multiplier: force AF after (this x n_tiles) positions without one\n");
-            writer.write("#                         Default 3, typical 1-5. Lower = more aggressive safety net.\n");
-            writer.write("#   gap_spatial_multiplier: force AF beyond (this x af_min_distance) from nearest AF\n");
-            writer.write(
-                    "#                           Default 2.0, typical 1.0-3.0. Catches disconnected fragments.\n\n");
-
+            writer.write(FocusMetricsManifest.get(autofocusFile.getParentFile() != null
+                    ? autofocusFile.getParentFile().toPath() : null).headerCommentBlock());
             yaml.dump(root, writer);
         }
 

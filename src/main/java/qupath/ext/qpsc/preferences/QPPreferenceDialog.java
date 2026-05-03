@@ -185,6 +185,13 @@ public class QPPreferenceDialog {
     private static final BooleanProperty streamingAfMigrationAcknowledgedProperty =
             PathPrefs.createPersistentPreference("streamingAfMigrationAcknowledged", false);
 
+    // Set true once the user has dismissed the autofocus-YAML legacy-name
+    // migration banner. Suppresses re-prompt on every editor open after
+    // the user has chosen "Don't ask again" for files that still hold
+    // removed metric aliases (e.g. volath5 -> vollath_f5).
+    private static final BooleanProperty autofocusYamlMigrationAcknowledgedProperty =
+            PathPrefs.createPersistentPreference("autofocusYamlMigrationAcknowledged", false);
+
     // --- Notification / Alert preferences ---
     private static final String ALERTS_CATEGORY = "QuPath SCope Alerts";
     private static final String PPM_CATEGORY = "PPM (Polarized Light Microscopy)";
@@ -714,6 +721,14 @@ public class QPPreferenceDialog {
 
     public static void setStreamingAfMigrationAcknowledged(boolean acknowledged) {
         streamingAfMigrationAcknowledgedProperty.set(acknowledged);
+    }
+
+    public static boolean getAutofocusYamlMigrationAcknowledged() {
+        return autofocusYamlMigrationAcknowledgedProperty.get();
+    }
+
+    public static void setAutofocusYamlMigrationAcknowledged(boolean acknowledged) {
+        autofocusYamlMigrationAcknowledgedProperty.set(acknowledged);
     }
 
     /**

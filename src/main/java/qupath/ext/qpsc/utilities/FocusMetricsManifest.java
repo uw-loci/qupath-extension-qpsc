@@ -429,4 +429,81 @@ public final class FocusMetricsManifest {
     public Set<Group> groupsPresent() {
         return metrics.values().stream().map(s -> s.group).collect(Collectors.toCollection(java.util.LinkedHashSet::new));
     }
+
+    /**
+     * Generate the header comment block written above the autofocus
+     * YAML on save. Replaces the previously hardcoded block in
+     * {@code AutofocusEditorWorkflow.saveAutofocusSettings} so the
+     * comment can never drift from the real metric / strategy /
+     * modality-default vocabulary the runtime accepts.
+     *
+     * <p>Each line is prefixed with {@code "# "} and the block ends in
+     * a single blank line so it concatenates cleanly with the YAML body.
+     */
+    public String headerCommentBlock() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("# ========== AUTOFOCUS CONFIGURATION ==========\n");
+        sb.append("# Per-objective autofocus parameters and per-modality strategy bindings.\n");
+        sb.append("# Vocabulary (metric / strategy / validity-check names) is sourced from\n");
+        sb.append("# focus_metrics_manifest.yml; this header is regenerated on every save.\n");
+        sb.append("#\n");
+        sb.append("# OBJECTIVE FIELDS:\n");
+        sb.append("#   n_steps              -- Z positions sampled for the standard sweep\n");
+        sb.append("#   search_range_um      -- total Z range searched in micrometres\n");
+        sb.append("#   interp_strength      -- interpolation density factor (typical 50-200)\n");
+        sb.append("#   interp_kind          -- 'linear', 'quadratic', or 'cubic'\n");
+        sb.append("#   sweep_range_um       -- in-acquisition drift-check Z range (default 10)\n");
+        sb.append("#   sweep_n_steps        -- in-acquisition drift-check Z samples (default 6)\n");
+        sb.append("#   n_tiles              -- run AF every N tiles; sets af_min_distance\n");
+        sb.append("#   score_metric         -- focus metric (see AVAILABLE SCORE METRICS below)\n");
+        sb.append("#   gap_index_multiplier -- force AF after (this x n_tiles) positions w/o one\n");
+        sb.append("#   gap_spatial_multiplier -- force AF beyond (this x af_min_distance)\n");
+        sb.append("#\n");
+        sb.append("# AVAILABLE SCORE METRICS:\n");
+        for (Group g : new Group[]{Group.RECOMMENDED, Group.ADVANCED, Group.SPECIAL}) {
+            List<MetricSpec> entries = metricsByGroup(g);
+            if (entries.isEmpty()) continue;
+            sb.append("#   [").append(g.name().toLowerCase(Locale.ROOT)).append("]\n");
+            for (MetricSpec m : entries) {
+                String role = m.role != null ? "  (" + m.role + ")" : "";
+                sb.append("#     ").append(m.name).append(role).append("\n");
+                if (!m.bestFor.isEmpty()) {
+                    sb.append("#       best for : ").append(oneLine(m.bestFor)).append("\n");
+                }
+                if (!m.avoidWhen.isEmpty()) {
+                    sb.append("#       avoid    : ").append(oneLine(m.avoidWhen)).append("\n");
+                }
+            }
+        }
+        if (!strategies.isEmpty()) {
+            sb.append("#\n");
+            sb.append("# STRATEGIES (referenced by per-modality bindings):\n");
+            for (StrategySpec s : strategies.values()) {
+                sb.append("#   ").append(s.name)
+                        .append(" -> score_metric_default=").append(s.scoreMetricDefault)
+                        .append(", validity_check=").append(s.validityCheck)
+                        .append(", on_failure=").append(s.onFailure).append("\n");
+            }
+        }
+        if (!modalityDefaults.isEmpty()) {
+            sb.append("#\n");
+            sb.append("# MODALITY DEFAULTS (used when no per-objective score_metric is set):\n");
+            for (Map.Entry<String, String> e : modalityDefaults.entrySet()) {
+                sb.append("#   ").append(e.getKey()).append(" -> ").append(e.getValue()).append("\n");
+            }
+        }
+        if (!removedAliases.isEmpty()) {
+            sb.append("#\n");
+            sb.append("# RENAMED METRICS (loader rejects the old name):\n");
+            for (Map.Entry<String, String> e : removedAliases.entrySet()) {
+                sb.append("#   ").append(e.getKey()).append(" -> ").append(e.getValue()).append("\n");
+            }
+        }
+        sb.append("\n");
+        return sb.toString();
+    }
+
+    private static String oneLine(String s) {
+        return s.replace("\n", " ").replace("\r", " ").trim();
+    }
 }

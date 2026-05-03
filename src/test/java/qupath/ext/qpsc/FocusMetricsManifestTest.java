@@ -132,6 +132,27 @@ public class FocusMetricsManifestTest {
     }
 
     @Test
+    void headerCommentBlockIsCommentedAndNamesCanonicalMetrics() {
+        FocusMetricsManifest m = FocusMetricsManifest.get(null);
+        String header = m.headerCommentBlock();
+        assertNotNull(header);
+        // Every line should be a YAML comment (or blank).
+        for (String line : header.split("\n", -1)) {
+            assertTrue(line.isEmpty() || line.startsWith("#"),
+                    "Header line is not a YAML comment: '" + line + "'");
+        }
+        // Canonical replacements appear; legacy aliases appear only in
+        // the rename map.
+        assertTrue(header.contains("tenengrad"));
+        assertTrue(header.contains("vollath_f5"));
+        assertTrue(header.contains("dense_texture"));
+        // The rename block lists volath5 -> vollath_f5 (one of the
+        // removed aliases shipped in the manifest).
+        assertTrue(header.contains("volath5"),
+                "Header should list legacy aliases under RENAMED METRICS");
+    }
+
+    @Test
     void dropdownOrderingPlacesRecommendedFirst() {
         FocusMetricsManifest m = FocusMetricsManifest.get(null);
         List<FocusMetricsManifest.MetricSpec> ordered = m.metricsForDropdown();
