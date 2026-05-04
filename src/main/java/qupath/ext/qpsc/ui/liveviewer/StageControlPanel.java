@@ -1857,11 +1857,37 @@ public class StageControlPanel extends VBox {
         TextField expField = new TextField();
         expField.setPrefWidth(80);
         expField.setPromptText("e.g., 33");
-        try {
-            var expResult = MicroscopeController.getInstance().getSocketClient().getExposures();
-            expField.setText(String.format("%.1f", expResult.unified()));
-        } catch (Exception ex) {
-            expField.setText("");
+        // Prefer the persisted last-edit so a Camera-tab tune-up survives
+        // a session restart. Apply it back to hardware so live preview
+        // matches the prefilled value rather than whatever exposure the
+        // active profile's apply_mode_setup just left in place.
+        // Falls back to the live GETEXP value if no preference is saved.
+        double saved = qupath.ext.qpsc.preferences.PersistentPreferences.getLastUnifiedExposureMs();
+        boolean usedSaved = false;
+        if (saved > 0) {
+            expField.setText(String.format("%.1f", saved));
+            usedSaved = true;
+            final float toApply = (float) saved;
+            Thread t = new Thread(() -> {
+                try {
+                    MicroscopeController mc = MicroscopeController.getInstance();
+                    if (mc != null && mc.isConnected()) {
+                        mc.getSocketClient().setExposures(new float[] {toApply});
+                    }
+                } catch (Exception ex) {
+                    logger.debug("Restoring last exposure {} ms failed: {}", toApply, ex.getMessage());
+                }
+            }, "Restore-Exposure");
+            t.setDaemon(true);
+            t.start();
+        }
+        if (!usedSaved) {
+            try {
+                var expResult = MicroscopeController.getInstance().getSocketClient().getExposures();
+                expField.setText(String.format("%.1f", expResult.unified()));
+            } catch (Exception ex) {
+                expField.setText("");
+            }
         }
         Button applyBtn = new Button("Set");
         applyBtn.setStyle("-fx-font-size: 10px;");
@@ -1914,7 +1940,38 @@ public class StageControlPanel extends VBox {
 
             float min = illumResult.minPower();
             float max = illumResult.maxPower();
-            float current = illumResult.power();
+            // Prefer the persisted last-edit per modality (e.g. BF) so the
+            // Camera tab survives the APPLYPR-on-modality-switch that
+            // otherwise resets the lamp to the YAML's
+            // illumination_intensity. Push the persisted value back to
+            // hardware on prefill so the live preview matches what the
+            // slider shows. Falls back to the live GETILLM value if the
+            // pref is not set.
+            Double savedIntensity = (currentCameraModality != null)
+                    ? qupath.ext.qpsc.preferences.PersistentPreferences.getLastModalityIllumination(
+                            currentCameraModality)
+                    : null;
+            float current;
+            if (savedIntensity != null && savedIntensity > 0) {
+                float clamped = (float) Math.max(min, Math.min(max, savedIntensity));
+                current = clamped;
+                final float toApply = clamped;
+                Thread t = new Thread(() -> {
+                    try {
+                        MicroscopeController mc2 = MicroscopeController.getInstance();
+                        if (mc2 != null && mc2.isConnected()) {
+                            mc2.getSocketClient().setIllumination(toApply);
+                        }
+                    } catch (Exception ex) {
+                        logger.debug("Restoring last {} illumination {} failed: {}",
+                                currentCameraModality, toApply, ex.getMessage());
+                    }
+                }, "Restore-Illum");
+                t.setDaemon(true);
+                t.start();
+            } else {
+                current = illumResult.power();
+            }
 
             // Try to get the illumination label from config
             String illumLabel = "Lamp";
@@ -2020,6 +2077,15 @@ public class StageControlPanel extends VBox {
 
     /** Send illumination power to the server in a background thread. */
     private void sendIlluminationPower(float power) {
+        // Persist non-zero values per modality so the next session/rebuild
+        // restores the user's last tune-up instead of snapping back to the
+        // YAML profile's illumination_intensity. Power=0 is the OFF toggle
+        // and intentionally NOT persisted -- otherwise toggling off
+        // permanently demotes the saved level to zero.
+        if (currentCameraModality != null && power > 0) {
+            qupath.ext.qpsc.preferences.PersistentPreferences.setLastModalityIllumination(
+                    currentCameraModality, power);
+        }
         Thread t = new Thread(
                 () -> {
                     try {

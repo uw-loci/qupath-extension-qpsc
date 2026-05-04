@@ -1354,6 +1354,51 @@ public class PersistentPreferences {
         lastUnifiedExposureMs.set(String.valueOf(exposureMs));
     }
 
+    // Per-modality illumination intensity (Camera tab single-source modes
+    // like Brightfield). Stored as one delimited blob keyed by modality so
+    // BF, BF on a second config, etc. don't clobber each other -- mirrors
+    // the per-channel intensity store. NOT used for channel-based modalities
+    // (FL / BF+IF) which key by (modality, channelId).
+    private static final StringProperty lastModalityIlluminationsSaved =
+            PathPrefs.createPersistentPreference("LastModalityIlluminations", "");
+
+    public static Double getLastModalityIllumination(String modality) {
+        if (modality == null) return null;
+        String blob = lastModalityIlluminationsSaved.getValue();
+        if (blob == null || blob.isEmpty()) return null;
+        String needle = modality + "=";
+        for (String entry : blob.split(";")) {
+            if (entry.startsWith(needle)) {
+                try {
+                    return Double.parseDouble(entry.substring(needle.length()));
+                } catch (NumberFormatException ex) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    public static void setLastModalityIllumination(String modality, double value) {
+        if (modality == null) return;
+        String blob = lastModalityIlluminationsSaved.getValue();
+        if (blob == null) blob = "";
+        String key = modality + "=";
+        java.util.List<String> rebuilt = new java.util.ArrayList<>();
+        boolean replaced = false;
+        for (String entry : blob.split(";")) {
+            if (entry.isEmpty()) continue;
+            if (entry.startsWith(key)) {
+                rebuilt.add(key + value);
+                replaced = true;
+            } else {
+                rebuilt.add(entry);
+            }
+        }
+        if (!replaced) rebuilt.add(key + value);
+        lastModalityIlluminationsSaved.setValue(String.join(";", rebuilt));
+    }
+
     // ================== BACKGROUND CORRECTION (non-PPM) ==================
     // Whether the user wants background correction applied to non-PPM
     // (monochrome) acquisitions. JAI/PPM uses a WB-mode selector that
