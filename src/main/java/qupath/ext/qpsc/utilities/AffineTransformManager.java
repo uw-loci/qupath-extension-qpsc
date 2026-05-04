@@ -961,6 +961,62 @@ public class AffineTransformManager {
     }
 
     /**
+     * Load the slide alignment built for {@code requestedScope}, regardless of
+     * the active microscope. Used by back-propagation when the source sub-image
+     * was acquired on a different scope than the one currently active: the
+     * sub's xy_offset is in {@code requestedScope}'s stage frame, so the
+     * inverse alignment must be the one for that same scope. The base SVS
+     * pixel coords are absolute, so this composition is correct without
+     * needing CrossScopeTransformBuilder.
+     *
+     * <p>Looks for {@code <sample>_<requestedScope>_alignment.json}. Falls
+     * back to the legacy unnamespaced filename only if its in-JSON
+     * {@code microscope} field matches {@code requestedScope}.
+     *
+     * @param project        QuPath project (provides the directory)
+     * @param sampleName     sample/slide name
+     * @param requestedScope scope name to load the alignment for (e.g. "OWS3")
+     * @return the transform + recorded flip frame, or null if no matching file
+     */
+    public static SlideAlignmentResult loadSlideAlignmentWithFrameForScope(
+            Project<BufferedImage> project, String sampleName, String requestedScope) {
+        if (project == null || sampleName == null || requestedScope == null || requestedScope.isEmpty()) {
+            return null;
+        }
+        try {
+            File projectDir = project.getPath().toFile().getParentFile();
+            if (projectDir == null || !projectDir.exists()) return null;
+            File alignmentDir = new File(projectDir, "alignmentFiles");
+            if (!alignmentDir.exists()) return null;
+
+            File scoped = new File(alignmentDir, sampleName + "_" + requestedScope + "_alignment.json");
+            if (scoped.exists()) {
+                SlideAlignmentResult r = readAlignmentJsonWithFrame(scoped, requestedScope);
+                if (r != null) {
+                    logger.info("Loaded slide alignment for cross-scope use: scope='{}' file='{}'",
+                            requestedScope, scoped.getName());
+                    return r;
+                }
+            }
+            File legacy = new File(alignmentDir, sampleName + "_alignment.json");
+            if (legacy.exists()) {
+                SlideAlignmentResult r = readAlignmentJsonWithFrame(legacy, requestedScope);
+                if (r != null) {
+                    logger.info("Loaded legacy slide alignment for cross-scope use: scope='{}' file='{}'",
+                            requestedScope, legacy.getName());
+                    return r;
+                }
+            }
+            logger.warn("No slide alignment found for sample='{}' scope='{}' under {}",
+                    sampleName, requestedScope, alignmentDir);
+            return null;
+        } catch (Exception e) {
+            logger.error("Failed to load slide alignment for scope '{}': {}", requestedScope, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Read a slide alignment JSON and return both the transform and the
      * recorded flip frame (or nulls). Mirrors the validation in
      * {@link #readAlignmentJson(File, String)}.

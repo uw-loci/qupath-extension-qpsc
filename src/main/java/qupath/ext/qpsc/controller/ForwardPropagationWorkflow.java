@@ -549,39 +549,62 @@ public class ForwardPropagationWorkflow {
         }
         logger.info("BackProp fan-out: sub='{}' source_microscope='{}' active_microscope='{}' base='{}'",
                 subEntry.getImageName(), subSourceScope, activeScope, baseName);
+
+        // Cross-scope routing: when the sub was acquired on a different scope
+        // than the active one, the xy_offset is in *that* scope's stage frame.
+        // The base SVS pixel coords are absolute, so the correct alignment to
+        // invert is the one built for the sub's source scope -- not the active
+        // scope. Re-load the alignment for the sub's scope and override the
+        // baseToStage parameter the caller passed in (which is active-scope
+        // only, since the dialog has no way to know which sub will be picked).
+        AffineTransformManager.SlideAlignmentResult slideResult = null;
         if (subSourceScope != null && activeScope != null && !subSourceScope.equals(activeScope)) {
-            logger.warn("BackProp: sub-image source_microscope='{}' differs from active scope='{}'. "
-                    + "The xy_offset is in the source scope's stage frame, but the loaded alignment "
-                    + "is for the active scope. Cross-scope back-prop is not yet wired here -- "
-                    + "annotations will likely land outside the base image.",
-                    subSourceScope, activeScope);
+            AffineTransformManager.SlideAlignmentResult crossScope =
+                    AffineTransformManager.loadSlideAlignmentWithFrameForScope(project, baseName, subSourceScope);
+            if (crossScope != null) {
+                logger.info("BackProp: cross-scope routing -- replacing active-scope ({}) alignment with "
+                        + "sub source-scope ({}) alignment for back-prop math.",
+                        activeScope, subSourceScope);
+                baseToStage = crossScope.getTransform();
+                slideResult = crossScope;
+            } else {
+                logger.warn("BackProp: sub source_microscope='{}' differs from active scope='{}', "
+                        + "but no '{}_{}_alignment.json' found. Will use the active-scope alignment "
+                        + "and the result will likely be wrong.",
+                        subSourceScope, activeScope, baseName, subSourceScope);
+            }
         }
 
         // Resolve alignment-frame flip from the per-slide JSON (preferred) or active preset (fallback).
         boolean alignFlipX = false;
         boolean alignFlipY = false;
-        AffineTransformManager.SlideAlignmentResult slideResult =
-                AffineTransformManager.loadSlideAlignmentWithFrame(project, baseName);
+        if (slideResult == null) {
+            slideResult = AffineTransformManager.loadSlideAlignmentWithFrame(project, baseName);
+        }
         if (slideResult != null && slideResult.hasFlipFrame()) {
             alignFlipX = Boolean.TRUE.equals(slideResult.getFlipMacroX());
             alignFlipY = Boolean.TRUE.equals(slideResult.getFlipMacroY());
             logger.info("BackProp: alignment frame from slide JSON: flipX={}, flipY={}", alignFlipX, alignFlipY);
         } else {
+            // Fallback: pick a preset whose target microscope matches the alignment we will be
+            // inverting. For cross-scope routing that's the sub's source scope; otherwise the
+            // active scope.
+            String flipScope = (subSourceScope != null && !subSourceScope.isEmpty())
+                    ? subSourceScope : activeScope;
             try {
                 String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-                if (configPath != null && !configPath.isEmpty()) {
-                    String activeMicroscope =
-                            MicroscopeConfigManager.getInstance(configPath).getMicroscopeName();
+                if (configPath != null && !configPath.isEmpty() && flipScope != null) {
                     AffineTransformManager mgr =
                             new AffineTransformManager(new java.io.File(configPath).getParent());
-                    for (String scanner : mgr.getDistinctSourceScannersForMicroscope(activeMicroscope)) {
+                    for (String scanner : mgr.getDistinctSourceScannersForMicroscope(flipScope)) {
                         AffineTransformManager.TransformPreset p =
-                                mgr.getBestPresetForPair(scanner, activeMicroscope);
+                                mgr.getBestPresetForPair(scanner, flipScope);
                         if (p != null && p.hasFlipState()) {
                             alignFlipX = Boolean.TRUE.equals(p.getFlipMacroX());
                             alignFlipY = Boolean.TRUE.equals(p.getFlipMacroY());
-                            logger.warn("BackProp: per-slide JSON lacks flip frame; falling back to preset '{}': flipX={}, flipY={}",
-                                    p.getName(), alignFlipX, alignFlipY);
+                            logger.warn("BackProp: per-slide JSON lacks flip frame; "
+                                    + "falling back to preset '{}' (target scope='{}'): flipX={}, flipY={}",
+                                    p.getName(), flipScope, alignFlipX, alignFlipY);
                             break;
                         }
                     }

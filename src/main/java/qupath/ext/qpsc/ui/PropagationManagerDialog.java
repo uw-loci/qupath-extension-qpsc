@@ -98,7 +98,12 @@ public final class PropagationManagerDialog {
 
         Stage dialog = new Stage();
         dialog.setTitle("Propagation Manager");
-        if (qupath.getStage() != null) dialog.initOwner(qupath.getStage());
+        // Deliberately NOT initOwner(qupath.getStage()): owner-bound stages can be hidden
+        // by the FX runtime when the owner's window state changes (image switch, focus
+        // shuffle), and users have reported the propagation results window vanishing
+        // mid-inspection. Independent stage survives those events.
+        dialog.setOnCloseRequest(e -> logger.info("PropagationManagerDialog close requested"));
+        dialog.setOnHidden(e -> logger.info("PropagationManagerDialog hidden"));
 
         // -- Header --------------------------------------------------------
         Label header = new Label("Propagate annotations between base images and their sub-acquisitions.");
