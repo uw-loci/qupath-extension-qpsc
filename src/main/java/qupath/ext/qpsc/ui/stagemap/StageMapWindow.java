@@ -1746,36 +1746,23 @@ public class StageMapWindow {
             }
         }
 
-        // Apply flip for Stage Map display.
+        // Apply optical flip for Stage Map display.
         // The macro is always raw (from associated images, either current or original entry).
         //
-        // Two independent concepts combine here via XOR:
-        //   1. prefFlipX/Y  = OPTICAL FLIP preference (microscope light path mirrors the image)
-        //   2. axisInvertedX/Y = STAGE AXIS INVERSION (auto-detected from StageInsert calibration)
-        //
-        // XOR is correct because each flip reverses the image once:
-        //   - If only optical flip is set, the image needs one flip.
-        //   - If only axis inversion is set, the image needs one flip.
-        //   - If BOTH are set, they cancel out (double-flip = no flip).
-        // On the PPM/single_h insert both axes are inverted AND both optical flips are set,
-        // so XOR gives false for both -- equivalent to 180-degree rotation already handled.
+        // Optical flip (preset.flipMacroX/Y) and stage axis inversion are INDEPENDENT --
+        // see qupath-extension-qpsc/CLAUDE.md "Coordinate system terminology". Optical
+        // flip changes which way the macro pixels render; stage axis inversion changes
+        // which way stage commands move. Conflating them via XOR (the previous
+        // implementation) was a coincidence-correct hack on PPM (where both axes are
+        // inverted AND both optical flips are set, so XOR cancels) that broke as soon
+        // as the same preset was used in a project where the entry's metadata didn't
+        // happen to line up with the inversion booleans (today on PPM, where opening
+        // the unflipped MetroHealth_142.svs base produced an unflipped macro overlay
+        // even though Ocus40_PPM correctly says flipMacroX=Y=true).
         boolean[] resolved = resolveCurrentFlipAxes();
-        boolean prefFlipX = resolved[0];
-        boolean prefFlipY = resolved[1];
-        StageInsert insert = insertComboBox.getValue();
-        boolean axisInvertedX = insert != null && insert.isXAxisInverted();
-        boolean axisInvertedY = insert != null && insert.isYAxisInverted();
-
-        boolean flipX = prefFlipX ^ axisInvertedX;
-        boolean flipY = prefFlipY ^ axisInvertedY;
-        logger.info(
-                "Macro overlay: prefFlip=({}, {}), axisInverted=({}, {}), effective flip=({}, {})",
-                prefFlipX,
-                prefFlipY,
-                axisInvertedX,
-                axisInvertedY,
-                flipX,
-                flipY);
+        boolean flipX = resolved[0];
+        boolean flipY = resolved[1];
+        logger.info("Macro overlay: optical flip from preset/entry = ({}, {})", flipX, flipY);
 
         if (flipX || flipY) {
             macroImage = MacroImageUtility.flipMacroImage(macroImage, flipX, flipY);
