@@ -354,13 +354,60 @@ public class AutofocusEditorWorkflow {
         VBox content = new VBox(8);
         content.setPadding(new Insets(8));
 
+        // --- "Where streaming AF actually gets each setting from" map ---
         Label intro = new Label(
-                "Streaming AF is the Live Viewer 'Autofocus' button -- a fast\n"
-                        + "continuous-Z scan. Not used during acquisition (that's\n"
-                        + "Standard + Sweep above).");
+                "Streaming AF is the LIVE VIEWER 'Autofocus' button only.\n"
+                        + "Acquisition uses Standard AF (initial) + Sweep Drift\n"
+                        + "Check (per-tile) -- both edited in the Per-Objective\n"
+                        + "settings above. Streaming AF is not invoked during\n"
+                        + "acquisition; switch the Live Viewer button to 'Sweep'\n"
+                        + "if you want acquisition-style behaviour interactively.");
         intro.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
 
-        // --- Editable: exposure threshold preference ---
+        Label sourcesHeader = new Label("Effective settings (where each comes from):");
+        sourcesHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; "
+                + "-fx-padding: 6 0 0 0;");
+        GridPane srcGrid = new GridPane();
+        srcGrid.setHgap(10);
+        srcGrid.setVgap(4);
+        String[][] sources = {
+                {"Scan range (um)",
+                 "Per-objective sweep_range_um (above), unless overridden\n"
+                 + "by the Live Viewer 'Range' dropdown."},
+                {"Score metric",
+                 "Per-objective score_metric (above). Falls back to the\n"
+                 + "modality default in focus_metrics_manifest.yml."},
+                {"Edge retries",
+                 "Server-side hardcode (currently 2). Not YAML-driven for\n"
+                 + "streaming AF; same name as the per-objective field but\n"
+                 + "that field only governs Standard AF."},
+                {"Crop factor",
+                 "Server-side hardcode (0.5 = center 50% of sensor)."},
+                {"Sample density",
+                 "Determined by camera frame rate + scan duration; not a\n"
+                 + "user knob. Streaming AF samples continuously during\n"
+                 + "stage motion (no n_steps)."},
+                {"Stage motion speed",
+                 "stage.streaming_af in " + configFile.getName()
+                 + " (read-only block below)."},
+        };
+        int sr = 0;
+        for (String[] row : sources) {
+            Label k = new Label(row[0] + ":");
+            k.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
+            Label v = new Label(row[1]);
+            v.setStyle("-fx-font-size: 11px; -fx-text-fill: -fx-text-base-color;");
+            v.setWrapText(true);
+            srcGrid.add(k, 0, sr);
+            srcGrid.add(v, 1, sr);
+            sr++;
+        }
+
+        // --- Editable: exposure threshold preference (live-saved) ---
+        Label expHeader = new Label("Editable here (saved to QuPath preferences live, "
+                + "not to the autofocus YAML):");
+        expHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; "
+                + "-fx-padding: 6 0 0 0;");
         GridPane editGrid = new GridPane();
         editGrid.setHgap(10);
         editGrid.setVgap(6);
@@ -377,7 +424,8 @@ public class AutofocusEditorWorkflow {
                         + "exposure exceeds this threshold. 40 ms is the historical\n"
                         + "default (works for most brightfield + PPM). Long-exposure\n"
                         + "fluorescence may want this lower (forces sweep more often)\n"
-                        + "or higher experimentally; sweep always works regardless."));
+                        + "or higher experimentally; sweep always works regardless.\n"
+                        + "Saves on every change -- no need to press Save and Close."));
         Label expDesc = new Label("(streaming refuses above this; auto-falls back to Sweep)");
         expDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
         editGrid.add(expLabel, 0, 0);
@@ -385,7 +433,7 @@ public class AutofocusEditorWorkflow {
         editGrid.add(expDesc, 2, 0);
 
         // --- Read-only: stage.streaming_af block from main config ---
-        Label rigHeader = new Label("Stage configuration (read-only, from "
+        Label rigHeader = new Label("Stage block (read-only, from "
                 + configFile.getName() + " -> stage.streaming_af):");
         rigHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-padding: 6 0 0 0;");
 
@@ -421,17 +469,14 @@ public class AutofocusEditorWorkflow {
             rigGrid.add(hint, 0, r, 2, 1);
         }
 
-        Label sweepRangeNote = new Label(
-                "Per-objective: 'sweep_range_um' above (Sweep Drift Check section)\n"
-                        + "is also the default scan window for streaming AF when the\n"
-                        + "Live Viewer's range dropdown is set to 'Auto'.");
-        sweepRangeNote.setStyle("-fx-font-size: 11px; -fx-text-fill: -fx-text-base-color; "
-                + "-fx-padding: 6 0 0 0;");
+        content.getChildren().addAll(intro, new Separator(),
+                sourcesHeader, srcGrid,
+                expHeader, editGrid,
+                rigHeader, rigGrid);
 
-        content.getChildren().addAll(intro, new Separator(), editGrid,
-                rigHeader, rigGrid, sweepRangeNote);
-
-        TitledPane pane = new TitledPane("Streaming Autofocus (Live Viewer Only)", content);
+        TitledPane pane = new TitledPane(
+                "Streaming Autofocus (Live Viewer Only -- mostly read-only)",
+                content);
         pane.setCollapsible(true);
         pane.setExpanded(false);
         return pane;
