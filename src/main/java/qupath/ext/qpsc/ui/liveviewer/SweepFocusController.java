@@ -293,10 +293,49 @@ public class SweepFocusController {
                 }
             }
 
+            // Reject persistent boundary peaks. After edge retries
+            // exhaust, a peak at the very first or last sampled Z means
+            // the search window did not bracket focus -- moving to that
+            // Z drives an in-focus stage off-focus (OWS3 incident
+            // 2026-05-03: ground-truth Z=2003 with bestIdx at boundary
+            // of a 60 um sweep produced bestZ=1944.41, 75 um below
+            // truth, then "succeeded" via Phase 5 refinement around
+            // that wrong Z). Stay at startZ and report failure to the
+            // operator; manual focus is the safer fallback than an
+            // unverified boundary guess.
+            boolean peakAtBoundary = (bestIdx == 0) || (bestIdx == measurements.size() - 1);
+            if (peakAtBoundary) {
+                String edgeLabel = (bestIdx == 0) ? "low" : "high";
+                logger.warn(
+                        "Sweep Focus: peak at {} edge of search window after retries "
+                                + "(bestIdx={}/{}, Z={}); search did not bracket focus",
+                        edgeLabel, bestIdx, measurements.size() - 1,
+                        fmt(measurements.get(bestIdx)[0]));
+                try {
+                    socketClient.moveStageZ(startZ);
+                } catch (IOException ignored) {
+                }
+                finish(
+                        callback,
+                        String.format(
+                                "Failed: peak at %s edge of %.0fum search window. "
+                                        + "Widen the range or pre-focus closer before retrying.",
+                                edgeLabel, range),
+                        Outcome.FAILED);
+                return;
+            }
+
             double bestZ = measurements.get(bestIdx)[0];
 
-            // Quadratic interpolation around peak for sub-sample refinement
-            if (bestIdx > 0 && bestIdx < measurements.size() - 1) {
+            // Quadratic interpolation around peak for sub-sample refinement.
+            // Requires at least 2 flanking samples on each side, not just 1:
+            // bestIdx==1 with rising-into-z0 scores produces an interpolated
+            // peak in [z0, z2] that is mathematically valid but physically
+            // misleading -- the true peak is almost always below z0, and
+            // committing to an interpolated value near the boundary still
+            // walks the stage off-focus.
+            boolean canInterpolate = bestIdx >= 2 && bestIdx <= measurements.size() - 3;
+            if (canInterpolate) {
                 double z0 = measurements.get(bestIdx - 1)[0];
                 double z1 = measurements.get(bestIdx)[0];
                 double z2 = measurements.get(bestIdx + 1)[0];
@@ -313,6 +352,11 @@ public class SweepFocusController {
                         logger.info("Sweep Focus: quadratic interpolation {} -> {}", fmt(z1), fmt(bestZ));
                     }
                 }
+            } else {
+                logger.info(
+                        "Sweep Focus: peak too close to edge for safe interpolation "
+                                + "(bestIdx={}/{}); using raw sample Z",
+                        bestIdx, measurements.size() - 1);
             }
 
             logger.info(
