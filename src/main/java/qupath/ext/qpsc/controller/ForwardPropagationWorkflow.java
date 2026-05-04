@@ -336,8 +336,10 @@ public class ForwardPropagationWorkflow {
 
         PathObjectHierarchy baseHierarchy = baseData.getHierarchy();
 
-        double subPixelSize =
-                subEntry.readImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
+        ImageData<BufferedImage> subData = subEntry.readImageData();
+        int subWidth = subData.getServer().getWidth();
+        int subHeight = subData.getServer().getHeight();
+        double subPixelSize = subData.getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
         if (Double.isNaN(subPixelSize) || subPixelSize <= 0) {
             throw new IllegalStateException("Sub-image has no valid pixel size");
         }
@@ -355,11 +357,21 @@ public class ForwardPropagationWorkflow {
             halfFovX = fov[0] / 2.0;
             halfFovY = fov[1] / 2.0;
         } else {
-            logger.warn("Could not determine FOV for sub-image '{}'. "
-                    + "Offset correction will be skipped.", subEntry.getImageName());
+            logger.warn("BackProp: could not determine FOV for sub-image '{}'. "
+                    + "Offset correction will be skipped (objects may be mis-shifted by half a FOV).",
+                    subEntry.getImageName());
         }
         double correctedOffsetX = xyOffset[0] - halfFovX;
         double correctedOffsetY = xyOffset[1] - halfFovY;
+
+        logger.info("BackProp inputs for sub '{}':", subEntry.getImageName());
+        logger.info("  sub: {}x{} px @ {} um/px", subWidth, subHeight, subPixelSize);
+        logger.info("  base: {}x{} px", baseWidth, baseHeight);
+        logger.info("  xy_offset (raw, stage um) = ({}, {})", xyOffset[0], xyOffset[1]);
+        logger.info("  halfFOV (um) = ({}, {}); corrected offset = ({}, {})",
+                halfFovX, halfFovY, correctedOffsetX, correctedOffsetY);
+        logger.info("  baseToStage = {}", formatAffine(baseToStage));
+        logger.info("  alignFlip = (X={}, Y={})", alignFlipX, alignFlipY);
 
         // Build inverse: sub_pixels -> stage_microns -> alignment_pixels -> [unflip]
         // Sub-acquisitions are stage-canonical; the previous "if (subFlipX || subFlipY)"
@@ -385,17 +397,77 @@ public class ForwardPropagationWorkflow {
             AffineTransform withUnflip = new AffineTransform(unflip);
             withUnflip.concatenate(combined);
             combined = withUnflip;
-            logger.info("Back: post-unflipped alignment-frame pixels to unflipped-base frame ({}, {})",
-                    alignFlipX, alignFlipY);
+            logger.info("  post-unflip applied (alignFlip=({}, {}))", alignFlipX, alignFlipY);
+        }
+        logger.info("  combined sub_px -> base_px = {}", formatAffine(combined));
+
+        // Sanity-check: where do the four corners of the sub-image land in base-pixel coords?
+        // If these four points fall well outside [0,baseWidth] x [0,baseHeight], the alignment
+        // is for a different stage frame than the sub-acquisition (e.g. cross-scope mismatch).
+        double[] cornerProbe = new double[] { 0, 0, subWidth, 0, subWidth, subHeight, 0, subHeight };
+        double[] cornerOut = new double[8];
+        combined.transform(cornerProbe, 0, cornerOut, 0, 4);
+        logger.info("  sub-image corners in base px: TL=({}, {}) TR=({}, {}) BR=({}, {}) BL=({}, {})",
+                fmt(cornerOut[0]), fmt(cornerOut[1]),
+                fmt(cornerOut[2]), fmt(cornerOut[3]),
+                fmt(cornerOut[4]), fmt(cornerOut[5]),
+                fmt(cornerOut[6]), fmt(cornerOut[7]));
+        boolean cornersOnBase = false;
+        for (int i = 0; i < 4 && !cornersOnBase; i++) {
+            double cx = cornerOut[i * 2];
+            double cy = cornerOut[i * 2 + 1];
+            if (cx >= 0 && cx <= baseWidth && cy >= 0 && cy <= baseHeight) cornersOnBase = true;
+        }
+        if (!cornersOnBase) {
+            logger.warn("BackProp: NONE of the sub-image corners land inside the base image. "
+                    + "This usually means the alignment is for the wrong stage frame "
+                    + "(e.g. sub was acquired on a different scope than the loaded alignment).");
+        }
+
+        // Per-source-object transform diagnostics (caller-side; transformAndClip itself is shared
+        // with forward-prop and stays quiet).
+        for (PathObject obj : sourceObjects) {
+            ROI src = obj.getROI();
+            if (src == null) continue;
+            double sx = src.getBoundsX();
+            double sy = src.getBoundsY();
+            double sw = src.getBoundsWidth();
+            double sh = src.getBoundsHeight();
+            double[] in = new double[] { sx, sy, sx + sw, sy + sh };
+            double[] out = new double[4];
+            combined.transform(in, 0, out, 0, 2);
+            double tx = Math.min(out[0], out[2]);
+            double ty = Math.min(out[1], out[3]);
+            double tw = Math.abs(out[2] - out[0]);
+            double th = Math.abs(out[3] - out[1]);
+            boolean intersects = (tx + tw) >= 0 && tx <= baseWidth
+                    && (ty + th) >= 0 && ty <= baseHeight;
+            logger.info("  source obj '{}' src px=({}, {}, {}x{}) -> base px=({}, {}, {}x{}) -- {}",
+                    obj.getDisplayedName(),
+                    fmt(sx), fmt(sy), fmt(sw), fmt(sh),
+                    fmt(tx), fmt(ty), fmt(tw), fmt(th),
+                    intersects ? "intersects base" : "NO OVERLAP with base");
         }
 
         List<PathObject> propagated = transformAndClip(sourceObjects, combined, baseWidth, baseHeight);
+        logger.info("BackProp: {} of {} object(s) survived transform+clip onto base ({}x{})",
+                propagated.size(), sourceObjects.size(), baseWidth, baseHeight);
 
         if (!propagated.isEmpty()) {
             baseHierarchy.addObjects(propagated);
         }
 
         return propagated.size();
+    }
+
+    private static String formatAffine(AffineTransform t) {
+        return String.format("[m00=%.6f m10=%.6f m01=%.6f m11=%.6f tx=%.3f ty=%.3f]",
+                t.getScaleX(), t.getShearY(), t.getShearX(), t.getScaleY(),
+                t.getTranslateX(), t.getTranslateY());
+    }
+
+    private static String fmt(double v) {
+        return String.format("%.1f", v);
     }
 
     /**
@@ -460,6 +532,30 @@ public class ForwardPropagationWorkflow {
             throws Exception {
 
         List<String> perSiblingLog = new ArrayList<>();
+
+        // Cross-scope diagnostic: the sub may have been acquired on a different microscope
+        // than the one currently active. The alignment file is scope-locked to the active
+        // microscope, so an offset stored in another scope's stage frame will not invert
+        // correctly through it.
+        String subSourceScope = subEntry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+        String activeScope = null;
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath != null && !configPath.isEmpty()) {
+                activeScope = MicroscopeConfigManager.getInstance(configPath).getMicroscopeName();
+            }
+        } catch (Exception e) {
+            logger.debug("BackProp: could not read active scope name: {}", e.getMessage());
+        }
+        logger.info("BackProp fan-out: sub='{}' source_microscope='{}' active_microscope='{}' base='{}'",
+                subEntry.getImageName(), subSourceScope, activeScope, baseName);
+        if (subSourceScope != null && activeScope != null && !subSourceScope.equals(activeScope)) {
+            logger.warn("BackProp: sub-image source_microscope='{}' differs from active scope='{}'. "
+                    + "The xy_offset is in the source scope's stage frame, but the loaded alignment "
+                    + "is for the active scope. Cross-scope back-prop is not yet wired here -- "
+                    + "annotations will likely land outside the base image.",
+                    subSourceScope, activeScope);
+        }
 
         // Resolve alignment-frame flip from the per-slide JSON (preferred) or active preset (fallback).
         boolean alignFlipX = false;
