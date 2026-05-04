@@ -55,19 +55,45 @@ public class ImageFlipHelper {
      */
     public static CompletableFuture<Boolean> validateAndFlipIfNeeded(
             QuPathGUI gui, Project<BufferedImage> project, String sampleName) {
-        return validateAndFlipIfNeeded(
-                gui,
-                project,
-                sampleName,
-                FlipResolver.resolveFlipX(null, null, null),
-                FlipResolver.resolveFlipY(null, null, null));
+        // Step B of the flip-relocation refactor: flipped-duplicate entries are
+        // no longer required for alignment / acquisition / propagation. The flip
+        // required by the saved alignment is applied as a transform step at the
+        // math layer (see ForwardPropagationWorkflow.propagateBack and
+        // AlignmentHelper.checkForSlideAlignment, which now bakes the flip into
+        // the returned state.transform). This validator is preserved as a
+        // signature-compatible no-op so existing call sites compile unchanged.
+        logger.debug(
+                "validateAndFlipIfNeeded: deprecated under Step B; returning true. "
+                        + "Flipped-duplicate entries are no longer created or required "
+                        + "(sample='{}').",
+                sampleName);
+        return CompletableFuture.completedFuture(true);
     }
 
     /**
-     * Variant that takes explicit flip requirements -- used by the orientation dialog
-     * which captures the flip from the user interactively.
+     * Legacy explicit-flip overload retained for compatibility with callers that
+     * previously passed flip requirements (orientation dialog). Now a no-op for
+     * the same reason as the 3-arg variant -- Step B moves flip handling out of
+     * the entry-creation path entirely.
      */
     public static CompletableFuture<Boolean> validateAndFlipIfNeeded(
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            String sampleName,
+            boolean explicitFlipX,
+            boolean explicitFlipY) {
+        logger.debug(
+                "validateAndFlipIfNeeded(explicit flipX={}, flipY={}): no-op under Step B",
+                explicitFlipX, explicitFlipY);
+        return CompletableFuture.completedFuture(true);
+    }
+
+    /**
+     * Old long-form implementation retained only as documentation of the previous
+     * algorithm. Never invoked under Step B. Will be removed in Step B.4.
+     */
+    @SuppressWarnings("unused")
+    private static CompletableFuture<Boolean> validateAndFlipIfNeededLegacyImpl(
             QuPathGUI gui,
             Project<BufferedImage> project,
             String sampleName,

@@ -1170,6 +1170,16 @@ public class ExistingImageWorkflowV2 {
                 Project<BufferedImage> project,
                 boolean requiresFlipX,
                 boolean requiresFlipY) {
+            // Step B of the flip-relocation refactor: the open entry no longer
+            // needs to match the preset's flip frame. Annotation pixel coords
+            // are now interpreted in the unflipped-base frame and the alignment
+            // flip is baked into state.transform by AlignmentHelper. The guard
+            // is preserved as a logged no-op so its call sites compile and the
+            // call chain is unchanged; B.4 will rip it entirely.
+            logger.debug(
+                    "verifyOpenEntryMatchesPreset: deprecated under Step B (flip required={}, {}); skipping",
+                    requiresFlipX, requiresFlipY);
+            if (true) return;
             if (gui == null || project == null) return;
             ImageData<BufferedImage> openData = gui.getImageData();
             ProjectImageEntry<BufferedImage> openEntry = openData != null ? project.getEntry(openData) : null;

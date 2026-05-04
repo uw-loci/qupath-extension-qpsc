@@ -195,19 +195,64 @@ public class AlignmentHelper {
         // Try to load slide-specific alignment using IMAGE name (not sample name)
         AffineTransform slideTransform = null;
         String createdDate = null;
+        Boolean alignFlipX = null;
+        Boolean alignFlipY = null;
 
-        // First try from current project
+        // First try from current project. Prefer the with-frame loader so the
+        // alignment-time macro flip is captured -- Step B of the flip-relocation
+        // refactor bakes this flip into the returned transform so all downstream
+        // callers operate on unflipped-base pixel coords.
         Project<BufferedImage> project = gui.getProject();
         if (project != null) {
-            slideTransform = AffineTransformManager.loadSlideAlignment(project, imageName);
-            // Try to get created date from alignment metadata
+            AffineTransformManager.SlideAlignmentResult withFrame =
+                    AffineTransformManager.loadSlideAlignmentWithFrame(project, imageName);
+            if (withFrame != null) {
+                slideTransform = withFrame.getTransform();
+                alignFlipX = withFrame.getFlipMacroX();
+                alignFlipY = withFrame.getFlipMacroY();
+            } else {
+                slideTransform = AffineTransformManager.loadSlideAlignment(project, imageName);
+            }
             createdDate = AffineTransformManager.getSlideAlignmentDate(project, imageName);
         } else {
             // Try from project directory if no project is open
             File projectDir = new File(sample.projectsFolder(), sample.sampleName());
             if (projectDir.exists()) {
-                slideTransform = AffineTransformManager.loadSlideAlignmentFromDirectory(projectDir, imageName);
+                AffineTransformManager.SlideAlignmentResult withFrame =
+                        AffineTransformManager.loadSlideAlignmentWithFrameFromDirectory(projectDir, imageName);
+                if (withFrame != null) {
+                    slideTransform = withFrame.getTransform();
+                    alignFlipX = withFrame.getFlipMacroX();
+                    alignFlipY = withFrame.getFlipMacroY();
+                } else {
+                    slideTransform = AffineTransformManager.loadSlideAlignmentFromDirectory(projectDir, imageName);
+                }
                 createdDate = AffineTransformManager.getSlideAlignmentDateFromDirectory(projectDir, imageName);
+            }
+        }
+
+        // Bake the alignment-frame flip into the returned transform so downstream
+        // callers (AcquisitionManager, AnnotationOrderingService, ...) consume
+        // unflipped-base pixel coords directly. baseToStage_new = baseToStage *
+        // createFlip(alignFlipX, alignFlipY, baseWidth, baseHeight). Requires the
+        // base image dimensions; read them from the currently-open image (which
+        // is the unflipped base by convention after Step B).
+        if (slideTransform != null && alignFlipX != null && alignFlipY != null
+                && (alignFlipX || alignFlipY) && gui.getImageData() != null) {
+            try {
+                int baseWidth = gui.getImageData().getServer().getWidth();
+                int baseHeight = gui.getImageData().getServer().getHeight();
+                AffineTransform flip = qupath.ext.qpsc.controller.ForwardPropagationWorkflow.createFlip(
+                        alignFlipX, alignFlipY, baseWidth, baseHeight);
+                AffineTransform composed = new AffineTransform(slideTransform);
+                composed.concatenate(flip);
+                slideTransform = composed;
+                logger.info(
+                        "Baked alignment-frame flip ({}, {}) into slide transform; downstream uses unflipped-base pixel coords",
+                        alignFlipX, alignFlipY);
+            } catch (Exception e) {
+                logger.warn("Could not bake alignment flip into transform; downstream may misalign: {}",
+                        e.getMessage());
             }
         }
 
