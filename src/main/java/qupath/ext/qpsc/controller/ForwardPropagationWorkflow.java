@@ -191,10 +191,42 @@ public class ForwardPropagationWorkflow {
 
     /**
      * Forward propagation: base image objects -> sub-image.
-     * Transform: base_pixels -> stage_microns -> sub_pixels
+     *
+     * <p>Convenience overload assuming the alignment was built in the
+     * unflipped frame ({@code alignFlipX = alignFlipY = false}); use the
+     * explicit-flip overload when the alignment frame differs from the base
+     * entry's pixel frame (Step B of the flip-relocation refactor).
      */
     public static int propagateForward(
             AffineTransform baseToStage, List<PathObject> sourceObjects, ProjectImageEntry<BufferedImage> subEntry)
+            throws Exception {
+        return propagateForward(baseToStage, false, false, 0, 0, sourceObjects, subEntry);
+    }
+
+    /**
+     * Forward propagation with explicit alignment-frame flip.
+     *
+     * <p>{@code alignFlipX}/{@code alignFlipY} describe the macro flip that was
+     * active when the alignment was built (the pixel frame {@code baseToStage}
+     * expects as input). Source objects are interpreted in the **unflipped base
+     * pixel frame**; if the alignment frame differs, an axis-flip is applied
+     * before {@code baseToStage} as part of the composed transform chain.
+     * {@code baseWidth}/{@code baseHeight} are required when either flip is
+     * true (the flip transform is "translate(W,0); scale(-1,1)" and similar).
+     * Pass 0 for both when no flip is needed.
+     *
+     * <p>This overload lets the workflow operate on the single unflipped base
+     * entry without needing a separate "(flipped X|Y|XY)" duplicate in the
+     * project.
+     */
+    public static int propagateForward(
+            AffineTransform baseToStage,
+            boolean alignFlipX,
+            boolean alignFlipY,
+            int baseWidth,
+            int baseHeight,
+            List<PathObject> sourceObjects,
+            ProjectImageEntry<BufferedImage> subEntry)
             throws Exception {
 
         ImageData<BufferedImage> subData = subEntry.readImageData();
@@ -208,10 +240,6 @@ public class ForwardPropagationWorkflow {
         double[] xyOffset = ImageMetadataManager.getXYOffset(subEntry);
         int subWidth = subData.getServer().getWidth();
         int subHeight = subData.getServer().getHeight();
-
-        Map<String, String> subMeta = subEntry.getMetadata();
-        boolean subFlipX = "1".equals(subMeta.get(ImageMetadataManager.FLIP_X));
-        boolean subFlipY = "1".equals(subMeta.get(ImageMetadataManager.FLIP_Y));
 
         // The xy_offset in metadata is the annotation top-left in stage microns.
         // But the tile grid starts half a FOV before the annotation edge (TilingUtilities
@@ -247,19 +275,28 @@ public class ForwardPropagationWorkflow {
                     halfFovY);
         }
 
-        // Build combined transform: base_pixels -> stage_microns -> sub_pixels
+        // Build combined transform: unflipped_base_pixels -> [optional flip into
+        // alignment frame] -> stage_microns -> sub_pixels.
+        //
+        // Sub-acquisition pixels are stage-canonical -- we no longer flip
+        // them based on the sub entry's FLIP_X/Y metadata (which is always 0
+        // for sub-acquisitions and is being deprecated as a per-entry concept;
+        // see Step B of the flip-relocation refactor).
         AffineTransform stageToSub = new AffineTransform();
         stageToSub.scale(1.0 / subPixelSize, 1.0 / subPixelSize);
         stageToSub.translate(-correctedOffsetX, -correctedOffsetY);
 
         AffineTransform combined = new AffineTransform(stageToSub);
         combined.concatenate(baseToStage);
-
-        if (subFlipX || subFlipY) {
-            AffineTransform flip = createFlip(subFlipX, subFlipY, subWidth, subHeight);
-            AffineTransform withFlip = new AffineTransform(flip);
-            withFlip.concatenate(combined);
-            combined = withFlip;
+        if (alignFlipX || alignFlipY) {
+            if (baseWidth <= 0 || baseHeight <= 0) {
+                throw new IllegalArgumentException(
+                        "Forward propagation with alignFlip set requires baseWidth/baseHeight > 0");
+            }
+            AffineTransform alignFlip = createFlip(alignFlipX, alignFlipY, baseWidth, baseHeight);
+            combined.concatenate(alignFlip);
+            logger.info("Forward: pre-flipped unflipped-base pixels into alignment frame ({}, {})",
+                    alignFlipX, alignFlipY);
         }
 
         List<PathObject> propagated = transformAndClip(sourceObjects, combined, subWidth, subHeight);
@@ -273,11 +310,25 @@ public class ForwardPropagationWorkflow {
     }
 
     /**
-     * Back propagation: sub-image objects -> base image.
-     * Transform: sub_pixels -> stage_microns -> base_pixels
+     * Back propagation: sub-image objects -> base image (unflipped base frame).
+     *
+     * <p>Transform chain: {@code sub_pixels -> stage_microns -> alignment_frame_pixels
+     * -> [optional unflip] -> unflipped_base_pixels}. The optional unflip is
+     * applied based on the saved alignment's flipMacroX/Y; on legacy alignments
+     * with no recorded flip, no unflip is applied (output frame == alignment
+     * frame, which matches the entry being written).
+     *
+     * @param baseToStage transform mapping alignment-frame pixel coords to stage
+     * @param alignFlipX  alignment-time macro flip X (the frame baseToStage expects)
+     * @param alignFlipY  alignment-time macro flip Y
+     * @param sourceObjects sub-image-frame objects to back-propagate
+     * @param subEntry      source sub-acquisition entry (provides offset, FOV)
+     * @param baseData      target base ImageData; written objects are appended
      */
-    private static int propagateBack(
+    public static int propagateBack(
             AffineTransform baseToStage,
+            boolean alignFlipX,
+            boolean alignFlipY,
             List<PathObject> sourceObjects,
             ProjectImageEntry<BufferedImage> subEntry,
             ImageData<BufferedImage> baseData)
@@ -292,12 +343,6 @@ public class ForwardPropagationWorkflow {
         }
 
         double[] xyOffset = ImageMetadataManager.getXYOffset(subEntry);
-        int subWidth = subEntry.readImageData().getServer().getWidth();
-        int subHeight = subEntry.readImageData().getServer().getHeight();
-
-        Map<String, String> subMeta = subEntry.getMetadata();
-        boolean subFlipX = "1".equals(subMeta.get(ImageMetadataManager.FLIP_X));
-        boolean subFlipY = "1".equals(subMeta.get(ImageMetadataManager.FLIP_Y));
 
         int baseWidth = baseData.getServer().getWidth();
         int baseHeight = baseData.getServer().getHeight();
@@ -316,19 +361,14 @@ public class ForwardPropagationWorkflow {
         double correctedOffsetX = xyOffset[0] - halfFovX;
         double correctedOffsetY = xyOffset[1] - halfFovY;
 
-        // Build inverse: sub_pixels -> stage_microns -> base_pixels
+        // Build inverse: sub_pixels -> stage_microns -> alignment_pixels -> [unflip]
+        // Sub-acquisitions are stage-canonical; the previous "if (subFlipX || subFlipY)"
+        // branch never fired for them and is removed as part of the per-entry FLIP
+        // metadata deprecation (Step B).
         AffineTransform subToStage = new AffineTransform();
         subToStage.translate(correctedOffsetX, correctedOffsetY);
         subToStage.scale(subPixelSize, subPixelSize);
 
-        if (subFlipX || subFlipY) {
-            AffineTransform unflip = createFlip(subFlipX, subFlipY, subWidth, subHeight);
-            AffineTransform withUnflip = new AffineTransform(subToStage);
-            withUnflip.concatenate(unflip);
-            subToStage = withUnflip;
-        }
-
-        // Invert baseToStage to get stageToBase
         AffineTransform stageToBase;
         try {
             stageToBase = baseToStage.createInverse();
@@ -338,6 +378,16 @@ public class ForwardPropagationWorkflow {
 
         AffineTransform combined = new AffineTransform(stageToBase);
         combined.concatenate(subToStage);
+        if (alignFlipX || alignFlipY) {
+            // alignment_frame_pixel -> unflipped_base_pixel
+            // createFlip is an involution, so the same matrix flips and unflips.
+            AffineTransform unflip = createFlip(alignFlipX, alignFlipY, baseWidth, baseHeight);
+            AffineTransform withUnflip = new AffineTransform(unflip);
+            withUnflip.concatenate(combined);
+            combined = withUnflip;
+            logger.info("Back: post-unflipped alignment-frame pixels to unflipped-base frame ({}, {})",
+                    alignFlipX, alignFlipY);
+        }
 
         List<PathObject> propagated = transformAndClip(sourceObjects, combined, baseWidth, baseHeight);
 
@@ -346,6 +396,20 @@ public class ForwardPropagationWorkflow {
         }
 
         return propagated.size();
+    }
+
+    /**
+     * Legacy zero-flip overload for callers not yet aware of the alignment-frame
+     * flip pair. New callers should use the explicit-flip variant so back-prop
+     * lands on the unflipped base regardless of how the alignment was saved.
+     */
+    private static int propagateBack(
+            AffineTransform baseToStage,
+            List<PathObject> sourceObjects,
+            ProjectImageEntry<BufferedImage> subEntry,
+            ImageData<BufferedImage> baseData)
+            throws Exception {
+        return propagateBack(baseToStage, false, false, sourceObjects, subEntry, baseData);
     }
 
     /** Aggregate result of a multi-sibling back-prop fan-out. */
@@ -364,35 +428,27 @@ public class ForwardPropagationWorkflow {
     }
 
     /**
-     * Back-propagation that fans out across every base-like sibling of
-     * {@code baseName} (unflipped, flipped X, flipped Y, flipped XY).
+     * Back-propagation onto the unflipped base entry.
      *
-     * <p>Workflow:
-     * <ol>
-     *   <li>Resolve the canonical target by reading the active microscope's
-     *       saved {@link AffineTransformManager.TransformPreset} for the source
-     *       scanner used by this slide alignment, and finding the sibling whose
-     *       FLIP_X/FLIP_Y match the preset's flipMacroX/flipMacroY. If absent,
-     *       auto-create it via {@link QPProjectFunctions#createFlippedDuplicate}
-     *       (when {@code allowAutoCreate} is true).</li>
-     *   <li>Run the existing single-target {@code propagateBack} math against
-     *       the canonical target.</li>
-     *   <li>For every other sibling, take the just-propagated annotations
-     *       (already in the canonical sibling's pixel frame) and re-flip them
-     *       by the XOR delta of (canonical flip) vs (sibling flip).</li>
-     * </ol>
+     * <p>Step B of the flip-relocation refactor: there is now exactly one base
+     * entry per slide (the unflipped original SVS). The flip required by the
+     * saved alignment is applied as a transform step inside {@link #propagateBack},
+     * so the back-propagated annotations always land in the unflipped-base
+     * pixel frame regardless of which microscope captured the alignment.
      *
-     * <p>Newly auto-created siblings start empty; this fan-out is the first
-     * write into them. Any existing annotations on other siblings are preserved
-     * and the propagated objects are appended.
+     * <p>The previous "fan out across every flipped sibling" behaviour is gone:
+     * since the project no longer carries flipped duplicates, there is nothing
+     * to fan to. The {@link FanOutResult} return type is preserved as a thin
+     * legacy wrapper around the single-target write so existing callers
+     * (PropagationManagerDialog) keep compiling unchanged.
      *
-     * @param project the QuPath project (used to find / create siblings)
+     * @param project the QuPath project (must contain the unflipped base entry)
      * @param baseName the base image name (without extension)
      * @param baseToStage the per-slide alignment for the active microscope
      * @param sourceObjects sub-image-frame objects to back-propagate
      * @param subEntry the sub-acquisition entry these objects came from
-     * @param allowAutoCreate whether missing siblings may be auto-created
-     * @return aggregate result; never null
+     * @param allowAutoCreate ignored under Step B (no siblings to create)
+     * @return result with siblingsAutoCreated always 0
      */
     public static FanOutResult propagateBackFanOut(
             Project<BufferedImage> project,
@@ -405,212 +461,107 @@ public class ForwardPropagationWorkflow {
 
         List<String> perSiblingLog = new ArrayList<>();
 
-        // 1. Determine the canonical (alignment-frame) flip. Two sources, in priority:
-        //    (a) the per-slide JSON's recorded flipMacroX/Y if present (phase 3),
-        //    (b) the active microscope preset's flipMacroX/Y (legacy fallback).
-        boolean canonicalFlipX = false;
-        boolean canonicalFlipY = false;
-        boolean canonicalFromJson = false;
-        String activeMicroscope = null;
-
+        // Resolve alignment-frame flip from the per-slide JSON (preferred) or active preset (fallback).
+        boolean alignFlipX = false;
+        boolean alignFlipY = false;
         AffineTransformManager.SlideAlignmentResult slideResult =
                 AffineTransformManager.loadSlideAlignmentWithFrame(project, baseName);
         if (slideResult != null && slideResult.hasFlipFrame()) {
-            canonicalFlipX = Boolean.TRUE.equals(slideResult.getFlipMacroX());
-            canonicalFlipY = Boolean.TRUE.equals(slideResult.getFlipMacroY());
-            canonicalFromJson = true;
-            logger.info("BackProp fan-out: alignment frame from slide JSON: flipX={}, flipY={}",
-                    canonicalFlipX, canonicalFlipY);
+            alignFlipX = Boolean.TRUE.equals(slideResult.getFlipMacroX());
+            alignFlipY = Boolean.TRUE.equals(slideResult.getFlipMacroY());
+            logger.info("BackProp: alignment frame from slide JSON: flipX={}, flipY={}", alignFlipX, alignFlipY);
         } else {
-            AffineTransformManager.TransformPreset activePreset = null;
             try {
                 String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
                 if (configPath != null && !configPath.isEmpty()) {
-                    MicroscopeConfigManager configMgr = MicroscopeConfigManager.getInstance(configPath);
-                    activeMicroscope = configMgr.getMicroscopeName();
+                    String activeMicroscope =
+                            MicroscopeConfigManager.getInstance(configPath).getMicroscopeName();
                     AffineTransformManager mgr =
                             new AffineTransformManager(new java.io.File(configPath).getParent());
-                    List<String> scanners = mgr.getDistinctSourceScannersForMicroscope(activeMicroscope);
-                    for (String scanner : scanners) {
-                        AffineTransformManager.TransformPreset p = mgr.getBestPresetForPair(scanner, activeMicroscope);
+                    for (String scanner : mgr.getDistinctSourceScannersForMicroscope(activeMicroscope)) {
+                        AffineTransformManager.TransformPreset p =
+                                mgr.getBestPresetForPair(scanner, activeMicroscope);
                         if (p != null && p.hasFlipState()) {
-                            activePreset = p;
+                            alignFlipX = Boolean.TRUE.equals(p.getFlipMacroX());
+                            alignFlipY = Boolean.TRUE.equals(p.getFlipMacroY());
+                            logger.warn("BackProp: per-slide JSON lacks flip frame; falling back to preset '{}': flipX={}, flipY={}",
+                                    p.getName(), alignFlipX, alignFlipY);
                             break;
                         }
                     }
                 }
             } catch (Exception e) {
-                logger.warn("Could not load active microscope preset for canonical-flip resolution: {}", e.getMessage());
-            }
-            if (activePreset != null) {
-                canonicalFlipX = Boolean.TRUE.equals(activePreset.getFlipMacroX());
-                canonicalFlipY = Boolean.TRUE.equals(activePreset.getFlipMacroY());
-                logger.warn("BackProp fan-out: per-slide JSON lacks flip frame; falling back to preset '{}': flipX={}, flipY={}. Re-save alignment to capture per-slide frame.",
-                        activePreset.getName(), canonicalFlipX, canonicalFlipY);
-            } else {
-                logger.warn("BackProp fan-out: no flip frame available (no slide JSON, no preset); treating as unflipped (legacy).");
+                logger.warn("BackProp: could not resolve fallback flip from preset: {}", e.getMessage());
             }
         }
-        // Mark `canonicalFromJson` as used to suppress unused-warning analyzers; informational only.
-        if (canonicalFromJson) logger.debug("Canonical flip frame resolved from per-slide JSON.");
 
-        // 2. Find or create the canonical sibling.
-        ProjectImageEntry<BufferedImage> canonical =
-                ImageMetadataManager.findSiblingWithFlip(project, baseName, canonicalFlipX, canonicalFlipY);
-        int siblingsAutoCreated = 0;
-
-        if (canonical == null) {
-            if (!allowAutoCreate) {
-                throw new IllegalStateException(String.format(
-                        "No sibling of '%s' with flipX=%s, flipY=%s exists, and auto-create is disabled.",
-                        baseName, canonicalFlipX, canonicalFlipY));
-            }
-            // Find the unflipped root to seed the duplicate.
-            ProjectImageEntry<BufferedImage> root =
-                    ImageMetadataManager.findSiblingWithFlip(project, baseName, false, false);
-            if (root == null) {
-                // Project has no unflipped sibling; pick whatever exists and undo to root by name.
-                List<ProjectImageEntry<BufferedImage>> siblings =
-                        ImageMetadataManager.getSiblingsByBaseImage(project, baseName);
-                if (siblings.isEmpty()) {
-                    throw new IllegalStateException("No siblings of base '" + baseName + "' found in project.");
+        // Find the unflipped base entry. The project must contain it -- with Step B
+        // there are no flipped duplicates to auto-create as a substitute.
+        ProjectImageEntry<BufferedImage> base = findUnflippedBase(project, baseName);
+        if (base == null) {
+            // Soft fallback: pick any base-like entry whose name doesn't include "(flipped".
+            // This covers projects that have already been migrated but had the unflipped
+            // base renamed for some reason. Hard fail if even that finds nothing.
+            for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
+                String name = e.getImageName();
+                if (name == null) continue;
+                String stripped = GeneralTools.stripExtension(name);
+                if (stripped.equals(baseName) && !name.contains("(flipped")) {
+                    base = e;
+                    break;
                 }
-                root = siblings.get(0);
-                logger.warn("No unflipped sibling for '{}'; seeding canonical from '{}'",
-                        baseName, root.getImageName());
-            }
-            String sampleName = ImageMetadataManager.getSampleName(root);
-            if (sampleName == null) sampleName = baseName;
-            logger.warn("Auto-creating canonical sibling for '{}' (flipX={}, flipY={}) from '{}'",
-                    baseName, canonicalFlipX, canonicalFlipY, root.getImageName());
-            canonical = QPProjectFunctions.createFlippedDuplicate(
-                    project, root, canonicalFlipX, canonicalFlipY, sampleName);
-            if (canonical == null) {
-                throw new IllegalStateException(
-                        "Failed to auto-create canonical sibling for base '" + baseName + "'.");
-            }
-            project.syncChanges();
-            siblingsAutoCreated++;
-        }
-
-        // 3. Run the back-prop math against the canonical sibling. Validate first
-        // that the chosen sibling's flip metadata still agrees with the alignment
-        // frame -- protects against silently mis-targeting if the sibling's
-        // metadata was edited or got out of sync.
-        boolean canonicalEntryFlipX = ImageMetadataManager.isFlippedX(canonical);
-        boolean canonicalEntryFlipY = ImageMetadataManager.isFlippedY(canonical);
-        if (canonicalEntryFlipX != canonicalFlipX || canonicalEntryFlipY != canonicalFlipY) {
-            // Best-effort tolerance for legacy entries lacking explicit metadata --
-            // fall back to name-pattern flip from findSiblingWithFlip's logic.
-            String name = canonical.getImageName() != null ? canonical.getImageName() : "";
-            boolean nameXY = name.contains("(flipped XY)");
-            boolean nameFx = nameXY || name.contains("(flipped X)");
-            boolean nameFy = nameXY || name.contains("(flipped Y)");
-            if (nameFx != canonicalFlipX || nameFy != canonicalFlipY) {
-                throw new IllegalStateException(String.format(
-                        "Canonical sibling '%s' (flipX=%s, flipY=%s) does not match alignment frame "
-                                + "(flipX=%s, flipY=%s). Re-run alignment or fix the entry's FLIP_X/FLIP_Y metadata.",
-                        canonical.getImageName(), canonicalEntryFlipX, canonicalEntryFlipY,
-                        canonicalFlipX, canonicalFlipY));
             }
         }
+        if (base == null) {
+            throw new IllegalStateException(
+                    "No unflipped base entry for '" + baseName + "' found in project.");
+        }
 
-        ImageData<BufferedImage> canonicalData = canonical.readImageData();
-        PathObjectHierarchy canonicalHierarchy = canonicalData.getHierarchy();
-        int beforeCount = canonicalHierarchy.getAllObjects(false).size();
-        int writtenToCanonical = propagateBack(baseToStage, sourceObjects, subEntry, canonicalData);
-        int afterCount = canonicalHierarchy.getAllObjects(false).size();
-        int totalObjects = writtenToCanonical;
+        ImageData<BufferedImage> baseData = base.readImageData();
+        PathObjectHierarchy baseHierarchy = baseData.getHierarchy();
+        int beforeCount = baseHierarchy.getAllObjects(false).size();
+        int written = propagateBack(baseToStage, alignFlipX, alignFlipY, sourceObjects, subEntry, baseData);
+        int afterCount = baseHierarchy.getAllObjects(false).size();
         int siblingsUpdated = 0;
         if (afterCount > beforeCount) {
-            canonical.saveImageData(canonicalData);
-            siblingsUpdated++;
-            perSiblingLog.add(String.format("  %s -> %s: %d objects (canonical, flipX=%s, flipY=%s)",
-                    subEntry.getImageName(), canonical.getImageName(),
-                    writtenToCanonical, canonicalFlipX, canonicalFlipY));
+            base.saveImageData(baseData);
+            siblingsUpdated = 1;
+            perSiblingLog.add(String.format("  %s -> %s: %d objects (alignFlip=(%s, %s))",
+                    subEntry.getImageName(), base.getImageName(), written, alignFlipX, alignFlipY));
         } else {
-            perSiblingLog.add(String.format("  %s -> %s: 0 objects (canonical, no overlap)",
-                    subEntry.getImageName(), canonical.getImageName()));
+            perSiblingLog.add(String.format("  %s -> %s: 0 objects (no overlap)",
+                    subEntry.getImageName(), base.getImageName()));
         }
-
-        // 4. Capture the propagated objects from the canonical hierarchy so we can
-        // delta-flip them into the other siblings.
-        List<PathObject> canonicalPropagated;
-        if (writtenToCanonical > 0) {
-            // The objects we just wrote are the last `writtenToCanonical` additions.
-            // Pull them by intersecting the hierarchy with the prior set.
-            List<PathObject> all = new ArrayList<>(canonicalHierarchy.getAllObjects(false));
-            canonicalPropagated = all.subList(Math.max(0, all.size() - writtenToCanonical), all.size());
-        } else {
-            canonicalPropagated = Collections.emptyList();
+        // allowAutoCreate is preserved in the signature for back-compat but is no longer used.
+        if (allowAutoCreate) {
+            logger.debug("propagateBackFanOut: allowAutoCreate is now a no-op under Step B (no flipped siblings).");
         }
+        logger.info("Back-prop complete: 1 base updated ({} objects)", written);
+        return new FanOutResult(written, siblingsUpdated, 0, perSiblingLog);
+    }
 
-        // 5. Fan out to remaining siblings.
-        if (!canonicalPropagated.isEmpty()) {
-            int baseWidth = canonicalData.getServer().getWidth();
-            int baseHeight = canonicalData.getServer().getHeight();
-
-            List<ProjectImageEntry<BufferedImage>> allSiblings =
-                    ImageMetadataManager.getSiblingsByBaseImage(project, baseName);
-            for (ProjectImageEntry<BufferedImage> sibling : allSiblings) {
-                if (sibling == canonical) continue;
-
-                String fxStr = sibling.getMetadata().get(ImageMetadataManager.FLIP_X);
-                String fyStr = sibling.getMetadata().get(ImageMetadataManager.FLIP_Y);
-                boolean siblingFx;
-                boolean siblingFy;
-                if (fxStr != null || fyStr != null) {
-                    siblingFx = "1".equals(fxStr);
-                    siblingFy = "1".equals(fyStr);
-                } else {
-                    String n = sibling.getImageName();
-                    if (n == null) n = "";
-                    boolean nameXY = n.contains("(flipped XY)");
-                    siblingFx = nameXY || n.contains("(flipped X)");
-                    siblingFy = nameXY || n.contains("(flipped Y)");
-                }
-
-                boolean deltaX = siblingFx ^ canonicalFlipX;
-                boolean deltaY = siblingFy ^ canonicalFlipY;
-                logger.info("Fan-out target: {} (flipX={}, flipY={}); delta from canonical: ({}, {})",
-                        sibling.getImageName(), siblingFx, siblingFy, deltaX, deltaY);
-
-                AffineTransform delta = (deltaX || deltaY)
-                        ? createFlip(deltaX, deltaY, baseWidth, baseHeight)
-                        : null;
-
-                ImageData<BufferedImage> sibData = sibling.readImageData();
-                PathObjectHierarchy sibHierarchy = sibData.getHierarchy();
-                int sibBefore = sibHierarchy.getAllObjects(false).size();
-                List<PathObject> toAdd = new ArrayList<>(canonicalPropagated.size());
-                for (PathObject obj : canonicalPropagated) {
-                    PathObject copy = (delta == null)
-                            ? PathObjectTools.transformObject(obj, new AffineTransform(), true, true)
-                            : PathObjectTools.transformObject(obj, delta, true, true);
-                    if (copy == null || copy.getROI() == null || copy.getROI().isEmpty()) continue;
-                    toAdd.add(copy);
-                }
-                if (!toAdd.isEmpty()) {
-                    sibHierarchy.addObjects(toAdd);
-                    sibling.saveImageData(sibData);
-                    int added = sibHierarchy.getAllObjects(false).size() - sibBefore;
-                    totalObjects += added;
-                    if (added > 0) siblingsUpdated++;
-                    perSiblingLog.add(String.format("  %s -> %s: %d objects (delta flipX=%s, flipY=%s)",
-                            subEntry.getImageName(), sibling.getImageName(), added, deltaX, deltaY));
-                } else {
-                    perSiblingLog.add(String.format("  %s -> %s: 0 objects (after delta-flip)",
-                            subEntry.getImageName(), sibling.getImageName()));
-                }
-            }
+    /** Locate the unflipped base entry for {@code baseName} (FLIP_X/Y both '0' or both absent). */
+    private static ProjectImageEntry<BufferedImage> findUnflippedBase(
+            Project<BufferedImage> project, String baseName) {
+        for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
+            String imageName = entry.getImageName();
+            if (imageName == null) continue;
+            String stripped = GeneralTools.stripExtension(imageName);
+            String rawBase = ImageMetadataManager.getBaseImage(entry);
+            String effectiveBase = (rawBase != null && !rawBase.isEmpty()) ? rawBase : stripped;
+            if (!baseName.equals(effectiveBase)) continue;
+            // Skip sub-acquisitions
+            boolean isBaseLike = stripped.equals(baseName)
+                    || imageName.startsWith(baseName + ".");
+            if (!isBaseLike) continue;
+            // Skip flipped duplicates by name (legacy projects that haven't been migrated yet)
+            if (imageName.contains("(flipped")) continue;
+            String fx = entry.getMetadata().get(ImageMetadataManager.FLIP_X);
+            String fy = entry.getMetadata().get(ImageMetadataManager.FLIP_Y);
+            boolean isUnflipped = (fx == null || "0".equals(fx)) && (fy == null || "0".equals(fy));
+            if (isUnflipped) return entry;
         }
-
-        if (siblingsAutoCreated > 0) {
-            project.syncChanges();
-        }
-        logger.info("Fan-out complete: {} siblings updated, {} auto-created, {} total objects",
-                siblingsUpdated, siblingsAutoCreated, totalObjects);
-        return new FanOutResult(totalObjects, siblingsUpdated, siblingsAutoCreated, perSiblingLog);
+        return null;
     }
 
     // ------------------------------------------------------------------
