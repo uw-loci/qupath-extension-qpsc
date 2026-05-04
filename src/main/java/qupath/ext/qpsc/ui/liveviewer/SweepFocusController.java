@@ -144,6 +144,8 @@ public class SweepFocusController {
             List<double[]> measurements = new ArrayList<>();
             long sweepStartTime = System.currentTimeMillis();
             double peakMetric = Double.NEGATIVE_INFINITY;
+            int peakIdx = -1;
+            double minMetric = Double.POSITIVE_INFINITY;
             int stepsSincePeak = 0;
             int minStepsBeforeEarlyStop = (int) (NUM_STEPS * EARLY_STOP_MIN_PROGRESS);
             boolean stoppedEarly = false;
@@ -165,29 +167,66 @@ public class SweepFocusController {
                 }
                 if (f != null) {
                     double metric = metricHelper.computeFocusMetric(f);
+                    int idx = measurements.size();
                     measurements.add(new double[] {z, metric});
 
                     // Track peak and consecutive decline for early stop
                     if (metric >= peakMetric) {
                         peakMetric = metric;
+                        peakIdx = idx;
                         stepsSincePeak = 0;
                     } else {
                         stepsSincePeak++;
                     }
+                    if (metric < minMetric) {
+                        minMetric = metric;
+                    }
 
                     // Early stop: if we've passed the peak by enough steps and
-                    // have covered enough of the range, stop to save time
+                    // have covered enough of the range, stop to save time.
+                    //
+                    // Two guards prevent false early-stop on noise (OWS3 BF 10x
+                    // 2026-05-04: a flat-metric scan early-stopped at step 8/30
+                    // with peak at the random first sample, then the boundary-
+                    // peak retry shifted the next scan AWAY from true focus by
+                    // 30 um, then again by another 60 um, ending ~100 um below
+                    // focus):
+                    //   1. The running peak must NOT be at index 0. A peak
+                    //      that never moved off the first sample means we
+                    //      saw monotonic decline, not a rise-then-fall, so
+                    //      "passed the peak" is meaningless.
+                    //   2. The metric range so far must exceed the noise
+                    //      floor (mirrors streaming-AF FLAT_METRIC_FRACTION
+                    //      = 5%; use 2% here matching the boundary-peak
+                    //      retry threshold below).
                     if (i >= minStepsBeforeEarlyStop && stepsSincePeak >= EARLY_STOP_DECLINE_COUNT) {
-                        logger.info(
-                                "Sweep Focus: early stop at step {}/{} -- {} consecutive "
-                                        + "steps below peak (metric {} vs peak {})",
-                                i,
-                                NUM_STEPS,
-                                stepsSincePeak,
-                                fmt(metric),
-                                fmt(peakMetric));
-                        stoppedEarly = true;
-                        break;
+                        boolean peakAtStart = (peakIdx <= 0);
+                        double rangeFracSoFar =
+                                (peakMetric - minMetric) / Math.max(Math.abs(peakMetric), 1.0);
+                        boolean metricFlat = rangeFracSoFar < 0.02;
+                        if (peakAtStart || metricFlat) {
+                            logger.info(
+                                    "Sweep Focus: suppressed early-stop at step {}/{} "
+                                            + "(peakIdx={}, range {} of peak {}) -- "
+                                            + "continuing scan",
+                                    i, NUM_STEPS, peakIdx,
+                                    String.format("%.2f%%", rangeFracSoFar * 100.0),
+                                    fmt(peakMetric));
+                            // Reset decline counter so the same condition
+                            // doesn't retrigger on the very next sample.
+                            stepsSincePeak = 0;
+                        } else {
+                            logger.info(
+                                    "Sweep Focus: early stop at step {}/{} -- {} consecutive "
+                                            + "steps below peak (metric {} vs peak {})",
+                                    i,
+                                    NUM_STEPS,
+                                    stepsSincePeak,
+                                    fmt(metric),
+                                    fmt(peakMetric));
+                            stoppedEarly = true;
+                            break;
+                        }
                     }
                 }
 
