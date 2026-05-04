@@ -1081,6 +1081,14 @@ public class StageMapWindow {
      * @return a 2-element array {@code {flipX, flipY}}; never null
      */
     private boolean[] resolveCurrentFlipAxes() {
+        // STEP A of the flip-relocation refactor: per-entry FLIP_X/Y is no longer
+        // consulted for macro rendering. The flip required to render a macro on
+        // a given microscope is a function of the (source_scanner, target_microscope)
+        // preset pair -- not of the image entry, which travels unchanged between
+        // microscopes when the project is moved. Resolution order:
+        //   1. Preset for (entry.SOURCE_MICROSCOPE, activeMicroscope) if it has flip state.
+        //   2. Currently-selected preset in the dropdown (activePreset) if it has flip state.
+        //   3. Default (false, false).
         try {
             QuPathGUI gui = QuPathGUI.getInstance();
             if (gui != null && gui.getProject() != null && gui.getImageData() != null) {
@@ -1088,57 +1096,32 @@ public class StageMapWindow {
                 Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
                 ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
                 if (entry != null) {
-                    // For DERIVED entries (sub-acquisitions, flipped duplicates -- anything with
-                    // original_image_id set), the FLIP_X/Y metadata describes the entry's OWN
-                    // pixel orientation, NOT the alignment-time macro frame. Sub-acquisitions
-                    // always carry FLIP_X='0' / FLIP_Y='0' (canonical stage-aligned orientation),
-                    // which is wrong to feed into the macro overlay flip path -- the macro
-                    // overlay is rendered in the alignment-time frame, which lives on the preset
-                    // as flipMacroX/Y. Per-entry FLIP_X/Y leaks into resolveCurrentFlipAxes and
-                    // makes the macro render with opposite X flip on a sub-acquisition vs its
-                    // parent, even though the macro source bytes are identical.
-                    //
-                    // Restores the rationale of commit 8db7cd7 but scoped to derived entries
-                    // only, so the parent base entry's behavior is unchanged.
-                    boolean isDerived = entry.getMetadata().get(ImageMetadataManager.ORIGINAL_IMAGE_ID) != null;
-                    if (isDerived && activePreset != null && activePreset.hasFlipState()) {
-                        boolean[] axes = {activePreset.getFlipMacroX(), activePreset.getFlipMacroY()};
+                    String sourceScanner = entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+                    if (sourceScanner != null && !sourceScanner.isEmpty()) {
+                        AffineTransformManager.TransformPreset pairPreset =
+                                lookupPresetForSourceScanner(sourceScanner);
+                        if (pairPreset != null && pairPreset.hasFlipState()) {
+                            boolean[] axes = {pairPreset.getFlipMacroX(), pairPreset.getFlipMacroY()};
+                            logger.info(
+                                    "resolveCurrentFlipAxes: entry='{}' source_microscope='{}' -> PAIR PRESET wins "
+                                            + "(preset='{}', flip=({}, {}))",
+                                    entry.getImageName(),
+                                    sourceScanner,
+                                    pairPreset.getName(),
+                                    axes[0],
+                                    axes[1]);
+                            return axes;
+                        }
                         logger.info(
-                                "resolveCurrentFlipAxes: entry='{}' is DERIVED (original_image_id='{}') -> PRESET wins "
-                                        + "(preset='{}', flip=({}, {})); ignoring entry FLIP_X='{}' FLIP_Y='{}'",
+                                "resolveCurrentFlipAxes: entry='{}' source_microscope='{}' -- no pair preset with flip state; "
+                                        + "falling through to active preset",
                                 entry.getImageName(),
-                                entry.getMetadata().get(ImageMetadataManager.ORIGINAL_IMAGE_ID),
-                                activePreset.getName(),
-                                axes[0],
-                                axes[1],
-                                entry.getMetadata().get(ImageMetadataManager.FLIP_X),
-                                entry.getMetadata().get(ImageMetadataManager.FLIP_Y));
-                        return axes;
-                    }
-                    if (entry.getMetadata().get(ImageMetadataManager.FLIP_X) != null) {
-                        boolean[] axes = {
-                            ImageMetadataManager.isFlippedX(entry), ImageMetadataManager.isFlippedY(entry)
-                        };
+                                sourceScanner);
+                    } else {
                         logger.info(
-                                "resolveCurrentFlipAxes: entry='{}' base_image='{}' original_image_id='{}' source_microscope='{}' "
-                                        + "FLIP_X='{}' FLIP_Y='{}' -> ENTRY-META wins ({}, {})",
-                                entry.getImageName(),
-                                entry.getMetadata().get(ImageMetadataManager.BASE_IMAGE),
-                                entry.getMetadata().get(ImageMetadataManager.ORIGINAL_IMAGE_ID),
-                                entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE),
-                                entry.getMetadata().get(ImageMetadataManager.FLIP_X),
-                                entry.getMetadata().get(ImageMetadataManager.FLIP_Y),
-                                axes[0],
-                                axes[1]);
-                        return axes;
+                                "resolveCurrentFlipAxes: entry='{}' has no source_microscope metadata; falling through to active preset",
+                                entry.getImageName());
                     }
-                    logger.info(
-                            "resolveCurrentFlipAxes: entry='{}' base_image='{}' original_image_id='{}' source_microscope='{}' "
-                                    + "FLIP_X=null -> falling through to preset",
-                            entry.getImageName(),
-                            entry.getMetadata().get(ImageMetadataManager.BASE_IMAGE),
-                            entry.getMetadata().get(ImageMetadataManager.ORIGINAL_IMAGE_ID),
-                            entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE));
                 }
             }
         } catch (Exception e) {
@@ -1148,15 +1131,34 @@ public class StageMapWindow {
         if (activePreset != null && activePreset.hasFlipState()) {
             boolean[] axes = {activePreset.getFlipMacroX(), activePreset.getFlipMacroY()};
             logger.info(
-                    "resolveCurrentFlipAxes: PRESET wins (preset='{}', flip=({}, {}))",
+                    "resolveCurrentFlipAxes: ACTIVE PRESET wins (preset='{}', flip=({}, {}))",
                     activePreset.getName(),
                     axes[0],
                     axes[1]);
             return axes;
         }
 
-        logger.info("resolveCurrentFlipAxes: no entry metadata, no preset -> default (false, false)");
+        logger.info("resolveCurrentFlipAxes: no source-scanner pair preset, no active preset -> default (false, false)");
         return new boolean[] {false, false};
+    }
+
+    /**
+     * Look up the saved preset for the {@code (sourceScanner, activeMicroscope)} pair.
+     * Returns null if no such preset exists or the active microscope cannot be resolved.
+     */
+    private AffineTransformManager.TransformPreset lookupPresetForSourceScanner(String sourceScanner) {
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath == null || configPath.isEmpty()) return null;
+            MicroscopeConfigManager cfg = MicroscopeConfigManager.getInstance(configPath);
+            String activeMicroscope = cfg.getMicroscopeName();
+            if (activeMicroscope == null || activeMicroscope.isEmpty()) return null;
+            AffineTransformManager mgr = new AffineTransformManager(new File(configPath).getParent());
+            return mgr.getBestPresetForPair(sourceScanner, activeMicroscope);
+        } catch (Exception e) {
+            logger.debug("lookupPresetForSourceScanner('{}') failed: {}", sourceScanner, e.getMessage());
+            return null;
+        }
     }
 
     private void startPositionPolling() {
