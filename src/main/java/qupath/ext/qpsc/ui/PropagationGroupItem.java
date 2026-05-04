@@ -25,6 +25,7 @@ public final class PropagationGroupItem {
     private final SimpleStringProperty subAcquisitionSummary = new SimpleStringProperty();
     private final SimpleBooleanProperty alignmentFound = new SimpleBooleanProperty(false);
     private final SimpleStringProperty status = new SimpleStringProperty("");
+    private final SimpleBooleanProperty selected = new SimpleBooleanProperty(false);
 
     public PropagationGroupItem(
             String baseName,
@@ -66,4 +67,8 @@ public final class PropagationGroupItem {
 
     public boolean isAlignmentFound() { return alignmentFound.get(); }
     public void setStatus(String s) { status.set(s); }
+
+    public SimpleBooleanProperty selectedProperty() { return selected; }
+    public boolean isSelected() { return selected.get(); }
+    public void setSelected(boolean v) { selected.set(v); }
 }

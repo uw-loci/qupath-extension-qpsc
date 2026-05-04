@@ -856,29 +856,83 @@ public class ForwardPropagationWorkflow {
             }
         }
 
-        // Source 2: config file (modality + objective + detector from metadata)
+        // Source 2: config file (modality + objective + detector from metadata).
+        // For cross-scope back-prop, the entry's objective/detector pair will
+        // not exist in the active scope's config -- it only exists in the
+        // scope that captured the sub. Try the active config first, then
+        // fall back to the sub's source-scope config.
         if (entry != null) {
             Map<String, String> meta = entry.getMetadata();
             String modality = meta.get(ImageMetadataManager.MODALITY);
             String objective = meta.get(ImageMetadataManager.OBJECTIVE);
             String detector = meta.get(ImageMetadataManager.DETECTOR_ID);
+            String sourceScope = meta.get(ImageMetadataManager.SOURCE_MICROSCOPE);
             if (modality != null && objective != null && detector != null) {
                 try {
                     MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-                    if (mgr == null) throw new IllegalStateException("Config not loaded");
-                    double[] fov = mgr.getCameraFOV(modality, objective, detector);
-                    if (fov != null && fov[0] > 0 && fov[1] > 0) {
-                        logger.debug("FOV from config: {}x{} um (modality={}, obj={}, det={})",
-                                fov[0], fov[1], modality, objective, detector);
-                        return fov;
+                    if (mgr != null) {
+                        double[] fov = mgr.getCameraFOV(modality, objective, detector);
+                        if (fov != null && fov[0] > 0 && fov[1] > 0) {
+                            logger.info("FOV from active config: {}x{} um (modality={}, obj={}, det={})",
+                                    fov[0], fov[1], modality, objective, detector);
+                            return fov;
+                        }
                     }
                 } catch (Exception e) {
-                    logger.debug("Could not get FOV from config: {}", e.getMessage());
+                    logger.debug("Active config could not resolve FOV: {}", e.getMessage());
+                }
+                // Cross-scope fallback: load source-scope's config.
+                if (sourceScope != null && !sourceScope.isEmpty()) {
+                    try {
+                        String activeCfg = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                        if (activeCfg != null && !activeCfg.isEmpty()) {
+                            java.io.File configDir = new java.io.File(activeCfg).getParentFile();
+                            if (configDir != null && configDir.exists()) {
+                                java.io.File scopeCfg = new java.io.File(configDir, "config_" + sourceScope + ".yml");
+                                if (scopeCfg.exists()) {
+                                    MicroscopeConfigManager detached =
+                                            MicroscopeConfigManager.createDetached(scopeCfg.getAbsolutePath());
+                                    if (detached != null) {
+                                        double[] fov = detached.getCameraFOV(modality, objective, detector);
+                                        if (fov != null && fov[0] > 0 && fov[1] > 0) {
+                                            logger.info("FOV from source-scope ('{}') config: {}x{} um "
+                                                    + "(modality={}, obj={}, det={})",
+                                                    sourceScope, fov[0], fov[1], modality, objective, detector);
+                                            return fov;
+                                        }
+                                    }
+                                } else {
+                                    logger.warn("Source-scope config '{}' not found at {}",
+                                            sourceScope, scopeCfg.getAbsolutePath());
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Source-scope ('{}') config FOV lookup failed: {}",
+                                sourceScope, e.getMessage());
+                    }
                 }
             }
         }
 
-        // Source 3: live microscope (legacy fallback)
+        // Source 3: live microscope (legacy fallback). Skip when the entry was
+        // acquired on a scope different from the active one -- the live FOV
+        // will be the wrong scope's optics.
+        if (entry != null) {
+            String entryScope = entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+            String activeScope = null;
+            try {
+                MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+                if (mgr != null) activeScope = mgr.getMicroscopeName();
+            } catch (Exception ignore) {
+            }
+            if (entryScope != null && activeScope != null && !entryScope.equals(activeScope)) {
+                logger.warn("Skipping live-microscope FOV fallback: entry source='{}' != active='{}'. "
+                        + "FOV would be wrong scope; back-prop offset will be uncorrected.",
+                        entryScope, activeScope);
+                return null;
+            }
+        }
         try {
             MicroscopeController mc = MicroscopeController.getInstance();
             if (mc != null && mc.isConnected()) {

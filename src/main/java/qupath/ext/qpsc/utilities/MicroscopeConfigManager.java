@@ -131,6 +131,23 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * Build a NON-singleton config manager pointing at {@code configPath}.
+     *
+     * <p>Use this for cross-scope lookups (e.g. back-propagation needs the FOV
+     * for a sub-acquisition that was captured on a different microscope than
+     * the one currently active). The result does not affect or replace the
+     * singleton {@link #getInstance(String)}.
+     *
+     * @param configPath path to the microscope YAML
+     * @return a fresh, detached config manager, or null if the file is missing
+     */
+    public static MicroscopeConfigManager createDetached(String configPath) {
+        if (configPath == null || configPath.isBlank()) return null;
+        if (!new java.io.File(configPath).exists()) return null;
+        return new MicroscopeConfigManager(configPath);
+    }
+
+    /**
      * Retrieves an unmodifiable view of the entire configuration map currently loaded
      * from the microscope-specific YAML file.
      *

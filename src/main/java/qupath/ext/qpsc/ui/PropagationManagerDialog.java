@@ -138,6 +138,32 @@ public final class PropagationManagerDialog {
         groupTable.setPlaceholder(new Label(
                 "No groups found. Sub-images need 'base_image' metadata (set during acquisition)."));
         groupTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        groupTable.setEditable(true);
+
+        // Per-group selection checkbox -- drives multi-group propagation.
+        TableColumn<PropagationGroupItem, Boolean> selCol = new TableColumn<>("");
+        selCol.setCellValueFactory(c -> c.getValue().selectedProperty());
+        selCol.setCellFactory(col -> new TableCell<>() {
+            private final CheckBox cb = new CheckBox();
+            {
+                cb.setOnAction(e -> {
+                    PropagationGroupItem item = (PropagationGroupItem) getTableRow().getItem();
+                    if (item != null) item.setSelected(cb.isSelected());
+                });
+            }
+            @Override
+            protected void updateItem(Boolean v, boolean empty) {
+                super.updateItem(v, empty);
+                if (empty) { setGraphic(null); return; }
+                cb.setSelected(v != null && v);
+                setGraphic(cb);
+            }
+        });
+        selCol.setEditable(true);
+        selCol.setPrefWidth(34);
+        selCol.setMinWidth(34);
+        selCol.setMaxWidth(34);
+        selCol.setSortable(false);
 
         TableColumn<PropagationGroupItem, String> baseCol = new TableColumn<>("Base image");
         baseCol.setCellValueFactory(c -> new SimpleObjectProperty<>(c.getValue().getBaseName()));
@@ -166,39 +192,66 @@ public final class PropagationManagerDialog {
         TableColumn<PropagationGroupItem, String> statusCol = new TableColumn<>("Status");
         statusCol.setCellValueFactory(c -> c.getValue().statusProperty());
 
-        groupTable.getColumns().addAll(baseCol, siblingCol, subCol, alignCol, statusCol);
-        groupTable.setPrefHeight(180);
-        if (!groups.isEmpty()) groupTable.getSelectionModel().selectFirst();
+        groupTable.getColumns().addAll(selCol, baseCol, siblingCol, subCol, alignCol, statusCol);
+        groupTable.setPrefHeight(220);
 
-        // -- Sub-image checklist (mirrors the selected row) ----------------
+        // Select-all / select-none buttons above the table.
+        Button selectAllBtn = new Button("Select all");
+        Button selectNoneBtn = new Button("Select none");
+        Runnable[] refreshSubAndClassRefs = new Runnable[2]; // holds {rebuildSubList, refreshClasses}
+        selectAllBtn.setOnAction(e -> {
+            for (PropagationGroupItem g : groups) g.setSelected(true);
+            groupTable.refresh();
+            if (refreshSubAndClassRefs[0] != null) refreshSubAndClassRefs[0].run();
+            if (refreshSubAndClassRefs[1] != null) refreshSubAndClassRefs[1].run();
+        });
+        selectNoneBtn.setOnAction(e -> {
+            for (PropagationGroupItem g : groups) g.setSelected(false);
+            groupTable.refresh();
+            if (refreshSubAndClassRefs[0] != null) refreshSubAndClassRefs[0].run();
+            if (refreshSubAndClassRefs[1] != null) refreshSubAndClassRefs[1].run();
+        });
+        HBox selectBar = new HBox(8, new Label("Groups:"), selectAllBtn, selectNoneBtn);
+        selectBar.setAlignment(Pos.CENTER_LEFT);
+
+        // Default: pre-check groups whose alignment is found, so first run does
+        // something useful without requiring a click on every row.
+        for (PropagationGroupItem g : groups) g.setSelected(g.isAlignmentFound());
+
+        // -- Sub-image checklist (mirrors the union of CHECKED groups) -----
         Map<ProjectImageEntry<BufferedImage>, CheckBox> subChecks = new LinkedHashMap<>();
         VBox subList = new VBox(2);
         subList.setPadding(new Insets(2, 6, 2, 6));
         ScrollPane subScroll = new ScrollPane(subList);
         subScroll.setFitToWidth(true);
-        subScroll.setPrefHeight(140);
-        Label subListLabel = new Label("Sub-images of selected group:");
+        subScroll.setPrefHeight(160);
+        Label subListLabel = new Label("Sub-images across all checked groups:");
         subListLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
 
         Runnable rebuildSubList = () -> {
             subList.getChildren().clear();
             subChecks.clear();
-            PropagationGroupItem sel = groupTable.getSelectionModel().getSelectedItem();
-            if (sel == null) {
-                subList.getChildren().add(new Label("(no group selected)"));
+            List<PropagationGroupItem> checked = groups.stream()
+                    .filter(PropagationGroupItem::isSelected)
+                    .collect(Collectors.toList());
+            if (checked.isEmpty()) {
+                subList.getChildren().add(new Label("(no groups checked -- check one or more above)"));
                 return;
             }
-            for (ProjectImageEntry<BufferedImage> sub : sel.getSubAcquisitions()) {
-                CheckBox cb = new CheckBox(sub.getImageName());
-                cb.setSelected(true);
-                subChecks.put(sub, cb);
-                subList.getChildren().add(cb);
+            for (PropagationGroupItem g : checked) {
+                if (g.getSubAcquisitions().isEmpty()) continue;
+                Label groupHeader = new Label(g.getBaseName());
+                groupHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-padding: 4 0 2 0;");
+                subList.getChildren().add(groupHeader);
+                for (ProjectImageEntry<BufferedImage> sub : g.getSubAcquisitions()) {
+                    CheckBox cb = new CheckBox(sub.getImageName());
+                    cb.setSelected(true);
+                    subChecks.put(sub, cb);
+                    subList.getChildren().add(cb);
+                }
             }
-            if (subChecks.isEmpty()) subList.getChildren().add(new Label("(no sub-images in this group)"));
+            if (subChecks.isEmpty()) subList.getChildren().add(new Label("(no sub-images in checked groups)"));
         };
-
-        groupTable.getSelectionModel().selectedItemProperty().addListener((o, a, b) -> rebuildSubList.run());
-        rebuildSubList.run();
 
         // -- Class filter --------------------------------------------------
         VBox classBox = new VBox(2);
@@ -211,12 +264,15 @@ public final class PropagationManagerDialog {
             classBox.getChildren().clear();
             classChecks.clear();
             Direction dir = forwardBtn.isSelected() ? Direction.FORWARD : Direction.BACK;
+            List<PropagationGroupItem> checked = groups.stream()
+                    .filter(PropagationGroupItem::isSelected)
+                    .collect(Collectors.toList());
             Set<ProjectImageEntry<BufferedImage>> selectedSubs = subChecks.entrySet().stream()
                     .filter(e -> e.getValue().isSelected())
                     .map(Map.Entry::getKey)
                     .collect(Collectors.toSet());
             ForwardPropagationWorkflow.ClassScan scan =
-                    ForwardPropagationWorkflow.collectClasses(dir, groups, selectedSubs);
+                    ForwardPropagationWorkflow.collectClasses(dir, checked, selectedSubs);
             if (scan.hasUnclassified) {
                 unclassifiedCheck.setSelected(true);
                 classBox.getChildren().add(unclassifiedCheck);
@@ -231,8 +287,20 @@ public final class PropagationManagerDialog {
                 classBox.getChildren().add(new Label("(no objects found in source)"));
             }
         };
+        refreshSubAndClassRefs[0] = rebuildSubList;
+        refreshSubAndClassRefs[1] = refreshClasses;
+
+        // Whenever a group's checkbox toggles (mouse click in the table),
+        // refresh the sub-image and class lists to reflect the new union.
+        for (PropagationGroupItem g : groups) {
+            g.selectedProperty().addListener((o, a, b) -> {
+                rebuildSubList.run();
+                refreshClasses.run();
+            });
+        }
         dirGroup.selectedToggleProperty().addListener((o, a, b) -> refreshClasses.run());
-        groupTable.getSelectionModel().selectedItemProperty().addListener((o, a, b) -> refreshClasses.run());
+        rebuildSubList.run();
+
         Label classLabel = new Label("Object classes to propagate:");
         classLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
         ScrollPane classScroll = new ScrollPane(classBox);
@@ -269,6 +337,7 @@ public final class PropagationManagerDialog {
                 header,
                 countLabel,
                 new Separator(),
+                selectBar,
                 groupTable,
                 subListLabel,
                 subScroll,
@@ -320,9 +389,12 @@ public final class PropagationManagerDialog {
             return;
         }
 
-        PropagationGroupItem selectedGroup = groupTable.getSelectionModel().getSelectedItem();
-        if (selectedGroup == null) {
-            new Alert(Alert.AlertType.WARNING, "No group selected.").showAndWait();
+        List<PropagationGroupItem> checkedGroups = groups.stream()
+                .filter(PropagationGroupItem::isSelected)
+                .collect(Collectors.toList());
+        if (checkedGroups.isEmpty()) {
+            new Alert(Alert.AlertType.WARNING,
+                    "No groups checked. Tick one or more rows in the Groups table.").showAndWait();
             return;
         }
 
@@ -332,101 +404,119 @@ public final class PropagationManagerDialog {
                 .collect(Collectors.toSet());
         boolean autoCreate = autoCreateCheck.isSelected();
 
-        results.appendText("=== Propagation started: direction=" + dir + " ===\n");
+        results.appendText("=== Propagation started: direction=" + dir
+                + ", " + checkedGroups.size() + " group(s) ===\n");
         progress.setVisible(true);
         progress.setProgress(-1);
         propagateBtn.setDisable(true);
 
         Thread worker = new Thread(() -> {
-            int totalObjects = 0;
-            int errors = 0;
+            int grandTotal = 0;
+            int grandErrors = 0;
             try {
-                String baseName = selectedGroup.getBaseName();
-                AffineTransform alignment;
-                try {
-                    alignment = AffineTransformManager.loadSlideAlignment(project, baseName);
-                } catch (Exception ex) {
-                    appendStatus(results, "  [" + baseName + "] alignment error: " + ex.getMessage() + "\n");
-                    return;
-                }
-                if (alignment == null) {
-                    appendStatus(results, "  [" + baseName + "] no alignment file found\n");
-                    return;
-                }
+                for (PropagationGroupItem grp : checkedGroups) {
+                    int groupTotal = 0;
+                    int groupErrors = 0;
+                    String baseName = grp.getBaseName();
+                    appendStatus(results, "[" + baseName + "]\n");
 
-                if (dir == Direction.FORWARD) {
-                    ProjectImageEntry<BufferedImage> base = pickForwardBase(selectedGroup);
-                    if (base == null) {
-                        appendStatus(results, "  [" + baseName + "] no base sibling found\n");
-                        return;
-                    }
-                    List<PathObject> sourceObjects;
+                    AffineTransform alignment;
                     try {
-                        sourceObjects = ForwardPropagationWorkflow.loadFilteredObjects(
-                                base, selectedClasses, includeUnclassified);
+                        alignment = AffineTransformManager.loadSlideAlignment(project, baseName);
                     } catch (Exception ex) {
-                        appendStatus(results, "  [" + baseName + "] read error: " + ex.getMessage() + "\n");
-                        logger.error("Could not read base hierarchy", ex);
-                        return;
+                        appendStatus(results, "  alignment error: " + ex.getMessage() + "\n");
+                        Platform.runLater(() -> grp.setStatus("alignment error"));
+                        continue;
                     }
-                    if (sourceObjects.isEmpty()) {
-                        appendStatus(results, "  [" + baseName + "] base has no matching objects\n");
-                        return;
+                    if (alignment == null) {
+                        appendStatus(results, "  no alignment file found for active scope\n");
+                        Platform.runLater(() -> grp.setStatus("no alignment"));
+                        continue;
                     }
-                    appendStatus(results, "  source: " + base.getImageName()
-                            + " (" + sourceObjects.size() + " objects)\n");
-                    for (ProjectImageEntry<BufferedImage> sub : selectedGroup.getSubAcquisitions()) {
-                        if (!selectedSubs.contains(sub)) continue;
+
+                    if (dir == Direction.FORWARD) {
+                        ProjectImageEntry<BufferedImage> base = pickForwardBase(grp);
+                        if (base == null) {
+                            appendStatus(results, "  no base sibling found\n");
+                            Platform.runLater(() -> grp.setStatus("no base"));
+                            continue;
+                        }
+                        List<PathObject> sourceObjects;
                         try {
-                            int count = ForwardPropagationWorkflow.propagateForward(alignment, sourceObjects, sub);
-                            totalObjects += count;
-                            appendStatus(results, String.format(
-                                    "    -> %s: %d objects%n", sub.getImageName(), count));
+                            sourceObjects = ForwardPropagationWorkflow.loadFilteredObjects(
+                                    base, selectedClasses, includeUnclassified);
                         } catch (Exception ex) {
-                            errors++;
-                            appendStatus(results, String.format(
-                                    "    -> %s: FAILED (%s)%n", sub.getImageName(), ex.getMessage()));
-                            logger.error("Forward propagation failed", ex);
+                            appendStatus(results, "  read error: " + ex.getMessage() + "\n");
+                            logger.error("Could not read base hierarchy", ex);
+                            groupErrors++;
+                            continue;
+                        }
+                        if (sourceObjects.isEmpty()) {
+                            appendStatus(results, "  base has no matching objects\n");
+                            Platform.runLater(() -> grp.setStatus("0 obj"));
+                            continue;
+                        }
+                        appendStatus(results, "  source: " + base.getImageName()
+                                + " (" + sourceObjects.size() + " objects)\n");
+                        for (ProjectImageEntry<BufferedImage> sub : grp.getSubAcquisitions()) {
+                            if (!selectedSubs.contains(sub)) continue;
+                            try {
+                                int count = ForwardPropagationWorkflow.propagateForward(alignment, sourceObjects, sub);
+                                groupTotal += count;
+                                appendStatus(results, String.format(
+                                        "    -> %s: %d objects%n", sub.getImageName(), count));
+                            } catch (Exception ex) {
+                                groupErrors++;
+                                appendStatus(results, String.format(
+                                        "    -> %s: FAILED (%s)%n", sub.getImageName(), ex.getMessage()));
+                                logger.error("Forward propagation failed", ex);
+                            }
+                        }
+                    } else {
+                        for (ProjectImageEntry<BufferedImage> sub : grp.getSubAcquisitions()) {
+                            if (!selectedSubs.contains(sub)) continue;
+                            try {
+                                List<PathObject> subObjects = ForwardPropagationWorkflow.loadFilteredObjects(
+                                        sub, selectedClasses, includeUnclassified);
+                                if (subObjects.isEmpty()) {
+                                    appendStatus(results, "    " + sub.getImageName() + ": no matching objects\n");
+                                    continue;
+                                }
+                                FanOutResult fo = ForwardPropagationWorkflow.propagateBackFanOut(
+                                        project, baseName, alignment, subObjects, sub, autoCreate);
+                                groupTotal += fo.totalObjects;
+                                appendStatus(results, "  source: " + sub.getImageName()
+                                        + " (" + subObjects.size() + " objects)\n");
+                                for (String line : fo.perSiblingLog) {
+                                    appendStatus(results, line + "\n");
+                                }
+                                if (fo.siblingsAutoCreated > 0) {
+                                    appendStatus(results, "  (auto-created " + fo.siblingsAutoCreated
+                                            + " sibling(s) for fan-out)\n");
+                                }
+                            } catch (Exception ex) {
+                                groupErrors++;
+                                appendStatus(results, "    " + sub.getImageName()
+                                        + ": FAILED (" + ex.getMessage() + ")\n");
+                                logger.error("Back propagation failed", ex);
+                            }
                         }
                     }
-                } else {
-                    for (ProjectImageEntry<BufferedImage> sub : selectedGroup.getSubAcquisitions()) {
-                        if (!selectedSubs.contains(sub)) continue;
-                        try {
-                            List<PathObject> subObjects = ForwardPropagationWorkflow.loadFilteredObjects(
-                                    sub, selectedClasses, includeUnclassified);
-                            if (subObjects.isEmpty()) {
-                                appendStatus(results, "    " + sub.getImageName() + ": no matching objects\n");
-                                continue;
-                            }
-                            FanOutResult fo = ForwardPropagationWorkflow.propagateBackFanOut(
-                                    project, baseName, alignment, subObjects, sub, autoCreate);
-                            totalObjects += fo.totalObjects;
-                            appendStatus(results, "  source: " + sub.getImageName()
-                                    + " (" + subObjects.size() + " objects)\n");
-                            for (String line : fo.perSiblingLog) {
-                                appendStatus(results, line + "\n");
-                            }
-                            if (fo.siblingsAutoCreated > 0) {
-                                appendStatus(results, "  (auto-created " + fo.siblingsAutoCreated
-                                        + " sibling(s) for fan-out)\n");
-                            }
-                        } catch (Exception ex) {
-                            errors++;
-                            appendStatus(results, "    " + sub.getImageName()
-                                    + ": FAILED (" + ex.getMessage() + ")\n");
-                            logger.error("Back propagation failed", ex);
-                        }
-                    }
+
+                    final int gt = groupTotal;
+                    final int ge = groupErrors;
+                    Platform.runLater(() ->
+                            grp.setStatus(gt + " obj" + (ge > 0 ? " (" + ge + " errors)" : "")));
+                    grandTotal += groupTotal;
+                    grandErrors += groupErrors;
                 }
 
-                final int finalTotal = totalObjects;
-                final int finalErrors = errors;
-                Platform.runLater(() -> {
-                    selectedGroup.setStatus(finalTotal + " obj" + (finalErrors > 0 ? " (" + finalErrors + " errors)" : ""));
-                    appendStatus(results, "=== Done: " + finalTotal + " object(s) propagated"
-                            + (finalErrors > 0 ? ", " + finalErrors + " error(s)" : "") + " ===\n");
-                });
+                final int finalTotal = grandTotal;
+                final int finalErrors = grandErrors;
+                Platform.runLater(() -> appendStatus(results,
+                        "=== Done: " + finalTotal + " object(s) propagated across "
+                                + checkedGroups.size() + " group(s)"
+                                + (finalErrors > 0 ? ", " + finalErrors + " error(s)" : "") + " ===\n"));
             } finally {
                 Platform.runLater(() -> {
                     progress.setVisible(false);
