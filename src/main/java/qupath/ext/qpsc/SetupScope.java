@@ -12,7 +12,9 @@ import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
+import qupath.ext.qpsc.utilities.FlippedDuplicateMigrator;
 import qupath.ext.qpsc.controller.MakePortableWorkflow;
+import qupath.fx.dialogs.Dialogs;
 import qupath.ext.qpsc.controller.QPScopeController;
 import qupath.ext.qpsc.controller.StackTimeLapseWorkflow;
 import qupath.ext.qpsc.ui.SinglePointAcquisitionController;
@@ -425,6 +427,33 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         + "Supports both forward (base -> sub) and back (sub -> base) directions.");
         propagationManagerOption.setOnAction(e -> ForwardPropagationWorkflow.run(qupath));
 
+        // Migrate flipped duplicates (Step B.3 of the flip-relocation refactor).
+        // One-time cleanup that consolidates annotations from "(flipped X|Y|XY)"
+        // duplicate entries onto the unflipped base, then removes the duplicates.
+        MenuItem migrateFlippedOption = new MenuItem("Migrate Flipped Duplicates...");
+        setMenuItemTooltip(
+                migrateFlippedOption,
+                "Consolidate annotations from legacy '(flipped X|Y|XY)' duplicate entries "
+                        + "onto the unflipped base, then remove the duplicates. Safe to run "
+                        + "repeatedly -- a no-op when no duplicates remain.");
+        migrateFlippedOption.setOnAction(e -> {
+            if (qupath.getProject() == null) {
+                Dialogs.showErrorMessage("Migrate Flipped Duplicates", "No project is open.");
+                return;
+            }
+            @SuppressWarnings("unchecked")
+            qupath.lib.projects.Project<java.awt.image.BufferedImage> typedProject =
+                    (qupath.lib.projects.Project<java.awt.image.BufferedImage>) qupath.getProject();
+            FlippedDuplicateMigrator.Result result = FlippedDuplicateMigrator.migrate(typedProject);
+            StringBuilder msg = new StringBuilder();
+            msg.append("Migration complete.\n\n");
+            msg.append("Duplicates found: ").append(result.duplicatesFound).append("\n");
+            msg.append("Duplicates removed: ").append(result.duplicatesRemoved).append("\n");
+            msg.append("Annotations transferred: ").append(result.annotationsTransferred).append("\n\n");
+            for (String line : result.log) msg.append(line).append('\n');
+            Dialogs.showMessageDialog("Migrate Flipped Duplicates", msg.toString());
+        });
+
         // Stitching recovery (doesn't need microscope connection)
         MenuItem stitchingRecoveryOption = new MenuItem(res.getString("menu.stitchingRecovery"));
         setMenuItemTooltip(
@@ -470,6 +499,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         stackTimeLapseOption,
                         new SeparatorMenuItem(),
                         propagationManagerOption,
+                        migrateFlippedOption,
                         stitchingRecoveryOption,
                         makePortableOption,
                         new SeparatorMenuItem(),
