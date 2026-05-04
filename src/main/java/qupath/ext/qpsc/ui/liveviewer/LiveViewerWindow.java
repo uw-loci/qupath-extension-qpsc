@@ -1293,35 +1293,72 @@ public class LiveViewerWindow {
                         stageControlPanel.refreshPositions();
                     }
                     if (outcome == RefineFocusController.Outcome.FAILED) {
-                        // UNAVAILABLE / pre-flight refusal -- streaming
-                        // refused (typically: exposure budget violation,
-                        // saturation, no stage speed property). Sweep
-                        // Focus has no such pre-flight, so it usually
-                        // works where streaming refused. Auto-chain to
-                        // it instead of forcing the user to click a
-                        // separate button after reading a notification.
+                        // UNAVAILABLE / pre-flight refusal. Distinguish
+                        // FIXABLE refusals (Sweep Focus has a chance of
+                        // succeeding because it uses different sampling /
+                        // doesn't need slow-stage-speed / handles long
+                        // exposures) from SIGNAL-DEAD refusals (the metric
+                        // is genuinely flat across the scan window, so a
+                        // different algorithm running on the same data
+                        // will also fail -- and worse, may walk the stage
+                        // far from focus on noise).
+                        //
+                        // 2026-05-04 PPM 40x incident: streaming refused
+                        // with "metric range 0.91% of peak is within noise",
+                        // the auto-fallback ran Sweep Focus on the same
+                        // flat field, the boundary-peak retry shifted DOWN
+                        // twice, and the stage ended 41 um BELOW the
+                        // operator's starting in-focus Z. The flat-metric
+                        // refusal is the AF telling us "I can't find focus
+                        // from this data" -- the right response is to
+                        // leave the stage where it is and tell the user,
+                        // not to hand the same flat data to a worse
+                        // algorithm.
                         streamingFocusButton.setText("Autofocus");
                         streamingFocusButton.setStyle("");
                         streamingFocusButton.setTooltip(new Tooltip(
-                                "Streaming AF refused; auto-fell back to Sweep Focus.\n"
-                                        + "Reason: " + msg));
+                                "Streaming AF refused.\nReason: " + msg));
                         streamingFocusButton.setDisable(!liveActive);
 
                         String reason = msg;
                         if (reason.startsWith("Autofocus unavailable: ")) {
                             reason = reason.substring("Autofocus unavailable: ".length());
                         }
-                        if (liveActive) {
+
+                        // Recognise signal-dead refusals by their reason
+                        // string. These come from streaming_focus.py and
+                        // share the substrings "metric range" + "noise" or
+                        // "depth-of-field". If we add new flat-metric
+                        // refusal phrasings server-side, mirror them here.
+                        String lower = reason.toLowerCase();
+                        boolean signalDead =
+                                lower.contains("metric range") && lower.contains("noise")
+                                || lower.contains("depth-of-field")
+                                || lower.contains("metric_flat");
+
+                        if (signalDead || !liveActive) {
+                            // Stage stays where it is. Show an explicit
+                            // "Sweep Focus" button so the user can opt in
+                            // manually if they believe a stepped scan
+                            // would do better.
+                            sweepFocusButton.setVisible(true);
+                            sweepFocusButton.setManaged(true);
+                            String headline = signalDead
+                                    ? "Autofocus: signal too flat to find focus"
+                                    : "Autofocus: no focus found";
+                            Dialogs.showInfoNotification(headline, reason
+                                    + "\n\nStage left at current Z. "
+                                    + "If you believe focus is reachable, click "
+                                    + "Sweep Focus to attempt a stepped scan.");
+                            updateStatus(headline + " -- stage left at current Z");
+                        } else {
+                            // Fixable refusal (long exposure, no slow-
+                            // speed property, etc.) -- Sweep Focus uses
+                            // a different mechanism so it has a real
+                            // chance of succeeding.
                             updateStatus("Autofocus: streaming unavailable (" + reason
                                     + "); switching to Sweep Focus");
                             handleSweepFocus();
-                        } else {
-                            // Live mode was toggled off mid-attempt --
-                            // can't run sweep either. Surface the original
-                            // notification so the user sees what happened.
-                            sweepFocusButton.setVisible(true);
-                            sweepFocusButton.setManaged(true);
-                            Dialogs.showInfoNotification("Autofocus: no focus found", reason);
                         }
                     } else if (outcome == RefineFocusController.Outcome.ERROR) {
                         streamingFocusButton.setText("FAILED");

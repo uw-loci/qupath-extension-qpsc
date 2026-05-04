@@ -267,8 +267,24 @@ public class SweepFocusController {
             }
 
             // Edge retry: when peak is at boundary with a real score trend,
-            // extend the sweep in the peak direction (up to 2 retries).
-            int maxEdgeRetries = 2;
+            // extend the sweep in the peak direction (up to 1 retry --
+            // see safety bounds below).
+            //
+            // 2026-05-04 PPM 40x incident: with a flat metric (1% range)
+            // the retry walked the stage 41 um DOWN from a starting in-
+            // focus Z=91.27 to final Z=50.30 over 2 retries. Two stacked
+            // safety nets:
+            //   1. maxEdgeRetries 2 -> 1: a single "extend in peak
+            //      direction" attempt is enough; chained retries
+            //      compound noise into runaway.
+            //   2. MAX_CUMULATIVE_SHIFT_UM: hard cap on |bestZ - startZ|
+            //      across the whole Sweep Focus invocation. If a retry
+            //      would commit beyond this radius from the operator's
+            //      starting Z, abort and stay at startZ.
+            //   3. rangePct gate raised from 2% -> 5% -- the prior
+            //      threshold accepted noisy near-flat scans.
+            int maxEdgeRetries = 1;
+            double MAX_CUMULATIVE_SHIFT_UM = 30.0;
             double half = range / 2.0;
             for (int retry = 0; retry < maxEdgeRetries; retry++) {
                 if (cancelled) break;
@@ -282,12 +298,36 @@ public class SweepFocusController {
                 }
                 double meanM = sumM / measurements.size();
                 double rangePct = (maxM - minM) / Math.max(meanM, 1.0) * 100;
-                if (rangePct < 2.0) break;
+                if (rangePct < 5.0) {
+                    logger.info(
+                            "Sweep Focus: refusing edge retry -- metric range {}% "
+                                    + "below 5% threshold (likely noise on flat field)",
+                            String.format("%.2f", rangePct));
+                    break;
+                }
 
                 double boundaryZ = measurements.get(bestIdx)[0];
                 double newCenter = (bestIdx == measurements.size() - 1) ? boundaryZ + half : boundaryZ - half;
                 double extStart = newCenter - half;
                 double extEnd = newCenter + half;
+
+                // Cumulative-shift safety bound. If the most-extreme
+                // sample of the proposed extended scan is more than
+                // MAX_CUMULATIVE_SHIFT_UM away from the operator's
+                // starting Z, refuse the retry. The operator's starting
+                // Z is the only ground truth we have for "approximately
+                // in focus"; walking arbitrarily far from it on noisy
+                // data is the failure mode this guard exists to prevent.
+                double farthest = Math.max(Math.abs(extStart - startZ), Math.abs(extEnd - startZ));
+                if (farthest > MAX_CUMULATIVE_SHIFT_UM) {
+                    logger.warn(
+                            "Sweep Focus: refusing edge retry -- proposed range "
+                                    + "[{}, {}] would shift {} um from startZ {} "
+                                    + "(cap {} um). Likely runaway on flat data.",
+                            fmt(extStart), fmt(extEnd), fmt(farthest), fmt(startZ),
+                            fmt(MAX_CUMULATIVE_SHIFT_UM));
+                    break;
+                }
 
                 if (configMgr != null) {
                     if (!configMgr.isWithinStageBounds(extStart) || !configMgr.isWithinStageBounds(extEnd)) {
