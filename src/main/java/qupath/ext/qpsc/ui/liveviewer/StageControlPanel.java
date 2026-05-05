@@ -2128,8 +2128,19 @@ public class StageControlPanel extends VBox {
             label.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
             ComboBox<String> profileCombo = new ComboBox<>();
             profileCombo.getItems().addAll(matchingProfiles);
-            profileCombo.setValue(matchingProfiles.get(0));
-            cameraActiveProfile = matchingProfiles.get(0);
+            // Preserve the existing dropdown selection across rebuilds. Without
+            // this, every rebuildCameraModContent (modality switch, Apply
+            // Profile, Save/Load Preset) snaps the dropdown back to the first
+            // profile in the list -- so a user on Brightfield_20x who clicks
+            // Apply ends up displayed as Brightfield_10x even though they
+            // applied 20x. The retained selection also lets Apply Profile
+            // rebuild without losing context.
+            String defaultSelection = matchingProfiles.get(0);
+            if (cameraActiveProfile != null && matchingProfiles.contains(cameraActiveProfile)) {
+                defaultSelection = cameraActiveProfile;
+            }
+            profileCombo.setValue(defaultSelection);
+            cameraActiveProfile = defaultSelection;
             profileCombo.valueProperty().addListener((obs, oldV, newV) -> {
                 if (newV != null) cameraActiveProfile = newV;
             });
@@ -2152,9 +2163,21 @@ public class StageControlPanel extends VBox {
                                 if (mc == null || !mc.isConnected()) throw new Exception("Not connected");
                                 mc.withLiveModeHandling(
                                         () -> mc.getSocketClient().applyProfile(selectedProfile));
+                                // APPLYPR resets exposure + illumination to the YAML
+                                // profile's apply_mode_setup defaults, but the UI
+                                // fields still show whatever the user (or saved
+                                // prefs) had previously displayed. Rebuilding the
+                                // panel re-pulls the saved prefs and pushes them
+                                // back to hardware via buildExposureControl /
+                                // buildIlluminationControl's restore threads, so
+                                // the displayed values match what's actually on
+                                // the camera. Without this, the user sees stale
+                                // numbers (e.g. "2 ms / 700") that don't reflect
+                                // the dim image hardware is actually producing.
                                 Platform.runLater(() -> {
                                     cameraStatusLabel.setText("Profile applied: " + selectedProfile);
                                     cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                                    rebuildCameraModContent(modality);
                                 });
                             } catch (Exception ex) {
                                 logger.error("Failed to apply profile '{}': {}", selectedProfile, ex.getMessage());
