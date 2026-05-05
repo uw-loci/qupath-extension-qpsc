@@ -1452,9 +1452,7 @@ public class AutofocusEditorWorkflow {
 
                 // Run in background to avoid blocking UI
                 java.util.concurrent.CompletableFuture.runAsync(() -> {
-                    // Stop live viewing -- AF validation moves Z and snaps images
                     MicroscopeController mc = MicroscopeController.getInstance();
-                    MicroscopeController.LiveViewState liveState = null;
                     try {
                         if (!mc.isConnected()) {
                             Platform.runLater(() -> Dialogs.showErrorMessage(
@@ -1462,11 +1460,15 @@ public class AutofocusEditorWorkflow {
                             return;
                         }
 
-                        liveState = mc.stopAllLiveViewing();
-                        var socketClient = mc.getSocketClient();
-                        var result = socketClient.testAutofocusValidation(configPath, testOutputPath, currentObj);
-
-                        Platform.runLater(() -> showValidationResult(result, statusLabel));
+                        // AF validation moves Z and snaps images. withAllLiveViewingOff
+                        // pairs stopAllLiveViewing/restoreLiveViewState in a try/finally
+                        // so the Live Viewer status updates correctly and frames resume
+                        // afterwards even when the test throws.
+                        mc.withAllLiveViewingOff(() -> {
+                            var socketClient = mc.getSocketClient();
+                            var result = socketClient.testAutofocusValidation(configPath, testOutputPath, currentObj);
+                            Platform.runLater(() -> showValidationResult(result, statusLabel));
+                        });
 
                     } catch (Exception ex) {
                         logger.error("Autofocus validation failed", ex);
@@ -1478,10 +1480,6 @@ public class AutofocusEditorWorkflow {
                                     "Error: " + ex.getMessage()
                                             + "\n\nMake sure you are focused on tissue before running the test.");
                         });
-                    } finally {
-                        if (liveState != null) {
-                            mc.restoreLiveViewState(liveState);
-                        }
                     }
                 });
 

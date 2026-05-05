@@ -247,66 +247,49 @@ public class TestAutofocusWorkflow {
         logger.info("Executing {} autofocus test for objective: {}", testType, objective);
 
         MicroscopeController mc = MicroscopeController.getInstance();
-        MicroscopeController.LiveViewState liveState = null;
 
         try {
-            // Get socket client from MicroscopeController
             MicroscopeSocketClient socketClient = mc.getSocketClient();
 
-            // Ensure connection
             if (!mc.isConnected()) {
                 logger.info("Connecting to microscope server for autofocus test");
                 mc.connect();
             }
 
-            // Create output directory
             File outputDir = new File(outputPath);
             if (!outputDir.exists() && !outputDir.mkdirs()) {
                 throw new IOException("Failed to create output directory: " + outputPath);
             }
 
-            // Stop live viewing -- the AF test moves Z and snaps images, so
-            // both MM live mode and the QPSC Live Viewer's continuous
-            // acquisition must release the camera. Without this, the Live
-            // Viewer keeps showing "Live: ON" with a frozen frame because
-            // the aux-socket GETFRAME poll competes with the AF run for the
-            // server-side hardware lock and starves out.
-            liveState = mc.stopAllLiveViewing();
+            // The AF test moves Z and snaps images. withAllLiveViewingOff
+            // stops both MM live mode and the QPSC Live Viewer's continuous
+            // acquisition before the run and restores them in a finally
+            // block, so the Live Viewer status updates correctly and frames
+            // resume after the test.
+            mc.withAllLiveViewingOff(() -> {
+                logger.info("Starting {} autofocus test", testType);
 
-            logger.info("Starting {} autofocus test", testType);
+                Map<String, String> result;
+                if (isAdaptive) {
+                    result = socketClient.testAdaptiveAutofocus(configPath, outputPath, objective);
+                } else {
+                    result = socketClient.testAutofocus(configPath, outputPath, objective);
+                }
 
-            // Call the appropriate test method
-            Map<String, String> result;
-            if (isAdaptive) {
-                result = socketClient.testAdaptiveAutofocus(configPath, outputPath, objective);
-            } else {
-                result = socketClient.testAutofocus(configPath, outputPath, objective);
-            }
+                logger.info("{} autofocus test completed successfully", testType);
 
-            logger.info("{} autofocus test completed successfully", testType);
+                String plotPath = result.get("plot_path");
+                String initialZ = result.get("initial_z");
+                String finalZ = result.get("final_z");
+                String zShift = result.get("z_shift");
 
-            // Extract results
-            String plotPath = result.get("plot_path");
-            String message_text = result.get("message");
-            String initialZ = result.get("initial_z");
-            String finalZ = result.get("final_z");
-            String zShift = result.get("z_shift");
-
-            // Show success notification on UI thread
-            Platform.runLater(() -> {
-                showAutofocusResultDialog(testType, initialZ, finalZ, zShift, plotPath);
+                Platform.runLater(() -> showAutofocusResultDialog(testType, initialZ, finalZ, zShift, plotPath));
             });
 
         } catch (Exception e) {
             logger.error("Autofocus test failed", e);
-            Platform.runLater(() -> {
-                Dialogs.showErrorMessage(
-                        "Autofocus Test Failed", "Failed to execute autofocus test: " + e.getMessage());
-            });
-        } finally {
-            if (liveState != null) {
-                mc.restoreLiveViewState(liveState);
-            }
+            Platform.runLater(() -> Dialogs.showErrorMessage(
+                    "Autofocus Test Failed", "Failed to execute autofocus test: " + e.getMessage()));
         }
     }
 
