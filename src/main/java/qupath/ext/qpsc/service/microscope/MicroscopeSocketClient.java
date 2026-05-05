@@ -3482,6 +3482,22 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
+     * Clears the server-unresponsive latch without kicking off the async
+     * reconnect cycle that {@link #userTriggeredReconnect()} would. Intended
+     * for callers that are about to drive their own connect() and just need
+     * the flag reset so subsequent aux operations stop short-circuiting with
+     * "MicroManager likely crashed". Safe to call when the flag is already
+     * false (no-op).
+     */
+    public void clearServerUnresponsiveSuspended() {
+        if (serverUnresponsiveSuspended) {
+            logger.info("Clearing serverUnresponsiveSuspended flag (caller will reconnect explicitly)");
+            serverUnresponsiveSuspended = false;
+            mainReconnectBackoffMs = reconnectDelayMs;
+        }
+    }
+
+    /**
      * Starts health monitoring thread.
      */
     private void startHealthMonitoring() {

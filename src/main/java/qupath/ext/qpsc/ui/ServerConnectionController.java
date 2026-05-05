@@ -658,6 +658,18 @@ public class ServerConnectionController {
 
                 MicroscopeController controller = MicroscopeController.getInstance();
 
+                // The user pressing Reconnect is by definition a
+                // user-triggered retry, so clear the server-unresponsive
+                // latch first. Otherwise an earlier MicroManager hang or a
+                // long string of silent aux failures leaves the flag set,
+                // and every subsequent aux call (Live Viewer, stage poll,
+                // getCameraFOV) short-circuits with "MicroManager likely
+                // crashed" even though the dialog reports green.
+                if (controller.getSocketClient().isServerUnresponsiveSuspended()) {
+                    controller.getSocketClient().clearServerUnresponsiveSuspended();
+                    logMessage("Cleared server-unresponsive suspend (user retry)");
+                }
+
                 // Only disconnect the primary socket -- leave the auxiliary
                 // (Live Viewer, stage control) running so we don't disrupt
                 // an active live session while reconnecting.
