@@ -35,6 +35,18 @@
 #   - 'role: fallback' means the metric is auto-computed alongside the
 #       primary in the standard AF path and used when peak validation
 #       fails (currently p98_p2 only).
+#   - 'valid_modalities' lists the optical modalities the metric is
+#       physically meaningful for. Optional; absent = "any". The GUI
+#       surfaces these as constraint badges next to the metric name.
+#       Recognised values: brightfield, ppm, fluorescence, dark_field.
+#       'brightfield' covers raw transmitted-light + DIC; 'ppm' covers
+#       polarized-light tissue. Mono BF (Hamamatsu) and RGB BF (JAI)
+#       count the same.
+#   - 'min_magnification' (optional, float) is the smallest objective
+#       nominal magnification at which the metric is reliable. Used by
+#       the GUI to warn (not block) when a low-mag objective picks a
+#       metric that would fail there. Currently used only for
+#       normalized_variance (lamp vignette dominates at low mag).
 #
 # Loaders that encounter a name in 'removed_aliases' should raise
 # UnknownMetricError naming the canonical replacement; never silently
@@ -48,11 +60,14 @@ metrics:
     group: recommended
     badge: high
     best_for: |
-      Brightfield, PPM at typical magnifications. Streaming-AF default.
-      Sum of squared Sobel gradients -- inherently high-pass, immune to
-      lamp vignette.
+      Brightfield, PPM at typical magnifications. Streaming-AF default
+      for tissue. Sum of squared Sobel gradients -- inherently high-pass,
+      immune to lamp vignette.
     avoid_when: |
-      Very dark or sparse fluorescence -- gradient signal is weak.
+      Very dark or sparse fluorescence with sub-resolution objects --
+      gradient signal is weak relative to noise. Use laplacian_variance
+      for sparse particle samples (pollen grains, beads, FISH spots)
+      where bright-spot detection is more reliable than edge gradients.
     requires: numpy
     supported_paths: [streaming, standard, strategy]
 
@@ -61,10 +76,17 @@ metrics:
     badge: high
     best_for: |
       Lower magnifications (10x and below) on brightfield.
+      Sparse particles on dark background (pollen grains, beads, FISH
+      spots, scattered fluorescent objects) -- the second derivative is
+      highly responsive to bright point-like features. The internal
+      sparse_signal strategy uses this metric paired with a bright-spot
+      validity check.
       Variance of the Laplacian-filtered image; high-pass.
     avoid_when: |
       High magnification brightfield -- sensitivity falls off as features
       become large compared to the kernel.
+      Continuous tissue at high mag -- the Laplacian over-emphasises
+      pixel-scale noise relative to feature edges.
     requires: scipy
     supported_paths: [streaming, standard, strategy]
 
@@ -73,7 +95,10 @@ metrics:
     badge: medium
     best_for: |
       Fast checks, low-contrast and dark-field samples.
-      Sum of squared lag-2 horizontal differences.
+      Sum of squared lag-2 horizontal differences. Robust to noise
+      and dark backgrounds; reasonable second-choice for sparse
+      fluorescence if laplacian_variance over-responds to single-pixel
+      noise.
     avoid_when: |
       Samples needing fine peak resolution -- robust but coarse.
     requires: numpy
@@ -84,12 +109,18 @@ metrics:
     badge: medium
     best_for: |
       High-magnification brightfield with dim or non-uniform illumination
-      where var/mean stays focus-sensitive.
+      where var/mean stays focus-sensitive. Brightfield ONLY -- the
+      var/mean ratio is meaningful only when the mean reflects sample-
+      scale illumination, not background dark current.
     avoid_when: |
       Low magnifications on brightfield -- known to fail because the lamp
       vignette dominates var/mean. Confirmed on OWS3 BF 10x 2026-05-01.
+      Fluorescence at any magnification -- background dark current makes
+      both var and mean small and noisy, so the ratio is unstable.
     requires: numpy
     supported_paths: [streaming, standard]
+    valid_modalities: [brightfield, ppm]
+    min_magnification: 20.0
 
   - name: vollath_f5
     group: advanced
@@ -118,10 +149,20 @@ metrics:
     best_for: |
       Histogram-spread fallback. Always computed alongside the primary
       metric in the standard AF path and used when peak validation
-      fails on the primary -- no extra acquisition cost.
+      fails on the primary -- no extra acquisition cost. Modality-
+      agnostic AS A PEAK FINDER: standard AF compares p98_p2 across Z
+      and picks the maximum-difference Z, which works for both BF
+      (focus pulls p2 down -> larger spread) and FL (focus pulls p98
+      up -> larger spread). The intermediate Z extreme of the curve is
+      what matters; "higher = sharper" comparisons across modalities
+      are NOT meaningful.
     avoid_when: |
       Picking it as a primary unless you specifically want histogram-
-      spread behavior.
+      spread behavior. Any code path that compares p98_p2 values across
+      different modalities or different fields-of-view -- the metric's
+      sign and magnitude meaning changes with the sample's brightness
+      direction (BF: dark features on bright bg; FL: bright features
+      on dark bg).
     requires: numpy
     supported_paths: [standard]
     role: fallback
@@ -142,11 +183,20 @@ metrics:
     badge: high
     best_for: |
       Modality-aware combination of Brenner + soft tissue mask + Gaussian
-      smoothing.
+      smoothing. Brightfield / PPM ONLY: the soft mask weights mid-gray
+      pixels highest, which matches BF tissue (dark features against a
+      bright background) but actively suppresses fluorescence signal
+      (bright features against a dark background) -- under FL the
+      brighter and sharper the field, the LOWER this metric scores.
     avoid_when: |
-      Non-strategy / ad-hoc paths.
+      Fluorescence at any magnification -- the mid-gray soft mask
+      inverts the metric (sharper FL -> smaller score). Use vollath_f5
+      or laplacian_variance for FL instead. Non-strategy / ad-hoc
+      paths -- this metric is wired into the dense_texture strategy
+      and not directly usable by streaming or standard AF.
     requires: scipy+skimage
     supported_paths: [strategy]
+    valid_modalities: [brightfield, ppm]
 
   - name: none
     group: special
@@ -216,6 +266,12 @@ strategies:
     description: Scattered fluorescent objects on dark background (beads, pollen, FISH spots, single cells).
     score_metric_default: laplacian_variance
     validity_check: bright_spot_count
+    on_failure: proceed
+
+  - name: dense_fluorescence
+    description: Confluent fluorescent signal (whole-cell IF, dense membrane stains, packed nuclei). Uses vollath_f5 because the autocorrelation form rejects shot-noise that wrecks plain variance metrics on fluorescence; falls back to total_gradient_energy for validity since bright_spot_count would mis-score confluent signal as failure.
+    score_metric_default: vollath_f5
+    validity_check: total_gradient_energy
     on_failure: proceed
 
   - name: dark_field

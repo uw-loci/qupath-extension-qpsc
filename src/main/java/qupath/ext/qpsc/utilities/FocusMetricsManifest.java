@@ -97,10 +97,28 @@ public final class FocusMetricsManifest {
         public final String requires;
         public final List<String> supportedPaths;
         public final String role; // "fallback" for p98_p2; null otherwise
+        /**
+         * Optical modalities the metric is physically meaningful for
+         * (e.g. ["brightfield","ppm"]). Empty list = "any modality" --
+         * the manifest treats absence of the field as unrestricted.
+         * Lowercase canonical names; the matcher in
+         * {@link #isValidForModality} normalises casing and accepts
+         * common aliases (bf, fl, polarized, ...).
+         */
+        public final List<String> validModalities;
+        /**
+         * Smallest objective magnification at which the metric is
+         * reliable. Null = unrestricted. Used by the GUI to surface a
+         * "[20x+]" badge next to the metric name when the active
+         * objective is below this threshold; never enforced as a hard
+         * block (operators may have a special-case where the warning
+         * is wrong).
+         */
+        public final Double minMagnification;
 
         MetricSpec(String name, Group group, String badge, String bestFor,
                    String avoidWhen, String requires, List<String> supportedPaths,
-                   String role) {
+                   String role, List<String> validModalities, Double minMagnification) {
             this.name = name;
             this.group = group;
             this.badge = badge;
@@ -109,6 +127,10 @@ public final class FocusMetricsManifest {
             this.requires = requires;
             this.supportedPaths = Collections.unmodifiableList(supportedPaths);
             this.role = role;
+            this.validModalities = validModalities == null
+                    ? Collections.emptyList()
+                    : Collections.unmodifiableList(validModalities);
+            this.minMagnification = minMagnification;
         }
 
         /** True if this metric can be selected for the streaming AF code path. */
@@ -117,6 +139,87 @@ public final class FocusMetricsManifest {
         public boolean supportsStandard() { return supportedPaths.contains("standard"); }
         /** True if this metric can be wired up as a strategy's score_metric. */
         public boolean supportsStrategy() { return supportedPaths.contains("strategy"); }
+
+        /**
+         * Check whether this metric is appropriate for the given
+         * modality key (the same string used in the manifest's
+         * modality_defaults map and in modality binding rows).
+         *
+         * <p>Returns true when the manifest declares no restriction
+         * (empty {@link #validModalities}), when the modality argument
+         * is null/blank (caller can't tell), or when the canonical
+         * form of the modality matches one of the listed entries.
+         *
+         * <p>The match is canonicalised: short aliases like {@code bf}
+         * and {@code fl} expand to {@code brightfield} / {@code
+         * fluorescence}; {@code polarized}, {@code ppm_*} resolve to
+         * {@code ppm}; {@code wf}, {@code widefield}, {@code lsm},
+         * {@code shg}, {@code 1p}, {@code 2p} all map to {@code
+         * fluorescence}; {@code dark_field} stays distinct.
+         */
+        public boolean isValidForModality(String modality) {
+            if (validModalities.isEmpty()) return true;
+            if (modality == null || modality.isBlank()) return true;
+            String canon = canonicalModality(modality);
+            for (String allowed : validModalities) {
+                if (canonicalModality(allowed).equals(canon)) return true;
+            }
+            return false;
+        }
+
+        /**
+         * Check whether this metric is appropriate at the given
+         * objective nominal magnification. Always true if the
+         * manifest sets no {@link #minMagnification} or the caller
+         * passes a non-positive value (unknown).
+         */
+        public boolean isValidForMagnification(double nominalMag) {
+            if (minMagnification == null) return true;
+            if (Double.isNaN(nominalMag) || nominalMag <= 0.0) return true;
+            return nominalMag >= minMagnification;
+        }
+    }
+
+    /**
+     * Reduce a modality string (or alias) to one of the canonical
+     * buckets {@code brightfield}, {@code ppm}, {@code fluorescence},
+     * {@code dark_field}, {@code other}. Lowercase, prefix-aware. The
+     * manifest's {@code valid_modalities} entries are normalised
+     * through this same function so that
+     * {@code valid_modalities: [brightfield]} matches a binding key
+     * like {@code bf_dia}, {@code BF_IF}, {@code Brightfield}, etc.
+     *
+     * <p>Bucket assignments mirror {@code modality_defaults} in the
+     * manifest: any modality whose default is {@code vollath_f5} is
+     * treated as fluorescence here. {@code shg} is separately mapped
+     * to {@code dark_field} only when explicitly named that way; in
+     * the default mapping it counts as fluorescence (it ships with
+     * vollath_f5 as the streaming default).
+     */
+    public static String canonicalModality(String modality) {
+        if (modality == null) return "other";
+        String s = modality.trim().toLowerCase(Locale.ROOT);
+        if (s.isEmpty()) return "other";
+        if (s.equals("brightfield") || s.equals("bf") || s.startsWith("bf_")
+                || s.startsWith("brightfield_") || s.equals("dia")
+                || s.equals("transmission") || s.equals("trans")) {
+            return "brightfield";
+        }
+        if (s.equals("ppm") || s.startsWith("ppm_") || s.equals("polarized")
+                || s.equals("pol") || s.equals("polarised")) {
+            return "ppm";
+        }
+        if (s.equals("dark_field") || s.equals("darkfield") || s.equals("df")) {
+            return "dark_field";
+        }
+        if (s.equals("fluorescence") || s.equals("fluorescent") || s.equals("fl")
+                || s.startsWith("fl_") || s.equals("widefield") || s.equals("wf")
+                || s.startsWith("wf_") || s.equals("laser_scanning")
+                || s.equals("lsm") || s.equals("confocal") || s.equals("shg")
+                || s.equals("multiphoton") || s.equals("1p") || s.equals("2p")) {
+            return "fluorescence";
+        }
+        return s;
     }
 
     /** A validity-check entry. Params drive the typed editor in the GUI. */
@@ -304,6 +407,11 @@ public final class FocusMetricsManifest {
                         ? ((List<Object>) entry.get("supported_paths")).stream()
                             .map(Object::toString).collect(Collectors.toList())
                         : Collections.emptyList();
+                List<String> validModalities = entry.get("valid_modalities") instanceof List
+                        ? ((List<Object>) entry.get("valid_modalities")).stream()
+                            .map(Object::toString).collect(Collectors.toList())
+                        : Collections.emptyList();
+                Double minMag = toDoubleOrNull(entry.get("min_magnification"));
                 metrics.put(name, new MetricSpec(
                         name,
                         Group.fromString((String) entry.get("group")),
@@ -312,7 +420,9 @@ public final class FocusMetricsManifest {
                         (String) entry.get("avoid_when"),
                         (String) entry.get("requires"),
                         paths,
-                        (String) entry.get("role")));
+                        (String) entry.get("role"),
+                        validModalities,
+                        minMag));
             }
         }
 
@@ -403,7 +513,8 @@ public final class FocusMetricsManifest {
                 "normalized_variance", "vollath_f5", "sobel", "p98_p2",
                 "robust_sharpness_metric", "hybrid_sharpness_metric", "none")) {
             m.put(n, new MetricSpec(n, Group.UNKNOWN, "na", "", "", "numpy",
-                    List.of("streaming", "standard", "strategy"), null));
+                    List.of("streaming", "standard", "strategy"), null,
+                    Collections.emptyList(), null));
         }
         return new FocusMetricsManifest(0, m, Collections.emptyMap(),
                 Collections.emptyMap(), Collections.emptyMap(),
@@ -466,7 +577,18 @@ public final class FocusMetricsManifest {
             sb.append("#   [").append(g.name().toLowerCase(Locale.ROOT)).append("]\n");
             for (MetricSpec m : entries) {
                 String role = m.role != null ? "  (" + m.role + ")" : "";
-                sb.append("#     ").append(m.name).append(role).append("\n");
+                sb.append("#     ").append(m.name).append(role);
+                List<String> tags = new ArrayList<>();
+                if (!m.validModalities.isEmpty()) {
+                    tags.add(String.join("/", m.validModalities) + " only");
+                }
+                if (m.minMagnification != null) {
+                    tags.add(String.format(Locale.ROOT, "%.0fx+", m.minMagnification));
+                }
+                if (!tags.isEmpty()) {
+                    sb.append("  [").append(String.join(", ", tags)).append("]");
+                }
+                sb.append("\n");
                 if (!m.bestFor.isEmpty()) {
                     sb.append("#       best for : ").append(oneLine(m.bestFor)).append("\n");
                 }

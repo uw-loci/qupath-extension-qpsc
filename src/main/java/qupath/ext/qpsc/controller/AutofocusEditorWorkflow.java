@@ -219,8 +219,12 @@ public class AutofocusEditorWorkflow {
     /**
      * Build the manifest-sourced score-metric ComboBox. Items are
      * grouped (Recommended, Advanced, Special) with non-selectable
-     * separators; tooltip is one short sentence; the caller wires up
-     * a "Help me pick" button via {@link #showMetricHelpDialog}.
+     * separators; each metric line shows constraint badges sourced
+     * from the manifest's {@code valid_modalities} / {@code
+     * min_magnification} fields so users see at a glance which
+     * picks are sample-restricted; tooltip is one short sentence;
+     * the caller wires up a "Help me pick" button via {@link
+     * #showMetricHelpDialog}.
      */
     private static ComboBox<String> buildScoreMetricCombo(
             String currentValue, FocusMetricsManifest manifest) {
@@ -235,24 +239,63 @@ public class AutofocusEditorWorkflow {
             combo.getItems().add(m.name);
             lastGroup = m.group;
         }
-        // Skip-separator behaviour: clicking a "---" header reverts to
-        // the previous value rather than committing a non-metric string.
         combo.setCellFactory(lv -> new ListCell<>() {
             @Override protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
-                setText(empty ? null : item);
-                if (item != null && item.startsWith("---")) {
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                    setDisable(false);
+                    return;
+                }
+                if (item.startsWith("---")) {
+                    setText(item);
                     setDisable(true);
                     setStyle("-fx-font-weight: bold; -fx-text-fill: gray;");
-                } else {
-                    setDisable(false);
-                    setStyle("");
+                    return;
                 }
+                setDisable(false);
+                FocusMetricsManifest.MetricSpec spec = manifest.getMetrics().get(item);
+                String badges = spec == null ? "" : metricConstraintBadges(spec);
+                setText(badges.isEmpty() ? item : item + "  " + badges);
+                setStyle(badges.isEmpty() ? "" : "-fx-text-fill: -fx-text-base-color;");
             }
         });
         combo.setValue(currentValue);
-        combo.setPrefWidth(200);
+        combo.setPrefWidth(260);
         return combo;
+    }
+
+    /**
+     * One-line constraint summary for a manifest metric: e.g.
+     * {@code "[BF/PPM only]"} or {@code "[20x+]"}, suitable for
+     * appending to a dropdown row. Returns an empty string when the
+     * metric has no declared constraints.
+     */
+    private static String metricConstraintBadges(FocusMetricsManifest.MetricSpec m) {
+        List<String> tags = new ArrayList<>();
+        if (!m.validModalities.isEmpty()) {
+            List<String> short_ = new ArrayList<>();
+            for (String mod : m.validModalities) {
+                String canon = FocusMetricsManifest.canonicalModality(mod);
+                switch (canon) {
+                    case "brightfield": short_.add("BF"); break;
+                    case "ppm":         short_.add("PPM"); break;
+                    case "fluorescence":short_.add("FL"); break;
+                    case "dark_field":  short_.add("DF"); break;
+                    default:            short_.add(mod); break;
+                }
+            }
+            tags.add(String.join("/", short_) + " only");
+        }
+        if (m.minMagnification != null) {
+            tags.add(String.format(Locale.ROOT, "%.0fx+", m.minMagnification));
+        }
+        if ("fallback".equalsIgnoreCase(m.role)) {
+            tags.add("auto-fallback");
+        }
+        if (tags.isEmpty()) return "";
+        return "[" + String.join(", ", tags) + "]";
     }
 
     private static String groupLabel(FocusMetricsManifest.Group g) {
@@ -288,9 +331,30 @@ public class AutofocusEditorWorkflow {
             for (FocusMetricsManifest.MetricSpec m : bucket) {
                 VBox card = new VBox(2);
                 card.setPadding(new Insets(2, 0, 6, 12));
-                Label name = new Label(m.name + "  [" + m.badge + "]");
+                String constraintBadge = metricConstraintBadges(m);
+                String headerLine = m.name + "  [" + m.badge + "]"
+                        + (constraintBadge.isEmpty() ? "" : "  " + constraintBadge);
+                Label name = new Label(headerLine);
                 name.setStyle("-fx-font-weight: bold; -fx-font-family: monospace;");
                 card.getChildren().add(name);
+                if (!m.validModalities.isEmpty() || m.minMagnification != null) {
+                    StringBuilder cs = new StringBuilder();
+                    if (!m.validModalities.isEmpty()) {
+                        cs.append("Restricted to: ")
+                                .append(String.join(", ", m.validModalities));
+                    }
+                    if (m.minMagnification != null) {
+                        if (cs.length() > 0) cs.append("   |   ");
+                        cs.append("Minimum magnification: ")
+                                .append(String.format(Locale.ROOT, "%.0fx",
+                                        m.minMagnification));
+                    }
+                    Label cl = new Label(cs.toString());
+                    cl.setWrapText(true);
+                    cl.setStyle("-fx-text-fill: #6A6A6A; -fx-font-size: 11px; "
+                            + "-fx-font-style: italic;");
+                    card.getChildren().add(cl);
+                }
                 if (!m.bestFor.isEmpty()) {
                     Label bf = new Label("Best for: " + m.bestFor.replace("\n", " "));
                     bf.setWrapText(true);
@@ -2277,16 +2341,71 @@ public class AutofocusEditorWorkflow {
             scoreOvCombo.getItems().add(ms.name);
         }
         scoreOvCombo.setValue(mb.scoreMetricOverride == null ? SENTINEL : mb.scoreMetricOverride);
-        scoreOvCombo.setPrefWidth(200);
+        scoreOvCombo.setPrefWidth(260);
         scoreOvCombo.setTooltip(new Tooltip(
                 "Per-modality override for the strategy's score_metric default.\n"
                         + "Loses to per-objective YAML score_metric (per-objective wins).\n"
                         + "Pick the sentinel to inherit the strategy's metric."));
+        // Constraint-aware cell renderer: flag metrics whose
+        // valid_modalities exclude this binding's modality so the
+        // operator sees the mismatch BEFORE saving.
+        scoreOvCombo.setCellFactory(lv -> new ListCell<>() {
+            @Override protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) { setText(null); setStyle(""); return; }
+                FocusMetricsManifest.MetricSpec spec = bindingManifest.getMetrics().get(item);
+                if (spec == null) {
+                    setText(item);
+                    setStyle("");
+                    return;
+                }
+                String badges = metricConstraintBadges(spec);
+                boolean modalityOk = spec.isValidForModality(mb.modalityKey);
+                String label = badges.isEmpty() ? item : item + "  " + badges;
+                if (!modalityOk) {
+                    label = label + "  -- not for "
+                            + FocusMetricsManifest.canonicalModality(mb.modalityKey);
+                    setStyle("-fx-text-fill: #B0463F;");
+                } else {
+                    setStyle("");
+                }
+                setText(label);
+            }
+        });
+        // Warning label that surfaces alongside the combo when the
+        // current pick would be physically wrong for this modality.
+        Label scoreOvWarn = new Label();
+        scoreOvWarn.setStyle("-fx-text-fill: #B0463F; -fx-font-size: 10px;");
+        scoreOvWarn.setWrapText(true);
+        Runnable refreshOvWarn = () -> {
+            String picked = mb.scoreMetricOverride;
+            if (picked == null) {
+                scoreOvWarn.setText("");
+                return;
+            }
+            FocusMetricsManifest.MetricSpec spec =
+                    bindingManifest.getMetrics().get(picked);
+            if (spec == null || spec.isValidForModality(mb.modalityKey)) {
+                scoreOvWarn.setText("");
+                return;
+            }
+            scoreOvWarn.setText(
+                    "Warning: metric '" + picked + "' is restricted to "
+                            + String.join("/", spec.validModalities)
+                            + " by the manifest. Saving will write it anyway, but "
+                            + "the runtime will likely produce poor focus on a "
+                            + FocusMetricsManifest.canonicalModality(mb.modalityKey)
+                            + " sample. Pick a different metric or change the "
+                            + "binding's modality key.");
+        };
         scoreOvCombo.valueProperty().addListener((obs, o, n) -> {
             mb.scoreMetricOverride = (n == null || SENTINEL.equals(n)) ? null : n;
+            refreshOvWarn.run();
         });
+        refreshOvWarn.run();
         bindingOverrideGrid.add(scoreOvLabel, 0, 0);
         bindingOverrideGrid.add(scoreOvCombo, 1, 0);
+        bindingOverrideGrid.add(scoreOvWarn, 2, 0);
 
         Label failOvLabel = new Label("on_failure override:");
         ComboBox<String> failOvCombo = new ComboBox<>();
