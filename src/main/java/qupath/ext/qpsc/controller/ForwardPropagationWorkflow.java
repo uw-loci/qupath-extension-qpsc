@@ -394,6 +394,12 @@ public class ForwardPropagationWorkflow {
             logger.info("BackProp: using GROUND-TRUTH source rect from metadata: "
                     + "base px=({}, {}, {}x{}) flip=({}, {}) -- skipping alignment math.",
                     fmt(rx), fmt(ry), fmt(rw), fmt(rh), roiFlipX, roiFlipY);
+            logger.info("BackProp(GT): sub '{}' is {}x{} px @ {} um/px; "
+                    + "original_image_id={}; base '{}' is {}x{} px",
+                    subEntry.getImageName(), subWidth, subHeight, subPixelSize,
+                    ImageMetadataManager.getOriginalImageId(subEntry),
+                    baseData.getServer().getMetadata().getName(),
+                    baseWidth, baseHeight);
             // Build sub_px -> base_px linear map. Flip flags reverse the
             // axis inside the rectangle (used when the rectangle was
             // derived from a flipped sibling parent's tile detections).
@@ -414,9 +420,16 @@ public class ForwardPropagationWorkflow {
                 double ty = Math.min(out[1], out[3]);
                 double tw = Math.abs(out[2] - out[0]);
                 double th = Math.abs(out[3] - out[1]);
-                logger.info("  source obj '{}' src px=({}, {}, {}x{}) -> base px=({}, {}, {}x{}) [GT]",
+                double sxFracMin = sx / (double) subWidth;
+                double sxFracMax = (sx + sw) / (double) subWidth;
+                double syFracMin = sy / (double) subHeight;
+                double syFracMax = (sy + sh) / (double) subHeight;
+                logger.info("  source obj '{}' src px=({}, {}, {}x{}) "
+                        + "frac=(x: {}-{}, y: {}-{}) -> base px=({}, {}, {}x{}) [GT]",
                         obj.getDisplayedName(),
                         fmt(sx), fmt(sy), fmt(sw), fmt(sh),
+                        String.format("%.3f", sxFracMin), String.format("%.3f", sxFracMax),
+                        String.format("%.3f", syFracMin), String.format("%.3f", syFracMax),
                         fmt(tx), fmt(ty), fmt(tw), fmt(th));
             }
             List<PathObject> propagated = transformAndClip(sourceObjects, combined, baseWidth, baseHeight);
