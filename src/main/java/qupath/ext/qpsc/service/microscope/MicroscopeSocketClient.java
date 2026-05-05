@@ -6486,7 +6486,12 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double ratioThreshold,
             int minMatchCount,
             double contrastThreshold,
-            int nFeatures)
+            int nFeatures,
+            String monoNormalization,
+            double percentileLow,
+            double percentileHigh,
+            boolean claheEnabled,
+            double claheClipLimit)
             throws IOException {
         StringBuilder msg = new StringBuilder();
         msg.append("--wsi-region ").append(wsiRegionPath);
@@ -6497,6 +6502,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
         msg.append(" --min-matches ").append(minMatchCount);
         msg.append(" --contrast ").append(contrastThreshold);
         if (nFeatures > 0) msg.append(" --nfeatures ").append(nFeatures);
+        if (monoNormalization != null && !monoNormalization.isBlank()) {
+            msg.append(" --mono-norm ").append(monoNormalization);
+        }
+        msg.append(" --pct-low ").append(percentileLow);
+        msg.append(" --pct-high ").append(percentileHigh);
+        msg.append(" --clahe ").append(claheEnabled ? "true" : "false");
+        msg.append(" --clahe-clip ").append(claheClipLimit);
         if (flipX) msg.append(" --flip-x");
         if (flipY) msg.append(" --flip-y");
         msg.append(" ENDOFSTR");

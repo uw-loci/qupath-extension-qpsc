@@ -9,6 +9,8 @@ import javafx.geometry.Pos;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
@@ -140,6 +142,11 @@ public final class SiftAutoAlignHelper {
             int minMatchCount = PersistentPreferences.getSiftMinMatchCount();
             double contrastThreshold = PersistentPreferences.getSiftContrastThreshold();
             int nFeatures = PersistentPreferences.getSiftNFeatures();
+            String monoNorm = PersistentPreferences.getSiftMonoNormalization();
+            double pctLow = PersistentPreferences.getSiftPercentileLow();
+            double pctHigh = PersistentPreferences.getSiftPercentileHigh();
+            boolean claheEnabled = PersistentPreferences.isSiftClaheEnabled();
+            double claheClip = PersistentPreferences.getSiftClaheClipLimit();
             String response = mc.getSocketClient()
                     .siftAutoAlign(
                             tempFile.getAbsolutePath(),
@@ -151,7 +158,12 @@ public final class SiftAutoAlignHelper {
                             ratioThreshold,
                             minMatchCount,
                             contrastThreshold,
-                            nFeatures);
+                            nFeatures,
+                            monoNorm,
+                            pctLow,
+                            pctHigh,
+                            claheEnabled,
+                            claheClip);
 
             if (!response.startsWith("SUCCESS:")) {
                 logger.warn("SIFT auto-align did not succeed: {}", response);
@@ -384,6 +396,70 @@ public final class SiftAutoAlignHelper {
         confHelp.setWrapText(true);
         grid.add(confHelp, 0, ++row, 2, 1);
 
+        // ---- Bit-depth normalization controls ----
+        Label normHeader = new Label("Bit-depth normalization");
+        normHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
+        grid.add(normHeader, 0, ++row, 2, 1);
+
+        ChoiceBox<String> monoNormChoice = new ChoiceBox<>();
+        monoNormChoice.getItems().addAll("PERCENTILE", "MIN_MAX", "BIT_SHIFT");
+        String currentMono = PersistentPreferences.getSiftMonoNormalization();
+        monoNormChoice.setValue(monoNormChoice.getItems().contains(currentMono) ? currentMono : "PERCENTILE");
+        monoNormChoice.setPrefWidth(150);
+        grid.add(new Label("16-bit -> 8-bit:"), 0, ++row);
+        grid.add(monoNormChoice, 1, row);
+        Label monoHelp = new Label(
+                "How to compress >8-bit grayscale (microscope camera) to 8-bit before matching. "
+                        + "PERCENTILE clips outliers and stretches; best when the camera doesn't use the full bit "
+                        + "range (typical 12-14 bit cameras). MIN_MAX uses the actual data extremes. "
+                        + "BIT_SHIFT is the legacy /256 behaviour.");
+        monoHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        monoHelp.setWrapText(true);
+        grid.add(monoHelp, 0, ++row, 2, 1);
+
+        Spinner<Double> pctLowSpinner =
+                new Spinner<>(0.0, 50.0, PersistentPreferences.getSiftPercentileLow(), 0.5);
+        pctLowSpinner.setEditable(true);
+        pctLowSpinner.setPrefWidth(90);
+        grid.add(new Label("Percentile low:"), 0, ++row);
+        grid.add(pctLowSpinner, 1, row);
+
+        Spinner<Double> pctHighSpinner =
+                new Spinner<>(50.0, 100.0, PersistentPreferences.getSiftPercentileHigh(), 0.5);
+        pctHighSpinner.setEditable(true);
+        pctHighSpinner.setPrefWidth(90);
+        grid.add(new Label("Percentile high:"), 0, ++row);
+        grid.add(pctHighSpinner, 1, row);
+        Label pctHelp = new Label(
+                "Used only when normalization = PERCENTILE. Defaults 2 / 98 are robust against a few "
+                        + "saturated pixels. Lower the high (e.g. 95) if the camera is over-exposed; raise the "
+                        + "low (e.g. 5) for noisy backgrounds.");
+        pctHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        pctHelp.setWrapText(true);
+        grid.add(pctHelp, 0, ++row, 2, 1);
+
+        CheckBox claheCheckbox = new CheckBox("Apply CLAHE (contrast equalisation)");
+        claheCheckbox.setSelected(PersistentPreferences.isSiftClaheEnabled());
+        grid.add(claheCheckbox, 0, ++row, 2, 1);
+        Label claheHelp = new Label(
+                "Cross-modality contrast normalisation. Strongly recommended when matching a monochrome "
+                        + "brightfield camera against an H&E (RGB) WSI -- the staining and the camera have very "
+                        + "different intensity statistics, and CLAHE makes the keypoints commensurate.");
+        claheHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        claheHelp.setWrapText(true);
+        grid.add(claheHelp, 0, ++row, 2, 1);
+
+        Spinner<Double> claheClipSpinner =
+                new Spinner<>(0.5, 10.0, PersistentPreferences.getSiftClaheClipLimit(), 0.25);
+        claheClipSpinner.setEditable(true);
+        claheClipSpinner.setPrefWidth(90);
+        grid.add(new Label("CLAHE clip limit:"), 0, ++row);
+        grid.add(claheClipSpinner, 1, row);
+        Label clipHelp = new Label("Higher = more aggressive equalisation. 2.0 default; raise to 4.0 if matches are scarce.");
+        clipHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        clipHelp.setWrapText(true);
+        grid.add(clipHelp, 0, ++row, 2, 1);
+
         dialog.getDialogPane().setContent(grid);
 
         dialog.setResultConverter(bt -> {
@@ -394,14 +470,25 @@ public final class SiftAutoAlignHelper {
                 PersistentPreferences.setSiftContrastThreshold(contrastSpinner.getValue());
                 PersistentPreferences.setSiftSearchMarginUm(marginSpinner.getValue());
                 PersistentPreferences.setSiftConfidenceThreshold(confSpinner.getValue());
+                PersistentPreferences.setSiftMonoNormalization(monoNormChoice.getValue());
+                PersistentPreferences.setSiftPercentileLow(pctLowSpinner.getValue());
+                PersistentPreferences.setSiftPercentileHigh(pctHighSpinner.getValue());
+                PersistentPreferences.setSiftClaheEnabled(claheCheckbox.isSelected());
+                PersistentPreferences.setSiftClaheClipLimit(claheClipSpinner.getValue());
                 logger.info(
-                        "SIFT settings updated: minPx={}, ratio={}, minMatches={}, contrast={}, margin={}, confidence={}",
+                        "SIFT settings updated: minPx={}, ratio={}, minMatches={}, contrast={}, margin={}, "
+                                + "confidence={}, monoNorm={}, pctLow={}, pctHigh={}, clahe={}, claheClip={}",
                         minPxSpinner.getValue(),
                         ratioSpinner.getValue(),
                         minMatchSpinner.getValue(),
                         contrastSpinner.getValue(),
                         marginSpinner.getValue(),
-                        confSpinner.getValue());
+                        confSpinner.getValue(),
+                        monoNormChoice.getValue(),
+                        pctLowSpinner.getValue(),
+                        pctHighSpinner.getValue(),
+                        claheCheckbox.isSelected(),
+                        claheClipSpinner.getValue());
             }
             return null;
         });

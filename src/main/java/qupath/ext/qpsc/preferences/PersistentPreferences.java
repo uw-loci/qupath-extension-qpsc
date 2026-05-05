@@ -1279,6 +1279,102 @@ public class PersistentPreferences {
         return siftNFeaturesProperty;
     }
 
+    // ---- SIFT bit-depth normalization (cross-modality matching) ----
+    // The microscope camera typically produces 16-bit data using only
+    // 12-14 effective bits. The legacy /256 bit-shift compresses the
+    // useful range to a sliver of 8-bit, which collapses SIFT matching
+    // against an 8-bit H&E WSI. PERCENTILE stretch is the right default.
+
+    private static final StringProperty siftMonoNormalizationProperty =
+            PathPrefs.createPersistentPreference("siftMonoNormalization", "PERCENTILE");
+
+    /**
+     * Normalization mode used when converting >8-bit grayscale input
+     * (typical 16-bit camera capture) to 8-bit before SIFT matching.
+     * Valid values: "PERCENTILE", "MIN_MAX", "BIT_SHIFT".
+     */
+    public static String getSiftMonoNormalization() {
+        return siftMonoNormalizationProperty.get();
+    }
+
+    public static void setSiftMonoNormalization(String mode) {
+        siftMonoNormalizationProperty.set(mode);
+    }
+
+    public static StringProperty siftMonoNormalizationProperty() {
+        return siftMonoNormalizationProperty;
+    }
+
+    private static final DoubleProperty siftPercentileLowProperty =
+            PathPrefs.createPersistentPreference("siftPercentileLow", 2.0);
+
+    /** Lower percentile (0-100) used by PERCENTILE normalization. */
+    public static double getSiftPercentileLow() {
+        return siftPercentileLowProperty.get();
+    }
+
+    public static void setSiftPercentileLow(double v) {
+        siftPercentileLowProperty.set(v);
+    }
+
+    public static DoubleProperty siftPercentileLowProperty() {
+        return siftPercentileLowProperty;
+    }
+
+    private static final DoubleProperty siftPercentileHighProperty =
+            PathPrefs.createPersistentPreference("siftPercentileHigh", 98.0);
+
+    /** Upper percentile (0-100) used by PERCENTILE normalization. */
+    public static double getSiftPercentileHigh() {
+        return siftPercentileHighProperty.get();
+    }
+
+    public static void setSiftPercentileHigh(double v) {
+        siftPercentileHighProperty.set(v);
+    }
+
+    public static DoubleProperty siftPercentileHighProperty() {
+        return siftPercentileHighProperty;
+    }
+
+    private static final BooleanProperty siftClaheEnabledProperty =
+            PathPrefs.createPersistentPreference("siftClaheEnabled", true);
+
+    /**
+     * If true, apply CLAHE (contrast-limited adaptive histogram
+     * equalisation) to both microscope and WSI grayscale images before
+     * SIFT. This is the standard cross-modality robustness trick and
+     * dramatically improves matching of monochrome brightfield against
+     * H&E. Default on.
+     */
+    public static boolean isSiftClaheEnabled() {
+        return siftClaheEnabledProperty.get();
+    }
+
+    public static void setSiftClaheEnabled(boolean enabled) {
+        siftClaheEnabledProperty.set(enabled);
+    }
+
+    public static BooleanProperty siftClaheEnabledProperty() {
+        return siftClaheEnabledProperty;
+    }
+
+    private static final DoubleProperty siftClaheClipLimitProperty =
+            PathPrefs.createPersistentPreference("siftClaheClipLimit", 2.0);
+
+    /** CLAHE clipLimit. Higher = more aggressive equalisation. Default 2.0. */
+    public static double getSiftClaheClipLimit() {
+        return siftClaheClipLimitProperty.get();
+    }
+
+    public static void setSiftClaheClipLimit(double v) {
+        siftClaheClipLimitProperty.set(v);
+    }
+
+    public static DoubleProperty siftClaheClipLimitProperty() {
+        return siftClaheClipLimitProperty;
+    }
+
     // --- Z-Stack acquisition preferences ---
 
     private static final BooleanProperty zStackEnabledProperty =
