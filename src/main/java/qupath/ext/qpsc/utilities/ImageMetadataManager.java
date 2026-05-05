@@ -80,6 +80,15 @@ public class ImageMetadataManager {
     public static final String SOURCE_ROI_W_PX = "source_roi_w_px";
     public static final String SOURCE_ROI_H_PX = "source_roi_h_px";
 
+    // Optional axis-flip flags on the source ROI: if set, the sub_px X (or Y)
+    // axis is reversed inside the recorded rectangle. Used when the
+    // rectangle was derived from tile detections living on a flipped sibling
+    // entry -- the bbox is stored in unflipped-base coords (so it lines up
+    // with the entry being written), but the sub-image's pixel layout is
+    // mirrored along that axis relative to the rectangle.
+    public static final String SOURCE_ROI_FLIP_X = "source_roi_flip_x";
+    public static final String SOURCE_ROI_FLIP_Y = "source_roi_flip_y";
+
     // PPM analysis metadata
     public static final String PPM_CALIBRATION = "ppm_calibration";
 
@@ -618,12 +627,44 @@ public class ImageMetadataManager {
      */
     public static void setSourceRoiPx(ProjectImageEntry<?> entry,
                                       double x, double y, double w, double h) {
+        setSourceRoiPx(entry, x, y, w, h, false, false);
+    }
+
+    /**
+     * Stamp a ground-truth rectangle along with axis-flip flags. When the
+     * rectangle was derived from tile detections on a flipped sibling
+     * entry, the sub_px X / Y axis is reversed inside the rectangle even
+     * though the rectangle itself is recorded in unflipped-base
+     * coordinates; the flags let the back-prop GT path apply the right
+     * sign when interpolating sub_px positions into the rectangle.
+     */
+    public static void setSourceRoiPx(ProjectImageEntry<?> entry,
+                                      double x, double y, double w, double h,
+                                      boolean flipX, boolean flipY) {
         if (entry == null) return;
         Map<String, String> meta = entry.getMetadata();
         meta.put(SOURCE_ROI_X_PX, String.valueOf(x));
         meta.put(SOURCE_ROI_Y_PX, String.valueOf(y));
         meta.put(SOURCE_ROI_W_PX, String.valueOf(w));
         meta.put(SOURCE_ROI_H_PX, String.valueOf(h));
+        if (flipX) meta.put(SOURCE_ROI_FLIP_X, "1");
+        else meta.remove(SOURCE_ROI_FLIP_X);
+        if (flipY) meta.put(SOURCE_ROI_FLIP_Y, "1");
+        else meta.remove(SOURCE_ROI_FLIP_Y);
+    }
+
+    /**
+     * Read the optional axis-flip flags stored alongside the source ROI.
+     *
+     * @return [flipX, flipY], both false when not stamped or absent
+     */
+    public static boolean[] getSourceRoiFlip(ProjectImageEntry<?> entry) {
+        if (entry == null) return new boolean[]{false, false};
+        Map<String, String> meta = entry.getMetadata();
+        return new boolean[]{
+                "1".equals(meta.get(SOURCE_ROI_FLIP_X)),
+                "1".equals(meta.get(SOURCE_ROI_FLIP_Y))
+        };
     }
 
     /**

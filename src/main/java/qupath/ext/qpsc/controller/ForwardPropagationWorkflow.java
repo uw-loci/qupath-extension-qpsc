@@ -388,24 +388,36 @@ public class ForwardPropagationWorkflow {
         double[] sourceRoi = ImageMetadataManager.getSourceRoiPx(subEntry);
         if (sourceRoi != null) {
             double rx = sourceRoi[0], ry = sourceRoi[1], rw = sourceRoi[2], rh = sourceRoi[3];
+            boolean[] roiFlip = ImageMetadataManager.getSourceRoiFlip(subEntry);
+            boolean roiFlipX = roiFlip[0];
+            boolean roiFlipY = roiFlip[1];
             logger.info("BackProp: using GROUND-TRUTH source rect from metadata: "
-                    + "base px=({}, {}, {}x{}) -- skipping alignment math.",
-                    fmt(rx), fmt(ry), fmt(rw), fmt(rh));
+                    + "base px=({}, {}, {}x{}) flip=({}, {}) -- skipping alignment math.",
+                    fmt(rx), fmt(ry), fmt(rw), fmt(rh), roiFlipX, roiFlipY);
+            // Build sub_px -> base_px linear map. Flip flags reverse the
+            // axis inside the rectangle (used when the rectangle was
+            // derived from a flipped sibling parent's tile detections).
             AffineTransform combined = new AffineTransform();
-            combined.translate(rx, ry);
-            combined.scale(rw / subWidth, rh / subHeight);
+            combined.translate(roiFlipX ? rx + rw : rx, roiFlipY ? ry + rh : ry);
+            combined.scale(
+                    (roiFlipX ? -1.0 : 1.0) * rw / subWidth,
+                    (roiFlipY ? -1.0 : 1.0) * rh / subHeight);
             for (PathObject obj : sourceObjects) {
                 ROI src = obj.getROI();
                 if (src == null) continue;
                 double sx = src.getBoundsX(), sy = src.getBoundsY();
                 double sw = src.getBoundsWidth(), sh = src.getBoundsHeight();
+                double[] in = new double[]{sx, sy, sx + sw, sy + sh};
+                double[] out = new double[4];
+                combined.transform(in, 0, out, 0, 2);
+                double tx = Math.min(out[0], out[2]);
+                double ty = Math.min(out[1], out[3]);
+                double tw = Math.abs(out[2] - out[0]);
+                double th = Math.abs(out[3] - out[1]);
                 logger.info("  source obj '{}' src px=({}, {}, {}x{}) -> base px=({}, {}, {}x{}) [GT]",
                         obj.getDisplayedName(),
                         fmt(sx), fmt(sy), fmt(sw), fmt(sh),
-                        fmt(rx + sx * rw / subWidth),
-                        fmt(ry + sy * rh / subHeight),
-                        fmt(sw * rw / subWidth),
-                        fmt(sh * rh / subHeight));
+                        fmt(tx), fmt(ty), fmt(tw), fmt(th));
             }
             List<PathObject> propagated = transformAndClip(sourceObjects, combined, baseWidth, baseHeight);
             logger.info("BackProp(GT): {} of {} object(s) survived clip onto base ({}x{})",
@@ -719,6 +731,21 @@ public class ForwardPropagationWorkflow {
 
         ImageData<BufferedImage> baseData = base.readImageData();
         PathObjectHierarchy baseHierarchy = baseData.getHierarchy();
+
+        // Auto-stamp ground-truth source rectangle from tile detections on
+        // the parent entry the sub was generated against. No-op if the sub
+        // already has a stamp, has no parent reference, or the parent has
+        // no matching tile detections. Once stamped, the GT path inside
+        // propagateBack picks it up and bypasses alignment / flip /
+        // half-FOV math entirely.
+        if (ImageMetadataManager.getSourceRoiPx(subEntry) == null) {
+            try {
+                autoStampSourceRoiFromTiles(project, subEntry, base, baseData);
+            } catch (Exception e) {
+                logger.warn("Auto-stamp from tile detections failed: {}", e.getMessage());
+            }
+        }
+
         int beforeCount = baseHierarchy.getAllObjects(false).size();
         int written = propagateBack(baseToStage, alignFlipX, alignFlipY, sourceObjects, subEntry, baseData);
         int afterCount = baseHierarchy.getAllObjects(false).size();
@@ -812,6 +839,148 @@ public class ForwardPropagationWorkflow {
         logger.info("Back-prop complete: {} sibling(s) updated, {} object(s) total",
                 siblingsUpdated, totalWritten);
         return new FanOutResult(totalWritten, siblingsUpdated, 0, perSiblingLog);
+    }
+
+    /**
+     * Auto-detect a ground-truth source rectangle for a sub-acquisition by
+     * reading tile detections from the parent entry the sub was generated
+     * against, and stamp it onto the sub as {@code source_roi_*_px}
+     * metadata.
+     *
+     * <p>Background: when an acquisition is taken, {@code TilingUtilities}
+     * writes detection objects on the parent entry's hierarchy with names
+     * of the form {@code <tileIndex>_<annotationName>} and a
+     * {@code TileNumber} measurement. The bounding-box union of those
+     * tiles in the parent's pixel frame is the authoritative source
+     * rectangle for the resulting sub-acquisition -- it bypasses the
+     * alignment / flip / half-FOV math entirely.
+     *
+     * <p>If the parent is a legacy flipped sibling (e.g.
+     * {@code "MetroHealth_142.svs (flipped X)"}), the bbox is mirrored
+     * back to the unflipped-base coordinate frame so the stamp lines up
+     * with the unflipped base entry that BACK propagation writes to. The
+     * parent's flip pair is ALSO stored as {@code source_roi_flip_x/y} so
+     * the GT path in {@link #propagateBack} knows the sub_px X/Y axes are
+     * reversed inside the rectangle.
+     *
+     * <p>No-op when:
+     * <ul>
+     *   <li>the sub has no {@code original_image_id} or {@code annotation_name} metadata</li>
+     *   <li>the parent entry cannot be located in the project</li>
+     *   <li>the parent's hierarchy contains no tile detections matching the sub</li>
+     * </ul>
+     */
+    private static boolean autoStampSourceRoiFromTiles(
+            Project<BufferedImage> project,
+            ProjectImageEntry<BufferedImage> sub,
+            ProjectImageEntry<BufferedImage> unflippedBase,
+            ImageData<BufferedImage> unflippedBaseData)
+            throws Exception {
+
+        String parentId = ImageMetadataManager.getOriginalImageId(sub);
+        if (parentId == null || parentId.isEmpty()) {
+            logger.debug("Auto-stamp: sub '{}' has no original_image_id; skipping.",
+                    sub.getImageName());
+            return false;
+        }
+        String annotationName = sub.getMetadata().get(ImageMetadataManager.ANNOTATION_NAME);
+        if (annotationName == null || annotationName.isEmpty()) {
+            logger.debug("Auto-stamp: sub '{}' has no annotation_name; skipping.",
+                    sub.getImageName());
+            return false;
+        }
+
+        ProjectImageEntry<BufferedImage> parent = null;
+        for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
+            if (parentId.equals(e.getID())) {
+                parent = e;
+                break;
+            }
+        }
+        if (parent == null) {
+            logger.info("Auto-stamp: parent ID '{}' (recorded on sub '{}') not found in project; "
+                    + "skipping tile-detection ground-truth lookup.",
+                    parentId, sub.getImageName());
+            return false;
+        }
+
+        String suffix = "_" + annotationName;
+        List<PathObject> matches = new ArrayList<>();
+        ImageData<BufferedImage> parentData = parent.readImageData();
+        for (PathObject obj : parentData.getHierarchy().getDetectionObjects()) {
+            if (obj.getName() == null) continue;
+            if (!obj.getName().endsWith(suffix)) continue;
+            if (!obj.getMeasurements().containsKey("TileNumber")) continue;
+            if (obj.getROI() == null) continue;
+            matches.add(obj);
+        }
+
+        if (matches.isEmpty()) {
+            logger.info("Auto-stamp: no tile detections matching '*{}' on parent '{}'; "
+                    + "back-prop will fall back to alignment math.",
+                    suffix, parent.getImageName());
+            return false;
+        }
+
+        double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY;
+        double maxX = Double.NEGATIVE_INFINITY, maxY = Double.NEGATIVE_INFINITY;
+        for (PathObject m : matches) {
+            ROI r = m.getROI();
+            minX = Math.min(minX, r.getBoundsX());
+            minY = Math.min(minY, r.getBoundsY());
+            maxX = Math.max(maxX, r.getBoundsX() + r.getBoundsWidth());
+            maxY = Math.max(maxY, r.getBoundsY() + r.getBoundsHeight());
+        }
+        double rx = minX, ry = minY, rw = maxX - minX, rh = maxY - minY;
+
+        boolean parentFlipX = "1".equals(parent.getMetadata().get(ImageMetadataManager.FLIP_X));
+        boolean parentFlipY = "1".equals(parent.getMetadata().get(ImageMetadataManager.FLIP_Y));
+        String parentName = parent.getImageName();
+        if (parentName != null) {
+            if (parentName.contains("(flipped XY)")) {
+                parentFlipX = true;
+                parentFlipY = true;
+            } else if (parentName.contains("(flipped X)")) {
+                parentFlipX = true;
+            } else if (parentName.contains("(flipped Y)")) {
+                parentFlipY = true;
+            }
+        }
+
+        if (parentFlipX || parentFlipY) {
+            int baseWidth = unflippedBaseData.getServer().getWidth();
+            int baseHeight = unflippedBaseData.getServer().getHeight();
+            AffineTransform mirror = createFlip(parentFlipX, parentFlipY, baseWidth, baseHeight);
+            double[] in = new double[]{rx, ry, rx + rw, ry + rh};
+            double[] out = new double[4];
+            mirror.transform(in, 0, out, 0, 2);
+            double mx = Math.min(out[0], out[2]);
+            double my = Math.min(out[1], out[3]);
+            double mw = Math.abs(out[2] - out[0]);
+            double mh = Math.abs(out[3] - out[1]);
+            logger.info("Auto-stamp: parent '{}' is flipped (X={}, Y={}); mirroring "
+                    + "tile bbox ({}, {}, {}x{}) -> unflipped base ({}, {}, {}x{}); "
+                    + "marking sub axes as flipped within rect.",
+                    parent.getImageName(), parentFlipX, parentFlipY,
+                    fmt(rx), fmt(ry), fmt(rw), fmt(rh),
+                    fmt(mx), fmt(my), fmt(mw), fmt(mh));
+            rx = mx; ry = my; rw = mw; rh = mh;
+        } else {
+            logger.info("Auto-stamp: parent '{}' is unflipped; tile bbox in base px: ({}, {}, {}x{})",
+                    parent.getImageName(), fmt(rx), fmt(ry), fmt(rw), fmt(rh));
+        }
+
+        ImageMetadataManager.setSourceRoiPx(sub, rx, ry, rw, rh, parentFlipX, parentFlipY);
+        try {
+            project.syncChanges();
+        } catch (Exception e) {
+            logger.debug("syncChanges after auto-stamp: {}", e.getMessage());
+        }
+        logger.info("Auto-stamp: stamped source_roi_*_px on sub '{}' from {} tile detection(s) "
+                + "on parent '{}' (rect=({}, {}, {}x{}) flip=({}, {})).",
+                sub.getImageName(), matches.size(), parent.getImageName(),
+                fmt(rx), fmt(ry), fmt(rw), fmt(rh), parentFlipX, parentFlipY);
+        return true;
     }
 
     /** Locate the unflipped base entry for {@code baseName} (FLIP_X/Y both '0' or both absent). */
