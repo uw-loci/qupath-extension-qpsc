@@ -34,6 +34,7 @@ import qupath.ext.qpsc.ui.StitchingBlockingDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.StageImageTransform;
@@ -371,8 +372,7 @@ public class StitchingHelper {
                     gui,
                     project,
                     executor,
-                    handler,
-                    sample != null ? sample.modality() : null);
+                    handler);
         }
 
         if (angleExposures != null && angleExposures.size() > 1) {
@@ -976,8 +976,7 @@ public class StitchingHelper {
             QuPathGUI gui,
             Project<BufferedImage> project,
             ExecutorService executor,
-            ModalityHandler handler,
-            String longModalityName) {
+            ModalityHandler handler) {
 
         logger.info("Stitching {} channels for: {}", channelIds.size(), annotationName);
 
@@ -1112,19 +1111,65 @@ public class StitchingHelper {
                                 Path firstStitch = Paths.get(stitchedImages.get(0));
                                 String mergedDir = firstStitch.getParent().toString();
 
-                                // Target filename: PollenIF_fl_001.ome.tif style,
-                                // matching the per-channel naming convention but with the
-                                // channel token removed and the long modality name (e.g.
-                                // "Fluorescence") replaced by the short registry prefix
-                                // ("fl"). Modality combos like BF+IF use their multi-token
-                                // prefix verbatim ("bf_if").
+                                // Build merged filename via the standard naming scheme
+                                // (ImageNameGenerator), with angle/channel slot null since
+                                // the merged file collapses channels into one pyramid.
+                                // Substitute the long modality token with the short registry
+                                // prefix ("Fluorescence" -> "fl") so the merged file matches
+                                // the conventional short-name layout used elsewhere. Combos
+                                // like BF+IF use their multi-token prefix verbatim
+                                // ("bf_if").
                                 String shortModalityPrefix = ModalityRegistry.getShortPrefix(handler);
-                                String mergedStem = deriveMergedStem(
-                                        firstStitch.getFileName().toString(),
-                                        successfullyStitchedChannelIds.get(0),
-                                        annotationName,
-                                        longModalityName,
-                                        shortModalityPrefix);
+                                String displayName = (metadata != null
+                                                && metadata.sampleName != null
+                                                && !metadata.sampleName.isEmpty())
+                                        ? metadata.sampleName
+                                        : sampleName;
+                                String[] modalityParts = ImageNameGenerator.parseImagingMode(modeWithIndex);
+                                String parsedModality = modalityParts[0];
+                                String objective = modalityParts[1];
+                                int imageIndex = ImageNameGenerator.extractImageIndex(modeWithIndex);
+                                String mergedModality = parsedModality;
+                                if (shortModalityPrefix != null
+                                        && !shortModalityPrefix.isBlank()
+                                        && parsedModality != null
+                                        && parsedModality.toLowerCase().startsWith(shortModalityPrefix.toLowerCase())) {
+                                    mergedModality = shortModalityPrefix;
+                                }
+                                String sanitizedAnnotationName =
+                                        ImageNameGenerator.sanitizeForFilename(annotationName);
+                                int candidateIndex = imageIndex;
+                                String mergedBaseName = ImageNameGenerator.generateImageName(
+                                        displayName,
+                                        candidateIndex,
+                                        mergedModality,
+                                        objective,
+                                        sanitizedAnnotationName,
+                                        null,
+                                        ".ome.tif");
+                                File mergedCandidate = new File(mergedDir, mergedBaseName);
+                                while (mergedCandidate.exists()) {
+                                    candidateIndex++;
+                                    mergedBaseName = ImageNameGenerator.generateImageName(
+                                            displayName,
+                                            candidateIndex,
+                                            mergedModality,
+                                            objective,
+                                            sanitizedAnnotationName,
+                                            null,
+                                            ".ome.tif");
+                                    mergedCandidate = new File(mergedDir, mergedBaseName);
+                                }
+                                String mergedStem = mergedBaseName.substring(
+                                        0, mergedBaseName.length() - ".ome.tif".length());
+                                logger.info(
+                                        "Merged filename built from naming scheme: stem='{}' (sample={}, modality={}, objective={}, annotation={}, index={})",
+                                        mergedStem,
+                                        displayName,
+                                        mergedModality,
+                                        objective,
+                                        sanitizedAnnotationName,
+                                        candidateIndex);
 
                                 List<Integer> channelColors = getDefaultChannelColors(
                                         successfullyStitchedChannelIds);
@@ -1198,25 +1243,6 @@ public class StitchingHelper {
                 executor);
     }
 
-    /**
-     * Derives the merged-file stem by stripping the trailing channel segment from
-     * the first per-channel filename and (when a short prefix is supplied) replacing
-     * the long modality token with the short registry prefix.
-     *
-     * <p>For example:
-     * <pre>
-     *   PollenIF_Fluorescence_FITC_001.ome.tif + channel FITC + long "Fluorescence" + short "fl"
-     *      -> PollenIF_fl_001
-     *   PollenIF_BF_IF_BF_001.ome.tif + channel BF + long "BF_IF" + short "bf_if"
-     *      -> PollenIF_bf_if_001
-     * </pre>
-     *
-     * <p>Falls back to {@code <annotationName>_merged} if the filename doesn't
-     * contain the channel id (e.g. custom naming scheme) so we never produce a
-     * garbage stem. If the long-to-short replacement isn't possible (long name not
-     * found in stem, or short prefix is null), the long form is kept verbatim.
-     */
-
     // -- Default fluorescence channel colors (packed ARGB) --
 
     private static final java.util.Map<String, Integer> DEFAULT_CHANNEL_COLORS = java.util.Map.ofEntries(
@@ -1248,51 +1274,6 @@ public class StitchingHelper {
             colors.add(color); // null is fine -- merger falls back to source color
         }
         return colors;
-    }
-
-    private static String deriveMergedStem(
-            String firstPerChannelFilename,
-            String firstChannelId,
-            String annotationName,
-            String longModalityName,
-            String shortModalityPrefix) {
-        // Strip file extension (.ome.tif, .ome.zarr, .tif, ...)
-        String stem = firstPerChannelFilename;
-        int dotIdx = stem.indexOf('.');
-        if (dotIdx > 0) {
-            stem = stem.substring(0, dotIdx);
-        }
-        // Look for "_<channelId>_" and remove the "_<channelId>" segment.
-        String token = "_" + firstChannelId + "_";
-        int tokenIdx = stem.indexOf(token);
-        String stripped;
-        if (tokenIdx >= 0) {
-            stripped = stem.substring(0, tokenIdx) + "_" + stem.substring(tokenIdx + token.length());
-        } else {
-            // Handle "_<channelId>" at the end with no trailing counter.
-            String tailToken = "_" + firstChannelId;
-            if (stem.endsWith(tailToken)) {
-                stripped = stem.substring(0, stem.length() - tailToken.length());
-            } else {
-                return annotationName + "_merged";
-            }
-        }
-
-        // Replace the long modality token with the short registry prefix when both
-        // are known. Use "_<long>_" boundaries so we don't accidentally match a
-        // substring of the sample name.
-        if (longModalityName != null
-                && !longModalityName.isBlank()
-                && shortModalityPrefix != null
-                && !shortModalityPrefix.isBlank()
-                && !longModalityName.equalsIgnoreCase(shortModalityPrefix)) {
-            String longBounded = "_" + longModalityName + "_";
-            String shortBounded = "_" + shortModalityPrefix + "_";
-            if (stripped.contains(longBounded)) {
-                stripped = stripped.replace(longBounded, shortBounded);
-            }
-        }
-        return stripped;
     }
 
     /**
