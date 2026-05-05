@@ -106,6 +106,13 @@ public class WhiteBalanceDialog {
     // 12 dB = 4x linear gain
     private static final DoubleProperty boostedMaxGainDbProperty =
             PathPrefs.createPersistentPreference("wb.advanced.boostedMaxGainDb", 12.0);
+    // Per-channel R/B analog gain ceiling (linear, not dB). The JAI hardware spec
+    // lists 4.0 as the safe max, but the firmware accepts higher values when needed
+    // for color balance in unusual scenes (e.g. PPM positive-angle imagery where
+    // blue can need > 4.0x). Default 4.0 keeps spec-compliant behavior; raise this
+    // to allow the calibration's Phase 1c / Phase 2 to drive R or B above 4.0x.
+    private static final DoubleProperty gainAnalogRbMaxProperty =
+            PathPrefs.createPersistentPreference("wb.advanced.gainAnalogRbMax", 4.0);
 
     // Objective selection is tracked globally via PersistentPreferences.getLastObjective().
     // This dialog used to have its own "wb.ppm.objective" shadow preference, but that
@@ -128,7 +135,8 @@ public class WhiteBalanceDialog {
             boolean calibrateBlackLevel, // Whether to calibrate black level (default true)
             double baseGain, // Starting gain for all channels (default 5.0)
             double exposureSoftCapMs, // Max exposure before gain boost (default 50.0)
-            double boostedMaxGainDb // Max gain when past soft cap (default 12.0)
+            double boostedMaxGainDb, // Max gain when past soft cap (default 12.0)
+            double gainAnalogRbMax // R/B per-channel analog gain ceiling, linear (default 4.0)
             ) {}
 
     /**
@@ -332,6 +340,8 @@ public class WhiteBalanceDialog {
                         (Spinner<?>) advancedPane.getContent().lookup("#exposureSoftCapMs");
                 Spinner<?> boostedMaxGainSpinner =
                         (Spinner<?>) advancedPane.getContent().lookup("#boostedMaxGainDb");
+                Spinner<?> gainAnalogRbMaxSpinner =
+                        (Spinner<?>) advancedPane.getContent().lookup("#gainAnalogRbMax");
 
                 // Lookup hidden dialog buttons and inline buttons
                 Button ppmDialogBtn = (Button) dialog.getDialogPane().lookupButton(runPPMButton);
@@ -402,6 +412,7 @@ public class WhiteBalanceDialog {
                     double baseGain = (Double) baseGainSpinner.getValue();
                     double exposureSoftCap = (Double) exposureSoftCapSpinner.getValue();
                     double boostedMaxGain = (Double) boostedMaxGainSpinner.getValue();
+                    double gainAnalogRbMax = (Double) gainAnalogRbMaxSpinner.getValue();
 
                     // Get objective and detector (shared by both modes). Both come
                     // from the user's explicit dropdown selection -- never iterator-
@@ -443,9 +454,11 @@ public class WhiteBalanceDialog {
                     baseGainProperty.set(baseGain);
                     exposureSoftCapMsProperty.set(exposureSoftCap);
                     boostedMaxGainDbProperty.set(boostedMaxGain);
+                    gainAnalogRbMaxProperty.set(gainAnalogRbMax);
 
                     AdvancedWBParams advanced = new AdvancedWBParams(
-                            maxGain, gainThreshold, maxIter, calibrateBL, baseGain, exposureSoftCap, boostedMaxGain);
+                            maxGain, gainThreshold, maxIter, calibrateBL, baseGain, exposureSoftCap, boostedMaxGain,
+                            gainAnalogRbMax);
 
                     if (buttonType == runSimpleButton) {
                         double exposure = (Double) simpleExpSpinner.getValue();
@@ -1346,6 +1359,29 @@ public class WhiteBalanceDialog {
         grid.add(boostedMaxGainLabel, 0, row);
         grid.add(boostedMaxGainSpinner, 1, row);
         grid.add(boostedMaxGainNote, 2, row);
+        row++;
+
+        // R/B Analog Gain Max (per-channel ceiling, separate from unified gain dB caps above)
+        Label gainAnalogRbMaxLabel = new Label("R/B Analog Gain Max:");
+
+        Spinner<Double> gainAnalogRbMaxSpinner = new Spinner<>(1.0, 10.0, gainAnalogRbMaxProperty.get(), 0.5);
+        gainAnalogRbMaxSpinner.setId("gainAnalogRbMax");
+        gainAnalogRbMaxSpinner.setEditable(true);
+        gainAnalogRbMaxSpinner.setPrefWidth(100);
+        gainAnalogRbMaxSpinner.setTooltip(new Tooltip(
+                "Per-channel ceiling (linear, not dB) for the JAI red and blue analog gains\n"
+                        + "applied during Phase 1c gain compensation and Phase 2 fine tuning.\n"
+                        + "Hardware spec lists 4.0 as the safe max; firmware accepts higher values\n"
+                        + "when needed for color balance in scenes where blue or red would otherwise\n"
+                        + "require very long exposures (e.g. PPM positive-angle imagery).\n"
+                        + "Raise this if calibration warns 'desired Nx' above 4.0x."));
+
+        Label gainAnalogRbMaxNote = new Label("(per-channel R/B ceiling, default 4.0x)");
+        gainAnalogRbMaxNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+
+        grid.add(gainAnalogRbMaxLabel, 0, row);
+        grid.add(gainAnalogRbMaxSpinner, 1, row);
+        grid.add(gainAnalogRbMaxNote, 2, row);
 
         TitledPane pane = new TitledPane("Advanced Settings", grid);
         pane.setCollapsible(true);

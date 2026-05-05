@@ -4463,6 +4463,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double baseGain,
             double exposureSoftCapMs,
             double boostedMaxGainDb,
+            double gainAnalogRbMax,
             String yamlPath,
             String objective,
             String detector,
@@ -4497,6 +4498,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         message.append(" --base_gain ").append(baseGain);
         message.append(" --exposure_soft_cap_ms ").append(exposureSoftCapMs);
         message.append(" --boosted_max_gain_db ").append(boostedMaxGainDb);
+        message.append(" --gain_analog_rb_max ").append(gainAnalogRbMax);
         // Per-angle targets for remaining angles (Simple WB now calibrates all angles)
         if (positiveTarget > 0) message.append(" --target_positive ").append(positiveTarget);
         if (negativeTarget > 0) message.append(" --target_negative ").append(negativeTarget);
@@ -4517,10 +4519,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 maxIterations,
                 calibrateBlackLevel);
         logger.info(
-                "  Gain algo: baseGain={}, exposureSoftCap={}ms, boostedMaxGain={}dB",
+                "  Gain algo: baseGain={}, exposureSoftCap={}ms, boostedMaxGain={}dB, rbAnalogMax={}x",
                 baseGain,
                 exposureSoftCapMs,
-                boostedMaxGainDb);
+                boostedMaxGainDb,
+                gainAnalogRbMax);
 
         synchronized (socketLock) {
             ensureConnected();
@@ -4643,6 +4646,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double baseGain,
             double exposureSoftCapMs,
             double boostedMaxGainDb,
+            double gainAnalogRbMax,
             String yamlPath,
             String objective,
             String detector)
@@ -4681,6 +4685,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         message.append(" --base_gain ").append(baseGain);
         message.append(" --exposure_soft_cap_ms ").append(exposureSoftCapMs);
         message.append(" --boosted_max_gain_db ").append(boostedMaxGainDb);
+        message.append(" --gain_analog_rb_max ").append(gainAnalogRbMax);
         message.append(" ").append(END_MARKER);
 
         byte[] messageBytes = message.toString().getBytes(StandardCharsets.UTF_8);
@@ -4699,10 +4704,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 maxIterations,
                 calibrateBlackLevel);
         logger.info(
-                "  Gain algo: baseGain={}, exposureSoftCap={}ms, boostedMaxGain={}dB",
+                "  Gain algo: baseGain={}, exposureSoftCap={}ms, boostedMaxGain={}dB, rbAnalogMax={}x",
                 baseGain,
                 exposureSoftCapMs,
-                boostedMaxGainDb);
+                boostedMaxGainDb,
+                gainAnalogRbMax);
 
         synchronized (socketLock) {
             ensureConnected();

@@ -518,6 +518,7 @@ public class WBComparisonWorkflow {
                         1.0, // baseGain
                         100.0, // exposureSoftCapMs
                         12.0, // boostedMaxGainDb
+                        4.0, // gainAnalogRbMax (hardware-spec default; raise via WB dialog if Phase 1c saturates)
                         configPath,
                         objective,
                         detector,
@@ -573,6 +574,7 @@ public class WBComparisonWorkflow {
                         1.0, // baseGain
                         100.0, // exposureSoftCapMs
                         12.0, // boostedMaxGainDb
+                        4.0, // gainAnalogRbMax (hardware-spec default; raise via WB dialog if Phase 1c saturates)
                         configPath,
                         objective,
                         detector);

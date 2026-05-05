@@ -268,6 +268,7 @@ public class WhiteBalanceWorkflow {
                                 advanced.baseGain(),
                                 advanced.exposureSoftCapMs(),
                                 advanced.boostedMaxGainDb(),
+                                advanced.gainAnalogRbMax(),
                                 yamlPath,
                                 params.objective(),
                                 params.detector(),
@@ -398,6 +399,7 @@ public class WhiteBalanceWorkflow {
                                 advanced.baseGain(),
                                 advanced.exposureSoftCapMs(),
                                 advanced.boostedMaxGainDb(),
+                                advanced.gainAnalogRbMax(),
                                 yamlPath,
                                 params.objective(),
                                 params.detector());
