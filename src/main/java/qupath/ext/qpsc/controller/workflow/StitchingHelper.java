@@ -1377,7 +1377,15 @@ public class StitchingHelper {
             // StageControlPanel use for lookup via loadSlideAlignment.
             String alignmentKey = qupath.lib.common.GeneralTools.stripExtension(importedFile.getName());
             String modality = metadata.modality != null ? metadata.modality : "BoundingBox";
-            AffineTransformManager.saveSlideAlignment(project, alignmentKey, modality, transform, null);
+            // Persist the macro-flip frame the transform was built for. Lines above
+            // encode metadata.flipX/Y into the transform's origin and scale signs;
+            // recording the same booleans on the JSON lets AlignmentHelper bake the
+            // matching flip into state.transform on reload, so all downstream callers
+            // (SingleTileRefinement, AcquisitionManager, ...) consume unflipped-base
+            // pixel coords. Without this, PPM auto-registered alignments load as if
+            // unflipped and SingleTileRefinement targets the XY-mirrored stage point.
+            AffineTransformManager.saveSlideAlignment(
+                    project, alignmentKey, modality, transform, null, flipX, flipY);
             logger.info(
                     "Auto-registered stage alignment for '{}' from BoundingBox metadata "
                             + "(bounds=({},{})->({},{}), image={}x{})",

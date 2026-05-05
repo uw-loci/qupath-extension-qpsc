@@ -29,7 +29,6 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
-import qupath.ext.qpsc.utilities.FlipResolver;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
@@ -185,100 +184,25 @@ public class SingleTileRefinement {
         double frameWidth = selectedTile.getROI().getBoundsWidth();
         double frameHeight = selectedTile.getROI().getBoundsHeight();
 
-        // Get flip status from image metadata - the actual flip state of THIS image,
-        // not from global preferences which may have changed
-        boolean flipX = false;
-        boolean flipY = false;
-        ProjectImageEntry<?> currentEntry = gui.getProject() != null && gui.getImageData() != null
-                ? gui.getProject().getEntry(gui.getImageData())
-                : null;
-        if (currentEntry != null) {
-            flipX = ImageMetadataManager.isFlippedX(currentEntry);
-            flipY = ImageMetadataManager.isFlippedY(currentEntry);
-            logger.debug("Using flip status from image metadata: flipX={}, flipY={}", flipX, flipY);
-        } else {
-            // No image entry: defer to FlipResolver (preset/detector/global pref chain).
-            @SuppressWarnings("unchecked")
-            ProjectImageEntry<java.awt.image.BufferedImage> nullEntry = null;
-            flipX = FlipResolver.resolveFlipX(nullEntry, null, null);
-            flipY = FlipResolver.resolveFlipY(nullEntry, null, null);
-            logger.debug("No image entry, resolved via FlipResolver: flipX={}, flipY={}", flipX, flipY);
-        }
-
         logger.info(
-                "Selected tile '{}' at coordinates: ({}, {}), frame size: {}x{}, flips: X={}, Y={}",
+                "Selected tile '{}' at coordinates: ({}, {}), frame size: {}x{}",
                 selectedTile.getName(),
                 tileCoords[0],
                 tileCoords[1],
                 frameWidth,
-                frameHeight,
-                flipX,
-                flipY);
+                frameHeight);
 
-        // FLIP CORRECTION for alignment prediction.
-        //
-        // The alignment transform maps [flipped WSI pixels] -> [stage microns].
-        // It was calibrated while viewing the flipped WSI.
-        //
-        // When to apply correction:
-        //   - Viewing the ORIGINAL unflipped WSI: tile centroids are in unflipped space,
-        //     but the transform expects flipped space. Shift by one frame to compensate.
-        //   - Viewing the flipped WSI: coordinates are already in the correct space.
-        //   - Viewing a sub-image (20x, 40x, etc.): coordinates map to stage via
-        //     xy_offset + pixel_size, NOT via the WSI alignment. No correction needed.
-        //     (Sub-images inherit flip_x/flip_y from parent but are not themselves flipped.)
-        //
-        // Decision: apply correction ONLY when the current image is the unflipped
-        // original WSI (no flip metadata, and it's a base-level image, not a sub-image).
-        double[] correctedCoords = {tileCoords[0], tileCoords[1]};
-        boolean currentImageIsFlipped = flipX || flipY;
-        String baseImageName = currentEntry != null ? ImageMetadataManager.getBaseImage(currentEntry) : null;
-        String currentName =
-                currentEntry != null ? qupath.lib.common.GeneralTools.stripExtension(currentEntry.getImageName()) : "";
-        boolean isBaseImage = baseImageName == null
-                || baseImageName.equals(currentName)
-                || (currentEntry != null && currentEntry.getImageName().startsWith(baseImageName + "."));
-
-        if (!currentImageIsFlipped && isBaseImage) {
-            // Viewing unflipped original WSI -- need flip correction for the transform.
-            // Use FlipResolver so future work can thread an active preset; behaves identically
-            // to the global pref today since preset/detector aren't in scope here.
-            @SuppressWarnings("unchecked")
-            ProjectImageEntry<java.awt.image.BufferedImage> nullEntry = null;
-            boolean prefFlipX = FlipResolver.resolveFlipX(nullEntry, null, null);
-            boolean prefFlipY = FlipResolver.resolveFlipY(nullEntry, null, null);
-            if (prefFlipX) {
-                correctedCoords[0] -= frameWidth;
-                logger.debug("Applied flipX correction: X {} -> {}", tileCoords[0], correctedCoords[0]);
-            }
-            if (prefFlipY) {
-                correctedCoords[1] += frameHeight;
-                logger.debug("Applied flipY correction: Y {} -> {}", tileCoords[1], correctedCoords[1]);
-            }
-            logger.info("Applied flip correction (unflipped base WSI)");
-        } else {
-            logger.info(
-                    "No flip correction: currentFlipped={}, isBase={}, image='{}'",
-                    currentImageIsFlipped,
-                    isBaseImage,
-                    currentName);
-        }
-
-        // Transform corrected coordinates to stage position
+        // Post-Step-B: initialTransform is always in unflipped-base pixel frame
+        // (AlignmentHelper.checkForSlideAlignment composed any alignment-time
+        // flipMacroX/Y from the per-slide JSON into the transform before it
+        // reached us). Tile centroids are read from the unflipped base entry, so
+        // they go through unchanged. The previous "flip correction" block that
+        // shifted by frameWidth/Height is no longer correct in this frame; it
+        // was already inert in practice (FlipResolver(null,null,null) returns
+        // false), but removing it avoids a future double-flip if a preset is
+        // ever threaded through here.
         double[] estimatedStageCoords =
-                TransformationFunctions.transformQuPathFullResToStage(correctedCoords, initialTransform);
-
-        if (flipX || flipY) {
-            // Also log what the uncorrected position would have been for comparison
-            double[] uncorrectedStageCoords =
-                    TransformationFunctions.transformQuPathFullResToStage(tileCoords, initialTransform);
-            logger.info(
-                    "Stage position: corrected=({}, {}), uncorrected=({}, {})",
-                    String.format("%.1f", estimatedStageCoords[0]),
-                    String.format("%.1f", estimatedStageCoords[1]),
-                    String.format("%.1f", uncorrectedStageCoords[0]),
-                    String.format("%.1f", uncorrectedStageCoords[1]));
-        }
+                TransformationFunctions.transformQuPathFullResToStage(tileCoords, initialTransform);
 
         // Center viewer on tile
         centerViewerOnTile(gui, selectedTile);

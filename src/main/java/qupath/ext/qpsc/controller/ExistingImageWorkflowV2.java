@@ -1033,8 +1033,14 @@ public class ExistingImageWorkflowV2 {
             }
 
             if (imageName != null) {
-                AffineTransformManager.saveSlideAlignment(project, imageName, state.modality, state.transform, null);
-                logger.info("Saved refined alignment for image: {}", imageName);
+                // state.transform is in unflipped-base frame at this point: AlignmentHelper
+                // baked any alignment-time flip into it before we passed it through
+                // SingleTileRefinement. Record flipMacroX/Y = false so the next reload
+                // is idempotent (AlignmentHelper sees no flip to bake, transform stays
+                // in unflipped-base frame).
+                AffineTransformManager.saveSlideAlignment(
+                        project, imageName, state.modality, state.transform, null, false, false);
+                logger.info("Saved refined alignment for image: {} (flipMacroX=false, flipMacroY=false)", imageName);
             }
         }
 
