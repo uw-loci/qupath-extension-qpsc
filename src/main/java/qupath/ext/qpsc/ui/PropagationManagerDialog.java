@@ -325,7 +325,7 @@ public final class PropagationManagerDialog {
         Button propagateBtn = new Button("Propagate");
         propagateBtn.setStyle("-fx-font-weight: bold;");
         propagateBtn.setOnAction(e -> runPropagation(
-                project, groups, groupTable, subChecks, classChecks, unclassifiedCheck,
+                qupath, project, groups, groupTable, subChecks, classChecks, unclassifiedCheck,
                 forwardBtn, backBtn, autoCreateCheck, progress, results, propagateBtn));
 
         Button closeBtn = new Button("Close");
@@ -367,6 +367,7 @@ public final class PropagationManagerDialog {
 
     /** Run the propagation on a worker thread so the FX UI stays responsive. */
     private void runPropagation(
+            QuPathGUI qupath,
             Project<BufferedImage> project,
             List<PropagationGroupItem> groups,
             TableView<PropagationGroupItem> groupTable,
@@ -411,6 +412,32 @@ public final class PropagationManagerDialog {
         progress.setVisible(true);
         progress.setProgress(-1);
         propagateBtn.setDisable(true);
+
+        // Save the currently-open image's hierarchy BEFORE the worker starts.
+        // The worker will write directly to entry .qpdata files via
+        // entry.saveImageData(...), bypassing the FX viewer. Without this save,
+        // any in-memory edits the user has made on the open image would be
+        // overwritten silently if its entry is touched by propagation. Done on
+        // the FX thread so the project sync sees the user's pending edits.
+        ProjectImageEntry<BufferedImage> openEntry = null;
+        try {
+            if (qupath.getImageData() != null) {
+                openEntry = project.getEntry(qupath.getImageData());
+                if (openEntry != null) {
+                    openEntry.saveImageData(qupath.getImageData());
+                    project.syncChanges();
+                    appendStatus(results, "  (saved current image '" + openEntry.getImageName()
+                            + "' before propagation)\n");
+                }
+            }
+        } catch (Exception ex) {
+            logger.warn("Could not save current image before propagation: {}", ex.getMessage());
+        }
+        final ProjectImageEntry<BufferedImage> openEntryAtStart = openEntry;
+
+        // Track every entry the worker writes to so we can reload the viewer
+        // afterwards if the currently-open entry is among them.
+        Set<ProjectImageEntry<BufferedImage>> touchedEntries = new LinkedHashSet<>();
 
         // Accumulate missing source-scope configs across all subs so we can show
         // ONE actionable warning at the end naming every file the user needs.
@@ -470,6 +497,7 @@ public final class PropagationManagerDialog {
                             try {
                                 int count = ForwardPropagationWorkflow.propagateForward(alignment, sourceObjects, sub);
                                 groupTotal += count;
+                                if (count > 0) touchedEntries.add(sub);
                                 appendStatus(results, String.format(
                                         "    -> %s: %d objects%n", sub.getImageName(), count));
                             } catch (MissingSourceConfigException mce) {
@@ -500,6 +528,12 @@ public final class PropagationManagerDialog {
                                 FanOutResult fo = ForwardPropagationWorkflow.propagateBackFanOut(
                                         project, baseName, alignment, subObjects, sub, autoCreate);
                                 groupTotal += fo.totalObjects;
+                                if (fo.totalObjects > 0) {
+                                    // Back-prop writes to the unflipped base of this group;
+                                    // mark every base sibling as potentially touched so the
+                                    // viewer reloads if one of them is currently open.
+                                    touchedEntries.addAll(grp.getSiblings());
+                                }
                                 appendStatus(results, "  source: " + sub.getImageName()
                                         + " (" + subObjects.size() + " objects)\n");
                                 for (String line : fo.perSiblingLog) {
@@ -578,6 +612,23 @@ public final class PropagationManagerDialog {
                         alert.getDialogPane().setContent(ta);
                         alert.getDialogPane().setPrefWidth(620);
                         alert.showAndWait();
+                    });
+                }
+
+                // If the currently-open image's entry was written to during
+                // propagation, reload it in the viewer so the user sees the
+                // newly-deposited annotations without having to switch images.
+                if (openEntryAtStart != null && touchedEntries.contains(openEntryAtStart)) {
+                    Platform.runLater(() -> {
+                        try {
+                            qupath.openImageEntry(openEntryAtStart);
+                            appendStatus(results, "  (reloaded current image '"
+                                    + openEntryAtStart.getImageName() + "' to show new objects)\n");
+                        } catch (Exception ex) {
+                            logger.warn("Could not reload image after propagation: {}", ex.getMessage());
+                            appendStatus(results, "  (note: switch off and back to '"
+                                    + openEntryAtStart.getImageName() + "' to see the new objects)\n");
+                        }
                     });
                 }
             } finally {

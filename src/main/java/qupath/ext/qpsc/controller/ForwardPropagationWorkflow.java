@@ -688,21 +688,95 @@ public class ForwardPropagationWorkflow {
         int written = propagateBack(baseToStage, alignFlipX, alignFlipY, sourceObjects, subEntry, baseData);
         int afterCount = baseHierarchy.getAllObjects(false).size();
         int siblingsUpdated = 0;
+        int totalWritten = 0;
+        List<PathObject> writtenObjects = java.util.Collections.emptyList();
         if (afterCount > beforeCount) {
+            // Capture the freshly-added objects so we can fan them out to legacy
+            // flipped siblings without re-running the math.
+            List<PathObject> all = new ArrayList<>(baseHierarchy.getAllObjects(false));
+            writtenObjects = all.subList(beforeCount, all.size());
+            writtenObjects = new ArrayList<>(writtenObjects); // detach view
             base.saveImageData(baseData);
             siblingsUpdated = 1;
+            totalWritten += written;
             perSiblingLog.add(String.format("  %s -> %s: %d objects (alignFlip=(%s, %s))",
                     subEntry.getImageName(), base.getImageName(), written, alignFlipX, alignFlipY));
         } else {
             perSiblingLog.add(String.format("  %s -> %s: 0 objects (no overlap)",
                     subEntry.getImageName(), base.getImageName()));
         }
+
+        // Fan-out to legacy flipped sibling entries (e.g. "(flipped X)",
+        // "(flipped Y)", "(flipped XY)") that may still exist in pre-Step-B
+        // projects. Step B prefers a single unflipped base entry, but until
+        // every project is migrated the duplicates remain and the user
+        // expects the back-propagated annotation to appear on them too.
+        // Each duplicate is the same image content with axis flips, so the
+        // transform is a simple per-axis mirror around base width/height.
+        int baseWidth = baseData.getServer().getWidth();
+        int baseHeight = baseData.getServer().getHeight();
+        if (!writtenObjects.isEmpty()) {
+            for (ProjectImageEntry<BufferedImage> sibling : project.getImageList()) {
+                if (sibling == base) continue;
+                String name = sibling.getImageName();
+                if (name == null) continue;
+                String stripped = GeneralTools.stripExtension(name);
+                String rawBase = ImageMetadataManager.getBaseImage(sibling);
+                String effectiveBase = (rawBase != null && !rawBase.isEmpty()) ? rawBase : stripped;
+                if (!baseName.equals(effectiveBase)) continue;
+                if (!name.contains("(flipped")) continue; // only fan to legacy duplicates
+
+                boolean flipX = name.contains("(flipped XY)") || name.contains("(flipped X)");
+                boolean flipY = name.contains("(flipped XY)") || name.contains("(flipped Y)");
+                if (!flipX && !flipY) continue;
+
+                AffineTransform mirror = createFlip(flipX, flipY, baseWidth, baseHeight);
+                try {
+                    ImageData<BufferedImage> sibData = sibling.readImageData();
+                    PathObjectHierarchy sibHierarchy = sibData.getHierarchy();
+                    int beforeSib = sibHierarchy.getAllObjects(false).size();
+                    List<PathObject> mirrored = new ArrayList<>(writtenObjects.size());
+                    for (PathObject obj : writtenObjects) {
+                        try {
+                            PathObject m = PathObjectTools.transformObject(obj, mirror, true, true);
+                            if (m != null && m.getROI() != null && !m.getROI().isEmpty()) mirrored.add(m);
+                        } catch (Exception trEx) {
+                            logger.debug("Sibling fan-out: could not mirror object: {}", trEx.getMessage());
+                        }
+                    }
+                    if (!mirrored.isEmpty()) {
+                        sibHierarchy.addObjects(mirrored);
+                        sibling.saveImageData(sibData);
+                        int added = sibHierarchy.getAllObjects(false).size() - beforeSib;
+                        siblingsUpdated++;
+                        totalWritten += added;
+                        perSiblingLog.add(String.format("  %s -> %s: %d objects (mirror=(%s, %s))",
+                                subEntry.getImageName(), name, added, flipX, flipY));
+                    } else {
+                        perSiblingLog.add(String.format("  %s -> %s: 0 objects (mirror produced empty ROIs)",
+                                subEntry.getImageName(), name));
+                    }
+                } catch (Exception sibEx) {
+                    perSiblingLog.add(String.format("  %s -> %s: FAILED (%s)",
+                            subEntry.getImageName(), name, sibEx.getMessage()));
+                    logger.warn("Sibling fan-out to '{}' failed: {}", name, sibEx.getMessage());
+                }
+            }
+        }
+
+        try {
+            project.syncChanges();
+        } catch (Exception e) {
+            logger.debug("project.syncChanges after sibling fan-out: {}", e.getMessage());
+        }
+
         // allowAutoCreate is preserved in the signature for back-compat but is no longer used.
         if (allowAutoCreate) {
             logger.debug("propagateBackFanOut: allowAutoCreate is now a no-op under Step B (no flipped siblings).");
         }
-        logger.info("Back-prop complete: 1 base updated ({} objects)", written);
-        return new FanOutResult(written, siblingsUpdated, 0, perSiblingLog);
+        logger.info("Back-prop complete: {} sibling(s) updated, {} object(s) total",
+                siblingsUpdated, totalWritten);
+        return new FanOutResult(totalWritten, siblingsUpdated, 0, perSiblingLog);
     }
 
     /** Locate the unflipped base entry for {@code baseName} (FLIP_X/Y both '0' or both absent). */
