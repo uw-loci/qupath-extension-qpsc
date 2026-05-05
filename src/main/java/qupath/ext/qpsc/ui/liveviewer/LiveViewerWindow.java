@@ -362,11 +362,22 @@ public class LiveViewerWindow {
      * <p>
      * Thread-safe -- can be called from any thread. Schedules a cosmetic UI update
      * via {@code Platform.runLater()}.
+     * <p>
+     * The UI state always reflects the actual outcome: on success the focus
+     * buttons re-enable and the status reads "Live ON"; on failure liveActive
+     * stays false, the status reads "Live OFF (restart failed)" and the user
+     * can retry via the Live toggle. The previous version skipped the UI
+     * update when {@link MicroscopeController#startContinuousAcquisition()}
+     * threw, leaving the focus buttons stuck disabled with no feedback --
+     * observed after the Editor's Test Sweep Drift Check on PPM 40x
+     * 2026-05-04.
      */
     public static void restartStreaming() {
         if (instance == null) {
             return;
         }
+        boolean started = false;
+        String failureReason = null;
         try {
             MicroscopeController controller = MicroscopeController.getInstance();
             if (controller != null) {
@@ -380,7 +391,7 @@ public class LiveViewerWindow {
                     logger.debug("Stop before restart: {}", e.getMessage());
                 }
                 controller.startContinuousAcquisition();
-                instance.liveActive = true;
+                started = true;
                 // Reset FPS counter, desync tracking, and recovery state
                 instance.frameCount.set(0);
                 instance.fpsWindowStart.set(System.currentTimeMillis());
@@ -389,18 +400,34 @@ public class LiveViewerWindow {
                 instance.lastFrameArrivalTime = System.currentTimeMillis();
                 instance.recoveryAttempts = 0;
                 instance.recoveryInProgress = false;
-                // Cosmetic UI update
-                Platform.runLater(() -> {
-                    if (instance != null) {
-                        instance.updateLiveButtonStyle(true);
-                        instance.updateRefineFocusButtonState();
-                        instance.updateStatus("Live ON - streaming...");
-                    }
-                });
                 logger.info("QPSC Live Viewer streaming restarted");
+            } else {
+                failureReason = "no microscope controller";
             }
         } catch (IOException e) {
-            logger.warn("Failed to restart QPSC Live Viewer streaming: {}", e.getMessage());
+            failureReason = e.getMessage();
+            logger.warn("Failed to restart QPSC Live Viewer streaming: {}", failureReason);
+        } finally {
+            // Always sync UI state. If the restart threw, leave liveActive
+            // false but RE-ENABLE the live toggle and reset the focus
+            // button text so the user can recover by clicking Live ON.
+            // Without this, the focus buttons stay setDisable(true) and
+            // any prior "FAILED" sweep label sticks indefinitely.
+            final boolean activeNow = started;
+            final String reason = failureReason;
+            instance.liveActive = activeNow;
+            Platform.runLater(() -> {
+                if (instance == null) return;
+                instance.updateLiveButtonStyle(activeNow);
+                instance.updateRefineFocusButtonState();
+                if (activeNow) {
+                    instance.updateStatus("Live ON - streaming...");
+                } else {
+                    instance.liveToggleButton.setDisable(false);
+                    String suffix = (reason != null && !reason.isEmpty()) ? " (" + reason + ")" : "";
+                    instance.updateStatus("Live OFF (restart failed -- click Live to retry)" + suffix);
+                }
+            });
         }
     }
 
