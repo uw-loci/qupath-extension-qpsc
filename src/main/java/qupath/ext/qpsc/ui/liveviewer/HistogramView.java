@@ -5,6 +5,7 @@ import javafx.geometry.Pos;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Slider;
 import javafx.scene.layout.HBox;
@@ -123,70 +124,74 @@ public class HistogramView extends VBox {
             drawHistogram();
         });
 
-        // --- Row 4: Buttons ---
+        // --- Row 4: Buttons + Always Auto-Scale checkbox ---
         Button fullRangeBtn = new Button("Full Range");
         Button autoScaleBtn = new Button("Auto Scale");
+        CheckBox alwaysAutoScale = new CheckBox("Always Auto-Scale");
+        alwaysAutoScale.setTooltip(new javafx.scene.control.Tooltip(
+                "When checked, every live frame and acquired tile is auto-scaled.\n"
+                        + "When unchecked, your manual Min/Max sliders are preserved.\n"
+                        + "Auto Scale button always does a one-shot rescale."));
+        alwaysAutoScale.setSelected(contrastSettings.isAutoScale());
 
         fullRangeBtn.setOnAction(e -> {
             contrastSettings.setDisplayMin(0);
             contrastSettings.setDisplayMax(currentMaxValue);
             contrastSettings.setAutoScale(false);
+            alwaysAutoScale.setSelected(false);
             updateSlidersFromSettings();
             drawHistogram();
         });
 
+        // One-shot rescale: apply auto-scale once but do NOT flip the
+        // persistent autoScale flag. The "Always Auto-Scale" checkbox
+        // owns the persistent flag.
         autoScaleBtn.setOnAction(e -> {
             contrastSettings.applyAutoScale(
                     currentHistogram, new FrameData(0, 0, 1, currentMaxValue > 255 ? 2 : 1, new byte[0], 0));
-            contrastSettings.setAutoScale(true);
             updateSlidersFromSettings();
             drawHistogram();
         });
 
-        HBox buttonRow = new HBox(8, fullRangeBtn, autoScaleBtn);
+        alwaysAutoScale.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            contrastSettings.setAutoScale(newVal);
+            if (newVal) {
+                contrastSettings.applyAutoScale(
+                        currentHistogram, new FrameData(0, 0, 1, currentMaxValue > 255 ? 2 : 1, new byte[0], 0));
+                updateSlidersFromSettings();
+                drawHistogram();
+            }
+        });
+
+        HBox buttonRow = new HBox(8, fullRangeBtn, autoScaleBtn, alwaysAutoScale);
         buttonRow.setAlignment(Pos.CENTER);
         buttonRow.setPadding(new Insets(2, 0, 0, 0));
+
+        // Slider drag turns off the persistent flag. Reflect that in the
+        // checkbox so its state stays in sync with the underlying setting.
+        minSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (alwaysAutoScale.isSelected()) alwaysAutoScale.setSelected(false);
+        });
+        maxSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (alwaysAutoScale.isSelected()) alwaysAutoScale.setSelected(false);
+        });
 
         getChildren().addAll(histRow, meanLabel, minRow, maxRow, buttonRow);
     }
 
     /**
      * Updates the histogram from a new frame. Throttled to max ~5 Hz.
-     * Auto-scale is applied only if {@link ContrastSettings#isAutoScale()} is on.
+     * Auto-scale is applied only if {@link ContrastSettings#isAutoScale()} is on
+     * (i.e. when "Always Auto-Scale" is checked).
      *
      * @param frame The current frame data
      */
     public void updateHistogram(FrameData frame) {
-        recompute(frame, false, true);
-    }
-
-    /**
-     * Tile-display variant: bypass the throttle and ALWAYS apply auto-scale,
-     * regardless of {@link ContrastSettings#isAutoScale()}. Used by the
-     * "Show Tiles" path so each acquired tile gets a fresh contrast range
-     * without first stealing the user's live-mode min/max sliders.
-     *
-     * <p>Why force auto-scale: a fluorescence tile's intensity range is
-     * unrelated to whatever live preview was on screen (different exposure,
-     * different illumination, different channel). The default contrast
-     * settings carried over from live preview render every tile as flat
-     * gray. The user explicitly asked for an auto-scale per tile so the
-     * histogram below also reflects the tile content.
-     */
-    public void updateHistogramAndAutoScale(FrameData frame) {
-        recompute(frame, true, false);
-    }
-
-    private void recompute(FrameData frame, boolean forceAutoScale, boolean obeyThrottle) {
-        if (obeyThrottle) {
-            long now = System.currentTimeMillis();
-            if (now - lastHistogramUpdateMs < HISTOGRAM_THROTTLE_MS) {
-                return;
-            }
-            lastHistogramUpdateMs = now;
-        } else {
-            lastHistogramUpdateMs = System.currentTimeMillis();
+        long now = System.currentTimeMillis();
+        if (now - lastHistogramUpdateMs < HISTOGRAM_THROTTLE_MS) {
+            return;
         }
+        lastHistogramUpdateMs = now;
 
         currentMaxValue = frame.maxValue();
 
@@ -269,8 +274,8 @@ public class HistogramView extends VBox {
             }
         }
 
-        // Auto-scale if enabled (or forced by the tile-display caller).
-        if (forceAutoScale || contrastSettings.isAutoScale()) {
+        // Auto-scale only if "Always Auto-Scale" is on.
+        if (contrastSettings.isAutoScale()) {
             contrastSettings.applyAutoScale(histogram, frame);
         }
 
