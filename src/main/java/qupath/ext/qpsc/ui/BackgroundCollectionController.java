@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
@@ -18,6 +19,7 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.BackgroundCollectionResult;
+import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
@@ -907,15 +909,31 @@ public class BackgroundCollectionController {
             if (!availableObjectives.isEmpty()) {
                 objectiveComboBox.getItems().addAll(availableObjectives);
                 objectiveComboBox.setDisable(false);
-                // Pre-select last-used objective (e.g. from wizard)
+                // Prefer the objective actually mounted right now (matched against the live
+                // MicroManager pixel size) over the wizard's last-selected pref. The pref
+                // goes stale whenever the user swaps objectives without going through the
+                // Acquisition Wizard, which previously caused calibrations to be saved into
+                // the wrong YAML slot (2026-05-04 incident).
+                Optional<MicroscopeConfigManager.HardwareSelection> liveMatch =
+                        detectMountedHardware(configManager);
+                String defaultObjective = liveMatch
+                        .map(MicroscopeConfigManager.HardwareSelection::objectiveId)
+                        .filter(availableObjectives::contains)
+                        .orElse(null);
                 String lastObjective = PersistentPreferences.getLastObjective();
+                if (defaultObjective == null && lastObjective != null && !lastObjective.isEmpty()
+                        && availableObjectives.contains(lastObjective)) {
+                    defaultObjective = lastObjective;
+                }
                 logger.info(
-                        "Background dialog objectives: available={}, lastObjective='{}', match={}",
+                        "Background dialog objectives: available={}, liveMatch='{}', "
+                                + "lastObjective='{}', selected='{}'",
                         availableObjectives,
+                        liveMatch.map(MicroscopeConfigManager.HardwareSelection::objectiveId).orElse(null),
                         lastObjective,
-                        availableObjectives.contains(lastObjective));
-                if (lastObjective != null && !lastObjective.isEmpty() && availableObjectives.contains(lastObjective)) {
-                    objectiveComboBox.setValue(lastObjective);
+                        defaultObjective);
+                if (defaultObjective != null) {
+                    objectiveComboBox.setValue(defaultObjective);
                 }
                 logger.info("Loaded {} objectives for modality {}", availableObjectives.size(), modality);
             } else {
@@ -925,6 +943,25 @@ public class BackgroundCollectionController {
         } catch (Exception e) {
             logger.error("Failed to load objectives for modality: {}", modality, e);
             objectiveComboBox.setDisable(true);
+        }
+    }
+
+    /**
+     * Returns the (objective, detector) pair currently mounted by matching the live
+     * MicroManager pixel size against the configured hardware table. Returns empty if
+     * the microscope is not connected, the pixel size lookup fails, or nothing matches.
+     */
+    private static Optional<MicroscopeConfigManager.HardwareSelection> detectMountedHardware(
+            MicroscopeConfigManager configManager) {
+        try {
+            MicroscopeController mc = MicroscopeController.getInstance();
+            if (mc == null || !mc.isConnected()) return Optional.empty();
+            double mmPx = mc.getSocketClient().getMicroscopePixelSize();
+            return configManager.findHardwareByPixelSize(
+                    mmPx, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
+        } catch (Exception e) {
+            logger.debug("Background dialog: live hardware detection failed: {}", e.getMessage());
+            return Optional.empty();
         }
     }
 

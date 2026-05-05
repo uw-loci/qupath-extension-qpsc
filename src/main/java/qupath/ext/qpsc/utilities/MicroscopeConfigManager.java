@@ -2660,6 +2660,53 @@ public class MicroscopeConfigManager {
         return null;
     }
 
+    /**
+     * Result of a live pixel-size lookup: which (objective, detector) the configured
+     * pixel-size table matched against a measured value.
+     */
+    public record HardwareSelection(String objectiveId, String detectorId) {}
+
+    /**
+     * Default tolerance (in um) for matching a measured MicroManager pixel size against
+     * the per-(objective,detector) pixel-size table.
+     */
+    public static final double DEFAULT_PIXEL_SIZE_TOLERANCE_UM = 0.001;
+
+    /**
+     * Match a measured pixel size against the configured per-(objective, detector) pixel-size
+     * table. Returns the first hardware combination whose YAML pixel size is within
+     * {@code tolerance} um of the measured value.
+     *
+     * <p>This is the single source of truth for "which objective/detector is currently
+     * mounted" -- it is more reliable than {@link PersistentPreferences#getLastObjective()},
+     * which only reflects the last-saved user choice (often stale when the user swaps
+     * objectives without going through the Acquisition Wizard).
+     *
+     * @param measuredPixelSizeUm The pixel size reported by MicroManager (um/px). Must be > 0.
+     * @param tolerance Match tolerance in um. Use {@link #DEFAULT_PIXEL_SIZE_TOLERANCE_UM}
+     *                  unless you have a reason to relax it.
+     * @return The matched (objective, detector) pair, or empty if nothing matches.
+     */
+    public Optional<HardwareSelection> findHardwareByPixelSize(double measuredPixelSizeUm, double tolerance) {
+        if (measuredPixelSizeUm <= 0) {
+            return Optional.empty();
+        }
+        Set<String> objectives = getAvailableObjectives();
+        Set<String> detectors = getHardwareDetectors();
+        if (objectives.isEmpty() || detectors.isEmpty()) {
+            return Optional.empty();
+        }
+        for (String obj : objectives) {
+            for (String det : detectors) {
+                Double cfgPx = getHardwarePixelSize(obj, det);
+                if (cfgPx != null && Math.abs(cfgPx - measuredPixelSizeUm) < tolerance) {
+                    return Optional.of(new HardwareSelection(obj, det));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
     // ========== METHODS FOR UI DROPDOWNS ==========
 
     /**

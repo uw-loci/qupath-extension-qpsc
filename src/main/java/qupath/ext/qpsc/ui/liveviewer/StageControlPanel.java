@@ -1054,32 +1054,21 @@ public class StageControlPanel extends VBox {
         currentCameraObjectiveId = "Unknown";
         currentCameraDetectorId = "Unknown";
         try {
-            var modalities = mgr.getAvailableModalities();
-            String mod = (modalities != null && !modalities.isEmpty())
-                    ? modalities.iterator().next()
-                    : "ppm";
             var objectives = mgr.getAvailableObjectives();
             var detectors = mgr.getHardwareDetectors();
 
             boolean detected = false;
             MicroscopeController mc = MicroscopeController.getInstance();
-            if (mc != null && mc.isConnected() && objectives != null && detectors != null) {
+            if (mc != null && mc.isConnected()) {
                 try {
                     double mmPx = mc.getSocketClient().getMicroscopePixelSize();
-                    if (mmPx > 0) {
-                        for (String obj : objectives) {
-                            for (String det : detectors) {
-                                Double cfgPx = mgr.getHardwarePixelSize(obj, det);
-                                if (cfgPx != null && Math.abs(cfgPx - mmPx) < 0.001) {
-                                    currentCameraObjectiveId = obj;
-                                    currentCameraDetectorId = det;
-                                    detected = true;
-                                    logger.info("Camera tab: detected {}/{} from MM pixel size {}", obj, det, mmPx);
-                                    break;
-                                }
-                            }
-                            if (detected) break;
-                        }
+                    var match = mgr.findHardwareByPixelSize(mmPx, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
+                    if (match.isPresent()) {
+                        currentCameraObjectiveId = match.get().objectiveId();
+                        currentCameraDetectorId = match.get().detectorId();
+                        detected = true;
+                        logger.info("Camera tab: detected {}/{} from MM pixel size {}",
+                                currentCameraObjectiveId, currentCameraDetectorId, mmPx);
                     }
                 } catch (Exception e) {
                     logger.debug("Camera tab: pixel size detection failed: {}", e.getMessage());

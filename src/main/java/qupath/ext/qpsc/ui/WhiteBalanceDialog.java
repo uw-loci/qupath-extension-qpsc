@@ -5,6 +5,7 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
@@ -18,6 +19,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.WbMode;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -694,13 +696,26 @@ public class WhiteBalanceDialog {
                     objectiveCombo
                             .getItems()
                             .addAll(objectives.stream().sorted().toList());
-                    // Single source of truth: whatever the Acquisition Wizard (or any other
-                    // dialog) most recently selected. Do not shadow this with a dialog-local
-                    // persistent preference -- that caused the 2026-04-15 calibration mislabel
-                    // where WB used a stale 20X_POL while the Wizard was on 10X.
-                    String savedObjective = PersistentPreferences.getLastObjective();
-                    if (savedObjective != null && !savedObjective.isEmpty() && objectives.contains(savedObjective)) {
-                        objectiveCombo.setValue(savedObjective);
+                    // Prefer the objective actually mounted right now (matched against the live
+                    // MicroManager pixel size) over the wizard's last-selected pref. The pref
+                    // goes stale whenever the user swaps objectives without going through the
+                    // Acquisition Wizard, which previously caused WB calibration on the 40x to
+                    // be saved into the 20x YAML slot (2026-05-04 incident).
+                    Optional<MicroscopeConfigManager.HardwareSelection> liveMatch =
+                            detectMountedHardware(configManager);
+                    String defaultObjective = liveMatch
+                            .map(MicroscopeConfigManager.HardwareSelection::objectiveId)
+                            .filter(objectives::contains)
+                            .orElse(null);
+                    if (defaultObjective == null) {
+                        String savedObjective = PersistentPreferences.getLastObjective();
+                        if (savedObjective != null && !savedObjective.isEmpty()
+                                && objectives.contains(savedObjective)) {
+                            defaultObjective = savedObjective;
+                        }
+                    }
+                    if (defaultObjective != null) {
+                        objectiveCombo.setValue(defaultObjective);
                     } else {
                         objectiveCombo.getSelectionModel().selectFirst();
                     }
@@ -742,9 +757,22 @@ public class WhiteBalanceDialog {
                     detectorCombo
                             .getItems()
                             .addAll(detectors.stream().sorted().toList());
-                    String savedDetector = PersistentPreferences.getLastDetector();
-                    if (savedDetector != null && !savedDetector.isEmpty() && detectors.contains(savedDetector)) {
-                        detectorCombo.setValue(savedDetector);
+                    // Same live-detection-first policy as the objective combo above.
+                    Optional<MicroscopeConfigManager.HardwareSelection> liveMatch =
+                            detectMountedHardware(configManager);
+                    String defaultDetector = liveMatch
+                            .map(MicroscopeConfigManager.HardwareSelection::detectorId)
+                            .filter(detectors::contains)
+                            .orElse(null);
+                    if (defaultDetector == null) {
+                        String savedDetector = PersistentPreferences.getLastDetector();
+                        if (savedDetector != null && !savedDetector.isEmpty()
+                                && detectors.contains(savedDetector)) {
+                            defaultDetector = savedDetector;
+                        }
+                    }
+                    if (defaultDetector != null) {
+                        detectorCombo.setValue(defaultDetector);
                     } else {
                         detectorCombo.getSelectionModel().selectFirst();
                     }
@@ -869,6 +897,29 @@ public class WhiteBalanceDialog {
         TitledPane pane = new TitledPane("Simple White Balance", vbox);
         pane.setCollapsible(true);
         return pane;
+    }
+
+    /**
+     * Returns the (objective, detector) pair currently mounted, by matching the live
+     * MicroManager pixel size against the configured hardware table. Returns empty if
+     * the microscope is not connected, the pixel size lookup fails, or nothing matches.
+     *
+     * <p>Used to seed the objective and detector combo boxes so the dialog defaults
+     * reflect the physically mounted hardware rather than a possibly-stale persistent
+     * preference. The user can still override via the dropdowns.
+     */
+    private static Optional<MicroscopeConfigManager.HardwareSelection> detectMountedHardware(
+            MicroscopeConfigManager configManager) {
+        try {
+            MicroscopeController mc = MicroscopeController.getInstance();
+            if (mc == null || !mc.isConnected()) return Optional.empty();
+            double mmPx = mc.getSocketClient().getMicroscopePixelSize();
+            return configManager.findHardwareByPixelSize(
+                    mmPx, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
+        } catch (Exception e) {
+            logger.debug("WB dialog: live hardware detection failed: {}", e.getMessage());
+            return Optional.empty();
+        }
     }
 
     /**
