@@ -508,6 +508,30 @@ public class UIFunctions {
      * @return CompletableFuture that completes with true if confirmed, false if cancelled
      */
     public static CompletableFuture<Boolean> stageAlignmentConfirmAsync() {
+        return stageAlignmentConfirmAsync(null, null, null, null);
+    }
+
+    /**
+     * SIFT-enabled variant of {@link #stageAlignmentConfirmAsync()}.
+     *
+     * <p>When {@code siftTargetTile} is non-null, an "Auto-Align (SIFT)"
+     * + Settings... button row is added above the Confirm/Cancel buttons.
+     * Clicking SIFT runs {@link SiftAutoAlignHelper#autoAlign} against the
+     * given tile and moves the stage to the matched position; the user
+     * still clicks Confirm to commit. When {@code siftTargetTile} is null,
+     * the dialog renders identically to the legacy form.
+     *
+     * @param gui              QuPath GUI (for image access). May be null
+     *                         if {@code siftTargetTile} is null.
+     * @param siftTargetTile   tile to match SIFT against. Pass null to
+     *                         hide the SIFT button row.
+     * @param headerText       custom header (defaults to "Is the current
+     *                         position accurate?")
+     * @param instructionText  custom instruction (defaults to "Compare
+     *                         with the uManager live view.")
+     */
+    public static CompletableFuture<Boolean> stageAlignmentConfirmAsync(
+            QuPathGUI gui, PathObject siftTargetTile, String headerText, String instructionText) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
 
         Runnable showDialog = () -> {
@@ -520,10 +544,13 @@ public class UIFunctions {
             layout.setPadding(new Insets(20));
             layout.setAlignment(Pos.CENTER);
 
-            Label headerLabel = new Label("Is the current position accurate?");
+            Label headerLabel = new Label(headerText != null ? headerText : "Is the current position accurate?");
             headerLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
 
-            Label instructionLabel = new Label("Compare with the uManager live view.");
+            Label instructionLabel =
+                    new Label(instructionText != null ? instructionText : "Compare with the uManager live view.");
+            instructionLabel.setWrapText(true);
+            instructionLabel.setMaxWidth(440);
 
             HBox buttonBox = new HBox(10);
             buttonBox.setAlignment(Pos.CENTER);
@@ -543,9 +570,22 @@ public class UIFunctions {
             });
 
             buttonBox.getChildren().addAll(confirmButton, cancelButton);
-            layout.getChildren().addAll(headerLabel, instructionLabel, new Separator(), buttonBox);
 
-            Scene scene = new Scene(layout, 350, 150);
+            // Optional SIFT button row + status label above the
+            // confirm/cancel pair when the caller supplied a target tile.
+            if (siftTargetTile != null && gui != null) {
+                Label siftStatus = new Label();
+                siftStatus.setWrapText(true);
+                siftStatus.setStyle("-fx-font-size: 10px;");
+                HBox siftRow =
+                        qupath.ext.qpsc.ui.SiftAutoAlignHelper.buildSiftButtonRow(gui, siftTargetTile, stage, siftStatus);
+                layout.getChildren()
+                        .addAll(headerLabel, instructionLabel, siftRow, siftStatus, new Separator(), buttonBox);
+            } else {
+                layout.getChildren().addAll(headerLabel, instructionLabel, new Separator(), buttonBox);
+            }
+
+            Scene scene = new Scene(layout, siftTargetTile != null ? 460 : 350, siftTargetTile != null ? 240 : 150);
             stage.setScene(scene);
 
             stage.setOnCloseRequest(e -> {

@@ -1006,11 +1006,6 @@ public class MicroscopeAlignmentWorkflow {
             String selectedScannerConfigPath,
             MacroOrientationDialog.MacroFlip macroFlip) {
 
-        // First, try to get tissue annotations specifically
-        var tissueAnnotations = gui.getViewer().getHierarchy().getAnnotationObjects().stream()
-                .filter(a -> a.getClassification() != null && "Tissue".equals(a.getClassification()))
-                .toList();
-
         // Flip comes from the orientation dialog answered at workflow start.
         boolean flipX = macroFlip != null ? macroFlip.flipX() : false;
         boolean flipY = macroFlip != null ? macroFlip.flipY() : false;
@@ -1038,7 +1033,43 @@ public class MicroscopeAlignmentWorkflow {
                 boundsForTiling.width,
                 boundsForTiling.height);
 
-        // If we have tissue annotations, use those for tiling
+        var allAnnotations = gui.getViewer().getHierarchy().getAnnotationObjects();
+
+        // Highest-priority filter: the user's currently configured collection
+        // classes. This matches what the Existing Image Workflow tiles, so
+        // the alignment-time tile grid covers the exact regions the user is
+        // about to acquire.
+        List<String> collectionClasses = PersistentPreferences.getSelectedAnnotationClasses();
+        if (collectionClasses != null && !collectionClasses.isEmpty()) {
+            var collectionAnnotations = allAnnotations.stream()
+                    .filter(a -> a.getClassification() != null && collectionClasses.contains(a.getClassification()))
+                    .toList();
+            if (!collectionAnnotations.isEmpty()) {
+                logger.info(
+                        "Found {} annotation(s) matching configured collection classes {} for tiling",
+                        collectionAnnotations.size(),
+                        collectionClasses);
+                createTilesForAnnotations(
+                        gui,
+                        collectionAnnotations,
+                        sampleSetup,
+                        tempTileDirectory,
+                        modeWithIndex,
+                        stageInvertedX,
+                        stageInvertedY);
+                return;
+            }
+            logger.info(
+                    "No annotations match configured collection classes {} -- falling back to Tissue / valid classes",
+                    collectionClasses);
+        }
+
+        // Tissue-specific fallback (legacy alignment-only entry point: user
+        // ran microscope alignment without first running an existing-image
+        // workflow that sets collection classes).
+        var tissueAnnotations = allAnnotations.stream()
+                .filter(a -> a.getClassification() != null && "Tissue".equals(a.getClassification()))
+                .toList();
         if (!tissueAnnotations.isEmpty()) {
             logger.info("Found {} tissue annotations for tiling", tissueAnnotations.size());
             createTilesForAnnotations(
@@ -1052,36 +1083,31 @@ public class MicroscopeAlignmentWorkflow {
             return;
         }
 
-        // Otherwise fall back to any valid annotation class
-        logger.info("No tissue annotations found, checking for other valid annotation types");
-        var annotations = gui.getViewer().getHierarchy().getAnnotationObjects().stream()
+        // Otherwise fall back to any valid (Tissue / Scanned Area /
+        // Bounding Box) annotation class. We deliberately do NOT fall back
+        // to "all annotations regardless of class" -- silently tiling
+        // unrelated overlapping annotations produces a noisy, ambiguous
+        // tile grid for the alignment step and was the source of multiple
+        // confusing alignment runs.
+        var annotations = allAnnotations.stream()
                 .filter(a -> a.getClassification() != null && VALID_ANNOTATION_CLASSES.contains(a.getClassification()))
                 .toList();
-
-        // Final fallback: use ALL annotations regardless of classification
-        if (annotations.isEmpty()) {
-            var allAnnotations =
-                    new java.util.ArrayList<>(gui.getViewer().getHierarchy().getAnnotationObjects());
-            if (!allAnnotations.isEmpty()) {
-                logger.info(
-                        "No classified annotations found, using all {} annotations for tiling", allAnnotations.size());
-                createTilesForAnnotations(
-                        gui,
-                        allAnnotations,
-                        sampleSetup,
-                        tempTileDirectory,
-                        modeWithIndex,
-                        stageInvertedX,
-                        stageInvertedY);
-                return;
-            }
-            logger.warn("No annotations found for tiling");
+        if (!annotations.isEmpty()) {
+            logger.info("Found {} annotations for tiling (non-tissue)", annotations.size());
+            createTilesForAnnotations(
+                    gui, annotations, sampleSetup, tempTileDirectory, modeWithIndex, stageInvertedX, stageInvertedY);
             return;
         }
 
-        logger.info("Found {} annotations for tiling (non-tissue)", annotations.size());
-        createTilesForAnnotations(
-                gui, annotations, sampleSetup, tempTileDirectory, modeWithIndex, stageInvertedX, stageInvertedY);
+        logger.warn("No annotations match collection classes or {}; alignment tiles not created", VALID_ANNOTATION_CLASSES);
+        Platform.runLater(() -> UIFunctions.notifyUserOfError(
+                "No annotations match the configured collection classes "
+                        + (collectionClasses != null && !collectionClasses.isEmpty()
+                                ? collectionClasses.toString()
+                                : VALID_ANNOTATION_CLASSES.toString())
+                        + ".\n\nEither create a Tissue annotation, update the class selection, "
+                        + "or classify existing annotations as one of: " + VALID_ANNOTATION_CLASSES,
+                "No annotations to tile"));
     }
 
     private static void createTilesForAnnotations(

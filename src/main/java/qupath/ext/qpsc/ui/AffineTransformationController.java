@@ -122,14 +122,20 @@ public class AffineTransformationController {
                             "Select a REFERENCE tile (preferably near the center or edge of your region).\n"
                                     + "After selection:\n"
                                     + "1. The stage will automatically move to the estimated position\n"
-                                    + "2. Verify alignment and fine-tune if needed\n"
-                                    + "3. Click 'Confirm Selection' when the stage is properly positioned";
+                                    + "2. Verify alignment and fine-tune if needed (Auto-Align (SIFT) is available)\n"
+                                    + "3. Click 'Confirm Selection' when the stage is properly positioned\n\n"
+                                    + "Tip: Auto-Align (SIFT) only succeeds when the live view already overlaps the\n"
+                                    + "selected tile by at least a few hundred microns. Pick a tile near visible\n"
+                                    + "features and drive the stage close before clicking Confirm.";
                 } else {
                     tileSelectionPrompt =
                             "Select a REFERENCE tile (preferably near the center or edge of your region).\n"
                                     + "After selection:\n"
                                     + "1. Manually move the microscope stage to center this tile in the live view\n"
-                                    + "2. Click 'Confirm Selection' when the stage is properly positioned";
+                                    + "2. Click 'Confirm Selection' when the stage is properly positioned\n\n"
+                                    + "Tip: Auto-Align (SIFT) only succeeds when the live view already overlaps the\n"
+                                    + "selected tile by at least a few hundred microns. Pick a tile near visible\n"
+                                    + "features and drive the stage close before clicking Confirm.";
                 }
 
                 UIFunctions.promptTileSelectionDialogAsync(tileSelectionPrompt)
@@ -161,8 +167,19 @@ public class AffineTransformationController {
                             }
 
                             // 3. Non-modal confirmation -- user can interact with QuPath
-                            //    and the Live Viewer while this is open
-                            return UIFunctions.stageAlignmentConfirmAsync().thenCompose(aligned -> {
+                            //    and the Live Viewer while this is open. SIFT button is
+                            //    available against the chosen reference tile; user still
+                            //    clicks Confirm to commit the (post-SIFT) stage position.
+                            String confirmInstruction = hasEstimate
+                                    ? "The stage was moved using the initial scaling estimate -- it may be off"
+                                            + " by tens of microns. Use the joystick or Auto-Align (SIFT) to refine,"
+                                            + " then click Confirm."
+                                    : "Drive the stage so the live view matches the selected tile, then click"
+                                            + " Confirm. Auto-Align (SIFT) can refine the last few microns once you"
+                                            + " are roughly on the tile.";
+                            return UIFunctions.stageAlignmentConfirmAsync(
+                                            gui, refTile, "Reference tile alignment", confirmInstruction)
+                                    .thenCompose(aligned -> {
                                 if (!aligned) {
                                     logger.info("User cancelled at manual alignment step.");
                                     future.complete(null);
@@ -273,8 +290,14 @@ public class AffineTransformationController {
 
                 MicroscopeController.getInstance().moveStageXY(stageCoords[0], stageCoords[1]);
 
-                // Non-modal async confirmation
-                UIFunctions.stageAlignmentConfirmAsync().thenAccept(ok -> {
+                // Non-modal async confirmation. Per-tile SIFT auto-align is
+                // available against the current refinement tile; user still
+                // clicks Confirm to commit the (post-SIFT) stage position.
+                String refineInstruction = "Refining with tile '"
+                        + (tile.getName() != null ? tile.getName() : "tile")
+                        + "'. Use the joystick or Auto-Align (SIFT) to fine-tune, then click Confirm.";
+                UIFunctions.stageAlignmentConfirmAsync(gui, tile, "Refinement tile alignment", refineInstruction)
+                        .thenAccept(ok -> {
                     if (!ok) {
                         logger.info("User cancelled during secondary alignment at tile '{}'.", tile.getName());
                         tileFuture.complete(null);

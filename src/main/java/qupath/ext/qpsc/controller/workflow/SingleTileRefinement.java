@@ -1,8 +1,6 @@
 package qupath.ext.qpsc.controller.workflow;
 
 import java.awt.geom.AffineTransform;
-import java.awt.image.BufferedImage;
-import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -11,33 +9,20 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
-import javafx.scene.control.ButtonType;
-import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
-import javafx.scene.control.Spinner;
-import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import javafx.geometry.Rectangle2D;
 import javafx.stage.Modality;
-import javafx.stage.Screen;
 import javafx.stage.Stage;
-import javafx.stage.Window;
-import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.SiftAutoAlignHelper;
 import qupath.ext.qpsc.ui.UIFunctions;
-import qupath.ext.qpsc.utilities.ImageMetadataManager;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
-import qupath.lib.images.servers.ImageServer;
 import qupath.lib.objects.PathObject;
-import qupath.lib.projects.ProjectImageEntry;
-import qupath.lib.regions.RegionRequest;
 
 /**
  * Helper for single-tile alignment refinement.
@@ -118,8 +103,12 @@ public class SingleTileRefinement {
 
         logger.info("Starting single-tile refinement (trustSift={}, threshold={})", trustSift, confidenceThreshold);
 
+        String classSummary = summarizeAnnotationClasses(annotations);
+
         // Select tile for refinement
         UIFunctions.promptTileSelectionDialogAsync("Select a tile for alignment refinement.\n"
+                        + "Tiles created for " + annotations.size() + " annotation(s)"
+                        + (classSummary.isEmpty() ? "" : " of class: " + classSummary) + ".\n"
                         + "The microscope will move to the estimated position for this tile.\n"
                         + (trustSift
                                 ? "SIFT auto-alignment will attempt to match automatically."
@@ -145,6 +134,23 @@ public class SingleTileRefinement {
                 });
 
         return future;
+    }
+
+    /**
+     * Returns a comma-separated, deduplicated list of annotation
+     * classification names from {@code annotations}. Empty string if no
+     * classifications are set.
+     */
+    private static String summarizeAnnotationClasses(List<PathObject> annotations) {
+        if (annotations == null || annotations.isEmpty()) {
+            return "";
+        }
+        return annotations.stream()
+                .map(PathObject::getClassification)
+                .filter(c -> c != null && !c.isBlank())
+                .distinct()
+                .sorted()
+                .collect(java.util.stream.Collectors.joining(", "));
     }
 
     /**
@@ -220,7 +226,7 @@ public class SingleTileRefinement {
             new Thread(
                             () -> {
                                 try {
-                                    double[] result = performSiftAutoAlign(gui, selectedTile);
+                                    double[] result = SiftAutoAlignHelper.autoAlign(gui, selectedTile);
                                     if (result != null && result.length >= 4) {
                                         double confidence = result[3]; // 4th element = confidence
                                         logger.info(
@@ -397,15 +403,6 @@ public class SingleTileRefinement {
             future.complete(new RefinementResult(null, selectedTile)); // Signal to switch to manual alignment
         });
 
-        // Auto-Align button (SIFT feature matching)
-        Button autoAlignButton = new Button("Auto-Align (SIFT)");
-        autoAlignButton.setStyle(
-                "-fx-font-weight: bold; -fx-border-color: #4A90D9; " + "-fx-border-width: 2; -fx-border-radius: 3;");
-        autoAlignButton.setTooltip(
-                new javafx.scene.control.Tooltip("Automatically align by matching the microscope view to the WSI tile\n"
-                        + "using SIFT feature detection. Searches within ~160um of the\n"
-                        + "predicted position. Requires tissue with visible features."));
-
         Label siftDescription = new Label(String.format(
                 "SIFT searches a ~%.0fum region around the predicted tile position. "
                         + "It requires visible tissue features in the microscope field of view "
@@ -414,74 +411,14 @@ public class SingleTileRefinement {
         siftDescription.setWrapText(true);
         siftDescription.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
 
-        // SIFT Settings button. Dialog is non-modal and docked next to the
-        // Refine Alignment stage (right side preferred, left if it doesn't
-        // fit). Previously it was modal under the main QuPath window and got
-        // hidden behind the always-on-top Refine Alignment dialog, leaving
-        // its focus there and blocking interaction with both.
-        Button siftSettingsButton = new Button("Settings...");
-        siftSettingsButton.setStyle("-fx-font-size: 10px;");
-        siftSettingsButton.setOnAction(e -> {
-            Window ownerWindow = siftSettingsButton.getScene() != null
-                    ? siftSettingsButton.getScene().getWindow()
-                    : null;
-            showSiftSettingsDialog(ownerWindow);
-        });
-
         Label autoAlignStatus = new Label();
         autoAlignStatus.setWrapText(true);
         autoAlignStatus.setStyle("-fx-font-size: 10px;");
 
-        autoAlignButton.setOnAction(e -> {
-            autoAlignButton.setDisable(true);
-            autoAlignStatus.setText("Running SIFT matching...");
-            autoAlignStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
-
-            new Thread(
-                            () -> {
-                                try {
-                                    double[] offset = performSiftAutoAlign(gui, selectedTile);
-                                    Platform.runLater(() -> {
-                                        autoAlignButton.setDisable(false);
-                                        if (offset != null && offset.length >= 2) {
-                                            String confStr = offset.length >= 4
-                                                    ? String.format(" (%.0f%% confidence)", offset[3] * 100)
-                                                    : "";
-                                            autoAlignStatus.setText(String.format(
-                                                    "Aligned! Offset: (%.1f, %.1f) um%s. Verify and Save.",
-                                                    offset[0], offset[1], confStr));
-                                            autoAlignStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
-                                        } else {
-                                            autoAlignStatus.setText("SIFT matching failed. Align manually.");
-                                            autoAlignStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: orange;");
-                                        }
-                                    });
-                                } catch (Exception ex) {
-                                    String msg = ex.getMessage();
-                                    boolean isMatchFailure = msg != null
-                                            && (msg.contains("insufficient features")
-                                                    || msg.contains("matching failed"));
-                                    if (isMatchFailure) {
-                                        logger.info("SIFT matching did not find enough features -- "
-                                                + "the selected tile may be outside the search range or "
-                                                + "lack distinctive tissue features");
-                                    } else {
-                                        logger.error("Auto-align failed: {}", msg);
-                                    }
-                                    String userMsg = isMatchFailure
-                                            ? "SIFT could not match. Try clicking closer to "
-                                                    + "the tile, or adjust Settings."
-                                            : "Error: " + msg;
-                                    Platform.runLater(() -> {
-                                        autoAlignButton.setDisable(false);
-                                        autoAlignStatus.setText(userMsg);
-                                        autoAlignStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: orange;");
-                                    });
-                                }
-                            },
-                            "SIFT-AutoAlign")
-                    .start();
-        });
+        // Auto-Align (SIFT) + Settings... button row provided by the
+        // shared helper so this dialog and the alignment-workflow confirm
+        // dialog stay visually consistent.
+        HBox siftButtonRow = SiftAutoAlignHelper.buildSiftButtonRow(gui, selectedTile, dialogStage, autoAlignStatus);
 
         // Layout
         HBox restoreBox = new HBox(restoreButton);
@@ -489,9 +426,6 @@ public class SingleTileRefinement {
 
         HBox buttonBox = new HBox(10, saveButton, skipButton, newAlignmentButton);
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
-
-        HBox siftButtonRow = new HBox(8, autoAlignButton, siftSettingsButton);
-        siftButtonRow.setAlignment(Pos.CENTER_LEFT);
 
         content.getChildren()
                 .addAll(
@@ -513,339 +447,5 @@ public class SingleTileRefinement {
         Scene scene = new Scene(content);
         dialogStage.setScene(scene);
         dialogStage.show();
-    }
-
-    /**
-     * Perform SIFT-based auto-alignment.
-     *
-     * <p>Extracts a region from the WSI around the selected tile (160um margin),
-     * saves it as a temp file, sends it to the Python server for SIFT matching
-     * against a fresh microscope snapshot, and moves the stage by the resulting offset.
-     *
-     * @param gui QuPath GUI (for accessing the image server)
-     * @param selectedTile The tile being refined
-     * @return Offset in microns [x, y], or null if matching failed
-     */
-    /**
-     * Shows a dialog for tuning SIFT matching parameters.
-     * Changes are saved to persistent preferences and take effect on the next SIFT run.
-     *
-     * <p>Non-modal and docked next to the Refine Alignment window so the user
-     * can see both at once. Previously the dialog opened modal under the main
-     * QuPath window, hidden behind the always-on-top Refine Alignment stage,
-     * leaving focus in the hidden dialog and blocking all interaction.
-     *
-     * @param ownerWindow the Refine Alignment stage (dock target). May be null,
-     *     in which case the dialog falls back to screen-center positioning.
-     */
-    private static void showSiftSettingsDialog(Window ownerWindow) {
-        var prefs = qupath.ext.qpsc.preferences.PersistentPreferences.class;
-        Dialog<Void> dialog = new Dialog<>();
-        dialog.setTitle("SIFT Matching Settings");
-        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
-        dialog.getDialogPane().setPrefWidth(400);
-        // Non-modal so input isn't captured away from either window.
-        dialog.initModality(Modality.NONE);
-        if (ownerWindow != null) {
-            dialog.initOwner(ownerWindow);
-        }
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(8);
-        grid.setPadding(new Insets(15));
-
-        int row = 0;
-
-        // Min pixel size
-        Spinner<Double> minPxSpinner =
-                new Spinner<>(0.1, 5.0, qupath.ext.qpsc.preferences.PersistentPreferences.getSiftMinPixelSize(), 0.1);
-        minPxSpinner.setEditable(true);
-        minPxSpinner.setPrefWidth(90);
-        grid.add(new Label("Min pixel size (um):"), 0, row);
-        grid.add(minPxSpinner, 1, row);
-        Label minPxHelp = new Label("Downsample to this resolution. Lower = more detail but slower.");
-        minPxHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
-        minPxHelp.setWrapText(true);
-        grid.add(minPxHelp, 0, ++row, 2, 1);
-
-        // Ratio threshold
-        Spinner<Double> ratioSpinner = new Spinner<>(
-                0.3, 0.95, qupath.ext.qpsc.preferences.PersistentPreferences.getSiftRatioThreshold(), 0.05);
-        ratioSpinner.setEditable(true);
-        ratioSpinner.setPrefWidth(90);
-        grid.add(new Label("Ratio threshold:"), 0, ++row);
-        grid.add(ratioSpinner, 1, row);
-        Label ratioHelp = new Label("Lowe's ratio test. Higher = more permissive matching (try 0.8 if failing).");
-        ratioHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
-        ratioHelp.setWrapText(true);
-        grid.add(ratioHelp, 0, ++row, 2, 1);
-
-        // Min matches
-        Spinner<Integer> minMatchSpinner =
-                new Spinner<>(3, 50, qupath.ext.qpsc.preferences.PersistentPreferences.getSiftMinMatchCount(), 1);
-        minMatchSpinner.setPrefWidth(90);
-        grid.add(new Label("Min match count:"), 0, ++row);
-        grid.add(minMatchSpinner, 1, row);
-        Label matchHelp = new Label("Minimum inlier matches required. Lower = accept weaker matches.");
-        matchHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
-        matchHelp.setWrapText(true);
-        grid.add(matchHelp, 0, ++row, 2, 1);
-
-        // Contrast threshold
-        Spinner<Double> contrastSpinner = new Spinner<>(
-                0.001, 0.2, qupath.ext.qpsc.preferences.PersistentPreferences.getSiftContrastThreshold(), 0.005);
-        contrastSpinner.setEditable(true);
-        contrastSpinner.setPrefWidth(90);
-        grid.add(new Label("Contrast threshold:"), 0, ++row);
-        grid.add(contrastSpinner, 1, row);
-        Label contrastHelp = new Label("Feature detection sensitivity. Lower = detect more features in pale tissue.");
-        contrastHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
-        contrastHelp.setWrapText(true);
-        grid.add(contrastHelp, 0, ++row, 2, 1);
-
-        // Search margin
-        Spinner<Double> marginSpinner = new Spinner<>(
-                50.0, 500.0, qupath.ext.qpsc.preferences.PersistentPreferences.getSiftSearchMarginUm(), 10.0);
-        marginSpinner.setEditable(true);
-        marginSpinner.setPrefWidth(90);
-        grid.add(new Label("Search margin (um):"), 0, ++row);
-        grid.add(marginSpinner, 1, row);
-        Label marginHelp = new Label("WSI region extends this far beyond the tile on each side.");
-        marginHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
-        marginHelp.setWrapText(true);
-        grid.add(marginHelp, 0, ++row, 2, 1);
-
-        // Confidence threshold
-        Spinner<Double> confSpinner = new Spinner<>(
-                0.1, 1.0, qupath.ext.qpsc.preferences.PersistentPreferences.getSiftConfidenceThreshold(), 0.05);
-        confSpinner.setEditable(true);
-        confSpinner.setPrefWidth(90);
-        grid.add(new Label("Auto-accept confidence:"), 0, ++row);
-        grid.add(confSpinner, 1, row);
-        Label confHelp = new Label("Min inlier ratio to auto-accept when Trust SIFT is enabled.");
-        confHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
-        confHelp.setWrapText(true);
-        grid.add(confHelp, 0, ++row, 2, 1);
-
-        dialog.getDialogPane().setContent(grid);
-
-        dialog.setResultConverter(bt -> {
-            if (bt == ButtonType.OK) {
-                qupath.ext.qpsc.preferences.PersistentPreferences.setSiftMinPixelSize(minPxSpinner.getValue());
-                qupath.ext.qpsc.preferences.PersistentPreferences.setSiftRatioThreshold(ratioSpinner.getValue());
-                qupath.ext.qpsc.preferences.PersistentPreferences.setSiftMinMatchCount(minMatchSpinner.getValue());
-                qupath.ext.qpsc.preferences.PersistentPreferences.setSiftContrastThreshold(contrastSpinner.getValue());
-                qupath.ext.qpsc.preferences.PersistentPreferences.setSiftSearchMarginUm(marginSpinner.getValue());
-                qupath.ext.qpsc.preferences.PersistentPreferences.setSiftConfidenceThreshold(confSpinner.getValue());
-                logger.info(
-                        "SIFT settings updated: minPx={}, ratio={}, minMatches={}, contrast={}, margin={}, confidence={}",
-                        minPxSpinner.getValue(),
-                        ratioSpinner.getValue(),
-                        minMatchSpinner.getValue(),
-                        contrastSpinner.getValue(),
-                        marginSpinner.getValue(),
-                        confSpinner.getValue());
-            }
-            return null;
-        });
-
-        // Dock next to the owner window once sizes are known, and keep the
-        // dialog on top so it sits beside the always-on-top Refine Alignment
-        // stage instead of disappearing behind it.
-        dialog.setOnShown(evt -> {
-            Window dialogWindow = dialog.getDialogPane().getScene() != null
-                    ? dialog.getDialogPane().getScene().getWindow()
-                    : null;
-            if (dialogWindow instanceof Stage) {
-                ((Stage) dialogWindow).setAlwaysOnTop(true);
-            }
-            if (ownerWindow != null && dialogWindow != null) {
-                dockNextTo(dialogWindow, ownerWindow);
-            }
-        });
-
-        // Non-blocking so the workflow thread isn't held up; the result
-        // converter still fires on OK/Cancel to persist the preferences.
-        dialog.show();
-    }
-
-    /**
-     * Position {@code child} immediately to the right of {@code owner}. If the
-     * right side doesn't fit within the containing screen's visual bounds,
-     * fall back to the left. If neither fits, center horizontally. Y-align
-     * with the owner's top edge.
-     */
-    private static void dockNextTo(Window child, Window owner) {
-        double gap = 10;
-        double childW = child.getWidth();
-        double childH = child.getHeight();
-
-        // Find the screen containing the owner so we dock within the same
-        // monitor the user is looking at.
-        Rectangle2D bounds = Screen.getPrimary().getVisualBounds();
-        double ownerCx = owner.getX() + owner.getWidth() / 2.0;
-        double ownerCy = owner.getY() + owner.getHeight() / 2.0;
-        for (Screen s : Screen.getScreens()) {
-            if (s.getBounds().contains(ownerCx, ownerCy)) {
-                bounds = s.getVisualBounds();
-                break;
-            }
-        }
-
-        double rightX = owner.getX() + owner.getWidth() + gap;
-        double leftX = owner.getX() - gap - childW;
-
-        if (rightX + childW <= bounds.getMaxX()) {
-            child.setX(rightX);
-        } else if (leftX >= bounds.getMinX()) {
-            child.setX(leftX);
-        } else {
-            // Neither side fits; center on the owner's screen as a last resort.
-            child.setX(bounds.getMinX() + Math.max(0, (bounds.getWidth() - childW) / 2.0));
-        }
-
-        // Clamp vertical position so the dialog stays on-screen.
-        double y = owner.getY();
-        if (y + childH > bounds.getMaxY()) {
-            y = Math.max(bounds.getMinY(), bounds.getMaxY() - childH);
-        }
-        if (y < bounds.getMinY()) {
-            y = bounds.getMinY();
-        }
-        child.setY(y);
-    }
-
-    private static double[] performSiftAutoAlign(QuPathGUI gui, PathObject selectedTile) throws Exception {
-
-        var imageData = gui.getImageData();
-        if (imageData == null) throw new IllegalStateException("No image data available");
-
-        ImageServer<BufferedImage> server = imageData.getServer();
-        double wsiPixelSize = server.getPixelCalibration().getAveragedPixelSizeMicrons();
-        if (Double.isNaN(wsiPixelSize) || wsiPixelSize <= 0) {
-            throw new IllegalStateException("WSI has no valid pixel size calibration");
-        }
-
-        // Get microscope pixel size
-        MicroscopeController mc = MicroscopeController.getInstance();
-        double microPixelSize = mc.getSocketClient().getMicroscopePixelSize();
-
-        // Calculate search region: tile bounds + configurable margin on each side
-        double marginUm = qupath.ext.qpsc.preferences.PersistentPreferences.getSiftSearchMarginUm();
-        double marginPx = marginUm / wsiPixelSize;
-
-        double tileX = selectedTile.getROI().getBoundsX();
-        double tileY = selectedTile.getROI().getBoundsY();
-        double tileW = selectedTile.getROI().getBoundsWidth();
-        double tileH = selectedTile.getROI().getBoundsHeight();
-
-        int regionX = Math.max(0, (int) (tileX - marginPx));
-        int regionY = Math.max(0, (int) (tileY - marginPx));
-        int regionW = Math.min(server.getWidth() - regionX, (int) (tileW + 2 * marginPx));
-        int regionH = Math.min(server.getHeight() - regionY, (int) (tileH + 2 * marginPx));
-
-        logger.info(
-                "Extracting WSI region: ({}, {}) {}x{} pixels (margin={}um={}px)",
-                regionX,
-                regionY,
-                regionW,
-                regionH,
-                marginUm,
-                (int) marginPx);
-
-        // Read the WSI region at full resolution
-        RegionRequest request = RegionRequest.createInstance(server.getPath(), 1.0, regionX, regionY, regionW, regionH);
-        BufferedImage wsiRegion = server.readRegion(request);
-
-        // Save to temp file
-        File tempFile = File.createTempFile("sift_wsi_region_", ".png");
-        tempFile.deleteOnExit();
-        ImageIO.write(wsiRegion, "PNG", tempFile);
-        logger.info(
-                "Saved WSI region to temp file: {} ({}x{})",
-                tempFile.getAbsolutePath(),
-                wsiRegion.getWidth(),
-                wsiRegion.getHeight());
-
-        // Get flip status from image metadata (macro/WSI flip)
-        ProjectImageEntry<?> entry = gui.getProject() != null && gui.getImageData() != null
-                ? gui.getProject().getEntry(gui.getImageData())
-                : null;
-        boolean flipX = entry != null && ImageMetadataManager.isFlippedX(entry);
-        boolean flipY = entry != null && ImageMetadataManager.isFlippedY(entry);
-
-        // Account for detector optical flip (XOR with macro flip).
-        // If the macro is flipped AND the detector is also flipped, they cancel out
-        // and no SIFT flip is needed. If only one is flipped, SIFT must compensate.
-        String siftDetectorId = entry != null ? ImageMetadataManager.getDetectorId(entry) : null;
-        if (siftDetectorId != null) {
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-            if (mgr != null) {
-                flipX ^= mgr.getDetectorFlipX(siftDetectorId);
-                flipY ^= mgr.getDetectorFlipY(siftDetectorId);
-            }
-        }
-
-        // Stop live streaming for clean snap
-        MicroscopeController.LiveViewState liveState = mc.stopAllLiveViewing();
-        try {
-            // Call SIFT matching on the Python server
-            double minPx = qupath.ext.qpsc.preferences.PersistentPreferences.getSiftMinPixelSize();
-            double ratioThreshold = qupath.ext.qpsc.preferences.PersistentPreferences.getSiftRatioThreshold();
-            int minMatchCount = qupath.ext.qpsc.preferences.PersistentPreferences.getSiftMinMatchCount();
-            double contrastThreshold = qupath.ext.qpsc.preferences.PersistentPreferences.getSiftContrastThreshold();
-            int nFeatures = qupath.ext.qpsc.preferences.PersistentPreferences.getSiftNFeatures();
-            String response = mc.getSocketClient()
-                    .siftAutoAlign(
-                            tempFile.getAbsolutePath(),
-                            microPixelSize,
-                            wsiPixelSize,
-                            flipX,
-                            flipY,
-                            minPx,
-                            ratioThreshold,
-                            minMatchCount,
-                            contrastThreshold,
-                            nFeatures);
-
-            // Parse response: "SUCCESS:offsetX,offsetY|inliers:N|confidence:C"
-            if (!response.startsWith("SUCCESS:")) {
-                logger.warn("SIFT auto-align did not succeed: {}", response);
-                return null;
-            }
-
-            String[] parts = response.substring(8).split("\\|");
-            String[] offsets = parts[0].split(",");
-            double offsetX = Double.parseDouble(offsets[0]);
-            double offsetY = Double.parseDouble(offsets[1]);
-
-            // Parse inliers and confidence
-            int inliers = 0;
-            double confidence = 0;
-            for (String part : parts) {
-                if (part.startsWith("inliers:")) inliers = Integer.parseInt(part.substring(8));
-                if (part.startsWith("confidence:")) confidence = Double.parseDouble(part.substring(11));
-            }
-
-            logger.info("SIFT offset: ({}, {}) um, inliers={}, confidence={}", offsetX, offsetY, inliers, confidence);
-
-            // Move stage by the offset to correct alignment
-            double[] currentPos = mc.getStagePositionXY();
-            double newX = currentPos[0] + offsetX;
-            double newY = currentPos[1] + offsetY;
-            logger.info("Moving stage from ({}, {}) to ({}, {})", currentPos[0], currentPos[1], newX, newY);
-            mc.moveStageXY(newX, newY);
-
-            // Return offset + inliers + confidence
-            return new double[] {offsetX, offsetY, inliers, confidence};
-
-        } finally {
-            mc.restoreLiveViewState(liveState);
-            // Clean up temp file
-            if (!tempFile.delete()) {
-                logger.debug("Could not delete temp file: {}", tempFile);
-            }
-        }
     }
 }
