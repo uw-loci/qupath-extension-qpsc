@@ -246,15 +246,17 @@ public class TestAutofocusWorkflow {
         String testType = isAdaptive ? "adaptive" : "standard";
         logger.info("Executing {} autofocus test for objective: {}", testType, objective);
 
+        MicroscopeController mc = MicroscopeController.getInstance();
+        MicroscopeController.LiveViewState liveState = null;
+
         try {
             // Get socket client from MicroscopeController
-            MicroscopeSocketClient socketClient =
-                    MicroscopeController.getInstance().getSocketClient();
+            MicroscopeSocketClient socketClient = mc.getSocketClient();
 
             // Ensure connection
-            if (!MicroscopeController.getInstance().isConnected()) {
+            if (!mc.isConnected()) {
                 logger.info("Connecting to microscope server for autofocus test");
-                MicroscopeController.getInstance().connect();
+                mc.connect();
             }
 
             // Create output directory
@@ -262,6 +264,14 @@ public class TestAutofocusWorkflow {
             if (!outputDir.exists() && !outputDir.mkdirs()) {
                 throw new IOException("Failed to create output directory: " + outputPath);
             }
+
+            // Stop live viewing -- the AF test moves Z and snaps images, so
+            // both MM live mode and the QPSC Live Viewer's continuous
+            // acquisition must release the camera. Without this, the Live
+            // Viewer keeps showing "Live: ON" with a frozen frame because
+            // the aux-socket GETFRAME poll competes with the AF run for the
+            // server-side hardware lock and starves out.
+            liveState = mc.stopAllLiveViewing();
 
             logger.info("Starting {} autofocus test", testType);
 
@@ -293,6 +303,10 @@ public class TestAutofocusWorkflow {
                 Dialogs.showErrorMessage(
                         "Autofocus Test Failed", "Failed to execute autofocus test: " + e.getMessage());
             });
+        } finally {
+            if (liveState != null) {
+                mc.restoreLiveViewState(liveState);
+            }
         }
     }
 
