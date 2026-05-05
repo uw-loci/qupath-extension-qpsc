@@ -45,6 +45,28 @@ public class ForwardPropagationWorkflow {
     }
 
     /**
+     * Thrown when back-propagation cannot determine the camera FOV for a
+     * sub-acquisition because the scope that captured it has no config file
+     * accessible to this QuPath instance. The dialog uses {@link #subName} /
+     * {@link #sourceScope} / {@link #expectedConfigFilename} to surface a
+     * user-actionable warning naming the file the user needs to add.
+     */
+    public static class MissingSourceConfigException extends Exception {
+        public final String subName;
+        public final String sourceScope;
+        public final String expectedConfigFilename;
+
+        public MissingSourceConfigException(String subName, String sourceScope, String expectedConfigFilename) {
+            super("No config file for source scope '" + sourceScope
+                    + "' (expected '" + expectedConfigFilename + "') -- cannot resolve FOV for '"
+                    + subName + "'.");
+            this.subName = subName;
+            this.sourceScope = sourceScope;
+            this.expectedConfigFilename = expectedConfigFilename;
+        }
+    }
+
+    /**
      * Show the propagation manager dialog with Forward as default direction.
      */
     public static void run(QuPathGUI qupath) {
@@ -250,17 +272,27 @@ public class ForwardPropagationWorkflow {
         //   1. Per-image metadata (fov_x_um / fov_y_um) -- always correct
         //   2. Config file (modality + objective + detector from metadata) -- works offline
         //   3. Live microscope connection -- fallback if nothing else available
-        double halfFovX = 0;
-        double halfFovY = 0;
         double[] fov = resolveFovForEntry(subEntry);
-        if (fov != null) {
-            halfFovX = fov[0] / 2.0;
-            halfFovY = fov[1] / 2.0;
-        } else {
-            logger.warn("Could not determine FOV for sub-image '{}'. "
-                    + "Offset correction will be skipped -- propagated objects may be shifted by half a FOV.",
-                    subEntry.getImageName());
+        if (fov == null) {
+            String subSource = subEntry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+            String activeScope = null;
+            try {
+                MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+                if (mgr != null) activeScope = mgr.getMicroscopeName();
+            } catch (Exception ignore) {
+            }
+            if (subSource != null && !subSource.isEmpty()
+                    && activeScope != null && !subSource.equals(activeScope)) {
+                throw new MissingSourceConfigException(
+                        subEntry.getImageName(), subSource, "config_" + subSource + ".yml");
+            }
+            throw new IllegalStateException(
+                    "Cannot determine FOV for sub-image '" + subEntry.getImageName()
+                    + "'. Add 'fov_x_um' / 'fov_y_um' metadata or ensure the active microscope "
+                    + "config has objective+detector entries for this sub-acquisition.");
         }
+        double halfFovX = fov[0] / 2.0;
+        double halfFovY = fov[1] / 2.0;
 
         double correctedOffsetX = xyOffset[0] - halfFovX;
         double correctedOffsetY = xyOffset[1] - halfFovY;
@@ -349,18 +381,32 @@ public class ForwardPropagationWorkflow {
         int baseWidth = baseData.getServer().getWidth();
         int baseHeight = baseData.getServer().getHeight();
 
-        // Apply same half-FOV correction as forward propagation (see resolveFovForEntry)
-        double halfFovX = 0;
-        double halfFovY = 0;
+        // Apply same half-FOV correction as forward propagation (see resolveFovForEntry).
+        // If FOV cannot be resolved we refuse to back-propagate -- silently dropping the
+        // halfFOV correction shifts the result by hundreds of base pixels, which is worse
+        // than failing visibly. When the missing piece is the source scope's config file,
+        // surface that to the caller so the dialog can tell the user exactly what to add.
         double[] fov = resolveFovForEntry(subEntry);
-        if (fov != null) {
-            halfFovX = fov[0] / 2.0;
-            halfFovY = fov[1] / 2.0;
-        } else {
-            logger.warn("BackProp: could not determine FOV for sub-image '{}'. "
-                    + "Offset correction will be skipped (objects may be mis-shifted by half a FOV).",
-                    subEntry.getImageName());
+        if (fov == null) {
+            String subSource = subEntry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+            String activeScope = null;
+            try {
+                MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+                if (mgr != null) activeScope = mgr.getMicroscopeName();
+            } catch (Exception ignore) {
+            }
+            if (subSource != null && !subSource.isEmpty()
+                    && activeScope != null && !subSource.equals(activeScope)) {
+                throw new MissingSourceConfigException(
+                        subEntry.getImageName(), subSource, "config_" + subSource + ".yml");
+            }
+            throw new IllegalStateException(
+                    "Cannot determine FOV for sub-image '" + subEntry.getImageName()
+                    + "'. Add 'fov_x_um' / 'fov_y_um' metadata or ensure the active microscope "
+                    + "config has objective+detector entries for this sub-acquisition.");
         }
+        double halfFovX = fov[0] / 2.0;
+        double halfFovY = fov[1] / 2.0;
         double correctedOffsetX = xyOffset[0] - halfFovX;
         double correctedOffsetY = xyOffset[1] - halfFovY;
 

@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,6 +41,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow.Direction;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow.FanOutResult;
+import qupath.ext.qpsc.controller.ForwardPropagationWorkflow.MissingSourceConfigException;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -410,6 +412,11 @@ public final class PropagationManagerDialog {
         progress.setProgress(-1);
         propagateBtn.setDisable(true);
 
+        // Accumulate missing source-scope configs across all subs so we can show
+        // ONE actionable warning at the end naming every file the user needs.
+        Map<String, String> missingConfigs = new LinkedHashMap<>(); // scope -> filename
+        Map<String, Set<String>> missingConfigSubs = new LinkedHashMap<>(); // scope -> subs
+
         Thread worker = new Thread(() -> {
             int grandTotal = 0;
             int grandErrors = 0;
@@ -465,6 +472,14 @@ public final class PropagationManagerDialog {
                                 groupTotal += count;
                                 appendStatus(results, String.format(
                                         "    -> %s: %d objects%n", sub.getImageName(), count));
+                            } catch (MissingSourceConfigException mce) {
+                                groupErrors++;
+                                missingConfigs.put(mce.sourceScope, mce.expectedConfigFilename);
+                                missingConfigSubs.computeIfAbsent(mce.sourceScope, k -> new LinkedHashSet<>())
+                                        .add(mce.subName);
+                                appendStatus(results, String.format(
+                                        "    -> %s: SKIPPED (missing source-scope config '%s')%n",
+                                        sub.getImageName(), mce.expectedConfigFilename));
                             } catch (Exception ex) {
                                 groupErrors++;
                                 appendStatus(results, String.format(
@@ -494,6 +509,14 @@ public final class PropagationManagerDialog {
                                     appendStatus(results, "  (auto-created " + fo.siblingsAutoCreated
                                             + " sibling(s) for fan-out)\n");
                                 }
+                            } catch (MissingSourceConfigException mce) {
+                                groupErrors++;
+                                missingConfigs.put(mce.sourceScope, mce.expectedConfigFilename);
+                                missingConfigSubs.computeIfAbsent(mce.sourceScope, k -> new LinkedHashSet<>())
+                                        .add(mce.subName);
+                                appendStatus(results, "    " + sub.getImageName()
+                                        + ": SKIPPED (missing source-scope config '"
+                                        + mce.expectedConfigFilename + "')\n");
                             } catch (Exception ex) {
                                 groupErrors++;
                                 appendStatus(results, "    " + sub.getImageName()
@@ -517,6 +540,46 @@ public final class PropagationManagerDialog {
                         "=== Done: " + finalTotal + " object(s) propagated across "
                                 + checkedGroups.size() + " group(s)"
                                 + (finalErrors > 0 ? ", " + finalErrors + " error(s)" : "") + " ===\n"));
+
+                if (!missingConfigs.isEmpty()) {
+                    Platform.runLater(() -> {
+                        StringBuilder body = new StringBuilder();
+                        body.append("Some sub-acquisitions could not be propagated because the "
+                                + "config file for the microscope that captured them is not "
+                                + "available to this QuPath instance.\n\n");
+                        body.append("To fix this, copy the listed file(s) into the same directory "
+                                + "as your active microscope config "
+                                + "(Edit > Preferences > QuPath SCope > Microscope Config File), "
+                                + "then run propagation again.\n\n");
+                        for (Map.Entry<String, String> e : missingConfigs.entrySet()) {
+                            body.append("Missing: ").append(e.getValue())
+                                    .append("  (scope '").append(e.getKey()).append("')\n");
+                            Set<String> subs = missingConfigSubs.get(e.getKey());
+                            if (subs != null) {
+                                int n = 0;
+                                for (String s : subs) {
+                                    if (n++ >= 5) {
+                                        body.append("    ... and ").append(subs.size() - 5)
+                                                .append(" more\n");
+                                        break;
+                                    }
+                                    body.append("    - ").append(s).append('\n');
+                                }
+                            }
+                        }
+                        Alert alert = new Alert(Alert.AlertType.WARNING);
+                        alert.setTitle("Propagation Manager - missing config file(s)");
+                        alert.setHeaderText("Cross-scope propagation needs source microscope config");
+                        TextArea ta = new TextArea(body.toString());
+                        ta.setEditable(false);
+                        ta.setWrapText(true);
+                        ta.setPrefRowCount(Math.min(20, 6 + missingConfigSubs.values().stream()
+                                .mapToInt(Set::size).sum()));
+                        alert.getDialogPane().setContent(ta);
+                        alert.getDialogPane().setPrefWidth(620);
+                        alert.showAndWait();
+                    });
+                }
             } finally {
                 Platform.runLater(() -> {
                     progress.setVisible(false);
