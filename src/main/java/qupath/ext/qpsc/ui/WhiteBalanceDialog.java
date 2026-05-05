@@ -720,13 +720,18 @@ public class WhiteBalanceDialog {
                             .map(MicroscopeConfigManager.HardwareSelection::objectiveId)
                             .filter(objectives::contains)
                             .orElse(null);
+                    String fallbackPref = null;
                     if (defaultObjective == null) {
-                        String savedObjective = PersistentPreferences.getLastObjective();
-                        if (savedObjective != null && !savedObjective.isEmpty()
-                                && objectives.contains(savedObjective)) {
-                            defaultObjective = savedObjective;
+                        fallbackPref = PersistentPreferences.getLastObjective();
+                        if (fallbackPref != null && !fallbackPref.isEmpty()
+                                && objectives.contains(fallbackPref)) {
+                            defaultObjective = fallbackPref;
                         }
                     }
+                    logger.info("WB dialog objective seed: liveMatch={}, prefFallback='{}', selected='{}'",
+                            liveMatch.map(MicroscopeConfigManager.HardwareSelection::objectiveId).orElse(null),
+                            fallbackPref,
+                            defaultObjective);
                     if (defaultObjective != null) {
                         objectiveCombo.setValue(defaultObjective);
                     } else {
@@ -925,12 +930,20 @@ public class WhiteBalanceDialog {
             MicroscopeConfigManager configManager) {
         try {
             MicroscopeController mc = MicroscopeController.getInstance();
-            if (mc == null || !mc.isConnected()) return Optional.empty();
+            if (mc == null || !mc.isConnected()) {
+                logger.info("WB dialog: live hardware detection skipped (controller={}, connected={})",
+                        mc, mc != null && mc.isConnected());
+                return Optional.empty();
+            }
             double mmPx = mc.getSocketClient().getMicroscopePixelSize();
-            return configManager.findHardwareByPixelSize(
+            Optional<MicroscopeConfigManager.HardwareSelection> match = configManager.findHardwareByPixelSize(
                     mmPx, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
+            logger.info("WB dialog: live MM pixel size {} um/px -> {}",
+                    mmPx,
+                    match.map(h -> h.objectiveId() + " / " + h.detectorId()).orElse("NO MATCH"));
+            return match;
         } catch (Exception e) {
-            logger.debug("WB dialog: live hardware detection failed: {}", e.getMessage());
+            logger.warn("WB dialog: live hardware detection failed: {}", e.getMessage());
             return Optional.empty();
         }
     }
