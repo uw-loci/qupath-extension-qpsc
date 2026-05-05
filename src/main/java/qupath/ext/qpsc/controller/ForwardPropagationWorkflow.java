@@ -376,10 +376,45 @@ public class ForwardPropagationWorkflow {
             throw new IllegalStateException("Sub-image has no valid pixel size");
         }
 
-        double[] xyOffset = ImageMetadataManager.getXYOffset(subEntry);
-
         int baseWidth = baseData.getServer().getWidth();
         int baseHeight = baseData.getServer().getHeight();
+
+        // Ground-truth path: if the sub has a recorded source rectangle on the
+        // unflipped base, use it directly. The annotation's relative position
+        // within the sub maps to the same relative position within the base
+        // rectangle. This bypasses every alignment / flip / half-FOV variable
+        // and is correct as long as the rectangle was captured accurately at
+        // acquisition time (or hand-stamped from a known source ROI).
+        double[] sourceRoi = ImageMetadataManager.getSourceRoiPx(subEntry);
+        if (sourceRoi != null) {
+            double rx = sourceRoi[0], ry = sourceRoi[1], rw = sourceRoi[2], rh = sourceRoi[3];
+            logger.info("BackProp: using GROUND-TRUTH source rect from metadata: "
+                    + "base px=({}, {}, {}x{}) -- skipping alignment math.",
+                    fmt(rx), fmt(ry), fmt(rw), fmt(rh));
+            AffineTransform combined = new AffineTransform();
+            combined.translate(rx, ry);
+            combined.scale(rw / subWidth, rh / subHeight);
+            for (PathObject obj : sourceObjects) {
+                ROI src = obj.getROI();
+                if (src == null) continue;
+                double sx = src.getBoundsX(), sy = src.getBoundsY();
+                double sw = src.getBoundsWidth(), sh = src.getBoundsHeight();
+                logger.info("  source obj '{}' src px=({}, {}, {}x{}) -> base px=({}, {}, {}x{}) [GT]",
+                        obj.getDisplayedName(),
+                        fmt(sx), fmt(sy), fmt(sw), fmt(sh),
+                        fmt(rx + sx * rw / subWidth),
+                        fmt(ry + sy * rh / subHeight),
+                        fmt(sw * rw / subWidth),
+                        fmt(sh * rh / subHeight));
+            }
+            List<PathObject> propagated = transformAndClip(sourceObjects, combined, baseWidth, baseHeight);
+            logger.info("BackProp(GT): {} of {} object(s) survived clip onto base ({}x{})",
+                    propagated.size(), sourceObjects.size(), baseWidth, baseHeight);
+            if (!propagated.isEmpty()) baseHierarchy.addObjects(propagated);
+            return propagated.size();
+        }
+
+        double[] xyOffset = ImageMetadataManager.getXYOffset(subEntry);
 
         // Apply same half-FOV correction as forward propagation (see resolveFovForEntry).
         // If FOV cannot be resolved we refuse to back-propagate -- silently dropping the

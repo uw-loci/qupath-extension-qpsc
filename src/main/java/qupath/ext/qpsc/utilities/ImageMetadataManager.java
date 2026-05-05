@@ -70,6 +70,16 @@ public class ImageMetadataManager {
     public static final String FOV_X_UM = "fov_x_um";
     public static final String FOV_Y_UM = "fov_y_um";
 
+    // Ground-truth source rectangle on the unflipped base entry, in
+    // base-pixel coordinates, recorded at acquisition time. Knowing this
+    // lets back-propagation place objects exactly inside the region the
+    // user originally drew, without depending on alignment / flip /
+    // half-FOV math being internally consistent.
+    public static final String SOURCE_ROI_X_PX = "source_roi_x_px";
+    public static final String SOURCE_ROI_Y_PX = "source_roi_y_px";
+    public static final String SOURCE_ROI_W_PX = "source_roi_w_px";
+    public static final String SOURCE_ROI_H_PX = "source_roi_h_px";
+
     // PPM analysis metadata
     public static final String PPM_CALIBRATION = "ppm_calibration";
 
@@ -597,6 +607,45 @@ public class ImageMetadataManager {
         } catch (Exception e) {
             logger.debug("Could not parse XYZ offset for {}: {}", entry.getImageName(), e.getMessage());
             return new double[] {0, 0, 0};
+        }
+    }
+
+    /**
+     * Stamp the ground-truth source rectangle (in unflipped-base pixel
+     * coords) onto a sub-acquisition entry. Used by back-propagation as
+     * authoritative placement when the alignment / flip math disagrees with
+     * what the user actually drew.
+     */
+    public static void setSourceRoiPx(ProjectImageEntry<?> entry,
+                                      double x, double y, double w, double h) {
+        if (entry == null) return;
+        Map<String, String> meta = entry.getMetadata();
+        meta.put(SOURCE_ROI_X_PX, String.valueOf(x));
+        meta.put(SOURCE_ROI_Y_PX, String.valueOf(y));
+        meta.put(SOURCE_ROI_W_PX, String.valueOf(w));
+        meta.put(SOURCE_ROI_H_PX, String.valueOf(h));
+    }
+
+    /**
+     * Read the source rectangle stamped by {@link #setSourceRoiPx}.
+     *
+     * @return [x, y, w, h] in base pixels, or null if not stamped (or invalid)
+     */
+    public static double[] getSourceRoiPx(ProjectImageEntry<?> entry) {
+        if (entry == null) return null;
+        Map<String, String> meta = entry.getMetadata();
+        String xs = meta.get(SOURCE_ROI_X_PX);
+        String ys = meta.get(SOURCE_ROI_Y_PX);
+        String ws = meta.get(SOURCE_ROI_W_PX);
+        String hs = meta.get(SOURCE_ROI_H_PX);
+        if (xs == null || ys == null || ws == null || hs == null) return null;
+        try {
+            double w = Double.parseDouble(ws);
+            double h = Double.parseDouble(hs);
+            if (w <= 0 || h <= 0) return null;
+            return new double[]{Double.parseDouble(xs), Double.parseDouble(ys), w, h};
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 

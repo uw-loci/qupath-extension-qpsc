@@ -43,6 +43,9 @@ import qupath.ext.qpsc.controller.ForwardPropagationWorkflow.Direction;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow.FanOutResult;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow.MissingSourceConfigException;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
+import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.lib.common.GeneralTools;
+import qupath.lib.roi.interfaces.ROI;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
@@ -322,6 +325,20 @@ public final class PropagationManagerDialog {
         Button refreshBtn = new Button("Refresh classes");
         refreshBtn.setOnAction(e -> refreshClasses.run());
 
+        // "Record source ROI" button: stamps the bounds of the currently-selected
+        // annotation on the open base entry as ground-truth source rectangle on
+        // every sub-acquisition in every checked group whose unflipped base
+        // matches the open entry. Lets the user retrofit existing data without
+        // re-acquiring -- back-prop then bypasses alignment math entirely.
+        Button stampRoiBtn = new Button("Record source ROI");
+        stampRoiBtn.setTooltip(new Tooltip(
+                "Open the unflipped base image, select the annotation that marks "
+                        + "where these sub-acquisitions came from, then click here. "
+                        + "Each checked group whose base matches the open image will "
+                        + "get the rect stamped as ground truth on its sub-acquisitions, "
+                        + "so back-propagation lands exactly inside that region."));
+        stampRoiBtn.setOnAction(e -> stampSourceRoi(qupath, project, groups, results));
+
         Button propagateBtn = new Button("Propagate");
         propagateBtn.setStyle("-fx-font-weight: bold;");
         propagateBtn.setOnAction(e -> runPropagation(
@@ -331,7 +348,7 @@ public final class PropagationManagerDialog {
         Button closeBtn = new Button("Close");
         closeBtn.setOnAction(e -> dialog.close());
 
-        HBox buttonBar = new HBox(8, propagateBtn, refreshBtn, closeBtn);
+        HBox buttonBar = new HBox(8, propagateBtn, refreshBtn, stampRoiBtn, closeBtn);
         buttonBar.setAlignment(Pos.CENTER_RIGHT);
 
         // -- Compose -------------------------------------------------------
@@ -640,6 +657,80 @@ public final class PropagationManagerDialog {
         }, "PropagationManager-Worker");
         worker.setDaemon(true);
         worker.start();
+    }
+
+    /**
+     * Stamp the bounds of the currently-selected annotation on the open base
+     * entry as ground-truth source rectangle on every sub-acquisition in
+     * every checked group whose base matches the open entry. Saves and
+     * syncs the project so the stamps survive reload.
+     */
+    private static void stampSourceRoi(QuPathGUI qupath,
+                                       Project<BufferedImage> project,
+                                       List<PropagationGroupItem> groups,
+                                       TextArea results) {
+        if (qupath.getImageData() == null) {
+            new Alert(Alert.AlertType.WARNING,
+                    "No image is open. Open the unflipped base image first.").showAndWait();
+            return;
+        }
+        ProjectImageEntry<BufferedImage> openEntry = project.getEntry(qupath.getImageData());
+        if (openEntry == null) {
+            new Alert(Alert.AlertType.WARNING,
+                    "The open image is not a project entry.").showAndWait();
+            return;
+        }
+        var selected = qupath.getImageData().getHierarchy().getSelectionModel().getSelectedObjects();
+        if (selected == null || selected.size() != 1) {
+            new Alert(Alert.AlertType.WARNING,
+                    "Select exactly ONE annotation on the base image to use as the source rectangle, "
+                            + "then click again.").showAndWait();
+            return;
+        }
+        ROI roi = selected.iterator().next().getROI();
+        if (roi == null) {
+            new Alert(Alert.AlertType.WARNING, "Selected object has no ROI.").showAndWait();
+            return;
+        }
+        double rx = roi.getBoundsX();
+        double ry = roi.getBoundsY();
+        double rw = roi.getBoundsWidth();
+        double rh = roi.getBoundsHeight();
+        if (rw <= 0 || rh <= 0) {
+            new Alert(Alert.AlertType.WARNING, "Selected ROI has zero area.").showAndWait();
+            return;
+        }
+        String openBase = ImageMetadataManager.getBaseImage(openEntry);
+        if (openBase == null || openBase.isEmpty()) {
+            openBase = GeneralTools.stripExtension(openEntry.getImageName());
+        }
+        int stampedSubs = 0;
+        int matchedGroups = 0;
+        for (PropagationGroupItem grp : groups) {
+            if (!grp.isSelected()) continue;
+            if (!grp.getBaseName().equals(openBase)) continue;
+            matchedGroups++;
+            for (ProjectImageEntry<BufferedImage> sub : grp.getSubAcquisitions()) {
+                ImageMetadataManager.setSourceRoiPx(sub, rx, ry, rw, rh);
+                stampedSubs++;
+            }
+        }
+        try {
+            project.syncChanges();
+        } catch (Exception ex) {
+            logger.warn("syncChanges after stamp failed: {}", ex.getMessage());
+        }
+        String msg;
+        if (stampedSubs == 0) {
+            msg = "No sub-acquisitions matched the open base '" + openBase
+                    + "'. Check at least one group whose base matches the open image, then retry.";
+        } else {
+            msg = String.format("Stamped source ROI (%.0f, %.0f, %.0f x %.0f) onto %d sub(s) "
+                            + "across %d group(s). Run BACK propagation to use it as ground truth.",
+                    rx, ry, rw, rh, stampedSubs, matchedGroups);
+        }
+        results.appendText(msg + "\n");
+        new Alert(Alert.AlertType.INFORMATION, msg).showAndWait();
     }
 
     private static void appendStatus(TextArea results, String s) {
