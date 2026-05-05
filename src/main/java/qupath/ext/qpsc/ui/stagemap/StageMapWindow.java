@@ -1253,17 +1253,32 @@ public class StageMapWindow {
 
         // Only update UI once when we hit the error threshold
         if (consecutiveErrors == MAX_CONSECUTIVE_ERRORS) {
-            logger.warn(
-                    "Stage Map polling paused after {} consecutive errors - microscope may be disconnected",
-                    MAX_CONSECUTIVE_ERRORS);
+            // Include the actual cause so failures are diagnosable. The per-call
+            // path logs at debug only (to avoid flood), so without this the user
+            // has no signal about WHY polling failed -- common case is aux
+            // socket down while primary stays up (green status is misleading).
+            if (e != null) {
+                logger.warn(
+                        "Stage Map polling paused after {} consecutive errors - last error: {}: {}",
+                        MAX_CONSECUTIVE_ERRORS,
+                        e.getClass().getSimpleName(),
+                        e.getMessage());
+            } else {
+                logger.warn(
+                        "Stage Map polling paused after {} consecutive errors - microscope returned null position",
+                        MAX_CONSECUTIVE_ERRORS);
+            }
             Platform.runLater(() -> {
                 if (stage != null && stage.isShowing() && !dialogShowing) {
-                    // CRITICAL: Hide the canvas to stop JavaFX's internal rendering loop
-                    // from trying to repaint a corrupted texture (causes NPE spam)
-                    if (canvas != null) {
-                        canvas.setVisible(false);
-                    }
-                    statusLabel.setText("Disconnected - reopen to reconnect");
+                    // Do NOT hide the canvas. StageMapCanvas now uses
+                    // WritableImage+Shape and explicitly does not suffer the
+                    // texture-corruption class of bug the prior Canvas-based
+                    // implementation did (see its class javadoc and
+                    // isTextureCorrupted()), so there is no render loop to
+                    // suppress. Hiding the canvas wiped the macro overlay,
+                    // slide rect, and insert outline -- exactly what the user
+                    // wants to keep seeing when live position polling breaks.
+                    statusLabel.setText("Position polling paused - see log");
                     statusLabel.setStyle("-fx-text-fill: #f66;");
                 }
             });
