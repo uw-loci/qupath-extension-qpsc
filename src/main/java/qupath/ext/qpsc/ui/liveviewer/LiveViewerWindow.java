@@ -758,9 +758,11 @@ public class LiveViewerWindow {
         streamingFocusButton.setOnAction(e -> handleStreamingFocus());
 
         focusRangeCombo = new ComboBox<>();
-        focusRangeCombo.getItems().addAll("Auto", "1um", "2um", "5um", "10um", "20um");
+        focusRangeCombo.getItems().addAll("Auto", "6um", "10um", "15um", "20um", "30um", "40um");
         focusRangeCombo.setValue("Auto");
-        focusRangeCombo.setPrefWidth(70);
+        // Width must fit "Auto" plus the 3-character "<n>um" labels with a
+        // dropdown chevron; 70 px clipped "20um" -> "20" on JavaFX 21.
+        focusRangeCombo.setPrefWidth(95);
         focusRangeCombo.setTooltip(new Tooltip("Search range for autofocus.\n"
                 + "Auto: uses sweep_range_um from autofocus YAML.\n"
                 + "Explicit values override the YAML setting.\n"
