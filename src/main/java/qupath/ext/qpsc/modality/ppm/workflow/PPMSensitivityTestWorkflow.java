@@ -463,7 +463,7 @@ public class PPMSensitivityTestWorkflow {
             // Ensure connection
             if (!MicroscopeController.getInstance().isConnected()) {
                 logger.info("Connecting to microscope server for sensitivity test");
-                MicroscopeController.getInstance().connect();
+                MicroscopeController.getInstance().userTriggeredConnect();
             }
 
             // Get config file path

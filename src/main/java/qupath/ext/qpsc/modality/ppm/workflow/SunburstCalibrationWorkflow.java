@@ -157,7 +157,7 @@ public class SunburstCalibrationWorkflow {
             // Ensure we're connected
             if (!MicroscopeController.getInstance().isConnected()) {
                 logger.info("Not connected to microscope server, connecting...");
-                MicroscopeController.getInstance().connect();
+                MicroscopeController.getInstance().userTriggeredConnect();
             }
 
             logger.info("Sending sunburst calibration command...");
@@ -313,7 +313,7 @@ public class SunburstCalibrationWorkflow {
                     MicroscopeController.getInstance().getSocketClient();
 
             if (!MicroscopeController.getInstance().isConnected()) {
-                MicroscopeController.getInstance().connect();
+                MicroscopeController.getInstance().userTriggeredConnect();
             }
 
             // Pass the existing image path so the server skips acquisition
@@ -406,7 +406,7 @@ public class SunburstCalibrationWorkflow {
                                     MicroscopeController.getInstance().getSocketClient();
 
                             if (!MicroscopeController.getInstance().isConnected()) {
-                                MicroscopeController.getInstance().connect();
+                                MicroscopeController.getInstance().userTriggeredConnect();
                             }
 
                             String resultJson = socketClient.runSunburstCalibration(

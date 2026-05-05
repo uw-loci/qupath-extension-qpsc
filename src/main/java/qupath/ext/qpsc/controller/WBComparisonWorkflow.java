@@ -109,7 +109,7 @@ public class WBComparisonWorkflow {
         try {
             if (!mc.isConnected()) {
                 logger.info("Connecting to microscope server");
-                mc.connect();
+                mc.userTriggeredConnect();
             }
         } catch (IOException e) {
             throw new RuntimeException("Failed to connect to microscope server: " + e.getMessage(), e);
@@ -427,9 +427,11 @@ public class WBComparisonWorkflow {
 
         // Establish fresh connection before acquisition to avoid stale connection state
         // from calibration/background operations (which may leave the socket in an
-        // unstable state that causes EOFException during status polling)
+        // unstable state that causes EOFException during status polling). Use
+        // userTriggeredConnect() so the server-unresponsive latch is cleared --
+        // a recovery from prior workflow trouble is a fresh user shot.
         socketClient.disconnect();
-        socketClient.connect();
+        MicroscopeController.getInstance().userTriggeredConnect();
 
         socketClient.startAcquisition(builder);
         logger.info("[{}] Acquisition started, polling for completion", wbMode);

@@ -141,7 +141,7 @@ public class TestAutofocusWorkflow {
 
                     if (connect) {
                         try {
-                            MicroscopeController.getInstance().connect();
+                            MicroscopeController.getInstance().userTriggeredConnect();
                         } catch (IOException e) {
                             logger.error("Failed to connect to microscope server", e);
                             Dialogs.showErrorMessage(
@@ -253,7 +253,7 @@ public class TestAutofocusWorkflow {
 
             if (!mc.isConnected()) {
                 logger.info("Connecting to microscope server for autofocus test");
-                mc.connect();
+                mc.userTriggeredConnect();
             }
 
             File outputDir = new File(outputPath);

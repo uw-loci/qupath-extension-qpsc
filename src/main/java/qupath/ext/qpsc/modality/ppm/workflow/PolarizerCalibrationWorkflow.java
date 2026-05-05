@@ -367,7 +367,7 @@ public class PolarizerCalibrationWorkflow {
             // Ensure connection
             if (!MicroscopeController.getInstance().isConnected()) {
                 logger.info("Connecting to microscope server for calibration");
-                MicroscopeController.getInstance().connect();
+                MicroscopeController.getInstance().userTriggeredConnect();
             }
 
             // Get config file path

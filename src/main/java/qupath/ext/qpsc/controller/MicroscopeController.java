@@ -518,9 +518,28 @@ public class MicroscopeController implements StagePositionProvider {
     /**
      * Manually connects the primary socket to the microscope server.
      *
+     * @apiNote UI/workflow code should prefer {@link #userTriggeredConnect()},
+     *     which also clears the server-unresponsive latch. This method is kept
+     *     for the auto-connect path at startup and for the internal
+     *     auto-retry loop (which must NOT clear the latch -- that is the
+     *     reconnect-storm suppression the latch exists for).
      * @throws IOException if connection fails
      */
     public void connect() throws IOException {
+        socketClient.connect();
+    }
+
+    /**
+     * User-initiated connection attempt. Clears the server-unresponsive latch
+     * before connecting, since by definition any explicit user action
+     * ("Reconnect", "Connect", opening a new workflow) is a fresh shot.
+     * Internal auto-retry paths must keep using {@link #connect()} so the
+     * latch retains its reconnect-storm suppression role.
+     *
+     * @throws IOException if connection fails
+     */
+    public void userTriggeredConnect() throws IOException {
+        socketClient.clearServerUnresponsiveSuspended();
         socketClient.connect();
     }
 

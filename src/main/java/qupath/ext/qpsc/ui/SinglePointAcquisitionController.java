@@ -59,7 +59,7 @@ public class SinglePointAcquisitionController {
         MicroscopeController mc = MicroscopeController.getInstance();
         if (!mc.isConnected()) {
             try {
-                mc.connect();
+                mc.userTriggeredConnect();
             } catch (java.io.IOException e) {
                 logger.error("Failed to connect to microscope server: {}", e.getMessage());
                 Dialogs.showErrorMessage(

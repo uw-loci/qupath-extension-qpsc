@@ -158,7 +158,7 @@ public class BackgroundCollectionWorkflow {
             // Ensure connection
             if (!MicroscopeController.getInstance().isConnected()) {
                 logger.info("Connecting to microscope server for background acquisition");
-                MicroscopeController.getInstance().connect();
+                MicroscopeController.getInstance().userTriggeredConnect();
             }
 
             // Build parameters

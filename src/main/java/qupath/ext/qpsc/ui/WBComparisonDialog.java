@@ -405,7 +405,7 @@ public class WBComparisonDialog {
         try {
             MicroscopeController mc = MicroscopeController.getInstance();
             if (!mc.isConnected()) {
-                mc.connect();
+                mc.userTriggeredConnect();
             }
             double[] pos = mc.getStagePositionXY();
             double z = mc.getStagePositionZ();

@@ -59,7 +59,7 @@ public class NoiseCharacterizationWorkflow {
                             "Not Connected",
                             "Not connected to microscope server.\n" + "Would you like to connect now?");
                     if (connect) {
-                        MicroscopeController.getInstance().connect();
+                        MicroscopeController.getInstance().userTriggeredConnect();
                     } else {
                         return;
                     }

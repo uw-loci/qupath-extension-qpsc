@@ -1131,7 +1131,7 @@ public class AcquisitionWizardDialog {
                 refreshAllStatuses();
                 return;
             }
-            MicroscopeController.getInstance().connect();
+            MicroscopeController.getInstance().userTriggeredConnect();
             refreshAllStatuses();
         } catch (IOException e) {
             logger.error("Failed to connect to microscope server", e);

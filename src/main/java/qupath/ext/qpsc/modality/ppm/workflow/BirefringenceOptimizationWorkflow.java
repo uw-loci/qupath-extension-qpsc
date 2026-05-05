@@ -194,7 +194,7 @@ public class BirefringenceOptimizationWorkflow {
             // Ensure we're connected
             if (!MicroscopeController.getInstance().isConnected()) {
                 logger.info("Not connected to microscope server, connecting...");
-                MicroscopeController.getInstance().connect();
+                MicroscopeController.getInstance().userTriggeredConnect();
             }
 
             logger.info("Sending birefringence optimization command:");

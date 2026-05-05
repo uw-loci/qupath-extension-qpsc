@@ -146,6 +146,20 @@ public class MicroscopeSocketClient implements AutoCloseable {
      */
     private volatile boolean serverUnresponsiveSuspended = false;
 
+    /**
+     * Debounce / dedupe state for re-showing the "MicroManager unresponsive"
+     * modal when an aux call hits an already-set latch. The original modal is
+     * shown ONCE at latch time; if the user dismisses it, every subsequent
+     * aux call (Live Viewer, stage poll, focus rollback) hits the latch and
+     * throws -- but most of those throws are silently swallowed, leaving the
+     * user with no signal. These fields gate a re-show: at most one modal
+     * at a time, and at most one re-show per debounce window.
+     */
+    private static final java.util.concurrent.atomic.AtomicBoolean modalShowing =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    private volatile long lastUnresponsiveModalNanos = 0L;
+    private static final long MODAL_REDISPLAY_DEBOUNCE_NANOS = 30L * 1_000_000_000L; // 30s
+
     // Configuration
     private final int maxReconnectAttempts;
     private final long reconnectDelayMs;
@@ -702,6 +716,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
             return;
         }
         if (serverUnresponsiveSuspended) {
+            // Re-surface the modal (debounced) so the user sees the recovery
+            // prompt no matter which subsystem hits the latch -- many aux
+            // callers (stage poll, focus rollback) silently swallow the
+            // throw, so without this the latch becomes invisible.
+            maybeReshowUnresponsiveModal();
             throw new IOException(
                     "Microscope server unresponsive (MicroManager likely crashed). "
                             + "Restart MicroManager + the Python server, then click Retry.");
@@ -3393,7 +3412,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
                                         + "after {} attempts. MicroManager likely crashed. Suspending "
                                         + "automatic reconnection until user retries.",
                                 attempts);
-                        showServerUnresponsiveModal(lastFailureMessage);
+                        // Claim the modal slot so a concurrent aux call cannot
+                        // double-show via maybeReshowUnresponsiveModal(); also
+                        // stamp the debounce so the first re-show window is
+                        // measured from this moment rather than t=0.
+                        if (modalShowing.compareAndSet(false, true)) {
+                            lastUnresponsiveModalNanos = System.nanoTime();
+                            showServerUnresponsiveModal(lastFailureMessage);
+                        }
                     } else {
                         logger.error(
                                 "Failed to reconnect after {} attempts (next health check in ~{}s may retry)",
@@ -3426,6 +3452,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * a fresh reconnection attempt.
      */
     private void showServerUnresponsiveModal(String lastFailureMessage) {
+        showServerUnresponsiveModal(lastFailureMessage, false);
+    }
+
+    /**
+     * @param reshown true when this is a re-display from {@link #maybeReshowUnresponsiveModal()}
+     *                after the user dismissed the original modal -- adjusts the header text
+     *                so the user knows it is the same condition still active.
+     */
+    private void showServerUnresponsiveModal(String lastFailureMessage, boolean reshown) {
         javafx.application.Platform.runLater(() -> {
             try {
                 java.awt.Toolkit.getDefaultToolkit().beep();
@@ -3434,7 +3469,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
             javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
                     javafx.scene.control.Alert.AlertType.ERROR);
             alert.setTitle("Microscope Server Unresponsive");
-            alert.setHeaderText("MicroManager appears to have crashed.");
+            alert.setHeaderText(
+                    reshown
+                            ? "MicroManager still appears unresponsive."
+                            : "MicroManager appears to have crashed.");
             alert.setContentText(
                     "The microscope server is accepting connections but not responding to commands. "
                             + "This typically means MicroManager itself has crashed or lost its "
@@ -3450,12 +3488,34 @@ public class MicroscopeSocketClient implements AutoCloseable {
             javafx.scene.control.ButtonType dismiss = new javafx.scene.control.ButtonType(
                     "Dismiss", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
             alert.getButtonTypes().setAll(retry, dismiss);
-            alert.showAndWait().ifPresent(bt -> {
-                if (bt == retry) {
-                    userTriggeredReconnect();
-                }
-            });
+            try {
+                alert.showAndWait().ifPresent(bt -> {
+                    if (bt == retry) {
+                        userTriggeredReconnect();
+                    }
+                });
+            } finally {
+                modalShowing.set(false);
+            }
         });
+    }
+
+    /**
+     * Re-surface the unresponsive modal when an aux call hits an already-set
+     * latch. Debounced (one modal open at a time, plus a 30s window between
+     * re-shows) so polling threads hammering the latch every 200ms don't spam
+     * the user. Safe to call from any thread.
+     */
+    private void maybeReshowUnresponsiveModal() {
+        long now = System.nanoTime();
+        if (now - lastUnresponsiveModalNanos < MODAL_REDISPLAY_DEBOUNCE_NANOS) {
+            return;
+        }
+        if (!modalShowing.compareAndSet(false, true)) {
+            return;
+        }
+        lastUnresponsiveModalNanos = now;
+        showServerUnresponsiveModal(null, true);
     }
 
     /**
@@ -3473,6 +3533,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         logger.info("User triggered reconnect; clearing serverUnresponsiveSuspended flag");
         serverUnresponsiveSuspended = false;
         mainReconnectBackoffMs = reconnectDelayMs;
+        // Clear modal-debounce state so a fresh latch event after recovery
+        // is not silenced by the stale 30s window.
+        lastUnresponsiveModalNanos = 0L;
+        modalShowing.set(false);
         scheduleReconnection();
     }
 
@@ -3494,6 +3558,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
             logger.info("Clearing serverUnresponsiveSuspended flag (caller will reconnect explicitly)");
             serverUnresponsiveSuspended = false;
             mainReconnectBackoffMs = reconnectDelayMs;
+            // Clear modal-debounce state so a fresh latch event after this
+            // recovery is not silenced by the stale 30s window.
+            lastUnresponsiveModalNanos = 0L;
+            modalShowing.set(false);
         }
     }
 

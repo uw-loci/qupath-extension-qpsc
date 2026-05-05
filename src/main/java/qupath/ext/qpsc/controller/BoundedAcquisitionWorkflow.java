@@ -75,7 +75,7 @@ public class BoundedAcquisitionWorkflow {
         try {
             if (!MicroscopeController.getInstance().isConnected()) {
                 logger.info("Connecting to microscope server for stage control");
-                MicroscopeController.getInstance().connect();
+                MicroscopeController.getInstance().userTriggeredConnect();
             }
         } catch (IOException e) {
             logger.error("Failed to connect to microscope server: {}", e.getMessage());
