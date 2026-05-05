@@ -154,14 +154,17 @@ public class SweepFocusController {
                 if (cancelled) break;
 
                 double z = sweepStart + i * stepSize;
-                long preTs = captureTimestamp();
+                FrameFreshness.Snapshot preSnap = captureSnapshot();
                 socketClient.moveStageZ(z);
 
                 // Wait for a fresh frame that was captured AFTER the move.
                 // moveStageZ uses the primary socket so it no longer blocks
                 // the aux-socket frame poller, but we still need a frame
-                // taken at the new Z (not a pre-move stale frame).
-                FrameData f = waitForFreshFrame(preTs);
+                // taken at the new Z (not a pre-move stale frame). MM may
+                // serve back the same cached frame with a fresh receive
+                // timestamp, so the check requires both newer timestamp AND
+                // different pixel content (FrameFreshness.isFresh).
+                FrameData f = waitForFreshFrame(preSnap);
                 if (f == null) {
                     f = frameSupplier.get();
                 }
@@ -351,9 +354,9 @@ public class SweepFocusController {
                 for (int i = 0; i <= NUM_STEPS; i++) {
                     if (cancelled) break;
                     double z = extStart + i * extStep;
-                    long preTs = captureTimestamp();
+                    FrameFreshness.Snapshot preSnap = captureSnapshot();
                     socketClient.moveStageZ(z);
-                    FrameData f = waitForFreshFrame(preTs);
+                    FrameData f = waitForFreshFrame(preSnap);
                     if (f == null) f = frameSupplier.get();
                     if (f != null) {
                         double metric = metricHelper.computeFocusMetric(f);
@@ -500,16 +503,15 @@ public class SweepFocusController {
         }
     }
 
-    private long captureTimestamp() {
-        FrameData f = frameSupplier.get();
-        return (f != null) ? f.timestampMs() : 0;
+    private FrameFreshness.Snapshot captureSnapshot() {
+        return FrameFreshness.capture(frameSupplier);
     }
 
-    private FrameData waitForFreshFrame(long afterTimestamp) {
+    private FrameData waitForFreshFrame(FrameFreshness.Snapshot prev) {
         long deadline = System.currentTimeMillis() + 2000;
         while (System.currentTimeMillis() < deadline) {
             FrameData f = frameSupplier.get();
-            if (f != null && f.timestampMs() > afterTimestamp) {
+            if (FrameFreshness.isFresh(f, prev)) {
                 return f;
             }
             try {

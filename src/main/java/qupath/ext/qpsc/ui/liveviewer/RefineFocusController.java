@@ -29,6 +29,7 @@ public class RefineFocusController {
     static final double SATURATION_ABORT_PCT = 5.0;
     static final double IMPROVEMENT_THRESHOLD = 0.5; // min metric improvement (in bins)
 
+
     // State
     private volatile boolean running = false;
     private volatile boolean cancelled = false;
@@ -121,8 +122,8 @@ public class RefineFocusController {
             bestZ = startZ;
 
             callback.onStatusUpdate("Refine Focus: measuring baseline...", Outcome.IN_PROGRESS);
-            long ts = captureTimestamp();
-            double baseMetric = measureFocus(ts);
+            FrameFreshness.Snapshot snap = captureSnapshot();
+            double baseMetric = measureFocus(snap);
             double bestMetric = baseMetric;
             logger.info(
                     "Refine Focus: startZ={}, baseMetric={}, step={}, maxTravel={}",
@@ -140,10 +141,10 @@ public class RefineFocusController {
 
             // Try positive direction
             double testZPlus = startZ + initialStep;
-            ts = captureTimestamp();
+            snap = captureSnapshot();
             moveZ(testZPlus);
             settle();
-            double metricPlus = measureFocus(ts);
+            double metricPlus = measureFocus(snap);
 
             if (cancelled) {
                 moveAndFinish(bestZ, startZ, callback);
@@ -152,10 +153,10 @@ public class RefineFocusController {
 
             // Try negative direction
             double testZMinus = startZ - initialStep;
-            ts = captureTimestamp();
+            snap = captureSnapshot();
             moveZ(testZMinus);
             settle();
-            double metricMinus = measureFocus(ts);
+            double metricMinus = measureFocus(snap);
 
             // Return to start before deciding
             moveZ(startZ);
@@ -244,10 +245,10 @@ public class RefineFocusController {
                     continue;
                 }
 
-                ts = captureTimestamp();
+                snap = captureSnapshot();
                 moveZ(targetZ);
                 settle();
-                double metric = measureFocus(ts);
+                double metric = measureFocus(snap);
 
                 callback.onStatusUpdate(
                         String.format("Refine Focus: step=%.1fum, metric=%.1f (best=%.1f)", stepUm, metric, bestMetric),
@@ -377,42 +378,47 @@ public class RefineFocusController {
     }
 
     /**
-     * Measures focus using a frame captured after the pre-move timestamp.
-     * This ensures the frame reflects the current Z position, not a stale
-     * cached frame from before the stage moved.
+     * Measures focus using a frame captured after the pre-move snapshot.
+     * Requires both a newer wall-clock timestamp AND a different content
+     * hash, so we don't accept a same-pixel frame that MM served twice.
      *
-     * @param preMoveTimestamp timestamp of the frame cached before the move
+     * @param preMoveSnapshot snapshot of the frame cached before the move
      */
-    double measureFocus(long preMoveTimestamp) throws InterruptedException {
+    double measureFocus(FrameFreshness.Snapshot preMoveSnapshot) throws InterruptedException {
         double sum = 0;
-        long lastTs = preMoveTimestamp;
+        FrameFreshness.Snapshot last = preMoveSnapshot;
         for (int i = 0; i < FRAMES_TO_AVERAGE; i++) {
-            FrameData frame = waitForFreshFrame(lastTs);
+            FrameData frame = waitForFreshFrame(last);
             if (frame == null) {
                 frame = frameSupplier.get();
                 if (frame == null) return 0;
             }
-            lastTs = frame.timestampMs();
+            last = new FrameFreshness.Snapshot(
+                    frame.timestampMs(), FrameFreshness.pixelContentHash(frame));
             sum += computeFocusMetric(frame);
         }
         return sum / FRAMES_TO_AVERAGE;
     }
 
-    /** Captures the current frame timestamp (call before moveZ). */
-    long captureTimestamp() {
-        FrameData f = frameSupplier.get();
-        return (f != null) ? f.timestampMs() : 0;
+    /** Captures the current frame's timestamp + content hash (call before moveZ). */
+    FrameFreshness.Snapshot captureSnapshot() {
+        return FrameFreshness.capture(frameSupplier);
     }
 
     /**
-     * Waits for a frame with a timestamp newer than the given value.
+     * Waits for a frame whose wall-clock timestamp is newer AND whose
+     * content hash differs from the given snapshot. The hash check defends
+     * against MM returning the same cached frame on consecutive
+     * get_last_image() peeks: receive timestamps always advance, but
+     * pixel content does not, so a timestamp-only check let stale frames
+     * pass and produced identical metrics at base/plus/minus probes.
      * Times out after 2 seconds and returns null.
      */
-    private FrameData waitForFreshFrame(long afterTimestamp) throws InterruptedException {
+    private FrameData waitForFreshFrame(FrameFreshness.Snapshot prev) throws InterruptedException {
         long deadline = System.currentTimeMillis() + 2000;
         while (System.currentTimeMillis() < deadline) {
             FrameData frame = frameSupplier.get();
-            if (frame != null && frame.timestampMs() > afterTimestamp) {
+            if (FrameFreshness.isFresh(frame, prev)) {
                 return frame;
             }
             Thread.sleep(50);
