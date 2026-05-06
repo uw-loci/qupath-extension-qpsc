@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.basicstitching.workflow.StitchingWorkflow;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.components.ObjectiveSelector;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.StageImageTransform;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
@@ -225,9 +226,11 @@ public class RapidScanWorkflow {
         heightSpinner.valueProperty().addListener((obs, o, n) -> updateFovAndTiles.run());
         overlapSpinner.valueProperty().addListener((obs, o, n) -> updateFovAndTiles.run());
 
-        // Select defaults and trigger initial FOV computation
-        objectiveCombo.getSelectionModel().selectFirst();
-        // Default to last detector (JAI is typically listed after Teledyne on PPM)
+        // Select defaults and trigger initial FOV computation. Objective
+        // auto-detected from MM (live pixel-size match -> last-used pref
+        // -> first entry); detector still defaults to last (JAI is
+        // typically listed after Teledyne on PPM).
+        ObjectiveSelector.autoSelect(objectiveCombo, mgr);
         detectorCombo.getSelectionModel().selectLast();
         updateFovAndTiles.run();
 

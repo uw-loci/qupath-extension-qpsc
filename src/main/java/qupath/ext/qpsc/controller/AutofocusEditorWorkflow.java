@@ -22,6 +22,7 @@ import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.ui.components.ObjectiveSelector;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.FocusMetricsManifest;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -798,11 +799,11 @@ public class AutofocusEditorWorkflow {
         VBox mainLayout = new VBox(10);
         mainLayout.setPadding(new Insets(10));
 
-        // Objective selection
+        // Objective selection -- shared component auto-selects MM's
+        // currently mounted objective by pixel-size match, falls back
+        // to last-used preference, then to the first entry.
         Label objectiveLabel = new Label("Select Objective:");
-        ComboBox<String> objectiveCombo = new ComboBox<>();
-        objectiveCombo.getItems().addAll(objectives);
-        objectiveCombo.setValue(objectives.get(0));
+        ComboBox<String> objectiveCombo = ObjectiveSelector.create(objectives, configManager);
 
         // ===== ACQUISITION FREQUENCY SECTION =====
         GridPane acquisitionGrid = new GridPane();

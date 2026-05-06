@@ -28,6 +28,7 @@ import qupath.ext.qpsc.controller.QPScopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.CalibrationChecker.Status;
+import qupath.ext.qpsc.ui.components.ObjectiveSelector;
 import qupath.ext.qpsc.ui.CalibrationChecker.StepStatus;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -534,28 +535,16 @@ public class AcquisitionWizardDialog {
         Set<String> objectives = CalibrationChecker.getAvailableObjectives();
         objectiveCombo.setItems(FXCollections.observableArrayList(objectives));
         if (!objectives.isEmpty()) {
-            boolean restored = false;
-
-            // Priority 1: match objective_in_use from microscope config
-            String configObjective = getConfigObjectiveInUse();
-            if (configObjective != null && objectives.contains(configObjective)) {
-                objectiveCombo.setValue(configObjective);
-                restored = true;
-            }
-
-            // Priority 2: restore last-used objective from preferences
-            if (!restored) {
-                String lastObjective = PersistentPreferences.getLastObjective();
-                if (!lastObjective.isEmpty() && objectives.contains(lastObjective)) {
-                    objectiveCombo.setValue(lastObjective);
-                    restored = true;
-                }
-            }
-
-            // Fallback: select first
-            if (!restored) {
-                objectiveCombo.getSelectionModel().selectFirst();
-            }
+            // Use the unified ObjectiveSelector so the wizard agrees with
+            // the AF Config Editor / Camera tab on which objective is
+            // currently mounted. Priority: live MM pixel-size match ->
+            // last-used pref -> first entry. The previous "config
+            // objective_in_use" priority went stale whenever the user
+            // swapped objectives without updating the YAML.
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager mgr = (configPath == null || configPath.isEmpty())
+                    ? null : MicroscopeConfigManager.getInstance(configPath);
+            ObjectiveSelector.autoSelect(objectiveCombo, mgr);
             onObjectiveChanged();
         } else {
             objectiveCombo.getItems().clear();
