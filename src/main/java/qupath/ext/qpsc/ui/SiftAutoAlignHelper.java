@@ -218,7 +218,10 @@ public final class SiftAutoAlignHelper {
                 "-fx-font-weight: bold; -fx-border-color: #4A90D9; " + "-fx-border-width: 2; -fx-border-radius: 3;");
         autoAlignButton.setTooltip(new Tooltip(
                 "Auto-align using SIFT feature matching against the selected tile.\n"
-                        + "Requires distinctive tissue features visible in the live view.\n"
+                        + "SIFT is a refinement, not a search: the live view must already\n"
+                        + "overlap the target tile by at least a few hundred microns.\n"
+                        + "Bit-depth normalization (16-bit camera vs 8-bit H&E WSI) and\n"
+                        + "CLAHE preprocessing run server-side using the values in Settings.\n"
                         + "If matching fails, refine manually and confirm."));
 
         Button settingsButton = new Button("Settings...");

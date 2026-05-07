@@ -223,7 +223,7 @@ ENDOFSTR
 | TESTAF | `testaf__` | params + ENDOFSTR | AF result |
 | TESTADAF | `testadaf` | params + ENDOFSTR | adaptive AF result |
 | AFBENCH | `afbench_` | params + ENDOFSTR | benchmark results |
-| SIFTAL | `siftal__` | `--wsi-region ... --flip-x ENDOFSTR` | `SUCCESS:x,y\|inliers:N` |
+| SIFTAL | `siftal__` | `--wsi-region <path> --micro-px <f> --wsi-px <f> --min-px <f> --ratio <f> --min-matches <n> --contrast <f> [--nfeatures <n>] [--mono-norm PERCENTILE\|MIN_MAX\|BIT_SHIFT] [--pct-low <f>] [--pct-high <f>] [--clahe true\|false] [--clahe-clip <f>] [--flip-x] [--flip-y] ENDOFSTR` | `SUCCESS:x,y\|inliers:N\|confidence:C` or `FAILED:<reason>` |
 | PPMBIREF | `ppmbiref` | params + ENDOFSTR | optimization result |
 | SBCALIB | `sbcalib_` | params + ENDOFSTR | calibration result |
 | WBSIMPLE | `wbsimple` | params + ENDOFSTR | WB result |
@@ -253,6 +253,44 @@ debugging `STRMAFZ` UNAVAILABLE responses. See
 Response: `PROBEZOK` on normal completion (~30-60 seconds),
 `PROBEZFL` if a safety check failed (sequence already running,
 server not configured, etc.).
+
+#### SIFTAL
+
+SIFT auto-alignment. Snaps a microscope image, matches it against the WSI region file at `--wsi-region`, and returns the offset in micrometers.
+
+Required flags:
+
+| Flag | Description |
+|---|---|
+| `--wsi-region <path>` | Path to the PNG/TIFF region extracted from the WSI by the Java client. |
+| `--micro-px <f>` | Microscope camera pixel size (um/px). |
+| `--wsi-px <f>` | WSI pixel size (um/px). |
+
+Optional matching parameters (defaults shown):
+
+| Flag | Default | Description |
+|---|---|---|
+| `--min-px <f>` | 1.0 | Both images downsampled to at least this resolution before SIFT. |
+| `--ratio <f>` | 0.7 | Lowe's ratio test threshold. |
+| `--min-matches <n>` | 10 | Minimum inlier matches required for success. |
+| `--contrast <f>` | 0.04 | Feature-detection sensitivity. |
+| `--nfeatures <n>` | 0 (unlimited) | Cap on detected features. |
+| `--flip-x` / `--flip-y` | off | Flip the WSI region before matching to align with microscope orientation. |
+
+Optional bit-depth / cross-modality preprocessing (defaults shown):
+
+| Flag | Default | Description |
+|---|---|---|
+| `--mono-norm PERCENTILE\|MIN_MAX\|BIT_SHIFT` | `PERCENTILE` | How >8-bit grayscale (typical 16-bit camera capture) is compressed to 8-bit. The legacy `BIT_SHIFT` mode (raw `/256`) collapses dynamic range when the camera doesn't span the full bit depth -- which is most cameras. `PERCENTILE` is the right default; `MIN_MAX` uses the actual data extremes. |
+| `--pct-low <f>` | 2.0 | Lower percentile clip used by `PERCENTILE` mode. |
+| `--pct-high <f>` | 98.0 | Upper percentile clip used by `PERCENTILE` mode. |
+| `--clahe true\|false` | `true` | Apply Contrast-Limited Adaptive Histogram Equalisation to both grayscale images before SIFT. Standard cross-modality robustness trick when matching monochrome brightfield against 8-bit H&E. |
+| `--clahe-clip <f>` | 2.0 | CLAHE clipLimit. Higher = more aggressive equalisation. |
+
+Response formats:
+
+- `SUCCESS:<offset_x_um>,<offset_y_um>|inliers:<n>|confidence:<f>` -- match succeeded; the server has already moved the stage by `(offset_x, offset_y)`.
+- `FAILED:<reason>` -- match failed (insufficient features, missing region file, etc.). The stage is not moved.
 
 #### STRMAFZ
 

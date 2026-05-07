@@ -348,6 +348,26 @@ Observe which direction the physical stage actually moves. If it moves in the la
 
 For multi-channel IF / BF+IF acquisitions where the merge failed and each per-channel file was imported individually, every channel gets its own alignment. Opening any one of them should enable the button.
 
+#### Q: Auto-Align (SIFT) fails even though the live view is on the correct tile
+
+**A:** The most common cause is a bit-depth mismatch between a 16-bit monochrome microscope camera (e.g. OWS3) and an 8-bit reference WSI (typical H&E or PPM scan). Most cameras only use 12-14 of their 16 bits, so the legacy `gray / 256` bit-shift compresses the camera's useful range to a sliver of 8-bit, leaving SIFT with one near-black image and one full-contrast reference. The fix landed 2026-05-06 (Java commit `0f13ca2`, server commit `59c8d41`).
+
+Defaults now handle this correctly: `Bit-depth normalization` = `PERCENTILE` 2/98 with `CLAHE` on (clipLimit 2.0). Both knobs live in the SIFT Settings dialog (open via the **Settings...** button next to **Auto-Align (SIFT)**).
+
+If matching still fails on a tile that visually overlaps the camera's live view:
+
+1. Confirm the camera and server are running the post-fix versions. The server log line `_to_gray: mode=PERCENTILE, ...` should appear during a SIFT call. If you see `BIT_SHIFT applied`, the legacy mode is still selected -- update the dropdown.
+2. Raise CLAHE clipLimit to 4.0 (Settings dialog) for very low-contrast samples.
+3. Widen the percentile range to 0.5/99.5 if the camera produces very faint features that are being clipped.
+4. Lower the SIFT contrast threshold to 0.02 (Preferences > SIFT) for pale tissue.
+5. As a last resort, switch normalization mode to `MIN_MAX`. Note: this is more sensitive to a few saturated pixels than `PERCENTILE`.
+
+#### Q: Auto-Align (SIFT) fails when the live view is far from the target tile
+
+**A:** SIFT is a *refinement*, not a search. The WSI region pulled around the target tile extends only ~160 um beyond the tile (configurable via `Search margin (um)` in the SIFT Settings dialog). If the live view doesn't overlap the WSI region at all, there's nothing to match against and SIFT will report `insufficient features` or `matching failed`.
+
+Drive the stage roughly close (a few hundred microns is enough) using the joystick, Live Viewer click-to-center, or the initial transform estimate before clicking SIFT. If you genuinely need a wider capture range, raise the search margin -- but matching cost grows with margin squared, so 300-400 um is a reasonable upper bound.
+
 ### Acquisition Problems
 
 #### Q: Acquisition starts but no images appear

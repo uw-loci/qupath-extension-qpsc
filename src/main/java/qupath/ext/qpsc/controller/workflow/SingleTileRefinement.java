@@ -406,7 +406,9 @@ public class SingleTileRefinement {
         Label siftDescription = new Label(String.format(
                 "SIFT searches a ~%.0fum region around the predicted tile position. "
                         + "It requires visible tissue features in the microscope field of view "
-                        + "to match against the WSI. Click Settings to adjust parameters if matching fails.",
+                        + "to match against the WSI. Cross-modality preprocessing (bit-depth "
+                        + "normalization + CLAHE) handles the 16-bit-camera-vs-8-bit-H&E case. "
+                        + "Click Settings to adjust parameters if matching fails.",
                 qupath.ext.qpsc.preferences.PersistentPreferences.getSiftSearchMarginUm()));
         siftDescription.setWrapText(true);
         siftDescription.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
