@@ -713,8 +713,16 @@ public class AutofocusEditorWorkflow {
     private static LineChart<Number, Number> buildTimeDomainChart(List<double[]> rows) {
         NumberAxis xAxis = new NumberAxis();
         xAxis.setLabel("Time (ms)");
+        // forceZeroInRange defaults to true on JavaFX NumberAxis -- turning
+        // it off so axes auto-fit to the data range instead of dragging
+        // out to include zero. Important for Z values which are typically
+        // negative micrometers (e.g. -90..-50 on PPM); with forceZero on,
+        // the axis would span -90..0 and crush all the variation into the
+        // left half. Same applies to metric values in the millions.
+        xAxis.setForceZeroInRange(false);
         NumberAxis yAxis = new NumberAxis();
         yAxis.setLabel("Metric  (and Z, scaled)");
+        yAxis.setForceZeroInRange(false);
         LineChart<Number, Number> chart = new LineChart<>(xAxis, yAxis);
         chart.setTitle("Time domain");
         chart.setCreateSymbols(false);
@@ -751,8 +759,10 @@ public class AutofocusEditorWorkflow {
     private static LineChart<Number, Number> buildSpaceDomainChart(List<double[]> rows) {
         NumberAxis xAxis = new NumberAxis();
         xAxis.setLabel("Z (um)");
+        xAxis.setForceZeroInRange(false);
         NumberAxis yAxis = new NumberAxis();
         yAxis.setLabel("Metric");
+        yAxis.setForceZeroInRange(false);
         LineChart<Number, Number> chart = new LineChart<>(xAxis, yAxis);
         chart.setTitle("Space domain (metric vs Z actual)");
         chart.setCreateSymbols(true);
