@@ -164,6 +164,49 @@ public class MicroscopeController implements StagePositionProvider {
     }
 
     /**
+     * Verifies the locally-cached {@link #acquisitionActive} flag against the
+     * server's authoritative STATUS. If the server reports a non-running state
+     * (IDLE / COMPLETED / CANCELLED / FAILED), the local flag is treated as
+     * stale, cleared, and {@code false} is returned.
+     *
+     * <p>Used by the Stage Map (and any other UI gated on the flag) to
+     * recover from rare cancellation paths where the local cleanup hook
+     * doesn't fire (e.g. a synchronous exception thrown between
+     * {@code setAcquisitionActive(true)} and the whenComplete registration).
+     * Without this reconciliation, the user has no way to unstick the UI
+     * short of restarting QuPath.
+     *
+     * <p>Performs a blocking socket call -- do NOT call this from the
+     * JavaFX Application Thread. Callers should hop to a background
+     * thread first.
+     *
+     * @return true if the server confirms an active acquisition; false if
+     *         the local flag was stale (and has been cleared) or was already
+     *         false to begin with.
+     * @throws IOException if the STATUS query fails. Callers should
+     *         conservatively treat this as "still active" rather than
+     *         clearing the flag, since we cannot prove otherwise.
+     */
+    public boolean isAcquisitionReallyActive() throws IOException {
+        if (!acquisitionActive) {
+            return false;
+        }
+        qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.AcquisitionState state =
+                socketClient.getAcquisitionStatus();
+        boolean serverActive =
+                state == qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.AcquisitionState.RUNNING
+                        || state == qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.AcquisitionState.CANCELLING;
+        if (!serverActive) {
+            logger.warn(
+                    "Local acquisitionActive flag was stale (server state={}); clearing -- "
+                            + "this indicates a cleanup path missed clearing the flag.",
+                    state);
+            setAcquisitionActive(false);
+        }
+        return serverActive;
+    }
+
+    /**
      * Checks whether user-initiated stage movement should be blocked.
      * If blocked, logs a warning and shows a throttled user notification.
      *

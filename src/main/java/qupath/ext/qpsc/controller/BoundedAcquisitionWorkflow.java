@@ -607,6 +607,14 @@ public class BoundedAcquisitionWorkflow {
                         Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                         String message = cause.getMessage();
 
+                        // Defensive: if the failure happened between setAcquisitionActive(true)
+                        // (line ~336) and the acquisitionFuture.whenComplete registration that
+                        // normally clears it (line ~505), the flag is stuck. Clearing it here
+                        // is idempotent in the happy path (whenComplete already cleared it) and
+                        // recovers the StageMap from a permanent "Locked during acquisition"
+                        // state in the rare-exception path.
+                        MicroscopeController.getInstance().setAcquisitionActive(false);
+
                         // User cancellation from dialogs (angle selection, background mismatch)
                         // can arrive as CancellationException or as a message containing
                         // specific cancel tokens.

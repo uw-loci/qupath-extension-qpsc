@@ -1329,10 +1329,44 @@ public class StageMapWindow {
     }
 
     private void handleCanvasClick(double stageX, double stageY) {
-        // Block navigation during active acquisition
+        // Block navigation during active acquisition. The local flag can
+        // desync from the server if a cancellation path skips the cleanup
+        // hook (e.g. a sync exception between setAcquisitionActive(true)
+        // and the whenComplete registration). Verify against the server
+        // before refusing -- this turns the local flag into an advisory
+        // cache and makes the server's STATUS authoritative.
         if (MicroscopeController.getInstance().isAcquisitionActive()) {
-            statusLabel.setText("Locked during acquisition");
+            statusLabel.setText("Verifying acquisition state...");
             statusLabel.setStyle("-fx-text-fill: #fa7;");
+            new Thread(
+                            () -> {
+                                boolean stillActive;
+                                try {
+                                    stillActive = MicroscopeController.getInstance().isAcquisitionReallyActive();
+                                } catch (Exception ex) {
+                                    // STATUS check failed -- can't prove the flag is stale,
+                                    // so honor the cached value and stay locked.
+                                    logger.warn(
+                                            "Could not verify acquisition state (treating as active): {}",
+                                            ex.getMessage());
+                                    stillActive = true;
+                                }
+                                final boolean blocked = stillActive;
+                                Platform.runLater(() -> {
+                                    if (blocked) {
+                                        statusLabel.setText("Locked during acquisition");
+                                        statusLabel.setStyle("-fx-text-fill: #fa7;");
+                                    } else {
+                                        // Stale flag was cleared inside the controller. Re-fire
+                                        // the click so the user's intended move actually happens.
+                                        statusLabel.setText("");
+                                        statusLabel.setStyle("-fx-text-fill: #888;");
+                                        handleCanvasClick(stageX, stageY);
+                                    }
+                                });
+                            },
+                            "StageMap-AcqStateVerify")
+                    .start();
             return;
         }
 
