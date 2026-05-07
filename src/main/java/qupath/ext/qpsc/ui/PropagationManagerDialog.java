@@ -140,6 +140,16 @@ public final class PropagationManagerDialog {
                         + "(flipped X / Y / XY) on demand so cross-microscope acquisitions can use them."));
         autoCreateCheck.disableProperty().bind(forwardBtn.selectedProperty());
 
+        // -- Replace-existing toggle ---------------------------------------
+        CheckBox replaceExistingCheck = new CheckBox("Remove existing objects of copied classes");
+        replaceExistingCheck.setSelected(false);
+        replaceExistingCheck.setTooltip(new Tooltip(
+                "Before propagating, delete any existing objects on each target image whose class is "
+                        + "in the selected set (and unclassified objects, if 'Unclassified' is also "
+                        + "selected). Use this when re-propagating refined source annotations -- the old "
+                        + "copies on the targets will be removed first so you don't get overlapping "
+                        + "duplicates with slightly different shapes."));
+
         // -- Group summary table -------------------------------------------
         TableView<PropagationGroupItem> groupTable = new TableView<>(FXCollections.observableArrayList(groups));
         groupTable.setPlaceholder(new Label(
@@ -345,7 +355,7 @@ public final class PropagationManagerDialog {
         propagateBtn.setStyle("-fx-font-weight: bold;");
         propagateBtn.setOnAction(e -> runPropagation(
                 qupath, project, groups, groupTable, subChecks, classChecks, unclassifiedCheck,
-                forwardBtn, backBtn, autoCreateCheck, progress, results, propagateBtn));
+                forwardBtn, backBtn, autoCreateCheck, replaceExistingCheck, progress, results, propagateBtn));
 
         Button closeBtn = new Button("Close");
         closeBtn.setOnAction(e -> dialog.close());
@@ -365,6 +375,7 @@ public final class PropagationManagerDialog {
                 new Separator(),
                 dirBox,
                 autoCreateCheck,
+                replaceExistingCheck,
                 classLabel,
                 classScroll,
                 new Separator(),
@@ -396,6 +407,7 @@ public final class PropagationManagerDialog {
             RadioButton forwardBtn,
             RadioButton backBtn,
             CheckBox autoCreateCheck,
+            CheckBox replaceExistingCheck,
             ProgressBar progress,
             TextArea results,
             Button propagateBtn) {
@@ -425,6 +437,7 @@ public final class PropagationManagerDialog {
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toSet());
         boolean autoCreate = autoCreateCheck.isSelected();
+        boolean replaceExisting = replaceExistingCheck.isSelected();
 
         results.appendText("=== Propagation started: direction=" + dir
                 + ", " + checkedGroups.size() + " group(s) ===\n");
@@ -600,6 +613,16 @@ public final class PropagationManagerDialog {
                         for (ProjectImageEntry<BufferedImage> sub : grp.getSubAcquisitions()) {
                             if (!selectedSubs.contains(sub)) continue;
                             try {
+                                if (replaceExisting) {
+                                    int removed = removeMatchingObjects(
+                                            sub, selectedClasses, includeUnclassified);
+                                    if (removed > 0) {
+                                        appendStatus(results, String.format(
+                                                "    (removed %d existing object(s) on %s)%n",
+                                                removed, sub.getImageName()));
+                                        touchedEntries.add(sub);
+                                    }
+                                }
                                 int count = ForwardPropagationWorkflow.propagateForward(
                                         alignment, alignFlipX, alignFlipY, baseWidth, baseHeight,
                                         sourceObjects, sub);
@@ -623,6 +646,26 @@ public final class PropagationManagerDialog {
                             }
                         }
                     } else {
+                        // Back-prop removal applies to base siblings (the targets of fan-out),
+                        // done once per group rather than per-sub so we don't repeatedly
+                        // delete and re-add as multiple subs back-prop into the same base.
+                        if (replaceExisting) {
+                            for (ProjectImageEntry<BufferedImage> sib : grp.getSiblings()) {
+                                try {
+                                    int removed = removeMatchingObjects(
+                                            sib, selectedClasses, includeUnclassified);
+                                    if (removed > 0) {
+                                        appendStatus(results, String.format(
+                                                "  (removed %d existing object(s) on %s)%n",
+                                                removed, sib.getImageName()));
+                                        touchedEntries.add(sib);
+                                    }
+                                } catch (Exception ex) {
+                                    logger.warn("Replace-existing: could not clear {}: {}",
+                                            sib.getImageName(), ex.getMessage());
+                                }
+                            }
+                        }
                         for (ProjectImageEntry<BufferedImage> sub : grp.getSubAcquisitions()) {
                             if (!selectedSubs.contains(sub)) continue;
                             try {
@@ -837,5 +880,33 @@ public final class PropagationManagerDialog {
             if (!name.contains("(flipped")) return s;
         }
         return siblings.get(0);
+    }
+
+    /**
+     * Remove every annotation/detection from {@code entry} whose class is in
+     * {@code selectedClasses} (or whose class is null when {@code includeUnclassified}
+     * is true). Saves the entry's image data after removal. Returns the number of
+     * objects removed.
+     *
+     * <p>Used by the "Remove existing objects of copied classes" toggle to clear
+     * stale propagation results before a re-propagation lands new copies.
+     */
+    private static int removeMatchingObjects(
+            ProjectImageEntry<BufferedImage> entry,
+            Set<PathClass> selectedClasses,
+            boolean includeUnclassified) throws Exception {
+        var data = entry.readImageData();
+        var hierarchy = data.getHierarchy();
+        List<PathObject> toRemove = new ArrayList<>();
+        for (PathObject obj : hierarchy.getAllObjects(false)) {
+            if (obj.isRootObject()) continue;
+            PathClass pc = obj.getPathClass();
+            boolean matches = (pc == null) ? includeUnclassified : selectedClasses.contains(pc);
+            if (matches) toRemove.add(obj);
+        }
+        if (toRemove.isEmpty()) return 0;
+        hierarchy.removeObjects(toRemove, true);
+        entry.saveImageData(data);
+        return toRemove.size();
     }
 }
