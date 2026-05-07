@@ -631,6 +631,20 @@ public class ExistingImageWorkflowV2 {
                                         ? state.selectedAnnotationClasses
                                         : PersistentPreferences.getSelectedAnnotationClasses();
 
+                        // CRITICAL: clear any annotations cached from the config dialog. Those
+                        // were captured against the UNFLIPPED base entry (state.annotations is
+                        // populated at config-dialog return, before validateAndFlipIfNeeded
+                        // switches the open entry to the flipped sibling). If we left them in
+                        // place, ensureAnnotationsExist short-circuits on `state.annotations !=
+                        // null && !isEmpty`, and downstream tile creation reads ROI bounds from
+                        // PathObjects that belong to the unflipped base's hierarchy. The
+                        // resulting tiles get added to the flipped sibling's hierarchy at
+                        // unflipped-frame coordinates -- i.e. at the XY-mirror of where the
+                        // (correctly flipped) annotations actually are. User-visible symptom:
+                        // "annotations in the right place, tiles somewhere else, not near
+                        // the annotations." Force the re-read against the current hierarchy.
+                        state.annotations = null;
+
                         // Use the new dialog-based annotation handling (non-blocking)
                         return ensureAnnotationsExist(state);
                     })
