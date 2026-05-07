@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.controller.workflow.StitchingHelper;
+import qupath.ext.qpsc.controller.workflow.TileCleanupHelper;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.model.SampleSetupResult;
@@ -575,16 +576,11 @@ public class BoundedAcquisitionWorkflow {
                                                 return null;
                                             });
 
-                                    // Handle cleanup after stitching
-                                    stitchFuture.thenRun(() -> {
-                                        String handling = QPPreferenceDialog.getTileHandlingMethodProperty();
-                                        if ("Delete".equals(handling)) {
-                                            TileProcessingUtilities.deleteTilesAndFolder(tempTileDir);
-                                        } else if ("Zip".equals(handling)) {
-                                            TileProcessingUtilities.zipTilesAndMove(tempTileDir);
-                                            TileProcessingUtilities.deleteTilesAndFolder(tempTileDir);
-                                        }
-                                    });
+                                    // Handle cleanup after stitching (success path only).
+                                    // Shared with ExistingImageWorkflowV2 via TileCleanupHelper so
+                                    // both workflows honor the same Delete/Zip/Keep semantics --
+                                    // notably, Zip only deletes originals if zipping succeeded.
+                                    stitchFuture.thenRun(() -> TileCleanupHelper.performCleanup(tempTileDir));
 
                                     return stitchFuture;
                                 })

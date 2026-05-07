@@ -144,6 +144,7 @@ public class ExistingImageWorkflowV2 {
                         .thenCompose(this::performAcquisition)
                         .thenCompose(this::waitForCompletion)
                         .thenAccept(result -> {
+                            cleanupTilesAfterStitching();
                             cleanup();
                             showSuccessNotification();
                         })
@@ -164,6 +165,7 @@ public class ExistingImageWorkflowV2 {
                         .thenCompose(this::performAcquisition)
                         .thenCompose(this::waitForCompletion)
                         .thenAccept(result -> {
+                            cleanupTilesAfterStitching();
                             cleanup();
                             showSuccessNotification();
                         })
@@ -1110,6 +1112,22 @@ public class ExistingImageWorkflowV2 {
             logger.info("Workflow completed - cleaning up");
             // Clear any preserved annotations (should already be restored, but cleanup just in case)
             AnnotationPreservationService.clearPreservedAnnotations();
+        }
+
+        /**
+         * Applies the tile-handling preference (Delete / Zip / Keep) to the
+         * temporary tile directory. Runs only on the success path so tiles
+         * remain available for diagnostics if acquisition or stitching failed.
+         */
+        private void cleanupTilesAfterStitching() {
+            if (state == null || state.projectInfo == null) {
+                return;
+            }
+            String tempTileDir = state.projectInfo.getTempTileDirectory();
+            if (tempTileDir == null || tempTileDir.isBlank()) {
+                return;
+            }
+            TileCleanupHelper.performCleanup(tempTileDir);
         }
 
         /**

@@ -9,6 +9,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 *No unreleased changes.*
 
+## [0.5.0] - 2026-05-07
+
+### Added
+
+**SIFT auto-alignment**
+- Auto-Align (SIFT) button in the 3-point Microscope Alignment workflow per-tile confirm step (was previously only available in single-tile refinement). Reuses the same dialog and Settings, minus the "save / skip / new alignment" buttons.
+- Configurable bit-depth normalization (`PERCENTILE` / `MIN_MAX` / `BIT_SHIFT`) and CLAHE preprocessing for cross-modality matching (16-bit monochrome camera vs 8-bit H&E WSI). Defaults `PERCENTILE` 2/98 + CLAHE on with clipLimit 2.0 fix the OWS3 + H&E "fails near correct tile" failure mode.
+- Wire-protocol flags `--mono-norm`, `--pct-low`, `--pct-high`, `--clahe`, `--clahe-clip` on SIFTAL.
+
+**Live Viewer**
+- "Always Auto-Scale" checkbox replaces the forced per-tile rescale; drag the Min/Max sliders to opt out of auto-scale.
+- Camera Control tab restores last-used Exposure + Intensity on open.
+- Focus buttons recover when `restartStreaming` fails (no more deadlocked spinner).
+
+**Autofocus Editor**
+- Test Streaming Autofocus button with live curve plots; chart axes auto-fit.
+- Surfaced `valid_modalities` and `min_magnification` constraints from the focus manifest.
+
+**Propagation Manager**
+- Ground-truth source ROI auto-stamped from parent tile detections; "Stamp source ROI from tiles" retrofit button for older sub-acquisitions.
+- Cross-scope back-prop swaps in the source-scope alignment so the xy_offset is interpreted in its own scope's stage frame.
+- Comprehensive diagnostics for back-prop; multi-group UI; "Save & reload viewer" handling.
+- Visible warning when a source-scope config is missing instead of silently producing a wrong xy_offset.
+
+**Acquisition Wizard**
+- Periodic 3-second poll so calibration status pills (white balance, backgrounds, alignment) refresh while the wizard stays open -- no more closing+reopening to clear yellow warnings after running WB / Background Collection.
+- Unified `ObjectiveSelector` component that auto-detects from MicroManager pixel size (priority: MM pixel size match -> last-used pref -> first config entry).
+
+**White Balance**
+- R/B analog gain ceiling spinner exposed in the WB dialog and plumbed to the server.
+- Objective/detector combos seeded from live MicroManager pixel size when opening WB / Background dialogs.
+
+### Fixed
+
+**Flip handling (Step B refactor + 2026-05-07 follow-ups)**
+- Step B (2026-05-04): flip source-of-truth moved from per-entry `FLIP_X`/`FLIP_Y` metadata to `TransformPreset.flipMacroX/Y` (per `(source_scanner, target_microscope)` preset) and the per-slide alignment JSON. `AlignmentHelper.checkForSlideAlignment` bakes the alignment-frame flip into the loaded transform so all downstream callers consume unflipped-base pixel coords.
+- 2026-05-04: per-slide JSONs auto-registered at BoundingBox stitch import + saved by ExistingImageWorkflow refinement now record `flipMacroX/Y` truthfully (the legacy 5-arg overload wrote `null,null` and was source of an XY-mirror bug on PPM existing-image acquisitions).
+- 2026-05-07 (this release): `(flipped X|Y|XY)` companion entries are still created on demand by `ImageFlipHelper.validateAndFlipIfNeeded` for the visual-UX of operator alignment (the unflipped base and the flipped live camera view disagree by a mirror on PPM and cannot be aligned by eye). The 2026-05-04 stub-out of this method was reverted and replaced with a real preset-driven implementation.
+- 2026-05-07: `ManualAlignmentPath` now records `flipMacroX/Y` on the per-slide JSON from the active preset (was via `FlipResolver(null,null,null)` which post-Step-B always returned `(false, false)`, mis-stamping the JSON as "no flip" when the alignment was actually done in the flipped sibling's frame).
+- 2026-05-07: `StageControlPanel.handleGoToCentroid` (Move to Centroid button) now loads via `loadSlideAlignmentWithFrame` and bakes the flip on the unflipped base entry, mirroring `AlignmentHelper.checkForSlideAlignment`. The legacy raw-load + manual-compensation block was producing XY-mirror motion on PPM.
+- 2026-05-07: tile detections in single-tile refinement now overlay the (correctly flipped) annotations on the flipped sibling instead of landing at the XY-mirror -- caused by `state.annotations` being captured against the unflipped base at config-dialog return and never re-fetched after the flip switch. `processSlideSpecificAlignment` now clears `state.annotations` after `validateAndFlipIfNeeded` so `ensureAnnotationsExist` re-reads from the now-current hierarchy.
+
+**Stage Map**
+- Macro overlay flip now resolves from the active `(source, target)` preset, not per-entry metadata.
+- Recovers when polling fails instead of hiding the overlay; logs the real failure cause.
+- Recovers from stale `acquisitionActive` after cancellation.
+
+**Connection stability**
+- User-triggered Reconnect clears the server-unresponsive latch.
+- Unified server-unresponsive recovery path across acquisition + heartbeat.
+- Cancel runs off the JavaFX thread; CANC read timeout bumped so cancellation doesn't time out under server load.
+
+**Class-filtered alignment tiling**
+- `MicroscopeAlignmentWorkflow` (standalone) now prefers `PersistentPreferences.getSelectedAnnotationClasses()` for tiling, with Tissue / valid-class fallback chain. Removed the silent "all annotations regardless of class" fallback that produced noisy / overlapping tile grids.
+- Existing Image Workflow's single-tile refinement prompt now reports the count and class names of annotations being tiled.
+
+**Other**
+- Tile-handling preference (Delete / Zip / Keep) now actually runs after the Existing Image Workflow finishes stitching. The cleanup was previously only wired into `BoundedAcquisitionWorkflow`, so existing-image runs left their `tempTileDirectory` in place regardless of the preference. Both workflows now share `TileCleanupHelper.performCleanup`, and the Zip path only deletes originals if zipping succeeded. Background-correction tiles live in a separate config-specified folder and are unaffected.
+- Live Viewer focus range dropdown options 6-40um (was truncated 1-20um).
+- Sweep Focus rejects boundary peaks and requires 2 flanking samples for parabolic interpolation; suppresses early-stop on flat metric / peak-at-start.
+- Test Standard/Adaptive Autofocus stops live view before running (no more "AF metric is whatever the camera last streamed" artifacts).
+- Multichannel merged filenames follow the standard naming scheme.
+- Camera tab Apply Profile rebuilds the panel and restores saved exposure/illumination prefs to hardware so UI matches.
+
+### Documentation
+
+- New `documentation/developer/COORDINATE_TRANSFORMS.md` is now authoritative for the flip pipeline.
+- `documentation/developer/SOCKET_PROTOCOL.md` includes a full SIFTAL flag reference.
+- `documentation/PREFERENCES.md` covers all SIFT bit-depth normalization knobs.
+- `documentation/TROUBLESHOOTING.md` adds entries for SIFT failure modes (close-but-failing on PPM/H&E + stage-too-far-from-tile).
+- `documentation/tools/microscope-alignment.md` and `documentation/tools/existing-image-acquisition.md` updated for SIFT-in-3-point alignment + class-filtered tiling.
+
 ## [0.3.0] - 2026-03-02
 
 ### Added
