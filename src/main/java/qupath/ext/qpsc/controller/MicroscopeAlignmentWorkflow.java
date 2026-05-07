@@ -1482,6 +1482,7 @@ public class MicroscopeAlignmentWorkflow {
                             String.format(
                                     "Successfully saved alignment transform: %s (verified)", finalTransformName));
                 }
+                qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
             });
 
         } catch (Exception e) {

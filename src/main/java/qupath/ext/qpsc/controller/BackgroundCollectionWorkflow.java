@@ -276,6 +276,7 @@ public class BackgroundCollectionWorkflow {
                                 "Successfully acquired %d background images for %s modality",
                                 angleExposures.size(), modality));
             });
+            qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
 
         } catch (Exception e) {
             logger.error("Background acquisition failed", e);

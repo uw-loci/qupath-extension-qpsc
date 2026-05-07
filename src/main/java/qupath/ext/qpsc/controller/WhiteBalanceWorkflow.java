@@ -298,6 +298,7 @@ public class WhiteBalanceWorkflow {
                             progressStage.close();
                             showSimpleResults(result, params.outputPath());
                         });
+                        qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
 
                     } catch (Exception e) {
                         logger.error("Simple white balance failed", e);
@@ -425,6 +426,7 @@ public class WhiteBalanceWorkflow {
                             progressStage.close();
                             showPPMResults(results, params.outputPath());
                         });
+                        qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
 
                     } catch (Exception e) {
                         logger.error("PPM white balance failed", e);

@@ -75,14 +75,13 @@ public class AcquisitionWizardDialog {
     private static String textSectionHeader() { return isDark() ? "#aaa" : "#888"; }
 
     private static Stage wizardStage;
+    private static AcquisitionWizardDialog activeInstance;
 
     // Root container that holds both expanded and collapsed views
     private StackPane rootPane;
     private VBox expandedContent;
     private HBox collapsedContent;
     private boolean collapsed;
-
-    private javafx.animation.Timeline statusRefreshTimeline;
 
     // Saved position/size for expand/collapse transitions
     private double expandedX, expandedY;
@@ -113,6 +112,19 @@ public class AcquisitionWizardDialog {
 
     // Autofocus disable checkbox
     private CheckBox disableAutofocusCheckBox;
+
+    /**
+     * Refreshes calibration statuses on the open wizard, if any. No-op when
+     * the wizard is not open. Sub-workflows (WhiteBalanceWorkflow,
+     * BackgroundCollectionWorkflow, MicroscopeAlignmentWorkflow) call this
+     * on completion so the wizard's status pills update without polling.
+     * Safe to call from any thread.
+     */
+    public static void notifyCalibrationChanged() {
+        AcquisitionWizardDialog inst = activeInstance;
+        if (inst == null) return;
+        javafx.application.Platform.runLater(inst::refreshAllStatuses);
+    }
 
     /**
      * Shows the wizard dialog. If already open, brings it to front and expands.
@@ -178,26 +190,14 @@ public class AcquisitionWizardDialog {
             }
         });
 
-        // Periodic poll for calibration status changes. The focus listener
-        // above is a fast path, but it doesn't fire when sub-workflows like
-        // White Balance or Background Collection are owned by the wizard --
-        // the wizard's focus state can stay "true" the whole time the
-        // child dialog is on top, so closing the child never triggers a
-        // refresh and the status pills stay yellow until the wizard is
-        // closed and reopened. A 3-second poll is cheap (CalibrationChecker
-        // is a few file-system stats) and covers all sub-workflow exits
-        // and any out-of-band file changes.
-        statusRefreshTimeline = new javafx.animation.Timeline(
-                new javafx.animation.KeyFrame(javafx.util.Duration.seconds(3), ev -> refreshCalibrationStatuses()));
-        statusRefreshTimeline.setCycleCount(javafx.animation.Animation.INDEFINITE);
-        statusRefreshTimeline.play();
-
-        // Stop the polling Timeline when the wizard is hidden/closed so it
-        // doesn't keep firing in the background after the user dismisses
-        // the wizard.
+        // Track the open instance so sub-workflows (WhiteBalanceWorkflow,
+        // BackgroundCollectionWorkflow, MicroscopeAlignmentWorkflow) can push
+        // a refresh on completion via notifyCalibrationChanged(). Clear on
+        // hide so we don't keep a reference to a closed wizard.
+        activeInstance = this;
         wizardStage.setOnHidden(ev -> {
-            if (statusRefreshTimeline != null) {
-                statusRefreshTimeline.stop();
+            if (activeInstance == AcquisitionWizardDialog.this) {
+                activeInstance = null;
             }
         });
 
