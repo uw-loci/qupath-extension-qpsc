@@ -1587,6 +1587,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         public final int nSamples;
         public final double zSpan;
         public final String reason;
+        /** Path to the server-side dump directory when --dump was set
+         * (frames/, samples.csv, z_poll.csv, manifest.json). Null when
+         * the request did not enable dump mode. */
+        public final String dumpPath;
 
         public StreamingFocusResult(
                 Status status,
@@ -1596,6 +1600,18 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 int nSamples,
                 double zSpan,
                 String reason) {
+            this(status, initialZ, finalZ, zShift, nSamples, zSpan, reason, null);
+        }
+
+        public StreamingFocusResult(
+                Status status,
+                double initialZ,
+                double finalZ,
+                double zShift,
+                int nSamples,
+                double zSpan,
+                String reason,
+                String dumpPath) {
             this.status = status;
             this.initialZ = initialZ;
             this.finalZ = finalZ;
@@ -1603,6 +1619,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             this.nSamples = nSamples;
             this.zSpan = zSpan;
             this.reason = reason;
+            this.dumpPath = dumpPath;
         }
     }
 
@@ -1647,6 +1664,17 @@ public class MicroscopeSocketClient implements AutoCloseable {
      */
     public StreamingFocusResult streamingFocus(
             String yamlPath, String objective, String modality, double rangeOverrideUm) throws IOException {
+        return streamingFocus(yamlPath, objective, modality, rangeOverrideUm, false);
+    }
+
+    /**
+     * Variant that opt-in enables server-side dump (TIFs + CSV + manifest)
+     * for diagnostic / Test-button workflows. Returns the dumpPath in the
+     * result so callers can render plots or open the folder.
+     */
+    public StreamingFocusResult streamingFocus(
+            String yamlPath, String objective, String modality,
+            double rangeOverrideUm, boolean dumpFrames) throws IOException {
         if (yamlPath == null || yamlPath.isEmpty()) {
             throw new IllegalArgumentException("yamlPath is required for streamingFocus");
         }
@@ -1661,6 +1689,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
         if (!Double.isNaN(rangeOverrideUm) && rangeOverrideUm > 0) {
             msgBuilder.append(" --range ").append(rangeOverrideUm);
+        }
+        if (dumpFrames) {
+            msgBuilder.append(" --dump 1");
         }
         msgBuilder.append(" ").append(END_MARKER);
         String message = msgBuilder.toString();
@@ -1695,6 +1726,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 logger.info("STRMAFZ response: {}", response);
                 lastActivityTime.set(System.currentTimeMillis());
 
+                // Extract optional ":dump=<path>" suffix and strip it before
+                // parsing the SUCCESS / UNAVAILABLE bodies.
+                String dumpPath = null;
+                int dumpIdx = response.indexOf(":dump=");
+                if (dumpIdx >= 0) {
+                    dumpPath = response.substring(dumpIdx + ":dump=".length()).trim();
+                    response = response.substring(0, dumpIdx);
+                }
+
                 if (response.startsWith("SUCCESS:")) {
                     // SUCCESS:<initial>:<final>:<shift>:<n_samples>:<span>
                     String body = response.substring("SUCCESS:".length());
@@ -1713,14 +1753,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         int nSamples = Integer.parseInt(parts[3].trim());
                         double zSpan = Double.parseDouble(parts[4].trim());
                         return new StreamingFocusResult(
-                                StreamingFocusResult.Status.SUCCESS, initialZ, finalZ, zShift, nSamples, zSpan, null);
+                                StreamingFocusResult.Status.SUCCESS, initialZ, finalZ, zShift, nSamples, zSpan, null, dumpPath);
                     } catch (NumberFormatException e) {
                         throw new IOException("STRMAFZ: could not parse SUCCESS payload: " + response, e);
                     }
                 } else if (response.startsWith("UNAVAILABLE:")) {
                     String reason = response.substring("UNAVAILABLE:".length());
                     logger.info("STRMAFZ UNAVAILABLE: {}", reason);
-                    return new StreamingFocusResult(StreamingFocusResult.Status.UNAVAILABLE, 0, 0, 0, 0, 0, reason);
+                    return new StreamingFocusResult(StreamingFocusResult.Status.UNAVAILABLE, 0, 0, 0, 0, 0, reason, dumpPath);
                 } else if (response.startsWith("FAILED:")) {
                     String reason = response.substring("FAILED:".length());
                     logger.warn("STRMAFZ FAILED: {}", reason);

@@ -11,10 +11,14 @@ import java.util.regex.Pattern;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.chart.LineChart;
+import javafx.scene.chart.NumberAxis;
+import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
 import javafx.stage.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -534,10 +538,25 @@ public class AutofocusEditorWorkflow {
             rigGrid.add(hint, 0, r, 2, 1);
         }
 
+        // --- Test button: run a streaming AF scan with --dump enabled and
+        // render the metric curves in time and Z domains. Lets the operator
+        // see whether the stage is moving at the expected speed and whether
+        // the metric has a real focus peak.
+        Button testStreamingButton = new Button("Test Streaming Autofocus");
+        testStreamingButton.setOnAction(e -> runStreamingAfTest(testStreamingButton));
+        Label testHint = new Label(
+                "Runs one streaming AF scan at the current XY/Z and dumps every captured\n"
+                        + "frame plus a CSV of (time, assumed Z, actual Z, metric) under\n"
+                        + "config/logs/streaming_af_dumps/. Plots are shown in a popup.");
+        testHint.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        VBox testBox = new VBox(4, testStreamingButton, testHint);
+        testBox.setPadding(new Insets(6, 0, 0, 0));
+
         content.getChildren().addAll(intro, new Separator(),
                 sourcesHeader, srcGrid,
                 expHeader, editGrid,
-                rigHeader, rigGrid);
+                rigHeader, rigGrid,
+                testBox);
 
         TitledPane pane = new TitledPane(
                 "Streaming Autofocus (Live Viewer Only -- mostly read-only)",
@@ -545,6 +564,215 @@ public class AutofocusEditorWorkflow {
         pane.setCollapsible(true);
         pane.setExpanded(false);
         return pane;
+    }
+
+    /**
+     * Run a streaming AF scan with --dump enabled and show metric curves
+     * (time-domain and Z-domain) in a popup. The button is disabled while
+     * the scan runs and re-enabled on completion.
+     *
+     * <p>Reads the server-written {@code samples.csv} from the dump path
+     * the server returns, parses (wall_ms, z_assumed, z_actual, metric)
+     * rows, and renders two LineCharts side-by-side. If z_actual is
+     * missing the chart silently falls back to z_assumed.
+     */
+    private static void runStreamingAfTest(Button button) {
+        String yamlPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        if (yamlPath == null || yamlPath.isEmpty()) {
+            Dialogs.showErrorMessage("Test Streaming AF",
+                    "No microscope config yaml set in preferences.");
+            return;
+        }
+        button.setDisable(true);
+        button.setText("Running streaming AF (saving frames)...");
+
+        // Run on a background thread so the UI stays responsive.
+        Thread t = new Thread(() -> {
+            try {
+                qupath.ext.qpsc.controller.MicroscopeController mc =
+                        qupath.ext.qpsc.controller.MicroscopeController.getInstance();
+                qupath.ext.qpsc.service.microscope.MicroscopeSocketClient sc = mc.getSocketClient();
+                qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.StreamingFocusResult result =
+                        sc.streamingFocus(yamlPath, null, null, Double.NaN, true);
+                Platform.runLater(() -> showStreamingAfTestResult(result));
+            } catch (Exception ex) {
+                logger.error("Test Streaming AF failed", ex);
+                Platform.runLater(() -> Dialogs.showErrorMessage(
+                        "Test Streaming AF",
+                        "Scan failed: " + ex.getMessage()));
+            } finally {
+                Platform.runLater(() -> {
+                    button.setDisable(false);
+                    button.setText("Test Streaming Autofocus");
+                });
+            }
+        }, "streaming-af-test");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** Build and show a non-modal Stage with two LineCharts + a status header. */
+    private static void showStreamingAfTestResult(
+            qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.StreamingFocusResult result) {
+        VBox root = new VBox(8);
+        root.setPadding(new Insets(10));
+
+        String header;
+        switch (result.status) {
+            case SUCCESS:
+                header = String.format(
+                        "SUCCESS: shifted %+.3f um, peak Z=%.3f, %d samples, span %.2f um",
+                        result.zShift, result.finalZ, result.nSamples, result.zSpan);
+                break;
+            case UNAVAILABLE:
+                header = "UNAVAILABLE: " + result.reason;
+                break;
+            default:
+                header = "FAILED: " + result.reason;
+                break;
+        }
+        Label headerLabel = new Label(header);
+        headerLabel.setStyle("-fx-font-weight: bold; -fx-font-family: monospace;");
+        headerLabel.setWrapText(true);
+        root.getChildren().add(headerLabel);
+
+        if (result.dumpPath == null || result.dumpPath.isEmpty()) {
+            root.getChildren().add(new Label(
+                    "Server did not return a dump path -- nothing to plot."));
+        } else {
+            Label pathLabel = new Label("Dump: " + result.dumpPath);
+            pathLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 10px;");
+            pathLabel.setWrapText(true);
+            root.getChildren().add(pathLabel);
+
+            // The server writes one subdirectory per attempt
+            // (attempt_1/, attempt_2/, ...). Try attempt_1/samples.csv
+            // first; if not present, fall back to <root>/samples.csv.
+            File csv = new File(result.dumpPath, "attempt_1/samples.csv");
+            if (!csv.exists()) {
+                csv = new File(result.dumpPath, "samples.csv");
+            }
+            if (!csv.exists()) {
+                root.getChildren().add(new Label(
+                        "samples.csv not found under dump path. Check that the server\n"
+                                + "completed at least one attempt and wrote out the dump\n"
+                                + "(see server log for STREAM_AF:dump written line)."));
+            } else {
+                List<double[]> rows;
+                try {
+                    rows = readSamplesCsv(csv);
+                } catch (IOException ex) {
+                    rows = Collections.emptyList();
+                    root.getChildren().add(new Label("Could not read CSV: " + ex.getMessage()));
+                }
+                if (!rows.isEmpty()) {
+                    HBox plots = new HBox(10);
+                    plots.getChildren().addAll(
+                            buildTimeDomainChart(rows),
+                            buildSpaceDomainChart(rows));
+                    root.getChildren().add(plots);
+                }
+            }
+        }
+
+        Stage stage = new Stage();
+        stage.setTitle("Streaming Autofocus Test Result");
+        stage.setScene(new javafx.scene.Scene(root, 1100, 600));
+        stage.show();
+    }
+
+    /**
+     * Read the server-side samples.csv. Columns:
+     *   idx, wall_ms, z_assumed_um, z_actual_um, metric
+     * Returns rows as {wall_ms, z_assumed, z_actual_or_NaN, metric}.
+     */
+    private static List<double[]> readSamplesCsv(File csv) throws IOException {
+        List<double[]> rows = new ArrayList<>();
+        try (var br = new java.io.BufferedReader(new java.io.FileReader(csv))) {
+            String line = br.readLine();   // skip header
+            while ((line = br.readLine()) != null) {
+                String[] parts = line.split(",");
+                if (parts.length < 5) continue;
+                try {
+                    double wall = Double.parseDouble(parts[1].trim());
+                    double zAss = Double.parseDouble(parts[2].trim());
+                    String zAct = parts[3].trim();
+                    double zActVal = zAct.isEmpty()
+                            ? Double.NaN
+                            : Double.parseDouble(zAct);
+                    double metric = Double.parseDouble(parts[4].trim());
+                    rows.add(new double[]{wall, zAss, zActVal, metric});
+                } catch (NumberFormatException ignored) {
+                    // skip bad rows
+                }
+            }
+        }
+        return rows;
+    }
+
+    private static LineChart<Number, Number> buildTimeDomainChart(List<double[]> rows) {
+        NumberAxis xAxis = new NumberAxis();
+        xAxis.setLabel("Time (ms)");
+        NumberAxis yAxis = new NumberAxis();
+        yAxis.setLabel("Metric  (and Z, scaled)");
+        LineChart<Number, Number> chart = new LineChart<>(xAxis, yAxis);
+        chart.setTitle("Time domain");
+        chart.setCreateSymbols(false);
+        chart.setLegendVisible(true);
+        chart.setPrefSize(540, 480);
+
+        XYChart.Series<Number, Number> metricSeries = new XYChart.Series<>();
+        metricSeries.setName("metric");
+        XYChart.Series<Number, Number> zSeries = new XYChart.Series<>();
+        zSeries.setName("Z actual (offset+scaled)");
+
+        // Scale Z so it fits on the same axis as metric.
+        double minMetric = Double.POSITIVE_INFINITY, maxMetric = Double.NEGATIVE_INFINITY;
+        double minZ = Double.POSITIVE_INFINITY, maxZ = Double.NEGATIVE_INFINITY;
+        for (double[] r : rows) {
+            minMetric = Math.min(minMetric, r[3]);
+            maxMetric = Math.max(maxMetric, r[3]);
+            double z = Double.isNaN(r[2]) ? r[1] : r[2];
+            minZ = Math.min(minZ, z);
+            maxZ = Math.max(maxZ, z);
+        }
+        double metricSpan = Math.max(maxMetric - minMetric, 1e-9);
+        double zSpan = Math.max(maxZ - minZ, 1e-9);
+        for (double[] r : rows) {
+            metricSeries.getData().add(new XYChart.Data<>(r[0], r[3]));
+            double z = Double.isNaN(r[2]) ? r[1] : r[2];
+            double zScaled = minMetric + (z - minZ) * metricSpan / zSpan;
+            zSeries.getData().add(new XYChart.Data<>(r[0], zScaled));
+        }
+        chart.getData().addAll(metricSeries, zSeries);
+        return chart;
+    }
+
+    private static LineChart<Number, Number> buildSpaceDomainChart(List<double[]> rows) {
+        NumberAxis xAxis = new NumberAxis();
+        xAxis.setLabel("Z (um)");
+        NumberAxis yAxis = new NumberAxis();
+        yAxis.setLabel("Metric");
+        LineChart<Number, Number> chart = new LineChart<>(xAxis, yAxis);
+        chart.setTitle("Space domain (metric vs Z actual)");
+        chart.setCreateSymbols(true);
+        chart.setLegendVisible(false);
+        chart.setPrefSize(540, 480);
+
+        XYChart.Series<Number, Number> series = new XYChart.Series<>();
+        // Sort by Z so the polyline doesn't zig-zag when stage is stationary
+        List<double[]> sorted = new ArrayList<>(rows);
+        sorted.sort((a, b) -> {
+            double za = Double.isNaN(a[2]) ? a[1] : a[2];
+            double zb = Double.isNaN(b[2]) ? b[1] : b[2];
+            return Double.compare(za, zb);
+        });
+        for (double[] r : sorted) {
+            double z = Double.isNaN(r[2]) ? r[1] : r[2];
+            series.getData().add(new XYChart.Data<>(z, r[3]));
+        }
+        chart.getData().add(series);
+        return chart;
     }
 
     /**
