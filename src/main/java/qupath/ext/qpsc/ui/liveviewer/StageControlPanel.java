@@ -56,7 +56,6 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.VirtualJoystick;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
-import qupath.ext.qpsc.utilities.FlipResolver;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
@@ -3504,17 +3503,59 @@ public class StageControlPanel extends VBox {
             }
         }
 
-        // Fall through to alignment transform path
-        AffineTransform transform = MicroscopeController.getInstance().getCurrentTransform();
-
-        // Try to load slide-specific alignment
-        if (transform == null && gui.getProject() != null) {
+        // Fall through to alignment transform path. Load the per-slide
+        // alignment with its alignment-time flip frame so we can bake
+        // any required flip into the transform here -- mirroring
+        // AlignmentHelper.checkForSlideAlignment so all callers consume
+        // unflipped-base pixel coords directly.
+        AffineTransform transform = null;
+        if (gui.getProject() != null) {
             try {
                 @SuppressWarnings("unchecked")
                 Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
                 String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
                 if (imageName != null && !imageName.isEmpty()) {
-                    transform = AffineTransformManager.loadSlideAlignment(project, imageName);
+                    AffineTransformManager.SlideAlignmentResult withFrame =
+                            AffineTransformManager.loadSlideAlignmentWithFrame(project, imageName);
+                    AffineTransform raw = withFrame != null ? withFrame.getTransform() : null;
+                    Boolean alignFlipX = withFrame != null ? withFrame.getFlipMacroX() : null;
+                    Boolean alignFlipY = withFrame != null ? withFrame.getFlipMacroY() : null;
+
+                    if (raw == null) {
+                        // Fall back to the legacy raw loader for older JSONs that
+                        // pre-date the with-frame format; for those the saved
+                        // transform is in unflipped-base frame already (Manual /
+                        // ExistingAlignment paths produced that).
+                        raw = AffineTransformManager.loadSlideAlignment(project, imageName);
+                    }
+
+                    // Determine whether the open entry is the unflipped base or
+                    // the flipped sibling. If unflipped base AND the alignment
+                    // was captured in flipped frame, bake the flip so we can
+                    // apply the centroid in unflipped-base pixel coords.
+                    ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
+                    boolean entryIsFlippedSibling = openEntry != null
+                            && qupath.ext.qpsc.utilities.ImageFlipHelper.isFlippedSiblingName(openEntry.getImageName());
+
+                    if (raw != null
+                            && alignFlipX != null
+                            && alignFlipY != null
+                            && (alignFlipX || alignFlipY)
+                            && !entryIsFlippedSibling) {
+                        int w = gui.getImageData().getServer().getWidth();
+                        int h = gui.getImageData().getServer().getHeight();
+                        AffineTransform flip = qupath.ext.qpsc.controller.ForwardPropagationWorkflow.createFlip(
+                                alignFlipX, alignFlipY, w, h);
+                        AffineTransform composed = new AffineTransform(raw);
+                        composed.concatenate(flip);
+                        transform = composed;
+                        logger.debug(
+                                "Move-to-Centroid: baked alignment flip ({}, {}) into transform for unflipped base",
+                                alignFlipX, alignFlipY);
+                    } else {
+                        transform = raw;
+                    }
+
                     if (transform != null) {
                         MicroscopeController.getInstance().setCurrentTransform(transform);
                     }
@@ -3522,6 +3563,11 @@ public class StageControlPanel extends VBox {
             } catch (Exception ex) {
                 logger.warn("Failed to load slide-specific alignment on click: {}", ex.getMessage());
             }
+        }
+
+        // Last-resort: use the in-session current transform if no per-slide JSON.
+        if (transform == null) {
+            transform = MicroscopeController.getInstance().getCurrentTransform();
         }
 
         if (transform == null) {
@@ -3532,48 +3578,7 @@ public class StageControlPanel extends VBox {
         }
 
         try {
-            double adjustedX = centroidX;
-            double adjustedY = centroidY;
-
-            // The alignment was calibrated on the flipped image. If we're viewing the
-            // original (unflipped) image, convert the centroid to the flipped coordinate
-            // space before applying the transform.
-            if (gui.getProject() != null) {
-                try {
-                    @SuppressWarnings("unchecked")
-                    Project<BufferedImage> proj = (Project<BufferedImage>) gui.getProject();
-                    ProjectImageEntry<BufferedImage> currentEntry = proj.getEntry(gui.getImageData());
-                    if (currentEntry != null) {
-                        boolean imageFlipX = ImageMetadataManager.isFlippedX(currentEntry);
-                        boolean imageFlipY = ImageMetadataManager.isFlippedY(currentEntry);
-                        // Resolve "what the alignment was calibrated with" via FlipResolver. No
-                        // preset/detector context here -- equivalent to global pref today.
-                        boolean prefFlipX = FlipResolver.resolveFlipX(null, null, null);
-                        boolean prefFlipY = FlipResolver.resolveFlipY(null, null, null);
-
-                        int imgWidth = gui.getImageData().getServer().getWidth();
-                        int imgHeight = gui.getImageData().getServer().getHeight();
-
-                        // If the preference says flip but the image isn't flipped,
-                        // we're on the original -- flip the centroid to match the
-                        // coordinate space the alignment was calibrated in.
-                        if (prefFlipX && !imageFlipX) {
-                            adjustedX = imgWidth - centroidX;
-                            logger.debug(
-                                    "Flipping centroid X: {} -> {} (image width={})", centroidX, adjustedX, imgWidth);
-                        }
-                        if (prefFlipY && !imageFlipY) {
-                            adjustedY = imgHeight - centroidY;
-                            logger.debug(
-                                    "Flipping centroid Y: {} -> {} (image height={})", centroidY, adjustedY, imgHeight);
-                        }
-                    }
-                } catch (Exception e) {
-                    logger.debug("Could not check image flip state: {}", e.getMessage());
-                }
-            }
-
-            double[] qpCoords = {adjustedX, adjustedY};
+            double[] qpCoords = {centroidX, centroidY};
             double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(qpCoords, transform);
             moveToStagePosition(stageCoords[0], stageCoords[1]);
         } catch (Exception ex) {

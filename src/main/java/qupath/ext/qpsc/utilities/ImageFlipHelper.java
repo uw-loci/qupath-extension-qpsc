@@ -1,29 +1,37 @@
 package qupath.ext.qpsc.utilities;
 
 import java.awt.image.BufferedImage;
+import java.io.File;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.model.SampleSetupResult;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
+import qupath.lib.projects.ProjectImageEntry;
 
 /**
- * Deprecated stub retained for binary compatibility with existing call sites
- * (MicroscopeAlignmentWorkflow, ManualAlignmentPath, ExistingAlignmentPath).
+ * Ensures a `(flipped X|Y|XY)` sibling entry exists for the currently-open
+ * project entry whenever the active `(source_scanner, target_microscope)`
+ * preset says a macro flip is needed, and switches the QuPath viewer to
+ * that sibling.
  *
- * <p>Step B of the flip-relocation refactor moved the macro flip from per-entry
- * metadata to the (source_scanner, target_microscope) preset. The previous
- * job of this class -- creating "(flipped X|Y|XY)" duplicate entries and
- * switching the QuPath viewer to them -- is no longer needed: the alignment-
- * time flip is baked into {@code state.transform} by
- * {@link qupath.ext.qpsc.controller.workflow.AlignmentHelper#checkForSlideAlignment}
- * and applied as a transform step inside
- * {@link qupath.ext.qpsc.controller.ForwardPropagationWorkflow#propagateBack}.
+ * <p>The flipped sibling is required for the visual UX of the alignment
+ * step: during single-tile refinement and 3-point alignment the operator
+ * compares the QuPath display to the live camera view, and on scopes
+ * with an optical flip (e.g. PPM) the unflipped Ocus40 H&E and the live
+ * camera view disagree by a mirror -- impossible to align by eye.
  *
- * <p>All four {@code validateAndFlipIfNeeded} overloads complete immediately
- * with {@code true}. They will be removed entirely once every caller is
- * updated to stop calling them.
+ * <p>Step B (2026-05-04) moved the **source of truth** for flip state
+ * from per-entry `FLIP_X`/`FLIP_Y` metadata to
+ * `TransformPreset.flipMacroX/Y` (per `(source_scanner, target_microscope)`
+ * preset) and the per-slide alignment JSON. This class respects that:
+ * we resolve flip from the preset, not from per-entry metadata. The
+ * `(flipped XY)` sibling is created for visual UX only -- it is no
+ * longer authoritative for flip state.
  */
 public final class ImageFlipHelper {
 
@@ -31,29 +39,253 @@ public final class ImageFlipHelper {
 
     private ImageFlipHelper() {}
 
-    /** No-op stub. Always returns true. */
+    /**
+     * Resolve flip from the active preset for the open entry's source
+     * scanner and the active microscope, then ensure a flipped sibling
+     * exists and is the open entry. Completes with {@code true} on
+     * success (whether or not a flip was needed).
+     */
     public static CompletableFuture<Boolean> validateAndFlipIfNeeded(
             QuPathGUI gui, Project<BufferedImage> project, String sampleName) {
-        logger.debug("validateAndFlipIfNeeded(sample='{}'): no-op stub (Step B)", sampleName);
-        return CompletableFuture.completedFuture(true);
+        return ensureFlippedSiblingIfNeeded(gui, project, sampleName, null, null);
     }
 
-    /** No-op stub. Always returns true. */
+    /**
+     * Caller-resolved flip overload. Used by paths that already know the
+     * flip state out-of-band (e.g. preset rebuild). The preset-driven
+     * resolution is bypassed; the explicit flags are taken as truth.
+     */
     public static CompletableFuture<Boolean> validateAndFlipIfNeeded(
             QuPathGUI gui,
             Project<BufferedImage> project,
             String sampleName,
             boolean explicitFlipX,
             boolean explicitFlipY) {
-        logger.debug(
-                "validateAndFlipIfNeeded(sample='{}', flipX={}, flipY={}): no-op stub (Step B)",
-                sampleName, explicitFlipX, explicitFlipY);
-        return CompletableFuture.completedFuture(true);
+        return ensureFlippedSiblingIfNeeded(gui, project, sampleName, explicitFlipX, explicitFlipY);
     }
 
-    /** No-op stub. Always returns true. */
+    /** Sample-result variant -- delegates to the string overload. */
     public static CompletableFuture<Boolean> validateAndFlipIfNeeded(
             QuPathGUI gui, Project<BufferedImage> project, SampleSetupResult sample) {
         return validateAndFlipIfNeeded(gui, project, sample != null ? sample.sampleName() : null);
+    }
+
+    // ---------------------------------------------------------------
+    // Worker
+    // ---------------------------------------------------------------
+
+    private static CompletableFuture<Boolean> ensureFlippedSiblingIfNeeded(
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            String sampleName,
+            Boolean explicitFlipX,
+            Boolean explicitFlipY) {
+
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+
+        if (gui == null || project == null || gui.getImageData() == null) {
+            logger.warn("validateAndFlipIfNeeded: missing gui/project/imageData -- skipping");
+            future.complete(true);
+            return future;
+        }
+
+        ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
+        if (openEntry == null) {
+            logger.warn("validateAndFlipIfNeeded: open imageData has no project entry -- skipping");
+            future.complete(true);
+            return future;
+        }
+
+        // If the open entry IS already a flipped sibling, nothing to do.
+        if (isFlippedSiblingName(openEntry.getImageName())) {
+            logger.info(
+                    "validateAndFlipIfNeeded: open entry '{}' is already a flipped sibling -- no-op",
+                    openEntry.getImageName());
+            future.complete(true);
+            return future;
+        }
+
+        // Resolve the flip we need.
+        boolean flipX;
+        boolean flipY;
+        if (explicitFlipX != null && explicitFlipY != null) {
+            flipX = explicitFlipX;
+            flipY = explicitFlipY;
+            logger.info(
+                    "validateAndFlipIfNeeded: using explicit flip flags ({}, {}) for sample='{}'",
+                    flipX, flipY, sampleName);
+        } else {
+            boolean[] resolved = resolveFlipFromPreset(openEntry);
+            flipX = resolved[0];
+            flipY = resolved[1];
+        }
+
+        if (!flipX && !flipY) {
+            logger.info(
+                    "validateAndFlipIfNeeded: active preset for entry '{}' requires no flip -- no-op",
+                    openEntry.getImageName());
+            future.complete(true);
+            return future;
+        }
+
+        // Look for an existing flipped sibling of this base entry.
+        ProjectImageEntry<BufferedImage> sibling = findFlippedSibling(project, openEntry, flipX, flipY);
+        if (sibling != null) {
+            logger.info(
+                    "validateAndFlipIfNeeded: flipped sibling already exists ({}); switching open entry",
+                    sibling.getImageName());
+            switchOpenEntry(gui, sibling, future);
+            return future;
+        }
+
+        // No sibling; create one and switch to it.
+        try {
+            logger.info(
+                    "validateAndFlipIfNeeded: creating flipped duplicate of '{}' (flipX={}, flipY={})",
+                    openEntry.getImageName(), flipX, flipY);
+            ProjectImageEntry<BufferedImage> created = QPProjectFunctions.createFlippedDuplicate(
+                    project, openEntry, flipX, flipY, sampleName);
+            if (created == null) {
+                logger.warn("validateAndFlipIfNeeded: createFlippedDuplicate returned null");
+                future.complete(false);
+                return future;
+            }
+            switchOpenEntry(gui, created, future);
+        } catch (Exception e) {
+            logger.error("validateAndFlipIfNeeded: failed to create flipped duplicate", e);
+            future.completeExceptionally(e);
+        }
+        return future;
+    }
+
+    /**
+     * Resolve `(flipMacroX, flipMacroY)` from the preset that matches
+     * the open entry's source scanner and the currently active
+     * microscope. Returns `(false, false)` if no match is found -- the
+     * caller treats that as "no flip needed".
+     */
+    private static boolean[] resolveFlipFromPreset(ProjectImageEntry<BufferedImage> openEntry) {
+        try {
+            String sourceScanner = openEntry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+            if (sourceScanner == null || sourceScanner.isBlank()) {
+                logger.info(
+                        "validateAndFlipIfNeeded: entry '{}' has no SOURCE_MICROSCOPE metadata; cannot resolve preset",
+                        openEntry.getImageName());
+                return new boolean[] {false, false};
+            }
+
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            String activeMicroscope = mgr != null ? mgr.getMicroscopeName() : null;
+            if (activeMicroscope == null || activeMicroscope.isBlank()) {
+                logger.info("validateAndFlipIfNeeded: no active microscope name; cannot resolve preset");
+                return new boolean[] {false, false};
+            }
+
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath == null || configPath.isBlank()) {
+                logger.info("validateAndFlipIfNeeded: no microscope config path; cannot resolve preset");
+                return new boolean[] {false, false};
+            }
+
+            AffineTransformManager atm = new AffineTransformManager(new File(configPath).getParent());
+            AffineTransformManager.TransformPreset preset =
+                    atm.getBestPresetForPair(sourceScanner, activeMicroscope);
+            if (preset == null || !preset.hasFlipState()) {
+                logger.info(
+                        "validateAndFlipIfNeeded: no preset (or no flip state) for ({}, {}); treating as no flip",
+                        sourceScanner, activeMicroscope);
+                return new boolean[] {false, false};
+            }
+
+            boolean flipX = Boolean.TRUE.equals(preset.getFlipMacroX());
+            boolean flipY = Boolean.TRUE.equals(preset.getFlipMacroY());
+            logger.info(
+                    "validateAndFlipIfNeeded: preset '{}' for ({}, {}) -> flipMacroX={}, flipMacroY={}",
+                    preset.getName(), sourceScanner, activeMicroscope, flipX, flipY);
+            return new boolean[] {flipX, flipY};
+        } catch (Exception e) {
+            logger.warn("validateAndFlipIfNeeded: preset resolution failed: {}", e.getMessage());
+            return new boolean[] {false, false};
+        }
+    }
+
+    /**
+     * Find an existing `(flipped X|Y|XY)` sibling of {@code baseEntry}
+     * matching the requested flip axes. Matches by `base_image`
+     * metadata if available, falling back to name prefix.
+     */
+    private static ProjectImageEntry<BufferedImage> findFlippedSibling(
+            Project<BufferedImage> project,
+            ProjectImageEntry<BufferedImage> baseEntry,
+            boolean flipX,
+            boolean flipY) {
+
+        String desiredSuffix;
+        if (flipX && flipY) {
+            desiredSuffix = "(flipped XY)";
+        } else if (flipX) {
+            desiredSuffix = "(flipped X)";
+        } else {
+            desiredSuffix = "(flipped Y)";
+        }
+
+        String baseImage = ImageMetadataManager.getBaseImage(baseEntry);
+        if (baseImage == null || baseImage.isBlank()) {
+            baseImage = qupath.lib.common.GeneralTools.stripExtension(baseEntry.getImageName());
+        }
+        String baseImageFinal = baseImage;
+
+        List<ProjectImageEntry<BufferedImage>> entries = project.getImageList();
+        for (ProjectImageEntry<BufferedImage> e : entries) {
+            if (e == baseEntry) continue;
+            String name = e.getImageName();
+            if (name == null || !name.contains(desiredSuffix)) continue;
+            // Prefer entries that share base_image; fall back to name-prefix match.
+            String candBase = ImageMetadataManager.getBaseImage(e);
+            if (candBase != null && candBase.equals(baseImageFinal)) {
+                return e;
+            }
+            if (name.startsWith(baseEntry.getImageName())
+                    || name.startsWith(qupath.lib.common.GeneralTools.stripExtension(baseEntry.getImageName()))) {
+                return e;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @return true if {@code name} ends with one of the flipped-sibling
+     *     suffixes produced by {@code QPProjectFunctions.createFlippedDuplicate}.
+     */
+    public static boolean isFlippedSiblingName(String name) {
+        if (name == null) return false;
+        return name.endsWith("(flipped X)")
+                || name.endsWith("(flipped Y)")
+                || name.endsWith("(flipped XY)");
+    }
+
+    /**
+     * Switch the QuPath viewer to {@code targetEntry} and complete
+     * {@code future} when the open is initiated. Performs the open on
+     * the FX thread.
+     */
+    private static void switchOpenEntry(
+            QuPathGUI gui, ProjectImageEntry<BufferedImage> targetEntry, CompletableFuture<Boolean> future) {
+        Runnable action = () -> {
+            try {
+                gui.refreshProject();
+                gui.openImageEntry(targetEntry);
+                logger.info("Switched open entry to '{}'", targetEntry.getImageName());
+                future.complete(true);
+            } catch (Exception e) {
+                logger.error("Failed to switch open entry to '{}'", targetEntry.getImageName(), e);
+                future.completeExceptionally(e);
+            }
+        };
+        if (Platform.isFxApplicationThread()) {
+            action.run();
+        } else {
+            Platform.runLater(action);
+        }
     }
 }

@@ -22,11 +22,15 @@ graph LR
     ST -->|"inverse"| QP
 ```
 
-After the Step B refactor (2026-05-04), there is **one project entry per slide** and **one canonical pixel frame** for downstream callers: the unflipped-base frame. The optical flip is captured on the saved `(source_scanner, target_microscope)` preset (`TransformPreset.flipMacroX/Y`) and on each per-slide alignment JSON (`flipMacroX/Y` field). `AlignmentHelper.checkForSlideAlignment` composes that flip into the loaded transform so every consumer downstream — `SingleTileRefinement`, `AcquisitionManager`, `ForwardPropagationWorkflow` — operates in unflipped-base pixel coords without further bookkeeping.
+After the Step B refactor (2026-05-04, scope clarified 2026-05-07), there is **one canonical pixel frame** for downstream callers: the unflipped-base frame. The optical flip is captured on the saved `(source_scanner, target_microscope)` preset (`TransformPreset.flipMacroX/Y`) and on each per-slide alignment JSON (`flipMacroX/Y` field). `AlignmentHelper.checkForSlideAlignment` composes that flip into the loaded transform so every consumer downstream — `SingleTileRefinement`, `AcquisitionManager`, `ForwardPropagationWorkflow` — operates in unflipped-base pixel coords without further bookkeeping.
+
+A `(flipped X|Y|XY)` companion entry is **still created on demand** by the alignment-bearing workflows (`ManualAlignmentPath`, `ExistingAlignmentPath`, anything that runs single-tile refinement) on scopes where the active preset has `flipMacroX/Y = true` (e.g. PPM). The companion exists for **visual-UX reasons only**: during alignment, the operator visually compares the QuPath display to the live camera view, and on a flipped scope the unflipped base and the live camera view disagree by a mirror. The sibling restores visual parity. The sibling is no longer authoritative for flip state — the preset and per-slide JSON are.
+
+`ImageFlipHelper.validateAndFlipIfNeeded` is the entry point for "ensure the sibling exists and is the open entry". It resolves flip from the preset using the open entry's `SOURCE_MICROSCOPE` metadata + active microscope name, and either reuses an existing sibling or creates one via `QPProjectFunctions.createFlippedDuplicate`.
 
 ### Step 1: QuPath Full-Res, unflipped base
 
-Annotations live on the unflipped base entry. There is no "flipped X/Y/XY" duplicate to choose between. Full-resolution pixel coordinates are interpreted in the unflipped pixel frame.
+Annotations live on the unflipped base entry. The optional `(flipped XY)` sibling, when present, mirrors annotation coordinates via `TransformationFunctions.transformHierarchy` so back-propagation keeps the two in sync. Full-resolution pixel coordinates are interpreted in the unflipped pixel frame for transform purposes.
 
 ### Step 2: Flip baking (alignment-time correction, applied once at load)
 
@@ -196,7 +200,7 @@ The `--hint-z` flag tells the server to start its autofocus search near the pred
 | `utilities/AffineTransformManager.java` | Persistent transform storage (JSON); `TransformPreset.flipMacroX/Y` per-pair flip; `saveSlideAlignment` 7-arg overload writes per-slide `flipMacroX/Y` |
 | `utilities/AffineTransform3D.java` | 3D transform with Z scale/offset |
 | `utilities/FlipResolver.java` | Resolves macro flip in priority order: per-image metadata (legacy), active preset, per-detector YAML, default false |
-| `utilities/ImageFlipHelper.java` | **Deprecated stub.** `validateAndFlipIfNeeded` is a no-op after Step B; flipped duplicates are no longer created |
+| `utilities/ImageFlipHelper.java` | `validateAndFlipIfNeeded` -- ensures a `(flipped X|Y|XY)` sibling exists and is the open entry on scopes where the active `(source_scanner, target_microscope)` preset has `flipMacroX/Y = true`. For visual UX during alignment only; not authoritative for flip state. |
 | `controller/workflow/AlignmentHelper.java` | `checkForSlideAlignment` — single normalization point that bakes alignment-frame flip into the loaded transform |
 | `controller/ForwardPropagationWorkflow.java` | `createFlip(flipX, flipY, w, h)` flip transform; back/forward propagation also baked through this |
 | `utilities/TilingUtilities.java` | Grid computation with axis inversion |
