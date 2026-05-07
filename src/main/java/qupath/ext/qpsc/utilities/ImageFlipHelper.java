@@ -161,6 +161,22 @@ public final class ImageFlipHelper {
     /**
      * Resolve `(flipMacroX, flipMacroY)` from the preset that matches
      * the open entry's source scanner and the currently active
+     * microscope. Returns `(false, false)` if no match is found.
+     *
+     * <p>Public so that save-site code (e.g. `ManualAlignmentPath`) can
+     * record the same flip frame the alignment was actually built in,
+     * matching what `ImageFlipHelper.validateAndFlipIfNeeded` saw at
+     * the time it switched the open entry to the flipped sibling.
+     *
+     * @return a 2-element array {flipMacroX, flipMacroY}.
+     */
+    public static boolean[] resolveRequiredFlipFromPreset(ProjectImageEntry<BufferedImage> openEntry) {
+        return resolveFlipFromPreset(openEntry);
+    }
+
+    /**
+     * Resolve `(flipMacroX, flipMacroY)` from the preset that matches
+     * the open entry's source scanner and the currently active
      * microscope. Returns `(false, false)` if no match is found -- the
      * caller treats that as "no flip needed".
      */

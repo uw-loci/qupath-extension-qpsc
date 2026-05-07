@@ -13,13 +13,13 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.AffineTransformationController;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
-import qupath.ext.qpsc.utilities.FlipResolver;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
+import qupath.lib.projects.ProjectImageEntry;
 
 /**
  * Handles Path B: Manual alignment creation.
@@ -221,9 +221,24 @@ public class ManualAlignmentPath {
 
                     if (imageName != null) {
                         // Capture the macro flip frame this manual alignment was built in
-                        // (no preset; falls through to detector / global pref).
-                        boolean flipMacroX = FlipResolver.resolveFlipX(null, null, null);
-                        boolean flipMacroY = FlipResolver.resolveFlipY(null, null, null);
+                        // by resolving the active (source_scanner, target_microscope)
+                        // preset's flipMacroX/Y. The legacy `FlipResolver(null, null, null)`
+                        // call always returned (false, false) post-Step-B (the global flip
+                        // preferences are gone), which mis-recorded the JSON as "no flip"
+                        // even when the operator was clicking on the flipped sibling. With
+                        // a wrong frame on the JSON, AlignmentHelper.checkForSlideAlignment
+                        // and StageControlPanel.handleGoToCentroid skip the flip-bake on
+                        // load, so the saved transform (in flipped frame) gets applied to
+                        // unflipped pixel coords and Move-to-Centroid drives to the XY
+                        // mirror. Resolving from the preset matches what
+                        // ImageFlipHelper.validateAndFlipIfNeeded used to switch the open
+                        // entry in the first place.
+                        ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
+                        boolean[] flipFromPreset = openEntry != null
+                                ? qupath.ext.qpsc.utilities.ImageFlipHelper.resolveRequiredFlipFromPreset(openEntry)
+                                : new boolean[] {false, false};
+                        boolean flipMacroX = flipFromPreset[0];
+                        boolean flipMacroY = flipFromPreset[1];
                         AffineTransformManager.saveSlideAlignment(
                                 project,
                                 imageName, // Use image name without extension for base_image compatibility
