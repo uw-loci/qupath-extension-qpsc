@@ -122,7 +122,14 @@ You do *not* need to re-run alignment every time you load a new slide from the s
 
 ### SIFT Auto-Alignment
 
-During refinement, an **Auto-Align (SIFT)** button can automatically match the microscope view to the WSI tile using feature detection, eliminating the need for manual stage adjustment. This works best on tissue with visible structural features and handles different pixel sizes between the WSI and microscope automatically. Falls back to manual alignment if SIFT cannot find enough matching features.
+An **Auto-Align (SIFT)** button is available in two places:
+
+1. **Per-tile confirm during the 3-point Microscope Alignment workflow** -- once the stage is roughly close to a calibration tile, click Auto-Align (SIFT) to refine the last few microns before clicking *Current Position is Accurate*.
+2. **The post-alignment Single-Tile Refinement step in the Existing Image Workflow** -- the dialog also offers Save / Skip / New Alignment because that step writes the per-slide JSON.
+
+SIFT works best on tissue with visible structural features and handles different pixel sizes between the WSI and microscope automatically. It is a *refinement*, not a search -- the live view must already partially overlap the target tile (rule of thumb: a few hundred microns) for matching to succeed. Falls back to manual alignment if SIFT cannot find enough features.
+
+Cross-modality matching (16-bit monochrome camera against 8-bit H&E WSI, the typical OWS3 / PPM brightfield case) is handled by configurable bit-depth normalization (`PERCENTILE` / `MIN_MAX` / `BIT_SHIFT`) plus optional CLAHE in the SIFT Settings dialog. Defaults are tuned for that scenario.
 
 See [full documentation](tools/microscope-alignment.md) for step-by-step instructions, point distribution guidelines, flip/invert settings, and troubleshooting.
 

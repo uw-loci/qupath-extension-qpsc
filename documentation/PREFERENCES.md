@@ -762,10 +762,23 @@ Preferences controlling the SIFT feature matching used for automated alignment r
 | SIFT confidence threshold | Double | 0.5 | Minimum inlier ratio (0.0-1.0) required to auto-accept alignment when Trust SIFT is enabled. Higher values are stricter. 0.5 means at least 50% of matched features must be RANSAC inliers. |
 | SIFT min pixel size (um) | Double | 1.0 | Minimum resolution for SIFT matching. Both images are downsampled to at least this pixel size before feature detection. Suppresses JPEG compression artifacts and speeds up matching. Lower values for high-magnification objectives (e.g., 63x oil where 1 um/px is a large fraction of the FOV). |
 
+**Cross-modality preprocessing (16-bit camera vs 8-bit WSI):** Five additional knobs handle the case where the microscope camera produces 16-bit data (typically using only the lower 12-14 bits) and the reference is an 8-bit H&E or PPM scan. The legacy `/256` bit-shift would compress the useful camera range to a sliver of 8-bit and collapse SIFT matching against the brighter WSI. These prefs are surfaced in the SIFT Settings dialog (accessible from the refinement step's Auto-Align panel).
+
+| Preference | Type | Default | Description |
+|------------|------|---------|-------------|
+| SIFT mono normalization | Enum | `PERCENTILE` | Mode used when converting >8-bit grayscale to 8-bit before SIFT. `PERCENTILE` stretches between the configured low/high percentiles (recommended). `MIN_MAX` stretches across the full per-image min/max range. `BIT_SHIFT` reproduces the legacy `>>8` behavior for back-compat. |
+| SIFT percentile low | Double | 2.0 | Lower clip percentile (0-100) used by `PERCENTILE` mode. Pixels below this map to 0. |
+| SIFT percentile high | Double | 98.0 | Upper clip percentile (0-100) used by `PERCENTILE` mode. Pixels above this map to 255. |
+| SIFT CLAHE enabled | Boolean | ON | Apply Contrast-Limited Adaptive Histogram Equalisation to both microscope and WSI grayscale images before SIFT. Standard cross-modality robustness trick; dramatically improves matching of monochrome brightfield against H&E references. |
+| SIFT CLAHE clip limit | Double | 2.0 | CLAHE `clipLimit`. Higher values produce more aggressive equalisation. |
+
 **When to adjust these:**
 - **Trust SIFT**: Enable when alignment is reliable and you want fully unattended acquisition
 - **Confidence threshold**: Lower (e.g., 0.3) if tissue has few features; raise (e.g., 0.7) for critical alignment
 - **Min pixel size**: Lower (e.g., 0.3) for 40x+ objectives; raise (e.g., 2.0) for 4x objectives or heavily compressed WSIs
+- **Mono normalization**: Leave on `PERCENTILE` unless you have a specific calibrated reason. Switch to `BIT_SHIFT` only when reproducing legacy alignment runs.
+- **Percentile low/high**: Tighten (e.g., 5/95) to suppress speckle/noise; widen (e.g., 0.5/99.5) when matching very faint features against a bright reference.
+- **CLAHE clip limit**: Raise (e.g., 3.0-4.0) for very low-contrast samples; lower (e.g., 1.0) when CLAHE is amplifying noise into spurious feature matches.
 
 ---
 

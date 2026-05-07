@@ -81,9 +81,13 @@ Choose how to align QuPath image coordinates with physical stage positions. You 
 
 Select the level of alignment refinement needed. No Refinement is fastest; Single-Tile Refinement corrects for minor drift; Full Manual Alignment is most thorough.
 
+If you choose Single-Tile Refinement, the workflow first generates tile detections from the **annotation classes you selected for collection** (not from every annotation in the image). The tile-selection dialog then lets you pick one of those tiles as the reference. This avoids the noisy/overlapping tile grids that used to appear when unrelated annotations got tiled alongside the ones you actually wanted to acquire. The dialog reports the count and class names so you can confirm the right set was tiled.
+
+The Refine Alignment dialog shown after the move offers **Auto-Align (SIFT)** alongside the manual joystick option. SIFT works best on tissue with visible features and only succeeds when the live view already overlaps the selected tile by at least a few hundred microns. See [Microscope Alignment > Step 4](microscope-alignment.md#step-4-refinement-manual-or-automatic) for the full SIFT walkthrough, and [Preferences > SIFT Auto-Alignment](../PREFERENCES.md#sift-auto-alignment) for the cross-modality bit-depth normalization knobs.
+
 ### Step 4: Annotation Class Selection
 
-Choose which annotation classes to include in the acquisition. The dialog shows all classes present on the current image with their counts and color previews.
+Choose which annotation classes to include in the acquisition. The dialog shows all classes present on the current image with their counts and color previews. The same selection drives tiling for the Single-Tile Refinement step (Step 3).
 
 ### Step 5: Hardware Configuration
 
@@ -131,6 +135,8 @@ Each annotation's acquisition is added to the project as it completes. Metadata 
 | Images appear shifted | Coordinate mismatch | Check flip/invert settings in Preferences |
 | "Pixel size not set" | Missing calibration | Set image pixel size in QuPath image properties |
 | Poor alignment at edges | Too few alignment points | Add more calibration points spread across the image |
+| Auto-Align (SIFT) fails near correct tile | Bit-depth mismatch (16-bit camera vs 8-bit H&E WSI) | SIFT Settings should default to `PERCENTILE` 2/98 + CLAHE on. If still failing, raise CLAHE clip to 4.0 or widen percentile to 0.5/99.5. See [Preferences > SIFT Auto-Alignment](../PREFERENCES.md#sift-auto-alignment). |
+| Auto-Align (SIFT) fails far from tile | Stage too far from target | Drive the stage roughly close (live view should partially overlap the tile) before clicking SIFT. SIFT is a refinement, not a search. |
 
 ## See Also
 

@@ -34,7 +34,7 @@ Controls how densely autofocus is scheduled across the tile grid.
 
 | Parameter | Type | Typical Range | Description |
 |-----------|------|---------------|-------------|
-| Objective | ComboBox | - | Select the objective to configure |
+| Objective | ComboBox | - | Select the objective to configure. The initial selection auto-detects the currently mounted optics by querying Micro-Manager's reported pixel size and matching it against the active config (via the shared `ObjectiveSelector` component). Falls back to the last-used objective preference, then the first entry. Replaces the previous always-defaults-to-10x behavior so editing the right objective does not require a manual change first. |
 | n_tiles | Spinner | 3-10 | AF grid spacing (every N tiles in each axis). Also sets `af_min_distance = n_tiles x mean(camera FOV)` |
 | gap_index_multiplier | Spinner | 1-5 (default 3) | Force AF after `gap_index_multiplier x n_tiles` positions without one. Safety net for scan-order gaps |
 | gap_spatial_multiplier | Text | 1.0-3.0 (default 2.0) | Force AF when nearest AF exceeds `gap_spatial_multiplier x af_min_distance`. Safety net for disconnected fragments |
@@ -71,6 +71,17 @@ The Sweep Drift Check section configures a periodic Z sweep that monitors focus 
 
 **Test Sweep Drift Check** button: runs a single sweep at the current position so you can verify parameters before acquisition.
 
+### Test Streaming Autofocus
+
+Below the streaming-AF panel, the **Test Streaming Autofocus** button runs a single streaming-AF pass at the current stage position with frame dumping enabled (server-side `--dump`). On completion a non-modal popup opens with:
+
+- **Status header** -- `SUCCESS` / `UNAVAILABLE` / `FAILED` plus a one-line reason from the server.
+- **Dump path** -- absolute path to the folder of dumped TIFs and the per-frame metric/Z log, so you can open the captures in your tool of choice for offline review.
+- **Time-domain chart** -- focus metric vs `wall_ms`, with the actual stage Z (offset + scaled) overlaid as a second series. Lets you see whether the metric peak lands while the stage is moving or after it has settled.
+- **Space-domain chart** -- focus metric vs `Z_actual`, sorted by Z so the polyline does not zig-zag when the stage was stationary at the start of the run. This is the curve the streaming-AF peak finder actually fits.
+
+Use this to diagnose noisy metric curves (raise CLAHE / change metric), to verify a metric switch did not invert the peak, or to confirm the stage motion profile actually covers the search range you configured. Streaming AF has to be available on the active objective (no exposure-budget gate, no missing speed property) for the button to enable; otherwise the popup reports `UNAVAILABLE` with the gating reason.
+
 ### Buttons
 
 | Button | Action |
@@ -87,13 +98,15 @@ enough signal to focus on. Each strategy is a collapsible card showing:
 | Field | Type | Description |
 |-------|------|-------------|
 | Description | TextArea | Human-readable explanation of when to use this strategy |
-| Score metric | ComboBox | Focus quality algorithm: `laplacian_variance` (default), `normalized_variance`, `brenner_gradient`, `sobel`, `p98_p2`, `none` |
+| Score metric | ComboBox | Focus quality algorithm: `laplacian_variance` (default), `normalized_variance`, `brenner_gradient`, `sobel`, `p98_p2`, `none`. Each row in the dropdown shows constraint badges (e.g. `-- not for fluorescence`, `-- needs 20x+`) sourced from the metric manifest's `valid_modalities` and `min_magnification` fields, so you can see which picks are sample-restricted before saving. |
 | Validity check | ComboBox | How the system decides a tile is focusable: `texture_and_area`, `bright_spot_count`, `total_gradient_energy`, `always_false` |
 | Validity params | Dynamic grid | Parameters for the chosen validity check. The fields change when the validity check selection changes. |
 | On failure | ComboBox | `defer` (skip tile, try next), `proceed` (run AF anyway), `manual` (pop focus dialog) |
 
 Use **+ Add Strategy** to create a new custom strategy, or **Delete Strategy** inside
 a card to remove one. At minimum, `dense_texture` and `manual_only` should be present.
+
+**Manifest constraint surfacing (`valid_modalities` / `min_magnification`):** the score-metric dropdown and the per-modality override picker both render constraint-aware cells. A metric whose `valid_modalities` list excludes the binding's modality is rendered in red with a `-- not for <modality>` suffix; selecting it surfaces a wrap-text warning label below the picker. Constraints are informational only -- they do not block saving, so operators retain the ability to use a metric outside its declared range when they have a reason. The recognised `valid_modalities` values are `brightfield`, `ppm`, `fluorescence`, `dark_field`, and `other`; modality keys like `bf_dia`, `BF_IF`, or `Brightfield` all canonicalise to the same bucket.
 
 ### Tab 3 -- Modality Bindings (v2)
 

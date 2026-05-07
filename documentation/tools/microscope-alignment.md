@@ -87,30 +87,31 @@ After marking points, click **Calculate Transform**. The system computes the bes
 
 ![Refine Alignment dialog](../images/Docs_MicroscopeAlignment_RefineAlignment.png)
 
-After the initial transform is calculated, single-tile refinement improves accuracy:
+This workflow already drives 3-point refinement implicitly: after you select a reference tile, two further tiles (top-center and left-center) are visited and confirmed in turn. The Position Confirmation dialog at each tile now includes an **Auto-Align (SIFT)** button so you can refine the last few microns before clicking **Current Position is Accurate** to commit the point.
 
-1. Select a tile in the image
-2. The stage moves to the predicted position
-3. Refine using one of two methods:
+> **Tip:** SIFT only succeeds when the live view already overlaps the selected tile by at least a few hundred microns. Pick a reference tile near visible features and drive the stage close (joystick or Live Viewer click-to-center) before clicking Auto-Align.
 
-**Auto-Align (SIFT)** -- recommended when tissue features are visible:
-- Click the **Auto-Align (SIFT)** button in the refinement dialog
-- The system extracts a region from the WSI around the selected tile (with 160um search margin)
-- A microscope image is snapped and matched against the WSI region using SIFT feature detection
-- Pixel size differences between the WSI and microscope are automatically handled (both images are rescaled to the lower resolution)
-- Optical flip correction is applied based on image metadata
-- The stage moves to correct any offset found by the matching
-- The status shows the offset and number of matched features
-- Verify the live view matches the tile, then click "Save Refined Position"
+For each tile-confirm step:
 
-**Manual alignment** -- fallback when SIFT cannot find enough features:
-- Use the stage controls or Live Viewer to manually adjust the position
-- Match the live microscope view to the selected tile in QuPath
-- Click "Save Refined Position"
+1. The stage is automatically moved to the predicted position (or you drive it manually if no estimate exists yet).
+2. Either click **Auto-Align (SIFT)** to refine, or use the joystick to position manually.
+3. Click **Current Position is Accurate** to commit the measurement; click **Cancel acquisition** to abort.
 
-SIFT auto-alignment works best on tissue with visible structural features. It may fail on blank areas, very uniform tissue, or regions with repetitive patterns. In those cases, use manual alignment.
+**Auto-Align (SIFT)**:
+- Extracts a region from the WSI around the selected tile (with the configured search margin, default 160um).
+- Snaps a microscope image and matches against the WSI region using SIFT feature detection.
+- Pixel size differences between the WSI and microscope are handled automatically (both images are rescaled to the lower resolution).
+- Optical flip is applied based on the image's per-slide metadata.
+- The stage moves to correct any offset found by the matching; the status line shows the offset and number of matched features.
+- If matching fails (insufficient features or stage too far off), refine manually.
 
-**Trust SIFT mode** (advanced): Enable via the `trustSiftAlignment` preference (see [Preferences](../PREFERENCES.md#sift-auto-alignment)). When enabled, the refinement step runs SIFT automatically without showing the manual dialog. If the confidence (inlier ratio) exceeds the configurable threshold (default 50%), the position is auto-accepted and the workflow continues unattended. Falls back to the manual dialog if SIFT fails or confidence is too low.
+SIFT auto-alignment works best on tissue with visible structural features. It can struggle on blank areas, very uniform tissue, or regions with repetitive patterns; in those cases use manual alignment.
+
+The same Auto-Align (SIFT) helper is also available in the post-alignment single-tile refinement step of the **Existing Image Workflow** (where the dialog also offers Save / Skip / New Alignment buttons because that step does write the per-slide JSON).
+
+**Trust SIFT mode** (advanced): Enable via the `trustSiftAlignment` preference (see [Preferences](../PREFERENCES.md#sift-auto-alignment)). When enabled, the post-alignment single-tile refinement step runs SIFT automatically without showing the manual dialog. If confidence (inlier ratio) exceeds the configurable threshold (default 50%), the position is auto-accepted and the workflow continues unattended. Falls back to manual if SIFT fails or confidence is too low. (The 3-point alignment confirm step always shows the dialog -- there are no auto-accept semantics there because each click is the human committing a calibration point.)
+
+**Cross-modality matching (16-bit camera vs 8-bit WSI):** When the microscope camera produces 16-bit images and the reference is an 8-bit H&E or PPM WSI, SIFT collapses if the camera range is naively bit-shifted to 8-bit. The SIFT Settings dialog exposes mono-normalization mode (`PERCENTILE` / `MIN_MAX` / `BIT_SHIFT`), percentile clip points, and CLAHE settings. Defaults (`PERCENTILE` 2/98 + CLAHE on, clipLimit=2.0) are tuned for that case. See [Preferences > SIFT Auto-Alignment](../PREFERENCES.md#sift-auto-alignment) for tuning guidance.
 
 ### Step 5: Validation
 

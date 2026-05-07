@@ -73,8 +73,10 @@ See [AUTOFOCUS.md](../AUTOFOCUS.md#autofocus-live-viewer) for the full design st
 
 | Option | Type | Description |
 |--------|------|-------------|
-| Min/Max Sliders | Slider | Contrast adjustment range |
-| Auto Scale | Button | Automatically set contrast range based on current image |
+| Min/Max Sliders | Slider | Contrast adjustment range. Dragging either slider also clears the persistent Always Auto-Scale flag (and unchecks the box) so the manual range is honored. |
+| Full Range | Button | Reset Min/Max to the full sensor range and clear the persistent Always Auto-Scale flag. |
+| Auto Scale | Button | One-shot rescale of the contrast range to the current frame. Does NOT flip the persistent Always Auto-Scale flag -- use it when you want a single rescale without committing to per-frame auto-scale. |
+| Always Auto-Scale | CheckBox | When checked, every live frame and acquired tile is auto-scaled (drives the persistent `autoScale` flag). When unchecked, your manual Min/Max sliders are preserved. Replaces the previous always-on per-tile rescale, which was breaking non-fluorescence acquisitions whose contrast was already correctly set. |
 
 The histogram shows a 256-bin luminance distribution updated in real time. Per-channel (R/G/B) saturation percentages are displayed below the histogram and turn red when any channel exceeds 1% saturation.
 
@@ -144,7 +146,7 @@ When a fluorescence-style modality has a channel library declared in YAML (`moda
 
 | Option | Type | Description |
 |--------|------|-------------|
-| Profile | Dropdown + Apply | Pick the acquisition profile (e.g. `Fluorescence_10x`) whose channel library to use; Apply runs `APPLYPR` and switches the cube + epi shutter + light source. |
+| Profile | Dropdown + Apply | Pick the acquisition profile (e.g. `Fluorescence_10x`) whose channel library to use. Apply runs `APPLYPR` to switch the cube + epi shutter + light source, then rebuilds the panel: the displayed exposure/illumination fields re-pull from saved prefs and re-push them to hardware so the numbers you see match what the camera is actually using. (Without that step `APPLYPR` would reset hardware to the YAML defaults while the UI still showed your previous tunings, leading to a dim image and stale displayed values until you nudged a slider.) The dropdown selection itself is preserved across rebuilds. |
 | (None -- deactivate all) | Radio | Selecting this sends `APPLYCH` with an empty channel id, which calls `_disable_all_modality_illuminations` to turn off every source declared in the modality. Default-selected on dialog open. |
 | Per-channel rows | Radio + Spinner + Spinner | One row per channel id (DAPI, FITC, ...). The radio button now drives hardware via `APPLYCH`: the cube/shutter presets run, the per-channel light source switches, the per-channel intensity property is written, and the per-channel exposure is applied -- all on the server in `apply_channel_hardware_state`, the same helper the acquisition workflow uses. The exposure spinner round-trips to the live camera; the intensity spinner persists to PersistentPreferences for the next acquisition (independent live tuning of the channel's intensity property requires SETILLMD on the channel's intensity device, scheduled if friction surfaces). |
 | Save / Load Preset | Buttons | Save: stores `profile|exp|gain|illum` keyed by modality + objective + detector. Load: runs `APPLYPR` for the saved profile *before* writing `SETCAM` and `SETILLM`, so the right cube + light path are in place when the preset's illumination power lands. Legacy preset format (no leading profile) auto-resolves to the first profile matching the section's modality. |
