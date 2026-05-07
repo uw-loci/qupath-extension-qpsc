@@ -444,11 +444,18 @@ public class BoundedAcquisitionWorkflow {
                                     final UIFunctions.ProgressHandle finalHandle = progressHandle;
                                     progressHandle.setCancelCallback(v -> {
                                         logger.info("User requested acquisition cancellation");
-                                        try {
-                                            socketClient.cancelAcquisition();
-                                        } catch (IOException e) {
-                                            logger.error("Failed to send cancel command", e);
-                                        }
+                                        // Off-EDT: CANC can block for tens of seconds waiting on
+                                        // the server's per-client lock during a tile capture.
+                                        new Thread(
+                                                        () -> {
+                                                            try {
+                                                                socketClient.cancelAcquisition();
+                                                            } catch (IOException e) {
+                                                                logger.error("Failed to send cancel command", e);
+                                                            }
+                                                        },
+                                                        "AcquisitionCancelSender")
+                                                .start();
                                     });
                                 }
 

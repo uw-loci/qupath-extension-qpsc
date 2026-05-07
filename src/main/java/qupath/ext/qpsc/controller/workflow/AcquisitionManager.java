@@ -518,11 +518,21 @@ public class AcquisitionManager {
                 DualProgressDialog dialog = new DualProgressDialog(state.annotations.size(), true);
                 dialog.setCancelCallback(v -> {
                     logger.info("User requested workflow cancellation via dual progress dialog");
-                    try {
-                        MicroscopeController.getInstance().getSocketClient().cancelAcquisition();
-                    } catch (IOException e) {
-                        logger.error("Failed to send cancel command", e);
-                    }
+                    // Off-EDT: CANC waits for the server's per-client lock and can sit
+                    // behind a tile capture for tens of seconds. Doing this on the FX
+                    // thread freezes the dialog and any other UI for the duration.
+                    new Thread(
+                                    () -> {
+                                        try {
+                                            MicroscopeController.getInstance()
+                                                    .getSocketClient()
+                                                    .cancelAcquisition();
+                                        } catch (IOException e) {
+                                            logger.error("Failed to send cancel command", e);
+                                        }
+                                    },
+                                    "AcquisitionCancelSender")
+                            .start();
                 });
                 dialog.show();
                 dualProgressDialog = dialog; // Set field for other method access

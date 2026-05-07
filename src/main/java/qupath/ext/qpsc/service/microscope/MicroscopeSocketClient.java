@@ -4103,15 +4103,43 @@ public class MicroscopeSocketClient implements AutoCloseable {
     /**
      * Cancels the currently running acquisition.
      *
+     * <p>Bumps the read timeout to 30s per-call. The default 5s timeout is
+     * too aggressive: CANC is processed by the per-client server thread
+     * sequentially, so it sits behind whatever long-running command is
+     * currently in flight (e.g. a 3-angle JAI tile capture, ~10-15s on
+     * PPM 20x). A timeout here triggers handleIOException -> reconnect
+     * storm; the server's same-IP takeover guard then rejects the
+     * reconnect with "Active acquisition" until the original acquisition
+     * finally winds down. Net effect: 5s UI freeze plus stale state in
+     * the StageMap. 30s mirrors {@link #getAcquisitionStatus()}.
+     *
      * @return true if cancellation was acknowledged
      * @throws IOException if communication fails
      */
     public boolean cancelAcquisition() throws IOException {
-        byte[] response = executeCommand(Command.CANCEL, null, 3);
-        String ack = new String(response, StandardCharsets.UTF_8);
-        boolean cancelled = "ACK".equals(ack);
-        logger.info("Acquisition cancellation {}", cancelled ? "acknowledged" : "failed");
-        return cancelled;
+        int originalTimeout;
+        synchronized (socketLock) {
+            ensureConnected();
+            originalTimeout = socket.getSoTimeout();
+            socket.setSoTimeout(30000);
+        }
+        try {
+            byte[] response = executeCommand(Command.CANCEL, null, 3);
+            String ack = new String(response, StandardCharsets.UTF_8);
+            boolean cancelled = "ACK".equals(ack);
+            logger.info("Acquisition cancellation {}", cancelled ? "acknowledged" : "failed");
+            return cancelled;
+        } finally {
+            synchronized (socketLock) {
+                if (socket != null && !socket.isClosed()) {
+                    try {
+                        socket.setSoTimeout(originalTimeout);
+                    } catch (IOException e) {
+                        logger.warn("Failed to restore socket timeout after CANCEL", e);
+                    }
+                }
+            }
+        }
     }
 
     /**
