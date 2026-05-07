@@ -516,20 +516,58 @@ public final class PropagationManagerDialog {
                             Platform.runLater(() -> grp.setStatus("0 obj"));
                             continue;
                         }
-                        // Resolve alignment-frame flip the same way back-prop does:
-                        // per-slide JSON first, then fall back to the active preset
-                        // for (sourceScanner, activeScope). Without this, source
-                        // pixels on the unflipped base entry get mapped through a
-                        // baseToStage transform that expects flipped-frame pixels,
-                        // which silently produces sub coords outside the image
-                        // bounds (the OWS3/PPM "0 objects across all subs" regression).
+                        // Resolve alignment-frame flip with this priority:
+                        //   1. The first sub's parent entry (via original_image_id) FLIP_X/Y metadata.
+                        //      This is the most direct signal -- the alignment was built in that entry's
+                        //      pixel frame, so its FLIP_X/Y are by definition the alignment-frame flips.
+                        //   2. The per-slide JSON's flipMacroX/Y (Step B canonical source).
+                        //   3. The active microscope's preset for the source scanner.
+                        // Priority 1 sits ahead of 2 because legacy ManualAlignmentPath (pre-45ca489)
+                        // silently saved (false, false) into the JSON even when the alignment was
+                        // actually built in the flipped sibling's frame. That wrote a JSON that
+                        // *claims* hasFlipFrame=true but encodes the wrong values, so falling back to
+                        // priority 2 would still produce 0 propagated objects on PPM. The parent's
+                        // FLIP_X/Y metadata (set when the entry was first imported) was not affected
+                        // by that bug.
                         boolean alignFlipX = false;
                         boolean alignFlipY = false;
-                        if (slideResult != null && slideResult.hasFlipFrame()) {
+                        String flipSource = "default-no-flip";
+                        Boolean parentFlipX = null;
+                        Boolean parentFlipY = null;
+                        for (ProjectImageEntry<BufferedImage> sub : grp.getSubAcquisitions()) {
+                            String parentId = ImageMetadataManager.getOriginalImageId(sub);
+                            if (parentId == null) continue;
+                            for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
+                                if (parentId.equals(e.getID())) {
+                                    parentFlipX = ImageMetadataManager.isFlippedX(e);
+                                    parentFlipY = ImageMetadataManager.isFlippedY(e);
+                                    logger.info("ForwardProp: sub parent entry='{}' flipX={} flipY={}",
+                                            e.getImageName(), parentFlipX, parentFlipY);
+                                    break;
+                                }
+                            }
+                            if (parentFlipX != null) break;
+                        }
+                        if (parentFlipX != null) {
+                            alignFlipX = parentFlipX;
+                            alignFlipY = parentFlipY;
+                            flipSource = "sub parent metadata";
+                            // Warn when the JSON disagrees -- legacy ManualAlignmentPath save bug.
+                            if (slideResult != null && slideResult.hasFlipFrame()) {
+                                boolean jsonX = Boolean.TRUE.equals(slideResult.getFlipMacroX());
+                                boolean jsonY = Boolean.TRUE.equals(slideResult.getFlipMacroY());
+                                if (jsonX != alignFlipX || jsonY != alignFlipY) {
+                                    logger.warn("ForwardProp: slide JSON flipX/Y=({}, {}) disagrees with "
+                                            + "sub parent flipX/Y=({}, {}); using parent metadata. "
+                                            + "JSON was probably written by pre-45ca489 ManualAlignmentPath; "
+                                            + "re-run Microscope Alignment to refresh the JSON.",
+                                            jsonX, jsonY, alignFlipX, alignFlipY);
+                                }
+                            }
+                        } else if (slideResult != null && slideResult.hasFlipFrame()) {
                             alignFlipX = Boolean.TRUE.equals(slideResult.getFlipMacroX());
                             alignFlipY = Boolean.TRUE.equals(slideResult.getFlipMacroY());
-                            logger.info("ForwardProp: alignment frame from slide JSON: flipX={}, flipY={}",
-                                    alignFlipX, alignFlipY);
+                            flipSource = "slide JSON";
                         } else {
                             try {
                                 String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
@@ -545,9 +583,7 @@ public final class PropagationManagerDialog {
                                         if (p != null && p.hasFlipState()) {
                                             alignFlipX = Boolean.TRUE.equals(p.getFlipMacroX());
                                             alignFlipY = Boolean.TRUE.equals(p.getFlipMacroY());
-                                            logger.warn("ForwardProp: per-slide JSON lacks flip frame; "
-                                                    + "falling back to preset '{}': flipX={}, flipY={}",
-                                                    p.getName(), alignFlipX, alignFlipY);
+                                            flipSource = "preset '" + p.getName() + "'";
                                             break;
                                         }
                                     }
@@ -557,6 +593,8 @@ public final class PropagationManagerDialog {
                                         e.getMessage());
                             }
                         }
+                        logger.info("ForwardProp: alignFlipX={}, alignFlipY={} (source={}); base={}x{} px",
+                                alignFlipX, alignFlipY, flipSource, baseWidth, baseHeight);
                         appendStatus(results, "  source: " + base.getImageName()
                                 + " (" + sourceObjects.size() + " objects)\n");
                         for (ProjectImageEntry<BufferedImage> sub : grp.getSubAcquisitions()) {
