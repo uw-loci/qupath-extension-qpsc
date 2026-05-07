@@ -197,7 +197,7 @@ public class BackgroundSettingsReader {
      * @return BackgroundSettings if valid, null otherwise
      */
     public static BackgroundSettings readBackgroundSettings(File settingsFile) {
-        logger.info("Reading background settings from: {}", settingsFile.getAbsolutePath());
+        logger.debug("Reading background settings from: {}", settingsFile.getAbsolutePath());
 
         try (FileReader reader = new FileReader(settingsFile, StandardCharsets.UTF_8)) {
             Yaml yaml = new Yaml();
@@ -252,7 +252,7 @@ public class BackgroundSettingsReader {
                     settingsFile.getAbsolutePath(),
                     wbMode);
 
-            logger.info("Successfully read background settings: {}", settings);
+            logger.debug("Successfully read background settings: {}", settings);
             return settings;
 
         } catch (IOException e) {
@@ -351,7 +351,7 @@ public class BackgroundSettingsReader {
                 }
             }
 
-            logger.info(
+            logger.debug(
                     "Found background settings for {} WB modes under {}: {}", result.size(), basePath, result.keySet());
 
         } catch (Exception e) {

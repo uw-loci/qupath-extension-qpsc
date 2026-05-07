@@ -42,8 +42,10 @@ import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow.Direction;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow.FanOutResult;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow.MissingSourceConfigException;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.roi.interfaces.ROI;
 import qupath.fx.dialogs.Dialogs;
@@ -471,9 +473,11 @@ public final class PropagationManagerDialog {
                     String baseName = grp.getBaseName();
                     appendStatus(results, "[" + baseName + "]\n");
 
+                    AffineTransformManager.SlideAlignmentResult slideResult;
                     AffineTransform alignment;
                     try {
-                        alignment = AffineTransformManager.loadSlideAlignment(project, baseName);
+                        slideResult = AffineTransformManager.loadSlideAlignmentWithFrame(project, baseName);
+                        alignment = (slideResult != null) ? slideResult.getTransform() : null;
                     } catch (Exception ex) {
                         appendStatus(results, "  alignment error: " + ex.getMessage() + "\n");
                         Platform.runLater(() -> grp.setStatus("alignment error"));
@@ -493,9 +497,14 @@ public final class PropagationManagerDialog {
                             continue;
                         }
                         List<PathObject> sourceObjects;
+                        int baseWidth;
+                        int baseHeight;
                         try {
                             sourceObjects = ForwardPropagationWorkflow.loadFilteredObjects(
                                     base, selectedClasses, includeUnclassified);
+                            var baseData = base.readImageData();
+                            baseWidth = baseData.getServer().getWidth();
+                            baseHeight = baseData.getServer().getHeight();
                         } catch (Exception ex) {
                             appendStatus(results, "  read error: " + ex.getMessage() + "\n");
                             logger.error("Could not read base hierarchy", ex);
@@ -507,12 +516,55 @@ public final class PropagationManagerDialog {
                             Platform.runLater(() -> grp.setStatus("0 obj"));
                             continue;
                         }
+                        // Resolve alignment-frame flip the same way back-prop does:
+                        // per-slide JSON first, then fall back to the active preset
+                        // for (sourceScanner, activeScope). Without this, source
+                        // pixels on the unflipped base entry get mapped through a
+                        // baseToStage transform that expects flipped-frame pixels,
+                        // which silently produces sub coords outside the image
+                        // bounds (the OWS3/PPM "0 objects across all subs" regression).
+                        boolean alignFlipX = false;
+                        boolean alignFlipY = false;
+                        if (slideResult != null && slideResult.hasFlipFrame()) {
+                            alignFlipX = Boolean.TRUE.equals(slideResult.getFlipMacroX());
+                            alignFlipY = Boolean.TRUE.equals(slideResult.getFlipMacroY());
+                            logger.info("ForwardProp: alignment frame from slide JSON: flipX={}, flipY={}",
+                                    alignFlipX, alignFlipY);
+                        } else {
+                            try {
+                                String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                                String activeScope = null;
+                                MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+                                if (mgr != null) activeScope = mgr.getMicroscopeName();
+                                if (configPath != null && !configPath.isEmpty() && activeScope != null) {
+                                    AffineTransformManager presetMgr =
+                                            new AffineTransformManager(new java.io.File(configPath).getParent());
+                                    for (String scanner : presetMgr.getDistinctSourceScannersForMicroscope(activeScope)) {
+                                        AffineTransformManager.TransformPreset p =
+                                                presetMgr.getBestPresetForPair(scanner, activeScope);
+                                        if (p != null && p.hasFlipState()) {
+                                            alignFlipX = Boolean.TRUE.equals(p.getFlipMacroX());
+                                            alignFlipY = Boolean.TRUE.equals(p.getFlipMacroY());
+                                            logger.warn("ForwardProp: per-slide JSON lacks flip frame; "
+                                                    + "falling back to preset '{}': flipX={}, flipY={}",
+                                                    p.getName(), alignFlipX, alignFlipY);
+                                            break;
+                                        }
+                                    }
+                                }
+                            } catch (Exception e) {
+                                logger.warn("ForwardProp: could not resolve fallback flip from preset: {}",
+                                        e.getMessage());
+                            }
+                        }
                         appendStatus(results, "  source: " + base.getImageName()
                                 + " (" + sourceObjects.size() + " objects)\n");
                         for (ProjectImageEntry<BufferedImage> sub : grp.getSubAcquisitions()) {
                             if (!selectedSubs.contains(sub)) continue;
                             try {
-                                int count = ForwardPropagationWorkflow.propagateForward(alignment, sourceObjects, sub);
+                                int count = ForwardPropagationWorkflow.propagateForward(
+                                        alignment, alignFlipX, alignFlipY, baseWidth, baseHeight,
+                                        sourceObjects, sub);
                                 groupTotal += count;
                                 if (count > 0) touchedEntries.add(sub);
                                 appendStatus(results, String.format(

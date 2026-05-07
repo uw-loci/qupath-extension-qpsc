@@ -48,7 +48,7 @@ public class AffineTransformManager {
                 .setPrettyPrinting()
                 .create();
         this.transforms = loadTransforms();
-        logger.info("Loaded {} transform presets from {}", transforms.size(), transformsPath);
+        logger.debug("Loaded {} transform presets from {}", transforms.size(), transformsPath);
     }
 
     /**

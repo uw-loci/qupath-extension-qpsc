@@ -209,7 +209,7 @@ public class MicroscopeConfigManager {
         }
         this.lociSectionMap = newSectionMap;
 
-        logger.info("Reloaded all config data from: {}", configPath);
+        logger.debug("Reloaded all config data from: {}", configPath);
     }
 
     /**
@@ -512,7 +512,7 @@ public class MicroscopeConfigManager {
                 // Store the entire imageprocessing config
                 imageprocessingMap.putAll(data);
 
-                logger.info("Loaded external imageprocessing config from: {}", imageprocessingFile.getAbsolutePath());
+                logger.debug("Loaded external imageprocessing config from: {}", imageprocessingFile.getAbsolutePath());
                 if (data.containsKey("imaging_profiles")) {
                     logger.debug("  - Found imaging_profiles section");
                 }

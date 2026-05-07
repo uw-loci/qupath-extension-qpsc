@@ -127,7 +127,7 @@ public class BackgroundValidityChecker {
                             // Parse calibration timestamp (ISO format from YAML)
                             LocalDateTime calibTime = parseTimestamp(calibTs);
                             if (calibTime != null && calibTime.isAfter(bgTime)) {
-                                logger.info(
+                                logger.debug(
                                         "WB mode '{}': calibration ({}) is newer than background collection ({})",
                                         mode.getProtocolName(),
                                         calibTime,
