@@ -44,8 +44,7 @@ import java.util.regex.Pattern;
  */
 public final class HardwareKey {
 
-    private static final Pattern MAGNIFICATION_TRAILING =
-            Pattern.compile("_(\\d+)[xX]$");
+    private static final Pattern MAGNIFICATION_TRAILING = Pattern.compile("_(\\d+)[xX]$");
 
     private final String modalityFamily;
     private final String magnification;
@@ -69,7 +68,11 @@ public final class HardwareKey {
      * @param detector  raw detector id
      */
     public static HardwareKey from(String modality, String objective, String detector) {
-        return new HardwareKey(stripMagnificationSuffix(modality), ObjectiveUtils.extractMagnification(objective), detector, objective);
+        return new HardwareKey(
+                stripMagnificationSuffix(modality),
+                ObjectiveUtils.extractMagnification(objective),
+                detector,
+                objective);
     }
 
     /**

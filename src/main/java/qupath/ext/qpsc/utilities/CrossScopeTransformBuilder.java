@@ -78,9 +78,7 @@ public final class CrossScopeTransformBuilder {
      *                                  (degenerate scale)
      */
     public static AffineTransform compose(
-            AffineTransform sourceImageToSourceStage,
-            TransformPreset sourcePreset,
-            TransformPreset targetPreset)
+            AffineTransform sourceImageToSourceStage, TransformPreset sourcePreset, TransformPreset targetPreset)
             throws NoninvertibleTransformException {
 
         if (sourceImageToSourceStage == null) {

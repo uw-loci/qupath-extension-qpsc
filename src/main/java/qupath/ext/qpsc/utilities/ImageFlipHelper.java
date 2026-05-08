@@ -113,7 +113,9 @@ public final class ImageFlipHelper {
             flipY = explicitFlipY;
             logger.info(
                     "validateAndFlipIfNeeded: using explicit flip flags ({}, {}) for sample='{}'",
-                    flipX, flipY, sampleName);
+                    flipX,
+                    flipY,
+                    sampleName);
         } else {
             boolean[] resolved = resolveFlipFromPreset(openEntry);
             flipX = resolved[0];
@@ -142,9 +144,11 @@ public final class ImageFlipHelper {
         try {
             logger.info(
                     "validateAndFlipIfNeeded: creating flipped duplicate of '{}' (flipX={}, flipY={})",
-                    openEntry.getImageName(), flipX, flipY);
-            ProjectImageEntry<BufferedImage> created = QPProjectFunctions.createFlippedDuplicate(
-                    project, openEntry, flipX, flipY, sampleName);
+                    openEntry.getImageName(),
+                    flipX,
+                    flipY);
+            ProjectImageEntry<BufferedImage> created =
+                    QPProjectFunctions.createFlippedDuplicate(project, openEntry, flipX, flipY, sampleName);
             if (created == null) {
                 logger.warn("validateAndFlipIfNeeded: createFlippedDuplicate returned null");
                 future.complete(false);
@@ -204,12 +208,12 @@ public final class ImageFlipHelper {
             }
 
             AffineTransformManager atm = new AffineTransformManager(new File(configPath).getParent());
-            AffineTransformManager.TransformPreset preset =
-                    atm.getBestPresetForPair(sourceScanner, activeMicroscope);
+            AffineTransformManager.TransformPreset preset = atm.getBestPresetForPair(sourceScanner, activeMicroscope);
             if (preset == null || !preset.hasFlipState()) {
                 logger.info(
                         "validateAndFlipIfNeeded: no preset (or no flip state) for ({}, {}); treating as no flip",
-                        sourceScanner, activeMicroscope);
+                        sourceScanner,
+                        activeMicroscope);
                 return new boolean[] {false, false};
             }
 
@@ -217,7 +221,11 @@ public final class ImageFlipHelper {
             boolean flipY = Boolean.TRUE.equals(preset.getFlipMacroY());
             logger.info(
                     "validateAndFlipIfNeeded: preset '{}' for ({}, {}) -> flipMacroX={}, flipMacroY={}",
-                    preset.getName(), sourceScanner, activeMicroscope, flipX, flipY);
+                    preset.getName(),
+                    sourceScanner,
+                    activeMicroscope,
+                    flipX,
+                    flipY);
             return new boolean[] {flipX, flipY};
         } catch (Exception e) {
             logger.warn("validateAndFlipIfNeeded: preset resolution failed: {}", e.getMessage());
@@ -231,10 +239,7 @@ public final class ImageFlipHelper {
      * metadata if available, falling back to name prefix.
      */
     private static ProjectImageEntry<BufferedImage> findFlippedSibling(
-            Project<BufferedImage> project,
-            ProjectImageEntry<BufferedImage> baseEntry,
-            boolean flipX,
-            boolean flipY) {
+            Project<BufferedImage> project, ProjectImageEntry<BufferedImage> baseEntry, boolean flipX, boolean flipY) {
 
         String desiredSuffix;
         if (flipX && flipY) {
@@ -275,9 +280,7 @@ public final class ImageFlipHelper {
      */
     public static boolean isFlippedSiblingName(String name) {
         if (name == null) return false;
-        return name.endsWith("(flipped X)")
-                || name.endsWith("(flipped Y)")
-                || name.endsWith("(flipped XY)");
+        return name.endsWith("(flipped X)") || name.endsWith("(flipped Y)") || name.endsWith("(flipped XY)");
     }
 
     /**

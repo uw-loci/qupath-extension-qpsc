@@ -816,8 +816,13 @@ public class StageMapCanvas extends StackPane {
         public final java.awt.image.BufferedImage thumbnail;
         public final double stageMinX, stageMinY, stageMaxX, stageMaxY;
 
-        public AcquisitionThumbnail(String imageName, java.awt.image.BufferedImage thumbnail,
-                double stageMinX, double stageMinY, double stageMaxX, double stageMaxY) {
+        public AcquisitionThumbnail(
+                String imageName,
+                java.awt.image.BufferedImage thumbnail,
+                double stageMinX,
+                double stageMinY,
+                double stageMaxX,
+                double stageMaxY) {
             this.imageName = imageName;
             this.thumbnail = thumbnail;
             this.stageMinX = stageMinX;
@@ -891,11 +896,11 @@ public class StageMapCanvas extends StackPane {
         int compH = Math.min((int) Math.ceil(screenH), 4096);
         if (compW <= 0 || compH <= 0) return;
 
-        java.awt.image.BufferedImage composite = new java.awt.image.BufferedImage(
-                compW, compH, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        java.awt.image.BufferedImage composite =
+                new java.awt.image.BufferedImage(compW, compH, java.awt.image.BufferedImage.TYPE_INT_ARGB);
         java.awt.Graphics2D g = composite.createGraphics();
-        g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
-                java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.setRenderingHint(
+                java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
         for (AcquisitionThumbnail t : acquisitionThumbnails) {
             double[] tA = stageToScreen(t.stageMinX, t.stageMinY);
@@ -954,9 +959,18 @@ public class StageMapCanvas extends StackPane {
         // Backward-compatible overload: no anchor metadata supplied. Forwards
         // to the full setter with NaN anchors so updateMacroOverlayPosition
         // takes the legacy 4-corner / config-offset paths.
-        setMacroOverlay(macroImage, transform, transformFlipX, transformFlipY,
-                pixelSizeUm, xOffsetUm, yOffsetUm,
-                Double.NaN, Double.NaN, Double.NaN, Double.NaN);
+        setMacroOverlay(
+                macroImage,
+                transform,
+                transformFlipX,
+                transformFlipY,
+                pixelSizeUm,
+                xOffsetUm,
+                yOffsetUm,
+                Double.NaN,
+                Double.NaN,
+                Double.NaN,
+                Double.NaN);
     }
 
     /**
@@ -1007,8 +1021,10 @@ public class StageMapCanvas extends StackPane {
         this.anchorStageY = anchorStageY;
         this.macroOverlayVisible = true;
 
-        boolean haveAnchor = !Double.isNaN(anchorMacroX) && !Double.isNaN(anchorMacroY)
-                && !Double.isNaN(anchorStageX) && !Double.isNaN(anchorStageY)
+        boolean haveAnchor = !Double.isNaN(anchorMacroX)
+                && !Double.isNaN(anchorMacroY)
+                && !Double.isNaN(anchorStageX)
+                && !Double.isNaN(anchorStageY)
                 && pixelSizeUm > 0;
         logger.info(
                 "Setting macro overlay: {}x{} pixels, pixelSize={} um, "
@@ -1134,7 +1150,7 @@ public class StageMapCanvas extends StackPane {
 
         // Pick the target slide (multi-slide detection uses transform center)
         StageInsert.SlidePosition targetSlide = slides.get(0);
-        if (slides.size() > 1 && macroTransform != null) {
+        if (slides.size() > 1) {
             double[] macroCenter = {macroWidth / 2.0, macroHeight / 2.0};
             double[] stageCenter = new double[2];
             macroTransform.transform(macroCenter, 0, stageCenter, 0, 1);
@@ -1154,8 +1170,10 @@ public class StageMapCanvas extends StackPane {
 
         double overlayX, overlayY, overlayW, overlayH;
 
-        boolean haveAnchor = !Double.isNaN(anchorMacroX) && !Double.isNaN(anchorMacroY)
-                && !Double.isNaN(anchorStageX) && !Double.isNaN(anchorStageY)
+        boolean haveAnchor = !Double.isNaN(anchorMacroX)
+                && !Double.isNaN(anchorMacroY)
+                && !Double.isNaN(anchorStageX)
+                && !Double.isNaN(anchorStageY)
                 && macroPixelSizeUm > 0;
 
         if (haveAnchor) {
@@ -1179,8 +1197,10 @@ public class StageMapCanvas extends StackPane {
             // transform isn't perfect everywhere.
             double[] anchorScreen = stageToScreen(anchorStageX, anchorStageY);
             if (anchorScreen == null) {
-                logger.warn("Anchor stage point ({}, {}) -> null screen; falling through to corners",
-                        anchorStageX, anchorStageY);
+                logger.warn(
+                        "Anchor stage point ({}, {}) -> null screen; falling through to corners",
+                        anchorStageX,
+                        anchorStageY);
             } else {
                 // The anchor pins the displayed-macro pixel (anchorMacroX,
                 // anchorMacroY) to anchorScreen exactly. To make the rest of
@@ -1201,8 +1221,8 @@ public class StageMapCanvas extends StackPane {
                 // non-anchor point, even though the anchor itself coincided.
                 double dirX = currentInsert != null && currentInsert.isXAxisInverted() ? -1.0 : 1.0;
                 double dirY = currentInsert != null && currentInsert.isYAxisInverted() ? -1.0 : 1.0;
-                double m00 = macroTransform != null ? macroTransform.getScaleX() : 1.0;
-                double m11 = macroTransform != null ? macroTransform.getScaleY() : 1.0;
+                double m00 = macroTransform.getScaleX();
+                double m11 = macroTransform.getScaleY();
                 double sX = dirX * Math.signum(m00 != 0 ? m00 : 1.0);
                 double sY = dirY * Math.signum(m11 != 0 ? m11 : 1.0);
 
@@ -1232,7 +1252,12 @@ public class StageMapCanvas extends StackPane {
                         String.format("%.1f", overlayY),
                         String.format("%.1f", overlayW),
                         String.format("%.1f", overlayH),
-                        sX, sY, m00, m11, dirX, dirY);
+                        sX,
+                        sY,
+                        m00,
+                        m11,
+                        dirX,
+                        dirY);
 
                 macroOverlayView.setX(overlayX);
                 macroOverlayView.setY(overlayY);
@@ -1244,103 +1269,65 @@ public class StageMapCanvas extends StackPane {
             }
         }
 
-        if (macroTransform != null) {
-            // Transform-driven positioning: place the overlay where the saved
-            // macro->stage transform actually maps the macro corners. The
-            // transform encodes the manually-aligned mapping from displayed
-            // (flipped) macro pixels to stage micrometers, so this is the
-            // single source of truth for "where is each macro pixel in stage".
-            //
-            // Previously the overlay was placed using slide_rect_left + a
-            // scanner-config offset, which on rigs whose slide_size_um is
-            // smaller than the cropped macro extent (e.g. OWS3: 40x20 mm slide
-            // rect vs 76x25 mm macro) caused the macro's label/holder portion
-            // to fall inside the slide rectangle. Using the transform makes
-            // the macro overlay coincide with the actual physical stage
-            // region the alignment maps to, regardless of slide_size_um.
-            //
-            // Transform is purely scale+translate (no rotation/shear), so the
-            // macro bounding box in stage is the AABB of the four corners. We
-            // map each corner through the transform to stage, then through
-            // stageToScreen to get screen coords, then take the screen AABB.
-            // Stage axis inversion (handled inside stageToScreen) means screen
-            // min/max may come from different macro corners than stage min/max
-            // -- we take min/max in SCREEN space directly.
-            double[][] corners = {
-                {0, 0},
-                {macroWidth, 0},
-                {0, macroHeight},
-                {macroWidth, macroHeight}
-            };
-            double minScreenX = Double.POSITIVE_INFINITY;
-            double minScreenY = Double.POSITIVE_INFINITY;
-            double maxScreenX = Double.NEGATIVE_INFINITY;
-            double maxScreenY = Double.NEGATIVE_INFINITY;
-            for (double[] c : corners) {
-                double[] stagePt = new double[2];
-                macroTransform.transform(c, 0, stagePt, 0, 1);
-                double[] scr = stageToScreen(stagePt[0], stagePt[1]);
-                if (scr == null) continue;
-                if (scr[0] < minScreenX) minScreenX = scr[0];
-                if (scr[1] < minScreenY) minScreenY = scr[1];
-                if (scr[0] > maxScreenX) maxScreenX = scr[0];
-                if (scr[1] > maxScreenY) maxScreenY = scr[1];
-            }
-            overlayX = minScreenX;
-            overlayY = minScreenY;
-            overlayW = maxScreenX - minScreenX;
-            overlayH = maxScreenY - minScreenY;
-
-            logger.info(
-                    "Macro overlay (transform-driven) on '{}': screen ({}, {}) {}x{} px from saved macro->stage transform",
-                    targetSlide.getName(),
-                    String.format("%.1f", overlayX),
-                    String.format("%.1f", overlayY),
-                    String.format("%.1f", overlayW),
-                    String.format("%.1f", overlayH));
-        } else if (macroPixelSizeUm > 0) {
-            // Legacy fallback: scanner-config-driven positioning when no saved
-            // transform is available (e.g. first run before alignment). Uses
-            // slide rect + scanner-config offset. Known to misplace the macro
-            // when slide_size_um differs from the cropped macro extent -- the
-            // transform-driven path above is preferred whenever we have a
-            // saved alignment.
-            double macroPhysicalW = macroWidth * macroPixelSizeUm;
-            double macroPhysicalH = macroHeight * macroPixelSizeUm;
-
-            overlayW = macroPhysicalW * scale;
-            overlayH = macroPhysicalH * scale;
-            overlayX = sx + macroOverlayXOffsetUm * scale;
-            overlayY = sy + (sh - overlayH) / 2.0 + macroOverlayYOffsetUm * scale;
-
-            logger.info(
-                    "Macro overlay (config-driven fallback) on '{}': physical {}x{} um, "
-                            + "offset ({}, {}) um, screen ({}, {}) {}x{} px",
-                    targetSlide.getName(),
-                    String.format("%.0f", macroPhysicalW),
-                    String.format("%.0f", macroPhysicalH),
-                    String.format("%.0f", macroOverlayXOffsetUm),
-                    String.format("%.0f", macroOverlayYOffsetUm),
-                    String.format("%.1f", overlayX),
-                    String.format("%.1f", overlayY),
-                    String.format("%.1f", overlayW),
-                    String.format("%.1f", overlayH));
-        } else {
-            // Fallback: fit macro to slide rectangle width, preserve aspect ratio
-            overlayW = sw;
-            double macroAspect = (double) macroWidth / macroHeight;
-            overlayH = sw / macroAspect;
-            overlayX = sx;
-            overlayY = sy + (sh - overlayH) / 2.0;
-
-            logger.info(
-                    "Macro overlay (fit-to-slide) on '{}': screen ({}, {}) {}x{} px",
-                    targetSlide.getName(),
-                    String.format("%.1f", overlayX),
-                    String.format("%.1f", overlayY),
-                    String.format("%.1f", overlayW),
-                    String.format("%.1f", overlayH));
+        // Transform-driven positioning: place the overlay where the saved
+        // macro->stage transform actually maps the macro corners. The
+        // transform encodes the manually-aligned mapping from displayed
+        // (flipped) macro pixels to stage micrometers, so this is the
+        // single source of truth for "where is each macro pixel in stage".
+        //
+        // Previously the overlay was placed using slide_rect_left + a
+        // scanner-config offset, which on rigs whose slide_size_um is
+        // smaller than the cropped macro extent (e.g. OWS3: 40x20 mm slide
+        // rect vs 76x25 mm macro) caused the macro's label/holder portion
+        // to fall inside the slide rectangle. Using the transform makes
+        // the macro overlay coincide with the actual physical stage
+        // region the alignment maps to, regardless of slide_size_um.
+        //
+        // Transform is purely scale+translate (no rotation/shear), so the
+        // macro bounding box in stage is the AABB of the four corners. We
+        // map each corner through the transform to stage, then through
+        // stageToScreen to get screen coords, then take the screen AABB.
+        // Stage axis inversion (handled inside stageToScreen) means screen
+        // min/max may come from different macro corners than stage min/max
+        // -- we take min/max in SCREEN space directly.
+        //
+        // macroTransform is guaranteed non-null here by the early return
+        // at the top of this method, so the legacy "no-transform" fallbacks
+        // (config-driven, fit-to-slide) are dead branches and have been
+        // removed. If a no-transform path is ever needed again, gate it
+        // earlier rather than re-introducing dead branches here.
+        double[][] corners = {
+            {0, 0},
+            {macroWidth, 0},
+            {0, macroHeight},
+            {macroWidth, macroHeight}
+        };
+        double minScreenX = Double.POSITIVE_INFINITY;
+        double minScreenY = Double.POSITIVE_INFINITY;
+        double maxScreenX = Double.NEGATIVE_INFINITY;
+        double maxScreenY = Double.NEGATIVE_INFINITY;
+        for (double[] c : corners) {
+            double[] stagePt = new double[2];
+            macroTransform.transform(c, 0, stagePt, 0, 1);
+            double[] scr = stageToScreen(stagePt[0], stagePt[1]);
+            if (scr == null) continue;
+            if (scr[0] < minScreenX) minScreenX = scr[0];
+            if (scr[1] < minScreenY) minScreenY = scr[1];
+            if (scr[0] > maxScreenX) maxScreenX = scr[0];
+            if (scr[1] > maxScreenY) maxScreenY = scr[1];
         }
+        overlayX = minScreenX;
+        overlayY = minScreenY;
+        overlayW = maxScreenX - minScreenX;
+        overlayH = maxScreenY - minScreenY;
+
+        logger.info(
+                "Macro overlay (transform-driven) on '{}': screen ({}, {}) {}x{} px from saved macro->stage transform",
+                targetSlide.getName(),
+                String.format("%.1f", overlayX),
+                String.format("%.1f", overlayY),
+                String.format("%.1f", overlayW),
+                String.format("%.1f", overlayH));
 
         // Compute the same axis-direction signs as the anchor branch so the
         // 4-corner / fallback paths render the macro pixels in the correct
@@ -1350,8 +1337,8 @@ public class StageMapCanvas extends StackPane {
         // via setScaleX/setScaleY. For PPM (m00 > 0, dirX > 0) this is a no-op.
         double dirX = currentInsert != null && currentInsert.isXAxisInverted() ? -1.0 : 1.0;
         double dirY = currentInsert != null && currentInsert.isYAxisInverted() ? -1.0 : 1.0;
-        double m00 = macroTransform != null ? macroTransform.getScaleX() : 1.0;
-        double m11 = macroTransform != null ? macroTransform.getScaleY() : 1.0;
+        double m00 = macroTransform.getScaleX();
+        double m11 = macroTransform.getScaleY();
         double sX = dirX * Math.signum(m00 != 0 ? m00 : 1.0);
         double sY = dirY * Math.signum(m11 != 0 ? m11 : 1.0);
 

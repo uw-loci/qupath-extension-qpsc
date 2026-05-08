@@ -29,7 +29,6 @@ public class RefineFocusController {
     static final double SATURATION_ABORT_PCT = 5.0;
     static final double IMPROVEMENT_THRESHOLD = 0.5; // min metric improvement (in bins)
 
-
     // State
     private volatile boolean running = false;
     private volatile boolean cancelled = false;
@@ -393,8 +392,7 @@ public class RefineFocusController {
                 frame = frameSupplier.get();
                 if (frame == null) return 0;
             }
-            last = new FrameFreshness.Snapshot(
-                    frame.timestampMs(), FrameFreshness.pixelContentHash(frame));
+            last = new FrameFreshness.Snapshot(frame.timestampMs(), FrameFreshness.pixelContentHash(frame));
             sum += computeFocusMetric(frame);
         }
         return sum / FRAMES_TO_AVERAGE;

@@ -52,10 +52,10 @@ public class WizardData {
     // means "not yet probed"; auto-migration in MicroscopeConfigManager
     // fills in legacy defaults so old v2 configs still validate at v3.
     public Boolean streamingAfEnabled = null;
-    public String streamingAfSpeedProperty = null;       // null = no writable speed prop
-    public String streamingAfSlowSpeedValue = null;      // raw stage value (e.g. "1" or "0.50mm/sec")
-    public Double streamingAfSlowSpeedUmPerS = null;     // actual velocity in um/s
-    public String streamingAfNormalSpeedValue = null;    // raw stage value to restore
+    public String streamingAfSpeedProperty = null; // null = no writable speed prop
+    public String streamingAfSlowSpeedValue = null; // raw stage value (e.g. "1" or "0.50mm/sec")
+    public Double streamingAfSlowSpeedUmPerS = null; // actual velocity in um/s
+    public String streamingAfNormalSpeedValue = null; // raw stage value to restore
 
     // ====== Step 6: Modalities ======
     /**

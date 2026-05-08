@@ -168,8 +168,14 @@ public class StitchingMetadata {
                 angle,
                 annotationName,
                 imageIndex,
-                null, null, null, null,
-                null, null, null, null);
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     /**

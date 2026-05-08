@@ -53,8 +53,7 @@ public class MakePortableWorkflow {
     public static void run(QuPathGUI gui) {
         Project<BufferedImage> project = gui.getProject();
         if (project == null) {
-            Dialogs.showErrorMessage("Make Project Portable",
-                    "No project is open. Open a project first.");
+            Dialogs.showErrorMessage("Make Project Portable", "No project is open. Open a project first.");
             return;
         }
 
@@ -62,8 +61,8 @@ public class MakePortableWorkflow {
         List<ZarrEntry> zarrEntries = findZarrEntries(project);
 
         if (zarrEntries.isEmpty()) {
-            Dialogs.showInfoNotification("Make Project Portable",
-                    "No ZARR-backed images found. Project is already portable.");
+            Dialogs.showInfoNotification(
+                    "Make Project Portable", "No ZARR-backed images found. Project is already portable.");
             return;
         }
 
@@ -76,7 +75,9 @@ public class MakePortableWorkflow {
     // ------------------------------------------------------------------
 
     private enum TiffStatus {
-        READY, CONVERTING, MISSING
+        READY,
+        CONVERTING,
+        MISSING
     }
 
     private static class ZarrEntry {
@@ -88,8 +89,7 @@ public class MakePortableWorkflow {
         TiffStatus status;
         long zarrSizeBytes;
 
-        ZarrEntry(ProjectImageEntry<BufferedImage> entry, String name,
-                  URI zarrUri, Path zarrPath, Path tiffPath) {
+        ZarrEntry(ProjectImageEntry<BufferedImage> entry, String name, URI zarrUri, Path zarrPath, Path tiffPath) {
             this.entry = entry;
             this.entryName = name;
             this.zarrUri = zarrUri;
@@ -111,9 +111,13 @@ public class MakePortableWorkflow {
             try (Stream<Path> walk = Files.walk(zarrPath)) {
                 return walk.filter(Files::isRegularFile)
                         .mapToLong(p -> {
-                            try { return Files.size(p); }
-                            catch (IOException e) { return 0; }
-                        }).sum();
+                            try {
+                                return Files.size(p);
+                            } catch (IOException e) {
+                                return 0;
+                            }
+                        })
+                        .sum();
             } catch (IOException e) {
                 return 0;
             }
@@ -137,13 +141,10 @@ public class MakePortableWorkflow {
                     String uriStr = uri.toString();
                     if (uriStr.contains(".ome.zarr")) {
                         Path zarrPath = Path.of(uri);
-                        String tiffPathStr = zarrPath.toString()
-                                .replaceAll("\\.ome\\.zarr$", ".ome.tif");
+                        String tiffPathStr = zarrPath.toString().replaceAll("\\.ome\\.zarr$", ".ome.tif");
                         Path tiffPath = Path.of(tiffPathStr);
 
-                        results.add(new ZarrEntry(
-                                entry, entry.getImageName(),
-                                uri, zarrPath, tiffPath));
+                        results.add(new ZarrEntry(entry, entry.getImageName(), uri, zarrPath, tiffPath));
                         break; // one ZARR URI per entry is enough
                     }
                 }
@@ -160,8 +161,7 @@ public class MakePortableWorkflow {
     // Dialog
     // ------------------------------------------------------------------
 
-    private static void showPortabilityDialog(
-            QuPathGUI gui, Project<BufferedImage> project, List<ZarrEntry> entries) {
+    private static void showPortabilityDialog(QuPathGUI gui, Project<BufferedImage> project, List<ZarrEntry> entries) {
 
         Stage dialog = new Stage();
         dialog.setTitle("Make Project Portable");
@@ -198,7 +198,8 @@ public class MakePortableWorkflow {
         Button makePortableBtn = new Button("Make Portable");
         Button closeBtn = new Button("Close");
 
-        long readyCount = entries.stream().filter(e -> e.status == TiffStatus.READY).count();
+        long readyCount =
+                entries.stream().filter(e -> e.status == TiffStatus.READY).count();
         makePortableBtn.setDisable(readyCount == 0);
 
         refreshBtn.setOnAction(e -> {
@@ -210,7 +211,8 @@ public class MakePortableWorkflow {
                 }
             });
             updateSummary(summaryLabel, entries);
-            long ready = entries.stream().filter(ze -> ze.status == TiffStatus.READY).count();
+            long ready =
+                    entries.stream().filter(ze -> ze.status == TiffStatus.READY).count();
             makePortableBtn.setDisable(ready == 0);
         });
 
@@ -219,74 +221,76 @@ public class MakePortableWorkflow {
             refreshBtn.setDisable(true);
             progressBar.setVisible(true);
 
-            Thread worker = new Thread(() -> {
-                List<ZarrEntry> readyEntries = entries.stream()
-                        .filter(ze -> ze.status == TiffStatus.READY)
-                        .toList();
+            Thread worker = new Thread(
+                    () -> {
+                        List<ZarrEntry> readyEntries = entries.stream()
+                                .filter(ze -> ze.status == TiffStatus.READY)
+                                .toList();
 
-                int total = readyEntries.size();
-                int succeeded = 0;
-                int failed = 0;
-                long freedBytes = 0;
+                        int total = readyEntries.size();
+                        int succeeded = 0;
+                        int failed = 0;
+                        long freedBytes = 0;
 
-                for (int i = 0; i < total; i++) {
-                    ZarrEntry ze = readyEntries.get(i);
-                    final int idx = i;
-                    Platform.runLater(() -> {
-                        statusLabel.setText("Swapping " + (idx + 1) + "/" + total + ": " + ze.entryName);
-                        progressBar.setProgress((double) idx / total);
-                    });
+                        for (int i = 0; i < total; i++) {
+                            ZarrEntry ze = readyEntries.get(i);
+                            final int idx = i;
+                            Platform.runLater(() -> {
+                                statusLabel.setText("Swapping " + (idx + 1) + "/" + total + ": " + ze.entryName);
+                                progressBar.setProgress((double) idx / total);
+                            });
 
-                    try {
-                        boolean ok = swapEntryToTiff(ze, project);
-                        if (ok) {
-                            long freed = ze.zarrSizeBytes;
-                            deleteZarrDirectory(ze.zarrPath);
-                            freedBytes += freed;
-                            succeeded++;
-                        } else {
-                            failed++;
+                            try {
+                                boolean ok = swapEntryToTiff(ze, project);
+                                if (ok) {
+                                    long freed = ze.zarrSizeBytes;
+                                    deleteZarrDirectory(ze.zarrPath);
+                                    freedBytes += freed;
+                                    succeeded++;
+                                } else {
+                                    failed++;
+                                }
+                            } catch (Exception ex) {
+                                failed++;
+                                logger.error("Failed to make portable: {}: {}", ze.entryName, ex.getMessage(), ex);
+                            }
                         }
-                    } catch (Exception ex) {
-                        failed++;
-                        logger.error("Failed to make portable: {}: {}",
-                                ze.entryName, ex.getMessage(), ex);
-                    }
-                }
 
-                final int s = succeeded;
-                final int f = failed;
-                final long freed = freedBytes;
-                Platform.runLater(() -> {
-                    progressBar.setProgress(1.0);
-                    try {
-                        project.syncChanges();
-                    } catch (IOException ex) {
-                        logger.error("Failed to sync project: {}", ex.getMessage());
-                    }
+                        final int s = succeeded;
+                        final int f = failed;
+                        final long freed = freedBytes;
+                        Platform.runLater(() -> {
+                            progressBar.setProgress(1.0);
+                            try {
+                                project.syncChanges();
+                            } catch (IOException ex) {
+                                logger.error("Failed to sync project: {}", ex.getMessage());
+                            }
 
-                    String freedStr = freed > 1_000_000_000
-                            ? String.format("%.1f GB", freed / 1_000_000_000.0)
-                            : String.format("%d MB", freed / 1_000_000);
+                            String freedStr = freed > 1_000_000_000
+                                    ? String.format("%.1f GB", freed / 1_000_000_000.0)
+                                    : String.format("%d MB", freed / 1_000_000);
 
-                    if (f == 0) {
-                        statusLabel.setText(String.format(
-                                "Done! %d images converted, %s freed.", s, freedStr));
-                        Dialogs.showInfoNotification("Make Project Portable",
-                                String.format("Project is now portable. %d images swapped to TIFF, %s freed.",
-                                        s, freedStr));
-                    } else {
-                        statusLabel.setText(String.format(
-                                "Done with errors: %d succeeded, %d failed, %s freed.", s, f, freedStr));
-                    }
+                            if (f == 0) {
+                                statusLabel.setText(String.format("Done! %d images converted, %s freed.", s, freedStr));
+                                Dialogs.showInfoNotification(
+                                        "Make Project Portable",
+                                        String.format(
+                                                "Project is now portable. %d images swapped to TIFF, %s freed.",
+                                                s, freedStr));
+                            } else {
+                                statusLabel.setText(String.format(
+                                        "Done with errors: %d succeeded, %d failed, %s freed.", s, f, freedStr));
+                            }
 
-                    // Refresh the entry list
-                    entries.forEach(ZarrEntry::refresh);
-                    updateSummary(summaryLabel, entries);
-                    makePortableBtn.setDisable(true);
-                    refreshBtn.setDisable(false);
-                });
-            }, "make-portable-worker");
+                            // Refresh the entry list
+                            entries.forEach(ZarrEntry::refresh);
+                            updateSummary(summaryLabel, entries);
+                            makePortableBtn.setDisable(true);
+                            refreshBtn.setDisable(false);
+                        });
+                    },
+                    "make-portable-worker");
             worker.setDaemon(true);
             worker.start();
         });
@@ -303,42 +307,43 @@ public class MakePortableWorkflow {
 
     private static void updateSummary(Label label, List<ZarrEntry> entries) {
         long ready = entries.stream().filter(e -> e.status == TiffStatus.READY).count();
-        long converting = entries.stream().filter(e -> e.status == TiffStatus.CONVERTING).count();
-        long missing = entries.stream().filter(e -> e.status == TiffStatus.MISSING).count();
+        long converting =
+                entries.stream().filter(e -> e.status == TiffStatus.CONVERTING).count();
+        long missing =
+                entries.stream().filter(e -> e.status == TiffStatus.MISSING).count();
         long totalBytes = entries.stream().mapToLong(e -> e.zarrSizeBytes).sum();
         String sizeStr = totalBytes > 1_000_000_000
                 ? String.format("%.1f GB", totalBytes / 1_000_000_000.0)
                 : String.format("%d MB", totalBytes / 1_000_000);
 
         label.setText(String.format(
-                "Found %d ZARR-backed images (%s).\n"
-                + "Ready for swap: %d | Converting: %d | Missing TIFF: %d",
+                "Found %d ZARR-backed images (%s).\n" + "Ready for swap: %d | Converting: %d | Missing TIFF: %d",
                 entries.size(), sizeStr, ready, converting, missing));
 
         if (converting > 0) {
-            label.setText(label.getText()
-                    + "\n(Background TIFF conversion still running -- click Refresh to check.)");
+            label.setText(label.getText() + "\n(Background TIFF conversion still running -- click Refresh to check.)");
         }
         if (missing > 0) {
-            label.setText(label.getText()
-                    + "\n(Missing TIFFs may need re-stitching with OME_TIFF_VIA_ZARR format.)");
+            label.setText(label.getText() + "\n(Missing TIFFs may need re-stitching with OME_TIFF_VIA_ZARR format.)");
         }
     }
 
     private static void updateEntryLabel(Label label, ZarrEntry ze) {
-        String statusStr = switch (ze.status) {
-            case READY -> "[READY]";
-            case CONVERTING -> "[CONVERTING...]";
-            case MISSING -> "[TIFF MISSING]";
-        };
+        String statusStr =
+                switch (ze.status) {
+                    case READY -> "[READY]";
+                    case CONVERTING -> "[CONVERTING...]";
+                    case MISSING -> "[TIFF MISSING]";
+                };
         String sizeStr = ze.zarrSizeBytes > 1_000_000_000
                 ? String.format("%.1f GB", ze.zarrSizeBytes / 1_000_000_000.0)
                 : String.format("%d MB", ze.zarrSizeBytes / 1_000_000);
 
         label.setText(String.format("  %s  %s  (%s)", statusStr, ze.entryName, sizeStr));
-        label.setStyle(ze.status == TiffStatus.READY ? "-fx-text-fill: green;"
-                : ze.status == TiffStatus.CONVERTING ? "-fx-text-fill: orange;"
-                : "-fx-text-fill: red;");
+        label.setStyle(
+                ze.status == TiffStatus.READY
+                        ? "-fx-text-fill: green;"
+                        : ze.status == TiffStatus.CONVERTING ? "-fx-text-fill: orange;" : "-fx-text-fill: red;");
     }
 
     // ------------------------------------------------------------------
@@ -358,12 +363,10 @@ public class MakePortableWorkflow {
 
             boolean changed = ze.entry.updateURIs(replacements);
             if (changed) {
-                logger.info("Swapped entry '{}': {} -> {}",
-                        ze.entryName, ze.zarrUri, tiffUri);
+                logger.info("Swapped entry '{}': {} -> {}", ze.entryName, ze.zarrUri, tiffUri);
                 return true;
             } else {
-                logger.warn("updateURIs returned false for '{}' -- URI may not have matched",
-                        ze.entryName);
+                logger.warn("updateURIs returned false for '{}' -- URI may not have matched", ze.entryName);
                 return false;
             }
         } catch (IOException e) {
@@ -384,14 +387,13 @@ public class MakePortableWorkflow {
             }
 
             try (Stream<Path> walk = Files.walk(zarrDir)) {
-                walk.sorted(Comparator.reverseOrder())
-                        .forEach(p -> {
-                            try {
-                                Files.delete(p);
-                            } catch (IOException e) {
-                                logger.warn("Could not delete {}: {}", p, e.getMessage());
-                            }
-                        });
+                walk.sorted(Comparator.reverseOrder()).forEach(p -> {
+                    try {
+                        Files.delete(p);
+                    } catch (IOException e) {
+                        logger.warn("Could not delete {}: {}", p, e.getMessage());
+                    }
+                });
             }
 
             if (!Files.exists(zarrDir)) {

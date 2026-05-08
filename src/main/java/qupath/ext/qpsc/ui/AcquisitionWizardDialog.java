@@ -28,8 +28,8 @@ import qupath.ext.qpsc.controller.QPScopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.CalibrationChecker.Status;
-import qupath.ext.qpsc.ui.components.ObjectiveSelector;
 import qupath.ext.qpsc.ui.CalibrationChecker.StepStatus;
+import qupath.ext.qpsc.ui.components.ObjectiveSelector;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.gui.QuPathGUI;
@@ -62,17 +62,49 @@ public class AcquisitionWizardDialog {
     }
 
     // Theme-adaptive colors queried at build time
-    private static String bgMain()      { return isDark() ? "#2b2b2b" : "white"; }
-    private static String bgSection()   { return isDark() ? "#333333" : "#f5f5f5"; }
-    private static String bgRow()       { return isDark() ? "#363636" : "white"; }
-    private static String bgIcon()      { return isDark() ? "#3a4a60" : "#e8eef7"; }
-    private static String borderColor() { return isDark() ? "#555"    : "#e0e0e0"; }
-    private static String borderOuter() { return isDark() ? "#555"    : "#bbb"; }
-    private static String borderSection() { return isDark() ? "#555"  : "#ddd"; }
-    private static String textPrimary() { return isDark() ? "#ddd"    : "black"; }
-    private static String textSecondary() { return isDark() ? "#aaa"  : "#666"; }
-    private static String textMuted()   { return isDark() ? "#888"    : "#999"; }
-    private static String textSectionHeader() { return isDark() ? "#aaa" : "#888"; }
+    private static String bgMain() {
+        return isDark() ? "#2b2b2b" : "white";
+    }
+
+    private static String bgSection() {
+        return isDark() ? "#333333" : "#f5f5f5";
+    }
+
+    private static String bgRow() {
+        return isDark() ? "#363636" : "white";
+    }
+
+    private static String bgIcon() {
+        return isDark() ? "#3a4a60" : "#e8eef7";
+    }
+
+    private static String borderColor() {
+        return isDark() ? "#555" : "#e0e0e0";
+    }
+
+    private static String borderOuter() {
+        return isDark() ? "#555" : "#bbb";
+    }
+
+    private static String borderSection() {
+        return isDark() ? "#555" : "#ddd";
+    }
+
+    private static String textPrimary() {
+        return isDark() ? "#ddd" : "black";
+    }
+
+    private static String textSecondary() {
+        return isDark() ? "#aaa" : "#666";
+    }
+
+    private static String textMuted() {
+        return isDark() ? "#888" : "#999";
+    }
+
+    private static String textSectionHeader() {
+        return isDark() ? "#aaa" : "#888";
+    }
 
     private static Stage wizardStage;
     private static AcquisitionWizardDialog activeInstance;
@@ -305,12 +337,11 @@ public class AcquisitionWizardDialog {
         // is the only signal we report; physical perturbations (bumping the
         // stage, swapping inserts, anything that changes pixel<->stage geometry)
         // invalidate alignment without the software being able to detect it.
-        Tooltip alignmentAgeTooltip = new Tooltip(
-                "Reference only -- this is the time since the last full microscope\n"
-                        + "alignment. The software cannot detect physical changes that\n"
-                        + "would break the alignment (bumping the stage or table,\n"
-                        + "swapping inserts, changing optics, etc.). When in doubt,\n"
-                        + "re-run Microscope Alignment.");
+        Tooltip alignmentAgeTooltip = new Tooltip("Reference only -- this is the time since the last full microscope\n"
+                + "alignment. The software cannot detect physical changes that\n"
+                + "would break the alignment (bumping the stage or table,\n"
+                + "swapping inserts, changing optics, etc.). When in doubt,\n"
+                + "re-run Microscope Alignment.");
         alignmentAgeTooltip.setShowDelay(javafx.util.Duration.millis(250));
         alignmentAgeTooltip.setShowDuration(javafx.util.Duration.seconds(20));
         StepRow alignmentRow = stepRows.get(STEP_ALIGNMENT);
@@ -568,7 +599,8 @@ public class AcquisitionWizardDialog {
             // swapped objectives without updating the YAML.
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager mgr = (configPath == null || configPath.isEmpty())
-                    ? null : MicroscopeConfigManager.getInstance(configPath);
+                    ? null
+                    : MicroscopeConfigManager.getInstance(configPath);
             ObjectiveSelector.autoSelect(objectiveCombo, mgr);
             onObjectiveChanged();
         } else {
@@ -659,8 +691,8 @@ public class AcquisitionWizardDialog {
         HBox row = new HBox(10);
         row.setAlignment(Pos.CENTER_LEFT);
         row.setPadding(new Insets(8, 12, 8, 12));
-        row.setStyle("-fx-background-color: " + bgRow() + "; -fx-background-radius: 6; "
-                + "-fx-border-color: " + borderColor() + "; -fx-border-radius: 6;");
+        row.setStyle("-fx-background-color: " + bgRow() + "; -fx-background-radius: 6; " + "-fx-border-color: "
+                + borderColor() + "; -fx-border-radius: 6;");
 
         // Icon circle
         StackPane iconPane = new StackPane(icon);

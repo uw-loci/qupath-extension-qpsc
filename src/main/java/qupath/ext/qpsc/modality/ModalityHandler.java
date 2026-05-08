@@ -281,7 +281,7 @@ public interface ModalityHandler {
      */
     default String channelLabel(int channelIdx, boolean rgbCamera) {
         if (rgbCamera) {
-            return new String[]{"R", "G", "B"}[channelIdx];
+            return new String[] {"R", "G", "B"}[channelIdx];
         }
         return "Gray";
     }

@@ -45,8 +45,7 @@ public final class AcquisitionMonitorService {
      * @throws RuntimeException if acquisition failed on the server
      */
     public static MicroscopeSocketClient.AcquisitionState monitorAndHandle(
-            MicroscopeSocketClient socketClient,
-            MonitorConfig config) throws IOException, InterruptedException {
+            MicroscopeSocketClient socketClient, MonitorConfig config) throws IOException, InterruptedException {
 
         MicroscopeSocketClient.AcquisitionState finalState = socketClient.monitorAcquisition(
                 config.progressCallback,
@@ -87,9 +86,7 @@ public final class AcquisitionMonitorService {
      * Handle the terminal acquisition state consistently.
      */
     private static MicroscopeSocketClient.AcquisitionState handleTerminalState(
-            MicroscopeSocketClient socketClient,
-            MicroscopeSocketClient.AcquisitionState state,
-            MonitorConfig config) {
+            MicroscopeSocketClient socketClient, MicroscopeSocketClient.AcquisitionState state, MonitorConfig config) {
 
         switch (state) {
             case COMPLETED:
@@ -166,6 +163,7 @@ public final class AcquisitionMonitorService {
      */
     public interface TimingCallback {
         void pause();
+
         void resume();
     }
 
@@ -251,4 +249,3 @@ public final class AcquisitionMonitorService {
         }
     }
 }
-

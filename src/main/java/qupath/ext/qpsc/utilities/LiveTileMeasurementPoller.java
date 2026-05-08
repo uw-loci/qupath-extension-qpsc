@@ -68,8 +68,11 @@ public class LiveTileMeasurementPoller {
     private int totalApplied = 0;
     private ScheduledFuture<?> handle;
 
-    private LiveTileMeasurementPoller(Path ndjsonPath, String annotationName,
-                                      PathObjectHierarchy sessionHierarchy, ImageData<?> sessionImageData) {
+    private LiveTileMeasurementPoller(
+            Path ndjsonPath,
+            String annotationName,
+            PathObjectHierarchy sessionHierarchy,
+            ImageData<?> sessionImageData) {
         this.ndjsonPath = ndjsonPath;
         this.annotationName = annotationName;
         this.sessionHierarchy = sessionHierarchy;
@@ -89,10 +92,13 @@ public class LiveTileMeasurementPoller {
      * @param sessionImageData ImageData captured at session start; used to check viewer state
      */
     public static LiveTileMeasurementPoller start(
-            Path ndjsonPath, String annotationName, ScheduledExecutorService executor,
-            PathObjectHierarchy sessionHierarchy, ImageData<?> sessionImageData) {
-        LiveTileMeasurementPoller poller = new LiveTileMeasurementPoller(
-                ndjsonPath, annotationName, sessionHierarchy, sessionImageData);
+            Path ndjsonPath,
+            String annotationName,
+            ScheduledExecutorService executor,
+            PathObjectHierarchy sessionHierarchy,
+            ImageData<?> sessionImageData) {
+        LiveTileMeasurementPoller poller =
+                new LiveTileMeasurementPoller(ndjsonPath, annotationName, sessionHierarchy, sessionImageData);
         poller.handle =
                 executor.scheduleAtFixedRate(poller::tickSafely, POLL_PERIOD_MS, POLL_PERIOD_MS, TimeUnit.MILLISECONDS);
         logger.debug("Started live tile measurement poller for annotation '{}' at {}", annotationName, ndjsonPath);

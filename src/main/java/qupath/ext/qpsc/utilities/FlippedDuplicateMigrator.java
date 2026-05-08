@@ -143,7 +143,9 @@ public final class FlippedDuplicateMigrator {
                     List<PathObject> toAdd = new ArrayList<>(dupAnnotations.size());
                     for (PathObject obj : dupAnnotations) {
                         PathObject copy = PathObjectTools.transformObject(obj, unflip, true, true);
-                        if (copy != null && copy.getROI() != null && !copy.getROI().isEmpty()) {
+                        if (copy != null
+                                && copy.getROI() != null
+                                && !copy.getROI().isEmpty()) {
                             toAdd.add(copy);
                         }
                     }
@@ -152,8 +154,8 @@ public final class FlippedDuplicateMigrator {
                         base.saveImageData(baseData);
                         int added = baseHierarchy.getAllObjects(false).size() - beforeCount;
                         annotationsTransferred += added;
-                        log.add("  " + dupName + " -> " + base.getImageName()
-                                + ": transferred " + added + " annotation(s)");
+                        log.add("  " + dupName + " -> " + base.getImageName() + ": transferred " + added
+                                + " annotation(s)");
                     }
                 }
 
@@ -178,15 +180,17 @@ public final class FlippedDuplicateMigrator {
             logger.warn("project.syncChanges() failed after migration: {}", e.getMessage());
         }
 
-        log.add("Migration complete: " + duplicatesRemoved + "/" + duplicates.size()
-                + " duplicates removed, " + annotationsTransferred + " annotation(s) transferred.");
-        logger.info("FlippedDuplicateMigrator: {} duplicates found, {} removed, {} annotations transferred",
-                duplicates.size(), duplicatesRemoved, annotationsTransferred);
+        log.add("Migration complete: " + duplicatesRemoved + "/" + duplicates.size() + " duplicates removed, "
+                + annotationsTransferred + " annotation(s) transferred.");
+        logger.info(
+                "FlippedDuplicateMigrator: {} duplicates found, {} removed, {} annotations transferred",
+                duplicates.size(),
+                duplicatesRemoved,
+                annotationsTransferred);
         return new Result(duplicates.size(), duplicatesRemoved, annotationsTransferred, log);
     }
 
-    private static ProjectImageEntry<BufferedImage> findUnflippedBase(
-            Project<BufferedImage> project, String baseName) {
+    private static ProjectImageEntry<BufferedImage> findUnflippedBase(Project<BufferedImage> project, String baseName) {
         if (baseName == null || baseName.isEmpty()) return null;
         for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
             String name = entry.getImageName();

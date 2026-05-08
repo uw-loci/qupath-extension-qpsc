@@ -121,8 +121,7 @@ public class SaturationSummaryDialog {
         }
 
         Stage stage = new Stage();
-        stage.setTitle("Saturation Summary"
-                + (modality != null && !modality.isBlank() ? " -- " + modality : ""));
+        stage.setTitle("Saturation Summary" + (modality != null && !modality.isBlank() ? " -- " + modality : ""));
         stage.initModality(Modality.NONE);
 
         VBox root = new VBox(10);
@@ -138,8 +137,7 @@ public class SaturationSummaryDialog {
         banner.setMaxWidth(Double.MAX_VALUE);
         banner.setStyle("-fx-font-size: 12px;");
 
-        Label instruction = new Label(
-                "Double-click a row to move stage to that tile (requires microscope connection)");
+        Label instruction = new Label("Double-click a row to move stage to that tile (requires microscope connection)");
         instruction.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
 
         root.getChildren().addAll(header, banner, instruction);
@@ -176,7 +174,9 @@ public class SaturationSummaryDialog {
 
         logger.info(
                 "Saturation summary dialog opened: {} concerning, {} expected-bright (modality={})",
-                concerning.size(), expectedBright.size(), modality);
+                concerning.size(),
+                expectedBright.size(),
+                modality);
     }
 
     /**
@@ -184,10 +184,11 @@ public class SaturationSummaryDialog {
      * expected-bright tiles and surfaces the worst-saturation pct so the
      * user immediately sees whether action is needed.
      */
-    private static String buildBanner(List<Map<String, Object>> concerning,
-                                       List<Map<String, Object>> expectedBright,
-                                       String fallbackSummary,
-                                       ModalityHandler handler) {
+    private static String buildBanner(
+            List<Map<String, Object>> concerning,
+            List<Map<String, Object>> expectedBright,
+            String fallbackSummary,
+            ModalityHandler handler) {
         StringBuilder sb = new StringBuilder();
         if (!concerning.isEmpty()) {
             double worst = concerning.stream()
@@ -206,7 +207,8 @@ public class SaturationSummaryDialog {
         if (!expectedBright.isEmpty()) {
             sb.append(" ");
             sb.append(expectedBright.size())
-                    .append(" tile(s) with expected bright saturation (e.g. PPM uncrossed) hidden in the section below.");
+                    .append(
+                            " tile(s) with expected bright saturation (e.g. PPM uncrossed) hidden in the section below.");
         }
         if (fallbackSummary != null && !fallbackSummary.isBlank()) {
             sb.append("\n\n").append(fallbackSummary);
@@ -215,9 +217,7 @@ public class SaturationSummaryDialog {
     }
 
     private static TableView<Map<String, Object>> buildTable(
-            List<Map<String, Object>> data,
-            ModalityHandler.ChannelDisplay channelDisplay,
-            ModalityHandler handler) {
+            List<Map<String, Object>> data, ModalityHandler.ChannelDisplay channelDisplay, ModalityHandler handler) {
 
         TableView<Map<String, Object>> table = new TableView<>();
         table.setItems(FXCollections.observableArrayList(data));
@@ -328,26 +328,29 @@ public class SaturationSummaryDialog {
         double y = ((Number) yObj).doubleValue();
         Double z = (zObj instanceof Number) ? ((Number) zObj).doubleValue() : null;
 
-        logger.info("Navigating to saturated tile {} at ({}, {}, Z={})",
-                tile.get("filename"), x, y, z != null ? z : "N/A");
+        logger.info(
+                "Navigating to saturated tile {} at ({}, {}, Z={})", tile.get("filename"), x, y, z != null ? z : "N/A");
 
-        new Thread(() -> {
-            try {
-                MicroscopeController controller = MicroscopeController.getInstance();
-                if (controller != null && controller.isConnected()) {
-                    controller.moveStageXY(x, y);
-                    if (z != null) {
-                        controller.moveStageZ(z);
-                    }
-                    logger.info("Stage moved to ({}, {}, Z={})", x, y, z != null ? z : "unchanged");
-                } else {
-                    logger.warn("Microscope not connected -- cannot navigate to tile");
-                    Platform.runLater(() -> qupath.fx.dialogs.Dialogs.showWarningNotification(
-                            "Not Connected", "Microscope not connected. Cannot navigate to tile."));
-                }
-            } catch (Exception e) {
-                logger.error("Failed to navigate to tile", e);
-            }
-        }, "SaturationNav").start();
+        new Thread(
+                        () -> {
+                            try {
+                                MicroscopeController controller = MicroscopeController.getInstance();
+                                if (controller != null && controller.isConnected()) {
+                                    controller.moveStageXY(x, y);
+                                    if (z != null) {
+                                        controller.moveStageZ(z);
+                                    }
+                                    logger.info("Stage moved to ({}, {}, Z={})", x, y, z != null ? z : "unchanged");
+                                } else {
+                                    logger.warn("Microscope not connected -- cannot navigate to tile");
+                                    Platform.runLater(() -> qupath.fx.dialogs.Dialogs.showWarningNotification(
+                                            "Not Connected", "Microscope not connected. Cannot navigate to tile."));
+                                }
+                            } catch (Exception e) {
+                                logger.error("Failed to navigate to tile", e);
+                            }
+                        },
+                        "SaturationNav")
+                .start();
     }
 }

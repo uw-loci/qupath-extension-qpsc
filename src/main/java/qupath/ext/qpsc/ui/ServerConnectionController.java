@@ -779,8 +779,8 @@ public class ServerConnectionController {
                 statusLabel.setText(prefix + "Primary connected (auxiliary will connect on use)");
                 statusLabel.setTextFill(Color.GREEN);
             } else if (auxiliary) {
-                statusLabel.setText(prefix
-                        + "Auxiliary only (Live Viewer works; primary will reconnect on next command)");
+                statusLabel.setText(
+                        prefix + "Auxiliary only (Live Viewer works; primary will reconnect on next command)");
                 statusLabel.setTextFill(Color.ORANGE);
             } else {
                 statusLabel.setText(prefix + "Disconnected");

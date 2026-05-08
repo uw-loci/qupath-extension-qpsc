@@ -130,8 +130,7 @@ public class MicroscopeAlignmentWorkflow {
                     // the project exists, so the user can toggle and see the flipped duplicate
                     // immediately. Until then we use no-flip as a starting assumption -- detection
                     // and project creation work fine on the original image.
-                    MacroOrientationDialog.MacroFlip initialFlip =
-                            new MacroOrientationDialog.MacroFlip(false, false);
+                    MacroOrientationDialog.MacroFlip initialFlip = new MacroOrientationDialog.MacroFlip(false, false);
                     SampleSetupController.showDialog(defaultSampleName)
                             .thenCompose(sampleSetup -> {
                                 if (sampleSetup == null) {
@@ -632,8 +631,7 @@ public class MicroscopeAlignmentWorkflow {
                 // Flip comes from the orientation dialog answered by the user at workflow start.
                 boolean flipX = combinedConfig.macroFlip().flipX();
                 boolean flipY = combinedConfig.macroFlip().flipY();
-                logger.info(
-                        "Using flip settings from orientation dialog: flipX={}, flipY={}", flipX, flipY);
+                logger.info("Using flip settings from orientation dialog: flipX={}, flipY={}", flipX, flipY);
                 // Override with entry metadata if available
                 if (gui.getProject() != null && gui.getImageData() != null) {
                     @SuppressWarnings("unchecked")
@@ -694,16 +692,14 @@ public class MicroscopeAlignmentWorkflow {
                         if (selectedScanner != null && !selectedScanner.isEmpty()) {
                             try {
                                 newEntry.getMetadata()
-                                        .put(qupath.ext.qpsc.utilities.ImageMetadataManager.SOURCE_MICROSCOPE,
+                                        .put(
+                                                qupath.ext.qpsc.utilities.ImageMetadataManager.SOURCE_MICROSCOPE,
                                                 selectedScanner);
                                 project.syncChanges();
-                                logger.info(
-                                        "Stamped source_microscope='{}' on alignment macro image",
-                                        selectedScanner);
+                                logger.info("Stamped source_microscope='{}' on alignment macro image", selectedScanner);
                             } catch (Exception metaEx) {
                                 logger.warn(
-                                        "Could not stamp source_microscope on macro image: {}",
-                                        metaEx.getMessage());
+                                        "Could not stamp source_microscope on macro image: {}", metaEx.getMessage());
                             }
                         }
                         gui.openImageEntry(newEntry);
@@ -738,7 +734,8 @@ public class MicroscopeAlignmentWorkflow {
                 MacroOrientationDialog.MacroFlip seedFlip = FlipResolver.seedFlipForNewAlignment(
                                 transformManager,
                                 selectedScanner,
-                                MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty())
+                                MicroscopeConfigManager.getInstance(
+                                                QPPreferenceDialog.getMicroscopeConfigFileProperty())
                                         .getString("microscope", "name"))
                         .map(arr -> new MacroOrientationDialog.MacroFlip(arr[0], arr[1]))
                         .orElse(combinedConfig.macroFlip());
@@ -749,49 +746,39 @@ public class MicroscopeAlignmentWorkflow {
                         return;
                     }
                     logger.info("Orientation dialog toggle: flipX={}, flipY={}", newFlipX, newFlipY);
-                    ImageFlipHelper.validateAndFlipIfNeeded(
-                                    gui, projectForFlip, sampleNameForFlip, newFlipX, newFlipY)
-                            .thenAccept(ok -> logger.info(
-                                    "validateAndFlipIfNeeded({}, {}) -> {}", newFlipX, newFlipY, ok))
+                    ImageFlipHelper.validateAndFlipIfNeeded(gui, projectForFlip, sampleNameForFlip, newFlipX, newFlipY)
+                            .thenAccept(
+                                    ok -> logger.info("validateAndFlipIfNeeded({}, {}) -> {}", newFlipX, newFlipY, ok))
                             .exceptionally(ex -> {
-                                logger.error(
-                                        "Failed to switch flipped entry on toggle: {}", ex.getMessage());
+                                logger.error("Failed to switch flipped entry on toggle: {}", ex.getMessage());
                                 return null;
                             });
                 };
 
-                MacroOrientationDialog.show(gui.getStage(), seedFlip, onToggle)
-                        .thenAccept(finalFlip -> {
-                            if (finalFlip == null) {
-                                logger.info("User cancelled at orientation step");
-                                Platform.runLater(() -> {
-                                    UIFunctions.notifyUserOfError(
-                                            "Alignment cancelled at orientation step.", "Alignment Cancelled");
-                                });
-                                return;
-                            }
-                            logger.info(
-                                    "Orientation captured: flipX={}, flipY={}",
-                                    finalFlip.flipX(),
-                                    finalFlip.flipY());
-                            // Ensure the right entry is open one more time (idempotent if already correct)
-                            ImageFlipHelper.validateAndFlipIfNeeded(
-                                            gui,
-                                            projectForFlip,
-                                            sampleNameForFlip,
-                                            finalFlip.flipX(),
-                                            finalFlip.flipY())
-                                    .whenComplete((ok, ex) -> Platform.runLater(() -> continueAlignmentAfterFlip(
-                                            gui,
-                                            sampleSetup,
-                                            alignConfig,
-                                            detectionResultsHolder,
-                                            selectedScanner,
-                                            selectedScannerConfigPath,
-                                            finalProjectDetails,
-                                            transformManager,
-                                            finalFlip)));
+                MacroOrientationDialog.show(gui.getStage(), seedFlip, onToggle).thenAccept(finalFlip -> {
+                    if (finalFlip == null) {
+                        logger.info("User cancelled at orientation step");
+                        Platform.runLater(() -> {
+                            UIFunctions.notifyUserOfError(
+                                    "Alignment cancelled at orientation step.", "Alignment Cancelled");
                         });
+                        return;
+                    }
+                    logger.info("Orientation captured: flipX={}, flipY={}", finalFlip.flipX(), finalFlip.flipY());
+                    // Ensure the right entry is open one more time (idempotent if already correct)
+                    ImageFlipHelper.validateAndFlipIfNeeded(
+                                    gui, projectForFlip, sampleNameForFlip, finalFlip.flipX(), finalFlip.flipY())
+                            .whenComplete((ok, ex) -> Platform.runLater(() -> continueAlignmentAfterFlip(
+                                    gui,
+                                    sampleSetup,
+                                    alignConfig,
+                                    detectionResultsHolder,
+                                    selectedScanner,
+                                    selectedScannerConfigPath,
+                                    finalProjectDetails,
+                                    transformManager,
+                                    finalFlip)));
+                });
 
             } catch (Exception e) {
                 logger.error("Error in alignment workflow", e);
@@ -1099,7 +1086,8 @@ public class MicroscopeAlignmentWorkflow {
             return;
         }
 
-        logger.warn("No annotations match collection classes or {}; alignment tiles not created", VALID_ANNOTATION_CLASSES);
+        logger.warn(
+                "No annotations match collection classes or {}; alignment tiles not created", VALID_ANNOTATION_CLASSES);
         Platform.runLater(() -> UIFunctions.notifyUserOfError(
                 "No annotations match the configured collection classes "
                         + (collectionClasses != null && !collectionClasses.isEmpty()
@@ -1209,13 +1197,12 @@ public class MicroscopeAlignmentWorkflow {
                 }
 
                 if (dataBounds == null) {
-                    throw new IllegalStateException(
-                            "Cannot create transform without data bounds. "
-                                    + "Set 'Data Bounds Classifier' in QPSC preferences -- a pixel "
-                                    + "classifier (.json) that separates the acquired data region "
-                                    + "from background/padding (white pyramid padding for Ocus40, "
-                                    + "dark background for fluorescence, etc.). "
-                                    + "Saving with full-image bounds is unsafe -- it can drive the stage to the label.");
+                    throw new IllegalStateException("Cannot create transform without data bounds. "
+                            + "Set 'Data Bounds Classifier' in QPSC preferences -- a pixel "
+                            + "classifier (.json) that separates the acquired data region "
+                            + "from background/padding (white pyramid padding for Ocus40, "
+                            + "dark background for fluorescence, etc.). "
+                            + "Saving with full-image bounds is unsafe -- it can drive the stage to the label.");
                 }
             }
 
@@ -1339,10 +1326,7 @@ public class MicroscopeAlignmentWorkflow {
             double scaleSignY = Math.signum(fullResToStageTransform.getScaleY());
             double sxMacro = (scaleSignX == 0 ? 1.0 : scaleSignX) * macroPixelSize;
             double syMacro = (scaleSignY == 0 ? 1.0 : scaleSignY) * macroPixelSize;
-            logger.info(
-                    "Macro->stage scale signs derived from fullRes->stage: sx={}, sy={}",
-                    scaleSignX,
-                    scaleSignY);
+            logger.info("Macro->stage scale signs derived from fullRes->stage: sx={}, sy={}", scaleSignX, scaleSignY);
 
             // Since AffineTransform methods apply in reverse order, we do:
             // First: translate to stage position
@@ -1479,8 +1463,7 @@ public class MicroscopeAlignmentWorkflow {
                 } else {
                     qupath.fx.dialogs.Dialogs.showInfoNotification(
                             "Transform Saved",
-                            String.format(
-                                    "Successfully saved alignment transform: %s (verified)", finalTransformName));
+                            String.format("Successfully saved alignment transform: %s (verified)", finalTransformName));
                 }
                 qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
             });
@@ -1530,8 +1513,7 @@ public class MicroscopeAlignmentWorkflow {
             return "no microscope config path -- cannot reload to verify";
         }
         try {
-            AffineTransformManager reloaded =
-                    new AffineTransformManager(new File(configPath).getParent());
+            AffineTransformManager reloaded = new AffineTransformManager(new File(configPath).getParent());
             AffineTransformManager.TransformPreset onDisk = reloaded.getTransform(transformName);
             if (onDisk == null) {
                 return String.format("preset '%s' not found after reload from disk", transformName);
@@ -1541,8 +1523,7 @@ public class MicroscopeAlignmentWorkflow {
             // it lands on the captured stage anchor. This is the exact arithmetic the Stage
             // Map will perform when placing the macro overlay.
             AffineTransform reloadedTransform = onDisk.getTransform();
-            Point2D mapped = reloadedTransform.transform(
-                    new Point2D.Double(expectedMacroX, expectedMacroY), null);
+            Point2D mapped = reloadedTransform.transform(new Point2D.Double(expectedMacroX, expectedMacroY), null);
             double dx = mapped.getX() - expectedStage.getX();
             double dy = mapped.getY() - expectedStage.getY();
             double err = Math.sqrt(dx * dx + dy * dy);
@@ -1577,10 +1558,7 @@ public class MicroscopeAlignmentWorkflow {
                     || !almostEqual(onDisk.getStageAnchorY(), expectedStage.getY(), 0.01)) {
                 return String.format(
                         "anchor stage mismatch: saved (%.2f, %.2f), reloaded (%.2f, %.2f)",
-                        expectedStage.getX(),
-                        expectedStage.getY(),
-                        onDisk.getStageAnchorX(),
-                        onDisk.getStageAnchorY());
+                        expectedStage.getX(), expectedStage.getY(), onDisk.getStageAnchorX(), onDisk.getStageAnchorY());
             }
             double savedPx = savedPreset.getMacroPixelSizeUm();
             double diskPx = onDisk.getMacroPixelSizeUm();

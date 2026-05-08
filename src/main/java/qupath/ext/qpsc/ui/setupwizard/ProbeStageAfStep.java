@@ -60,15 +60,14 @@ public class ProbeStageAfStep implements WizardStep {
         content = new VBox(12);
         content.setPadding(new Insets(15));
 
-        Label intro = new Label(
-                "Streaming autofocus drives the focus stage at a slow velocity while "
-                        + "streaming camera frames, then parabolic-fits the peak. The slow "
-                        + "value is hardware-specific; this step probes your stage to find "
-                        + "the right values automatically.\n\n"
-                        + "Click \"Probe Stage\" to query the stage (the server must be "
-                        + "running). You can edit the recommended values before saving, or "
-                        + "skip this step and re-probe later via Extensions > QPSC > "
-                        + "Re-probe Stage AF.");
+        Label intro = new Label("Streaming autofocus drives the focus stage at a slow velocity while "
+                + "streaming camera frames, then parabolic-fits the peak. The slow "
+                + "value is hardware-specific; this step probes your stage to find "
+                + "the right values automatically.\n\n"
+                + "Click \"Probe Stage\" to query the stage (the server must be "
+                + "running). You can edit the recommended values before saving, or "
+                + "skip this step and re-probe later via Extensions > QPSC > "
+                + "Re-probe Stage AF.");
         intro.setWrapText(true);
 
         // Probe button + status
@@ -117,13 +116,14 @@ public class ProbeStageAfStep implements WizardStep {
         grid.add(new Label("Normal speed value:"), 0, row);
         grid.add(normalValueField, 1, row++);
 
-        content.getChildren().addAll(
-                intro,
-                actionRow,
-                new Label("Probe results:"),
-                resultsArea,
-                new Label("Editable values (saved to config):"),
-                grid);
+        content.getChildren()
+                .addAll(
+                        intro,
+                        actionRow,
+                        new Label("Probe results:"),
+                        resultsArea,
+                        new Label("Editable values (saved to config):"),
+                        grid);
     }
 
     private void runProbe() {
@@ -143,21 +143,23 @@ public class ProbeStageAfStep implements WizardStep {
         AtomicReference<ProbeStageAfResult> resultRef = new AtomicReference<>();
         AtomicReference<String> errorRef = new AtomicReference<>();
 
-        Thread t = new Thread(() -> {
-            try (MicroscopeSocketClient client = new MicroscopeSocketClient(host, port)) {
-                client.connect();
-                ProbeStageAfResult result = client.probeStageAf(yamlPath, Double.NaN, Double.NaN);
-                resultRef.set(result);
-            } catch (IOException ex) {
-                logger.warn("PRBSAFZ probe failed: {}", ex.toString());
-                errorRef.set(ex.getMessage());
-            } catch (Exception ex) {
-                logger.warn("PRBSAFZ probe error", ex);
-                errorRef.set(ex.toString());
-            } finally {
-                Platform.runLater(this::onProbeFinished);
-            }
-        }, "ProbeStageAf");
+        Thread t = new Thread(
+                () -> {
+                    try (MicroscopeSocketClient client = new MicroscopeSocketClient(host, port)) {
+                        client.connect();
+                        ProbeStageAfResult result = client.probeStageAf(yamlPath, Double.NaN, Double.NaN);
+                        resultRef.set(result);
+                    } catch (IOException ex) {
+                        logger.warn("PRBSAFZ probe failed: {}", ex.toString());
+                        errorRef.set(ex.getMessage());
+                    } catch (Exception ex) {
+                        logger.warn("PRBSAFZ probe error", ex);
+                        errorRef.set(ex.toString());
+                    } finally {
+                        Platform.runLater(this::onProbeFinished);
+                    }
+                },
+                "ProbeStageAf");
         t.setDaemon(true);
         t.start();
 
@@ -180,13 +182,12 @@ public class ProbeStageAfStep implements WizardStep {
         if (error != null) {
             statusLabel.setText("Probe failed: " + error);
             statusLabel.setStyle("-fx-text-fill: red;");
-            resultsArea.setText(
-                    "Probe could not reach the server.\n\n"
-                            + "Check that the microscope server is running at "
-                            + QPPreferenceDialog.getMicroscopeServerHost() + ":"
-                            + QPPreferenceDialog.getMicroscopeServerPort() + ".\n\n"
-                            + "You can also click \"Skip\" -- safe defaults will be written "
-                            + "and you can re-probe later from the menu.");
+            resultsArea.setText("Probe could not reach the server.\n\n"
+                    + "Check that the microscope server is running at "
+                    + QPPreferenceDialog.getMicroscopeServerHost() + ":"
+                    + QPPreferenceDialog.getMicroscopeServerPort() + ".\n\n"
+                    + "You can also click \"Skip\" -- safe defaults will be written "
+                    + "and you can re-probe later from the menu.");
             return;
         }
         if (result == null) {
@@ -196,9 +197,10 @@ public class ProbeStageAfStep implements WizardStep {
         }
 
         statusLabel.setStyle("-fx-text-fill: green;");
-        statusLabel.setText(result.enabled
-                ? "Probe complete -- streaming AF is viable on this stage."
-                : "Probe complete -- streaming AF will fall back to Brent on this stage.");
+        statusLabel.setText(
+                result.enabled
+                        ? "Probe complete -- streaming AF is viable on this stage."
+                        : "Probe complete -- streaming AF will fall back to Brent on this stage.");
 
         StringBuilder sb = new StringBuilder();
         sb.append("Focus device:    ").append(nullToDash(result.focusDevice)).append('\n');
@@ -206,14 +208,23 @@ public class ProbeStageAfStep implements WizardStep {
         sb.append("Current value:   ").append(nullToDash(result.currentValue)).append('\n');
         sb.append("Classification:  ").append(nullToDash(result.classification)).append('\n');
         sb.append("Allowed values:  ").append(formatList(result.allowedValues)).append('\n');
-        sb.append("Recommended slow: ").append(nullToDash(result.slowSpeedValue))
-                .append("  (").append(formatUmS(result.slowSpeedUmPerS)).append(")\n");
+        sb.append("Recommended slow: ")
+                .append(nullToDash(result.slowSpeedValue))
+                .append("  (")
+                .append(formatUmS(result.slowSpeedUmPerS))
+                .append(")\n");
         if (result.slowSpeedUmPerSMeasured != null) {
-            sb.append("Measured slow:   ").append(formatUmS(result.slowSpeedUmPerSMeasured)).append('\n');
+            sb.append("Measured slow:   ")
+                    .append(formatUmS(result.slowSpeedUmPerSMeasured))
+                    .append('\n');
         }
-        sb.append("Recommended normal: ").append(nullToDash(result.normalSpeedValue)).append('\n');
+        sb.append("Recommended normal: ")
+                .append(nullToDash(result.normalSpeedValue))
+                .append('\n');
         sb.append("Verify:          ").append(nullToDash(result.verifyNote)).append('\n');
-        sb.append("Viability:       ").append(nullToDash(result.viabilityReason)).append('\n');
+        sb.append("Viability:       ")
+                .append(nullToDash(result.viabilityReason))
+                .append('\n');
         if (result.warnings != null && !result.warnings.isEmpty()) {
             sb.append("Warnings:\n");
             for (String w : result.warnings) sb.append("  - ").append(w).append('\n');
@@ -224,8 +235,7 @@ public class ProbeStageAfStep implements WizardStep {
         enabledCheck.setSelected(result.enabled);
         speedPropertyField.setText(nullToBlank(result.speedProperty));
         slowValueField.setText(nullToBlank(result.slowSpeedValue));
-        slowUmPerSField.setText(result.slowSpeedUmPerS == null ? ""
-                : String.format("%.3f", result.slowSpeedUmPerS));
+        slowUmPerSField.setText(result.slowSpeedUmPerS == null ? "" : String.format("%.3f", result.slowSpeedUmPerS));
         normalValueField.setText(nullToBlank(result.normalSpeedValue));
     }
 
@@ -240,16 +250,23 @@ public class ProbeStageAfStep implements WizardStep {
         slowUmPerSField.setText("11.5");
         normalValueField.setText("100");
         statusLabel.setStyle("-fx-text-fill: gray;");
-        statusLabel.setText("Using legacy defaults (Prior-style 1-100 percent). "
-                + "Run \"Re-probe Stage AF\" later to verify.");
+        statusLabel.setText(
+                "Using legacy defaults (Prior-style 1-100 percent). " + "Run \"Re-probe Stage AF\" later to verify.");
         resultsArea.setText("Skipped probe -- legacy defaults applied.");
     }
 
-    private static String nullToDash(Object o) { return o == null ? "-" : o.toString(); }
-    private static String nullToBlank(Object o) { return o == null ? "" : o.toString(); }
+    private static String nullToDash(Object o) {
+        return o == null ? "-" : o.toString();
+    }
+
+    private static String nullToBlank(Object o) {
+        return o == null ? "" : o.toString();
+    }
+
     private static String formatUmS(Double v) {
         return v == null ? "n/a" : String.format("%.2f um/s", v);
     }
+
     private static String formatList(List<String> xs) {
         if (xs == null || xs.isEmpty()) return "(none)";
         if (xs.size() <= 10) return String.join(", ", xs);
@@ -257,7 +274,9 @@ public class ProbeStageAfStep implements WizardStep {
     }
 
     @Override
-    public String getTitle() { return "Streaming AF"; }
+    public String getTitle() {
+        return "Streaming AF";
+    }
 
     @Override
     public String getDescription() {
@@ -265,7 +284,9 @@ public class ProbeStageAfStep implements WizardStep {
     }
 
     @Override
-    public Node getContent() { return content; }
+    public Node getContent() {
+        return content;
+    }
 
     @Override
     public String validate() {

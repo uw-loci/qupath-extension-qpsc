@@ -99,8 +99,8 @@ class BrightfieldExposureResolutionTest {
                         exposure_ms: 41.36
                 """);
         BrightfieldModalityHandler handler = new BrightfieldModalityHandler();
-        List<AngleExposure> result = handler
-                .getRotationAngles("Brightfield_10x", "0.5NA_AIR_10x", "HAMAMATSU_DCAM_01", "off")
+        List<AngleExposure> result = handler.getRotationAngles(
+                        "Brightfield_10x", "0.5NA_AIR_10x", "HAMAMATSU_DCAM_01", "off")
                 .get();
         assertEquals(1, result.size());
         assertEquals(41.36, result.get(0).exposureMs());
@@ -128,10 +128,12 @@ class BrightfieldExposureResolutionTest {
                         exposure_ms: 41.36
                 """);
         BrightfieldModalityHandler handler = new BrightfieldModalityHandler();
-        List<AngleExposure> result = handler
-                .getRotationAngles("Brightfield_10x", "0.75NA_AIR_10x", "HAMAMATSU_DCAM_01", "off")
+        List<AngleExposure> result = handler.getRotationAngles(
+                        "Brightfield_10x", "0.75NA_AIR_10x", "HAMAMATSU_DCAM_01", "off")
                 .get();
-        assertEquals(41.36, result.get(0).exposureMs(),
+        assertEquals(
+                41.36,
+                result.get(0).exposureMs(),
                 "objective-drift case must reuse calibrated exposure -- not fall back to stale preference");
     }
 
@@ -160,9 +162,10 @@ class BrightfieldExposureResolutionTest {
                 """);
         PersistentPreferences.setLastUnifiedExposureMs(2.0); // the trap value
         BrightfieldModalityHandler handler = new BrightfieldModalityHandler();
-        Exception ex = assertThrows(Exception.class, () -> handler
-                .getRotationAngles("Brightfield_10x", "0.5NA_AIR_10x", "HAMAMATSU_DCAM_01", "off")
-                .get());
+        Exception ex = assertThrows(
+                Exception.class,
+                () -> handler.getRotationAngles("Brightfield_10x", "0.5NA_AIR_10x", "HAMAMATSU_DCAM_01", "off")
+                        .get());
         // CompletableFuture wraps the runtime exception in an ExecutionException;
         // the cause must be our typed mismatch exception.
         Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
@@ -192,8 +195,8 @@ class BrightfieldExposureResolutionTest {
                 """);
         PersistentPreferences.setLastUnifiedExposureMs(50.0);
         BrightfieldModalityHandler handler = new BrightfieldModalityHandler();
-        List<AngleExposure> result = handler
-                .getRotationAngles("Brightfield_10x", "0.5NA_AIR_10x", "HAMAMATSU_DCAM_01", "off")
+        List<AngleExposure> result = handler.getRotationAngles(
+                        "Brightfield_10x", "0.5NA_AIR_10x", "HAMAMATSU_DCAM_01", "off")
                 .get();
         assertEquals(50.0, result.get(0).exposureMs());
     }

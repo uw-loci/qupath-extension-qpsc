@@ -16,10 +16,9 @@ import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.utilities.FlipResolver;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
+import qupath.ext.qpsc.utilities.FlipResolver;
 import qupath.ext.qpsc.utilities.GreenBoxDetector;
 import qupath.ext.qpsc.utilities.MacroImageAnalyzer;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
@@ -907,14 +906,12 @@ public class MacroImageController {
             if (preset != null) {
                 String flipDescription;
                 if (preset.hasFlipState()) {
-                    flipDescription = String.format(
-                            "X=%s, Y=%s", preset.getFlipMacroX(), preset.getFlipMacroY());
+                    flipDescription = String.format("X=%s, Y=%s", preset.getFlipMacroX(), preset.getFlipMacroY());
                 } else {
                     flipDescription = "(not recorded; falls back to global pref)";
                 }
-                String scannerLine = preset.getSourceScanner() != null
-                        ? "Source scanner: " + preset.getSourceScanner() + "\n"
-                        : "";
+                String scannerLine =
+                        preset.getSourceScanner() != null ? "Source scanner: " + preset.getSourceScanner() + "\n" : "";
                 detailsArea.setText(String.format(
                         "Microscope: %s\nMounting: %s\n%sCreated: %s\nMacro flip: %s\nNotes: %s",
                         preset.getMicroscope(),

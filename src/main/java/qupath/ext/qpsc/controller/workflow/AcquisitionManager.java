@@ -44,7 +44,6 @@ import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.utilities.AcquisitionSpaceCheck;
 import qupath.ext.qpsc.utilities.FlipResolver;
-import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.LiveTileMeasurementPoller;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
@@ -332,8 +331,7 @@ public class AcquisitionManager {
             // images in the viewer during acquisition does not crash or misdirect data.
             if (capturedImageData == null) {
                 @SuppressWarnings("unchecked")
-                Project<BufferedImage> captureProject =
-                        (Project<BufferedImage>) state.projectInfo.getCurrentProject();
+                Project<BufferedImage> captureProject = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
                 if (gui.getViewer().hasServer() && gui.getImageData() != null && captureProject != null) {
                     capturedImageData = gui.getImageData();
                     parentEntry = captureProject.getEntry(capturedImageData);
@@ -342,8 +340,7 @@ public class AcquisitionManager {
                             parentEntry != null ? parentEntry.getImageName() : "null");
                 } else {
                     logger.warn(
-                            "No parent entry available at prep start -- "
-                                    + "tile display will use fallback hierarchy");
+                            "No parent entry available at prep start -- " + "tile display will use fallback hierarchy");
                 }
             }
 
@@ -497,8 +494,7 @@ public class AcquisitionManager {
         // (e.g. bounded acquisition with no parent image), try once more here.
         if (capturedImageData == null && gui.getViewer().hasServer() && gui.getImageData() != null) {
             @SuppressWarnings("unchecked")
-            Project<BufferedImage> captureProject =
-                    (Project<BufferedImage>) state.projectInfo.getCurrentProject();
+            Project<BufferedImage> captureProject = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
             if (captureProject != null) {
                 capturedImageData = gui.getImageData();
                 parentEntry = captureProject.getEntry(capturedImageData);
@@ -1041,10 +1037,8 @@ public class AcquisitionManager {
         // on the open slide's detections as acquisition progresses. The batch attachment
         // at the end still runs and catches anything the poller missed.
         java.nio.file.Path ndjsonPath = Paths.get(tileDirPath, "tile_measurements.ndjson");
-        LiveTileMeasurementPoller livePoller =
-                LiveTileMeasurementPoller.start(
-                        ndjsonPath, annotation.getName(), LIVE_POLL_EXECUTOR,
-                        getSessionHierarchy(), capturedImageData);
+        LiveTileMeasurementPoller livePoller = LiveTileMeasurementPoller.start(
+                ndjsonPath, annotation.getName(), LIVE_POLL_EXECUTOR, getSessionHierarchy(), capturedImageData);
 
         try {
             // Monitor acquisition with regular status updates
@@ -1435,9 +1429,7 @@ public class AcquisitionManager {
                 logger.debug("No image data available for tile count estimate");
                 return 1;
             }
-            double imagePixelSize = imgData.getServer()
-                    .getPixelCalibration()
-                    .getAveragedPixelSizeMicrons();
+            double imagePixelSize = imgData.getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
 
             // Convert to microns
             double annWidthMicrons = annWidth * imagePixelSize;
@@ -1919,8 +1911,8 @@ public class AcquisitionManager {
         // p1_R/G/B/gray, p99_R/G/B/gray, mean_*, std_*, dynamic_range_*.
         // Surfaces dim-tile under-exposure (low p99) alongside saturation in
         // the same QuPath measurement table.
-        for (String prefix : new String[]{"p1_", "p99_", "mean_", "std_", "dynamic_range_"}) {
-            for (String suffix : new String[]{"R", "G", "B", "gray"}) {
+        for (String prefix : new String[] {"p1_", "p99_", "mean_", "std_", "dynamic_range_"}) {
+            for (String suffix : new String[] {"R", "G", "B", "gray"}) {
                 String key = prefix + suffix;
                 Number val = (Number) entry.get(key);
                 if (val != null) {

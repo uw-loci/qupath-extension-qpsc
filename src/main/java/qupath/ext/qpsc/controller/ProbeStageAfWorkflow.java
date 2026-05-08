@@ -14,7 +14,6 @@ import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
-import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
@@ -66,9 +65,8 @@ public class ProbeStageAfWorkflow {
                 Alert a = new Alert(Alert.AlertType.ERROR);
                 a.setTitle("No microscope config");
                 a.setHeaderText("No active microscope configuration");
-                a.setContentText(
-                        "Set the microscope config file in Preferences before running "
-                                + "Re-probe Stage AF, or run the Setup Wizard first.");
+                a.setContentText("Set the microscope config file in Preferences before running "
+                        + "Re-probe Stage AF, or run the Setup Wizard first.");
                 a.showAndWait();
             });
             return;
@@ -90,36 +88,38 @@ public class ProbeStageAfWorkflow {
         progressStage.setScene(new Scene(box));
         progressStage.show();
 
-        Thread t = new Thread(() -> {
-            ProbeStageAfResult result = null;
-            String error = null;
-            try (MicroscopeSocketClient client = new MicroscopeSocketClient(host, port)) {
-                client.connect();
-                result = client.probeStageAf(yamlPath, Double.NaN, Double.NaN);
-            } catch (IOException ex) {
-                logger.warn("Re-probe failed: {}", ex.toString());
-                error = ex.getMessage();
-            } catch (Exception ex) {
-                logger.warn("Re-probe error", ex);
-                error = ex.toString();
-            }
-            ProbeStageAfResult finalResult = result;
-            String finalError = error;
-            Platform.runLater(() -> {
-                progressStage.close();
-                if (finalError != null || finalResult == null) {
-                    Alert a = new Alert(Alert.AlertType.ERROR);
-                    a.setTitle("Probe failed");
-                    a.setHeaderText("Could not run streaming-AF probe");
-                    a.setContentText("Reason: "
-                            + (finalError == null ? "no result" : finalError)
-                            + "\n\nCheck the server is running and reachable.");
-                    a.showAndWait();
-                    return;
-                }
-                showResultDialog(yamlPath, finalResult);
-            });
-        }, "ProbeStageAfWorkflow");
+        Thread t = new Thread(
+                () -> {
+                    ProbeStageAfResult result = null;
+                    String error = null;
+                    try (MicroscopeSocketClient client = new MicroscopeSocketClient(host, port)) {
+                        client.connect();
+                        result = client.probeStageAf(yamlPath, Double.NaN, Double.NaN);
+                    } catch (IOException ex) {
+                        logger.warn("Re-probe failed: {}", ex.toString());
+                        error = ex.getMessage();
+                    } catch (Exception ex) {
+                        logger.warn("Re-probe error", ex);
+                        error = ex.toString();
+                    }
+                    ProbeStageAfResult finalResult = result;
+                    String finalError = error;
+                    Platform.runLater(() -> {
+                        progressStage.close();
+                        if (finalError != null || finalResult == null) {
+                            Alert a = new Alert(Alert.AlertType.ERROR);
+                            a.setTitle("Probe failed");
+                            a.setHeaderText("Could not run streaming-AF probe");
+                            a.setContentText("Reason: "
+                                    + (finalError == null ? "no result" : finalError)
+                                    + "\n\nCheck the server is running and reachable.");
+                            a.showAndWait();
+                            return;
+                        }
+                        showResultDialog(yamlPath, finalResult);
+                    });
+                },
+                "ProbeStageAfWorkflow");
         t.setDaemon(true);
         t.start();
     }
@@ -133,11 +133,10 @@ public class ProbeStageAfWorkflow {
         dialog.initModality(Modality.APPLICATION_MODAL);
         dialog.setTitle("Re-probe Stage AF -- Results");
 
-        Label header = new Label(
-                "The probe queried the focus stage's writable speed property and "
-                        + "verified via a 1-um round-trip move. Edit any field below "
-                        + "before saving. The values will be written to:\n  "
-                        + yamlPath + "\nunder stage.streaming_af.*");
+        Label header = new Label("The probe queried the focus stage's writable speed property and "
+                + "verified via a 1-um round-trip move. Edit any field below "
+                + "before saving. The values will be written to:\n  "
+                + yamlPath + "\nunder stage.streaming_af.*");
         header.setWrapText(true);
 
         TextArea diag = new TextArea();
@@ -151,8 +150,8 @@ public class ProbeStageAfWorkflow {
         enabledCheck.setSelected(result.enabled);
         TextField speedPropertyField = new TextField(nullToBlank(result.speedProperty));
         TextField slowValueField = new TextField(nullToBlank(result.slowSpeedValue));
-        TextField slowUmPerSField = new TextField(
-                result.slowSpeedUmPerS == null ? "" : String.format("%.3f", result.slowSpeedUmPerS));
+        TextField slowUmPerSField =
+                new TextField(result.slowSpeedUmPerS == null ? "" : String.format("%.3f", result.slowSpeedUmPerS));
         TextField normalValueField = new TextField(nullToBlank(result.normalSpeedValue));
 
         GridPane grid = new GridPane();
@@ -207,9 +206,8 @@ public class ProbeStageAfWorkflow {
                 Alert ok = new Alert(Alert.AlertType.INFORMATION);
                 ok.setTitle("Saved");
                 ok.setHeaderText("stage.streaming_af updated");
-                ok.setContentText(
-                        "Wrote new streaming-AF parameters to:\n  " + yamlPath
-                                + "\n\nThe next streaming autofocus run will use these values.");
+                ok.setContentText("Wrote new streaming-AF parameters to:\n  " + yamlPath
+                        + "\n\nThe next streaming autofocus run will use these values.");
                 ok.showAndWait();
             } catch (IOException ex) {
                 logger.error("Failed to write streaming_af block to {}", yamlPath, ex);
@@ -238,11 +236,15 @@ public class ProbeStageAfWorkflow {
         sb.append("Allowed values:  ").append(formatList(r.allowedValues)).append('\n');
         sb.append("Recommended slow: ").append(nullToDash(r.slowSpeedValue));
         if (r.slowSpeedUmPerS != null) {
-            sb.append("  (").append(String.format("%.2f um/s", r.slowSpeedUmPerS)).append(')');
+            sb.append("  (")
+                    .append(String.format("%.2f um/s", r.slowSpeedUmPerS))
+                    .append(')');
         }
         sb.append('\n');
         if (r.slowSpeedUmPerSMeasured != null) {
-            sb.append("Measured slow:   ").append(String.format("%.2f um/s", r.slowSpeedUmPerSMeasured)).append('\n');
+            sb.append("Measured slow:   ")
+                    .append(String.format("%.2f um/s", r.slowSpeedUmPerSMeasured))
+                    .append('\n');
         }
         sb.append("Recommended normal: ").append(nullToDash(r.normalSpeedValue)).append('\n');
         sb.append("Verify:          ").append(nullToDash(r.verifyNote)).append('\n');
@@ -296,8 +298,14 @@ public class ProbeStageAfWorkflow {
         Files.writeString(yamlPath, writer.dump(doc));
     }
 
-    private static String nullToDash(Object o) { return o == null ? "-" : o.toString(); }
-    private static String nullToBlank(Object o) { return o == null ? "" : o.toString(); }
+    private static String nullToDash(Object o) {
+        return o == null ? "-" : o.toString();
+    }
+
+    private static String nullToBlank(Object o) {
+        return o == null ? "" : o.toString();
+    }
+
     private static String formatList(List<String> xs) {
         if (xs == null || xs.isEmpty()) return "(none)";
         if (xs.size() <= 10) return String.join(", ", xs);

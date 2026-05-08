@@ -64,8 +64,8 @@ class ForwardPropagationRoundTripTest {
     @Test
     void createFlip_isInvolution() {
         // Applying the same flip twice returns to the original point.
-        for (boolean fx : new boolean[]{false, true}) {
-            for (boolean fy : new boolean[]{false, true}) {
+        for (boolean fx : new boolean[] {false, true}) {
+            for (boolean fy : new boolean[] {false, true}) {
                 AffineTransform t = ForwardPropagationWorkflow.createFlip(fx, fy, IMG_W, IMG_H);
                 Point2D src = new Point2D.Double(537.25, 891.75);
                 Point2D once = t.transform(src, null);
@@ -139,10 +139,8 @@ class ForwardPropagationRoundTripTest {
         Point2D base = new Point2D.Double(800.0, 600.0);
         Point2D sub = forward.transform(base, null);
         Point2D recovered = back.transform(sub, null);
-        assertEquals(base.getX(), recovered.getX(), 1.0,
-                "base X recovered within 1 pixel");
-        assertEquals(base.getY(), recovered.getY(), 1.0,
-                "base Y recovered within 1 pixel");
+        assertEquals(base.getX(), recovered.getX(), 1.0, "base X recovered within 1 pixel");
+        assertEquals(base.getY(), recovered.getY(), 1.0, "base Y recovered within 1 pixel");
         // For a clean (no-flip, no-shear) transform we should be effectively exact.
         assertEquals(base.getX(), recovered.getX(), 1e-6);
         assertEquals(base.getY(), recovered.getY(), 1e-6);

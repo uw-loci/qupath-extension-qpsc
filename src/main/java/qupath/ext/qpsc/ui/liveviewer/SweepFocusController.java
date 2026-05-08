@@ -204,15 +204,16 @@ public class SweepFocusController {
                     //      retry threshold below).
                     if (i >= minStepsBeforeEarlyStop && stepsSincePeak >= EARLY_STOP_DECLINE_COUNT) {
                         boolean peakAtStart = (peakIdx <= 0);
-                        double rangeFracSoFar =
-                                (peakMetric - minMetric) / Math.max(Math.abs(peakMetric), 1.0);
+                        double rangeFracSoFar = (peakMetric - minMetric) / Math.max(Math.abs(peakMetric), 1.0);
                         boolean metricFlat = rangeFracSoFar < 0.02;
                         if (peakAtStart || metricFlat) {
                             logger.info(
                                     "Sweep Focus: suppressed early-stop at step {}/{} "
                                             + "(peakIdx={}, range {} of peak {}) -- "
                                             + "continuing scan",
-                                    i, NUM_STEPS, peakIdx,
+                                    i,
+                                    NUM_STEPS,
+                                    peakIdx,
                                     String.format("%.2f%%", rangeFracSoFar * 100.0),
                                     fmt(peakMetric));
                             // Reset decline counter so the same condition
@@ -327,7 +328,10 @@ public class SweepFocusController {
                             "Sweep Focus: refusing edge retry -- proposed range "
                                     + "[{}, {}] would shift {} um from startZ {} "
                                     + "(cap {} um). Likely runaway on flat data.",
-                            fmt(extStart), fmt(extEnd), fmt(farthest), fmt(startZ),
+                            fmt(extStart),
+                            fmt(extEnd),
+                            fmt(farthest),
+                            fmt(startZ),
                             fmt(MAX_CUMULATIVE_SHIFT_UM));
                     break;
                 }
@@ -391,7 +395,9 @@ public class SweepFocusController {
                 logger.warn(
                         "Sweep Focus: peak at {} edge of search window after retries "
                                 + "(bestIdx={}/{}, Z={}); search did not bracket focus",
-                        edgeLabel, bestIdx, measurements.size() - 1,
+                        edgeLabel,
+                        bestIdx,
+                        measurements.size() - 1,
                         fmt(measurements.get(bestIdx)[0]));
                 try {
                     socketClient.moveStageZ(startZ);
@@ -438,7 +444,8 @@ public class SweepFocusController {
                 logger.info(
                         "Sweep Focus: peak too close to edge for safe interpolation "
                                 + "(bestIdx={}/{}); using raw sample Z",
-                        bestIdx, measurements.size() - 1);
+                        bestIdx,
+                        measurements.size() - 1);
             }
 
             logger.info(

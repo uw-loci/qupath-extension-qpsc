@@ -237,8 +237,11 @@ public class AlignmentHelper {
         // createFlip(alignFlipX, alignFlipY, baseWidth, baseHeight). Requires the
         // base image dimensions; read them from the currently-open image (which
         // is the unflipped base by convention after Step B).
-        if (slideTransform != null && alignFlipX != null && alignFlipY != null
-                && (alignFlipX || alignFlipY) && gui.getImageData() != null) {
+        if (slideTransform != null
+                && alignFlipX != null
+                && alignFlipY != null
+                && (alignFlipX || alignFlipY)
+                && gui.getImageData() != null) {
             try {
                 int baseWidth = gui.getImageData().getServer().getWidth();
                 int baseHeight = gui.getImageData().getServer().getHeight();
@@ -249,10 +252,11 @@ public class AlignmentHelper {
                 slideTransform = composed;
                 logger.info(
                         "Baked alignment-frame flip ({}, {}) into slide transform; downstream uses unflipped-base pixel coords",
-                        alignFlipX, alignFlipY);
+                        alignFlipX,
+                        alignFlipY);
             } catch (Exception e) {
-                logger.warn("Could not bake alignment flip into transform; downstream may misalign: {}",
-                        e.getMessage());
+                logger.warn(
+                        "Could not bake alignment flip into transform; downstream may misalign: {}", e.getMessage());
             }
         }
 

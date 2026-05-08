@@ -3,7 +3,6 @@ package qupath.ext.qpsc.ui;
 import java.io.File;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -19,12 +18,10 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
@@ -229,8 +226,7 @@ public class SinglePointAcquisitionController {
             sampleNameField.textProperty().addListener((obs, oldVal, newVal) -> {
                 String pf = QPPreferenceDialog.getProjectsFolderProperty();
                 if (pf != null && !pf.isEmpty() && newVal != null && !newVal.isEmpty()) {
-                    outputFolderField.setText(
-                            new File(new File(pf, newVal), "singlepoint").getAbsolutePath());
+                    outputFolderField.setText(new File(new File(pf, newVal), "singlepoint").getAbsolutePath());
                 }
             });
 
@@ -255,11 +251,7 @@ public class SinglePointAcquisitionController {
             outFormatRow.setHgap(8);
             outFormatRow.add(new Label("Output format:"), 0, 0);
             outFormatRow.add(outputFormatCombo, 1, 0);
-            outContent.getChildren().addAll(
-                    outFormatRow,
-                    new Label("Output folder:"),
-                    outputFolderField,
-                    browseBtn);
+            outContent.getChildren().addAll(outFormatRow, new Label("Output folder:"), outputFolderField, browseBtn);
             TitledPane outPane = new TitledPane("Output", outContent);
             outPane.setCollapsible(false);
 
@@ -305,8 +297,8 @@ public class SinglePointAcquisitionController {
                             projectsFolder != null ? new File(projectsFolder) : null,
                             modality,
                             null, // objective (not needed for single-point)
-                            null  // detector
-                    );
+                            null // detector
+                            );
 
                     dispatch(
                             mc,
@@ -377,7 +369,14 @@ public class SinglePointAcquisitionController {
 
         logger.info(
                 "Single-point dispatch: modality={}, z={}[{}..{} step {}], t=[{}pts, {}s], outFmt={}",
-                modality, zEnabled, zStart, zEnd, zStep, timepoints, intervalSec, outputFormat);
+                modality,
+                zEnabled,
+                zStart,
+                zEnd,
+                zStep,
+                timepoints,
+                intervalSec,
+                outputFormat);
 
         Thread worker = new Thread(
                 () -> {
@@ -433,16 +432,12 @@ public class SinglePointAcquisitionController {
                             logger.info("Single-point acquisition complete: {}", response);
                         });
 
-                        Platform.runLater(() ->
-                                Dialogs.showInfoNotification(
-                                        "Single-Point Acquisition",
-                                        "Acquisition complete. Output: " + outputFolder));
+                        Platform.runLater(() -> Dialogs.showInfoNotification(
+                                "Single-Point Acquisition", "Acquisition complete. Output: " + outputFolder));
                     } catch (Exception ex) {
                         logger.error("Single-point acquisition failed: {}", ex.getMessage(), ex);
-                        Platform.runLater(() ->
-                                Dialogs.showErrorNotification(
-                                        "Single-Point Acquisition",
-                                        "Acquisition failed: " + ex.getMessage()));
+                        Platform.runLater(() -> Dialogs.showErrorNotification(
+                                "Single-Point Acquisition", "Acquisition failed: " + ex.getMessage()));
                     } finally {
                         future.complete(null);
                     }

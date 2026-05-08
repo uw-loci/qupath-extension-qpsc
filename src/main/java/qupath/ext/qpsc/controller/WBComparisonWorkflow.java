@@ -441,14 +441,17 @@ public class WBComparisonWorkflow {
         Thread.sleep(1000);
 
         // Poll for completion with consistent error handling via shared service
-        AcquisitionMonitorService.monitorAndHandle(socketClient,
+        AcquisitionMonitorService.monitorAndHandle(
+                socketClient,
                 AcquisitionMonitorService.MonitorConfig.create()
-                        .progress(progress -> logger.debug("[{}] Acquisition progress: {}/{}",
-                                wbMode, progress.current, progress.total))
+                        .progress(progress -> logger.debug(
+                                "[{}] Acquisition progress: {}/{}", wbMode, progress.current, progress.total))
                         .manualFocus(retriesRemaining -> {
                             // Auto-skip manual focus for WB comparison (automated workflow)
-                            logger.warn("[{}] Autofocus failed, auto-skipping (retries remaining: {})",
-                                    wbMode, retriesRemaining);
+                            logger.warn(
+                                    "[{}] Autofocus failed, auto-skipping (retries remaining: {})",
+                                    wbMode,
+                                    retriesRemaining);
                             try {
                                 socketClient.skipAutofocusRetry();
                             } catch (IOException e) {
@@ -812,12 +815,11 @@ public class WBComparisonWorkflow {
         if (detectors.isEmpty()) {
             throw new RuntimeException("No detectors available for " + modality + "/" + objective);
         }
-        throw new RuntimeException(
-                "Multiple detectors available " + detectors
-                        + " for " + modality + "/" + objective
-                        + " but none selected -- run a WB calibration or open Background Collection "
-                        + "first so PersistentPreferences.lastDetector is set, or extend WB comparison "
-                        + "to expose its own detector picker.");
+        throw new RuntimeException("Multiple detectors available " + detectors
+                + " for " + modality + "/" + objective
+                + " but none selected -- run a WB calibration or open Background Collection "
+                + "first so PersistentPreferences.lastDetector is set, or extend WB comparison "
+                + "to expose its own detector picker.");
     }
 
     private static List<AngleExposure> resolveAngleExposures(

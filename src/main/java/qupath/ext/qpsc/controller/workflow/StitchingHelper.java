@@ -33,7 +33,6 @@ import qupath.ext.qpsc.ui.DualProgressDialog;
 import qupath.ext.qpsc.ui.StitchingBlockingDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
-import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
@@ -44,8 +43,8 @@ import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.Project;
-import qupath.lib.roi.interfaces.ROI;
 import qupath.lib.projects.ProjectImageEntry;
+import qupath.lib.roi.interfaces.ROI;
 
 /**
  * Helper class for image stitching operations.
@@ -163,8 +162,14 @@ public class StitchingHelper {
         // Use sample.sampleName() for file naming (source image name), not sampleName (project folder name)
         String displayName = sample.sampleName();
         StitchingMetadata metadata = calculateMetadata(
-                annotation, displayName, gui, project, fullResToStage, parentEntry,
-                sample.modality(), sample.objective());
+                annotation,
+                displayName,
+                gui,
+                project,
+                fullResToStage,
+                parentEntry,
+                sample.modality(),
+                sample.objective());
         return performStitchingInternal(
                 annotation.getName(),
                 sample,
@@ -626,8 +631,7 @@ public class StitchingHelper {
                             if (stitchingConfig.outputFormat() == StitchingConfig.OutputFormat.OME_TIFF_VIA_ZARR
                                     && !stitchedImages.isEmpty()) {
                                 // Use LZW for TIFF (ZARR compression types don't apply to TIFF)
-                                queueBackgroundZarrToTiffConversion(
-                                        stitchedImages, "LZW", annotationName);
+                                queueBackgroundZarrToTiffConversion(stitchedImages, "LZW", annotationName);
                             }
 
                         } catch (Exception e) {
@@ -786,8 +790,7 @@ public class StitchingHelper {
         boolean[] stitcherFlips = StageImageTransform.current().stitcherFlipFlags();
         boolean flipX = stitcherFlips[0];
         boolean flipY = stitcherFlips[1];
-        logger.info("Region stitching flip flags from StageImageTransform: flipX={}, flipY={}",
-                flipX, flipY);
+        logger.info("Region stitching flip flags from StageImageTransform: flipX={}, flipY={}", flipX, flipY);
 
         // Stamp source microscope (config name) + active detector so the
         // stitched image carries enough metadata for cross-system alignment
@@ -876,18 +879,21 @@ public class StitchingHelper {
         if (annotation != null && annotation.getROI() != null && fullResToStage != null) {
             ROI roi = annotation.getROI();
             double[] topLeft = TransformationFunctions.transformQuPathFullResToStage(
-                    new double[]{roi.getBoundsX(), roi.getBoundsY()}, fullResToStage);
+                    new double[] {roi.getBoundsX(), roi.getBoundsY()}, fullResToStage);
             double[] botRight = TransformationFunctions.transformQuPathFullResToStage(
-                    new double[]{roi.getBoundsX() + roi.getBoundsWidth(),
-                                 roi.getBoundsY() + roi.getBoundsHeight()}, fullResToStage);
+                    new double[] {roi.getBoundsX() + roi.getBoundsWidth(), roi.getBoundsY() + roi.getBoundsHeight()},
+                    fullResToStage);
             // Ensure min/max ordering (transform may have negative scales)
             stageBoundsX1 = Math.min(topLeft[0], botRight[0]);
             stageBoundsY1 = Math.min(topLeft[1], botRight[1]);
             stageBoundsX2 = Math.max(topLeft[0], botRight[0]);
             stageBoundsY2 = Math.max(topLeft[1], botRight[1]);
-            logger.info("Sub-image annotation stage bounds: ({},{}) -> ({},{})",
-                    String.format("%.1f", stageBoundsX1), String.format("%.1f", stageBoundsY1),
-                    String.format("%.1f", stageBoundsX2), String.format("%.1f", stageBoundsY2));
+            logger.info(
+                    "Sub-image annotation stage bounds: ({},{}) -> ({},{})",
+                    String.format("%.1f", stageBoundsX1),
+                    String.format("%.1f", stageBoundsY1),
+                    String.format("%.1f", stageBoundsX2),
+                    String.format("%.1f", stageBoundsY2));
         }
 
         String annotationName = annotation != null ? annotation.getName() : null;
@@ -897,10 +903,25 @@ public class StitchingHelper {
         if (detector != null && detector.isEmpty()) detector = null;
 
         return new StitchingMetadata(
-                parentEntry, offset[0], offset[1], flipX, flipY, sampleName,
-                modality, objective, null, annotationName, null,
-                stageBoundsX1, stageBoundsY1, stageBoundsX2, stageBoundsY2,
-                null, null, detector, sourceMicroscope);
+                parentEntry,
+                offset[0],
+                offset[1],
+                flipX,
+                flipY,
+                sampleName,
+                modality,
+                objective,
+                null,
+                annotationName,
+                null,
+                stageBoundsX1,
+                stageBoundsY1,
+                stageBoundsX2,
+                stageBoundsY2,
+                null,
+                null,
+                detector,
+                sourceMicroscope);
     }
 
     /**
@@ -1136,8 +1157,7 @@ public class StitchingHelper {
                                         && parsedModality.toLowerCase().startsWith(shortModalityPrefix.toLowerCase())) {
                                     mergedModality = shortModalityPrefix;
                                 }
-                                String sanitizedAnnotationName =
-                                        ImageNameGenerator.sanitizeForFilename(annotationName);
+                                String sanitizedAnnotationName = ImageNameGenerator.sanitizeForFilename(annotationName);
                                 int candidateIndex = imageIndex;
                                 String mergedBaseName = ImageNameGenerator.generateImageName(
                                         displayName,
@@ -1160,8 +1180,8 @@ public class StitchingHelper {
                                             ".ome.tif");
                                     mergedCandidate = new File(mergedDir, mergedBaseName);
                                 }
-                                String mergedStem = mergedBaseName.substring(
-                                        0, mergedBaseName.length() - ".ome.tif".length());
+                                String mergedStem =
+                                        mergedBaseName.substring(0, mergedBaseName.length() - ".ome.tif".length());
                                 logger.info(
                                         "Merged filename built from naming scheme: stem='{}' (sample={}, modality={}, objective={}, annotation={}, index={})",
                                         mergedStem,
@@ -1171,8 +1191,7 @@ public class StitchingHelper {
                                         sanitizedAnnotationName,
                                         candidateIndex);
 
-                                List<Integer> channelColors = getDefaultChannelColors(
-                                        successfullyStitchedChannelIds);
+                                List<Integer> channelColors = getDefaultChannelColors(successfullyStitchedChannelIds);
                                 String mergedPath = ChannelMerger.merge(
                                         stitchedImages,
                                         successfullyStitchedChannelIds,
@@ -1247,16 +1266,15 @@ public class StitchingHelper {
 
     private static final java.util.Map<String, Integer> DEFAULT_CHANNEL_COLORS = java.util.Map.ofEntries(
             // Common fluorescence filter names
-            java.util.Map.entry("dapi",  packRGB(0, 0, 255)),       // Blue
-            java.util.Map.entry("fitc",  packRGB(0, 255, 0)),       // Green
-            java.util.Map.entry("gfp",   packRGB(0, 255, 0)),       // Green
-            java.util.Map.entry("tritc", packRGB(255, 0, 0)),       // Red
-            java.util.Map.entry("cy3",   packRGB(255, 165, 0)),     // Orange
-            java.util.Map.entry("cy5",   packRGB(255, 0, 255)),     // Magenta
-            java.util.Map.entry("cy7",   packRGB(128, 0, 128)),     // Purple
-            java.util.Map.entry("bf",    packRGB(255, 255, 255)),    // White
-            java.util.Map.entry("brightfield", packRGB(255, 255, 255))
-    );
+            java.util.Map.entry("dapi", packRGB(0, 0, 255)), // Blue
+            java.util.Map.entry("fitc", packRGB(0, 255, 0)), // Green
+            java.util.Map.entry("gfp", packRGB(0, 255, 0)), // Green
+            java.util.Map.entry("tritc", packRGB(255, 0, 0)), // Red
+            java.util.Map.entry("cy3", packRGB(255, 165, 0)), // Orange
+            java.util.Map.entry("cy5", packRGB(255, 0, 255)), // Magenta
+            java.util.Map.entry("cy7", packRGB(128, 0, 128)), // Purple
+            java.util.Map.entry("bf", packRGB(255, 255, 255)), // White
+            java.util.Map.entry("brightfield", packRGB(255, 255, 255)));
 
     private static int packRGB(int r, int g, int b) {
         return (255 << 24) | (r << 16) | (g << 8) | b;
@@ -1337,15 +1355,19 @@ public class StitchingHelper {
             double imgX2 = metadata.stageBoundsX2Um + halfFovX;
             double imgY2 = metadata.stageBoundsY2Um + halfFovY;
 
-            logger.info("Stage bounds adjustment: annotation ({},{}) -> ({},{}), "
-                    + "image ({},{}) -> ({},{}) (halfFOV={},{})",
+            logger.info(
+                    "Stage bounds adjustment: annotation ({},{}) -> ({},{}), "
+                            + "image ({},{}) -> ({},{}) (halfFOV={},{})",
                     String.format("%.1f", metadata.stageBoundsX1Um),
                     String.format("%.1f", metadata.stageBoundsY1Um),
                     String.format("%.1f", metadata.stageBoundsX2Um),
                     String.format("%.1f", metadata.stageBoundsY2Um),
-                    String.format("%.1f", imgX1), String.format("%.1f", imgY1),
-                    String.format("%.1f", imgX2), String.format("%.1f", imgY2),
-                    String.format("%.1f", halfFovX), String.format("%.1f", halfFovY));
+                    String.format("%.1f", imgX1),
+                    String.format("%.1f", imgY1),
+                    String.format("%.1f", imgX2),
+                    String.format("%.1f", imgY2),
+                    String.format("%.1f", halfFovX),
+                    String.format("%.1f", halfFovY));
 
             // Account for image flips: when the stitched image is displayed
             // flipped (via TransformedServerBuilder), QuPath pixel coordinates
@@ -1362,10 +1384,14 @@ public class StitchingHelper {
 
             AffineTransform transform = new AffineTransform(scaleX, 0, 0, scaleY, originX, originY);
 
-            logger.info("Auto-register alignment: flip=({},{}), scale=({},{}), origin=({},{})",
-                    flipX, flipY,
-                    String.format("%.6f", scaleX), String.format("%.6f", scaleY),
-                    String.format("%.1f", originX), String.format("%.1f", originY));
+            logger.info(
+                    "Auto-register alignment: flip=({},{}), scale=({},{}), origin=({},{})",
+                    flipX,
+                    flipY,
+                    String.format("%.6f", scaleX),
+                    String.format("%.6f", scaleY),
+                    String.format("%.1f", originX),
+                    String.format("%.1f", originY));
 
             if (scaleX == 0 || scaleY == 0) {
                 logger.warn("Degenerate alignment transform (zero scale), skipping");
@@ -1384,8 +1410,7 @@ public class StitchingHelper {
             // (SingleTileRefinement, AcquisitionManager, ...) consume unflipped-base
             // pixel coords. Without this, PPM auto-registered alignments load as if
             // unflipped and SingleTileRefinement targets the XY-mirrored stage point.
-            AffineTransformManager.saveSlideAlignment(
-                    project, alignmentKey, modality, transform, null, flipX, flipY);
+            AffineTransformManager.saveSlideAlignment(project, alignmentKey, modality, transform, null, flipX, flipY);
             logger.info(
                     "Auto-registered stage alignment for '{}' from BoundingBox metadata "
                             + "(bounds=({},{})->({},{}), image={}x{})",
@@ -1438,15 +1463,22 @@ public class StitchingHelper {
                         // for downstream consumers that need to know the
                         // pyramid's stage-relative orientation.
                         QPProjectFunctions.addImageToProjectWithMetadata(
-                                project, f,
+                                project,
+                                f,
                                 metadata.parentEntry,
-                                metadata.xOffset, metadata.yOffset,
-                                false, false,
+                                metadata.xOffset,
+                                metadata.yOffset,
+                                false,
+                                false,
                                 metadata.sampleName,
-                                metadata.modality, metadata.objective,
-                                metadata.angle, metadata.annotationName,
-                                metadata.imageIndex, handler,
-                                metadata.detector, metadata.sourceMicroscope);
+                                metadata.modality,
+                                metadata.objective,
+                                metadata.angle,
+                                metadata.annotationName,
+                                metadata.imageIndex,
+                                handler,
+                                metadata.detector,
+                                metadata.sourceMicroscope);
                     } else {
                         QPProjectFunctions.addImageToProject(f, project, false, false, handler);
                     }
@@ -1492,15 +1524,22 @@ public class StitchingHelper {
                     // inverted stage polarity). flipX/Y is still applied to
                     // metadata for downstream consumers.
                     QPProjectFunctions.addImageToProjectWithMetadata(
-                            project, mergedFile,
+                            project,
+                            mergedFile,
                             metadata.parentEntry,
-                            metadata.xOffset, metadata.yOffset,
-                            false, false,
+                            metadata.xOffset,
+                            metadata.yOffset,
+                            false,
+                            false,
                             metadata.sampleName,
-                            metadata.modality, metadata.objective,
-                            metadata.angle, metadata.annotationName,
-                            metadata.imageIndex, handler,
-                            metadata.detector, metadata.sourceMicroscope);
+                            metadata.modality,
+                            metadata.objective,
+                            metadata.angle,
+                            metadata.annotationName,
+                            metadata.imageIndex,
+                            handler,
+                            metadata.detector,
+                            metadata.sourceMicroscope);
                 } else {
                     QPProjectFunctions.addImageToProject(mergedFile, project, false, false, handler);
                 }
@@ -1809,72 +1848,75 @@ public class StitchingHelper {
      * @param compression TIFF compression type (e.g. "LZW", "J2K")
      * @param label       Human-readable label for logging (e.g. annotation name)
      */
-    private static void queueBackgroundZarrToTiffConversion(
-            List<String> zarrPaths,
-            String compression,
-            String label) {
+    private static void queueBackgroundZarrToTiffConversion(List<String> zarrPaths, String compression, String label) {
 
-        List<String> toConvert = zarrPaths.stream()
-                .filter(p -> p.endsWith(".ome.zarr"))
-                .toList();
+        List<String> toConvert =
+                zarrPaths.stream().filter(p -> p.endsWith(".ome.zarr")).toList();
 
         if (toConvert.isEmpty()) {
             logger.info("No ZARR files to convert for {}", label);
             return;
         }
 
-        logger.info("=== Queuing background ZARR -> TIFF conversion for {} ({} files) ===",
-                label, toConvert.size());
+        logger.info("=== Queuing background ZARR -> TIFF conversion for {} ({} files) ===", label, toConvert.size());
         for (String p : toConvert) {
             logger.info("  Will convert: {}", p);
         }
 
-        Thread conversionThread = new Thread(() -> {
-            int succeeded = 0;
-            int failed = 0;
-            long totalStart = System.currentTimeMillis();
+        Thread conversionThread = new Thread(
+                () -> {
+                    int succeeded = 0;
+                    int failed = 0;
+                    long totalStart = System.currentTimeMillis();
 
-            for (String zarrPath : toConvert) {
-                try {
-                    boolean ok = convertSingleZarrToTiff(zarrPath, compression);
-                    if (ok) succeeded++;
-                    else failed++;
-                } catch (Exception e) {
-                    failed++;
-                    logger.error("Background ZARR->TIFF conversion failed for {}: {}",
-                            zarrPath, e.getMessage(), e);
-                }
-            }
+                    for (String zarrPath : toConvert) {
+                        try {
+                            boolean ok = convertSingleZarrToTiff(zarrPath, compression);
+                            if (ok) succeeded++;
+                            else failed++;
+                        } catch (Exception e) {
+                            failed++;
+                            logger.error(
+                                    "Background ZARR->TIFF conversion failed for {}: {}", zarrPath, e.getMessage(), e);
+                        }
+                    }
 
-            long elapsed = (System.currentTimeMillis() - totalStart) / 1000;
-            logger.info("=== Background ZARR -> TIFF conversion complete for {} ===", label);
-            logger.info("  Converted: {}/{}, failed: {}, elapsed: {}m {}s",
-                    succeeded, toConvert.size(), failed, elapsed / 60, elapsed % 60);
+                    long elapsed = (System.currentTimeMillis() - totalStart) / 1000;
+                    logger.info("=== Background ZARR -> TIFF conversion complete for {} ===", label);
+                    logger.info(
+                            "  Converted: {}/{}, failed: {}, elapsed: {}m {}s",
+                            succeeded,
+                            toConvert.size(),
+                            failed,
+                            elapsed / 60,
+                            elapsed % 60);
 
-            if (failed > 0) {
-                logger.warn("  {} ZARR files had conversion failures. "
-                        + "ZARR images remain usable in QuPath.", failed);
-            }
+                    if (failed > 0) {
+                        logger.warn(
+                                "  {} ZARR files had conversion failures. " + "ZARR images remain usable in QuPath.",
+                                failed);
+                    }
 
-            final int s = succeeded;
-            final int f = failed;
-            final long e = elapsed;
-            Platform.runLater(() -> {
-                String msg;
-                if (f == 0) {
-                    msg = String.format(
-                            "Background TIFF conversion complete: %d files (%dm %ds). "
-                            + "Use 'Make Project Portable' to finalize.", s, e / 60, e % 60);
-                    qupath.fx.dialogs.Dialogs.showInfoNotification(
-                            "ZARR to TIFF Conversion", msg);
-                } else {
-                    msg = String.format(
-                            "Background conversion: %d/%d succeeded, %d failed. "
-                            + "Check log for details.", s, s + f, f);
-                    UIFunctions.notifyUserOfError(msg, "ZARR to TIFF Conversion");
-                }
-            });
-        }, "zarr-to-tiff-converter");
+                    final int s = succeeded;
+                    final int f = failed;
+                    final long e = elapsed;
+                    Platform.runLater(() -> {
+                        String msg;
+                        if (f == 0) {
+                            msg = String.format(
+                                    "Background TIFF conversion complete: %d files (%dm %ds). "
+                                            + "Use 'Make Project Portable' to finalize.",
+                                    s, e / 60, e % 60);
+                            qupath.fx.dialogs.Dialogs.showInfoNotification("ZARR to TIFF Conversion", msg);
+                        } else {
+                            msg = String.format(
+                                    "Background conversion: %d/%d succeeded, %d failed. " + "Check log for details.",
+                                    s, s + f, f);
+                            UIFunctions.notifyUserOfError(msg, "ZARR to TIFF Conversion");
+                        }
+                    });
+                },
+                "zarr-to-tiff-converter");
 
         conversionThread.setDaemon(true);
         conversionThread.start();
@@ -1927,8 +1969,13 @@ public class StitchingHelper {
 
             long elapsed = (System.currentTimeMillis() - start) / 1000;
             long sizeMB = Files.size(tiff) / (1024 * 1024);
-            logger.info("  Converted {} -> {} ({} MB, {}m {}s)",
-                    zarr.getFileName(), tiff.getFileName(), sizeMB, elapsed / 60, elapsed % 60);
+            logger.info(
+                    "  Converted {} -> {} ({} MB, {}m {}s)",
+                    zarr.getFileName(),
+                    tiff.getFileName(),
+                    sizeMB,
+                    elapsed / 60,
+                    elapsed % 60);
             return true;
 
         } catch (Exception e) {
@@ -1936,7 +1983,8 @@ public class StitchingHelper {
             // Clean up partial TIFF if it exists
             try {
                 if (Files.exists(tiff)) Files.delete(tiff);
-            } catch (IOException ignored) {}
+            } catch (IOException ignored) {
+            }
             return false;
         }
     }

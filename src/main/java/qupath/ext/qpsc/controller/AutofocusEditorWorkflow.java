@@ -231,8 +231,7 @@ public class AutofocusEditorWorkflow {
      * the caller wires up a "Help me pick" button via {@link
      * #showMetricHelpDialog}.
      */
-    private static ComboBox<String> buildScoreMetricCombo(
-            String currentValue, FocusMetricsManifest manifest) {
+    private static ComboBox<String> buildScoreMetricCombo(String currentValue, FocusMetricsManifest manifest) {
         ComboBox<String> combo = new ComboBox<>();
         FocusMetricsManifest.Group lastGroup = null;
         for (FocusMetricsManifest.MetricSpec m : manifest.metricsForDropdown()) {
@@ -245,7 +244,8 @@ public class AutofocusEditorWorkflow {
             lastGroup = m.group;
         }
         combo.setCellFactory(lv -> new ListCell<>() {
-            @Override protected void updateItem(String item, boolean empty) {
+            @Override
+            protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
                 if (empty || item == null) {
                     setText(null);
@@ -284,11 +284,21 @@ public class AutofocusEditorWorkflow {
             for (String mod : m.validModalities) {
                 String canon = FocusMetricsManifest.canonicalModality(mod);
                 switch (canon) {
-                    case "brightfield": short_.add("BF"); break;
-                    case "ppm":         short_.add("PPM"); break;
-                    case "fluorescence":short_.add("FL"); break;
-                    case "dark_field":  short_.add("DF"); break;
-                    default:            short_.add(mod); break;
+                    case "brightfield":
+                        short_.add("BF");
+                        break;
+                    case "ppm":
+                        short_.add("PPM");
+                        break;
+                    case "fluorescence":
+                        short_.add("FL");
+                        break;
+                    case "dark_field":
+                        short_.add("DF");
+                        break;
+                    default:
+                        short_.add(mod);
+                        break;
                 }
             }
             tags.add(String.join("/", short_) + " only");
@@ -305,10 +315,14 @@ public class AutofocusEditorWorkflow {
 
     private static String groupLabel(FocusMetricsManifest.Group g) {
         switch (g) {
-            case RECOMMENDED: return "Recommended";
-            case ADVANCED:    return "Advanced";
-            case SPECIAL:     return "Special";
-            default:          return "Other";
+            case RECOMMENDED:
+                return "Recommended";
+            case ADVANCED:
+                return "Advanced";
+            case SPECIAL:
+                return "Special";
+            default:
+                return "Other";
         }
     }
 
@@ -324,10 +338,11 @@ public class AutofocusEditorWorkflow {
         alert.setHeaderText("Pick a metric for your sample");
         VBox content = new VBox(8);
         content.setPadding(new Insets(8));
-        for (FocusMetricsManifest.Group g : new FocusMetricsManifest.Group[]{
-                FocusMetricsManifest.Group.RECOMMENDED,
-                FocusMetricsManifest.Group.ADVANCED,
-                FocusMetricsManifest.Group.SPECIAL}) {
+        for (FocusMetricsManifest.Group g : new FocusMetricsManifest.Group[] {
+            FocusMetricsManifest.Group.RECOMMENDED,
+            FocusMetricsManifest.Group.ADVANCED,
+            FocusMetricsManifest.Group.SPECIAL
+        }) {
             List<FocusMetricsManifest.MetricSpec> bucket = manifest.metricsByGroup(g);
             if (bucket.isEmpty()) continue;
             Label header = new Label(groupLabel(g));
@@ -337,27 +352,24 @@ public class AutofocusEditorWorkflow {
                 VBox card = new VBox(2);
                 card.setPadding(new Insets(2, 0, 6, 12));
                 String constraintBadge = metricConstraintBadges(m);
-                String headerLine = m.name + "  [" + m.badge + "]"
-                        + (constraintBadge.isEmpty() ? "" : "  " + constraintBadge);
+                String headerLine =
+                        m.name + "  [" + m.badge + "]" + (constraintBadge.isEmpty() ? "" : "  " + constraintBadge);
                 Label name = new Label(headerLine);
                 name.setStyle("-fx-font-weight: bold; -fx-font-family: monospace;");
                 card.getChildren().add(name);
                 if (!m.validModalities.isEmpty() || m.minMagnification != null) {
                     StringBuilder cs = new StringBuilder();
                     if (!m.validModalities.isEmpty()) {
-                        cs.append("Restricted to: ")
-                                .append(String.join(", ", m.validModalities));
+                        cs.append("Restricted to: ").append(String.join(", ", m.validModalities));
                     }
                     if (m.minMagnification != null) {
                         if (cs.length() > 0) cs.append("   |   ");
                         cs.append("Minimum magnification: ")
-                                .append(String.format(Locale.ROOT, "%.0fx",
-                                        m.minMagnification));
+                                .append(String.format(Locale.ROOT, "%.0fx", m.minMagnification));
                     }
                     Label cl = new Label(cs.toString());
                     cl.setWrapText(true);
-                    cl.setStyle("-fx-text-fill: #6A6A6A; -fx-font-size: 11px; "
-                            + "-fx-font-style: italic;");
+                    cl.setStyle("-fx-text-fill: #6A6A6A; -fx-font-size: 11px; " + "-fx-font-style: italic;");
                     card.getChildren().add(cl);
                 }
                 if (!m.bestFor.isEmpty()) {
@@ -387,11 +399,12 @@ public class AutofocusEditorWorkflow {
      * the runtime will actually use given a (modality, picked metric)
      * pair. Updates as the user changes either dropdown.
      */
-    private static String resolutionPreviewText(
-            FocusMetricsManifest manifest, String modality, String pickedMetric) {
+    private static String resolutionPreviewText(FocusMetricsManifest manifest, String modality, String pickedMetric) {
         String effective = manifest.resolveEffectiveMetric(modality, pickedMetric, "tenengrad");
         String src;
-        if (pickedMetric != null && !pickedMetric.isEmpty() && !"none".equalsIgnoreCase(pickedMetric)
+        if (pickedMetric != null
+                && !pickedMetric.isEmpty()
+                && !"none".equalsIgnoreCase(pickedMetric)
                 && manifest.getMetrics().containsKey(pickedMetric)) {
             src = "per-objective YAML";
         } else if (modality != null && manifest.modalityDefault(modality).isPresent()) {
@@ -424,41 +437,43 @@ public class AutofocusEditorWorkflow {
         content.setPadding(new Insets(8));
 
         // --- "Where streaming AF actually gets each setting from" map ---
-        Label intro = new Label(
-                "Streaming AF is the LIVE VIEWER 'Autofocus' button only.\n"
-                        + "Acquisition uses Standard AF (initial) + Sweep Drift\n"
-                        + "Check (per-tile) -- both edited in the Per-Objective\n"
-                        + "settings above. Streaming AF is not invoked during\n"
-                        + "acquisition; switch the Live Viewer button to 'Sweep'\n"
-                        + "if you want acquisition-style behaviour interactively.");
+        Label intro = new Label("Streaming AF is the LIVE VIEWER 'Autofocus' button only.\n"
+                + "Acquisition uses Standard AF (initial) + Sweep Drift\n"
+                + "Check (per-tile) -- both edited in the Per-Objective\n"
+                + "settings above. Streaming AF is not invoked during\n"
+                + "acquisition; switch the Live Viewer button to 'Sweep'\n"
+                + "if you want acquisition-style behaviour interactively.");
         intro.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
 
         Label sourcesHeader = new Label("Effective settings (where each comes from):");
-        sourcesHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; "
-                + "-fx-padding: 6 0 0 0;");
+        sourcesHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; " + "-fx-padding: 6 0 0 0;");
         GridPane srcGrid = new GridPane();
         srcGrid.setHgap(10);
         srcGrid.setVgap(4);
         String[][] sources = {
-                {"Scan range (um)",
-                 "Per-objective sweep_range_um (above), unless overridden\n"
-                 + "by the Live Viewer 'Range' dropdown."},
-                {"Score metric",
-                 "Per-objective score_metric (above). Falls back to the\n"
-                 + "modality default in focus_metrics_manifest.yml."},
-                {"Edge retries",
-                 "Server-side hardcode (currently 2). Not YAML-driven for\n"
-                 + "streaming AF; same name as the per-objective field but\n"
-                 + "that field only governs Standard AF."},
-                {"Crop factor",
-                 "Server-side hardcode (0.5 = center 50% of sensor)."},
-                {"Sample density",
-                 "Determined by camera frame rate + scan duration; not a\n"
-                 + "user knob. Streaming AF samples continuously during\n"
-                 + "stage motion (no n_steps)."},
-                {"Stage motion speed",
-                 "stage.streaming_af in " + configFile.getName()
-                 + " (read-only block below)."},
+            {
+                "Scan range (um)",
+                "Per-objective sweep_range_um (above), unless overridden\n" + "by the Live Viewer 'Range' dropdown."
+            },
+            {
+                "Score metric",
+                "Per-objective score_metric (above). Falls back to the\n"
+                        + "modality default in focus_metrics_manifest.yml."
+            },
+            {
+                "Edge retries",
+                "Server-side hardcode (currently 2). Not YAML-driven for\n"
+                        + "streaming AF; same name as the per-objective field but\n"
+                        + "that field only governs Standard AF."
+            },
+            {"Crop factor", "Server-side hardcode (0.5 = center 50% of sensor)."},
+            {
+                "Sample density",
+                "Determined by camera frame rate + scan duration; not a\n"
+                        + "user knob. Streaming AF samples continuously during\n"
+                        + "stage motion (no n_steps)."
+            },
+            {"Stage motion speed", "stage.streaming_af in " + configFile.getName() + " (read-only block below)."},
         };
         int sr = 0;
         for (String[] row : sources) {
@@ -473,28 +488,25 @@ public class AutofocusEditorWorkflow {
         }
 
         // --- Editable: exposure threshold preference (live-saved) ---
-        Label expHeader = new Label("Editable here (saved to QuPath preferences live, "
-                + "not to the autofocus YAML):");
-        expHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; "
-                + "-fx-padding: 6 0 0 0;");
+        Label expHeader =
+                new Label("Editable here (saved to QuPath preferences live, " + "not to the autofocus YAML):");
+        expHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; " + "-fx-padding: 6 0 0 0;");
         GridPane editGrid = new GridPane();
         editGrid.setHgap(10);
         editGrid.setVgap(6);
         Label expLabel = new Label("Max exposure (ms):");
-        Spinner<Double> expSpinner = new Spinner<>(1.0, 1000.0,
-                QPPreferenceDialog.getStreamingMaxExposureMs(), 5.0);
+        Spinner<Double> expSpinner = new Spinner<>(1.0, 1000.0, QPPreferenceDialog.getStreamingMaxExposureMs(), 5.0);
         expSpinner.setEditable(true);
         expSpinner.setPrefWidth(120);
         expSpinner.valueProperty().addListener((obs, o, n) -> {
             if (n != null) QPPreferenceDialog.setStreamingMaxExposureMs(n);
         });
-        expSpinner.setTooltip(new Tooltip(
-                "Live Viewer auto-falls back to Sweep Focus when the active\n"
-                        + "exposure exceeds this threshold. 40 ms is the historical\n"
-                        + "default (works for most brightfield + PPM). Long-exposure\n"
-                        + "fluorescence may want this lower (forces sweep more often)\n"
-                        + "or higher experimentally; sweep always works regardless.\n"
-                        + "Saves on every change -- no need to press Save and Close."));
+        expSpinner.setTooltip(new Tooltip("Live Viewer auto-falls back to Sweep Focus when the active\n"
+                + "exposure exceeds this threshold. 40 ms is the historical\n"
+                + "default (works for most brightfield + PPM). Long-exposure\n"
+                + "fluorescence may want this lower (forces sweep more often)\n"
+                + "or higher experimentally; sweep always works regardless.\n"
+                + "Saves on every change -- no need to press Save and Close."));
         Label expDesc = new Label("(streaming refuses above this; auto-falls back to Sweep)");
         expDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
         editGrid.add(expLabel, 0, 0);
@@ -502,8 +514,8 @@ public class AutofocusEditorWorkflow {
         editGrid.add(expDesc, 2, 0);
 
         // --- Read-only: stage.streaming_af block from main config ---
-        Label rigHeader = new Label("Stage block (read-only, from "
-                + configFile.getName() + " -> stage.streaming_af):");
+        Label rigHeader =
+                new Label("Stage block (read-only, from " + configFile.getName() + " -> stage.streaming_af):");
         rigHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-padding: 6 0 0 0;");
 
         GridPane rigGrid = new GridPane();
@@ -511,29 +523,27 @@ public class AutofocusEditorWorkflow {
         rigGrid.setVgap(4);
         Map<String, Object> stageBlock = readStreamingAfStageBlock(configFile);
         if (stageBlock.isEmpty()) {
-            Label missing = new Label("(no stage.streaming_af block found -- "
-                    + "streaming AF will use legacy hardcoded defaults)");
+            Label missing = new Label(
+                    "(no stage.streaming_af block found -- " + "streaming AF will use legacy hardcoded defaults)");
             missing.setStyle("-fx-font-style: italic; -fx-text-fill: gray;");
             rigGrid.add(missing, 0, 0, 2, 1);
         } else {
             int r = 0;
-            for (String key : new String[]{
-                    "enabled", "speed_property", "slow_speed_value",
-                    "slow_speed_um_per_s", "normal_speed_value"}) {
+            for (String key : new String[] {
+                "enabled", "speed_property", "slow_speed_value", "slow_speed_um_per_s", "normal_speed_value"
+            }) {
                 Label k = new Label(key + ":");
                 k.setStyle("-fx-font-family: monospace;");
                 Object v = stageBlock.get(key);
                 Label val = new Label(v == null ? "(unset)" : String.valueOf(v));
-                val.setStyle(v == null
-                        ? "-fx-text-fill: gray; -fx-font-style: italic;"
-                        : "-fx-font-family: monospace;");
+                val.setStyle(
+                        v == null ? "-fx-text-fill: gray; -fx-font-style: italic;" : "-fx-font-family: monospace;");
                 rigGrid.add(k, 0, r);
                 rigGrid.add(val, 1, r);
                 r++;
             }
-            Label hint = new Label(
-                    "Edit these in " + configFile.getName() + " under stage.streaming_af.\n"
-                            + "Re-open this dialog after saving to see the new values.");
+            Label hint = new Label("Edit these in " + configFile.getName() + " under stage.streaming_af.\n"
+                    + "Re-open this dialog after saving to see the new values.");
             hint.setStyle("-fx-font-size: 10px; -fx-text-fill: gray; -fx-padding: 4 0 0 0;");
             rigGrid.add(hint, 0, r, 2, 1);
         }
@@ -544,23 +554,26 @@ public class AutofocusEditorWorkflow {
         // the metric has a real focus peak.
         Button testStreamingButton = new Button("Test Streaming Autofocus");
         testStreamingButton.setOnAction(e -> runStreamingAfTest(testStreamingButton));
-        Label testHint = new Label(
-                "Runs one streaming AF scan at the current XY/Z and dumps every captured\n"
-                        + "frame plus a CSV of (time, assumed Z, actual Z, metric) under\n"
-                        + "config/logs/streaming_af_dumps/. Plots are shown in a popup.");
+        Label testHint = new Label("Runs one streaming AF scan at the current XY/Z and dumps every captured\n"
+                + "frame plus a CSV of (time, assumed Z, actual Z, metric) under\n"
+                + "config/logs/streaming_af_dumps/. Plots are shown in a popup.");
         testHint.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
         VBox testBox = new VBox(4, testStreamingButton, testHint);
         testBox.setPadding(new Insets(6, 0, 0, 0));
 
-        content.getChildren().addAll(intro, new Separator(),
-                sourcesHeader, srcGrid,
-                expHeader, editGrid,
-                rigHeader, rigGrid,
-                testBox);
+        content.getChildren()
+                .addAll(
+                        intro,
+                        new Separator(),
+                        sourcesHeader,
+                        srcGrid,
+                        expHeader,
+                        editGrid,
+                        rigHeader,
+                        rigGrid,
+                        testBox);
 
-        TitledPane pane = new TitledPane(
-                "Streaming Autofocus (Live Viewer Only -- mostly read-only)",
-                content);
+        TitledPane pane = new TitledPane("Streaming Autofocus (Live Viewer Only -- mostly read-only)", content);
         pane.setCollapsible(true);
         pane.setExpanded(false);
         return pane;
@@ -579,34 +592,34 @@ public class AutofocusEditorWorkflow {
     private static void runStreamingAfTest(Button button) {
         String yamlPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         if (yamlPath == null || yamlPath.isEmpty()) {
-            Dialogs.showErrorMessage("Test Streaming AF",
-                    "No microscope config yaml set in preferences.");
+            Dialogs.showErrorMessage("Test Streaming AF", "No microscope config yaml set in preferences.");
             return;
         }
         button.setDisable(true);
         button.setText("Running streaming AF (saving frames)...");
 
         // Run on a background thread so the UI stays responsive.
-        Thread t = new Thread(() -> {
-            try {
-                qupath.ext.qpsc.controller.MicroscopeController mc =
-                        qupath.ext.qpsc.controller.MicroscopeController.getInstance();
-                qupath.ext.qpsc.service.microscope.MicroscopeSocketClient sc = mc.getSocketClient();
-                qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.StreamingFocusResult result =
-                        sc.streamingFocus(yamlPath, null, null, Double.NaN, true);
-                Platform.runLater(() -> showStreamingAfTestResult(result));
-            } catch (Exception ex) {
-                logger.error("Test Streaming AF failed", ex);
-                Platform.runLater(() -> Dialogs.showErrorMessage(
-                        "Test Streaming AF",
-                        "Scan failed: " + ex.getMessage()));
-            } finally {
-                Platform.runLater(() -> {
-                    button.setDisable(false);
-                    button.setText("Test Streaming Autofocus");
-                });
-            }
-        }, "streaming-af-test");
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        qupath.ext.qpsc.controller.MicroscopeController mc =
+                                qupath.ext.qpsc.controller.MicroscopeController.getInstance();
+                        qupath.ext.qpsc.service.microscope.MicroscopeSocketClient sc = mc.getSocketClient();
+                        qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.StreamingFocusResult result =
+                                sc.streamingFocus(yamlPath, null, null, Double.NaN, true);
+                        Platform.runLater(() -> showStreamingAfTestResult(result));
+                    } catch (Exception ex) {
+                        logger.error("Test Streaming AF failed", ex);
+                        Platform.runLater(
+                                () -> Dialogs.showErrorMessage("Test Streaming AF", "Scan failed: " + ex.getMessage()));
+                    } finally {
+                        Platform.runLater(() -> {
+                            button.setDisable(false);
+                            button.setText("Test Streaming Autofocus");
+                        });
+                    }
+                },
+                "streaming-af-test");
         t.setDaemon(true);
         t.start();
     }
@@ -637,8 +650,7 @@ public class AutofocusEditorWorkflow {
         root.getChildren().add(headerLabel);
 
         if (result.dumpPath == null || result.dumpPath.isEmpty()) {
-            root.getChildren().add(new Label(
-                    "Server did not return a dump path -- nothing to plot."));
+            root.getChildren().add(new Label("Server did not return a dump path -- nothing to plot."));
         } else {
             Label pathLabel = new Label("Dump: " + result.dumpPath);
             pathLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 10px;");
@@ -653,8 +665,8 @@ public class AutofocusEditorWorkflow {
                 csv = new File(result.dumpPath, "samples.csv");
             }
             if (!csv.exists()) {
-                root.getChildren().add(new Label(
-                        "samples.csv not found under dump path. Check that the server\n"
+                root.getChildren()
+                        .add(new Label("samples.csv not found under dump path. Check that the server\n"
                                 + "completed at least one attempt and wrote out the dump\n"
                                 + "(see server log for STREAM_AF:dump written line)."));
             } else {
@@ -667,9 +679,7 @@ public class AutofocusEditorWorkflow {
                 }
                 if (!rows.isEmpty()) {
                     HBox plots = new HBox(10);
-                    plots.getChildren().addAll(
-                            buildTimeDomainChart(rows),
-                            buildSpaceDomainChart(rows));
+                    plots.getChildren().addAll(buildTimeDomainChart(rows), buildSpaceDomainChart(rows));
                     root.getChildren().add(plots);
                 }
             }
@@ -688,8 +698,8 @@ public class AutofocusEditorWorkflow {
      */
     private static List<double[]> readSamplesCsv(File csv) throws IOException {
         List<double[]> rows = new ArrayList<>();
-        try (var br = new java.io.BufferedReader(new java.io.FileReader(csv))) {
-            String line = br.readLine();   // skip header
+        try (var br = java.nio.file.Files.newBufferedReader(csv.toPath(), java.nio.charset.StandardCharsets.UTF_8)) {
+            String line = br.readLine(); // skip header
             while ((line = br.readLine()) != null) {
                 String[] parts = line.split(",");
                 if (parts.length < 5) continue;
@@ -697,11 +707,9 @@ public class AutofocusEditorWorkflow {
                     double wall = Double.parseDouble(parts[1].trim());
                     double zAss = Double.parseDouble(parts[2].trim());
                     String zAct = parts[3].trim();
-                    double zActVal = zAct.isEmpty()
-                            ? Double.NaN
-                            : Double.parseDouble(zAct);
+                    double zActVal = zAct.isEmpty() ? Double.NaN : Double.parseDouble(zAct);
                     double metric = Double.parseDouble(parts[4].trim());
-                    rows.add(new double[]{wall, zAss, zActVal, metric});
+                    rows.add(new double[] {wall, zAss, zActVal, metric});
                 } catch (NumberFormatException ignored) {
                     // skip bad rows
                 }
@@ -802,8 +810,7 @@ public class AutofocusEditorWorkflow {
             if (!(block instanceof Map)) return Collections.emptyMap();
             return (Map<String, Object>) block;
         } catch (IOException e) {
-            logger.warn("Could not read streaming_af block from {}: {}",
-                    configFile, e.getMessage());
+            logger.warn("Could not read streaming_af block from {}: {}", configFile, e.getMessage());
             return Collections.emptyMap();
         }
     }
@@ -863,8 +870,12 @@ public class AutofocusEditorWorkflow {
             this(modalityKey, strategyName, overrides, null, null);
         }
 
-        ModalityBinding(String modalityKey, String strategyName, Map<String, Object> overrides,
-                        String scoreMetricOverride, String onFailureOverride) {
+        ModalityBinding(
+                String modalityKey,
+                String strategyName,
+                Map<String, Object> overrides,
+                String scoreMetricOverride,
+                String onFailureOverride) {
             this.modalityKey = modalityKey;
             this.strategyName = strategyName != null ? strategyName : "dense_texture";
             this.overrides = overrides != null ? new LinkedHashMap<>(overrides) : new LinkedHashMap<>();
@@ -1210,13 +1221,11 @@ public class AutofocusEditorWorkflow {
         FocusMetricsManifest manifest = FocusMetricsManifest.get(configDir.toPath());
         Label scoreMetricLabel = new Label("score_metric:");
         ComboBox<String> scoreMetricCombo = buildScoreMetricCombo("laplacian_variance", manifest);
-        scoreMetricCombo.setTooltip(new Tooltip(
-                "Focus metric used by standard AF + sweep drift check.\n"
-                        + "Click 'Help me pick' for the manifest's per-metric guide."));
+        scoreMetricCombo.setTooltip(new Tooltip("Focus metric used by standard AF + sweep drift check.\n"
+                + "Click 'Help me pick' for the manifest's per-metric guide."));
         Button scoreMetricHelp = new Button("Help me pick");
         scoreMetricHelp.setOnAction(e -> showMetricHelpDialog(manifest));
-        Label scoreMetricResolution = new Label(resolutionPreviewText(manifest, null,
-                scoreMetricCombo.getValue()));
+        Label scoreMetricResolution = new Label(resolutionPreviewText(manifest, null, scoreMetricCombo.getValue()));
         scoreMetricResolution.setStyle("-fx-font-size: 10px; -fx-font-style: italic; -fx-text-fill: gray;");
         scoreMetricCombo.valueProperty().addListener((obs, o, n) -> {
             if (n != null && !n.startsWith("---")) {
@@ -1238,14 +1247,13 @@ public class AutofocusEditorWorkflow {
         Label p98FallbackLabel = new Label("p98_p2 fallback:");
         CheckBox p98FallbackCheck = new CheckBox("Use p98_p2 if primary peak fails");
         p98FallbackCheck.setSelected(true);
-        p98FallbackCheck.setTooltip(new Tooltip(
-                "Standard-AF safety net. p98_p2 is always computed alongside\n"
-                        + "the primary metric. When this is enabled, the AF system\n"
-                        + "uses the p98_p2 peak whenever the primary metric's\n"
-                        + "Z-curve cannot be validated (no clear peak / monotonic\n"
-                        + "drift / saturation). Disable only if your primary metric\n"
-                        + "is well-tuned and you'd rather see the failure than\n"
-                        + "accept a histogram-spread fallback."));
+        p98FallbackCheck.setTooltip(new Tooltip("Standard-AF safety net. p98_p2 is always computed alongside\n"
+                + "the primary metric. When this is enabled, the AF system\n"
+                + "uses the p98_p2 peak whenever the primary metric's\n"
+                + "Z-curve cannot be validated (no clear peak / monotonic\n"
+                + "drift / saturation). Disable only if your primary metric\n"
+                + "is well-tuned and you'd rather see the failure than\n"
+                + "accept a histogram-spread fallback."));
         Label p98FallbackDesc = new Label("(falls back to p98_p2 when primary peak validation fails)");
         p98FallbackDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
         tissueGrid.add(p98FallbackLabel, 0, 3);
@@ -1836,11 +1844,10 @@ public class AutofocusEditorWorkflow {
         // fields that almost no one tunes.
         CheckBox advancedToggle = new CheckBox("Show advanced settings");
         advancedToggle.setSelected(QPPreferenceDialog.getAutofocusEditorAdvancedMode());
-        advancedToggle.setTooltip(new Tooltip(
-                "Simple: per-objective tab only, with the most-edited fields.\n"
-                        + "Advanced: also shows the Strategies tab, Modality Bindings tab,\n"
-                        + "Streaming AF section, plus the interp_* / edge_retries /\n"
-                        + "gap_* fine-tuning fields. Setting persists across sessions."));
+        advancedToggle.setTooltip(new Tooltip("Simple: per-objective tab only, with the most-edited fields.\n"
+                + "Advanced: also shows the Strategies tab, Modality Bindings tab,\n"
+                + "Streaming AF section, plus the interp_* / edge_retries /\n"
+                + "gap_* fine-tuning fields. Setting persists across sessions."));
 
         List<javafx.scene.Node> advancedNodes = new ArrayList<>();
         advancedNodes.add(interpStrengthLabel);
@@ -2042,9 +2049,9 @@ public class AutofocusEditorWorkflow {
                     Object of = ov.get("on_failure");
                     if (of != null) failureOv = String.valueOf(of);
                 }
-                result.put(entry.getKey(), new ModalityBinding(
-                        entry.getKey(), (String) m.get("strategy"),
-                        overrides, scoreOv, failureOv));
+                result.put(
+                        entry.getKey(),
+                        new ModalityBinding(entry.getKey(), (String) m.get("strategy"), overrides, scoreOv, failureOv));
             }
             logger.info("Loaded {} modality bindings from {}", result.size(), autofocusFile.getName());
         } catch (Exception e) {
@@ -2122,10 +2129,9 @@ public class AutofocusEditorWorkflow {
         scoreCombo.valueProperty().addListener((obs, o, n) -> {
             if (n != null && !n.startsWith("---")) sd.scoreMetric = n;
         });
-        scoreCombo.setTooltip(new Tooltip(
-                "Default focus metric for this strategy. The per-modality binding\n"
-                        + "or per-objective YAML can still override at runtime.\n"
-                        + "Click 'Help me pick' for the manifest's per-metric guide."));
+        scoreCombo.setTooltip(new Tooltip("Default focus metric for this strategy. The per-modality binding\n"
+                + "or per-objective YAML can still override at runtime.\n"
+                + "Click 'Help me pick' for the manifest's per-metric guide."));
         Button scoreHelp = new Button("Help me pick");
         scoreHelp.setOnAction(e -> showMetricHelpDialog(strategyManifest));
         Label scoreResolution = new Label(resolutionPreviewText(strategyManifest, null, sd.scoreMetric));
@@ -2187,7 +2193,8 @@ public class AutofocusEditorWorkflow {
             // with min/max from the manifest, list_of_float -> two-element
             // numeric editor.
             FocusMetricsManifest paramManifest = FocusMetricsManifest.get(null);
-            FocusMetricsManifest.ValidityCheckSpec vspec = paramManifest.getValidityChecks().get(sd.validityCheck);
+            FocusMetricsManifest.ValidityCheckSpec vspec =
+                    paramManifest.getValidityChecks().get(sd.validityCheck);
             Map<String, FocusMetricsManifest.ParamSpec> paramSpecs = new LinkedHashMap<>();
             if (vspec != null) {
                 for (FocusMetricsManifest.ParamSpec ps : vspec.params) {
@@ -2222,11 +2229,10 @@ public class AutofocusEditorWorkflow {
         row++;
 
         Button duplicateBtn = new Button("Duplicate");
-        duplicateBtn.setTooltip(new Tooltip(
-                "Create a new strategy seeded with this strategy's score_metric,\n"
-                        + "validity_check, validity_params, and on_failure. The clone\n"
-                        + "name is " + sd.name + "_copy (or _copy_2, _copy_3, ...) and you\n"
-                        + "can rename or edit it freely afterwards."));
+        duplicateBtn.setTooltip(new Tooltip("Create a new strategy seeded with this strategy's score_metric,\n"
+                + "validity_check, validity_params, and on_failure. The clone\n"
+                + "name is " + sd.name + "_copy (or _copy_2, _copy_3, ...) and you\n"
+                + "can rename or edit it freely afterwards."));
         duplicateBtn.setOnAction(e -> {
             String cloneKey = uniqueCloneName(sd.name, allStrategies.keySet());
             StrategyDefinition clone = new StrategyDefinition(
@@ -2322,9 +2328,7 @@ public class AutofocusEditorWorkflow {
      * without an explicit commit step.
      */
     private static javafx.scene.Node buildParamEditor(
-            String key, Object initialValue,
-            FocusMetricsManifest.ParamSpec spec,
-            Map<String, Object> targetMap) {
+            String key, Object initialValue, FocusMetricsManifest.ParamSpec spec, Map<String, Object> targetMap) {
         // No spec -> fall back to the legacy TextField behaviour so an
         // unknown YAML key still appears editable.
         if (spec == null || spec.type == null) {
@@ -2364,8 +2368,8 @@ public class AutofocusEditorWorkflow {
                 List<Number> initial = initialValue instanceof List
                         ? (List<Number>) initialValue
                         : (spec.defaultValue instanceof List
-                            ? (List<Number>) spec.defaultValue
-                            : Collections.emptyList());
+                                ? (List<Number>) spec.defaultValue
+                                : Collections.emptyList());
                 HBox row = new HBox(4);
                 row.setAlignment(Pos.CENTER_LEFT);
                 List<TextField> fields = new ArrayList<>();
@@ -2380,8 +2384,12 @@ public class AutofocusEditorWorkflow {
                     List<Double> list = new ArrayList<>();
                     boolean ok = true;
                     for (TextField tf : fields) {
-                        try { list.add(Double.parseDouble(tf.getText().trim())); }
-                        catch (NumberFormatException ex) { ok = false; break; }
+                        try {
+                            list.add(Double.parseDouble(tf.getText().trim()));
+                        } catch (NumberFormatException ex) {
+                            ok = false;
+                            break;
+                        }
                     }
                     if (ok) {
                         targetMap.put(key, list);
@@ -2400,13 +2408,15 @@ public class AutofocusEditorWorkflow {
         }
     }
 
-    private static TextField _legacyTextEditor(
-            String key, Object initialValue, Map<String, Object> targetMap) {
+    private static TextField _legacyTextEditor(String key, Object initialValue, Map<String, Object> targetMap) {
         TextField tf = new TextField(String.valueOf(initialValue));
         tf.setPrefWidth(150);
         tf.textProperty().addListener((obs, o, n) -> {
-            try { targetMap.put(key, Double.parseDouble(n)); }
-            catch (NumberFormatException ex) { targetMap.put(key, n); }
+            try {
+                targetMap.put(key, Double.parseDouble(n));
+            } catch (NumberFormatException ex) {
+                targetMap.put(key, n);
+            }
         });
         return tf;
     }
@@ -2414,8 +2424,10 @@ public class AutofocusEditorWorkflow {
     private static int toInt(Object value, Object fallback, int finalFallback) {
         if (value instanceof Number) return ((Number) value).intValue();
         if (value instanceof String) {
-            try { return Integer.parseInt(((String) value).trim()); }
-            catch (NumberFormatException ignored) {}
+            try {
+                return Integer.parseInt(((String) value).trim());
+            } catch (NumberFormatException ignored) {
+            }
         }
         if (fallback instanceof Number) return ((Number) fallback).intValue();
         return finalFallback;
@@ -2424,8 +2436,10 @@ public class AutofocusEditorWorkflow {
     private static double toDouble(Object value, Object fallback, double finalFallback) {
         if (value instanceof Number) return ((Number) value).doubleValue();
         if (value instanceof String) {
-            try { return Double.parseDouble(((String) value).trim()); }
-            catch (NumberFormatException ignored) {}
+            try {
+                return Double.parseDouble(((String) value).trim());
+            } catch (NumberFormatException ignored) {
+            }
         }
         if (fallback instanceof Number) return ((Number) fallback).doubleValue();
         return finalFallback;
@@ -2581,18 +2595,23 @@ public class AutofocusEditorWorkflow {
         }
         scoreOvCombo.setValue(mb.scoreMetricOverride == null ? SENTINEL : mb.scoreMetricOverride);
         scoreOvCombo.setPrefWidth(260);
-        scoreOvCombo.setTooltip(new Tooltip(
-                "Per-modality override for the strategy's score_metric default.\n"
-                        + "Loses to per-objective YAML score_metric (per-objective wins).\n"
-                        + "Pick the sentinel to inherit the strategy's metric."));
+        scoreOvCombo.setTooltip(new Tooltip("Per-modality override for the strategy's score_metric default.\n"
+                + "Loses to per-objective YAML score_metric (per-objective wins).\n"
+                + "Pick the sentinel to inherit the strategy's metric."));
         // Constraint-aware cell renderer: flag metrics whose
         // valid_modalities exclude this binding's modality so the
         // operator sees the mismatch BEFORE saving.
         scoreOvCombo.setCellFactory(lv -> new ListCell<>() {
-            @Override protected void updateItem(String item, boolean empty) {
+            @Override
+            protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
-                if (empty || item == null) { setText(null); setStyle(""); return; }
-                FocusMetricsManifest.MetricSpec spec = bindingManifest.getMetrics().get(item);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                    return;
+                }
+                FocusMetricsManifest.MetricSpec spec =
+                        bindingManifest.getMetrics().get(item);
                 if (spec == null) {
                     setText(item);
                     setStyle("");
@@ -2602,8 +2621,7 @@ public class AutofocusEditorWorkflow {
                 boolean modalityOk = spec.isValidForModality(mb.modalityKey);
                 String label = badges.isEmpty() ? item : item + "  " + badges;
                 if (!modalityOk) {
-                    label = label + "  -- not for "
-                            + FocusMetricsManifest.canonicalModality(mb.modalityKey);
+                    label = label + "  -- not for " + FocusMetricsManifest.canonicalModality(mb.modalityKey);
                     setStyle("-fx-text-fill: #B0463F;");
                 } else {
                     setStyle("");
@@ -2622,20 +2640,18 @@ public class AutofocusEditorWorkflow {
                 scoreOvWarn.setText("");
                 return;
             }
-            FocusMetricsManifest.MetricSpec spec =
-                    bindingManifest.getMetrics().get(picked);
+            FocusMetricsManifest.MetricSpec spec = bindingManifest.getMetrics().get(picked);
             if (spec == null || spec.isValidForModality(mb.modalityKey)) {
                 scoreOvWarn.setText("");
                 return;
             }
-            scoreOvWarn.setText(
-                    "Warning: metric '" + picked + "' is restricted to "
-                            + String.join("/", spec.validModalities)
-                            + " by the manifest. Saving will write it anyway, but "
-                            + "the runtime will likely produce poor focus on a "
-                            + FocusMetricsManifest.canonicalModality(mb.modalityKey)
-                            + " sample. Pick a different metric or change the "
-                            + "binding's modality key.");
+            scoreOvWarn.setText("Warning: metric '" + picked + "' is restricted to "
+                    + String.join("/", spec.validModalities)
+                    + " by the manifest. Saving will write it anyway, but "
+                    + "the runtime will likely produce poor focus on a "
+                    + FocusMetricsManifest.canonicalModality(mb.modalityKey)
+                    + " sample. Pick a different metric or change the "
+                    + "binding's modality key.");
         };
         scoreOvCombo.valueProperty().addListener((obs, o, n) -> {
             mb.scoreMetricOverride = (n == null || SENTINEL.equals(n)) ? null : n;
@@ -2652,11 +2668,10 @@ public class AutofocusEditorWorkflow {
         failOvCombo.getItems().addAll(ON_FAILURE_MODES);
         failOvCombo.setValue(mb.onFailureOverride == null ? SENTINEL : mb.onFailureOverride);
         failOvCombo.setPrefWidth(200);
-        failOvCombo.setTooltip(new Tooltip(
-                "Per-modality override for the strategy's on_failure default.\n"
-                        + "Useful when the same strategy needs to defer for one\n"
-                        + "modality but proceed for another. Pick the sentinel to\n"
-                        + "inherit the strategy's setting."));
+        failOvCombo.setTooltip(new Tooltip("Per-modality override for the strategy's on_failure default.\n"
+                + "Useful when the same strategy needs to defer for one\n"
+                + "modality but proceed for another. Pick the sentinel to\n"
+                + "inherit the strategy's setting."));
         failOvCombo.valueProperty().addListener((obs, o, n) -> {
             mb.onFailureOverride = (n == null || SENTINEL.equals(n)) ? null : n;
         });
@@ -2672,8 +2687,8 @@ public class AutofocusEditorWorkflow {
             // strategy card uses).
             StrategyDefinition refStrategy = strategies.get(mb.strategyName);
             String vcheck = refStrategy != null ? refStrategy.validityCheck : null;
-            FocusMetricsManifest.ValidityCheckSpec vspec = vcheck != null
-                    ? bindingManifest.getValidityChecks().get(vcheck) : null;
+            FocusMetricsManifest.ValidityCheckSpec vspec =
+                    vcheck != null ? bindingManifest.getValidityChecks().get(vcheck) : null;
             Map<String, FocusMetricsManifest.ParamSpec> specsByName = new LinkedHashMap<>();
             if (vspec != null) {
                 for (FocusMetricsManifest.ParamSpec ps : vspec.params) {
@@ -2684,8 +2699,7 @@ public class AutofocusEditorWorkflow {
             for (Map.Entry<String, Object> param : mb.overrides.entrySet()) {
                 String key = param.getKey();
                 overrideGrid.add(new Label(key + ":"), 0, pr);
-                overrideGrid.add(buildParamEditor(
-                        key, param.getValue(), specsByName.get(key), mb.overrides), 1, pr);
+                overrideGrid.add(buildParamEditor(key, param.getValue(), specsByName.get(key), mb.overrides), 1, pr);
                 pr++;
             }
             if (pr == 0 && overrideCheck.isSelected()) {
@@ -2737,10 +2751,11 @@ public class AutofocusEditorWorkflow {
      * the {@code microscope_configurations/scripts/migrate_autofocus_yaml.py}
      * regex used by the M5 migration script.
      */
-    private static Map<String, String> findDeprecatedAliasesInFile(
-            File file, FocusMetricsManifest manifest) {
+    private static Map<String, String> findDeprecatedAliasesInFile(File file, FocusMetricsManifest manifest) {
         Map<String, String> found = new LinkedHashMap<>();
-        if (file == null || !file.exists() || manifest == null
+        if (file == null
+                || !file.exists()
+                || manifest == null
                 || manifest.getRemovedAliases().isEmpty()) {
             return found;
         }
@@ -2765,31 +2780,29 @@ public class AutofocusEditorWorkflow {
      * with its canonical name. Saves a {@code <file>.pre-migration}
      * backup first. No-op if no replacements actually fire.
      */
-    private static boolean migrateAliasesInFile(File file, Map<String, String> aliases)
-            throws IOException {
+    private static boolean migrateAliasesInFile(File file, Map<String, String> aliases) throws IOException {
         String original = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
         String text = original;
         for (Map.Entry<String, String> e : aliases.entrySet()) {
             Pattern p = aliasPattern(e.getKey());
-            text = p.matcher(text).replaceAll(
-                    "$1" + Matcher.quoteReplacement(e.getValue()) + "$2");
+            text = p.matcher(text).replaceAll("$1" + Matcher.quoteReplacement(e.getValue()) + "$2");
         }
         if (text.equals(original)) return false;
         File backup = new File(file.getAbsolutePath() + ".pre-migration");
-        Files.copy(file.toPath(), backup.toPath(),
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        Files.copy(file.toPath(), backup.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         Files.write(file.toPath(), text.getBytes(StandardCharsets.UTF_8));
-        logger.info("Migrated autofocus YAML aliases in {} ({} replacement(s)); backup at {}",
-                file.getName(), aliases.size(), backup.getName());
+        logger.info(
+                "Migrated autofocus YAML aliases in {} ({} replacement(s)); backup at {}",
+                file.getName(),
+                aliases.size(),
+                backup.getName());
         return true;
     }
 
     private static Pattern aliasPattern(String oldName) {
         // Multiline mode so $ matches end-of-line, not end-of-text.
         return Pattern.compile(
-                "(?m)(\\bscore_metric\\s*:\\s*['\"]?)"
-                        + Pattern.quote(oldName)
-                        + "(['\"]?\\s*(?:#.*)?$)");
+                "(?m)(\\bscore_metric\\s*:\\s*['\"]?)" + Pattern.quote(oldName) + "(['\"]?\\s*(?:#.*)?$)");
     }
 
     /**
@@ -2801,24 +2814,28 @@ public class AutofocusEditorWorkflow {
      *   <li>Don't ask again -- set the persistent suppress preference</li>
      * </ul>
      */
-    private static void maybeShowMigrationBanner(
-            File file, Map<String, String> found, Window owner) {
+    private static void maybeShowMigrationBanner(File file, Map<String, String> found, Window owner) {
         if (found.isEmpty()) return;
         if (QPPreferenceDialog.getAutofocusYamlMigrationAcknowledged()) {
             logger.info(
                     "Autofocus YAML in {} contains legacy aliases {}; banner suppressed by preference.",
-                    file.getName(), found.keySet());
+                    file.getName(),
+                    found.keySet());
             return;
         }
         StringBuilder body = new StringBuilder();
         body.append("This autofocus YAML uses metric names that have been renamed:\n\n");
         for (Map.Entry<String, String> e : found.entrySet()) {
-            body.append("  ").append(e.getKey())
-                    .append("  ->  ").append(e.getValue()).append("\n");
+            body.append("  ")
+                    .append(e.getKey())
+                    .append("  ->  ")
+                    .append(e.getValue())
+                    .append("\n");
         }
         body.append("\nThe runtime no longer accepts the old names and will refuse the file.\n\n");
         body.append("Migrate now? A backup will be saved as ")
-                .append(file.getName()).append(".pre-migration");
+                .append(file.getName())
+                .append(".pre-migration");
 
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Autofocus YAML Migration");
@@ -2832,16 +2849,16 @@ public class AutofocusEditorWorkflow {
         if (choice.isPresent() && choice.get() == migrate) {
             try {
                 migrateAliasesInFile(file, found);
-                Alert ok = new Alert(Alert.AlertType.INFORMATION,
-                        "Migrated " + found.size() + " alias(es). Backup saved as "
-                                + file.getName() + ".pre-migration");
+                Alert ok = new Alert(
+                        Alert.AlertType.INFORMATION,
+                        "Migrated " + found.size() + " alias(es). Backup saved as " + file.getName()
+                                + ".pre-migration");
                 ok.setTitle("Migration Complete");
                 ok.setHeaderText(null);
                 UIFunctions.showAlertOverParent(ok, owner);
             } catch (IOException ex) {
                 logger.error("Failed to migrate autofocus YAML", ex);
-                Alert err = new Alert(Alert.AlertType.ERROR,
-                        "Failed to migrate: " + ex.getMessage());
+                Alert err = new Alert(Alert.AlertType.ERROR, "Failed to migrate: " + ex.getMessage());
                 err.setTitle("Migration Failed");
                 err.setHeaderText(null);
                 UIFunctions.showAlertOverParent(err, owner);
@@ -3029,8 +3046,11 @@ public class AutofocusEditorWorkflow {
         // can never drift from the actual metric / strategy / modality
         // vocabulary the runtime accepts.
         try (FileWriter writer = new FileWriter(autofocusFile, StandardCharsets.UTF_8)) {
-            writer.write(FocusMetricsManifest.get(autofocusFile.getParentFile() != null
-                    ? autofocusFile.getParentFile().toPath() : null).headerCommentBlock());
+            writer.write(FocusMetricsManifest.get(
+                            autofocusFile.getParentFile() != null
+                                    ? autofocusFile.getParentFile().toPath()
+                                    : null)
+                    .headerCommentBlock());
             yaml.dump(root, writer);
         }
 

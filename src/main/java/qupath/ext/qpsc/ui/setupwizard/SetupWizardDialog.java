@@ -180,8 +180,7 @@ public class SetupWizardDialog {
             String error = step.validate();
             if (error != null) {
                 showStep(i);
-                errorLabel.setText("Cannot jump past step " + (i + 1)
-                        + " (" + step.getTitle() + "): " + error);
+                errorLabel.setText("Cannot jump past step " + (i + 1) + " (" + step.getTitle() + "): " + error);
                 errorLabel.setVisible(true);
                 errorLabel.setManaged(true);
                 return;

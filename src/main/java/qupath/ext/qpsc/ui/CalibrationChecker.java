@@ -280,8 +280,7 @@ public class CalibrationChecker {
             Collection<AffineTransformManager.TransformPreset> allTransforms = transformMgr.getAllTransforms();
 
             if (allTransforms.isEmpty()) {
-                return new StepStatus(
-                        Status.NOT_READY, "No alignment found - run Microscope Alignment first");
+                return new StepStatus(Status.NOT_READY, "No alignment found - run Microscope Alignment first");
             }
 
             // Most recent transform wins. A transform without a createdDate
@@ -289,15 +288,13 @@ public class CalibrationChecker {
             AffineTransformManager.TransformPreset newest = null;
             for (var preset : allTransforms) {
                 if (preset.getCreatedDate() == null) continue;
-                if (newest == null
-                        || preset.getCreatedDate().after(newest.getCreatedDate())) {
+                if (newest == null || preset.getCreatedDate().after(newest.getCreatedDate())) {
                     newest = preset;
                 }
             }
 
             if (newest == null) {
-                return new StepStatus(
-                        Status.WARNING, "Alignment age unknown - consider recalibrating");
+                return new StepStatus(Status.WARNING, "Alignment age unknown - consider recalibrating");
             }
 
             java.time.LocalDate createdLocal = newest.getCreatedDate()

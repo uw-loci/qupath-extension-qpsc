@@ -1006,10 +1006,9 @@ public class StageControlPanel extends VBox {
         ToggleButton fovOverlayBtn = new ToggleButton("Show Objective FoVs");
         fovOverlayBtn.setMaxWidth(Double.MAX_VALUE);
         fovOverlayBtn.setStyle("-fx-font-size: 10px;");
-        fovOverlayBtn.setTooltip(new Tooltip(
-                "Overlay color-coded rectangles on the live image showing each\n"
-                        + "objective's FoV relative to the current one. Useful for\n"
-                        + "framing decisions when switching magnifications."));
+        fovOverlayBtn.setTooltip(new Tooltip("Overlay color-coded rectangles on the live image showing each\n"
+                + "objective's FoV relative to the current one. Useful for\n"
+                + "framing decisions when switching magnifications."));
         fovOverlayBtn.setOnAction(e -> {
             if (onFovOverlayToggle != null) onFovOverlayToggle.run();
         });
@@ -1061,13 +1060,17 @@ public class StageControlPanel extends VBox {
             if (mc != null && mc.isConnected()) {
                 try {
                     double mmPx = mc.getSocketClient().getMicroscopePixelSize();
-                    var match = mgr.findHardwareByPixelSize(mmPx, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
+                    var match =
+                            mgr.findHardwareByPixelSize(mmPx, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
                     if (match.isPresent()) {
                         currentCameraObjectiveId = match.get().objectiveId();
                         currentCameraDetectorId = match.get().detectorId();
                         detected = true;
-                        logger.info("Camera tab: detected {}/{} from MM pixel size {}",
-                                currentCameraObjectiveId, currentCameraDetectorId, mmPx);
+                        logger.info(
+                                "Camera tab: detected {}/{} from MM pixel size {}",
+                                currentCameraObjectiveId,
+                                currentCameraDetectorId,
+                                mmPx);
                     }
                 } catch (Exception e) {
                     logger.debug("Camera tab: pixel size detection failed: {}", e.getMessage());
@@ -1407,8 +1410,7 @@ public class StageControlPanel extends VBox {
                     Double pending = cameraChannelExpPending.remove(chIdLocal);
                     if (pending == null || Double.isNaN(pending)) return;
                     double v = pending;
-                    qupath.ext.qpsc.preferences.PersistentPreferences.setLastChannelExposureMs(
-                            modality, chIdLocal, v);
+                    qupath.ext.qpsc.preferences.PersistentPreferences.setLastChannelExposureMs(modality, chIdLocal, v);
                     try {
                         MicroscopeController.getInstance().getSocketClient().setExposures(new float[] {(float) v});
                         cameraStatusLabel.setText("Channel " + chIdLocal + " exposure -> " + v + " ms");
@@ -1456,14 +1458,16 @@ public class StageControlPanel extends VBox {
                                     String valueStr = formatIntensityValue(v);
                                     mc.getSocketClient().setProperty(pr.device(), pr.property(), valueStr);
                                     Platform.runLater(() -> {
-                                        cameraStatusLabel.setText(
-                                                "Channel " + ch.id() + " intensity -> " + v);
+                                        cameraStatusLabel.setText("Channel " + ch.id() + " intensity -> " + v);
                                         cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
                                     });
                                 } catch (Exception ex) {
                                     logger.warn(
                                             "SETPROP({}.{} <- {}) failed: {}",
-                                            pr.device(), pr.property(), v, ex.getMessage());
+                                            pr.device(),
+                                            pr.property(),
+                                            v,
+                                            ex.getMessage());
                                     Platform.runLater(() -> {
                                         cameraStatusLabel.setText("Intensity update failed: " + ex.getMessage());
                                         cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
@@ -1497,11 +1501,7 @@ public class StageControlPanel extends VBox {
                     Double expOverride = expSpinner.getValue();
                     Double intOverride = (ch.intensityProperty() != null) ? intSpinner.getValue() : null;
                     applyChannelInBackground(
-                            resolvedProfile,
-                            ch.id(),
-                            expOverride,
-                            ch.intensityProperty(),
-                            intOverride);
+                            resolvedProfile, ch.id(), expOverride, ch.intensityProperty(), intOverride);
                 });
 
                 grid.add(previewRadio, 0, row);
@@ -1522,8 +1522,7 @@ public class StageControlPanel extends VBox {
             // Persist the spinner-tuned values to YAML so they survive
             // restarts and feed BG / acquisition. Hover the button for the
             // exact list of fields written for this modality.
-            cameraModContent.getChildren().addAll(
-                    new Separator(), buildFluorescenceSaveToProfileButton(modality));
+            cameraModContent.getChildren().addAll(new Separator(), buildFluorescenceSaveToProfileButton(modality));
         } else {
             // Fallback for profiles without a channel library.
             cameraModContent.getChildren().add(buildExposureControl());
@@ -1570,8 +1569,8 @@ public class StageControlPanel extends VBox {
      * modality rebuild instead of snapping back to 80 ms every time.
      */
     private double resolveChannelExposureMs(String modality, qupath.ext.qpsc.modality.Channel channel) {
-        Double saved = qupath.ext.qpsc.preferences.PersistentPreferences.getLastChannelExposureMs(
-                modality, channel.id());
+        Double saved =
+                qupath.ext.qpsc.preferences.PersistentPreferences.getLastChannelExposureMs(modality, channel.id());
         if (saved != null && saved > 0) return saved;
         return channel.defaultExposureMs();
     }
@@ -1587,8 +1586,7 @@ public class StageControlPanel extends VBox {
     private Node buildBrightfieldSaveToProfileButton(String modality) {
         Button saveBtn = new Button("Save Intensity to Profile");
         saveBtn.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
-        saveBtn.setTooltip(new Tooltip(
-                "Persists the LIVE lamp intensity (whatever GETILLM reports right now) "
+        saveBtn.setTooltip(new Tooltip("Persists the LIVE lamp intensity (whatever GETILLM reports right now) "
                 + "to acquisition_profiles." + (cameraActiveProfile == null ? "<profile>" : cameraActiveProfile)
                 + ".illumination_intensity in your microscope YAML.\n\n"
                 + "Why it matters: Background Collection and tiled Acquisition both pull "
@@ -1634,10 +1632,7 @@ public class StageControlPanel extends VBox {
                         }
                         double power = illum.power();
                         var result = qupath.ext.qpsc.utilities.ConfigYamlEditor.setProfileScalar(
-                                java.nio.file.Paths.get(configPath),
-                                profileKey,
-                                "illumination_intensity",
-                                power);
+                                java.nio.file.Paths.get(configPath), profileKey, "illumination_intensity", power);
                         // Reload on BOTH sides so the next BG / acquisition actually sees the new value.
                         mgr.reload(configPath);
                         try {
@@ -1686,8 +1681,7 @@ public class StageControlPanel extends VBox {
             }
             lines.append("\n");
         }
-        saveBtn.setTooltip(new Tooltip(
-                "Persists the CURRENT spinner values for every channel below to "
+        saveBtn.setTooltip(new Tooltip("Persists the CURRENT spinner values for every channel below to "
                 + "modalities." + modality + ".channels[*] in your microscope YAML.\n\n"
                 + "Each channel writes:\n"
                 + "  exposure_ms (from the Exp spinner)\n"
@@ -1749,12 +1743,14 @@ public class StageControlPanel extends VBox {
                                 var r = qupath.ext.qpsc.utilities.ConfigYamlEditor.setChannelExposureMs(
                                         path, modality, id, exp);
                                 if (r.changed) writes++;
-                                summary.append(id).append(" exp ").append(r.message).append("; ");
+                                summary.append(id)
+                                        .append(" exp ")
+                                        .append(r.message)
+                                        .append("; ");
                             }
                             Double intensity = intSnap.get(id);
                             if (intensity != null && ch.intensityProperty() != null) {
-                                String valueStr = (intensity == Math.floor(intensity)
-                                                && !Double.isInfinite(intensity))
+                                String valueStr = (intensity == Math.floor(intensity) && !Double.isInfinite(intensity))
                                         ? Long.toString((long) (double) intensity)
                                         : Double.toString(intensity);
                                 var r = qupath.ext.qpsc.utilities.ConfigYamlEditor.setChannelDevicePropertyValue(
@@ -1765,7 +1761,10 @@ public class StageControlPanel extends VBox {
                                         ch.intensityProperty().property(),
                                         valueStr);
                                 if (r.changed) writes++;
-                                summary.append(id).append(" int ").append(r.message).append("; ");
+                                summary.append(id)
+                                        .append(" int ")
+                                        .append(r.message)
+                                        .append("; ");
                             }
                         }
                         // Reload both sides
@@ -1782,8 +1781,7 @@ public class StageControlPanel extends VBox {
                         final String finalSummary = summary.toString();
                         logger.info("Save channels to YAML: {} write(s). Detail: {}", finalWrites, finalSummary);
                         Platform.runLater(() -> {
-                            cameraStatusLabel.setText(
-                                    "Saved " + finalWrites + " field(s) to YAML + reloaded server");
+                            cameraStatusLabel.setText("Saved " + finalWrites + " field(s) to YAML + reloaded server");
                             cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
                             rebuildCameraModContent(modality);
                         });
@@ -1856,22 +1854,25 @@ public class StageControlPanel extends VBox {
             expField.setText(String.format("%.1f", saved));
             usedSaved = true;
             final float toApply = (float) saved;
-            Thread t = new Thread(() -> {
-                try {
-                    MicroscopeController mc = MicroscopeController.getInstance();
-                    if (mc != null && mc.isConnected()) {
-                        mc.getSocketClient().setExposures(new float[] {toApply});
-                    }
-                } catch (Exception ex) {
-                    logger.debug("Restoring last exposure {} ms failed: {}", toApply, ex.getMessage());
-                }
-            }, "Restore-Exposure");
+            Thread t = new Thread(
+                    () -> {
+                        try {
+                            MicroscopeController mc = MicroscopeController.getInstance();
+                            if (mc != null && mc.isConnected()) {
+                                mc.getSocketClient().setExposures(new float[] {toApply});
+                            }
+                        } catch (Exception ex) {
+                            logger.debug("Restoring last exposure {} ms failed: {}", toApply, ex.getMessage());
+                        }
+                    },
+                    "Restore-Exposure");
             t.setDaemon(true);
             t.start();
         }
         if (!usedSaved) {
             try {
-                var expResult = MicroscopeController.getInstance().getSocketClient().getExposures();
+                var expResult =
+                        MicroscopeController.getInstance().getSocketClient().getExposures();
                 expField.setText(String.format("%.1f", expResult.unified()));
             } catch (Exception ex) {
                 expField.setText("");
@@ -1890,7 +1891,8 @@ public class StageControlPanel extends VBox {
                 cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
                 logger.info("Set exposure to {} ms", exp);
                 try {
-                    var verify = MicroscopeController.getInstance().getSocketClient().getExposures();
+                    var verify =
+                            MicroscopeController.getInstance().getSocketClient().getExposures();
                     logger.info(
                             "Set exposure verify: GETEXP unified={} red={} green={} blue={} (perChannel={})",
                             verify.unified(),
@@ -1944,17 +1946,22 @@ public class StageControlPanel extends VBox {
                 float clamped = (float) Math.max(min, Math.min(max, savedIntensity));
                 current = clamped;
                 final float toApply = clamped;
-                Thread t = new Thread(() -> {
-                    try {
-                        MicroscopeController mc2 = MicroscopeController.getInstance();
-                        if (mc2 != null && mc2.isConnected()) {
-                            mc2.getSocketClient().setIllumination(toApply);
-                        }
-                    } catch (Exception ex) {
-                        logger.debug("Restoring last {} illumination {} failed: {}",
-                                currentCameraModality, toApply, ex.getMessage());
-                    }
-                }, "Restore-Illum");
+                Thread t = new Thread(
+                        () -> {
+                            try {
+                                MicroscopeController mc2 = MicroscopeController.getInstance();
+                                if (mc2 != null && mc2.isConnected()) {
+                                    mc2.getSocketClient().setIllumination(toApply);
+                                }
+                            } catch (Exception ex) {
+                                logger.debug(
+                                        "Restoring last {} illumination {} failed: {}",
+                                        currentCameraModality,
+                                        toApply,
+                                        ex.getMessage());
+                            }
+                        },
+                        "Restore-Illum");
                 t.setDaemon(true);
                 t.start();
             } else {
@@ -2071,8 +2078,7 @@ public class StageControlPanel extends VBox {
         // and intentionally NOT persisted -- otherwise toggling off
         // permanently demotes the saved level to zero.
         if (currentCameraModality != null && power > 0) {
-            qupath.ext.qpsc.preferences.PersistentPreferences.setLastModalityIllumination(
-                    currentCameraModality, power);
+            qupath.ext.qpsc.preferences.PersistentPreferences.setLastModalityIllumination(currentCameraModality, power);
         }
         Thread t = new Thread(
                 () -> {
@@ -2296,15 +2302,13 @@ public class StageControlPanel extends VBox {
                             // pause so the camera doesn't briefly run with
                             // YAML-default exposure before our override lands.
                             if (exposureOverride != null) {
-                                mc.getSocketClient().setExposures(
-                                        new float[] {exposureOverride.floatValue()});
+                                mc.getSocketClient().setExposures(new float[] {exposureOverride.floatValue()});
                             }
                             if (intensityProperty != null && intensityOverride != null) {
                                 String valueStr = formatIntensityValue(intensityOverride);
-                                mc.getSocketClient().setProperty(
-                                        intensityProperty.device(),
-                                        intensityProperty.property(),
-                                        valueStr);
+                                mc.getSocketClient()
+                                        .setProperty(
+                                                intensityProperty.device(), intensityProperty.property(), valueStr);
                             }
                         });
                         Platform.runLater(() -> {
@@ -2350,8 +2354,7 @@ public class StageControlPanel extends VBox {
                     try {
                         MicroscopeController mc = MicroscopeController.getInstance();
                         if (mc == null || !mc.isConnected()) return;
-                        mc.withLiveModeHandling(
-                                () -> mc.getSocketClient().applyProfile(profileToApply));
+                        mc.withLiveModeHandling(() -> mc.getSocketClient().applyProfile(profileToApply));
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Switched to " + profileToApply);
                             cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
@@ -2519,8 +2522,10 @@ public class StageControlPanel extends VBox {
                                 mc.withLiveModeHandling(
                                         () -> mc.getSocketClient().applyProfile(profileToApply));
                             } catch (Exception apEx) {
-                                logger.warn("applyProfile({}) before preset load failed: {}",
-                                        profileToApply, apEx.getMessage());
+                                logger.warn(
+                                        "applyProfile({}) before preset load failed: {}",
+                                        profileToApply,
+                                        apEx.getMessage());
                             }
                         }
 
@@ -3551,7 +3556,8 @@ public class StageControlPanel extends VBox {
                         transform = composed;
                         logger.debug(
                                 "Move-to-Centroid: baked alignment flip ({}, {}) into transform for unflipped base",
-                                alignFlipX, alignFlipY);
+                                alignFlipX,
+                                alignFlipY);
                     } else {
                         transform = raw;
                     }

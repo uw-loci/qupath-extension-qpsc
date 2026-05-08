@@ -129,4 +129,3 @@ public class WidefieldFluorescenceModalityHandler implements ModalityHandler {
         return ChannelDisplay.PER_CHANNEL;
     }
 }
-

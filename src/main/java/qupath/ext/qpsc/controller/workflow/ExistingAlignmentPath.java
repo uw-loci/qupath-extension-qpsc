@@ -249,15 +249,13 @@ public class ExistingAlignmentPath {
         // base, but composed with the preset's macro->stage which expects flipped-frame input,
         // producing an X-mirrored fullRes->stage transform. Same defect ecc67ab fixed in
         // ExistingImageWorkflowV2.processSlideSpecificAlignment; this is the rebuild path.
-        AffineTransformManager.TransformPreset presetForFlip = state.alignmentChoice != null
-                ? state.alignmentChoice.selectedTransform()
-                : null;
+        AffineTransformManager.TransformPreset presetForFlip =
+                state.alignmentChoice != null ? state.alignmentChoice.selectedTransform() : null;
         boolean requiresFlipX = FlipResolver.resolveFlipX(null, presetForFlip, null);
         boolean requiresFlipY = FlipResolver.resolveFlipY(null, presetForFlip, null);
 
         String sampleNameForFlip = state.sample != null ? state.sample.sampleName() : null;
-        return ImageFlipHelper.validateAndFlipIfNeeded(
-                        gui, project, sampleNameForFlip, requiresFlipX, requiresFlipY)
+        return ImageFlipHelper.validateAndFlipIfNeeded(gui, project, sampleNameForFlip, requiresFlipX, requiresFlipY)
                 .thenApply(validated -> {
                     if (!validated) {
                         throw new RuntimeException("Image validation and flip preparation failed");
@@ -448,8 +446,11 @@ public class ExistingAlignmentPath {
                 processedMacroImage,
                 flipMacroX,
                 flipMacroY);
-        logger.info("Saved slide-specific alignment for image: {} (flipMacroX={}, flipMacroY={})",
-                imageName, flipMacroX, flipMacroY);
+        logger.info(
+                "Saved slide-specific alignment for image: {} (flipMacroX={}, flipMacroY={})",
+                imageName,
+                flipMacroX,
+                flipMacroY);
     }
 
     // Helper methods
@@ -549,8 +550,7 @@ public class ExistingAlignmentPath {
             }
         } catch (Exception e) {
             logger.warn(
-                    "Data bounds detection failed; falling back to green-box-derived bounds, which is approximate",
-                    e);
+                    "Data bounds detection failed; falling back to green-box-derived bounds, which is approximate", e);
         }
 
         // Fallback calculation based on green box size

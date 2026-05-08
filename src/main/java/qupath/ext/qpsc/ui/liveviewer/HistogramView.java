@@ -128,8 +128,8 @@ public class HistogramView extends VBox {
         Button fullRangeBtn = new Button("Full Range");
         Button autoScaleBtn = new Button("Auto Scale");
         CheckBox alwaysAutoScale = new CheckBox("Always Auto-Scale");
-        alwaysAutoScale.setTooltip(new javafx.scene.control.Tooltip(
-                "When checked, every live frame and acquired tile is auto-scaled.\n"
+        alwaysAutoScale.setTooltip(
+                new javafx.scene.control.Tooltip("When checked, every live frame and acquired tile is auto-scaled.\n"
                         + "When unchecked, your manual Min/Max sliders are preserved.\n"
                         + "Auto Scale button always does a one-shot rescale."));
         alwaysAutoScale.setSelected(contrastSettings.isAutoScale());

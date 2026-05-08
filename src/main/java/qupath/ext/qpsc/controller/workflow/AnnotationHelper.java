@@ -170,8 +170,7 @@ public class AnnotationHelper {
                             entry.getMetadata().get(qupath.ext.qpsc.utilities.ImageMetadataManager.FLIP_X),
                             entry.getMetadata().get(qupath.ext.qpsc.utilities.ImageMetadataManager.FLIP_Y),
                             entry.getMetadata().get(qupath.ext.qpsc.utilities.ImageMetadataManager.BASE_IMAGE),
-                            entry.getMetadata()
-                                    .get(qupath.ext.qpsc.utilities.ImageMetadataManager.ORIGINAL_IMAGE_ID));
+                            entry.getMetadata().get(qupath.ext.qpsc.utilities.ImageMetadataManager.ORIGINAL_IMAGE_ID));
                 } else {
                     entryDescription = "<no matching project entry for current ImageData>";
                 }

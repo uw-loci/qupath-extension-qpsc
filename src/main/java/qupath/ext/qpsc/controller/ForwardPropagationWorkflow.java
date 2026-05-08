@@ -12,7 +12,6 @@ import qupath.ext.qpsc.ui.PropagationManagerDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
@@ -118,8 +117,7 @@ public class ForwardPropagationWorkflow {
         for (Map.Entry<String, List<ProjectImageEntry<BufferedImage>>> e : subs.entrySet()) {
             String baseName = e.getKey();
             List<ProjectImageEntry<BufferedImage>> subList = e.getValue();
-            List<ProjectImageEntry<BufferedImage>> siblings =
-                    baseVariants.getOrDefault(baseName, new ArrayList<>());
+            List<ProjectImageEntry<BufferedImage>> siblings = baseVariants.getOrDefault(baseName, new ArrayList<>());
             boolean alignmentFound = false;
             try {
                 AffineTransform t = AffineTransformManager.loadSlideAlignment(project, baseName);
@@ -150,9 +148,8 @@ public class ForwardPropagationWorkflow {
         Set<PathClass> classes = new TreeSet<>();
         boolean hasUnclassified = false;
         for (PropagationGroupItem grp : groups) {
-            List<ProjectImageEntry<BufferedImage>> entries = (direction == Direction.FORWARD)
-                    ? grp.getSiblings()
-                    : grp.getSubAcquisitions();
+            List<ProjectImageEntry<BufferedImage>> entries =
+                    (direction == Direction.FORWARD) ? grp.getSiblings() : grp.getSubAcquisitions();
             for (ProjectImageEntry<BufferedImage> entry : entries) {
                 if (direction == Direction.BACK && selectedSubs != null && !selectedSubs.contains(entry)) continue;
                 try {
@@ -174,6 +171,7 @@ public class ForwardPropagationWorkflow {
     public static final class ClassScan {
         public final Set<PathClass> classes;
         public final boolean hasUnclassified;
+
         ClassScan(Set<PathClass> classes, boolean hasUnclassified) {
             this.classes = classes;
             this.hasUnclassified = hasUnclassified;
@@ -281,13 +279,11 @@ public class ForwardPropagationWorkflow {
                 if (mgr != null) activeScope = mgr.getMicroscopeName();
             } catch (Exception ignore) {
             }
-            if (subSource != null && !subSource.isEmpty()
-                    && activeScope != null && !subSource.equals(activeScope)) {
+            if (subSource != null && !subSource.isEmpty() && activeScope != null && !subSource.equals(activeScope)) {
                 throw new MissingSourceConfigException(
                         subEntry.getImageName(), subSource, "config_" + subSource + ".yml");
             }
-            throw new IllegalStateException(
-                    "Cannot determine FOV for sub-image '" + subEntry.getImageName()
+            throw new IllegalStateException("Cannot determine FOV for sub-image '" + subEntry.getImageName()
                     + "'. Add 'fov_x_um' / 'fov_y_um' metadata or ensure the active microscope "
                     + "config has objective+detector entries for this sub-acquisition.");
         }
@@ -327,8 +323,8 @@ public class ForwardPropagationWorkflow {
             }
             AffineTransform alignFlip = createFlip(alignFlipX, alignFlipY, baseWidth, baseHeight);
             combined.concatenate(alignFlip);
-            logger.info("Forward: pre-flipped unflipped-base pixels into alignment frame ({}, {})",
-                    alignFlipX, alignFlipY);
+            logger.info(
+                    "Forward: pre-flipped unflipped-base pixels into alignment frame ({}, {})", alignFlipX, alignFlipY);
         }
 
         List<PathObject> propagated = transformAndClip(sourceObjects, combined, subWidth, subHeight);
@@ -367,8 +363,7 @@ public class ForwardPropagationWorkflow {
         int subHeight = subData.getServer().getHeight();
         double[] fov = resolveFovForEntry(subEntry);
         if (fov == null) {
-            throw new IllegalStateException(
-                    "Cannot determine FOV for sub-image '" + subEntry.getImageName() + "'.");
+            throw new IllegalStateException("Cannot determine FOV for sub-image '" + subEntry.getImageName() + "'.");
         }
         double halfFovX = fov[0] / 2.0;
         double halfFovY = fov[1] / 2.0;
@@ -445,29 +440,37 @@ public class ForwardPropagationWorkflow {
             boolean[] roiFlip = ImageMetadataManager.getSourceRoiFlip(subEntry);
             boolean roiFlipX = roiFlip[0];
             boolean roiFlipY = roiFlip[1];
-            logger.info("BackProp: using GROUND-TRUTH source rect from metadata: "
-                    + "base px=({}, {}, {}x{}) flip=({}, {}) -- skipping alignment math.",
-                    fmt(rx), fmt(ry), fmt(rw), fmt(rh), roiFlipX, roiFlipY);
-            logger.info("BackProp(GT): sub '{}' is {}x{} px @ {} um/px; "
-                    + "original_image_id={}; base '{}' is {}x{} px",
-                    subEntry.getImageName(), subWidth, subHeight, subPixelSize,
+            logger.info(
+                    "BackProp: using GROUND-TRUTH source rect from metadata: "
+                            + "base px=({}, {}, {}x{}) flip=({}, {}) -- skipping alignment math.",
+                    fmt(rx),
+                    fmt(ry),
+                    fmt(rw),
+                    fmt(rh),
+                    roiFlipX,
+                    roiFlipY);
+            logger.info(
+                    "BackProp(GT): sub '{}' is {}x{} px @ {} um/px; " + "original_image_id={}; base '{}' is {}x{} px",
+                    subEntry.getImageName(),
+                    subWidth,
+                    subHeight,
+                    subPixelSize,
                     ImageMetadataManager.getOriginalImageId(subEntry),
                     baseData.getServer().getMetadata().getName(),
-                    baseWidth, baseHeight);
+                    baseWidth,
+                    baseHeight);
             // Build sub_px -> base_px linear map. Flip flags reverse the
             // axis inside the rectangle (used when the rectangle was
             // derived from a flipped sibling parent's tile detections).
             AffineTransform combined = new AffineTransform();
             combined.translate(roiFlipX ? rx + rw : rx, roiFlipY ? ry + rh : ry);
-            combined.scale(
-                    (roiFlipX ? -1.0 : 1.0) * rw / subWidth,
-                    (roiFlipY ? -1.0 : 1.0) * rh / subHeight);
+            combined.scale((roiFlipX ? -1.0 : 1.0) * rw / subWidth, (roiFlipY ? -1.0 : 1.0) * rh / subHeight);
             for (PathObject obj : sourceObjects) {
                 ROI src = obj.getROI();
                 if (src == null) continue;
                 double sx = src.getBoundsX(), sy = src.getBoundsY();
                 double sw = src.getBoundsWidth(), sh = src.getBoundsHeight();
-                double[] in = new double[]{sx, sy, sx + sw, sy + sh};
+                double[] in = new double[] {sx, sy, sx + sw, sy + sh};
                 double[] out = new double[4];
                 combined.transform(in, 0, out, 0, 2);
                 double tx = Math.min(out[0], out[2]);
@@ -478,17 +481,30 @@ public class ForwardPropagationWorkflow {
                 double sxFracMax = (sx + sw) / (double) subWidth;
                 double syFracMin = sy / (double) subHeight;
                 double syFracMax = (sy + sh) / (double) subHeight;
-                logger.info("  source obj '{}' src px=({}, {}, {}x{}) "
-                        + "frac=(x: {}-{}, y: {}-{}) -> base px=({}, {}, {}x{}) [GT]",
+                logger.info(
+                        "  source obj '{}' src px=({}, {}, {}x{}) "
+                                + "frac=(x: {}-{}, y: {}-{}) -> base px=({}, {}, {}x{}) [GT]",
                         obj.getDisplayedName(),
-                        fmt(sx), fmt(sy), fmt(sw), fmt(sh),
-                        String.format("%.3f", sxFracMin), String.format("%.3f", sxFracMax),
-                        String.format("%.3f", syFracMin), String.format("%.3f", syFracMax),
-                        fmt(tx), fmt(ty), fmt(tw), fmt(th));
+                        fmt(sx),
+                        fmt(sy),
+                        fmt(sw),
+                        fmt(sh),
+                        String.format("%.3f", sxFracMin),
+                        String.format("%.3f", sxFracMax),
+                        String.format("%.3f", syFracMin),
+                        String.format("%.3f", syFracMax),
+                        fmt(tx),
+                        fmt(ty),
+                        fmt(tw),
+                        fmt(th));
             }
             List<PathObject> propagated = transformAndClip(sourceObjects, combined, baseWidth, baseHeight);
-            logger.info("BackProp(GT): {} of {} object(s) survived clip onto base ({}x{})",
-                    propagated.size(), sourceObjects.size(), baseWidth, baseHeight);
+            logger.info(
+                    "BackProp(GT): {} of {} object(s) survived clip onto base ({}x{})",
+                    propagated.size(),
+                    sourceObjects.size(),
+                    baseWidth,
+                    baseHeight);
             if (!propagated.isEmpty()) baseHierarchy.addObjects(propagated);
             return propagated.size();
         }
@@ -509,13 +525,11 @@ public class ForwardPropagationWorkflow {
                 if (mgr != null) activeScope = mgr.getMicroscopeName();
             } catch (Exception ignore) {
             }
-            if (subSource != null && !subSource.isEmpty()
-                    && activeScope != null && !subSource.equals(activeScope)) {
+            if (subSource != null && !subSource.isEmpty() && activeScope != null && !subSource.equals(activeScope)) {
                 throw new MissingSourceConfigException(
                         subEntry.getImageName(), subSource, "config_" + subSource + ".yml");
             }
-            throw new IllegalStateException(
-                    "Cannot determine FOV for sub-image '" + subEntry.getImageName()
+            throw new IllegalStateException("Cannot determine FOV for sub-image '" + subEntry.getImageName()
                     + "'. Add 'fov_x_um' / 'fov_y_um' metadata or ensure the active microscope "
                     + "config has objective+detector entries for this sub-acquisition.");
         }
@@ -528,8 +542,12 @@ public class ForwardPropagationWorkflow {
         logger.info("  sub: {}x{} px @ {} um/px", subWidth, subHeight, subPixelSize);
         logger.info("  base: {}x{} px", baseWidth, baseHeight);
         logger.info("  xy_offset (raw, stage um) = ({}, {})", xyOffset[0], xyOffset[1]);
-        logger.info("  halfFOV (um) = ({}, {}); corrected offset = ({}, {})",
-                halfFovX, halfFovY, correctedOffsetX, correctedOffsetY);
+        logger.info(
+                "  halfFOV (um) = ({}, {}); corrected offset = ({}, {})",
+                halfFovX,
+                halfFovY,
+                correctedOffsetX,
+                correctedOffsetY);
         logger.info("  baseToStage = {}", formatAffine(baseToStage));
         logger.info("  alignFlip = (X={}, Y={})", alignFlipX, alignFlipY);
 
@@ -564,14 +582,19 @@ public class ForwardPropagationWorkflow {
         // Sanity-check: where do the four corners of the sub-image land in base-pixel coords?
         // If these four points fall well outside [0,baseWidth] x [0,baseHeight], the alignment
         // is for a different stage frame than the sub-acquisition (e.g. cross-scope mismatch).
-        double[] cornerProbe = new double[] { 0, 0, subWidth, 0, subWidth, subHeight, 0, subHeight };
+        double[] cornerProbe = new double[] {0, 0, subWidth, 0, subWidth, subHeight, 0, subHeight};
         double[] cornerOut = new double[8];
         combined.transform(cornerProbe, 0, cornerOut, 0, 4);
-        logger.info("  sub-image corners in base px: TL=({}, {}) TR=({}, {}) BR=({}, {}) BL=({}, {})",
-                fmt(cornerOut[0]), fmt(cornerOut[1]),
-                fmt(cornerOut[2]), fmt(cornerOut[3]),
-                fmt(cornerOut[4]), fmt(cornerOut[5]),
-                fmt(cornerOut[6]), fmt(cornerOut[7]));
+        logger.info(
+                "  sub-image corners in base px: TL=({}, {}) TR=({}, {}) BR=({}, {}) BL=({}, {})",
+                fmt(cornerOut[0]),
+                fmt(cornerOut[1]),
+                fmt(cornerOut[2]),
+                fmt(cornerOut[3]),
+                fmt(cornerOut[4]),
+                fmt(cornerOut[5]),
+                fmt(cornerOut[6]),
+                fmt(cornerOut[7]));
         boolean cornersOnBase = false;
         for (int i = 0; i < 4 && !cornersOnBase; i++) {
             double cx = cornerOut[i * 2];
@@ -593,25 +616,35 @@ public class ForwardPropagationWorkflow {
             double sy = src.getBoundsY();
             double sw = src.getBoundsWidth();
             double sh = src.getBoundsHeight();
-            double[] in = new double[] { sx, sy, sx + sw, sy + sh };
+            double[] in = new double[] {sx, sy, sx + sw, sy + sh};
             double[] out = new double[4];
             combined.transform(in, 0, out, 0, 2);
             double tx = Math.min(out[0], out[2]);
             double ty = Math.min(out[1], out[3]);
             double tw = Math.abs(out[2] - out[0]);
             double th = Math.abs(out[3] - out[1]);
-            boolean intersects = (tx + tw) >= 0 && tx <= baseWidth
-                    && (ty + th) >= 0 && ty <= baseHeight;
-            logger.info("  source obj '{}' src px=({}, {}, {}x{}) -> base px=({}, {}, {}x{}) -- {}",
+            boolean intersects = (tx + tw) >= 0 && tx <= baseWidth && (ty + th) >= 0 && ty <= baseHeight;
+            logger.info(
+                    "  source obj '{}' src px=({}, {}, {}x{}) -> base px=({}, {}, {}x{}) -- {}",
                     obj.getDisplayedName(),
-                    fmt(sx), fmt(sy), fmt(sw), fmt(sh),
-                    fmt(tx), fmt(ty), fmt(tw), fmt(th),
+                    fmt(sx),
+                    fmt(sy),
+                    fmt(sw),
+                    fmt(sh),
+                    fmt(tx),
+                    fmt(ty),
+                    fmt(tw),
+                    fmt(th),
                     intersects ? "intersects base" : "NO OVERLAP with base");
         }
 
         List<PathObject> propagated = transformAndClip(sourceObjects, combined, baseWidth, baseHeight);
-        logger.info("BackProp: {} of {} object(s) survived transform+clip onto base ({}x{})",
-                propagated.size(), sourceObjects.size(), baseWidth, baseHeight);
+        logger.info(
+                "BackProp: {} of {} object(s) survived transform+clip onto base ({}x{})",
+                propagated.size(),
+                sourceObjects.size(),
+                baseWidth,
+                baseHeight);
 
         if (!propagated.isEmpty()) {
             baseHierarchy.addObjects(propagated);
@@ -621,9 +654,9 @@ public class ForwardPropagationWorkflow {
     }
 
     private static String formatAffine(AffineTransform t) {
-        return String.format("[m00=%.6f m10=%.6f m01=%.6f m11=%.6f tx=%.3f ty=%.3f]",
-                t.getScaleX(), t.getShearY(), t.getShearX(), t.getScaleY(),
-                t.getTranslateX(), t.getTranslateY());
+        return String.format(
+                "[m00=%.6f m10=%.6f m01=%.6f m11=%.6f tx=%.3f ty=%.3f]",
+                t.getScaleX(), t.getShearY(), t.getShearX(), t.getScaleY(), t.getTranslateX(), t.getTranslateY());
     }
 
     private static String fmt(double v) {
@@ -661,11 +694,13 @@ public class ForwardPropagationWorkflow {
         public final java.util.Map<ProjectImageEntry<BufferedImage>, List<PathObject>> writtenByEntry;
 
         FanOutResult(int totalObjects, int siblingsUpdated, int siblingsAutoCreated, List<String> perSiblingLog) {
-            this(totalObjects, siblingsUpdated, siblingsAutoCreated, perSiblingLog,
-                    new java.util.LinkedHashMap<>());
+            this(totalObjects, siblingsUpdated, siblingsAutoCreated, perSiblingLog, new java.util.LinkedHashMap<>());
         }
 
-        FanOutResult(int totalObjects, int siblingsUpdated, int siblingsAutoCreated,
+        FanOutResult(
+                int totalObjects,
+                int siblingsUpdated,
+                int siblingsAutoCreated,
                 List<String> perSiblingLog,
                 java.util.Map<ProjectImageEntry<BufferedImage>, List<PathObject>> writtenByEntry) {
             this.totalObjects = totalObjects;
@@ -724,8 +759,12 @@ public class ForwardPropagationWorkflow {
         } catch (Exception e) {
             logger.debug("BackProp: could not read active scope name: {}", e.getMessage());
         }
-        logger.info("BackProp fan-out: sub='{}' source_microscope='{}' active_microscope='{}' base='{}'",
-                subEntry.getImageName(), subSourceScope, activeScope, baseName);
+        logger.info(
+                "BackProp fan-out: sub='{}' source_microscope='{}' active_microscope='{}' base='{}'",
+                subEntry.getImageName(),
+                subSourceScope,
+                activeScope,
+                baseName);
 
         // Cross-scope routing: when the sub was acquired on a different scope
         // than the active one, the xy_offset is in *that* scope's stage frame.
@@ -739,16 +778,22 @@ public class ForwardPropagationWorkflow {
             AffineTransformManager.SlideAlignmentResult crossScope =
                     AffineTransformManager.loadSlideAlignmentWithFrameForScope(project, baseName, subSourceScope);
             if (crossScope != null) {
-                logger.info("BackProp: cross-scope routing -- replacing active-scope ({}) alignment with "
-                        + "sub source-scope ({}) alignment for back-prop math.",
-                        activeScope, subSourceScope);
+                logger.info(
+                        "BackProp: cross-scope routing -- replacing active-scope ({}) alignment with "
+                                + "sub source-scope ({}) alignment for back-prop math.",
+                        activeScope,
+                        subSourceScope);
                 baseToStage = crossScope.getTransform();
                 slideResult = crossScope;
             } else {
-                logger.warn("BackProp: sub source_microscope='{}' differs from active scope='{}', "
-                        + "but no '{}_{}_alignment.json' found. Will use the active-scope alignment "
-                        + "and the result will likely be wrong.",
-                        subSourceScope, activeScope, baseName, subSourceScope);
+                logger.warn(
+                        "BackProp: sub source_microscope='{}' differs from active scope='{}', "
+                                + "but no '{}_{}_alignment.json' found. Will use the active-scope alignment "
+                                + "and the result will likely be wrong.",
+                        subSourceScope,
+                        activeScope,
+                        baseName,
+                        subSourceScope);
             }
         }
 
@@ -766,22 +811,23 @@ public class ForwardPropagationWorkflow {
             // Fallback: pick a preset whose target microscope matches the alignment we will be
             // inverting. For cross-scope routing that's the sub's source scope; otherwise the
             // active scope.
-            String flipScope = (subSourceScope != null && !subSourceScope.isEmpty())
-                    ? subSourceScope : activeScope;
+            String flipScope = (subSourceScope != null && !subSourceScope.isEmpty()) ? subSourceScope : activeScope;
             try {
                 String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
                 if (configPath != null && !configPath.isEmpty() && flipScope != null) {
-                    AffineTransformManager mgr =
-                            new AffineTransformManager(new java.io.File(configPath).getParent());
+                    AffineTransformManager mgr = new AffineTransformManager(new java.io.File(configPath).getParent());
                     for (String scanner : mgr.getDistinctSourceScannersForMicroscope(flipScope)) {
-                        AffineTransformManager.TransformPreset p =
-                                mgr.getBestPresetForPair(scanner, flipScope);
+                        AffineTransformManager.TransformPreset p = mgr.getBestPresetForPair(scanner, flipScope);
                         if (p != null && p.hasFlipState()) {
                             alignFlipX = Boolean.TRUE.equals(p.getFlipMacroX());
                             alignFlipY = Boolean.TRUE.equals(p.getFlipMacroY());
-                            logger.warn("BackProp: per-slide JSON lacks flip frame; "
-                                    + "falling back to preset '{}' (target scope='{}'): flipX={}, flipY={}",
-                                    p.getName(), flipScope, alignFlipX, alignFlipY);
+                            logger.warn(
+                                    "BackProp: per-slide JSON lacks flip frame; "
+                                            + "falling back to preset '{}' (target scope='{}'): flipX={}, flipY={}",
+                                    p.getName(),
+                                    flipScope,
+                                    alignFlipX,
+                                    alignFlipY);
                             break;
                         }
                     }
@@ -809,8 +855,7 @@ public class ForwardPropagationWorkflow {
             }
         }
         if (base == null) {
-            throw new IllegalStateException(
-                    "No unflipped base entry for '" + baseName + "' found in project.");
+            throw new IllegalStateException("No unflipped base entry for '" + baseName + "' found in project.");
         }
 
         ImageData<BufferedImage> baseData = base.readImageData();
@@ -848,11 +893,12 @@ public class ForwardPropagationWorkflow {
             writtenByEntry.put(base, new ArrayList<>(writtenObjects));
             siblingsUpdated = 1;
             totalWritten += written;
-            perSiblingLog.add(String.format("  %s -> %s: %d objects (alignFlip=(%s, %s))",
+            perSiblingLog.add(String.format(
+                    "  %s -> %s: %d objects (alignFlip=(%s, %s))",
                     subEntry.getImageName(), base.getImageName(), written, alignFlipX, alignFlipY));
         } else {
-            perSiblingLog.add(String.format("  %s -> %s: 0 objects (no overlap)",
-                    subEntry.getImageName(), base.getImageName()));
+            perSiblingLog.add(
+                    String.format("  %s -> %s: 0 objects (no overlap)", subEntry.getImageName(), base.getImageName()));
         }
 
         // Fan-out to legacy flipped sibling entries (e.g. "(flipped X)",
@@ -900,15 +946,16 @@ public class ForwardPropagationWorkflow {
                         writtenByEntry.put(sibling, new ArrayList<>(mirrored));
                         siblingsUpdated++;
                         totalWritten += added;
-                        perSiblingLog.add(String.format("  %s -> %s: %d objects (mirror=(%s, %s))",
+                        perSiblingLog.add(String.format(
+                                "  %s -> %s: %d objects (mirror=(%s, %s))",
                                 subEntry.getImageName(), name, added, flipX, flipY));
                     } else {
-                        perSiblingLog.add(String.format("  %s -> %s: 0 objects (mirror produced empty ROIs)",
-                                subEntry.getImageName(), name));
+                        perSiblingLog.add(String.format(
+                                "  %s -> %s: 0 objects (mirror produced empty ROIs)", subEntry.getImageName(), name));
                     }
                 } catch (Exception sibEx) {
-                    perSiblingLog.add(String.format("  %s -> %s: FAILED (%s)",
-                            subEntry.getImageName(), name, sibEx.getMessage()));
+                    perSiblingLog.add(String.format(
+                            "  %s -> %s: FAILED (%s)", subEntry.getImageName(), name, sibEx.getMessage()));
                     logger.warn("Sibling fan-out to '{}' failed: {}", name, sibEx.getMessage());
                 }
             }
@@ -924,8 +971,7 @@ public class ForwardPropagationWorkflow {
         if (allowAutoCreate) {
             logger.debug("propagateBackFanOut: allowAutoCreate is now a no-op under Step B (no flipped siblings).");
         }
-        logger.info("Back-prop complete: {} sibling(s) updated, {} object(s) total",
-                siblingsUpdated, totalWritten);
+        logger.info("Back-prop complete: {} sibling(s) updated, {} object(s) total", siblingsUpdated, totalWritten);
         return new FanOutResult(totalWritten, siblingsUpdated, 0, perSiblingLog, writtenByEntry);
     }
 
@@ -967,14 +1013,12 @@ public class ForwardPropagationWorkflow {
 
         String parentId = ImageMetadataManager.getOriginalImageId(sub);
         if (parentId == null || parentId.isEmpty()) {
-            logger.debug("Auto-stamp: sub '{}' has no original_image_id; skipping.",
-                    sub.getImageName());
+            logger.debug("Auto-stamp: sub '{}' has no original_image_id; skipping.", sub.getImageName());
             return false;
         }
         String annotationName = sub.getMetadata().get(ImageMetadataManager.ANNOTATION_NAME);
         if (annotationName == null || annotationName.isEmpty()) {
-            logger.debug("Auto-stamp: sub '{}' has no annotation_name; skipping.",
-                    sub.getImageName());
+            logger.debug("Auto-stamp: sub '{}' has no annotation_name; skipping.", sub.getImageName());
             return false;
         }
 
@@ -986,9 +1030,11 @@ public class ForwardPropagationWorkflow {
             }
         }
         if (parent == null) {
-            logger.info("Auto-stamp: parent ID '{}' (recorded on sub '{}') not found in project; "
-                    + "skipping tile-detection ground-truth lookup.",
-                    parentId, sub.getImageName());
+            logger.info(
+                    "Auto-stamp: parent ID '{}' (recorded on sub '{}') not found in project; "
+                            + "skipping tile-detection ground-truth lookup.",
+                    parentId,
+                    sub.getImageName());
             return false;
         }
 
@@ -1004,9 +1050,11 @@ public class ForwardPropagationWorkflow {
         }
 
         if (matches.isEmpty()) {
-            logger.info("Auto-stamp: no tile detections matching '*{}' on parent '{}'; "
-                    + "back-prop will fall back to alignment math.",
-                    suffix, parent.getImageName());
+            logger.info(
+                    "Auto-stamp: no tile detections matching '*{}' on parent '{}'; "
+                            + "back-prop will fall back to alignment math.",
+                    suffix,
+                    parent.getImageName());
             return false;
         }
 
@@ -1039,23 +1087,40 @@ public class ForwardPropagationWorkflow {
             int baseWidth = unflippedBaseData.getServer().getWidth();
             int baseHeight = unflippedBaseData.getServer().getHeight();
             AffineTransform mirror = createFlip(parentFlipX, parentFlipY, baseWidth, baseHeight);
-            double[] in = new double[]{rx, ry, rx + rw, ry + rh};
+            double[] in = new double[] {rx, ry, rx + rw, ry + rh};
             double[] out = new double[4];
             mirror.transform(in, 0, out, 0, 2);
             double mx = Math.min(out[0], out[2]);
             double my = Math.min(out[1], out[3]);
             double mw = Math.abs(out[2] - out[0]);
             double mh = Math.abs(out[3] - out[1]);
-            logger.info("Auto-stamp: parent '{}' is flipped (X={}, Y={}); mirroring "
-                    + "tile bbox ({}, {}, {}x{}) -> unflipped base ({}, {}, {}x{}); "
-                    + "marking sub axes as flipped within rect.",
-                    parent.getImageName(), parentFlipX, parentFlipY,
-                    fmt(rx), fmt(ry), fmt(rw), fmt(rh),
-                    fmt(mx), fmt(my), fmt(mw), fmt(mh));
-            rx = mx; ry = my; rw = mw; rh = mh;
+            logger.info(
+                    "Auto-stamp: parent '{}' is flipped (X={}, Y={}); mirroring "
+                            + "tile bbox ({}, {}, {}x{}) -> unflipped base ({}, {}, {}x{}); "
+                            + "marking sub axes as flipped within rect.",
+                    parent.getImageName(),
+                    parentFlipX,
+                    parentFlipY,
+                    fmt(rx),
+                    fmt(ry),
+                    fmt(rw),
+                    fmt(rh),
+                    fmt(mx),
+                    fmt(my),
+                    fmt(mw),
+                    fmt(mh));
+            rx = mx;
+            ry = my;
+            rw = mw;
+            rh = mh;
         } else {
-            logger.info("Auto-stamp: parent '{}' is unflipped; tile bbox in base px: ({}, {}, {}x{})",
-                    parent.getImageName(), fmt(rx), fmt(ry), fmt(rw), fmt(rh));
+            logger.info(
+                    "Auto-stamp: parent '{}' is unflipped; tile bbox in base px: ({}, {}, {}x{})",
+                    parent.getImageName(),
+                    fmt(rx),
+                    fmt(ry),
+                    fmt(rw),
+                    fmt(rh));
         }
 
         ImageMetadataManager.setSourceRoiPx(sub, rx, ry, rw, rh, parentFlipX, parentFlipY);
@@ -1064,16 +1129,23 @@ public class ForwardPropagationWorkflow {
         } catch (Exception e) {
             logger.debug("syncChanges after auto-stamp: {}", e.getMessage());
         }
-        logger.info("Auto-stamp: stamped source_roi_*_px on sub '{}' from {} tile detection(s) "
-                + "on parent '{}' (rect=({}, {}, {}x{}) flip=({}, {})).",
-                sub.getImageName(), matches.size(), parent.getImageName(),
-                fmt(rx), fmt(ry), fmt(rw), fmt(rh), parentFlipX, parentFlipY);
+        logger.info(
+                "Auto-stamp: stamped source_roi_*_px on sub '{}' from {} tile detection(s) "
+                        + "on parent '{}' (rect=({}, {}, {}x{}) flip=({}, {})).",
+                sub.getImageName(),
+                matches.size(),
+                parent.getImageName(),
+                fmt(rx),
+                fmt(ry),
+                fmt(rw),
+                fmt(rh),
+                parentFlipX,
+                parentFlipY);
         return true;
     }
 
     /** Locate the unflipped base entry for {@code baseName} (FLIP_X/Y both '0' or both absent). */
-    private static ProjectImageEntry<BufferedImage> findUnflippedBase(
-            Project<BufferedImage> project, String baseName) {
+    private static ProjectImageEntry<BufferedImage> findUnflippedBase(Project<BufferedImage> project, String baseName) {
         for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
             String imageName = entry.getImageName();
             if (imageName == null) continue;
@@ -1082,8 +1154,7 @@ public class ForwardPropagationWorkflow {
             String effectiveBase = (rawBase != null && !rawBase.isEmpty()) ? rawBase : stripped;
             if (!baseName.equals(effectiveBase)) continue;
             // Skip sub-acquisitions
-            boolean isBaseLike = stripped.equals(baseName)
-                    || imageName.startsWith(baseName + ".");
+            boolean isBaseLike = stripped.equals(baseName) || imageName.startsWith(baseName + ".");
             if (!isBaseLike) continue;
             // Skip flipped duplicates by name (legacy projects that haven't been migrated yet)
             if (imageName.contains("(flipped")) continue;
@@ -1260,7 +1331,7 @@ public class ForwardPropagationWorkflow {
                     double fy = Double.parseDouble(fyStr);
                     if (fx > 0 && fy > 0) {
                         logger.debug("FOV from metadata: {}x{} um", fx, fy);
-                        return new double[]{fx, fy};
+                        return new double[] {fx, fy};
                     }
                 } catch (NumberFormatException e) {
                     logger.debug("Invalid FOV metadata: {}, {}", fxStr, fyStr);
@@ -1285,8 +1356,13 @@ public class ForwardPropagationWorkflow {
                     if (mgr != null) {
                         double[] fov = mgr.getCameraFOV(modality, objective, detector);
                         if (fov != null && fov[0] > 0 && fov[1] > 0) {
-                            logger.info("FOV from active config: {}x{} um (modality={}, obj={}, det={})",
-                                    fov[0], fov[1], modality, objective, detector);
+                            logger.info(
+                                    "FOV from active config: {}x{} um (modality={}, obj={}, det={})",
+                                    fov[0],
+                                    fov[1],
+                                    modality,
+                                    objective,
+                                    detector);
                             return fov;
                         }
                     }
@@ -1307,21 +1383,28 @@ public class ForwardPropagationWorkflow {
                                     if (detached != null) {
                                         double[] fov = detached.getCameraFOV(modality, objective, detector);
                                         if (fov != null && fov[0] > 0 && fov[1] > 0) {
-                                            logger.info("FOV from source-scope ('{}') config: {}x{} um "
-                                                    + "(modality={}, obj={}, det={})",
-                                                    sourceScope, fov[0], fov[1], modality, objective, detector);
+                                            logger.info(
+                                                    "FOV from source-scope ('{}') config: {}x{} um "
+                                                            + "(modality={}, obj={}, det={})",
+                                                    sourceScope,
+                                                    fov[0],
+                                                    fov[1],
+                                                    modality,
+                                                    objective,
+                                                    detector);
                                             return fov;
                                         }
                                     }
                                 } else {
-                                    logger.warn("Source-scope config '{}' not found at {}",
-                                            sourceScope, scopeCfg.getAbsolutePath());
+                                    logger.warn(
+                                            "Source-scope config '{}' not found at {}",
+                                            sourceScope,
+                                            scopeCfg.getAbsolutePath());
                                 }
                             }
                         }
                     } catch (Exception e) {
-                        logger.warn("Source-scope ('{}') config FOV lookup failed: {}",
-                                sourceScope, e.getMessage());
+                        logger.warn("Source-scope ('{}') config FOV lookup failed: {}", sourceScope, e.getMessage());
                     }
                 }
             }
@@ -1339,9 +1422,11 @@ public class ForwardPropagationWorkflow {
             } catch (Exception ignore) {
             }
             if (entryScope != null && activeScope != null && !entryScope.equals(activeScope)) {
-                logger.warn("Skipping live-microscope FOV fallback: entry source='{}' != active='{}'. "
-                        + "FOV would be wrong scope; back-prop offset will be uncorrected.",
-                        entryScope, activeScope);
+                logger.warn(
+                        "Skipping live-microscope FOV fallback: entry source='{}' != active='{}'. "
+                                + "FOV would be wrong scope; back-prop offset will be uncorrected.",
+                        entryScope,
+                        activeScope);
                 return null;
             }
         }

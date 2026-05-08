@@ -80,8 +80,8 @@ class BackgroundExposureLookupTest {
                         angle_degrees: 0.0
                         exposure_ms: 41.36
                 """);
-        BackgroundExposureMatch match = mgr.findBackgroundExposures(
-                "Brightfield_10x", "0.5NA_AIR_10x", "HAMAMATSU_DCAM_01");
+        BackgroundExposureMatch match =
+                mgr.findBackgroundExposures("Brightfield_10x", "0.5NA_AIR_10x", "HAMAMATSU_DCAM_01");
         assertNotNull(match, "exact match must succeed");
         assertEquals(BackgroundExposureMatch.Tier.EXACT, match.tier());
         assertEquals(41.36, match.exposures().get(0.0));
@@ -102,8 +102,8 @@ class BackgroundExposureLookupTest {
                         angle_degrees: 0.0
                         exposure_ms: 41.36
                 """);
-        BackgroundExposureMatch match = mgr.findBackgroundExposures(
-                "Brightfield_10x", "0.5NA_AIR_10x", "HAMAMATSU_DCAM_01");
+        BackgroundExposureMatch match =
+                mgr.findBackgroundExposures("Brightfield_10x", "0.5NA_AIR_10x", "HAMAMATSU_DCAM_01");
         assertNotNull(match);
         // Family stripping makes both keys identical; this is EXACT under the
         // canonical key, which is the desired property.
@@ -131,8 +131,8 @@ class BackgroundExposureLookupTest {
                         angle_degrees: 0.0
                         exposure_ms: 41.36
                 """);
-        BackgroundExposureMatch match = mgr.findBackgroundExposures(
-                "Brightfield", "0.75NA_AIR_10x", "HAMAMATSU_DCAM_01");
+        BackgroundExposureMatch match =
+                mgr.findBackgroundExposures("Brightfield", "0.75NA_AIR_10x", "HAMAMATSU_DCAM_01");
         assertNotNull(match, "objective-renamed-same-mag must match at tier MAGNIFICATION");
         assertEquals(BackgroundExposureMatch.Tier.MAGNIFICATION, match.tier());
         assertTrue(match.isObjectiveDrift());
@@ -154,8 +154,7 @@ class BackgroundExposureLookupTest {
                         angle_degrees: 0.0
                         exposure_ms: 41.36
                 """);
-        BackgroundExposureMatch match = mgr.findBackgroundExposures(
-                "Brightfield", "0.5NA_AIR_10x", "OTHER_DETECTOR");
+        BackgroundExposureMatch match = mgr.findBackgroundExposures("Brightfield", "0.5NA_AIR_10x", "OTHER_DETECTOR");
         assertNull(match, "detector axis is hard -- never softened");
     }
 
@@ -173,8 +172,8 @@ class BackgroundExposureLookupTest {
                         angle_degrees: 0.0
                         exposure_ms: 41.36
                 """);
-        BackgroundExposureMatch match = mgr.findBackgroundExposures(
-                "Brightfield", "0.5NA_AIR_10x", "HAMAMATSU_DCAM_01");
+        BackgroundExposureMatch match =
+                mgr.findBackgroundExposures("Brightfield", "0.5NA_AIR_10x", "HAMAMATSU_DCAM_01");
         assertNull(match, "modality family is hard -- never softened");
     }
 
@@ -195,8 +194,8 @@ class BackgroundExposureLookupTest {
                         angle_degrees: 0.0
                         exposure_ms: 41.36
                 """);
-        BackgroundExposureMatch match = mgr.findBackgroundExposures(
-                "Brightfield", "0.75NA_AIR_20x", "HAMAMATSU_DCAM_01");
+        BackgroundExposureMatch match =
+                mgr.findBackgroundExposures("Brightfield", "0.75NA_AIR_20x", "HAMAMATSU_DCAM_01");
         assertNull(match, "different magnification has no shared BG TIFF -- refuse");
     }
 
@@ -218,8 +217,8 @@ class BackgroundExposureLookupTest {
                         angle_degrees: 0.0
                         exposure_ms: 41.36
                 """);
-        BackgroundExposureMatch match = mgr.findBackgroundExposures(
-                "Brightfield", "0.75NA_AIR_10x", "HAMAMATSU_DCAM_01");
+        BackgroundExposureMatch match =
+                mgr.findBackgroundExposures("Brightfield", "0.75NA_AIR_10x", "HAMAMATSU_DCAM_01");
         assertNotNull(match, "explicit magnification field must enable Tier-2 match");
         assertEquals(BackgroundExposureMatch.Tier.MAGNIFICATION, match.tier());
         assertEquals(41.36, match.exposures().get(0.0));
@@ -231,8 +230,8 @@ class BackgroundExposureLookupTest {
         // without throwing, so callers can differentiate "never collected"
         // from "collected for wrong rig".
         writeFixture("# empty imageprocessing\n");
-        BackgroundExposureMatch match = mgr.findBackgroundExposures(
-                "Brightfield", "0.5NA_AIR_10x", "HAMAMATSU_DCAM_01");
+        BackgroundExposureMatch match =
+                mgr.findBackgroundExposures("Brightfield", "0.5NA_AIR_10x", "HAMAMATSU_DCAM_01");
         assertNull(match);
     }
 
@@ -259,8 +258,7 @@ class BackgroundExposureLookupTest {
                         angle_degrees: 135.0
                         exposure_ms: 18.0
                 """);
-        BackgroundExposureMatch match = mgr.findBackgroundExposures(
-                "ppm_20x", "0.5NA_AIR_20x", "HAMAMATSU_DCAM_01");
+        BackgroundExposureMatch match = mgr.findBackgroundExposures("ppm_20x", "0.5NA_AIR_20x", "HAMAMATSU_DCAM_01");
         assertNotNull(match);
         assertEquals(4, match.exposures().size());
         assertEquals(12.5, match.exposures().get(0.0));

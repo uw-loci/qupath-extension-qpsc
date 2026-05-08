@@ -19,9 +19,9 @@ import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.AcquisitionMonitorService;
 import qupath.ext.qpsc.service.AngleResolutionService;
 import qupath.ext.qpsc.service.ChannelResolutionService;
-import qupath.ext.qpsc.service.AcquisitionMonitorService;
 import qupath.ext.qpsc.service.ManualFocusHandler;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
@@ -470,7 +470,8 @@ public class BoundedAcquisitionWorkflow {
                                         Paths.get(tempTileDir, boundsMode).toString();
                                 final AtomicInteger lastTileProgress = new AtomicInteger(0);
 
-                                AcquisitionMonitorService.monitorAndHandle(socketClient,
+                                AcquisitionMonitorService.monitorAndHandle(
+                                        socketClient,
                                         AcquisitionMonitorService.MonitorConfig.create()
                                                 .progress(progress -> {
                                                     progressCounter.set(progress.current);

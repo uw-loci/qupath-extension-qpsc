@@ -53,7 +53,8 @@ public class BackgroundCollectionController {
     private ComboBox<String> detectorComboBox;
     private TextField outputPathField;
     private ComboBox<String> wbModeComboBox;
-    private VBox exposurePaneRoot; // exposure label + validation label + exposure controls; hidden when WB owns exposures
+    private VBox
+            exposurePaneRoot; // exposure label + validation label + exposure controls; hidden when WB owns exposures
     private VBox exposureControlsPane;
     private List<AngleExposure> currentAngleExposures = new ArrayList<>();
     private List<TextField> exposureFields = new ArrayList<>();
@@ -175,8 +176,7 @@ public class BackgroundCollectionController {
                     updateWbControlsVisibility();
                     updateExposurePaneVisibility();
                     if (modalityComboBox.getValue() != null && objectiveComboBox.getValue() != null) {
-                        updateExposureControlsWithBackground(
-                                modalityComboBox.getValue(), objectiveComboBox.getValue());
+                        updateExposureControlsWithBackground(modalityComboBox.getValue(), objectiveComboBox.getValue());
                     }
                 });
 
@@ -373,17 +373,18 @@ public class BackgroundCollectionController {
         // iterator() returned first, which on the PPM scope was masking JAI vs
         // Teledyne mistakes (2026-04-27 incident).
         Label detectorLabel = new Label("Detector:");
-        detectorLabel.setTooltip(new Tooltip(
-                "Select the detector for background collection.\n"
-                        + "Backgrounds are stored under <output>/<detector>/<modality>/<objective>/<wbMode>/, "
-                        + "and per-angle WB calibration is detector-specific."));
+        detectorLabel.setTooltip(new Tooltip("Select the detector for background collection.\n"
+                + "Backgrounds are stored under <output>/<detector>/<modality>/<objective>/<wbMode>/, "
+                + "and per-angle WB calibration is detector-specific."));
         detectorComboBox = new ComboBox<>();
         detectorComboBox.setPromptText("Select detector...");
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
             Set<String> availableDetectors = configManager.getAvailableDetectors();
-            detectorComboBox.getItems().addAll(availableDetectors.stream().sorted().toList());
+            detectorComboBox
+                    .getItems()
+                    .addAll(availableDetectors.stream().sorted().toList());
             String lastDetector = PersistentPreferences.getLastDetector();
             if (lastDetector != null && !lastDetector.isEmpty() && availableDetectors.contains(lastDetector)) {
                 detectorComboBox.setValue(lastDetector);
@@ -914,14 +915,15 @@ public class BackgroundCollectionController {
                 // goes stale whenever the user swaps objectives without going through the
                 // Acquisition Wizard, which previously caused calibrations to be saved into
                 // the wrong YAML slot (2026-05-04 incident).
-                Optional<MicroscopeConfigManager.HardwareSelection> liveMatch =
-                        detectMountedHardware(configManager);
+                Optional<MicroscopeConfigManager.HardwareSelection> liveMatch = detectMountedHardware(configManager);
                 String defaultObjective = liveMatch
                         .map(MicroscopeConfigManager.HardwareSelection::objectiveId)
                         .filter(availableObjectives::contains)
                         .orElse(null);
                 String lastObjective = PersistentPreferences.getLastObjective();
-                if (defaultObjective == null && lastObjective != null && !lastObjective.isEmpty()
+                if (defaultObjective == null
+                        && lastObjective != null
+                        && !lastObjective.isEmpty()
                         && availableObjectives.contains(lastObjective)) {
                     defaultObjective = lastObjective;
                 }
@@ -929,7 +931,9 @@ public class BackgroundCollectionController {
                         "Background dialog objectives: available={}, liveMatch='{}', "
                                 + "lastObjective='{}', selected='{}'",
                         availableObjectives,
-                        liveMatch.map(MicroscopeConfigManager.HardwareSelection::objectiveId).orElse(null),
+                        liveMatch
+                                .map(MicroscopeConfigManager.HardwareSelection::objectiveId)
+                                .orElse(null),
                         lastObjective,
                         defaultObjective);
                 if (defaultObjective != null) {
@@ -957,8 +961,7 @@ public class BackgroundCollectionController {
             MicroscopeController mc = MicroscopeController.getInstance();
             if (mc == null || !mc.isConnected()) return Optional.empty();
             double mmPx = mc.getSocketClient().getMicroscopePixelSize();
-            return configManager.findHardwareByPixelSize(
-                    mmPx, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
+            return configManager.findHardwareByPixelSize(mmPx, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
         } catch (Exception e) {
             logger.debug("Background dialog: live hardware detection failed: {}", e.getMessage());
             return Optional.empty();
@@ -1227,14 +1230,7 @@ public class BackgroundCollectionController {
             PersistentPreferences.setLastDetector(detector);
 
             return new BackgroundCollectionResult(
-                    modality,
-                    objective,
-                    detector,
-                    finalExposures,
-                    outputPath,
-                    usePerAngleWB,
-                    wbMode,
-                    targetIntensity);
+                    modality, objective, detector, finalExposures, outputPath, usePerAngleWB, wbMode, targetIntensity);
 
         } catch (Exception e) {
             logger.error("Error creating result", e);

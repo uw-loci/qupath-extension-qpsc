@@ -112,8 +112,7 @@ public class MicroscopeConfigManager {
         if (instance == null || (instance.configPath == null || instance.configPath.isBlank())) {
             instance = new MicroscopeConfigManager(configPath);
         } else if (!configPath.equals(instance.configPath)) {
-            logger.info("Config path changed from {} to {} -- reloading",
-                    instance.configPath, configPath);
+            logger.info("Config path changed from {} to {} -- reloading", instance.configPath, configPath);
             instance.reload(configPath);
         }
         return instance;
@@ -335,12 +334,11 @@ public class MicroscopeConfigManager {
         Map<String, Object> sa = (saObj instanceof Map) ? (Map<String, Object>) saObj : null;
 
         boolean missing = (sa == null);
-        boolean incomplete = sa != null && (
-                !sa.containsKey("enabled") ||
-                !sa.containsKey("slow_speed_value") ||
-                !sa.containsKey("slow_speed_um_per_s") ||
-                !sa.containsKey("normal_speed_value")
-        );
+        boolean incomplete = sa != null
+                && (!sa.containsKey("enabled")
+                        || !sa.containsKey("slow_speed_value")
+                        || !sa.containsKey("slow_speed_um_per_s")
+                        || !sa.containsKey("normal_speed_value"));
         if (!missing && !incomplete) {
             return false;
         }
@@ -359,13 +357,14 @@ public class MicroscopeConfigManager {
             try (Writer w = new FileWriter(configPath, StandardCharsets.UTF_8)) {
                 yaml.dump(configData, w);
             }
-            logger.warn("[CONFIG] auto-migrated {}: added stage.streaming_af with legacy "
-                    + "defaults. Run 'Re-probe Stage AF' from the QuPath SCope menu to verify "
-                    + "these values match your hardware.", configPath);
+            logger.warn(
+                    "[CONFIG] auto-migrated {}: added stage.streaming_af with legacy "
+                            + "defaults. Run 'Re-probe Stage AF' from the QuPath SCope menu to verify "
+                            + "these values match your hardware.",
+                    configPath);
             notifyStreamingAfMigrationOnce();
         } catch (Exception e) {
-            logger.error("Failed to persist streaming_af auto-migration to {}: {}",
-                    configPath, e.toString());
+            logger.error("Failed to persist streaming_af auto-migration to {}: {}", configPath, e.toString());
         }
         return true;
     }
@@ -386,12 +385,11 @@ public class MicroscopeConfigManager {
         try {
             javafx.application.Platform.runLater(() -> {
                 try {
-                    javafx.scene.control.Alert a = new javafx.scene.control.Alert(
-                            javafx.scene.control.Alert.AlertType.INFORMATION);
+                    javafx.scene.control.Alert a =
+                            new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.INFORMATION);
                     a.setTitle("Streaming AF migration");
                     a.setHeaderText("Microscope config updated to schema v3.");
-                    a.setContentText(
-                            "Legacy streaming-autofocus defaults (Prior 1-100% scale, "
+                    a.setContentText("Legacy streaming-autofocus defaults (Prior 1-100% scale, "
                             + "11.5 um/s slow speed) were written into your config. They "
                             + "are correct for PPM and likely wrong for other stages.\n\n"
                             + "Run 'Re-probe Stage AF' from the QuPath SCope menu to "
@@ -976,14 +974,17 @@ public class MicroscopeConfigManager {
         if (detector != null && stored.detector() != null && !detector.equals(stored.detector())) {
             logger.debug(
                     "Background exposures stored for detector '{}' but requested '{}' -- hard reject",
-                    stored.detector(), detector);
+                    stored.detector(),
+                    detector);
             return null;
         }
-        if (requested.modalityFamily() != null && stored.modalityFamily() != null
+        if (requested.modalityFamily() != null
+                && stored.modalityFamily() != null
                 && !requested.modalityFamily().equals(stored.modalityFamily())) {
             logger.debug(
                     "Background exposures stored for modality family '{}' but requested '{}' -- hard reject",
-                    stored.modalityFamily(), requested.modalityFamily());
+                    stored.modalityFamily(),
+                    requested.modalityFamily());
             return null;
         }
 
@@ -1025,14 +1026,20 @@ public class MicroscopeConfigManager {
             logger.warn(
                     "Background exposures stored for objective '{}' (mag={}) cannot match requested '{}' (mag={}) -- "
                             + "no shared magnification, refusing reuse",
-                    stored.objective(), stored.magnification(),
-                    requested.objective(), requested.magnification());
+                    stored.objective(),
+                    stored.magnification(),
+                    requested.objective(),
+                    requested.magnification());
             return null;
         }
 
         logger.debug(
                 "Loaded {} background exposure(s) from calibration_targets at tier {} for {}/{}/{}",
-                result.size(), tier, modality, objective, detector);
+                result.size(),
+                tier,
+                modality,
+                objective,
+                detector);
         return new BackgroundExposureMatch(result, tier, requested, stored);
     }
 

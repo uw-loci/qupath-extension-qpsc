@@ -1,6 +1,5 @@
 package qupath.ext.qpsc.controller;
 
-import java.awt.Desktop;
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
@@ -14,7 +13,6 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.WhiteBalanceDialog;
 import qupath.fx.dialogs.Dialogs;

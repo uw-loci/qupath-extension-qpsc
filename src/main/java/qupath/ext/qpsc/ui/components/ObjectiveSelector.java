@@ -1,5 +1,8 @@
 package qupath.ext.qpsc.ui.components;
 
+import java.io.IOException;
+import java.util.Collection;
+import java.util.Set;
 import javafx.scene.control.ComboBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,10 +10,6 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-
-import java.io.IOException;
-import java.util.Collection;
-import java.util.Set;
 
 /**
  * Single source of truth for objective-selection dropdowns across QPSC.
@@ -60,8 +59,7 @@ public final class ObjectiveSelector {
      * @param cfg active microscope config manager (for pixel-size lookup)
      * @return ComboBox populated and with an initial value selected
      */
-    public static ComboBox<String> create(Collection<String> objectives,
-                                          MicroscopeConfigManager cfg) {
+    public static ComboBox<String> create(Collection<String> objectives, MicroscopeConfigManager cfg) {
         return create(objectives, cfg, getDefaultSocketClient());
     }
 
@@ -69,9 +67,8 @@ public final class ObjectiveSelector {
      * Build a populated objective combo box with an explicit socket
      * client (for tests or contexts where the singleton is unavailable).
      */
-    public static ComboBox<String> create(Collection<String> objectives,
-                                          MicroscopeConfigManager cfg,
-                                          MicroscopeSocketClient socketClient) {
+    public static ComboBox<String> create(
+            Collection<String> objectives, MicroscopeConfigManager cfg, MicroscopeSocketClient socketClient) {
         ComboBox<String> combo = new ComboBox<>();
         if (objectives != null) {
             combo.getItems().addAll(objectives);
@@ -87,8 +84,7 @@ public final class ObjectiveSelector {
      *
      * @return the value that ended up selected, or null if none
      */
-    public static String autoSelect(ComboBox<String> combo,
-                                    MicroscopeConfigManager cfg) {
+    public static String autoSelect(ComboBox<String> combo, MicroscopeConfigManager cfg) {
         return autoSelect(combo, cfg, getDefaultSocketClient());
     }
 
@@ -98,9 +94,8 @@ public final class ObjectiveSelector {
      * the live-pixel-size step is skipped and we fall through to
      * last-used / first-entry.
      */
-    public static String autoSelect(ComboBox<String> combo,
-                                    MicroscopeConfigManager cfg,
-                                    MicroscopeSocketClient socketClient) {
+    public static String autoSelect(
+            ComboBox<String> combo, MicroscopeConfigManager cfg, MicroscopeSocketClient socketClient) {
         if (combo == null || combo.getItems().isEmpty()) {
             return null;
         }
@@ -127,9 +122,8 @@ public final class ObjectiveSelector {
         return first;
     }
 
-    private static String matchByLivePixelSize(Collection<String> objectives,
-                                                MicroscopeConfigManager cfg,
-                                                MicroscopeSocketClient socketClient) {
+    private static String matchByLivePixelSize(
+            Collection<String> objectives, MicroscopeConfigManager cfg, MicroscopeSocketClient socketClient) {
         if (socketClient == null || cfg == null || objectives == null || objectives.isEmpty()) {
             return null;
         }
@@ -145,18 +139,17 @@ public final class ObjectiveSelector {
             for (String obj : objectives) {
                 for (String det : detectors) {
                     Double cp = cfg.getHardwarePixelSize(obj, det);
-                    if (cp != null
-                            && Math.abs(cp - mmPixelSize) < PIXEL_SIZE_MATCH_TOLERANCE_UM) {
+                    if (cp != null && Math.abs(cp - mmPixelSize) < PIXEL_SIZE_MATCH_TOLERANCE_UM) {
                         logger.info(
                                 "Auto-detected objective from MM pixel size {}: {} (detector {})",
-                                mmPixelSize, obj, det);
+                                mmPixelSize,
+                                obj,
+                                det);
                         return obj;
                     }
                 }
             }
-            logger.info(
-                    "MM pixel size {} did not match any configured objective/detector pair",
-                    mmPixelSize);
+            logger.info("MM pixel size {} did not match any configured objective/detector pair", mmPixelSize);
         } catch (IOException e) {
             logger.debug("Could not read MM pixel size for auto-detection: {}", e.getMessage());
         } catch (Exception e) {
@@ -169,8 +162,7 @@ public final class ObjectiveSelector {
         try {
             return MicroscopeController.getInstance().getSocketClient();
         } catch (Exception e) {
-            logger.debug("MicroscopeController not available for objective auto-detection: {}",
-                    e.getMessage());
+            logger.debug("MicroscopeController not available for objective auto-detection: {}", e.getMessage());
             return null;
         }
     }

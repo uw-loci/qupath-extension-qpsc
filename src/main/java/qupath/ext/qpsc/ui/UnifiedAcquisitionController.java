@@ -211,10 +211,14 @@ public class UnifiedAcquisitionController {
         private String accentColor(String semantic) {
             boolean dark = isDark();
             switch (semantic) {
-                case "green": return dark ? "#66BB6A" : "#28a745";
-                case "red": return dark ? "#EF5350" : "#C62828";
-                case "amber": return dark ? "#FFD54F" : "#856404";
-                default: return dark ? "#B0BEC5" : "#666";
+                case "green":
+                    return dark ? "#66BB6A" : "#28a745";
+                case "red":
+                    return dark ? "#EF5350" : "#C62828";
+                case "amber":
+                    return dark ? "#FFD54F" : "#856404";
+                default:
+                    return dark ? "#B0BEC5" : "#666";
             }
         }
 
@@ -524,7 +528,8 @@ public class UnifiedAcquisitionController {
             // Pixel size mismatch warning
             Label pixelSizeWarning = new Label();
             pixelSizeWarning.setWrapText(true);
-            pixelSizeWarning.setStyle("-fx-text-fill: " + accentColor("red") + "; -fx-font-weight: bold; -fx-font-size: 11px;");
+            pixelSizeWarning.setStyle(
+                    "-fx-text-fill: " + accentColor("red") + "; -fx-font-weight: bold; -fx-font-size: 11px;");
             pixelSizeWarning.setVisible(false);
             pixelSizeWarning.setManaged(false);
             grid.add(pixelSizeWarning, 0, row, 2, 1);
@@ -637,8 +642,7 @@ public class UnifiedAcquisitionController {
             // Initialize center coordinates: prefer saved value, then current stage position
             String savedCenterX = PersistentPreferences.getBoundingBoxCenterX();
             String savedCenterY = PersistentPreferences.getBoundingBoxCenterY();
-            if ((savedCenterX == null || savedCenterX.isEmpty())
-                    && (savedCenterY == null || savedCenterY.isEmpty())) {
+            if ((savedCenterX == null || savedCenterX.isEmpty()) && (savedCenterY == null || savedCenterY.isEmpty())) {
                 // No saved center -- try current stage position
                 try {
                     if (MicroscopeController.getInstance().isConnected()) {
@@ -646,7 +650,10 @@ public class UnifiedAcquisitionController {
                         if (coords != null && coords.length >= 2) {
                             savedCenterX = String.format("%.2f", coords[0]);
                             savedCenterY = String.format("%.2f", coords[1]);
-                            logger.info("Initialized center from current stage position: {}, {}", savedCenterX, savedCenterY);
+                            logger.info(
+                                    "Initialized center from current stage position: {}, {}",
+                                    savedCenterX,
+                                    savedCenterY);
                         }
                     }
                 } catch (Exception ex) {
@@ -884,8 +891,8 @@ public class UnifiedAcquisitionController {
                     previewStorageLabel,
                     previewErrorLabel);
             previewContent.setPadding(new Insets(10));
-            previewContent.setStyle("-fx-background-color: " + (isDark() ? "#333" : "#f8f9fa")
-                    + "; -fx-border-color: " + (isDark() ? "#555" : "#dee2e6") + "; -fx-border-width: 1px;");
+            previewContent.setStyle("-fx-background-color: " + (isDark() ? "#333" : "#f8f9fa") + "; -fx-border-color: "
+                    + (isDark() ? "#555" : "#dee2e6") + "; -fx-border-width: 1px;");
 
             TitledPane previewPane = new TitledPane("ACQUISITION PREVIEW", previewContent);
             previewPane.setExpanded(true);

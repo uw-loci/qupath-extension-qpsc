@@ -216,13 +216,12 @@ public final class SiftAutoAlignHelper {
         Button autoAlignButton = new Button("Auto-Align (SIFT)");
         autoAlignButton.setStyle(
                 "-fx-font-weight: bold; -fx-border-color: #4A90D9; " + "-fx-border-width: 2; -fx-border-radius: 3;");
-        autoAlignButton.setTooltip(new Tooltip(
-                "Auto-align using SIFT feature matching against the selected tile.\n"
-                        + "SIFT is a refinement, not a search: the live view must already\n"
-                        + "overlap the target tile by at least a few hundred microns.\n"
-                        + "Bit-depth normalization (16-bit camera vs 8-bit H&E WSI) and\n"
-                        + "CLAHE preprocessing run server-side using the values in Settings.\n"
-                        + "If matching fails, refine manually and confirm."));
+        autoAlignButton.setTooltip(new Tooltip("Auto-align using SIFT feature matching against the selected tile.\n"
+                + "SIFT is a refinement, not a search: the live view must already\n"
+                + "overlap the target tile by at least a few hundred microns.\n"
+                + "Bit-depth normalization (16-bit camera vs 8-bit H&E WSI) and\n"
+                + "CLAHE preprocessing run server-side using the values in Settings.\n"
+                + "If matching fails, refine manually and confirm."));
 
         Button settingsButton = new Button("Settings...");
         settingsButton.setStyle("-fx-font-size: 10px;");
@@ -329,69 +328,231 @@ public final class SiftAutoAlignHelper {
      * the propagation-refinement keys.
      */
     public interface SiftPrefsAccessor {
-        double getMinPixelSize();      void setMinPixelSize(double v);
-        double getRatioThreshold();    void setRatioThreshold(double v);
-        int    getMinMatchCount();     void setMinMatchCount(int v);
-        double getContrastThreshold(); void setContrastThreshold(double v);
-        double getSearchMarginUm();    void setSearchMarginUm(double v);
-        double getConfidenceThreshold(); void setConfidenceThreshold(double v);
-        String getMonoNormalization(); void setMonoNormalization(String v);
-        double getPercentileLow();     void setPercentileLow(double v);
-        double getPercentileHigh();    void setPercentileHigh(double v);
-        boolean isClaheEnabled();      void setClaheEnabled(boolean v);
-        double getClaheClipLimit();    void setClaheClipLimit(double v);
+        double getMinPixelSize();
+
+        void setMinPixelSize(double v);
+
+        double getRatioThreshold();
+
+        void setRatioThreshold(double v);
+
+        int getMinMatchCount();
+
+        void setMinMatchCount(int v);
+
+        double getContrastThreshold();
+
+        void setContrastThreshold(double v);
+
+        double getSearchMarginUm();
+
+        void setSearchMarginUm(double v);
+
+        double getConfidenceThreshold();
+
+        void setConfidenceThreshold(double v);
+
+        String getMonoNormalization();
+
+        void setMonoNormalization(String v);
+
+        double getPercentileLow();
+
+        void setPercentileLow(double v);
+
+        double getPercentileHigh();
+
+        void setPercentileHigh(double v);
+
+        boolean isClaheEnabled();
+
+        void setClaheEnabled(boolean v);
+
+        double getClaheClipLimit();
+
+        void setClaheClipLimit(double v);
     }
 
     /** Single-tile-refinement / autoAlign SIFT settings. Default scope. */
     public static final SiftPrefsAccessor DEFAULT_PREFS = new SiftPrefsAccessor() {
-        public double getMinPixelSize()      { return PersistentPreferences.getSiftMinPixelSize(); }
-        public void setMinPixelSize(double v){ PersistentPreferences.setSiftMinPixelSize(v); }
-        public double getRatioThreshold()    { return PersistentPreferences.getSiftRatioThreshold(); }
-        public void setRatioThreshold(double v){ PersistentPreferences.setSiftRatioThreshold(v); }
-        public int    getMinMatchCount()     { return PersistentPreferences.getSiftMinMatchCount(); }
-        public void setMinMatchCount(int v)  { PersistentPreferences.setSiftMinMatchCount(v); }
-        public double getContrastThreshold() { return PersistentPreferences.getSiftContrastThreshold(); }
-        public void setContrastThreshold(double v){ PersistentPreferences.setSiftContrastThreshold(v); }
-        public double getSearchMarginUm()    { return PersistentPreferences.getSiftSearchMarginUm(); }
-        public void setSearchMarginUm(double v){ PersistentPreferences.setSiftSearchMarginUm(v); }
-        public double getConfidenceThreshold(){ return PersistentPreferences.getSiftConfidenceThreshold(); }
-        public void setConfidenceThreshold(double v){ PersistentPreferences.setSiftConfidenceThreshold(v); }
-        public String getMonoNormalization() { return PersistentPreferences.getSiftMonoNormalization(); }
-        public void setMonoNormalization(String v){ PersistentPreferences.setSiftMonoNormalization(v); }
-        public double getPercentileLow()     { return PersistentPreferences.getSiftPercentileLow(); }
-        public void setPercentileLow(double v){ PersistentPreferences.setSiftPercentileLow(v); }
-        public double getPercentileHigh()    { return PersistentPreferences.getSiftPercentileHigh(); }
-        public void setPercentileHigh(double v){ PersistentPreferences.setSiftPercentileHigh(v); }
-        public boolean isClaheEnabled()      { return PersistentPreferences.isSiftClaheEnabled(); }
-        public void setClaheEnabled(boolean v){ PersistentPreferences.setSiftClaheEnabled(v); }
-        public double getClaheClipLimit()    { return PersistentPreferences.getSiftClaheClipLimit(); }
-        public void setClaheClipLimit(double v){ PersistentPreferences.setSiftClaheClipLimit(v); }
+        public double getMinPixelSize() {
+            return PersistentPreferences.getSiftMinPixelSize();
+        }
+
+        public void setMinPixelSize(double v) {
+            PersistentPreferences.setSiftMinPixelSize(v);
+        }
+
+        public double getRatioThreshold() {
+            return PersistentPreferences.getSiftRatioThreshold();
+        }
+
+        public void setRatioThreshold(double v) {
+            PersistentPreferences.setSiftRatioThreshold(v);
+        }
+
+        public int getMinMatchCount() {
+            return PersistentPreferences.getSiftMinMatchCount();
+        }
+
+        public void setMinMatchCount(int v) {
+            PersistentPreferences.setSiftMinMatchCount(v);
+        }
+
+        public double getContrastThreshold() {
+            return PersistentPreferences.getSiftContrastThreshold();
+        }
+
+        public void setContrastThreshold(double v) {
+            PersistentPreferences.setSiftContrastThreshold(v);
+        }
+
+        public double getSearchMarginUm() {
+            return PersistentPreferences.getSiftSearchMarginUm();
+        }
+
+        public void setSearchMarginUm(double v) {
+            PersistentPreferences.setSiftSearchMarginUm(v);
+        }
+
+        public double getConfidenceThreshold() {
+            return PersistentPreferences.getSiftConfidenceThreshold();
+        }
+
+        public void setConfidenceThreshold(double v) {
+            PersistentPreferences.setSiftConfidenceThreshold(v);
+        }
+
+        public String getMonoNormalization() {
+            return PersistentPreferences.getSiftMonoNormalization();
+        }
+
+        public void setMonoNormalization(String v) {
+            PersistentPreferences.setSiftMonoNormalization(v);
+        }
+
+        public double getPercentileLow() {
+            return PersistentPreferences.getSiftPercentileLow();
+        }
+
+        public void setPercentileLow(double v) {
+            PersistentPreferences.setSiftPercentileLow(v);
+        }
+
+        public double getPercentileHigh() {
+            return PersistentPreferences.getSiftPercentileHigh();
+        }
+
+        public void setPercentileHigh(double v) {
+            PersistentPreferences.setSiftPercentileHigh(v);
+        }
+
+        public boolean isClaheEnabled() {
+            return PersistentPreferences.isSiftClaheEnabled();
+        }
+
+        public void setClaheEnabled(boolean v) {
+            PersistentPreferences.setSiftClaheEnabled(v);
+        }
+
+        public double getClaheClipLimit() {
+            return PersistentPreferences.getSiftClaheClipLimit();
+        }
+
+        public void setClaheClipLimit(double v) {
+            PersistentPreferences.setSiftClaheClipLimit(v);
+        }
     };
 
     /** Propagation refinement SIFT settings. Independent scope. */
     public static final SiftPrefsAccessor PROPAGATION_PREFS = new SiftPrefsAccessor() {
-        public double getMinPixelSize()      { return PersistentPreferences.getPropSiftMinPixelSize(); }
-        public void setMinPixelSize(double v){ PersistentPreferences.setPropSiftMinPixelSize(v); }
-        public double getRatioThreshold()    { return PersistentPreferences.getPropSiftRatioThreshold(); }
-        public void setRatioThreshold(double v){ PersistentPreferences.setPropSiftRatioThreshold(v); }
-        public int    getMinMatchCount()     { return PersistentPreferences.getPropSiftMinMatchCount(); }
-        public void setMinMatchCount(int v)  { PersistentPreferences.setPropSiftMinMatchCount(v); }
-        public double getContrastThreshold() { return PersistentPreferences.getPropSiftContrastThreshold(); }
-        public void setContrastThreshold(double v){ PersistentPreferences.setPropSiftContrastThreshold(v); }
-        public double getSearchMarginUm()    { return PersistentPreferences.getPropSiftSearchMarginUm(); }
-        public void setSearchMarginUm(double v){ PersistentPreferences.setPropSiftSearchMarginUm(v); }
-        public double getConfidenceThreshold(){ return PersistentPreferences.getPropSiftConfidenceThreshold(); }
-        public void setConfidenceThreshold(double v){ PersistentPreferences.setPropSiftConfidenceThreshold(v); }
-        public String getMonoNormalization() { return PersistentPreferences.getPropSiftMonoNormalization(); }
-        public void setMonoNormalization(String v){ PersistentPreferences.setPropSiftMonoNormalization(v); }
-        public double getPercentileLow()     { return PersistentPreferences.getPropSiftPercentileLow(); }
-        public void setPercentileLow(double v){ PersistentPreferences.setPropSiftPercentileLow(v); }
-        public double getPercentileHigh()    { return PersistentPreferences.getPropSiftPercentileHigh(); }
-        public void setPercentileHigh(double v){ PersistentPreferences.setPropSiftPercentileHigh(v); }
-        public boolean isClaheEnabled()      { return PersistentPreferences.isPropSiftClaheEnabled(); }
-        public void setClaheEnabled(boolean v){ PersistentPreferences.setPropSiftClaheEnabled(v); }
-        public double getClaheClipLimit()    { return PersistentPreferences.getPropSiftClaheClipLimit(); }
-        public void setClaheClipLimit(double v){ PersistentPreferences.setPropSiftClaheClipLimit(v); }
+        public double getMinPixelSize() {
+            return PersistentPreferences.getPropSiftMinPixelSize();
+        }
+
+        public void setMinPixelSize(double v) {
+            PersistentPreferences.setPropSiftMinPixelSize(v);
+        }
+
+        public double getRatioThreshold() {
+            return PersistentPreferences.getPropSiftRatioThreshold();
+        }
+
+        public void setRatioThreshold(double v) {
+            PersistentPreferences.setPropSiftRatioThreshold(v);
+        }
+
+        public int getMinMatchCount() {
+            return PersistentPreferences.getPropSiftMinMatchCount();
+        }
+
+        public void setMinMatchCount(int v) {
+            PersistentPreferences.setPropSiftMinMatchCount(v);
+        }
+
+        public double getContrastThreshold() {
+            return PersistentPreferences.getPropSiftContrastThreshold();
+        }
+
+        public void setContrastThreshold(double v) {
+            PersistentPreferences.setPropSiftContrastThreshold(v);
+        }
+
+        public double getSearchMarginUm() {
+            return PersistentPreferences.getPropSiftSearchMarginUm();
+        }
+
+        public void setSearchMarginUm(double v) {
+            PersistentPreferences.setPropSiftSearchMarginUm(v);
+        }
+
+        public double getConfidenceThreshold() {
+            return PersistentPreferences.getPropSiftConfidenceThreshold();
+        }
+
+        public void setConfidenceThreshold(double v) {
+            PersistentPreferences.setPropSiftConfidenceThreshold(v);
+        }
+
+        public String getMonoNormalization() {
+            return PersistentPreferences.getPropSiftMonoNormalization();
+        }
+
+        public void setMonoNormalization(String v) {
+            PersistentPreferences.setPropSiftMonoNormalization(v);
+        }
+
+        public double getPercentileLow() {
+            return PersistentPreferences.getPropSiftPercentileLow();
+        }
+
+        public void setPercentileLow(double v) {
+            PersistentPreferences.setPropSiftPercentileLow(v);
+        }
+
+        public double getPercentileHigh() {
+            return PersistentPreferences.getPropSiftPercentileHigh();
+        }
+
+        public void setPercentileHigh(double v) {
+            PersistentPreferences.setPropSiftPercentileHigh(v);
+        }
+
+        public boolean isClaheEnabled() {
+            return PersistentPreferences.isPropSiftClaheEnabled();
+        }
+
+        public void setClaheEnabled(boolean v) {
+            PersistentPreferences.setPropSiftClaheEnabled(v);
+        }
+
+        public double getClaheClipLimit() {
+            return PersistentPreferences.getPropSiftClaheClipLimit();
+        }
+
+        public void setClaheClipLimit(double v) {
+            PersistentPreferences.setPropSiftClaheClipLimit(v);
+        }
     };
 
     /**
@@ -408,8 +569,7 @@ public final class SiftAutoAlignHelper {
         buildAndShowSettingsDialog(ownerWindow, DEFAULT_PREFS, "SIFT Matching Settings");
     }
 
-    private static void buildAndShowSettingsDialog(
-            Window ownerWindow, SiftPrefsAccessor prefs, String title) {
+    private static void buildAndShowSettingsDialog(Window ownerWindow, SiftPrefsAccessor prefs, String title) {
         Dialog<Void> dialog = new Dialog<>();
         dialog.setTitle(title);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -455,8 +615,7 @@ public final class SiftAutoAlignHelper {
         matchHelp.setWrapText(true);
         grid.add(matchHelp, 0, ++row, 2, 1);
 
-        Spinner<Double> contrastSpinner =
-                new Spinner<>(0.001, 0.2, prefs.getContrastThreshold(), 0.005);
+        Spinner<Double> contrastSpinner = new Spinner<>(0.001, 0.2, prefs.getContrastThreshold(), 0.005);
         contrastSpinner.setEditable(true);
         contrastSpinner.setPrefWidth(90);
         grid.add(new Label("Contrast threshold:"), 0, ++row);
@@ -498,32 +657,28 @@ public final class SiftAutoAlignHelper {
         monoNormChoice.setPrefWidth(150);
         grid.add(new Label("16-bit -> 8-bit:"), 0, ++row);
         grid.add(monoNormChoice, 1, row);
-        Label monoHelp = new Label(
-                "How to compress >8-bit grayscale (microscope camera) to 8-bit before matching. "
-                        + "PERCENTILE clips outliers and stretches; best when the camera doesn't use the full bit "
-                        + "range (typical 12-14 bit cameras). MIN_MAX uses the actual data extremes. "
-                        + "BIT_SHIFT is the legacy /256 behaviour.");
+        Label monoHelp = new Label("How to compress >8-bit grayscale (microscope camera) to 8-bit before matching. "
+                + "PERCENTILE clips outliers and stretches; best when the camera doesn't use the full bit "
+                + "range (typical 12-14 bit cameras). MIN_MAX uses the actual data extremes. "
+                + "BIT_SHIFT is the legacy /256 behaviour.");
         monoHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
         monoHelp.setWrapText(true);
         grid.add(monoHelp, 0, ++row, 2, 1);
 
-        Spinner<Double> pctLowSpinner =
-                new Spinner<>(0.0, 50.0, prefs.getPercentileLow(), 0.5);
+        Spinner<Double> pctLowSpinner = new Spinner<>(0.0, 50.0, prefs.getPercentileLow(), 0.5);
         pctLowSpinner.setEditable(true);
         pctLowSpinner.setPrefWidth(90);
         grid.add(new Label("Percentile low:"), 0, ++row);
         grid.add(pctLowSpinner, 1, row);
 
-        Spinner<Double> pctHighSpinner =
-                new Spinner<>(50.0, 100.0, prefs.getPercentileHigh(), 0.5);
+        Spinner<Double> pctHighSpinner = new Spinner<>(50.0, 100.0, prefs.getPercentileHigh(), 0.5);
         pctHighSpinner.setEditable(true);
         pctHighSpinner.setPrefWidth(90);
         grid.add(new Label("Percentile high:"), 0, ++row);
         grid.add(pctHighSpinner, 1, row);
-        Label pctHelp = new Label(
-                "Used only when normalization = PERCENTILE. Defaults 2 / 98 are robust against a few "
-                        + "saturated pixels. Lower the high (e.g. 95) if the camera is over-exposed; raise the "
-                        + "low (e.g. 5) for noisy backgrounds.");
+        Label pctHelp = new Label("Used only when normalization = PERCENTILE. Defaults 2 / 98 are robust against a few "
+                + "saturated pixels. Lower the high (e.g. 95) if the camera is over-exposed; raise the "
+                + "low (e.g. 5) for noisy backgrounds.");
         pctHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
         pctHelp.setWrapText(true);
         grid.add(pctHelp, 0, ++row, 2, 1);
@@ -531,21 +686,21 @@ public final class SiftAutoAlignHelper {
         CheckBox claheCheckbox = new CheckBox("Apply CLAHE (contrast equalisation)");
         claheCheckbox.setSelected(prefs.isClaheEnabled());
         grid.add(claheCheckbox, 0, ++row, 2, 1);
-        Label claheHelp = new Label(
-                "Cross-modality contrast normalisation. Strongly recommended when matching a monochrome "
+        Label claheHelp =
+                new Label("Cross-modality contrast normalisation. Strongly recommended when matching a monochrome "
                         + "brightfield camera against an H&E (RGB) WSI -- the staining and the camera have very "
                         + "different intensity statistics, and CLAHE makes the keypoints commensurate.");
         claheHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
         claheHelp.setWrapText(true);
         grid.add(claheHelp, 0, ++row, 2, 1);
 
-        Spinner<Double> claheClipSpinner =
-                new Spinner<>(0.5, 10.0, prefs.getClaheClipLimit(), 0.25);
+        Spinner<Double> claheClipSpinner = new Spinner<>(0.5, 10.0, prefs.getClaheClipLimit(), 0.25);
         claheClipSpinner.setEditable(true);
         claheClipSpinner.setPrefWidth(90);
         grid.add(new Label("CLAHE clip limit:"), 0, ++row);
         grid.add(claheClipSpinner, 1, row);
-        Label clipHelp = new Label("Higher = more aggressive equalisation. 2.0 default; raise to 4.0 if matches are scarce.");
+        Label clipHelp =
+                new Label("Higher = more aggressive equalisation. 2.0 default; raise to 4.0 if matches are scarce.");
         clipHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
         clipHelp.setWrapText(true);
         grid.add(clipHelp, 0, ++row, 2, 1);

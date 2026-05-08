@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,19 +36,26 @@ public class FocusMetricsManifestTest {
         assertNotNull(m);
         // Canonical 10-metric set from M1.
         for (String name : List.of(
-                "tenengrad", "laplacian_variance", "brenner_gradient",
-                "normalized_variance", "vollath_f5", "sobel", "p98_p2",
-                "robust_sharpness_metric", "hybrid_sharpness_metric", "none")) {
-            assertTrue(m.getMetrics().containsKey(name),
-                    "Missing canonical metric: " + name);
+                "tenengrad",
+                "laplacian_variance",
+                "brenner_gradient",
+                "normalized_variance",
+                "vollath_f5",
+                "sobel",
+                "p98_p2",
+                "robust_sharpness_metric",
+                "hybrid_sharpness_metric",
+                "none")) {
+            assertTrue(m.getMetrics().containsKey(name), "Missing canonical metric: " + name);
         }
     }
 
     @Test
     void recommendedGroupContainsTopThree() {
         FocusMetricsManifest m = FocusMetricsManifest.get(null);
-        List<String> recommended = m.metricsByGroup(FocusMetricsManifest.Group.RECOMMENDED)
-                .stream().map(s -> s.name).toList();
+        List<String> recommended = m.metricsByGroup(FocusMetricsManifest.Group.RECOMMENDED).stream()
+                .map(s -> s.name)
+                .toList();
         assertTrue(recommended.contains("tenengrad"));
         assertTrue(recommended.contains("laplacian_variance"));
         assertTrue(recommended.contains("brenner_gradient"));
@@ -86,34 +92,25 @@ public class FocusMetricsManifestTest {
     void resolveEffectiveMetricMatchesPythonBehaviour() {
         FocusMetricsManifest m = FocusMetricsManifest.get(null);
         // Canonical YAML override wins.
-        assertEquals("laplacian_variance",
-                m.resolveEffectiveMetric("brightfield", "laplacian_variance", "tenengrad"));
+        assertEquals("laplacian_variance", m.resolveEffectiveMetric("brightfield", "laplacian_variance", "tenengrad"));
         // Legacy alias resolves to canonical.
-        assertEquals("vollath_f5",
-                m.resolveEffectiveMetric("fluorescence", "volath5", "tenengrad"));
+        assertEquals("vollath_f5", m.resolveEffectiveMetric("fluorescence", "volath5", "tenengrad"));
         // No YAML -> modality default.
-        assertEquals("tenengrad",
-                m.resolveEffectiveMetric("brightfield", null, "tenengrad"));
+        assertEquals("tenengrad", m.resolveEffectiveMetric("brightfield", null, "tenengrad"));
         // 'none' sentinel skips override -> modality default.
-        assertEquals("vollath_f5",
-                m.resolveEffectiveMetric("fluorescence", "none", "tenengrad"));
+        assertEquals("vollath_f5", m.resolveEffectiveMetric("fluorescence", "none", "tenengrad"));
         // Unknown modality + no YAML -> caller's fallback.
-        assertEquals("tenengrad",
-                m.resolveEffectiveMetric("not_a_real_modality", null, "tenengrad"));
+        assertEquals("tenengrad", m.resolveEffectiveMetric("not_a_real_modality", null, "tenengrad"));
     }
 
     @Test
     void validityChecksAndStrategiesPresent() {
         FocusMetricsManifest m = FocusMetricsManifest.get(null);
-        for (String c : List.of("texture_and_area", "bright_spot_count",
-                "total_gradient_energy", "always_false")) {
-            assertTrue(m.getValidityChecks().containsKey(c),
-                    "Missing validity check: " + c);
+        for (String c : List.of("texture_and_area", "bright_spot_count", "total_gradient_energy", "always_false")) {
+            assertTrue(m.getValidityChecks().containsKey(c), "Missing validity check: " + c);
         }
-        for (String s : List.of("dense_texture", "sparse_signal",
-                "dark_field", "manual_only")) {
-            assertTrue(m.getStrategies().containsKey(s),
-                    "Missing strategy: " + s);
+        for (String s : List.of("dense_texture", "sparse_signal", "dark_field", "manual_only")) {
+            assertTrue(m.getStrategies().containsKey(s), "Missing strategy: " + s);
         }
     }
 
@@ -138,8 +135,7 @@ public class FocusMetricsManifestTest {
         assertNotNull(header);
         // Every line should be a YAML comment (or blank).
         for (String line : header.split("\n", -1)) {
-            assertTrue(line.isEmpty() || line.startsWith("#"),
-                    "Header line is not a YAML comment: '" + line + "'");
+            assertTrue(line.isEmpty() || line.startsWith("#"), "Header line is not a YAML comment: '" + line + "'");
         }
         // Canonical replacements appear; legacy aliases appear only in
         // the rename map.
@@ -148,8 +144,7 @@ public class FocusMetricsManifestTest {
         assertTrue(header.contains("dense_texture"));
         // The rename block lists volath5 -> vollath_f5 (one of the
         // removed aliases shipped in the manifest).
-        assertTrue(header.contains("volath5"),
-                "Header should list legacy aliases under RENAMED METRICS");
+        assertTrue(header.contains("volath5"), "Header should list legacy aliases under RENAMED METRICS");
     }
 
     @Test
@@ -164,9 +159,7 @@ public class FocusMetricsManifestTest {
             if (g == FocusMetricsManifest.Group.ADVANCED && firstAdv < 0) firstAdv = i;
             if (g == FocusMetricsManifest.Group.SPECIAL && firstSpec < 0) firstSpec = i;
         }
-        assertTrue(firstRec >= 0 && firstAdv > firstRec,
-                "Recommended should come before Advanced in dropdown order");
-        assertTrue(firstAdv > 0 && firstSpec > firstAdv,
-                "Advanced should come before Special in dropdown order");
+        assertTrue(firstRec >= 0 && firstAdv > firstRec, "Recommended should come before Advanced in dropdown order");
+        assertTrue(firstAdv > 0 && firstSpec > firstAdv, "Advanced should come before Special in dropdown order");
     }
 }

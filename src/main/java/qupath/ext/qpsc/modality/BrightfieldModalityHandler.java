@@ -116,13 +116,19 @@ public class BrightfieldModalityHandler implements ModalityHandler {
                         "Brightfield BG calibration objective drift: stored objective '{}' (mag={}) but requested '{}' (mag={}). "
                                 + "Reusing calibrated exposure {} ms because both objectives share the same background TIFF on disk. "
                                 + "Re-run Background Collection if illumination geometry differs.",
-                        match.stored().objective(), match.stored().magnification(),
-                        match.requested().objective(), match.requested().magnification(),
+                        match.stored().objective(),
+                        match.stored().magnification(),
+                        match.requested().objective(),
+                        match.requested().magnification(),
                         exposure);
             } else {
                 logger.info(
                         "Brightfield using background collection exposure: {} ms (tier={}, modality={}, objective={}, detector={})",
-                        exposure, match.tier(), modalityName, objective, detector);
+                        exposure,
+                        match.tier(),
+                        modalityName,
+                        objective,
+                        detector);
             }
             return exposure;
         }
@@ -142,7 +148,10 @@ public class BrightfieldModalityHandler implements ModalityHandler {
         logger.info(
                 "Brightfield BG correction disabled; using PersistentPreferences.lastUnifiedExposureMs: {} ms "
                         + "(modality={}, objective={}, detector={})",
-                fallback, modalityName, objective, detector);
+                fallback,
+                modalityName,
+                objective,
+                detector);
         return fallback;
     }
 

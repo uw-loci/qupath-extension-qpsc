@@ -66,13 +66,12 @@ public final class MacroOrientationDialog {
                 Label header = new Label("Compare the current image to the Live View");
                 header.setStyle("-fx-font-weight: bold; -fx-font-size: 13;");
 
-                Label instructions = new Label(
-                        "Pan and zoom in QuPath to find a recognizable feature, then move the "
-                                + "microscope stage so the same feature is visible in the Live View. "
-                                + "If QuPath shows the feature mirrored relative to the Live View, "
-                                + "tick the matching axis. The image will switch to its flipped variant "
-                                + "immediately so you can verify the orientation. Click OK when the "
-                                + "QuPath view matches the Live View.");
+                Label instructions = new Label("Pan and zoom in QuPath to find a recognizable feature, then move the "
+                        + "microscope stage so the same feature is visible in the Live View. "
+                        + "If QuPath shows the feature mirrored relative to the Live View, "
+                        + "tick the matching axis. The image will switch to its flipped variant "
+                        + "immediately so you can verify the orientation. Click OK when the "
+                        + "QuPath view matches the Live View.");
                 instructions.setWrapText(true);
                 instructions.setMaxWidth(440);
 

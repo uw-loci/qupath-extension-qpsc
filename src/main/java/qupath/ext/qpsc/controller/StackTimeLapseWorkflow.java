@@ -35,8 +35,8 @@ public class StackTimeLapseWorkflow {
                 mc.userTriggeredConnect();
             } catch (java.io.IOException e) {
                 logger.error("Failed to connect to microscope server: {}", e.getMessage());
-                Dialogs.showErrorMessage("Z-Stack / Time-Lapse",
-                        "Not connected to microscope server: " + e.getMessage());
+                Dialogs.showErrorMessage(
+                        "Z-Stack / Time-Lapse", "Not connected to microscope server: " + e.getMessage());
                 return;
             }
         }

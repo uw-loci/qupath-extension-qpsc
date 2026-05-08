@@ -4,7 +4,6 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,10 +44,8 @@ public final class WizardDataLoader {
      * @return true if a main config was found and at least one section
      *         was populated; false if no existing configs were loaded.
      */
-    public static boolean loadFromExistingConfigs(
-            Path configDirectory, String microscopeName, WizardData target) {
-        if (configDirectory == null || microscopeName == null
-                || microscopeName.isBlank() || target == null) {
+    public static boolean loadFromExistingConfigs(Path configDirectory, String microscopeName, WizardData target) {
+        if (configDirectory == null || microscopeName == null || microscopeName.isBlank() || target == null) {
             return false;
         }
         Path mainPath = configDirectory.resolve("config_" + microscopeName + ".yml");
@@ -130,13 +127,14 @@ public final class WizardDataLoader {
             if (sa.get("enabled") instanceof Boolean b) target.streamingAfEnabled = b;
             if (sa.get("speed_property") instanceof String s) target.streamingAfSpeedProperty = s;
             if (sa.get("slow_speed_value") instanceof String s) target.streamingAfSlowSpeedValue = s;
-            else if (sa.get("slow_speed_value") != null) target.streamingAfSlowSpeedValue =
-                    sa.get("slow_speed_value").toString();
+            else if (sa.get("slow_speed_value") != null)
+                target.streamingAfSlowSpeedValue = sa.get("slow_speed_value").toString();
             Object umps = sa.get("slow_speed_um_per_s");
             if (umps instanceof Number n) target.streamingAfSlowSpeedUmPerS = n.doubleValue();
             if (sa.get("normal_speed_value") instanceof String s) target.streamingAfNormalSpeedValue = s;
-            else if (sa.get("normal_speed_value") != null) target.streamingAfNormalSpeedValue =
-                    sa.get("normal_speed_value").toString();
+            else if (sa.get("normal_speed_value") != null)
+                target.streamingAfNormalSpeedValue =
+                        sa.get("normal_speed_value").toString();
         }
     }
 
@@ -203,9 +201,17 @@ public final class WizardDataLoader {
             // laser, pmt, ...) round-trip as opaque sub-maps. The wizard
             // step will only touch the keys it knows about -- everything
             // else flows through unchanged.
-            for (String k : List.of("type", "rotation_stage", "rotation_angles",
-                    "filter_wheel", "illumination", "laser", "pockels_cell",
-                    "pmt", "zoom", "shutter")) {
+            for (String k : List.of(
+                    "type",
+                    "rotation_stage",
+                    "rotation_angles",
+                    "filter_wheel",
+                    "illumination",
+                    "laser",
+                    "pockels_cell",
+                    "pmt",
+                    "zoom",
+                    "shutter")) {
                 if (mod.containsKey(k)) copy.put(k, mod.get(k));
             }
             target.modalities.add(copy);

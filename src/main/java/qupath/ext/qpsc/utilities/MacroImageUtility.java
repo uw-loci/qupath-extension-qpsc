@@ -365,8 +365,7 @@ public class MacroImageUtility {
                         originalId,
                         baseImage);
                 if (originalId != null) {
-                    logger.info(
-                            "retrieveMacroImage: derived entry detected via original_image_id, tracing to source");
+                    logger.info("retrieveMacroImage: derived entry detected via original_image_id, tracing to source");
                     BufferedImage macro = retrieveMacroImageFromProject(gui, project);
                     if (macro != null) {
                         logger.info(
@@ -375,8 +374,7 @@ public class MacroImageUtility {
                                 macro.getHeight());
                         return macro;
                     }
-                    logger.warn(
-                            "retrieveMacroImage: source-trace failed, falling through to current entry's server");
+                    logger.warn("retrieveMacroImage: source-trace failed, falling through to current entry's server");
                 }
             }
         }
@@ -390,9 +388,7 @@ public class MacroImageUtility {
                 logger.info("retrieveMacroImage: current entry's server reports no associated images");
                 return null;
             }
-            logger.info(
-                    "retrieveMacroImage: CURRENT-ENTRY-SERVER path, associated images={}",
-                    associatedList);
+            logger.info("retrieveMacroImage: CURRENT-ENTRY-SERVER path, associated images={}", associatedList);
 
             // Find macro image key
             String macroKey = null;

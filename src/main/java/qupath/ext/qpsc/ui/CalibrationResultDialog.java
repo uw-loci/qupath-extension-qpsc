@@ -1,6 +1,5 @@
 package qupath.ext.qpsc.ui;
 
-import java.awt.Desktop;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileInputStream;
@@ -468,9 +467,8 @@ public class CalibrationResultDialog {
         // Open Folder button (success path only - error path adds its own)
         if (isSuccess && result.calibrationPath() != null) {
             Button openFolderButton = new Button("Open Folder");
-            openFolderButton.setOnAction(event ->
-                    qupath.ext.qpsc.ui.UIFunctions.revealInFileBrowser(
-                            new File(result.calibrationPath())));
+            openFolderButton.setOnAction(
+                    event -> qupath.ext.qpsc.ui.UIFunctions.revealInFileBrowser(new File(result.calibrationPath())));
             buttonBar.getChildren().add(openFolderButton);
         }
 

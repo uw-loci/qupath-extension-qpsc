@@ -30,10 +30,7 @@ import java.util.Map;
  * lookups never degrade across those axes.
  */
 public record BackgroundExposureMatch(
-        Map<Double, Double> exposures,
-        Tier tier,
-        HardwareKey requested,
-        HardwareKey stored) {
+        Map<Double, Double> exposures, Tier tier, HardwareKey requested, HardwareKey stored) {
 
     public enum Tier {
         /** All four axes match. */

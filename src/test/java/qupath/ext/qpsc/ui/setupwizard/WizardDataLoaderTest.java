@@ -33,8 +33,7 @@ class WizardDataLoaderTest {
         ConfigFileWriter.writeAll(out);
 
         WizardData in = new WizardData();
-        boolean loaded = WizardDataLoader.loadFromExistingConfigs(
-                tempDir, out.microscopeName, in);
+        boolean loaded = WizardDataLoader.loadFromExistingConfigs(tempDir, out.microscopeName, in);
         assertTrue(loaded, "Loader should report success on a freshly-written config");
 
         // Identity / paths
@@ -66,13 +65,11 @@ class WizardDataLoaderTest {
         // Objectives + pixel sizes (id round-trip + each combo)
         assertEquals(out.objectives.size(), in.objectives.size());
         for (int i = 0; i < out.objectives.size(); i++) {
-            assertEquals(out.objectives.get(i).get("id"),
-                    in.objectives.get(i).get("id"));
+            assertEquals(out.objectives.get(i).get("id"), in.objectives.get(i).get("id"));
         }
         assertEquals(out.pixelSizes.size(), in.pixelSizes.size());
         for (Map.Entry<String, Double> e : out.pixelSizes.entrySet()) {
-            assertEquals(e.getValue(), in.pixelSizes.get(e.getKey()), 1e-6,
-                    "pixelSizes mismatch for " + e.getKey());
+            assertEquals(e.getValue(), in.pixelSizes.get(e.getKey()), 1e-6, "pixelSizes mismatch for " + e.getKey());
         }
 
         // Detectors (id + key fields)
@@ -101,8 +98,7 @@ class WizardDataLoaderTest {
     @DisplayName("Loader returns false when no main config exists yet (fresh install)")
     void loaderNoOpsWhenConfigMissing() {
         WizardData target = new WizardData();
-        boolean loaded = WizardDataLoader.loadFromExistingConfigs(
-                tempDir, "NeverExisted", target);
+        boolean loaded = WizardDataLoader.loadFromExistingConfigs(tempDir, "NeverExisted", target);
         assertFalse(loaded, "Loader should report no-op when config_<name>.yml is missing");
         // Constructor defaults preserved.
         assertEquals(-36000, target.stageLimitXLow, 0.001);

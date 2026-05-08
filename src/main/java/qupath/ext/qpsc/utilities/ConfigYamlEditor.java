@@ -44,6 +44,7 @@ public final class ConfigYamlEditor {
     public static final class Result {
         public final boolean changed;
         public final String message;
+
         public Result(boolean changed, String message) {
             this.changed = changed;
             this.message = message;
@@ -57,8 +58,8 @@ public final class ConfigYamlEditor {
      * style already in use ({@code illumination_intensity: 700}, not
      * {@code 700.0}).
      */
-    public static Result setProfileScalar(
-            Path configPath, String profileKey, String fieldName, double value) throws IOException {
+    public static Result setProfileScalar(Path configPath, String profileKey, String fieldName, double value)
+            throws IOException {
         List<String> lines = new ArrayList<>(Files.readAllLines(configPath, StandardCharsets.UTF_8));
         int profilesAt = findTopLevelKey(lines, "acquisition_profiles");
         if (profilesAt < 0) {
@@ -102,8 +103,8 @@ public final class ConfigYamlEditor {
      * {@code modalities.<modalityKey>.channels}. The channel must already
      * exist; this method does not create channels.
      */
-    public static Result setChannelExposureMs(
-            Path configPath, String modalityKey, String channelId, double exposureMs) throws IOException {
+    public static Result setChannelExposureMs(Path configPath, String modalityKey, String channelId, double exposureMs)
+            throws IOException {
         return setChannelScalar(configPath, modalityKey, channelId, "exposure_ms", exposureMs);
     }
 
@@ -118,12 +119,7 @@ public final class ConfigYamlEditor {
      * decide where they go.
      */
     public static Result setChannelDevicePropertyValue(
-            Path configPath,
-            String modalityKey,
-            String channelId,
-            String device,
-            String property,
-            String valueStr)
+            Path configPath, String modalityKey, String channelId, String device, String property, String valueStr)
             throws IOException {
         List<String> lines = new ArrayList<>(Files.readAllLines(configPath, StandardCharsets.UTF_8));
         int[] channelRange = locateChannelBlock(lines, modalityKey, channelId);
@@ -154,8 +150,14 @@ public final class ConfigYamlEditor {
             String line = lines.get(i);
             if (line.isBlank()) continue;
             int lead = leadingSpaces(line).length();
-            if (lead < channelFieldIndent) { dpEnd = i; break; }
-            if (lead == channelFieldIndent && !line.trim().startsWith("-")) { dpEnd = i; break; }
+            if (lead < channelFieldIndent) {
+                dpEnd = i;
+                break;
+            }
+            if (lead == channelFieldIndent && !line.trim().startsWith("-")) {
+                dpEnd = i;
+                break;
+            }
         }
 
         // Walk list-item blocks (each starts with '- device:' at indent
@@ -175,7 +177,10 @@ public final class ConfigYamlEditor {
             int valueLine = -1;
             while (itemEnd < dpEnd) {
                 String l = lines.get(itemEnd);
-                if (l.isBlank()) { itemEnd++; continue; }
+                if (l.isBlank()) {
+                    itemEnd++;
+                    continue;
+                }
                 int lead = leadingSpaces(l).length();
                 if (lead < contIndent) break;
                 Matcher pm = Pattern.compile("^\\s*property:\\s*(.*\\S)\\s*$").matcher(l);
@@ -195,20 +200,25 @@ public final class ConfigYamlEditor {
                 Files.write(configPath, lines, StandardCharsets.UTF_8);
                 logger.info(
                         "ConfigYamlEditor: modalities.{}.channels[{}].device_properties[{}.{}].value {} -> {}",
-                        modalityKey, channelId, device, property, existing, formatted);
+                        modalityKey,
+                        channelId,
+                        device,
+                        property,
+                        existing,
+                        formatted);
                 return new Result(true, device + "." + property + " -> " + formatted);
             }
             i = itemEnd - 1; // continue scanning the next list item
         }
-        return new Result(false,
+        return new Result(
+                false,
                 "device_properties entry " + device + "." + property + " not found on channel '" + channelId + "'");
     }
 
     // ---------- internals ----------
 
     private static Result setChannelScalar(
-            Path configPath, String modalityKey, String channelId, String fieldName, double value)
-            throws IOException {
+            Path configPath, String modalityKey, String channelId, String fieldName, double value) throws IOException {
         List<String> lines = new ArrayList<>(Files.readAllLines(configPath, StandardCharsets.UTF_8));
         int[] channelRange = locateChannelBlock(lines, modalityKey, channelId);
         if (channelRange == null) {
@@ -226,8 +236,13 @@ public final class ConfigYamlEditor {
                 }
                 lines.set(i, repeat(' ', fieldIndent) + fieldName + ": " + formatted);
                 Files.write(configPath, lines, StandardCharsets.UTF_8);
-                logger.info("ConfigYamlEditor: modalities.{}.channels[{}].{} {} -> {}",
-                        modalityKey, channelId, fieldName, existing, formatted);
+                logger.info(
+                        "ConfigYamlEditor: modalities.{}.channels[{}].{} {} -> {}",
+                        modalityKey,
+                        channelId,
+                        fieldName,
+                        existing,
+                        formatted);
                 return new Result(true, channelId + "." + fieldName + " -> " + formatted);
             }
         }
@@ -276,9 +291,12 @@ public final class ConfigYamlEditor {
                     int chEnd = i + 1;
                     while (chEnd < modEnd) {
                         String l = lines.get(chEnd);
-                        if (l.isBlank()) { chEnd++; continue; }
+                        if (l.isBlank()) {
+                            chEnd++;
+                            continue;
+                        }
                         int lead = leadingSpaces(l).length();
-                        if (lead < listItemIndent) break;             // back to modality-sibling field
+                        if (lead < listItemIndent) break; // back to modality-sibling field
                         if (lead == listItemIndent && !l.trim().startsWith("-")) break; // next sibling at same indent
                         if (lead == listItemIndent && l.trim().startsWith("- ")) break; // next list item
                         chEnd++;
@@ -407,11 +425,16 @@ public final class ConfigYamlEditor {
         String trimmed = s.trim();
         if (trimmed.isEmpty()) return "''";
         switch (trimmed.toLowerCase()) {
-            case "on": case "off":
-            case "yes": case "no":
-            case "true": case "false":
-            case "y": case "n":
-            case "null": case "~":
+            case "on":
+            case "off":
+            case "yes":
+            case "no":
+            case "true":
+            case "false":
+            case "y":
+            case "n":
+            case "null":
+            case "~":
                 return "'" + trimmed + "'";
             default:
         }

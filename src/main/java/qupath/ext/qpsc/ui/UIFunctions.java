@@ -577,8 +577,8 @@ public class UIFunctions {
                 Label siftStatus = new Label();
                 siftStatus.setWrapText(true);
                 siftStatus.setStyle("-fx-font-size: 10px;");
-                HBox siftRow =
-                        qupath.ext.qpsc.ui.SiftAutoAlignHelper.buildSiftButtonRow(gui, siftTargetTile, stage, siftStatus);
+                HBox siftRow = qupath.ext.qpsc.ui.SiftAutoAlignHelper.buildSiftButtonRow(
+                        gui, siftTargetTile, stage, siftStatus);
                 layout.getChildren()
                         .addAll(headerLabel, instructionLabel, siftRow, siftStatus, new Separator(), buttonBox);
             } else {
@@ -1176,8 +1176,7 @@ public class UIFunctions {
             Label headerLabel = new Label("No annotations detected");
             headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
 
-            Label infoLabel = new Label(
-                    "Annotations are needed for acquisition.\n"
+            Label infoLabel = new Label("Annotations are needed for acquisition.\n"
                     + "Run tissue detection or draw annotations manually in QuPath,\n"
                     + "then click \"Use Annotations\" to continue.");
             infoLabel.setWrapText(true);
@@ -1200,29 +1199,32 @@ public class UIFunctions {
 
                 // Run on background thread so the UI stays responsive
                 CompletableFuture.runAsync(() -> {
-                    qupath.ext.qpsc.controller.workflow.AnnotationHelper
-                            .runTissueDetection(gui, validClasses);
-                }).whenCompleteAsync((v, ex) -> {
-                    tissueDetectionButton.setDisable(false);
-                    tissueDetectionButton.setText("Run Tissue Detection");
-                    if (ex != null) {
-                        statusLabel.setText("Tissue detection failed: " + ex.getMessage());
-                        statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #d32f2f;");
-                    } else {
-                        int count = countCurrentAnnotations(gui, validClasses);
-                        if (count > 0) {
-                            statusLabel.setText(String.format(
-                                    "Found %d annotation(s). Review/edit in QuPath, "
-                                    + "then click \"Use Annotations\" below.", count));
-                            statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #28a745;");
-                            headerLabel.setText("Annotations ready");
-                        } else {
-                            statusLabel.setText("No annotations created. "
-                                    + "Try adjusting the tissue detection script or draw manually.");
-                            statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #e65100;");
-                        }
-                    }
-                }, Platform::runLater);
+                            qupath.ext.qpsc.controller.workflow.AnnotationHelper.runTissueDetection(gui, validClasses);
+                        })
+                        .whenCompleteAsync(
+                                (v, ex) -> {
+                                    tissueDetectionButton.setDisable(false);
+                                    tissueDetectionButton.setText("Run Tissue Detection");
+                                    if (ex != null) {
+                                        statusLabel.setText("Tissue detection failed: " + ex.getMessage());
+                                        statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #d32f2f;");
+                                    } else {
+                                        int count = countCurrentAnnotations(gui, validClasses);
+                                        if (count > 0) {
+                                            statusLabel.setText(String.format(
+                                                    "Found %d annotation(s). Review/edit in QuPath, "
+                                                            + "then click \"Use Annotations\" below.",
+                                                    count));
+                                            statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #28a745;");
+                                            headerLabel.setText("Annotations ready");
+                                        } else {
+                                            statusLabel.setText("No annotations created. "
+                                                    + "Try adjusting the tissue detection script or draw manually.");
+                                            statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #e65100;");
+                                        }
+                                    }
+                                },
+                                Platform::runLater);
             });
 
             Separator sep2 = new Separator();
@@ -1260,10 +1262,16 @@ public class UIFunctions {
                 }
             });
 
-            layout.getChildren().addAll(
-                    headerLabel, infoLabel, sep1,
-                    tissueDetectionButton, statusLabel, sep2,
-                    useAnnotationsButton, cancelButton);
+            layout.getChildren()
+                    .addAll(
+                            headerLabel,
+                            infoLabel,
+                            sep1,
+                            tissueDetectionButton,
+                            statusLabel,
+                            sep2,
+                            useAnnotationsButton,
+                            cancelButton);
 
             Scene scene = new Scene(layout);
             stage.setScene(scene);
@@ -1278,8 +1286,8 @@ public class UIFunctions {
      */
     private static int countCurrentAnnotations(QuPathGUI gui, List<String> validClasses) {
         try {
-            return qupath.ext.qpsc.controller.workflow.AnnotationHelper
-                    .getCurrentValidAnnotations(gui, validClasses).size();
+            return qupath.ext.qpsc.controller.workflow.AnnotationHelper.getCurrentValidAnnotations(gui, validClasses)
+                    .size();
         } catch (Exception e) {
             logger.debug("Error counting annotations: {}", e.getMessage());
             return 0;
@@ -1322,8 +1330,7 @@ public class UIFunctions {
             alert.initOwner(parent);
         }
         alert.setOnShown(e -> {
-            if (alert.getDialogPane() != null
-                    && alert.getDialogPane().getScene() != null) {
+            if (alert.getDialogPane() != null && alert.getDialogPane().getScene() != null) {
                 Window w = alert.getDialogPane().getScene().getWindow();
                 if (w instanceof Stage) {
                     ((Stage) w).setAlwaysOnTop(true);

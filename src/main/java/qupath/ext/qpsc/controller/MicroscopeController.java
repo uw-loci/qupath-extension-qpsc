@@ -193,9 +193,9 @@ public class MicroscopeController implements StagePositionProvider {
         }
         qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.AcquisitionState state =
                 socketClient.getAcquisitionStatus();
-        boolean serverActive =
-                state == qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.AcquisitionState.RUNNING
-                        || state == qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.AcquisitionState.CANCELLING;
+        boolean serverActive = state
+                        == qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.AcquisitionState.RUNNING
+                || state == qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.AcquisitionState.CANCELLING;
         if (!serverActive) {
             logger.warn(
                     "Local acquisitionActive flag was stale (server state={}); clearing -- "

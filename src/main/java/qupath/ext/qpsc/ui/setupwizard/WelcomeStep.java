@@ -194,15 +194,15 @@ public class WelcomeStep implements WizardStep {
                 data.configDirectory = parent;
             }
             if (fname.startsWith("config_") && fname.endsWith(".yml")) {
-                data.microscopeName = fname.substring(
-                        "config_".length(), fname.length() - ".yml".length());
+                data.microscopeName = fname.substring("config_".length(), fname.length() - ".yml".length());
             }
             logger.debug(
                     "WelcomeStep: seeded from preferences (file={}) -> dir={}, name={}",
-                    configFile, data.configDirectory, data.microscopeName);
+                    configFile,
+                    data.configDirectory,
+                    data.microscopeName);
         } catch (Exception e) {
-            logger.debug("WelcomeStep: could not seed from preference '{}': {}",
-                    configFile, e.toString());
+            logger.debug("WelcomeStep: could not seed from preference '{}': {}", configFile, e.toString());
         }
     }
 
@@ -224,11 +224,9 @@ public class WelcomeStep implements WizardStep {
         // re-enter limits, objectives, modalities, probe results, etc.
         // No-op when this is a fresh install.
         try {
-            WizardDataLoader.loadFromExistingConfigs(
-                    data.configDirectory, data.microscopeName, data);
+            WizardDataLoader.loadFromExistingConfigs(data.configDirectory, data.microscopeName, data);
         } catch (Throwable t) {
-            logger.warn("Wizard pre-population failed; continuing with defaults: {}",
-                    t.toString());
+            logger.warn("Wizard pre-population failed; continuing with defaults: {}", t.toString());
         }
     }
 }

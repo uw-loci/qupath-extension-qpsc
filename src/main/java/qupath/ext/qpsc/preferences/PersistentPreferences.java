@@ -1387,74 +1387,134 @@ public class PersistentPreferences {
     private static final DoubleProperty propSiftMinPixelSizeProperty =
             PathPrefs.createPersistentPreference("propSiftMinPixelSizeUm", 1.0);
 
-    public static double getPropSiftMinPixelSize() { return propSiftMinPixelSizeProperty.get(); }
-    public static void setPropSiftMinPixelSize(double v) { propSiftMinPixelSizeProperty.set(v); }
+    public static double getPropSiftMinPixelSize() {
+        return propSiftMinPixelSizeProperty.get();
+    }
+
+    public static void setPropSiftMinPixelSize(double v) {
+        propSiftMinPixelSizeProperty.set(v);
+    }
 
     private static final DoubleProperty propSiftRatioThresholdProperty =
             PathPrefs.createPersistentPreference("propSiftRatioThreshold", 0.7);
 
-    public static double getPropSiftRatioThreshold() { return propSiftRatioThresholdProperty.get(); }
-    public static void setPropSiftRatioThreshold(double v) { propSiftRatioThresholdProperty.set(v); }
+    public static double getPropSiftRatioThreshold() {
+        return propSiftRatioThresholdProperty.get();
+    }
+
+    public static void setPropSiftRatioThreshold(double v) {
+        propSiftRatioThresholdProperty.set(v);
+    }
 
     private static final IntegerProperty propSiftMinMatchCountProperty =
             PathPrefs.createPersistentPreference("propSiftMinMatchCount", 10);
 
-    public static int getPropSiftMinMatchCount() { return propSiftMinMatchCountProperty.get(); }
-    public static void setPropSiftMinMatchCount(int v) { propSiftMinMatchCountProperty.set(v); }
+    public static int getPropSiftMinMatchCount() {
+        return propSiftMinMatchCountProperty.get();
+    }
+
+    public static void setPropSiftMinMatchCount(int v) {
+        propSiftMinMatchCountProperty.set(v);
+    }
 
     private static final DoubleProperty propSiftContrastThresholdProperty =
             PathPrefs.createPersistentPreference("propSiftContrastThreshold", 0.04);
 
-    public static double getPropSiftContrastThreshold() { return propSiftContrastThresholdProperty.get(); }
-    public static void setPropSiftContrastThreshold(double v) { propSiftContrastThresholdProperty.set(v); }
+    public static double getPropSiftContrastThreshold() {
+        return propSiftContrastThresholdProperty.get();
+    }
+
+    public static void setPropSiftContrastThreshold(double v) {
+        propSiftContrastThresholdProperty.set(v);
+    }
 
     private static final DoubleProperty propSiftSearchMarginUmProperty =
             PathPrefs.createPersistentPreference("propSiftSearchMarginUm", 160.0);
 
-    public static double getPropSiftSearchMarginUm() { return propSiftSearchMarginUmProperty.get(); }
-    public static void setPropSiftSearchMarginUm(double v) { propSiftSearchMarginUmProperty.set(v); }
+    public static double getPropSiftSearchMarginUm() {
+        return propSiftSearchMarginUmProperty.get();
+    }
+
+    public static void setPropSiftSearchMarginUm(double v) {
+        propSiftSearchMarginUmProperty.set(v);
+    }
 
     private static final DoubleProperty propSiftConfidenceThresholdProperty =
             PathPrefs.createPersistentPreference("propSiftConfidenceThreshold", 0.5);
 
-    public static double getPropSiftConfidenceThreshold() { return propSiftConfidenceThresholdProperty.get(); }
-    public static void setPropSiftConfidenceThreshold(double v) { propSiftConfidenceThresholdProperty.set(v); }
+    public static double getPropSiftConfidenceThreshold() {
+        return propSiftConfidenceThresholdProperty.get();
+    }
+
+    public static void setPropSiftConfidenceThreshold(double v) {
+        propSiftConfidenceThresholdProperty.set(v);
+    }
 
     private static final IntegerProperty propSiftNFeaturesProperty =
             PathPrefs.createPersistentPreference("propSiftNFeatures", 0);
 
-    public static int getPropSiftNFeatures() { return propSiftNFeaturesProperty.get(); }
-    public static void setPropSiftNFeatures(int v) { propSiftNFeaturesProperty.set(v); }
+    public static int getPropSiftNFeatures() {
+        return propSiftNFeaturesProperty.get();
+    }
+
+    public static void setPropSiftNFeatures(int v) {
+        propSiftNFeaturesProperty.set(v);
+    }
 
     private static final StringProperty propSiftMonoNormalizationProperty =
             PathPrefs.createPersistentPreference("propSiftMonoNormalization", "PERCENTILE");
 
-    public static String getPropSiftMonoNormalization() { return propSiftMonoNormalizationProperty.get(); }
-    public static void setPropSiftMonoNormalization(String v) { propSiftMonoNormalizationProperty.set(v); }
+    public static String getPropSiftMonoNormalization() {
+        return propSiftMonoNormalizationProperty.get();
+    }
+
+    public static void setPropSiftMonoNormalization(String v) {
+        propSiftMonoNormalizationProperty.set(v);
+    }
 
     private static final DoubleProperty propSiftPercentileLowProperty =
             PathPrefs.createPersistentPreference("propSiftPercentileLow", 2.0);
 
-    public static double getPropSiftPercentileLow() { return propSiftPercentileLowProperty.get(); }
-    public static void setPropSiftPercentileLow(double v) { propSiftPercentileLowProperty.set(v); }
+    public static double getPropSiftPercentileLow() {
+        return propSiftPercentileLowProperty.get();
+    }
+
+    public static void setPropSiftPercentileLow(double v) {
+        propSiftPercentileLowProperty.set(v);
+    }
 
     private static final DoubleProperty propSiftPercentileHighProperty =
             PathPrefs.createPersistentPreference("propSiftPercentileHigh", 98.0);
 
-    public static double getPropSiftPercentileHigh() { return propSiftPercentileHighProperty.get(); }
-    public static void setPropSiftPercentileHigh(double v) { propSiftPercentileHighProperty.set(v); }
+    public static double getPropSiftPercentileHigh() {
+        return propSiftPercentileHighProperty.get();
+    }
+
+    public static void setPropSiftPercentileHigh(double v) {
+        propSiftPercentileHighProperty.set(v);
+    }
 
     private static final BooleanProperty propSiftClaheEnabledProperty =
             PathPrefs.createPersistentPreference("propSiftClaheEnabled", true);
 
-    public static boolean isPropSiftClaheEnabled() { return propSiftClaheEnabledProperty.get(); }
-    public static void setPropSiftClaheEnabled(boolean v) { propSiftClaheEnabledProperty.set(v); }
+    public static boolean isPropSiftClaheEnabled() {
+        return propSiftClaheEnabledProperty.get();
+    }
+
+    public static void setPropSiftClaheEnabled(boolean v) {
+        propSiftClaheEnabledProperty.set(v);
+    }
 
     private static final DoubleProperty propSiftClaheClipLimitProperty =
             PathPrefs.createPersistentPreference("propSiftClaheClipLimit", 2.0);
 
-    public static double getPropSiftClaheClipLimit() { return propSiftClaheClipLimitProperty.get(); }
-    public static void setPropSiftClaheClipLimit(double v) { propSiftClaheClipLimitProperty.set(v); }
+    public static double getPropSiftClaheClipLimit() {
+        return propSiftClaheClipLimitProperty.get();
+    }
+
+    public static void setPropSiftClaheClipLimit(double v) {
+        propSiftClaheClipLimitProperty.set(v);
+    }
 
     // ---- Reference image selection for propagation refinement ----
     // The user manually picks which sub of each position-group is the SIFT
@@ -1465,20 +1525,35 @@ public class PersistentPreferences {
     private static final StringProperty propSiftReferenceMetadataKeyProperty =
             PathPrefs.createPersistentPreference("propSiftReferenceMetadataKey", "angle");
 
-    public static String getPropSiftReferenceMetadataKey() { return propSiftReferenceMetadataKeyProperty.get(); }
-    public static void setPropSiftReferenceMetadataKey(String v) { propSiftReferenceMetadataKeyProperty.set(v); }
+    public static String getPropSiftReferenceMetadataKey() {
+        return propSiftReferenceMetadataKeyProperty.get();
+    }
+
+    public static void setPropSiftReferenceMetadataKey(String v) {
+        propSiftReferenceMetadataKeyProperty.set(v);
+    }
 
     private static final StringProperty propSiftReferenceMetadataValueProperty =
             PathPrefs.createPersistentPreference("propSiftReferenceMetadataValue", "90.0");
 
-    public static String getPropSiftReferenceMetadataValue() { return propSiftReferenceMetadataValueProperty.get(); }
-    public static void setPropSiftReferenceMetadataValue(String v) { propSiftReferenceMetadataValueProperty.set(v); }
+    public static String getPropSiftReferenceMetadataValue() {
+        return propSiftReferenceMetadataValueProperty.get();
+    }
+
+    public static void setPropSiftReferenceMetadataValue(String v) {
+        propSiftReferenceMetadataValueProperty.set(v);
+    }
 
     private static final BooleanProperty propSiftEnabledProperty =
             PathPrefs.createPersistentPreference("propSiftEnabled", false);
 
-    public static boolean isPropSiftEnabled() { return propSiftEnabledProperty.get(); }
-    public static void setPropSiftEnabled(boolean v) { propSiftEnabledProperty.set(v); }
+    public static boolean isPropSiftEnabled() {
+        return propSiftEnabledProperty.get();
+    }
+
+    public static void setPropSiftEnabled(boolean v) {
+        propSiftEnabledProperty.set(v);
+    }
 
     // --- Z-Stack acquisition preferences ---
 

@@ -526,8 +526,9 @@ public class PolarizerCalibrationWorkflow {
             for (int i = 0; i < lines.size(); i++) {
                 String trimmed = lines.get(i).trim();
                 if (trimmed.startsWith("pizstage_offset") && lines.get(i).startsWith("    ")) {
-                    lines.set(i, "    pizstage_offset: " + offsetValue
-                            + "  # calibrated by Polarizer Calibration workflow");
+                    lines.set(
+                            i,
+                            "    pizstage_offset: " + offsetValue + "  # calibrated by Polarizer Calibration workflow");
                     updated = true;
                     break;
                 }

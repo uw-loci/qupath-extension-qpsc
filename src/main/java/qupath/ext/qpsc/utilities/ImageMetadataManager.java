@@ -625,8 +625,7 @@ public class ImageMetadataManager {
      * authoritative placement when the alignment / flip math disagrees with
      * what the user actually drew.
      */
-    public static void setSourceRoiPx(ProjectImageEntry<?> entry,
-                                      double x, double y, double w, double h) {
+    public static void setSourceRoiPx(ProjectImageEntry<?> entry, double x, double y, double w, double h) {
         setSourceRoiPx(entry, x, y, w, h, false, false);
     }
 
@@ -638,9 +637,8 @@ public class ImageMetadataManager {
      * coordinates; the flags let the back-prop GT path apply the right
      * sign when interpolating sub_px positions into the rectangle.
      */
-    public static void setSourceRoiPx(ProjectImageEntry<?> entry,
-                                      double x, double y, double w, double h,
-                                      boolean flipX, boolean flipY) {
+    public static void setSourceRoiPx(
+            ProjectImageEntry<?> entry, double x, double y, double w, double h, boolean flipX, boolean flipY) {
         if (entry == null) return;
         Map<String, String> meta = entry.getMetadata();
         meta.put(SOURCE_ROI_X_PX, String.valueOf(x));
@@ -659,12 +657,9 @@ public class ImageMetadataManager {
      * @return [flipX, flipY], both false when not stamped or absent
      */
     public static boolean[] getSourceRoiFlip(ProjectImageEntry<?> entry) {
-        if (entry == null) return new boolean[]{false, false};
+        if (entry == null) return new boolean[] {false, false};
         Map<String, String> meta = entry.getMetadata();
-        return new boolean[]{
-                "1".equals(meta.get(SOURCE_ROI_FLIP_X)),
-                "1".equals(meta.get(SOURCE_ROI_FLIP_Y))
-        };
+        return new boolean[] {"1".equals(meta.get(SOURCE_ROI_FLIP_X)), "1".equals(meta.get(SOURCE_ROI_FLIP_Y))};
     }
 
     /**
@@ -684,7 +679,7 @@ public class ImageMetadataManager {
             double w = Double.parseDouble(ws);
             double h = Double.parseDouble(hs);
             if (w <= 0 || h <= 0) return null;
-            return new double[]{Double.parseDouble(xs), Double.parseDouble(ys), w, h};
+            return new double[] {Double.parseDouble(xs), Double.parseDouble(ys), w, h};
         } catch (NumberFormatException e) {
             return null;
         }
@@ -858,8 +853,7 @@ public class ImageMetadataManager {
                     .map(ProjectImageEntry::getImageName)
                     .reduce((a, b) -> a + ", " + b)
                     .orElse("(none)");
-            logger.info("getSiblingsByBaseImage('{}'): {} sibling(s) -> {}",
-                    baseName, siblings.size(), list);
+            logger.info("getSiblingsByBaseImage('{}'): {} sibling(s) -> {}", baseName, siblings.size(), list);
         }
         return siblings;
     }
@@ -880,8 +874,7 @@ public class ImageMetadataManager {
      * @return matching entry, or null if none exists
      */
     public static ProjectImageEntry<BufferedImage> findSiblingWithFlip(
-            Project<BufferedImage> project, String baseName,
-            boolean flipX, boolean flipY) {
+            Project<BufferedImage> project, String baseName, boolean flipX, boolean flipY) {
         for (ProjectImageEntry<BufferedImage> entry : getSiblingsByBaseImage(project, baseName)) {
             String fxStr = entry.getMetadata().get(FLIP_X);
             String fyStr = entry.getMetadata().get(FLIP_Y);

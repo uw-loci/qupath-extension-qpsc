@@ -75,14 +75,23 @@ public final class FocusMetricsManifest {
     }
 
     /** Sensitivity bucket displayed in the GUI dropdown. */
-    public enum Group { RECOMMENDED, ADVANCED, SPECIAL, UNKNOWN;
+    public enum Group {
+        RECOMMENDED,
+        ADVANCED,
+        SPECIAL,
+        UNKNOWN;
+
         public static Group fromString(String s) {
             if (s == null) return UNKNOWN;
             switch (s.trim().toLowerCase(Locale.ROOT)) {
-                case "recommended": return RECOMMENDED;
-                case "advanced": return ADVANCED;
-                case "special": return SPECIAL;
-                default: return UNKNOWN;
+                case "recommended":
+                    return RECOMMENDED;
+                case "advanced":
+                    return ADVANCED;
+                case "special":
+                    return SPECIAL;
+                default:
+                    return UNKNOWN;
             }
         }
     }
@@ -116,9 +125,17 @@ public final class FocusMetricsManifest {
          */
         public final Double minMagnification;
 
-        MetricSpec(String name, Group group, String badge, String bestFor,
-                   String avoidWhen, String requires, List<String> supportedPaths,
-                   String role, List<String> validModalities, Double minMagnification) {
+        MetricSpec(
+                String name,
+                Group group,
+                String badge,
+                String bestFor,
+                String avoidWhen,
+                String requires,
+                List<String> supportedPaths,
+                String role,
+                List<String> validModalities,
+                Double minMagnification) {
             this.name = name;
             this.group = group;
             this.badge = badge;
@@ -127,18 +144,23 @@ public final class FocusMetricsManifest {
             this.requires = requires;
             this.supportedPaths = Collections.unmodifiableList(supportedPaths);
             this.role = role;
-            this.validModalities = validModalities == null
-                    ? Collections.emptyList()
-                    : Collections.unmodifiableList(validModalities);
+            this.validModalities =
+                    validModalities == null ? Collections.emptyList() : Collections.unmodifiableList(validModalities);
             this.minMagnification = minMagnification;
         }
 
         /** True if this metric can be selected for the streaming AF code path. */
-        public boolean supportsStreaming() { return supportedPaths.contains("streaming"); }
+        public boolean supportsStreaming() {
+            return supportedPaths.contains("streaming");
+        }
         /** True if this metric can be selected for the standard / sweep AF code path. */
-        public boolean supportsStandard() { return supportedPaths.contains("standard"); }
+        public boolean supportsStandard() {
+            return supportedPaths.contains("standard");
+        }
         /** True if this metric can be wired up as a strategy's score_metric. */
-        public boolean supportsStrategy() { return supportedPaths.contains("strategy"); }
+        public boolean supportsStrategy() {
+            return supportedPaths.contains("strategy");
+        }
 
         /**
          * Check whether this metric is appropriate for the given
@@ -200,23 +222,39 @@ public final class FocusMetricsManifest {
         if (modality == null) return "other";
         String s = modality.trim().toLowerCase(Locale.ROOT);
         if (s.isEmpty()) return "other";
-        if (s.equals("brightfield") || s.equals("bf") || s.startsWith("bf_")
-                || s.startsWith("brightfield_") || s.equals("dia")
-                || s.equals("transmission") || s.equals("trans")) {
+        if (s.equals("brightfield")
+                || s.equals("bf")
+                || s.startsWith("bf_")
+                || s.startsWith("brightfield_")
+                || s.equals("dia")
+                || s.equals("transmission")
+                || s.equals("trans")) {
             return "brightfield";
         }
-        if (s.equals("ppm") || s.startsWith("ppm_") || s.equals("polarized")
-                || s.equals("pol") || s.equals("polarised")) {
+        if (s.equals("ppm")
+                || s.startsWith("ppm_")
+                || s.equals("polarized")
+                || s.equals("pol")
+                || s.equals("polarised")) {
             return "ppm";
         }
         if (s.equals("dark_field") || s.equals("darkfield") || s.equals("df")) {
             return "dark_field";
         }
-        if (s.equals("fluorescence") || s.equals("fluorescent") || s.equals("fl")
-                || s.startsWith("fl_") || s.equals("widefield") || s.equals("wf")
-                || s.startsWith("wf_") || s.equals("laser_scanning")
-                || s.equals("lsm") || s.equals("confocal") || s.equals("shg")
-                || s.equals("multiphoton") || s.equals("1p") || s.equals("2p")) {
+        if (s.equals("fluorescence")
+                || s.equals("fluorescent")
+                || s.equals("fl")
+                || s.startsWith("fl_")
+                || s.equals("widefield")
+                || s.equals("wf")
+                || s.startsWith("wf_")
+                || s.equals("laser_scanning")
+                || s.equals("lsm")
+                || s.equals("confocal")
+                || s.equals("shg")
+                || s.equals("multiphoton")
+                || s.equals("1p")
+                || s.equals("2p")) {
             return "fluorescence";
         }
         return s;
@@ -227,6 +265,7 @@ public final class FocusMetricsManifest {
         public final String name;
         public final String description;
         public final List<ParamSpec> params;
+
         ValidityCheckSpec(String name, String description, List<ParamSpec> params) {
             this.name = name;
             this.description = description == null ? "" : description;
@@ -243,8 +282,7 @@ public final class FocusMetricsManifest {
         public final Double rangeMax; // nullable
         public final Integer length; // nullable, for list types
 
-        ParamSpec(String name, String type, Object defaultValue,
-                  Double rangeMin, Double rangeMax, Integer length) {
+        ParamSpec(String name, String type, Object defaultValue, Double rangeMin, Double rangeMax, Integer length) {
             this.name = name;
             this.type = type;
             this.defaultValue = defaultValue;
@@ -261,8 +299,9 @@ public final class FocusMetricsManifest {
         public final String scoreMetricDefault;
         public final String validityCheck;
         public final String onFailure;
-        StrategySpec(String name, String description, String scoreMetricDefault,
-                     String validityCheck, String onFailure) {
+
+        StrategySpec(
+                String name, String description, String scoreMetricDefault, String validityCheck, String onFailure) {
             this.name = name;
             this.description = description == null ? "" : description;
             this.scoreMetricDefault = scoreMetricDefault;
@@ -273,13 +312,33 @@ public final class FocusMetricsManifest {
 
     // --------------- accessors ---------------
 
-    public int getSchemaVersion() { return schemaVersion; }
-    public Path getSourcePath() { return sourcePath; }
-    public Map<String, MetricSpec> getMetrics() { return metrics; }
-    public Map<String, String> getRemovedAliases() { return removedAliases; }
-    public Map<String, ValidityCheckSpec> getValidityChecks() { return validityChecks; }
-    public Map<String, StrategySpec> getStrategies() { return strategies; }
-    public Map<String, String> getModalityDefaults() { return modalityDefaults; }
+    public int getSchemaVersion() {
+        return schemaVersion;
+    }
+
+    public Path getSourcePath() {
+        return sourcePath;
+    }
+
+    public Map<String, MetricSpec> getMetrics() {
+        return metrics;
+    }
+
+    public Map<String, String> getRemovedAliases() {
+        return removedAliases;
+    }
+
+    public Map<String, ValidityCheckSpec> getValidityChecks() {
+        return validityChecks;
+    }
+
+    public Map<String, StrategySpec> getStrategies() {
+        return strategies;
+    }
+
+    public Map<String, String> getModalityDefaults() {
+        return modalityDefaults;
+    }
 
     /** All metrics in the given group, in manifest order. */
     public List<MetricSpec> metricsByGroup(Group group) {
@@ -291,7 +350,9 @@ public final class FocusMetricsManifest {
     }
 
     /** All canonical metric names, in manifest order. */
-    public List<String> metricNames() { return new ArrayList<>(metrics.keySet()); }
+    public List<String> metricNames() {
+        return new ArrayList<>(metrics.keySet());
+    }
 
     /** Lookup the canonical replacement for an old/legacy metric name (e.g. "volath5" -> "vollath_f5"). */
     public Optional<String> aliasFor(String oldName) {
@@ -312,8 +373,7 @@ public final class FocusMetricsManifest {
      * the standard AF path.
      */
     public String resolveEffectiveMetric(String modality, String yamlScoreMetric, String fallback) {
-        if (yamlScoreMetric != null && !yamlScoreMetric.isEmpty()
-                && !"none".equalsIgnoreCase(yamlScoreMetric)) {
+        if (yamlScoreMetric != null && !yamlScoreMetric.isEmpty() && !"none".equalsIgnoreCase(yamlScoreMetric)) {
             String key = yamlScoreMetric.trim().toLowerCase(Locale.ROOT);
             if (metrics.containsKey(key)) return key;
             // Legacy alias -- effective name is the canonical replacement.
@@ -358,8 +418,11 @@ public final class FocusMetricsManifest {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> doc = (Map<String, Object>) loaded;
                     FocusMetricsManifest m = parse(doc, candidate);
-                    logger.info("Loaded focus manifest from {} ({} metrics, {} strategies)",
-                            candidate, m.metrics.size(), m.strategies.size());
+                    logger.info(
+                            "Loaded focus manifest from {} ({} metrics, {} strategies)",
+                            candidate,
+                            m.metrics.size(),
+                            m.strategies.size());
                     return m;
                 }
             } catch (IOException e) {
@@ -381,8 +444,8 @@ public final class FocusMetricsManifest {
         if (configDir != null) out.add(configDir.resolve(MANIFEST_FILENAME));
         // Packaged copy bundled with the extension (optional).
         try {
-            Path pkg = Paths.get(System.getProperty("user.dir"), "src", "main",
-                    "resources", "focus", MANIFEST_FILENAME);
+            Path pkg =
+                    Paths.get(System.getProperty("user.dir"), "src", "main", "resources", "focus", MANIFEST_FILENAME);
             if (Files.exists(pkg)) out.add(pkg);
         } catch (RuntimeException ignored) {
             // best effort
@@ -392,8 +455,8 @@ public final class FocusMetricsManifest {
 
     @SuppressWarnings("unchecked")
     private static FocusMetricsManifest parse(Map<String, Object> doc, Path source) {
-        int schemaVersion = doc.get("schema_version") instanceof Number
-                ? ((Number) doc.get("schema_version")).intValue() : 1;
+        int schemaVersion =
+                doc.get("schema_version") instanceof Number ? ((Number) doc.get("schema_version")).intValue() : 1;
 
         Map<String, MetricSpec> metrics = new LinkedHashMap<>();
         Object metricsObj = doc.get("metrics");
@@ -404,25 +467,27 @@ public final class FocusMetricsManifest {
                 String name = String.valueOf(entry.get("name"));
                 if (name == null || "null".equals(name)) continue;
                 List<String> paths = entry.get("supported_paths") instanceof List
-                        ? ((List<Object>) entry.get("supported_paths")).stream()
-                            .map(Object::toString).collect(Collectors.toList())
+                        ? ((List<Object>) entry.get("supported_paths"))
+                                .stream().map(Object::toString).collect(Collectors.toList())
                         : Collections.emptyList();
                 List<String> validModalities = entry.get("valid_modalities") instanceof List
-                        ? ((List<Object>) entry.get("valid_modalities")).stream()
-                            .map(Object::toString).collect(Collectors.toList())
+                        ? ((List<Object>) entry.get("valid_modalities"))
+                                .stream().map(Object::toString).collect(Collectors.toList())
                         : Collections.emptyList();
                 Double minMag = toDoubleOrNull(entry.get("min_magnification"));
-                metrics.put(name, new MetricSpec(
+                metrics.put(
                         name,
-                        Group.fromString((String) entry.get("group")),
-                        (String) entry.get("badge"),
-                        (String) entry.get("best_for"),
-                        (String) entry.get("avoid_when"),
-                        (String) entry.get("requires"),
-                        paths,
-                        (String) entry.get("role"),
-                        validModalities,
-                        minMag));
+                        new MetricSpec(
+                                name,
+                                Group.fromString((String) entry.get("group")),
+                                (String) entry.get("badge"),
+                                (String) entry.get("best_for"),
+                                (String) entry.get("avoid_when"),
+                                (String) entry.get("requires"),
+                                paths,
+                                (String) entry.get("role"),
+                                validModalities,
+                                minMag));
             }
         }
 
@@ -430,8 +495,7 @@ public final class FocusMetricsManifest {
         Object aliasObj = doc.get("removed_aliases");
         if (aliasObj instanceof Map) {
             for (Map.Entry<Object, Object> e : ((Map<Object, Object>) aliasObj).entrySet()) {
-                aliases.put(String.valueOf(e.getKey()).toLowerCase(Locale.ROOT),
-                        String.valueOf(e.getValue()));
+                aliases.put(String.valueOf(e.getKey()).toLowerCase(Locale.ROOT), String.valueOf(e.getValue()));
             }
         }
 
@@ -454,17 +518,13 @@ public final class FocusMetricsManifest {
                             rmin = toDoubleOrNull(((List<?>) rng).get(0));
                             rmax = toDoubleOrNull(((List<?>) rng).get(1));
                         }
-                        Integer length = pdef.get("length") instanceof Number
-                                ? ((Number) pdef.get("length")).intValue() : null;
+                        Integer length =
+                                pdef.get("length") instanceof Number ? ((Number) pdef.get("length")).intValue() : null;
                         params.add(new ParamSpec(
-                                pname,
-                                (String) pdef.get("type"),
-                                pdef.get("default"),
-                                rmin, rmax, length));
+                                pname, (String) pdef.get("type"), pdef.get("default"), rmin, rmax, length));
                     }
                 }
-                vchecks.put(name, new ValidityCheckSpec(
-                        name, (String) entry.get("description"), params));
+                vchecks.put(name, new ValidityCheckSpec(name, (String) entry.get("description"), params));
             }
         }
 
@@ -475,12 +535,14 @@ public final class FocusMetricsManifest {
                 if (!(e instanceof Map)) continue;
                 Map<String, Object> entry = (Map<String, Object>) e;
                 String name = String.valueOf(entry.get("name"));
-                strategies.put(name, new StrategySpec(
+                strategies.put(
                         name,
-                        (String) entry.get("description"),
-                        (String) entry.get("score_metric_default"),
-                        (String) entry.get("validity_check"),
-                        (String) entry.getOrDefault("on_failure", "defer")));
+                        new StrategySpec(
+                                name,
+                                (String) entry.get("description"),
+                                (String) entry.get("score_metric_default"),
+                                (String) entry.get("validity_check"),
+                                (String) entry.getOrDefault("on_failure", "defer")));
             }
         }
 
@@ -488,20 +550,21 @@ public final class FocusMetricsManifest {
         Object mObj = doc.get("modality_defaults");
         if (mObj instanceof Map) {
             for (Map.Entry<Object, Object> e : ((Map<Object, Object>) mObj).entrySet()) {
-                modality.put(String.valueOf(e.getKey()).toLowerCase(Locale.ROOT),
-                        String.valueOf(e.getValue()));
+                modality.put(String.valueOf(e.getKey()).toLowerCase(Locale.ROOT), String.valueOf(e.getValue()));
             }
         }
 
-        return new FocusMetricsManifest(
-                schemaVersion, metrics, aliases, vchecks, strategies, modality, source);
+        return new FocusMetricsManifest(schemaVersion, metrics, aliases, vchecks, strategies, modality, source);
     }
 
     private static Double toDoubleOrNull(Object o) {
         if (o instanceof Number) return ((Number) o).doubleValue();
         if (o == null) return null;
-        try { return Double.parseDouble(o.toString()); }
-        catch (NumberFormatException e) { return null; }
+        try {
+            return Double.parseDouble(o.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private static FocusMetricsManifest emptyManifest() {
@@ -509,16 +572,39 @@ public final class FocusMetricsManifest {
         // file is found. Names match the canonical set the runtime
         // dispatcher accepts so dropdown picks won't immediately error.
         Map<String, MetricSpec> m = new LinkedHashMap<>();
-        for (String n : List.of("tenengrad", "laplacian_variance", "brenner_gradient",
-                "normalized_variance", "vollath_f5", "sobel", "p98_p2",
-                "robust_sharpness_metric", "hybrid_sharpness_metric", "none")) {
-            m.put(n, new MetricSpec(n, Group.UNKNOWN, "na", "", "", "numpy",
-                    List.of("streaming", "standard", "strategy"), null,
-                    Collections.emptyList(), null));
+        for (String n : List.of(
+                "tenengrad",
+                "laplacian_variance",
+                "brenner_gradient",
+                "normalized_variance",
+                "vollath_f5",
+                "sobel",
+                "p98_p2",
+                "robust_sharpness_metric",
+                "hybrid_sharpness_metric",
+                "none")) {
+            m.put(
+                    n,
+                    new MetricSpec(
+                            n,
+                            Group.UNKNOWN,
+                            "na",
+                            "",
+                            "",
+                            "numpy",
+                            List.of("streaming", "standard", "strategy"),
+                            null,
+                            Collections.emptyList(),
+                            null));
         }
-        return new FocusMetricsManifest(0, m, Collections.emptyMap(),
-                Collections.emptyMap(), Collections.emptyMap(),
-                Collections.emptyMap(), null);
+        return new FocusMetricsManifest(
+                0,
+                m,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                null);
     }
 
     /**
@@ -528,7 +614,7 @@ public final class FocusMetricsManifest {
      */
     public List<MetricSpec> metricsForDropdown() {
         List<MetricSpec> out = new ArrayList<>();
-        for (Group g : new Group[]{Group.RECOMMENDED, Group.ADVANCED, Group.SPECIAL, Group.UNKNOWN}) {
+        for (Group g : new Group[] {Group.RECOMMENDED, Group.ADVANCED, Group.SPECIAL, Group.UNKNOWN}) {
             for (MetricSpec m : metrics.values()) {
                 if (m.group == g) out.add(m);
             }
@@ -538,7 +624,9 @@ public final class FocusMetricsManifest {
 
     /** Names of all groups present in the dropdown order. */
     public Set<Group> groupsPresent() {
-        return metrics.values().stream().map(s -> s.group).collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        return metrics.values().stream()
+                .map(s -> s.group)
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
     }
 
     /**
@@ -571,7 +659,7 @@ public final class FocusMetricsManifest {
         sb.append("#   gap_spatial_multiplier -- force AF beyond (this x af_min_distance)\n");
         sb.append("#\n");
         sb.append("# AVAILABLE SCORE METRICS:\n");
-        for (Group g : new Group[]{Group.RECOMMENDED, Group.ADVANCED, Group.SPECIAL}) {
+        for (Group g : new Group[] {Group.RECOMMENDED, Group.ADVANCED, Group.SPECIAL}) {
             List<MetricSpec> entries = metricsByGroup(g);
             if (entries.isEmpty()) continue;
             sb.append("#   [").append(g.name().toLowerCase(Locale.ROOT)).append("]\n");
@@ -593,7 +681,9 @@ public final class FocusMetricsManifest {
                     sb.append("#       best for : ").append(oneLine(m.bestFor)).append("\n");
                 }
                 if (!m.avoidWhen.isEmpty()) {
-                    sb.append("#       avoid    : ").append(oneLine(m.avoidWhen)).append("\n");
+                    sb.append("#       avoid    : ")
+                            .append(oneLine(m.avoidWhen))
+                            .append("\n");
                 }
             }
         }
@@ -601,24 +691,37 @@ public final class FocusMetricsManifest {
             sb.append("#\n");
             sb.append("# STRATEGIES (referenced by per-modality bindings):\n");
             for (StrategySpec s : strategies.values()) {
-                sb.append("#   ").append(s.name)
-                        .append(" -> score_metric_default=").append(s.scoreMetricDefault)
-                        .append(", validity_check=").append(s.validityCheck)
-                        .append(", on_failure=").append(s.onFailure).append("\n");
+                sb.append("#   ")
+                        .append(s.name)
+                        .append(" -> score_metric_default=")
+                        .append(s.scoreMetricDefault)
+                        .append(", validity_check=")
+                        .append(s.validityCheck)
+                        .append(", on_failure=")
+                        .append(s.onFailure)
+                        .append("\n");
             }
         }
         if (!modalityDefaults.isEmpty()) {
             sb.append("#\n");
             sb.append("# MODALITY DEFAULTS (used when no per-objective score_metric is set):\n");
             for (Map.Entry<String, String> e : modalityDefaults.entrySet()) {
-                sb.append("#   ").append(e.getKey()).append(" -> ").append(e.getValue()).append("\n");
+                sb.append("#   ")
+                        .append(e.getKey())
+                        .append(" -> ")
+                        .append(e.getValue())
+                        .append("\n");
             }
         }
         if (!removedAliases.isEmpty()) {
             sb.append("#\n");
             sb.append("# RENAMED METRICS (loader rejects the old name):\n");
             for (Map.Entry<String, String> e : removedAliases.entrySet()) {
-                sb.append("#   ").append(e.getKey()).append(" -> ").append(e.getValue()).append("\n");
+                sb.append("#   ")
+                        .append(e.getKey())
+                        .append(" -> ")
+                        .append(e.getValue())
+                        .append("\n");
             }
         }
         sb.append("\n");

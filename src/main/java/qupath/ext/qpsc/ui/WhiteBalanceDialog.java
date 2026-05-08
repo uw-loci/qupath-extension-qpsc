@@ -429,10 +429,9 @@ public class WhiteBalanceDialog {
                         Alert alert = new Alert(Alert.AlertType.ERROR);
                         alert.setTitle("White Balance: missing detector");
                         alert.setHeaderText("No detector selected");
-                        alert.setContentText(
-                                "Pick a detector in Shared Settings before running calibration. "
-                                        + "Calibration is written into the detector-specific YAML section, "
-                                        + "so picking the wrong one leaves the active detector with stale values.");
+                        alert.setContentText("Pick a detector in Shared Settings before running calibration. "
+                                + "Calibration is written into the detector-specific YAML section, "
+                                + "so picking the wrong one leaves the active detector with stale values.");
                         alert.showAndWait();
                         return null;
                     }
@@ -457,7 +456,13 @@ public class WhiteBalanceDialog {
                     gainAnalogRbMaxProperty.set(gainAnalogRbMax);
 
                     AdvancedWBParams advanced = new AdvancedWBParams(
-                            maxGain, gainThreshold, maxIter, calibrateBL, baseGain, exposureSoftCap, boostedMaxGain,
+                            maxGain,
+                            gainThreshold,
+                            maxIter,
+                            calibrateBL,
+                            baseGain,
+                            exposureSoftCap,
+                            boostedMaxGain,
                             gainAnalogRbMax);
 
                     if (buttonType == runSimpleButton) {
@@ -686,7 +691,8 @@ public class WhiteBalanceDialog {
 
         // Objective selection - calibration results are objective-specific
         Label objectiveLabel = new Label("Objective:");
-        objectiveLabel.setTooltip(new Tooltip("Select the objective for calibration (exposures are objective-specific)"));
+        objectiveLabel.setTooltip(
+                new Tooltip("Select the objective for calibration (exposures are objective-specific)"));
 
         ComboBox<String> objectiveCombo = new ComboBox<>();
         objectiveCombo.setId("wbObjective");
@@ -723,13 +729,15 @@ public class WhiteBalanceDialog {
                     String fallbackPref = null;
                     if (defaultObjective == null) {
                         fallbackPref = PersistentPreferences.getLastObjective();
-                        if (fallbackPref != null && !fallbackPref.isEmpty()
-                                && objectives.contains(fallbackPref)) {
+                        if (fallbackPref != null && !fallbackPref.isEmpty() && objectives.contains(fallbackPref)) {
                             defaultObjective = fallbackPref;
                         }
                     }
-                    logger.info("WB dialog objective seed: liveMatch={}, prefFallback='{}', selected='{}'",
-                            liveMatch.map(MicroscopeConfigManager.HardwareSelection::objectiveId).orElse(null),
+                    logger.info(
+                            "WB dialog objective seed: liveMatch={}, prefFallback='{}', selected='{}'",
+                            liveMatch
+                                    .map(MicroscopeConfigManager.HardwareSelection::objectiveId)
+                                    .orElse(null),
                             fallbackPref,
                             defaultObjective);
                     if (defaultObjective != null) {
@@ -772,9 +780,7 @@ public class WhiteBalanceDialog {
                 MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
                 Set<String> detectors = configManager.getAvailableDetectors();
                 if (!detectors.isEmpty()) {
-                    detectorCombo
-                            .getItems()
-                            .addAll(detectors.stream().sorted().toList());
+                    detectorCombo.getItems().addAll(detectors.stream().sorted().toList());
                     // Same live-detection-first policy as the objective combo above.
                     Optional<MicroscopeConfigManager.HardwareSelection> liveMatch =
                             detectMountedHardware(configManager);
@@ -784,8 +790,7 @@ public class WhiteBalanceDialog {
                             .orElse(null);
                     if (defaultDetector == null) {
                         String savedDetector = PersistentPreferences.getLastDetector();
-                        if (savedDetector != null && !savedDetector.isEmpty()
-                                && detectors.contains(savedDetector)) {
+                        if (savedDetector != null && !savedDetector.isEmpty() && detectors.contains(savedDetector)) {
                             defaultDetector = savedDetector;
                         }
                     }
@@ -931,14 +936,17 @@ public class WhiteBalanceDialog {
         try {
             MicroscopeController mc = MicroscopeController.getInstance();
             if (mc == null || !mc.isConnected()) {
-                logger.info("WB dialog: live hardware detection skipped (controller={}, connected={})",
-                        mc, mc != null && mc.isConnected());
+                logger.info(
+                        "WB dialog: live hardware detection skipped (controller={}, connected={})",
+                        mc,
+                        mc != null && mc.isConnected());
                 return Optional.empty();
             }
             double mmPx = mc.getSocketClient().getMicroscopePixelSize();
             Optional<MicroscopeConfigManager.HardwareSelection> match = configManager.findHardwareByPixelSize(
                     mmPx, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
-            logger.info("WB dialog: live MM pixel size {} um/px -> {}",
+            logger.info(
+                    "WB dialog: live MM pixel size {} um/px -> {}",
                     mmPx,
                     match.map(h -> h.objectiveId() + " / " + h.detectorId()).orElse("NO MATCH"));
             return match;
@@ -1381,8 +1389,8 @@ public class WhiteBalanceDialog {
         gainAnalogRbMaxSpinner.setId("gainAnalogRbMax");
         gainAnalogRbMaxSpinner.setEditable(true);
         gainAnalogRbMaxSpinner.setPrefWidth(100);
-        gainAnalogRbMaxSpinner.setTooltip(new Tooltip(
-                "Per-channel ceiling (linear, not dB) for the JAI red and blue analog gains\n"
+        gainAnalogRbMaxSpinner.setTooltip(
+                new Tooltip("Per-channel ceiling (linear, not dB) for the JAI red and blue analog gains\n"
                         + "applied during Phase 1c gain compensation and Phase 2 fine tuning.\n"
                         + "Hardware spec lists 4.0 as the safe max; firmware accepts higher values\n"
                         + "when needed for color balance in scenes where blue or red would otherwise\n"

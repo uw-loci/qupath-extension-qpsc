@@ -434,7 +434,8 @@ public class ExistingImageWorkflowV2 {
                 if (configPath == null || configPath.isEmpty()) {
                     return;
                 }
-                String activeMicroscope = MicroscopeConfigManager.getInstance(configPath).getMicroscopeName();
+                String activeMicroscope =
+                        MicroscopeConfigManager.getInstance(configPath).getMicroscopeName();
                 if (activeMicroscope == null || activeMicroscope.isEmpty() || "Unknown".equals(activeMicroscope)) {
                     return;
                 }
@@ -453,8 +454,7 @@ public class ExistingImageWorkflowV2 {
                     return;
                 }
 
-                AffineTransformManager mgr =
-                        new AffineTransformManager(new java.io.File(configPath).getParent());
+                AffineTransformManager mgr = new AffineTransformManager(new java.io.File(configPath).getParent());
 
                 for (AffineTransformManager.SlideAlignmentRecord record : records) {
                     String sourceMicroscope = record.getMicroscope();
@@ -473,8 +473,8 @@ public class ExistingImageWorkflowV2 {
                         if (tgtPreset == null || srcPreset == null) continue;
                         if (!tgtPreset.hasFlipState() || !srcPreset.hasFlipState()) continue;
                         try {
-                            AffineTransform composed = CrossScopeTransformBuilder.compose(
-                                    record.getTransform(), srcPreset, tgtPreset);
+                            AffineTransform composed =
+                                    CrossScopeTransformBuilder.compose(record.getTransform(), srcPreset, tgtPreset);
                             state.useExistingSlideAlignment = true;
                             state.transform = composed;
                             state.crossScope = true;
@@ -592,9 +592,8 @@ public class ExistingImageWorkflowV2 {
                                     state.alignmentSource);
                             return CompletableFuture.completedFuture(true);
                         }
-                        AffineTransformManager.TransformPreset presetForFlip = state.alignmentChoice != null
-                                ? state.alignmentChoice.selectedTransform()
-                                : null;
+                        AffineTransformManager.TransformPreset presetForFlip =
+                                state.alignmentChoice != null ? state.alignmentChoice.selectedTransform() : null;
                         boolean requiresFlipX = FlipResolver.resolveFlipX(null, presetForFlip, null);
                         boolean requiresFlipY = FlipResolver.resolveFlipY(null, presetForFlip, null);
                         String sampleNameForFlip = state.sample != null ? state.sample.sampleName() : null;
@@ -613,8 +612,7 @@ public class ExistingImageWorkflowV2 {
                                     // flipped entry but the swap can race the worker thread that
                                     // reads gui.getImageData() downstream.
                                     if (validated) {
-                                        verifyOpenEntryMatchesPreset(
-                                                gui, project, requiresFlipX, requiresFlipY);
+                                        verifyOpenEntryMatchesPreset(gui, project, requiresFlipX, requiresFlipY);
                                     }
                                     return validated;
                                 });
@@ -814,9 +812,8 @@ public class ExistingImageWorkflowV2 {
                         // (see processSlideSpecificAlignment for the OWS3 incident this avoids).
                         @SuppressWarnings("unchecked")
                         Project<BufferedImage> proj = (Project<BufferedImage>) projectInfo.getCurrentProject();
-                        AffineTransformManager.TransformPreset presetForFlip = state.alignmentChoice != null
-                                ? state.alignmentChoice.selectedTransform()
-                                : null;
+                        AffineTransformManager.TransformPreset presetForFlip =
+                                state.alignmentChoice != null ? state.alignmentChoice.selectedTransform() : null;
                         boolean requiresFlipX = FlipResolver.resolveFlipX(null, presetForFlip, null);
                         boolean requiresFlipY = FlipResolver.resolveFlipY(null, presetForFlip, null);
                         String sampleNameForFlip2 = state.sample != null ? state.sample.sampleName() : null;
@@ -1212,13 +1209,11 @@ public class ExistingImageWorkflowV2 {
          * Kept as a no-op so the existing call chain compiles unchanged.
          */
         private void verifyOpenEntryMatchesPreset(
-                QuPathGUI gui,
-                Project<BufferedImage> project,
-                boolean requiresFlipX,
-                boolean requiresFlipY) {
+                QuPathGUI gui, Project<BufferedImage> project, boolean requiresFlipX, boolean requiresFlipY) {
             logger.debug(
                     "verifyOpenEntryMatchesPreset: no-op under Step B (flip required={}, {})",
-                    requiresFlipX, requiresFlipY);
+                    requiresFlipX,
+                    requiresFlipY);
         }
     }
 
@@ -1259,6 +1254,7 @@ public class ExistingImageWorkflowV2 {
          * @see CrossScopeTransformBuilder
          */
         public boolean crossScope;
+
         public String crossScopeSourceMicroscope;
         public RefinementSelectionController.RefinementChoice refinementChoice =
                 RefinementSelectionController.RefinementChoice.NONE;

@@ -180,72 +180,76 @@ public class AffineTransformationController {
                             return UIFunctions.stageAlignmentConfirmAsync(
                                             gui, refTile, "Reference tile alignment", confirmInstruction)
                                     .thenCompose(aligned -> {
-                                if (!aligned) {
-                                    logger.info("User cancelled at manual alignment step.");
-                                    future.complete(null);
-                                    return CompletableFuture.completedFuture(null);
-                                }
+                                        if (!aligned) {
+                                            logger.info("User cancelled at manual alignment step.");
+                                            future.complete(null);
+                                            return CompletableFuture.completedFuture(null);
+                                        }
 
-                                try {
-                                    // 4. Get current stage position after user aligned
-                                    double[] measuredStageCoords =
-                                            MicroscopeController.getInstance().getStagePositionXY();
-                                    logger.info(
-                                            "Current stage coordinates after alignment: {}",
-                                            Arrays.toString(measuredStageCoords));
+                                        try {
+                                            // 4. Get current stage position after user aligned
+                                            double[] measuredStageCoords = MicroscopeController.getInstance()
+                                                    .getStagePositionXY();
+                                            logger.info(
+                                                    "Current stage coordinates after alignment: {}",
+                                                    Arrays.toString(measuredStageCoords));
 
-                                    // 5. Calculate transform based on aligned position
-                                    AffineTransform transform = TransformationFunctions.addTranslationToScaledAffine(
-                                            scalingTransform, qpRefCoords, measuredStageCoords);
-                                    logger.info("Calculated affine transform from alignment: {}", transform);
+                                            // 5. Calculate transform based on aligned position
+                                            AffineTransform transform =
+                                                    TransformationFunctions.addTranslationToScaledAffine(
+                                                            scalingTransform, qpRefCoords, measuredStageCoords);
+                                            logger.info("Calculated affine transform from alignment: {}", transform);
 
-                                    // Record the initial reference alignment point
-                                    alignmentPoints.add(new AlignmentPoint(
-                                            new Point2D.Double(qpRefCoords[0], qpRefCoords[1]),
-                                            new Point2D.Double(measuredStageCoords[0], measuredStageCoords[1]),
-                                            refTile.getName() != null ? refTile.getName() : "reference"));
+                                            // Record the initial reference alignment point
+                                            alignmentPoints.add(new AlignmentPoint(
+                                                    new Point2D.Double(qpRefCoords[0], qpRefCoords[1]),
+                                                    new Point2D.Double(measuredStageCoords[0], measuredStageCoords[1]),
+                                                    refTile.getName() != null ? refTile.getName() : "reference"));
 
-                                    // 6. Secondary refinement with geometric extremes
-                                    Collection<PathObject> allTiles =
-                                            gui.getViewer().getHierarchy().getDetectionObjects();
-                                    PathObject topCenterTile = TransformationFunctions.getTopCenterTile(allTiles);
-                                    PathObject leftCenterTile = TransformationFunctions.getLeftCenterTile(allTiles);
+                                            // 6. Secondary refinement with geometric extremes
+                                            Collection<PathObject> allTiles = gui.getViewer()
+                                                    .getHierarchy()
+                                                    .getDetectionObjects();
+                                            PathObject topCenterTile =
+                                                    TransformationFunctions.getTopCenterTile(allTiles);
+                                            PathObject leftCenterTile =
+                                                    TransformationFunctions.getLeftCenterTile(allTiles);
 
-                                    CompletableFuture<AffineTransform> refinementFuture =
-                                            CompletableFuture.completedFuture(transform);
+                                            CompletableFuture<AffineTransform> refinementFuture =
+                                                    CompletableFuture.completedFuture(transform);
 
-                                    for (PathObject tile : Arrays.asList(topCenterTile, leftCenterTile)) {
-                                        if (tile == null) continue;
+                                            for (PathObject tile : Arrays.asList(topCenterTile, leftCenterTile)) {
+                                                if (tile == null) continue;
 
-                                        refinementFuture = refinementFuture.thenCompose(currentTransform -> {
-                                            if (currentTransform == null) {
-                                                return CompletableFuture.completedFuture(null);
+                                                refinementFuture = refinementFuture.thenCompose(currentTransform -> {
+                                                    if (currentTransform == null) {
+                                                        return CompletableFuture.completedFuture(null);
+                                                    }
+                                                    return refineWithTileAsync(gui, tile, currentTransform);
+                                                });
                                             }
-                                            return refineWithTileAsync(gui, tile, currentTransform);
-                                        });
-                                    }
 
-                                    refinementFuture
-                                            .thenAccept(finalTransform -> {
-                                                if (finalTransform != null) {
-                                                    future.complete(finalTransform);
-                                                } else {
-                                                    future.complete(null);
-                                                }
-                                            })
-                                            .exceptionally(ex -> {
-                                                logger.error("Refinement failed", ex);
-                                                future.completeExceptionally(ex);
-                                                return null;
-                                            });
+                                            refinementFuture
+                                                    .thenAccept(finalTransform -> {
+                                                        if (finalTransform != null) {
+                                                            future.complete(finalTransform);
+                                                        } else {
+                                                            future.complete(null);
+                                                        }
+                                                    })
+                                                    .exceptionally(ex -> {
+                                                        logger.error("Refinement failed", ex);
+                                                        future.completeExceptionally(ex);
+                                                        return null;
+                                                    });
 
-                                } catch (Exception e) {
-                                    logger.error("Affine transformation setup failed", e);
-                                    future.complete(null);
-                                }
+                                        } catch (Exception e) {
+                                            logger.error("Affine transformation setup failed", e);
+                                            future.complete(null);
+                                        }
 
-                                return CompletableFuture.completedFuture(null);
-                            });
+                                        return CompletableFuture.completedFuture(null);
+                                    });
                         })
                         .exceptionally(ex -> {
                             logger.error("Tile selection failed", ex);
@@ -298,45 +302,45 @@ public class AffineTransformationController {
                         + "'. Use the joystick or Auto-Align (SIFT) to fine-tune, then click Confirm.";
                 UIFunctions.stageAlignmentConfirmAsync(gui, tile, "Refinement tile alignment", refineInstruction)
                         .thenAccept(ok -> {
-                    if (!ok) {
-                        logger.info("User cancelled during secondary alignment at tile '{}'.", tile.getName());
-                        tileFuture.complete(null);
-                        return;
-                    }
+                            if (!ok) {
+                                logger.info("User cancelled during secondary alignment at tile '{}'.", tile.getName());
+                                tileFuture.complete(null);
+                                return;
+                            }
 
-                    try {
-                        double[] measuredCoords =
-                                MicroscopeController.getInstance().getStagePositionXY();
-                        AffineTransform newTransform = TransformationFunctions.addTranslationToScaledAffine(
-                                currentTransform, tileCoords, measuredCoords);
-                        logger.info("Refined transform after tile '{}': {}", tile.getName(), newTransform);
+                            try {
+                                double[] measuredCoords =
+                                        MicroscopeController.getInstance().getStagePositionXY();
+                                AffineTransform newTransform = TransformationFunctions.addTranslationToScaledAffine(
+                                        currentTransform, tileCoords, measuredCoords);
+                                logger.info("Refined transform after tile '{}': {}", tile.getName(), newTransform);
 
-                        // Record this refinement point
-                        String tileName = tile.getName() != null ? tile.getName() : "refinement";
-                        alignmentPoints.add(new AlignmentPoint(
-                                new Point2D.Double(tileCoords[0], tileCoords[1]),
-                                new Point2D.Double(measuredCoords[0], measuredCoords[1]),
-                                tileName));
+                                // Record this refinement point
+                                String tileName = tile.getName() != null ? tile.getName() : "refinement";
+                                alignmentPoints.add(new AlignmentPoint(
+                                        new Point2D.Double(tileCoords[0], tileCoords[1]),
+                                        new Point2D.Double(measuredCoords[0], measuredCoords[1]),
+                                        tileName));
 
-                        // Compute residuals for all previous points against the new transform
-                        double maxResidualUm = computeMaxResidual(newTransform);
-                        logResiduals(newTransform);
+                                // Compute residuals for all previous points against the new transform
+                                double maxResidualUm = computeMaxResidual(newTransform);
+                                logResiduals(newTransform);
 
-                        // Translation shift between transforms is informational, not an error.
-                        // The first refinement always recenters translation; on a stage with
-                        // axis inversion the shift can be ~slide-width um even when the new
-                        // point is perfectly consistent with the previous one. The actual
-                        // health metric is the residual: if predictions still match measured
-                        // positions, the transform is good regardless of how its translation
-                        // term moved.
-                        checkTransformHealth(currentTransform, newTransform, tileName, maxResidualUm);
+                                // Translation shift between transforms is informational, not an error.
+                                // The first refinement always recenters translation; on a stage with
+                                // axis inversion the shift can be ~slide-width um even when the new
+                                // point is perfectly consistent with the previous one. The actual
+                                // health metric is the residual: if predictions still match measured
+                                // positions, the transform is good regardless of how its translation
+                                // term moved.
+                                checkTransformHealth(currentTransform, newTransform, tileName, maxResidualUm);
 
-                        tileFuture.complete(newTransform);
-                    } catch (Exception e) {
-                        logger.error("Error getting stage position during refinement", e);
-                        tileFuture.completeExceptionally(e);
-                    }
-                });
+                                tileFuture.complete(newTransform);
+                            } catch (Exception e) {
+                                logger.error("Error getting stage position during refinement", e);
+                                tileFuture.completeExceptionally(e);
+                            }
+                        });
 
             } catch (Exception e) {
                 logger.error("Error during tile refinement", e);
@@ -397,10 +401,7 @@ public class AffineTransformationController {
      * @param maxResidualUm     the worst back-projection residual across all alignment points
      */
     private static void checkTransformHealth(
-            AffineTransform previousTransform,
-            AffineTransform newTransform,
-            String tileName,
-            double maxResidualUm) {
+            AffineTransform previousTransform, AffineTransform newTransform, String tileName, double maxResidualUm) {
         double dTx = Math.abs(newTransform.getTranslateX() - previousTransform.getTranslateX());
         double dTy = Math.abs(newTransform.getTranslateY() - previousTransform.getTranslateY());
         double shift = Math.sqrt(dTx * dTx + dTy * dTy);

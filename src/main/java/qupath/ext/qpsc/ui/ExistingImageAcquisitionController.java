@@ -33,9 +33,9 @@ import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
-import qupath.lib.gui.prefs.QuPathStyleManager;
 import qupath.ext.qpsc.utilities.SampleNameValidator;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.gui.prefs.QuPathStyleManager;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.Project;
 
@@ -182,7 +182,7 @@ public class ExistingImageAcquisitionController {
         // Transform data
         private List<AffineTransformManager.TransformPreset> availableTransforms;
         private AffineTransformManager transformManager;
-        private boolean hasSlideAlignment;  // True if _alignment.json exists for current image
+        private boolean hasSlideAlignment; // True if _alignment.json exists for current image
 
         // UI Components - Banner
         private HBox variantBanner;
@@ -288,10 +288,8 @@ public class ExistingImageAcquisitionController {
             String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
             if (imageName == null) return false;
             @SuppressWarnings("unchecked")
-            Project<java.awt.image.BufferedImage> project =
-                    (Project<java.awt.image.BufferedImage>) gui.getProject();
-            java.awt.geom.AffineTransform t =
-                    AffineTransformManager.loadSlideAlignment(project, imageName);
+            Project<java.awt.image.BufferedImage> project = (Project<java.awt.image.BufferedImage>) gui.getProject();
+            java.awt.geom.AffineTransform t = AffineTransformManager.loadSlideAlignment(project, imageName);
             return t != null;
         }
 
@@ -331,11 +329,16 @@ public class ExistingImageAcquisitionController {
         private String accentColor(String semanticColor) {
             boolean dark = isDark();
             switch (semanticColor) {
-                case "green": return dark ? "#66BB6A" : "#2E7D32";
-                case "blue": return dark ? "#64B5F6" : "#1565C0";
-                case "amber": return dark ? "#FFD54F" : "#F57F17";
-                case "red": return dark ? "#EF5350" : "#C62828";
-                default: return dark ? "#B0BEC5" : "#424242";
+                case "green":
+                    return dark ? "#66BB6A" : "#2E7D32";
+                case "blue":
+                    return dark ? "#64B5F6" : "#1565C0";
+                case "amber":
+                    return dark ? "#FFD54F" : "#F57F17";
+                case "red":
+                    return dark ? "#EF5350" : "#C62828";
+                default:
+                    return dark ? "#B0BEC5" : "#424242";
             }
         }
 
@@ -727,10 +730,10 @@ public class ExistingImageAcquisitionController {
 
             // Info label for slide-specific (auto-registered) alignment
             Label slideAlignmentInfo = new Label(
-                    "This image has stage coordinates from QPSC acquisition. "
-                    + "No scanner alignment needed.");
+                    "This image has stage coordinates from QPSC acquisition. " + "No scanner alignment needed.");
             slideAlignmentInfo.setWrapText(true);
-            slideAlignmentInfo.setStyle("-fx-font-size: 11px; -fx-text-fill: " + accentColor("green") + "; -fx-padding: 4 0 0 20;");
+            slideAlignmentInfo.setStyle(
+                    "-fx-font-size: 11px; -fx-text-fill: " + accentColor("green") + "; -fx-padding: 4 0 0 20;");
             slideAlignmentInfo.setVisible(hasSlideAlignment && useExistingRadio.isSelected());
             slideAlignmentInfo.setManaged(hasSlideAlignment && useExistingRadio.isSelected());
 
@@ -738,12 +741,10 @@ public class ExistingImageAcquisitionController {
             Label recommendationLabel = new Label();
             recommendationLabel.setWrapText(true);
             recommendationLabel.setPadding(new Insets(8));
-            recommendationLabel.setStyle(
-                    bannerStyle("yellow"));
+            recommendationLabel.setStyle(bannerStyle("yellow"));
 
             if (hasSlideAlignment) {
-                recommendationLabel.setText(
-                        "[i] Image has auto-registered alignment from QPSC acquisition. "
+                recommendationLabel.setText("[i] Image has auto-registered alignment from QPSC acquisition. "
                         + "Ready to acquire without additional alignment setup.");
             } else if (hasScannerTransforms) {
                 recommendationLabel.setText(
@@ -807,8 +808,7 @@ public class ExistingImageAcquisitionController {
             refinementRecommendationLabel = new Label();
             refinementRecommendationLabel.setWrapText(true);
             refinementRecommendationLabel.setPadding(new Insets(8));
-            refinementRecommendationLabel.setStyle(
-                    bannerStyle("yellow"));
+            refinementRecommendationLabel.setStyle(bannerStyle("yellow"));
 
             // Set default based on confidence
             updateRefinementRecommendation();
@@ -964,8 +964,8 @@ public class ExistingImageAcquisitionController {
                     new VBox(5, previewAnnotationsLabel, previewTilesLabel, previewTimeLabel, previewStorageLabel);
             previewContent.setPadding(new Insets(10));
             boolean dark = QuPathStyleManager.getStyleColorScheme() == ColorScheme.DARK;
-            previewContent.setStyle("-fx-background-color: " + (dark ? "#333" : "#f8f9fa")
-                    + "; -fx-border-color: " + (dark ? "#555" : "#dee2e6") + "; -fx-border-width: 1px;");
+            previewContent.setStyle("-fx-background-color: " + (dark ? "#333" : "#f8f9fa") + "; -fx-border-color: "
+                    + (dark ? "#555" : "#dee2e6") + "; -fx-border-width: 1px;");
 
             TitledPane previewPane = new TitledPane("ACQUISITION PREVIEW", previewContent);
             previewPane.setExpanded(true);
@@ -1151,7 +1151,9 @@ public class ExistingImageAcquisitionController {
 
             logger.debug(
                     "White balance visibility updated: JAI={}, modalityWB={}, visible={}",
-                    isJAI, modalityUsesWb, showWb);
+                    isJAI,
+                    modalityUsesWb,
+                    showWb);
         }
 
         /**
@@ -1226,8 +1228,7 @@ public class ExistingImageAcquisitionController {
             // stage coordinates -- highest possible confidence, no refinement needed.
             if (hasSlideAlignment) {
                 noRefineRadio.setSelected(true);
-                refinementRecommendationLabel.setText(
-                        "[i] Recommendation: Proceed without refinement "
+                refinementRecommendationLabel.setText("[i] Recommendation: Proceed without refinement "
                         + "(auto-registered from acquisition coordinates)");
                 return;
             }
@@ -1405,8 +1406,7 @@ public class ExistingImageAcquisitionController {
             // Icon
             Label iconLabel = new Label(isOutdated ? "[!]" : "[*]");
             iconLabel.setStyle(String.format(
-                    "-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: %s;",
-                    accentColor(accentSemantic)));
+                    "-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: %s;", accentColor(accentSemantic)));
 
             // Message
             VBox messageBox = new VBox(2);
@@ -1416,8 +1416,7 @@ public class ExistingImageAcquisitionController {
                     isOutdated ? "Previously Refined Alignment May Be Outdated" : "Using Previously Refined Alignment";
             Label titleLabel = new Label(titleText);
             titleLabel.setStyle(String.format(
-                    "-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: %s;",
-                    accentColor(accentSemantic)));
+                    "-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: %s;", accentColor(accentSemantic)));
 
             // Date with age indicator
             String ageText;
@@ -1443,8 +1442,7 @@ public class ExistingImageAcquisitionController {
                     : "Recommendation: Proceed without refinement";
             Label recommendationLabel = new Label(recommendationText);
             recommendationLabel.setStyle(String.format(
-                    "-fx-font-size: 11px; -fx-font-style: italic; -fx-text-fill: %s;",
-                    accentColor(accentSemantic)));
+                    "-fx-font-size: 11px; -fx-font-style: italic; -fx-text-fill: %s;", accentColor(accentSemantic)));
 
             messageBox.getChildren().addAll(titleLabel, detailLabel, recommendationLabel);
 
@@ -1511,8 +1509,8 @@ public class ExistingImageAcquisitionController {
                             "Images: %,d tiles x %d %s%s = %,d images",
                             totalTiles, imagesPerTile, unit, zSuffix, totalImages));
                 } else {
-                    previewTilesLabel.setText(String.format(
-                            "Tiles: %,d%s = %,d images", totalTiles, zSuffix, totalImages));
+                    previewTilesLabel.setText(
+                            String.format("Tiles: %,d%s = %,d images", totalTiles, zSuffix, totalImages));
                 }
 
                 // Time estimate using persistent per-file mean from previous acquisitions.

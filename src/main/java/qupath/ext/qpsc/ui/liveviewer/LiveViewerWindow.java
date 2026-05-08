@@ -16,6 +16,8 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
@@ -33,8 +35,6 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
-import javafx.scene.canvas.Canvas;
-import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -176,9 +176,11 @@ public class LiveViewerWindow {
         // the button cannot drift from the actual server streaming state.
         MicroscopeController controller = MicroscopeController.getInstance();
         if (controller != null && controller.getSocketClient() != null) {
-            controller.getSocketClient().streamingActiveProperty().addListener(
-                    (obs, wasActive, nowActive) -> Platform.runLater(
-                            () -> syncLiveStateFromServer(nowActive != null && nowActive)));
+            controller
+                    .getSocketClient()
+                    .streamingActiveProperty()
+                    .addListener((obs, wasActive, nowActive) ->
+                            Platform.runLater(() -> syncLiveStateFromServer(nowActive != null && nowActive)));
         }
     }
 
@@ -195,8 +197,7 @@ public class LiveViewerWindow {
         liveActive = nowActive;
         updateLiveButtonStyle(nowActive);
         updateStatus(nowActive ? "Live ON" : "Live OFF");
-        logger.info("Live button synced to server streaming state: {}",
-                nowActive ? "ACTIVE" : "INACTIVE");
+        logger.info("Live button synced to server streaming state: {}", nowActive ? "ACTIVE" : "INACTIVE");
     }
 
     /**
@@ -1200,8 +1201,7 @@ public class LiveViewerWindow {
                     exposureMs = exposures.unified();
                     if (exposures.isPerChannel()) {
                         exposureMs = Math.max(
-                                exposureMs,
-                                Math.max(exposures.red(), Math.max(exposures.green(), exposures.blue())));
+                                exposureMs, Math.max(exposures.red(), Math.max(exposures.green(), exposures.blue())));
                     }
                     exposureSource = exposures.isPerChannel() ? "MMCore per-channel max" : "MMCore unified";
                 }
@@ -1343,8 +1343,7 @@ public class LiveViewerWindow {
                         // algorithm.
                         streamingFocusButton.setText("Autofocus");
                         streamingFocusButton.setStyle("");
-                        streamingFocusButton.setTooltip(new Tooltip(
-                                "Streaming AF refused.\nReason: " + msg));
+                        streamingFocusButton.setTooltip(new Tooltip("Streaming AF refused.\nReason: " + msg));
                         streamingFocusButton.setDisable(!liveActive);
 
                         String reason = msg;
@@ -1358,8 +1357,7 @@ public class LiveViewerWindow {
                         // "depth-of-field". If we add new flat-metric
                         // refusal phrasings server-side, mirror them here.
                         String lower = reason.toLowerCase();
-                        boolean signalDead =
-                                lower.contains("metric range") && lower.contains("noise")
+                        boolean signalDead = lower.contains("metric range") && lower.contains("noise")
                                 || lower.contains("depth-of-field")
                                 || lower.contains("metric_flat");
 
@@ -1373,18 +1371,19 @@ public class LiveViewerWindow {
                             String headline = signalDead
                                     ? "Autofocus: signal too flat to find focus"
                                     : "Autofocus: no focus found";
-                            Dialogs.showInfoNotification(headline, reason
-                                    + "\n\nStage left at current Z. "
-                                    + "If you believe focus is reachable, click "
-                                    + "Sweep Focus to attempt a stepped scan.");
+                            Dialogs.showInfoNotification(
+                                    headline,
+                                    reason
+                                            + "\n\nStage left at current Z. "
+                                            + "If you believe focus is reachable, click "
+                                            + "Sweep Focus to attempt a stepped scan.");
                             updateStatus(headline + " -- stage left at current Z");
                         } else {
                             // Fixable refusal (long exposure, no slow-
                             // speed property, etc.) -- Sweep Focus uses
                             // a different mechanism so it has a real
                             // chance of succeeding.
-                            updateStatus("Autofocus: streaming unavailable (" + reason
-                                    + "); switching to Sweep Focus");
+                            updateStatus("Autofocus: streaming unavailable (" + reason + "); switching to Sweep Focus");
                             handleSweepFocus();
                         }
                     } else if (outcome == RefineFocusController.Outcome.ERROR) {
@@ -1847,8 +1846,8 @@ public class LiveViewerWindow {
             fovLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11; -fx-font-weight: bold;");
         } catch (Exception e) {
             fovLabel.setText("FoV: error");
-            fovLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11; "
-                    + "-fx-font-weight: bold; -fx-text-fill: red;");
+            fovLabel.setStyle(
+                    "-fx-font-family: monospace; -fx-font-size: 11; " + "-fx-font-weight: bold; -fx-text-fill: red;");
         }
     }
 
@@ -1881,18 +1880,18 @@ public class LiveViewerWindow {
      * dark IF backgrounds.
      */
     private static final Color[] OBJECTIVE_COLORS = {
-        Color.rgb(255,  50,  50),  // red
-        Color.rgb( 50, 220,  50),  // green
-        Color.rgb( 80, 130, 255),  // blue
-        Color.rgb(255, 200,  30),  // yellow
-        Color.rgb(255,  50, 255),  // magenta
-        Color.rgb( 50, 230, 230),  // cyan
-        Color.rgb(255, 140,  30),  // orange
-        Color.rgb(160,  80, 255),  // purple
-        Color.rgb( 50, 255, 140),  // spring green
-        Color.rgb(255,  80, 160),  // pink
-        Color.rgb(180, 210,  40),  // lime
-        Color.rgb(100, 200, 255),  // sky blue
+        Color.rgb(255, 50, 50), // red
+        Color.rgb(50, 220, 50), // green
+        Color.rgb(80, 130, 255), // blue
+        Color.rgb(255, 200, 30), // yellow
+        Color.rgb(255, 50, 255), // magenta
+        Color.rgb(50, 230, 230), // cyan
+        Color.rgb(255, 140, 30), // orange
+        Color.rgb(160, 80, 255), // purple
+        Color.rgb(50, 255, 140), // spring green
+        Color.rgb(255, 80, 160), // pink
+        Color.rgb(180, 210, 40), // lime
+        Color.rgb(100, 200, 255), // sky blue
     };
 
     /**
@@ -1932,7 +1931,7 @@ public class LiveViewerWindow {
         for (String obj : objIds) {
             Double px = mgr.getHardwarePixelSize(obj, currentDetId);
             if (px != null && px > 0) {
-                fovs.add(new double[]{sensorW * px, sensorH * px});
+                fovs.add(new double[] {sensorW * px, sensorH * px});
             } else {
                 fovs.add(null);
             }

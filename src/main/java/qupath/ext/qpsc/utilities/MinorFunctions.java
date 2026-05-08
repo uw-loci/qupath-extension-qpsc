@@ -556,8 +556,14 @@ public class MinorFunctions {
             } catch (IOException e) {
                 lastException = e;
                 if (attempt < maxAttempts) {
-                    logger.warn("Files.move attempt {}/{} failed ({}), retrying in {}ms: {} -> {}",
-                            attempt, maxAttempts, e.getClass().getSimpleName(), delay, source, target);
+                    logger.warn(
+                            "Files.move attempt {}/{} failed ({}), retrying in {}ms: {} -> {}",
+                            attempt,
+                            maxAttempts,
+                            e.getClass().getSimpleName(),
+                            delay,
+                            source,
+                            target);
                     try {
                         Thread.sleep(delay);
                     } catch (InterruptedException ie) {
@@ -570,8 +576,9 @@ public class MinorFunctions {
         }
 
         // All attempts exhausted
-        throw new IOException(String.format(
-                "Files.move failed after %d attempts: %s -> %s", maxAttempts, source, target), lastException);
+        throw new IOException(
+                String.format("Files.move failed after %d attempts: %s -> %s", maxAttempts, source, target),
+                lastException);
     }
 
     /**
@@ -582,8 +589,7 @@ public class MinorFunctions {
      * @param initialDelayMs initial delay in milliseconds (doubled each retry)
      * @throws IOException if all attempts fail
      */
-    public static void deleteWithRetry(Path path, int maxAttempts, long initialDelayMs)
-            throws IOException {
+    public static void deleteWithRetry(Path path, int maxAttempts, long initialDelayMs) throws IOException {
         long delay = initialDelayMs;
         IOException lastException = null;
 
@@ -597,8 +603,13 @@ public class MinorFunctions {
             } catch (IOException e) {
                 lastException = e;
                 if (attempt < maxAttempts) {
-                    logger.warn("Files.delete attempt {}/{} failed ({}), retrying in {}ms: {}",
-                            attempt, maxAttempts, e.getClass().getSimpleName(), delay, path);
+                    logger.warn(
+                            "Files.delete attempt {}/{} failed ({}), retrying in {}ms: {}",
+                            attempt,
+                            maxAttempts,
+                            e.getClass().getSimpleName(),
+                            delay,
+                            path);
                     try {
                         Thread.sleep(delay);
                     } catch (InterruptedException ie) {
@@ -610,7 +621,7 @@ public class MinorFunctions {
             }
         }
 
-        throw new IOException(String.format(
-                "Files.delete failed after %d attempts: %s", maxAttempts, path), lastException);
+        throw new IOException(
+                String.format("Files.delete failed after %d attempts: %s", maxAttempts, path), lastException);
     }
 }

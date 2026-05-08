@@ -1,6 +1,5 @@
 package qupath.ext.qpsc.controller;
 
-import java.awt.Desktop;
 import java.io.File;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;

@@ -245,7 +245,8 @@ public class CameraControlController {
         // property. Hidden when the camera reports no choices (only [1])
         // so cameras without the property don't grow a useless control.
         try {
-            MicroscopeSocketClient.BinningResult bin = controller.getSocketClient().getBinning();
+            MicroscopeSocketClient.BinningResult bin =
+                    controller.getSocketClient().getBinning();
             if (bin.available != null && bin.available.length > 1) {
                 Label binningHeader = new Label("Binning");
                 binningHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
@@ -287,12 +288,12 @@ public class CameraControlController {
                     t.start();
                 });
 
-                HBox binningRow = new HBox(8,
-                        new Label("Factor:"), binningCombo, binningApplyBtn);
+                HBox binningRow = new HBox(8, new Label("Factor:"), binningCombo, binningApplyBtn);
                 binningRow.setAlignment(Pos.CENTER_LEFT);
                 content.getChildren().addAll(new Separator(), binningHeader, binningRow);
             } else {
-                logger.debug("Camera reports no binning options ({}); hiding binning row",
+                logger.debug(
+                        "Camera reports no binning options ({}); hiding binning row",
                         bin.available != null ? bin.available.length : 0);
             }
         } catch (Exception ex) {
@@ -426,7 +427,8 @@ public class CameraControlController {
         // via GETCAP once a profile is selected, so non-rotation profiles like
         // Brightfield_10x correctly hide the per-angle card even when the scope
         // also has a PPM profile in its config.
-        final VBox perAngleSection = new VBox(4, new Separator(), settingsHeader, settingsNote, rotationNote, wbMethodLabel);
+        final VBox perAngleSection =
+                new VBox(4, new Separator(), settingsHeader, settingsNote, rotationNote, wbMethodLabel);
         if (!hasRotationModality) {
             perAngleSection.setVisible(false);
             perAngleSection.setManaged(false);
@@ -710,36 +712,41 @@ public class CameraControlController {
 
             Label activeNote = new Label();
             activeNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
-            activeNote.setText("Active source follows the applied profile; rows below drive each source independently.");
+            activeNote.setText(
+                    "Active source follows the applied profile; rows below drive each source independently.");
             activeNote.setWrapText(true);
 
             VBox sourcesBox = new VBox(4);
 
             Runnable refreshSources = () -> {
-                Thread t = new Thread(() -> {
-                    try {
-                        String selected = selectedProfileHolder[0];
-                        var cap = controller.getSocketClient()
-                                .getCapabilities(selected == null ? "" : selected);
-                        if (cap.illumination == null || cap.illumination.isEmpty()) {
-                            Platform.runLater(() -> {
-                                sourcesBox.getChildren().clear();
-                                Label none = new Label("(no illumination sources reported)");
-                                none.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
-                                sourcesBox.getChildren().add(none);
-                            });
-                            return;
-                        }
-                        Platform.runLater(() -> {
-                            sourcesBox.getChildren().clear();
-                            for (var src : cap.illumination) {
-                                sourcesBox.getChildren().add(buildSourceRow(controller, src, illumRefreshHolder));
+                Thread t = new Thread(
+                        () -> {
+                            try {
+                                String selected = selectedProfileHolder[0];
+                                var cap =
+                                        controller.getSocketClient().getCapabilities(selected == null ? "" : selected);
+                                if (cap.illumination == null || cap.illumination.isEmpty()) {
+                                    Platform.runLater(() -> {
+                                        sourcesBox.getChildren().clear();
+                                        Label none = new Label("(no illumination sources reported)");
+                                        none.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
+                                        sourcesBox.getChildren().add(none);
+                                    });
+                                    return;
+                                }
+                                Platform.runLater(() -> {
+                                    sourcesBox.getChildren().clear();
+                                    for (var src : cap.illumination) {
+                                        sourcesBox
+                                                .getChildren()
+                                                .add(buildSourceRow(controller, src, illumRefreshHolder));
+                                    }
+                                });
+                            } catch (Exception ex) {
+                                logger.debug("Per-source row refresh failed: {}", ex.getMessage());
                             }
-                        });
-                    } catch (Exception ex) {
-                        logger.debug("Per-source row refresh failed: {}", ex.getMessage());
-                    }
-                }, "CCC-Sources-Refresh");
+                        },
+                        "CCC-Sources-Refresh");
                 t.setDaemon(true);
                 t.start();
             };
@@ -747,8 +754,7 @@ public class CameraControlController {
             illumRefreshHolder.set(refreshSources);
             refreshSources.run();
 
-            illumSection.getChildren().addAll(
-                    new Separator(), illumHeader, activeNote, sourcesBox);
+            illumSection.getChildren().addAll(new Separator(), illumHeader, activeNote, sourcesBox);
         } catch (Exception ex) {
             logger.debug("Could not load illumination info: {}", ex.getMessage());
         }
@@ -854,13 +860,14 @@ public class CameraControlController {
                                     });
                                     logger.debug(
                                             "GETCAP for '{}' -> isMultiAngle={} (per-angle section {})",
-                                            selected, isMulti, isMulti ? "shown" : "hidden");
+                                            selected,
+                                            isMulti,
+                                            isMulti ? "shown" : "hidden");
                                 } catch (Exception ex) {
                                     // Don't break the dialog if the server is
                                     // unreachable -- keep whatever visibility
                                     // the conservative heuristic gave us.
-                                    logger.debug(
-                                            "GETCAP for section visibility failed: {}", ex.getMessage());
+                                    logger.debug("GETCAP for section visibility failed: {}", ex.getMessage());
                                 }
                             },
                             "CCC-Cap-Refresh");
@@ -970,8 +977,7 @@ public class CameraControlController {
      */
     @SuppressWarnings("unchecked")
     private static String resolveIllumLabelForProfile(
-            qupath.ext.qpsc.utilities.MicroscopeConfigManager mgr,
-            String profileName) {
+            qupath.ext.qpsc.utilities.MicroscopeConfigManager mgr, String profileName) {
         try {
             Object modalitiesObj = mgr.getConfigItem("modalities");
             if (!(modalitiesObj instanceof Map<?, ?> modMap)) return "Lamp";
@@ -1058,15 +1064,12 @@ public class CameraControlController {
         nameLabel.setStyle("-fx-font-size: 11px; -fx-min-width: 90px;");
 
         Label statusLabel = new Label(src.isOn ? "ON" : "OFF");
-        statusLabel.setStyle(
-                "-fx-font-size: 10px; -fx-padding: 0 6 0 6; -fx-text-fill: "
-                        + (src.isOn ? "#0a7d28" : "#999999") + ";");
+        statusLabel.setStyle("-fx-font-size: 10px; -fx-padding: 0 6 0 6; -fx-text-fill: "
+                + (src.isOn ? "#0a7d28" : "#999999") + ";");
 
         boolean binary = "binary".equals(src.valueType);
-        double maxPower = (src.powerRange != null && src.powerRange.length >= 2)
-                ? src.powerRange[1] : 1.0;
-        double minPower = (src.powerRange != null && src.powerRange.length >= 2)
-                ? src.powerRange[0] : 0.0;
+        double maxPower = (src.powerRange != null && src.powerRange.length >= 2) ? src.powerRange[1] : 1.0;
+        double minPower = (src.powerRange != null && src.powerRange.length >= 2) ? src.powerRange[0] : 0.0;
 
         Button applyBtn = new Button("Apply");
         applyBtn.setStyle("-fx-font-size: 10px;");

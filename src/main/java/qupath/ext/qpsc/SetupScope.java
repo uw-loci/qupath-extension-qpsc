@@ -12,16 +12,15 @@ import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
-import qupath.ext.qpsc.utilities.FlippedDuplicateMigrator;
 import qupath.ext.qpsc.controller.MakePortableWorkflow;
-import qupath.fx.dialogs.Dialogs;
 import qupath.ext.qpsc.controller.QPScopeController;
 import qupath.ext.qpsc.controller.StackTimeLapseWorkflow;
-import qupath.ext.qpsc.ui.SinglePointAcquisitionController;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.SinglePointAcquisitionController;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
+import qupath.ext.qpsc.utilities.FlippedDuplicateMigrator;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.ProjectLogger;
@@ -449,7 +448,9 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             msg.append("Migration complete.\n\n");
             msg.append("Duplicates found: ").append(result.duplicatesFound).append("\n");
             msg.append("Duplicates removed: ").append(result.duplicatesRemoved).append("\n");
-            msg.append("Annotations transferred: ").append(result.annotationsTransferred).append("\n\n");
+            msg.append("Annotations transferred: ")
+                    .append(result.annotationsTransferred)
+                    .append("\n\n");
             for (String line : result.log) msg.append(line).append('\n');
             Dialogs.showMessageDialog("Migrate Flipped Duplicates", msg.toString());
         });

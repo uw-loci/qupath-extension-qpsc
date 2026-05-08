@@ -78,8 +78,8 @@ public class QPPreferenceDialog {
 
     private static final BooleanProperty autoConnectToServerProperty =
             PathPrefs.createPersistentPreference("microscope.autoConnectToServer", true);
-    private static final StringProperty microscopeConfigFileProperty = PathPrefs.createPersistentPreference(
-            "microscopeConfigFileProperty", "");
+    private static final StringProperty microscopeConfigFileProperty =
+            PathPrefs.createPersistentPreference("microscopeConfigFileProperty", "");
 
     private static final StringProperty projectsFolderProperty =
             PathPrefs.createPersistentPreference("projectsFolderProperty", "");

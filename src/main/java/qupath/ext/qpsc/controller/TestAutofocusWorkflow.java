@@ -406,8 +406,7 @@ public class TestAutofocusWorkflow {
         // Sweep drift check is designed for speed and skips the plot, so
         // an "Open Plot" button there would be a silent no-op.
         if (plotPath != null) {
-            alert.getButtonTypes().setAll(
-                    javafx.scene.control.ButtonType.YES, javafx.scene.control.ButtonType.NO);
+            alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.YES, javafx.scene.control.ButtonType.NO);
             ((javafx.scene.control.Button) alert.getDialogPane().lookupButton(javafx.scene.control.ButtonType.YES))
                     .setText("Open Plot");
             ((javafx.scene.control.Button) alert.getDialogPane().lookupButton(javafx.scene.control.ButtonType.NO))

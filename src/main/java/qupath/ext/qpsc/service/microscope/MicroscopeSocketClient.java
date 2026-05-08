@@ -1,5 +1,7 @@
 package qupath.ext.qpsc.service.microscope;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
 import java.io.*;
 import java.net.*;
 import java.nio.ByteBuffer;
@@ -19,8 +21,6 @@ import javafx.beans.property.ReadOnlyBooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 
 /**
@@ -90,8 +90,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
     // the Live Viewer button and any future UI can bind to it without keeping
     // a separate local flag that drifts out of sync. Mutated on the FX thread
     // because JavaFX properties are not thread-safe by default.
-    private final BooleanProperty streamingActiveProperty =
-            new SimpleBooleanProperty(this, "streamingActive", false);
+    private final BooleanProperty streamingActiveProperty = new SimpleBooleanProperty(this, "streamingActive", false);
 
     // Progress monitoring state - tracks last time progress was made or significant event occurred
     private final AtomicLong lastProgressUpdateTime = new AtomicLong(System.currentTimeMillis());
@@ -157,6 +156,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      */
     private static final java.util.concurrent.atomic.AtomicBoolean modalShowing =
             new java.util.concurrent.atomic.AtomicBoolean(false);
+
     private volatile long lastUnresponsiveModalNanos = 0L;
     private static final long MODAL_REDISPLAY_DEBOUNCE_NANOS = 30L * 1_000_000_000L; // 30s
 
@@ -545,17 +545,26 @@ public class MicroscopeSocketClient implements AutoCloseable {
             // Clean up primary socket only -- do NOT call cleanup() which
             // also destroys the auxiliary socket
             try {
-                if (input != null) { input.close(); input = null; }
+                if (input != null) {
+                    input.close();
+                    input = null;
+                }
             } catch (Exception e) {
                 logger.debug("Error closing primary input stream", e);
             }
             try {
-                if (output != null) { output.close(); output = null; }
+                if (output != null) {
+                    output.close();
+                    output = null;
+                }
             } catch (Exception e) {
                 logger.debug("Error closing primary output stream", e);
             }
             try {
-                if (socket != null && !socket.isClosed()) { socket.close(); socket = null; }
+                if (socket != null && !socket.isClosed()) {
+                    socket.close();
+                    socket = null;
+                }
             } catch (Exception e) {
                 logger.debug("Error closing primary socket", e);
             }
@@ -723,9 +732,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             // callers (stage poll, focus rollback) silently swallow the
             // throw, so without this the latch becomes invisible.
             maybeReshowUnresponsiveModal();
-            throw new IOException(
-                    "Microscope server unresponsive (MicroManager likely crashed). "
-                            + "Restart MicroManager + the Python server, then click Retry.");
+            throw new IOException("Microscope server unresponsive (MicroManager likely crashed). "
+                    + "Restart MicroManager + the Python server, then click Retry.");
         }
         // Enforce cooldown after failed attempts to prevent reconnection floods
         long now = System.currentTimeMillis();
@@ -897,8 +905,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if (responseStr.startsWith("ACK")) {
             logger.info("Server config reloaded successfully");
         } else if (responseStr.startsWith("FAILED")) {
-            throw new IOException("Server config reload failed: "
-                    + responseStr.substring(Math.min(7, responseStr.length())));
+            throw new IOException(
+                    "Server config reload failed: " + responseStr.substring(Math.min(7, responseStr.length())));
         } else {
             throw new IOException("Unexpected RECONFIG response: " + responseStr);
         }
@@ -1675,8 +1683,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * result so callers can render plots or open the folder.
      */
     public StreamingFocusResult streamingFocus(
-            String yamlPath, String objective, String modality,
-            double rangeOverrideUm, boolean dumpFrames) throws IOException {
+            String yamlPath, String objective, String modality, double rangeOverrideUm, boolean dumpFrames)
+            throws IOException {
         if (yamlPath == null || yamlPath.isEmpty()) {
             throw new IllegalArgumentException("yamlPath is required for streamingFocus");
         }
@@ -1755,14 +1763,22 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         int nSamples = Integer.parseInt(parts[3].trim());
                         double zSpan = Double.parseDouble(parts[4].trim());
                         return new StreamingFocusResult(
-                                StreamingFocusResult.Status.SUCCESS, initialZ, finalZ, zShift, nSamples, zSpan, null, dumpPath);
+                                StreamingFocusResult.Status.SUCCESS,
+                                initialZ,
+                                finalZ,
+                                zShift,
+                                nSamples,
+                                zSpan,
+                                null,
+                                dumpPath);
                     } catch (NumberFormatException e) {
                         throw new IOException("STRMAFZ: could not parse SUCCESS payload: " + response, e);
                     }
                 } else if (response.startsWith("UNAVAILABLE:")) {
                     String reason = response.substring("UNAVAILABLE:".length());
                     logger.info("STRMAFZ UNAVAILABLE: {}", reason);
-                    return new StreamingFocusResult(StreamingFocusResult.Status.UNAVAILABLE, 0, 0, 0, 0, 0, reason, dumpPath);
+                    return new StreamingFocusResult(
+                            StreamingFocusResult.Status.UNAVAILABLE, 0, 0, 0, 0, 0, reason, dumpPath);
                 } else if (response.startsWith("FAILED:")) {
                     String reason = response.substring("FAILED:".length());
                     logger.warn("STRMAFZ FAILED: {}", reason);
@@ -1858,8 +1874,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @return parsed result; never null.
      * @throws IOException on socket failure or FAILED response.
      */
-    public ProbeStageAfResult probeStageAf(
-            String yamlPath, double sweepRangeUm, double cameraFps) throws IOException {
+    public ProbeStageAfResult probeStageAf(String yamlPath, double sweepRangeUm, double cameraFps) throws IOException {
         StringBuilder msgBuilder = new StringBuilder();
         if (yamlPath != null && !yamlPath.isEmpty()) {
             msgBuilder.append("--yaml ").append(yamlPath);
@@ -1913,7 +1928,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     throw new IOException("PRBSAFZ: no response from server");
                 }
                 String response = baos.toString(StandardCharsets.UTF_8).trim();
-                logger.info("PRBSAFZ response ({} bytes): {}",
+                logger.info(
+                        "PRBSAFZ response ({} bytes): {}",
                         response.length(),
                         response.length() > 200 ? response.substring(0, 200) + "..." : response);
                 lastActivityTime.set(System.currentTimeMillis());
@@ -1967,8 +1983,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 Boolean.TRUE.equals(m.get("enabled")),
                 stringOrNull(m.get("viability_reason")),
                 stringOrNull(m.get("verify_note")),
-                stringListOrEmpty(m.get("warnings"))
-        );
+                stringListOrEmpty(m.get("warnings")));
     }
 
     private static String stringOrNull(Object o) {
@@ -2026,7 +2041,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
         String message = String.format(
                 "--output %s --center-x %.3f --center-y %.3f --width %.3f --height %.3f "
                         + "--overlap %.1f --exposure %.3f --fov-w %.3f --fov-h %.3f %s",
-                outputFolder, centerX, centerY, width, height, overlapPercent, exposureMs, fovWidth, fovHeight,
+                outputFolder,
+                centerX,
+                centerY,
+                width,
+                height,
+                overlapPercent,
+                exposureMs,
+                fovWidth,
+                fovHeight,
                 END_MARKER);
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
 
@@ -3508,25 +3531,22 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 java.awt.Toolkit.getDefaultToolkit().beep();
             } catch (Exception ignored) {
             }
-            javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
-                    javafx.scene.control.Alert.AlertType.ERROR);
+            javafx.scene.control.Alert alert =
+                    new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.ERROR);
             alert.setTitle("Microscope Server Unresponsive");
             alert.setHeaderText(
-                    reshown
-                            ? "MicroManager still appears unresponsive."
-                            : "MicroManager appears to have crashed.");
-            alert.setContentText(
-                    "The microscope server is accepting connections but not responding to commands. "
-                            + "This typically means MicroManager itself has crashed or lost its "
-                            + "connection to the camera.\n\n"
-                            + "To recover:\n"
-                            + "  1. Restart MicroManager\n"
-                            + "  2. Restart the Python microscope server\n"
-                            + "  3. Click Retry below\n\n"
-                            + (lastFailureMessage != null ? "Last error: " + lastFailureMessage + "\n\n" : "")
-                            + "Automatic reconnection has been suspended to prevent log spam.");
-            javafx.scene.control.ButtonType retry = new javafx.scene.control.ButtonType(
-                    "Retry", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
+                    reshown ? "MicroManager still appears unresponsive." : "MicroManager appears to have crashed.");
+            alert.setContentText("The microscope server is accepting connections but not responding to commands. "
+                    + "This typically means MicroManager itself has crashed or lost its "
+                    + "connection to the camera.\n\n"
+                    + "To recover:\n"
+                    + "  1. Restart MicroManager\n"
+                    + "  2. Restart the Python microscope server\n"
+                    + "  3. Click Retry below\n\n"
+                    + (lastFailureMessage != null ? "Last error: " + lastFailureMessage + "\n\n" : "")
+                    + "Automatic reconnection has been suspended to prevent log spam.");
+            javafx.scene.control.ButtonType retry =
+                    new javafx.scene.control.ButtonType("Retry", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
             javafx.scene.control.ButtonType dismiss = new javafx.scene.control.ButtonType(
                     "Dismiss", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
             alert.getButtonTypes().setAll(retry, dismiss);
@@ -5659,6 +5679,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
     public static final class BinningResult {
         public final int[] available;
         public final int current;
+
         public BinningResult(int[] available, int current) {
             this.available = available;
             this.current = current;
@@ -5683,8 +5704,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
         // small upper bound (count up to 16 binnings + 2 framing bytes).
         byte[] head = executeCommand(Command.GETBIN, null, 18);
         // Detect server error path (16-byte 'ERROR:...' padded with NULs).
-        if (head.length >= 6 && head[0] == 'E' && head[1] == 'R' && head[2] == 'R'
-                && head[3] == 'O' && head[4] == 'R' && head[5] == ':') {
+        if (head.length >= 6
+                && head[0] == 'E'
+                && head[1] == 'R'
+                && head[2] == 'R'
+                && head[3] == 'O'
+                && head[4] == 'R'
+                && head[5] == ':') {
             String msg = new String(head, StandardCharsets.UTF_8).trim();
             int z = msg.indexOf('\0');
             if (z >= 0) msg = msg.substring(0, z);
@@ -5695,9 +5721,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throw new IOException("GETBIN: invalid count " + count);
         }
         if (head.length < count + 2) {
-            throw new IOException(
-                    "GETBIN: short response (" + head.length + " bytes for count "
-                    + count + ")");
+            throw new IOException("GETBIN: short response (" + head.length + " bytes for count " + count + ")");
         }
         int[] available = new int[count];
         for (int i = 0; i < count; i++) {
@@ -5717,8 +5741,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      */
     public void setBinning(int value) throws IOException {
         if (value < 1 || value > 255) {
-            throw new IllegalArgumentException(
-                    "Binning factor must be in 1..255, got " + value);
+            throw new IllegalArgumentException("Binning factor must be in 1..255, got " + value);
         }
         byte[] payload = new byte[] {(byte) (value & 0xFF)};
         byte[] response = executeCommand(Command.SETBIN, payload, 8);
@@ -5742,26 +5765,36 @@ public class MicroscopeSocketClient implements AutoCloseable {
         public static final class Camera {
             public String name;
             public String type; // "jai" | "hamamatsu" | "laser_scanning" | "generic"
+
             @com.google.gson.annotations.SerializedName("supports_per_channel_exposure")
             public boolean supportsPerChannelExposure;
+
             @com.google.gson.annotations.SerializedName("supports_hardware_white_balance")
             public boolean supportsHardwareWhiteBalance;
+
             @com.google.gson.annotations.SerializedName("available_binnings")
             public int[] availableBinnings;
+
             @com.google.gson.annotations.SerializedName("current_binning")
             public int currentBinning;
+
             @com.google.gson.annotations.SerializedName("exposure_range_ms")
             public double[] exposureRangeMs;
+
             @com.google.gson.annotations.SerializedName("gain_range")
             public double[] gainRange; // null when camera has no gain control
         }
+
         public static final class Illumination {
             public String label;
             public String device;
+
             @com.google.gson.annotations.SerializedName("power_range")
             public double[] powerRange;
+
             @com.google.gson.annotations.SerializedName("current_power")
             public double currentPower;
+
             @com.google.gson.annotations.SerializedName("is_on")
             public boolean isOn;
             /**
@@ -5776,10 +5809,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
             @com.google.gson.annotations.SerializedName("value_type")
             public String valueType;
         }
+
         public static final class Channel {
             public String id;
+
             @com.google.gson.annotations.SerializedName("exposure_ms")
             public Double exposureMs; // boxed: optional
+
             @com.google.gson.annotations.SerializedName("default_intensity")
             public Double defaultIntensity;
             // intensity_property is a free-form dict; expose as raw map so
@@ -5787,13 +5823,18 @@ public class MicroscopeSocketClient implements AutoCloseable {
             @com.google.gson.annotations.SerializedName("intensity_property")
             public java.util.Map<String, Object> intensityProperty;
         }
+
         public static final class Modality {
             public String name;
+
             @com.google.gson.annotations.SerializedName("default_wb_mode")
             public String defaultWbMode;
+
             @com.google.gson.annotations.SerializedName("is_multi_angle")
             public boolean isMultiAngle;
+
             public java.util.List<Channel> channels;
+
             @com.google.gson.annotations.SerializedName("rotation_angles")
             public double[] rotationAngles;
         }
@@ -5801,6 +5842,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         public Camera camera;
         public java.util.List<Illumination> illumination;
         public Modality modality;
+
         @com.google.gson.annotations.SerializedName("active_profile")
         public String activeProfile;
     }
@@ -5834,7 +5876,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
                 byte[] lengthBytes = new byte[4];
                 input.readFully(lengthBytes);
-                int length = ByteBuffer.wrap(lengthBytes).order(ByteOrder.BIG_ENDIAN).getInt();
+                int length =
+                        ByteBuffer.wrap(lengthBytes).order(ByteOrder.BIG_ENDIAN).getInt();
                 if (length <= 0) {
                     throw new IOException("GETCAP: server returned empty payload (likely an error)");
                 }
@@ -5847,8 +5890,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 consecutiveErrors.set(0);
 
                 String json = new String(jsonBytes, StandardCharsets.UTF_8);
-                CapabilityResult result =
-                        new com.google.gson.Gson().fromJson(json, CapabilityResult.class);
+                CapabilityResult result = new com.google.gson.Gson().fromJson(json, CapabilityResult.class);
                 if (result == null) {
                     throw new IOException("GETCAP: failed to parse JSON response");
                 }
@@ -5942,8 +5984,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         byte[] response = executeCommand(Command.SETILLMD, payload, 8);
         String responseStr = new String(response, StandardCharsets.UTF_8).trim();
         if (!responseStr.startsWith("ACK")) {
-            throw new IOException(
-                    "Failed to set illumination on device '" + deviceName + "': " + responseStr);
+            throw new IOException("Failed to set illumination on device '" + deviceName + "': " + responseStr);
         }
         logger.info("Illumination on device '{}' set to {}", deviceName, power);
     }
@@ -5983,8 +6024,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         byte[] response = executeCommand(Command.SETPROP, payload, 8);
         String responseStr = new String(response, StandardCharsets.UTF_8).trim();
         if (!responseStr.startsWith("ACK")) {
-            throw new IOException("Failed to set " + device + "." + property + " <- " + value
-                    + ": " + responseStr);
+            throw new IOException("Failed to set " + device + "." + property + " <- " + value + ": " + responseStr);
         }
         logger.info("set_property: {}.{} <- {}", device, property, value);
     }
@@ -6040,10 +6080,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         String responseStr = new String(response, StandardCharsets.UTF_8).trim();
 
         if (!responseStr.startsWith("ACK")) {
-            throw new IOException(
-                    "Failed to apply channel '"
-                            + (channelId == null ? "<none>" : channelId)
-                            + "' from profile '" + profileName + "': " + responseStr);
+            throw new IOException("Failed to apply channel '"
+                    + (channelId == null ? "<none>" : channelId)
+                    + "' from profile '" + profileName + "': " + responseStr);
         }
 
         logger.info(
@@ -6369,10 +6408,22 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String projection)
             throws IOException {
         return startZStack(
-                outputFolder, zStart, zEnd, zStep, modality, anglesStr, wbMode,
-                yamlPath, objective, detector, projection,
-                false, null, null,
-                1, 0.0);
+                outputFolder,
+                zStart,
+                zEnd,
+                zStep,
+                modality,
+                anglesStr,
+                wbMode,
+                yamlPath,
+                objective,
+                detector,
+                projection,
+                false,
+                null,
+                null,
+                1,
+                0.0);
     }
 
     /**
@@ -6397,10 +6448,22 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String bgMethod)
             throws IOException {
         return startZStack(
-                outputFolder, zStart, zEnd, zStep, modality, anglesStr, wbMode,
-                yamlPath, objective, detector, projection,
-                bgCorrectionEnabled, bgFolder, bgMethod,
-                1, 0.0);
+                outputFolder,
+                zStart,
+                zEnd,
+                zStep,
+                modality,
+                anglesStr,
+                wbMode,
+                yamlPath,
+                objective,
+                detector,
+                projection,
+                bgCorrectionEnabled,
+                bgFolder,
+                bgMethod,
+                1,
+                0.0);
     }
 
     /**
@@ -6449,7 +6512,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if (yamlPath != null) msg.append(" --yaml ").append(yamlPath);
         if (objective != null) msg.append(" --objective ").append(objective);
         if (detector != null) msg.append(" --detector ").append(detector);
-        if (projection != null && !"none".equals(projection)) msg.append(" --projection ").append(projection);
+        if (projection != null && !"none".equals(projection))
+            msg.append(" --projection ").append(projection);
         if (bgCorrectionEnabled) {
             msg.append(" --bg-correction true");
             if (bgFolder != null) msg.append(" --bg-folder ").append(bgFolder);
@@ -6491,8 +6555,18 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String detector)
             throws IOException {
         return startTimeLapse(
-                outputFolder, timepoints, intervalSeconds, modality, anglesStr,
-                wbMode, yamlPath, objective, detector, false, null, null);
+                outputFolder,
+                timepoints,
+                intervalSeconds,
+                modality,
+                anglesStr,
+                wbMode,
+                yamlPath,
+                objective,
+                detector,
+                false,
+                null,
+                null);
     }
 
     /**

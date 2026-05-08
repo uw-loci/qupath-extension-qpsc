@@ -191,14 +191,15 @@ public final class ConfigFileWriter {
         // YAML reader on the Python side can distinguish "no probe yet"
         // from "block missing entirely".
         Map<String, Object> streamingAf = new LinkedHashMap<>();
-        streamingAf.put("enabled",
-                data.streamingAfEnabled != null ? data.streamingAfEnabled : true);
+        streamingAf.put("enabled", data.streamingAfEnabled != null ? data.streamingAfEnabled : true);
         streamingAf.put("speed_property", data.streamingAfSpeedProperty);
-        streamingAf.put("slow_speed_value",
-                data.streamingAfSlowSpeedValue != null ? data.streamingAfSlowSpeedValue : "1");
-        streamingAf.put("slow_speed_um_per_s",
+        streamingAf.put(
+                "slow_speed_value", data.streamingAfSlowSpeedValue != null ? data.streamingAfSlowSpeedValue : "1");
+        streamingAf.put(
+                "slow_speed_um_per_s",
                 data.streamingAfSlowSpeedUmPerS != null ? data.streamingAfSlowSpeedUmPerS : 11.5);
-        streamingAf.put("normal_speed_value",
+        streamingAf.put(
+                "normal_speed_value",
                 data.streamingAfNormalSpeedValue != null ? data.streamingAfNormalSpeedValue : "100");
         stage.put("streaming_af", streamingAf);
 

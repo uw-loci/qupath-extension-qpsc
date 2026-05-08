@@ -57,18 +57,51 @@ public final class PropagationGroupItem {
         return "unflipped";
     }
 
-    public String getBaseName() { return baseName; }
-    public List<ProjectImageEntry<BufferedImage>> getSiblings() { return siblings; }
-    public List<ProjectImageEntry<BufferedImage>> getSubAcquisitions() { return subAcquisitions; }
-    public SimpleStringProperty siblingSummaryProperty() { return siblingSummary; }
-    public SimpleStringProperty subAcquisitionSummaryProperty() { return subAcquisitionSummary; }
-    public SimpleBooleanProperty alignmentFoundProperty() { return alignmentFound; }
-    public SimpleStringProperty statusProperty() { return status; }
+    public String getBaseName() {
+        return baseName;
+    }
 
-    public boolean isAlignmentFound() { return alignmentFound.get(); }
-    public void setStatus(String s) { status.set(s); }
+    public List<ProjectImageEntry<BufferedImage>> getSiblings() {
+        return siblings;
+    }
 
-    public SimpleBooleanProperty selectedProperty() { return selected; }
-    public boolean isSelected() { return selected.get(); }
-    public void setSelected(boolean v) { selected.set(v); }
+    public List<ProjectImageEntry<BufferedImage>> getSubAcquisitions() {
+        return subAcquisitions;
+    }
+
+    public SimpleStringProperty siblingSummaryProperty() {
+        return siblingSummary;
+    }
+
+    public SimpleStringProperty subAcquisitionSummaryProperty() {
+        return subAcquisitionSummary;
+    }
+
+    public SimpleBooleanProperty alignmentFoundProperty() {
+        return alignmentFound;
+    }
+
+    public SimpleStringProperty statusProperty() {
+        return status;
+    }
+
+    public boolean isAlignmentFound() {
+        return alignmentFound.get();
+    }
+
+    public void setStatus(String s) {
+        status.set(s);
+    }
+
+    public SimpleBooleanProperty selectedProperty() {
+        return selected;
+    }
+
+    public boolean isSelected() {
+        return selected.get();
+    }
+
+    public void setSelected(boolean v) {
+        selected.set(v);
+    }
 }

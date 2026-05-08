@@ -196,8 +196,8 @@ public class RapidScanWorkflow {
                     fovState.pixelSize = 0;
                 }
                 String name = friendlyNames.getOrDefault(selectedObj, selectedObj);
-                fovLabel.setText(String.format("FOV: %.1f x %.1f um  |  Pixel size: %.3f um  (%s)",
-                        fov[0], fov[1], fovState.pixelSize, name));
+                fovLabel.setText(String.format(
+                        "FOV: %.1f x %.1f um  |  Pixel size: %.3f um  (%s)", fov[0], fov[1], fovState.pixelSize, name));
             } else {
                 fovLabel.setText("FOV: unknown for " + selectedObj);
                 fovState.fovW = 0;
@@ -215,8 +215,8 @@ public class RapidScanWorkflow {
                 int rows = Math.max(1, (int) Math.ceil(h / stepY));
                 int total = cols * rows;
                 double estTime = total * 0.3;
-                tileCountLabel.setText(String.format(
-                        "Grid: %d x %d = %d tiles    Est. time: ~%.0f sec", cols, rows, total, estTime));
+                tileCountLabel.setText(
+                        String.format("Grid: %d x %d = %d tiles    Est. time: ~%.0f sec", cols, rows, total, estTime));
             }
         };
 
@@ -236,35 +236,37 @@ public class RapidScanWorkflow {
 
         // Test snap button
         Button testSnapBtn = new Button("Test Snap");
-        testSnapBtn.setTooltip(new Tooltip(
-                "Set camera to the configured exposure so you can check\n"
-                        + "brightness in the Live Viewer before scanning."));
+        testSnapBtn.setTooltip(new Tooltip("Set camera to the configured exposure so you can check\n"
+                + "brightness in the Live Viewer before scanning."));
         Label testResultLabel = new Label();
         testResultLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
         testSnapBtn.setOnAction(e -> {
             testSnapBtn.setDisable(true);
             testResultLabel.setText("Setting exposure...");
-            new Thread(() -> {
-                try {
-                    var exposures = mc.getSocketClient().getExposures();
-                    float orig = (float) exposures.unified();
-                    float testExp = (float) Math.min(exposureSpinner.getValue(), MAX_EXPOSURE_MS);
-                    mc.getSocketClient().setExposures(new float[] {testExp});
-                    Platform.runLater(() -> {
-                        testResultLabel.setText(String.format(
-                                "Exposure set to %.3f ms (was %.1f ms). Check Live Viewer brightness.",
-                                testExp, orig));
-                        testResultLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #c60;");
-                        testSnapBtn.setDisable(false);
-                    });
-                } catch (Exception ex) {
-                    Platform.runLater(() -> {
-                        testResultLabel.setText("Failed: " + ex.getMessage());
-                        testResultLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
-                        testSnapBtn.setDisable(false);
-                    });
-                }
-            }, "RapidScan-TestSnap").start();
+            new Thread(
+                            () -> {
+                                try {
+                                    var exposures = mc.getSocketClient().getExposures();
+                                    float orig = (float) exposures.unified();
+                                    float testExp = (float) Math.min(exposureSpinner.getValue(), MAX_EXPOSURE_MS);
+                                    mc.getSocketClient().setExposures(new float[] {testExp});
+                                    Platform.runLater(() -> {
+                                        testResultLabel.setText(String.format(
+                                                "Exposure set to %.3f ms (was %.1f ms). Check Live Viewer brightness.",
+                                                testExp, orig));
+                                        testResultLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #c60;");
+                                        testSnapBtn.setDisable(false);
+                                    });
+                                } catch (Exception ex) {
+                                    Platform.runLater(() -> {
+                                        testResultLabel.setText("Failed: " + ex.getMessage());
+                                        testResultLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                                        testSnapBtn.setDisable(false);
+                                    });
+                                }
+                            },
+                            "RapidScan-TestSnap")
+                    .start();
         });
 
         // Output folder
@@ -399,57 +401,61 @@ public class RapidScanWorkflow {
             statusLabel.setText("Scanning...");
             statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
 
-            new Thread(() -> {
-                try {
-                    String response = mc.getSocketClient().startRapidScan(
-                            output, cx, cy, w, h, overlap, exposure, fovW, fovH);
+            new Thread(
+                            () -> {
+                                try {
+                                    String response = mc.getSocketClient()
+                                            .startRapidScan(output, cx, cy, w, h, overlap, exposure, fovW, fovH);
 
-                    // Parse binning from response: SUCCESS:nTiles:elapsed:binning
-                    int binning = 2; // default
-                    try {
-                        String[] parts = response.substring("SUCCESS:".length()).split(":");
-                        if (parts.length >= 3) {
-                            binning = Integer.parseInt(parts[2].trim());
-                        }
-                    } catch (Exception ignored) {
-                    }
-                    final int fBinning = binning;
+                                    // Parse binning from response: SUCCESS:nTiles:elapsed:binning
+                                    int binning = 2; // default
+                                    try {
+                                        String[] parts = response.substring("SUCCESS:".length())
+                                                .split(":");
+                                        if (parts.length >= 3) {
+                                            binning = Integer.parseInt(parts[2].trim());
+                                        }
+                                    } catch (Exception ignored) {
+                                    }
+                                    final int fBinning = binning;
 
-                    Platform.runLater(() -> {
-                        statusLabel.setText("Scan complete: " + response);
-                        statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
-                    });
+                                    Platform.runLater(() -> {
+                                        statusLabel.setText("Scan complete: " + response);
+                                        statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
+                                    });
 
-                    if (doStitch) {
-                        Platform.runLater(() -> {
-                            statusLabel.setText("Stitching...");
-                            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
-                        });
-                        try {
-                            // Pixel size scales with binning (2x2 binning -> 2x pixel size)
-                            stitchRapidScanOutput(output, pxSize * fBinning);
-                            Platform.runLater(() -> {
-                                statusLabel.setText("Scan + stitch complete");
-                                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
-                            });
-                        } catch (Exception stitchEx) {
-                            logger.error("Stitching failed", stitchEx);
-                            Platform.runLater(() -> {
-                                statusLabel.setText("Scan OK, stitch failed: " + stitchEx.getMessage());
-                                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: orange;");
-                            });
-                        }
-                    }
-                } catch (Exception ex) {
-                    logger.error("Rapid scan failed", ex);
-                    Platform.runLater(() -> {
-                        statusLabel.setText("Failed: " + ex.getMessage());
-                        statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
-                    });
-                } finally {
-                    Platform.runLater(() -> startBtn.setDisable(false));
-                }
-            }, "RapidScan-Acquire").start();
+                                    if (doStitch) {
+                                        Platform.runLater(() -> {
+                                            statusLabel.setText("Stitching...");
+                                            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+                                        });
+                                        try {
+                                            // Pixel size scales with binning (2x2 binning -> 2x pixel size)
+                                            stitchRapidScanOutput(output, pxSize * fBinning);
+                                            Platform.runLater(() -> {
+                                                statusLabel.setText("Scan + stitch complete");
+                                                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
+                                            });
+                                        } catch (Exception stitchEx) {
+                                            logger.error("Stitching failed", stitchEx);
+                                            Platform.runLater(() -> {
+                                                statusLabel.setText("Scan OK, stitch failed: " + stitchEx.getMessage());
+                                                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: orange;");
+                                            });
+                                        }
+                                    }
+                                } catch (Exception ex) {
+                                    logger.error("Rapid scan failed", ex);
+                                    Platform.runLater(() -> {
+                                        statusLabel.setText("Failed: " + ex.getMessage());
+                                        statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                                    });
+                                } finally {
+                                    Platform.runLater(() -> startBtn.setDisable(false));
+                                }
+                            },
+                            "RapidScan-Acquire")
+                    .start();
         });
 
         dialog.getDialogPane().setContent(grid);
@@ -475,14 +481,17 @@ public class RapidScanWorkflow {
                 stitchedFolder.getAbsolutePath(),
                 params.compressionType(),
                 pixelSizeMicrons,
-                1, ".", 1.0, outputFormat);
+                1,
+                ".",
+                1.0,
+                outputFormat);
 
         StageImageTransform siTransform = StageImageTransform.current();
         boolean[] stitcherFlags = siTransform.stitcherFlipFlags();
         qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = stitcherFlags[0];
         qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = stitcherFlags[1];
-        logger.info("Rapid scan stitching: flipX={}, flipY={} (from {})",
-                stitcherFlags[0], stitcherFlags[1], siTransform);
+        logger.info(
+                "Rapid scan stitching: flipX={}, flipY={} (from {})", stitcherFlags[0], stitcherFlags[1], siTransform);
         try {
             String outPath = StitchingWorkflow.run(config);
             logger.info("Rapid scan stitched output: {}", outPath);

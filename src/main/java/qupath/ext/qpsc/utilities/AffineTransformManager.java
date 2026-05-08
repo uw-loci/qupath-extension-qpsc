@@ -6,9 +6,7 @@ import com.google.gson.reflect.TypeToken;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
-import java.io.Reader;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -18,8 +16,6 @@ import java.util.*;
 import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.preferences.PersistentPreferences;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.lib.projects.Project;
 
 /**
@@ -161,9 +157,25 @@ public class AffineTransformManager {
                 Boolean flipMacroX,
                 Boolean flipMacroY,
                 String sourceScanner) {
-            this(name, microscope, mountingMethod, transform, notes, greenBoxParams,
-                    zScale, zOffset, flipMacroX, flipMacroY, sourceScanner,
-                    null, null, null, null, null, null, null);
+            this(
+                    name,
+                    microscope,
+                    mountingMethod,
+                    transform,
+                    notes,
+                    greenBoxParams,
+                    zScale,
+                    zOffset,
+                    flipMacroX,
+                    flipMacroY,
+                    sourceScanner,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
         }
 
         /**
@@ -180,8 +192,7 @@ public class AffineTransformManager {
                 GreenBoxDetector.DetectionParams greenBoxParams,
                 double zScale,
                 double zOffset) {
-            this(name, microscope, mountingMethod, transform, notes, greenBoxParams,
-                    zScale, zOffset, null, null, null);
+            this(name, microscope, mountingMethod, transform, notes, greenBoxParams, zScale, zOffset, null, null, null);
         }
 
         // Getters
@@ -496,8 +507,7 @@ public class AffineTransformManager {
     public TransformPreset getBestPresetForPair(String sourceScanner, String targetMicroscope) {
         if (sourceScanner == null || targetMicroscope == null) return null;
         return transforms.values().stream()
-                .filter(t -> targetMicroscope.equals(t.getMicroscope())
-                        && sourceScanner.equals(t.getSourceScanner()))
+                .filter(t -> targetMicroscope.equals(t.getMicroscope()) && sourceScanner.equals(t.getSourceScanner()))
                 .max(Comparator.comparing(
                         TransformPreset::getCreatedDate, Comparator.nullsFirst(Comparator.naturalOrder())))
                 .orElse(null);
@@ -911,18 +921,28 @@ public class AffineTransformManager {
             this.flipMacroY = flipMacroY;
         }
 
-        public AffineTransform getTransform() { return transform; }
-        public Boolean getFlipMacroX() { return flipMacroX; }
-        public Boolean getFlipMacroY() { return flipMacroY; }
-        public boolean hasFlipFrame() { return flipMacroX != null && flipMacroY != null; }
+        public AffineTransform getTransform() {
+            return transform;
+        }
+
+        public Boolean getFlipMacroX() {
+            return flipMacroX;
+        }
+
+        public Boolean getFlipMacroY() {
+            return flipMacroY;
+        }
+
+        public boolean hasFlipFrame() {
+            return flipMacroX != null && flipMacroY != null;
+        }
     }
 
     /**
      * Like {@link #loadSlideAlignment(Project, String)} but also surfaces the
      * recorded flip frame (or nulls if the JSON is from before phase 3).
      */
-    public static SlideAlignmentResult loadSlideAlignmentWithFrame(
-            Project<BufferedImage> project, String sampleName) {
+    public static SlideAlignmentResult loadSlideAlignmentWithFrame(Project<BufferedImage> project, String sampleName) {
         try {
             File projectDir = project.getPath().toFile().getParentFile();
             return loadSlideAlignmentWithFrameFromDirectory(projectDir, sampleName);
@@ -933,8 +953,7 @@ public class AffineTransformManager {
     }
 
     /** Directory-based variant; mirrors {@link #loadSlideAlignmentFromDirectory(File, String)}. */
-    public static SlideAlignmentResult loadSlideAlignmentWithFrameFromDirectory(
-            File projectDir, String sampleName) {
+    public static SlideAlignmentResult loadSlideAlignmentWithFrameFromDirectory(File projectDir, String sampleName) {
         if (projectDir == null || !projectDir.exists() || sampleName == null) return null;
         File alignmentDir = new File(projectDir, "alignmentFiles");
         if (!alignmentDir.exists()) return null;
@@ -993,8 +1012,10 @@ public class AffineTransformManager {
             if (scoped.exists()) {
                 SlideAlignmentResult r = readAlignmentJsonWithFrame(scoped, requestedScope);
                 if (r != null) {
-                    logger.info("Loaded slide alignment for cross-scope use: scope='{}' file='{}'",
-                            requestedScope, scoped.getName());
+                    logger.info(
+                            "Loaded slide alignment for cross-scope use: scope='{}' file='{}'",
+                            requestedScope,
+                            scoped.getName());
                     return r;
                 }
             }
@@ -1002,13 +1023,18 @@ public class AffineTransformManager {
             if (legacy.exists()) {
                 SlideAlignmentResult r = readAlignmentJsonWithFrame(legacy, requestedScope);
                 if (r != null) {
-                    logger.info("Loaded legacy slide alignment for cross-scope use: scope='{}' file='{}'",
-                            requestedScope, legacy.getName());
+                    logger.info(
+                            "Loaded legacy slide alignment for cross-scope use: scope='{}' file='{}'",
+                            requestedScope,
+                            legacy.getName());
                     return r;
                 }
             }
-            logger.warn("No slide alignment found for sample='{}' scope='{}' under {}",
-                    sampleName, requestedScope, alignmentDir);
+            logger.warn(
+                    "No slide alignment found for sample='{}' scope='{}' under {}",
+                    sampleName,
+                    requestedScope,
+                    alignmentDir);
             return null;
         } catch (Exception e) {
             logger.error("Failed to load slide alignment for scope '{}': {}", requestedScope, e.getMessage());
@@ -1039,8 +1065,8 @@ public class AffineTransformManager {
             List<Double> tv = (List<Double>) data.get("transform");
             if (tv == null || tv.size() != 6) return null;
 
-            AffineTransform transform = new AffineTransform(
-                    tv.get(0), tv.get(1), tv.get(2), tv.get(3), tv.get(4), tv.get(5));
+            AffineTransform transform =
+                    new AffineTransform(tv.get(0), tv.get(1), tv.get(2), tv.get(3), tv.get(4), tv.get(5));
 
             Boolean fx = data.get("flipMacroX") instanceof Boolean ? (Boolean) data.get("flipMacroX") : null;
             Boolean fy = data.get("flipMacroY") instanceof Boolean ? (Boolean) data.get("flipMacroY") : null;
@@ -1098,8 +1124,8 @@ public class AffineTransformManager {
             List<Double> tv = (List<Double>) data.get("transform");
             if (tv == null || tv.size() != 6) return null;
 
-            AffineTransform transform = new AffineTransform(
-                    tv.get(0), tv.get(1), tv.get(2), tv.get(3), tv.get(4), tv.get(5));
+            AffineTransform transform =
+                    new AffineTransform(tv.get(0), tv.get(1), tv.get(2), tv.get(3), tv.get(4), tv.get(5));
 
             logger.info("Loaded slide-specific alignment from: {}", alignmentFile.getAbsolutePath());
             logger.info(
@@ -1159,8 +1185,7 @@ public class AffineTransformManager {
      * @param sampleName sample / image name; matches {@code <sample>_<scope>_alignment.json}
      * @return list of records, possibly empty; never null
      */
-    public static List<SlideAlignmentRecord> loadAllSlideAlignmentsFromDirectory(
-            File projectDir, String sampleName) {
+    public static List<SlideAlignmentRecord> loadAllSlideAlignmentsFromDirectory(File projectDir, String sampleName) {
         if (projectDir == null || !projectDir.exists() || sampleName == null) {
             return List.of();
         }
@@ -1168,7 +1193,8 @@ public class AffineTransformManager {
         if (!alignmentDir.exists()) {
             return List.of();
         }
-        File[] candidates = alignmentDir.listFiles((d, n) -> n.startsWith(sampleName + "_") && n.endsWith("_alignment.json"));
+        File[] candidates =
+                alignmentDir.listFiles((d, n) -> n.startsWith(sampleName + "_") && n.endsWith("_alignment.json"));
         if (candidates == null || candidates.length == 0) {
             return List.of();
         }
@@ -1196,8 +1222,8 @@ public class AffineTransformManager {
                 @SuppressWarnings("unchecked")
                 List<Double> tv = (List<Double>) data.get("transform");
                 if (tv == null || tv.size() != 6) continue;
-                AffineTransform t = new AffineTransform(
-                        tv.get(0), tv.get(1), tv.get(2), tv.get(3), tv.get(4), tv.get(5));
+                AffineTransform t =
+                        new AffineTransform(tv.get(0), tv.get(1), tv.get(2), tv.get(3), tv.get(4), tv.get(5));
                 out.add(new SlideAlignmentRecord(t, fileScope, f));
             } catch (Exception e) {
                 logger.warn("loadAllSlideAlignments: failed to parse {}: {}", f.getName(), e.getMessage());
