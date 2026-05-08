@@ -305,27 +305,35 @@ Payload flags (text, terminated by `ENDOFSTR`):
 | `--yaml <path>` | yes | Path to the active `config_<scope>.yml` |
 | `--objective <id>` | no | Caller's preferred objective (e.g. `LOCI_OBJECTIVE_OLYMPUS_20X_POL_001`). If missing, the server auto-resolves via pixel-size match against `config.hardware.objectives`. |
 | `--range <um>` | no | Override of `sweep_range_um` from the yaml. |
+| `--dump 1` | no | Enable server-side frame dumping (TIFs + CSV + manifest). When set, the server writes all captured frames and per-frame metrics to a diagnostics folder and includes the path in the response. Used by the Autofocus Configuration Editor's Test button for offline analysis. |
 
 Server-side sequence:
 
 1. Resolve objective (client-provided > pixel-size match > yaml first entry).
 2. Load `sweep_range_um` for the objective.
 3. Pre-flight: motion blur budget and saturation checks; fail with `UNAVAILABLE` if either refuses.
-4. Seed-move to `z_start` at full speed; drop speed property to slow for the scan motion; start continuous sequence acquisition; fire non-blocking move to `z_end`; pop every frame with `(t_ms, z_at_pop, metric)`; parabolic-fit peak; commit final Z.
-5. Always restore speed property in `finally`.
+4. If dump enabled, create a timestamped dump folder under `config/logs/streaming_af_dumps/`.
+5. Seed-move to `z_start` at full speed; drop speed property to slow for the scan motion; start continuous sequence acquisition; fire non-blocking move to `z_end`; pop every frame with `(t_ms, z_at_pop, metric)`; save frames/metrics if dump enabled; parabolic-fit peak; commit final Z.
+6. Always restore speed property in `finally`.
 
 Response formats:
 
-- `SUCCESS:<initial_z>:<final_z>:<shift>:<n_samples>:<z_span>`
-  -- scan completed and committed a new focus
-- `UNAVAILABLE:<reason>` -- a pre-flight check refused to run,
+- `SUCCESS:<initial_z>:<final_z>:<shift>:<n_samples>:<z_span>[:dump=<path>]`
+  -- scan completed and committed a new focus; optional dump path appended if dump was enabled
+- `UNAVAILABLE:<reason>[:dump=<path>]` -- a pre-flight check refused to run,
   or no interior peak found after edge retries. The stage is
   moved to the best Z found if a focus slope was detected
   (better than initial_z even without a peak). Caller should
   fall back to stepped Sweep Focus. This is informational,
-  not an error.
+  not an error. Dump path included if dump folder was created.
 - `FAILED:<reason>` -- mid-scan error; stage state has been
   restored but no new focus was committed
+
+The optional `:dump=<path>` suffix is appended to any response when `--dump` was enabled. Clients extract it by searching for the `:dump=` marker and parsing the path up to the next whitespace or end of string. The path is an absolute directory containing:
+- `attempt_N/` subdirectories (one per focus-search attempt)
+- `attempt_N/frames/` — TIF files (one per captured frame)
+- `attempt_N/samples.csv` — CSV with columns (idx, wall_ms, z_assumed_um, z_actual_um, metric)
+- `attempt_N/manifest.json` — metadata (scan parameters, fit results, etc.)
 
 See `handlers/streaming_focus.py` and `claude-reports/2026-04-14_smooth-focus-design-and-probez-tooling.md` for the design rationale and PPM characterization results.
 
