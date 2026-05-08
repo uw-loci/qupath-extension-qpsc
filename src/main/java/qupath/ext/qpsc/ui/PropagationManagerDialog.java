@@ -461,8 +461,12 @@ public final class PropagationManagerDialog {
         buttonBar.setAlignment(Pos.CENTER_RIGHT);
 
         // -- Compose -------------------------------------------------------
+        // Direction sits at the very top: it determines what every other
+        // section means (forward = base->sub source, back = sub->base source),
+        // so conceptually it's the basis for everything below.
         VBox content = new VBox(8,
                 header,
+                dirBox,
                 countLabel,
                 new Separator(),
                 selectBar,
@@ -470,7 +474,6 @@ public final class PropagationManagerDialog {
                 subListLabel,
                 subScroll,
                 new Separator(),
-                dirBox,
                 autoCreateCheck,
                 replaceExistingCheck,
                 siftRow,
