@@ -30,11 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Propagation Manager**
 - Ground-truth source ROI auto-stamped from parent tile detections; "Stamp source ROI from tiles" retrofit button for older sub-acquisitions.
 - Cross-scope back-prop swaps in the source-scope alignment so the xy_offset is interpreted in its own scope's stage frame.
+- "Remove existing objects of copied classes" checkbox: when set, deletes existing objects on each target whose class is in the selected set (and unclassified objects when "Unclassified" is also selected) before adding the propagated copies. Use case: refining annotations on the source image and re-propagating without overlapping the old shapes. FORWARD removes per-sub right before each `propagateForward`; BACK removes once per group across all base siblings before any sub fans out (otherwise multiple subs back-prop'ing into the same base would each delete and re-add, dropping earlier subs' contributions).
 - Comprehensive diagnostics for back-prop; multi-group UI; "Save & reload viewer" handling.
 - Visible warning when a source-scope config is missing instead of silently producing a wrong xy_offset.
 
 **Acquisition Wizard**
-- Periodic 3-second poll so calibration status pills (white balance, backgrounds, alignment) refresh while the wizard stays open -- no more closing+reopening to clear yellow warnings after running WB / Background Collection.
+- Calibration status pills (white balance, backgrounds, alignment) auto-refresh after sub-workflows complete via explicit completion notifications -- no more closing+reopening to clear yellow warnings after running WB / Background Collection / Microscope Alignment / Save Transform. Replaces the earlier 3-second polling Timeline (which worked but was a constant 6-file disk read for the wizard's entire lifetime). `AcquisitionWizardDialog.notifyCalibrationChanged()` is the public hook; `WhiteBalanceWorkflow`, `BackgroundCollectionWorkflow`, and `MicroscopeAlignmentWorkflow` call it on success. Refresh All button stays as the user-driven backup path.
 - Unified `ObjectiveSelector` component that auto-detects from MicroManager pixel size (priority: MM pixel size match -> last-used pref -> first config entry).
 
 **White Balance**
@@ -50,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 2026-05-07: `ManualAlignmentPath` now records `flipMacroX/Y` on the per-slide JSON from the active preset (was via `FlipResolver(null,null,null)` which post-Step-B always returned `(false, false)`, mis-stamping the JSON as "no flip" when the alignment was actually done in the flipped sibling's frame).
 - 2026-05-07: `StageControlPanel.handleGoToCentroid` (Move to Centroid button) now loads via `loadSlideAlignmentWithFrame` and bakes the flip on the unflipped base entry, mirroring `AlignmentHelper.checkForSlideAlignment`. The legacy raw-load + manual-compensation block was producing XY-mirror motion on PPM.
 - 2026-05-07: tile detections in single-tile refinement now overlay the (correctly flipped) annotations on the flipped sibling instead of landing at the XY-mirror -- caused by `state.annotations` being captured against the unflipped base at config-dialog return and never re-fetched after the flip switch. `processSlideSpecificAlignment` now clears `state.annotations` after `validateAndFlipIfNeeded` so `ensureAnnotationsExist` re-reads from the now-current hierarchy.
+- 2026-05-07: forward-prop now resolves the alignment-frame flip from the sub's parent entry's `FLIP_X`/`FLIP_Y` metadata (priority: sub-parent metadata > per-slide JSON > active preset). The previous "load flip from per-slide JSON" path produced 0 propagated objects on projects whose JSON was written by the pre-`45ca489` `ManualAlignmentPath` -- those JSONs claimed `hasFlipFrame=true` while actually storing `(false, false)`, so no pre-flip ran and source pixels mapped through `baseToStage` in the wrong frame. Sub-parent metadata is set at import and was unaffected by the JSON-save bug, so it's a more reliable signal. When the JSON disagrees with the parent metadata a warning is logged recommending re-alignment.
 
 **Stage Map**
 - Macro overlay flip now resolves from the active `(source, target)` preset, not per-entry metadata.
