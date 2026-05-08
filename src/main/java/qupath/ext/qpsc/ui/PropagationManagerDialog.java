@@ -810,6 +810,12 @@ public final class PropagationManagerDialog {
                                 }
                             }
                         }
+                        // Track just-written objects per (sub -> entry -> objects)
+                        // so post-prop SIFT refinement can translate them by the
+                        // measured offset for each position.
+                        Map<ProjectImageEntry<BufferedImage>,
+                                Map<ProjectImageEntry<BufferedImage>, List<PathObject>>> writtenPerSub =
+                                new LinkedHashMap<>();
                         for (ProjectImageEntry<BufferedImage> sub : grp.getSubAcquisitions()) {
                             if (!selectedSubs.contains(sub)) continue;
                             try {
@@ -827,6 +833,9 @@ public final class PropagationManagerDialog {
                                     // mark every base sibling as potentially touched so the
                                     // viewer reloads if one of them is currently open.
                                     touchedEntries.addAll(grp.getSiblings());
+                                    if (fo.writtenByEntry != null && !fo.writtenByEntry.isEmpty()) {
+                                        writtenPerSub.put(sub, fo.writtenByEntry);
+                                    }
                                 }
                                 appendStatus(results, "  source: " + sub.getImageName()
                                         + " (" + subObjects.size() + " objects)\n");
@@ -850,6 +859,37 @@ public final class PropagationManagerDialog {
                                 appendStatus(results, "    " + sub.getImageName()
                                         + ": FAILED (" + ex.getMessage() + ")\n");
                                 logger.error("Back propagation failed", ex);
+                            }
+                        }
+
+                        // ------- SIFT post-propagation refinement (back) -------
+                        if (siftRefine && !writtenPerSub.isEmpty()) {
+                            try {
+                                ProjectImageEntry<BufferedImage> baseForSift = null;
+                                for (ProjectImageEntry<BufferedImage> s : grp.getSiblings()) {
+                                    String name = s.getImageName();
+                                    if (name != null && !name.contains("(flipped")) {
+                                        baseForSift = s;
+                                        break;
+                                    }
+                                }
+                                if (baseForSift == null && !grp.getSiblings().isEmpty()) {
+                                    baseForSift = grp.getSiblings().get(0);
+                                }
+                                if (baseForSift != null) {
+                                    int bw = baseForSift.readImageData().getServer().getWidth();
+                                    int bh = baseForSift.readImageData().getServer().getHeight();
+                                    runSiftRefinementBack(
+                                            baseForSift, bw, bh,
+                                            alignment, writtenPerSub, refKey, refValue,
+                                            results, siftFailures,
+                                            siftRefinedCount, siftAttemptedCount,
+                                            touchedEntries);
+                                }
+                            } catch (Exception siftEx) {
+                                logger.error("SIFT back-refinement worker failed", siftEx);
+                                appendStatus(results,
+                                        "  SIFT refinement aborted: " + siftEx.getMessage() + "\n");
                             }
                         }
                     }
@@ -1365,6 +1405,315 @@ public final class PropagationManagerDialog {
                 siftFailures.add(position + ": " + reason);
                 appendStatus(results, "    " + position + ": SIFT FAILED (" + reason + ")\n");
                 logger.warn("SIFT refinement failed for position {}: {}", position, reason, ex);
+            } finally {
+                if (baseTmp != null && !baseTmp.delete()) baseTmp.deleteOnExit();
+                if (subTmp != null && !subTmp.delete()) subTmp.deleteOnExit();
+            }
+        }
+    }
+
+    /**
+     * Per-position SIFT refinement after back-propagation.
+     *
+     * <p>Mirrors {@link #runSiftRefinementForward} but applied to objects on
+     * the base side instead of on the subs. For each {@code annotation_name}
+     * group, finds the user-selected reference sub, SIFT-matches its content
+     * against the base region around the just-back-propagated objects, and
+     * applies the resulting micrometer offset as a base-pixel translation.
+     * For legacy {@code (flipped X|Y|XY)} sibling fan-out copies, the offset
+     * is applied with the appropriate per-axis sign flip so the sibling
+     * mirrors stay consistent with the corrected base.
+     */
+    private static void runSiftRefinementBack(
+            ProjectImageEntry<BufferedImage> base,
+            int baseWidth,
+            int baseHeight,
+            AffineTransform baseToStage,
+            Map<ProjectImageEntry<BufferedImage>,
+                    Map<ProjectImageEntry<BufferedImage>, List<PathObject>>> writtenPerSub,
+            String refKey,
+            String refValue,
+            TextArea results,
+            List<String> siftFailures,
+            int[] refinedCountOut,
+            int[] attemptedCountOut,
+            Set<ProjectImageEntry<BufferedImage>> touchedEntries) throws Exception {
+
+        var baseData = base.readImageData();
+        var baseServer = baseData.getServer();
+        double basePixelSize = baseServer.getPixelCalibration().getAveragedPixelSizeMicrons();
+        if (Double.isNaN(basePixelSize) || basePixelSize <= 0) {
+            appendStatus(results, "  SIFT refinement skipped: base has no pixel size\n");
+            return;
+        }
+
+        double minPxUm = PersistentPreferences.getPropSiftMinPixelSize();
+        double ratioThreshold = PersistentPreferences.getPropSiftRatioThreshold();
+        int minMatches = PersistentPreferences.getPropSiftMinMatchCount();
+        double contrastThreshold = PersistentPreferences.getPropSiftContrastThreshold();
+        double searchMarginUm = PersistentPreferences.getPropSiftSearchMarginUm();
+        int nFeatures = PersistentPreferences.getPropSiftNFeatures();
+        String monoNorm = PersistentPreferences.getPropSiftMonoNormalization();
+        double pctLow = PersistentPreferences.getPropSiftPercentileLow();
+        double pctHigh = PersistentPreferences.getPropSiftPercentileHigh();
+        boolean claheEnabled = PersistentPreferences.isPropSiftClaheEnabled();
+        double claheClip = PersistentPreferences.getPropSiftClaheClipLimit();
+
+        // Group subs (and their per-entry written objects) by annotation_name.
+        // For each position, we'll SIFT-match once and then translate every
+        // captured object across every entry that received writes from any
+        // sub at that position.
+        Map<String, List<ProjectImageEntry<BufferedImage>>> subsByPosition = new LinkedHashMap<>();
+        for (ProjectImageEntry<BufferedImage> sub : writtenPerSub.keySet()) {
+            String pos = sub.getMetadata().get(ImageMetadataManager.ANNOTATION_NAME);
+            if (pos == null) pos = "(no annotation_name)";
+            subsByPosition.computeIfAbsent(pos, k -> new ArrayList<>()).add(sub);
+        }
+
+        appendStatus(results, "  --- SIFT refinement (back) ---\n");
+
+        var mc = qupath.ext.qpsc.controller.MicroscopeController.getInstance();
+        if (!mc.isConnected()) {
+            try {
+                mc.userTriggeredConnect();
+            } catch (Exception connectEx) {
+                appendStatus(results,
+                        "  SIFT skipped: server not connected (" + connectEx.getMessage() + ")\n");
+                for (String position : subsByPosition.keySet()) {
+                    siftFailures.add(position + ": server not connected");
+                }
+                attemptedCountOut[0] += subsByPosition.size();
+                return;
+            }
+        }
+        var client = mc.getSocketClient();
+
+        for (Map.Entry<String, List<ProjectImageEntry<BufferedImage>>> posEntry : subsByPosition.entrySet()) {
+            String position = posEntry.getKey();
+            List<ProjectImageEntry<BufferedImage>> positionSubs = posEntry.getValue();
+            attemptedCountOut[0]++;
+
+            // Find the user-selected reference sub for this position.
+            ProjectImageEntry<BufferedImage> refSub = null;
+            for (ProjectImageEntry<BufferedImage> s : positionSubs) {
+                String mv = s.getMetadata().get(refKey);
+                if (mv != null && mv.equals(refValue)) { refSub = s; break; }
+            }
+            if (refSub == null) {
+                String reason = String.format("no sub matches %s=%s", refKey, refValue);
+                siftFailures.add(position + ": " + reason);
+                appendStatus(results, "    " + position + ": SKIP (" + reason + ")\n");
+                continue;
+            }
+
+            // Aggregate the just-back-propagated objects on the BASE entry across
+            // every sub at this position (one position can contribute multiple
+            // sub annotations to the base).
+            List<PathObject> baseObjsAtPos = new ArrayList<>();
+            for (ProjectImageEntry<BufferedImage> s : positionSubs) {
+                Map<ProjectImageEntry<BufferedImage>, List<PathObject>> perEntry = writtenPerSub.get(s);
+                if (perEntry == null) continue;
+                List<PathObject> onBase = perEntry.get(base);
+                if (onBase != null) baseObjsAtPos.addAll(onBase);
+            }
+            if (baseObjsAtPos.isEmpty()) {
+                String reason = "no base objects from this position";
+                siftFailures.add(position + ": " + reason);
+                appendStatus(results, "    " + position + ": SKIP (" + reason + ")\n");
+                continue;
+            }
+
+            // Bbox-union of just-back-propagated base objects, in unflipped base px.
+            double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY;
+            double maxX = Double.NEGATIVE_INFINITY, maxY = Double.NEGATIVE_INFINITY;
+            for (PathObject o : baseObjsAtPos) {
+                ROI roi = o.getROI();
+                if (roi == null) continue;
+                minX = Math.min(minX, roi.getBoundsX());
+                minY = Math.min(minY, roi.getBoundsY());
+                maxX = Math.max(maxX, roi.getBoundsX() + roi.getBoundsWidth());
+                maxY = Math.max(maxY, roi.getBoundsY() + roi.getBoundsHeight());
+            }
+            if (!Double.isFinite(minX)) {
+                siftFailures.add(position + ": all base objects had null ROIs");
+                continue;
+            }
+            double marginBasePx = searchMarginUm / basePixelSize;
+            int baseRoiX = (int) Math.max(0, Math.floor(minX - marginBasePx));
+            int baseRoiY = (int) Math.max(0, Math.floor(minY - marginBasePx));
+            int baseRoiW = (int) Math.min(baseWidth - baseRoiX, Math.ceil(maxX - minX + 2 * marginBasePx));
+            int baseRoiH = (int) Math.min(baseHeight - baseRoiY, Math.ceil(maxY - minY + 2 * marginBasePx));
+            if (baseRoiW <= 0 || baseRoiH <= 0) {
+                siftFailures.add(position + ": base bbox after margin clipped to empty");
+                continue;
+            }
+
+            // Reference sub region: bbox from refSub's just-propagated copy on
+            // the base, transformed back to refSub px space (the inverse of the
+            // forward `combined` transform).
+            var refData = refSub.readImageData();
+            var refServer = refData.getServer();
+            double refPixelSize = refServer.getPixelCalibration().getAveragedPixelSizeMicrons();
+            int refSubWidth = refServer.getWidth();
+            int refSubHeight = refServer.getHeight();
+            double[] xyOffsetRef = ImageMetadataManager.getXYOffset(refSub);
+            double[] fovRef = ForwardPropagationWorkflow.resolveFovForEntry(refSub);
+            if (fovRef == null) {
+                siftFailures.add(position + ": cannot resolve FOV for reference sub");
+                continue;
+            }
+            double correctedRefX = xyOffsetRef[0] - fovRef[0] / 2.0;
+            double correctedRefY = xyOffsetRef[1] - fovRef[1] / 2.0;
+
+            // Build subToStage manually: sub_px * pxSize + corrected = stage_um.
+            // For the SIFT step we need to read the same stage region from the
+            // ref sub. Convert base px bbox to stage um using baseToStage (the
+            // alignment maps unflipped-base px -> stage um after Step B's
+            // bake-in via AlignmentHelper.checkForSlideAlignment).
+            double[] baseCorners = {
+                    baseRoiX, baseRoiY,
+                    baseRoiX + baseRoiW, baseRoiY,
+                    baseRoiX + baseRoiW, baseRoiY + baseRoiH,
+                    baseRoiX, baseRoiY + baseRoiH };
+            double[] stageCorners = new double[8];
+            baseToStage.transform(baseCorners, 0, stageCorners, 0, 4);
+            double sMinX = Math.min(Math.min(stageCorners[0], stageCorners[2]),
+                    Math.min(stageCorners[4], stageCorners[6]));
+            double sMaxX = Math.max(Math.max(stageCorners[0], stageCorners[2]),
+                    Math.max(stageCorners[4], stageCorners[6]));
+            double sMinY = Math.min(Math.min(stageCorners[1], stageCorners[3]),
+                    Math.min(stageCorners[5], stageCorners[7]));
+            double sMaxY = Math.max(Math.max(stageCorners[1], stageCorners[3]),
+                    Math.max(stageCorners[5], stageCorners[7]));
+            int subRoiX = (int) Math.max(0,
+                    Math.floor((sMinX - correctedRefX) / refPixelSize));
+            int subRoiY = (int) Math.max(0,
+                    Math.floor((sMinY - correctedRefY) / refPixelSize));
+            int subRoiW = (int) Math.min(refSubWidth - subRoiX,
+                    Math.ceil((sMaxX - sMinX) / refPixelSize));
+            int subRoiH = (int) Math.min(refSubHeight - subRoiY,
+                    Math.ceil((sMaxY - sMinY) / refPixelSize));
+            if (subRoiW <= 0 || subRoiH <= 0) {
+                siftFailures.add(position + ": ref-sub bbox clipped to empty");
+                continue;
+            }
+
+            java.io.File baseTmp = null, subTmp = null;
+            try {
+                baseTmp = java.io.File.createTempFile("sift_propback_base_", ".png");
+                subTmp = java.io.File.createTempFile("sift_propback_sub_", ".png");
+
+                qupath.lib.regions.RegionRequest baseReq =
+                        qupath.lib.regions.RegionRequest.createInstance(
+                                baseServer.getPath(), 1.0, baseRoiX, baseRoiY, baseRoiW, baseRoiH);
+                java.awt.image.BufferedImage baseImg = baseServer.readRegion(baseReq);
+                javax.imageio.ImageIO.write(baseImg, "PNG", baseTmp);
+
+                qupath.lib.regions.RegionRequest subReq =
+                        qupath.lib.regions.RegionRequest.createInstance(
+                                refServer.getPath(), 1.0, subRoiX, subRoiY, subRoiW, subRoiH);
+                java.awt.image.BufferedImage subImg = refServer.readRegion(subReq);
+                javax.imageio.ImageIO.write(subImg, "PNG", subTmp);
+
+                String response = client.siftMatchTwoImages(
+                        baseTmp.getAbsolutePath(), subTmp.getAbsolutePath(),
+                        basePixelSize, refPixelSize,
+                        false, false,
+                        minPxUm, ratioThreshold, minMatches, contrastThreshold, nFeatures,
+                        monoNorm, pctLow, pctHigh, claheEnabled, claheClip);
+
+                if (!response.startsWith("SUCCESS:")) {
+                    String reason = response.startsWith("FAILED:") ? response.substring(7) : response;
+                    siftFailures.add(position + ": " + reason);
+                    appendStatus(results, "    " + position + ": SIFT FAILED (" + reason + ")\n");
+                    continue;
+                }
+                String[] parts = response.substring(8).split("\\|");
+                String[] offsets = parts[0].split(",");
+                double offsetX = Double.parseDouble(offsets[0]);
+                double offsetY = Double.parseDouble(offsets[1]);
+                int inliers = 0;
+                double confidence = 0;
+                for (String part : parts) {
+                    if (part.startsWith("inliers:")) inliers = Integer.parseInt(part.substring(8));
+                    if (part.startsWith("confidence:")) confidence = Double.parseDouble(part.substring(11));
+                }
+
+                // Apply translation: offset is in stage/base um. Translate base
+                // objects directly. For legacy flipped sibling fan-out copies,
+                // mirror the X / Y component as appropriate so the corrected
+                // siblings stay consistent with the corrected base.
+                double dxBasePx = offsetX / basePixelSize;
+                double dyBasePx = offsetY / basePixelSize;
+                int objsTranslated = 0;
+                Set<ProjectImageEntry<BufferedImage>> entriesAtPos = new LinkedHashSet<>();
+                for (ProjectImageEntry<BufferedImage> s : positionSubs) {
+                    Map<ProjectImageEntry<BufferedImage>, List<PathObject>> perEntry = writtenPerSub.get(s);
+                    if (perEntry == null) continue;
+                    entriesAtPos.addAll(perEntry.keySet());
+                }
+                for (ProjectImageEntry<BufferedImage> targetEntry : entriesAtPos) {
+                    String name = targetEntry.getImageName() == null ? "" : targetEntry.getImageName();
+                    boolean sibFlipX = name.contains("(flipped XY)") || name.contains("(flipped X)");
+                    boolean sibFlipY = name.contains("(flipped XY)") || name.contains("(flipped Y)");
+                    double sx = sibFlipX ? -1.0 : 1.0;
+                    double sy = sibFlipY ? -1.0 : 1.0;
+                    AffineTransform shift = AffineTransform.getTranslateInstance(
+                            sx * dxBasePx, sy * dyBasePx);
+
+                    // Collect target object names from every sub's contribution
+                    // to this entry at this position.
+                    Set<String> targetNames = new HashSet<>();
+                    for (ProjectImageEntry<BufferedImage> s : positionSubs) {
+                        Map<ProjectImageEntry<BufferedImage>, List<PathObject>> perEntry = writtenPerSub.get(s);
+                        if (perEntry == null) continue;
+                        List<PathObject> list = perEntry.get(targetEntry);
+                        if (list == null) continue;
+                        for (PathObject p : list) {
+                            targetNames.add(p.getName() == null ? "" : p.getName());
+                        }
+                    }
+                    if (targetNames.isEmpty()) continue;
+
+                    var targetData = targetEntry.readImageData();
+                    var targetHierarchy = targetData.getHierarchy();
+                    List<PathObject> candidates = new ArrayList<>();
+                    for (PathObject existing : targetHierarchy.getAllObjects(false)) {
+                        if (existing.isRootObject() || existing.getROI() == null) continue;
+                        String n = existing.getName() == null ? "" : existing.getName();
+                        if (targetNames.contains(n)) candidates.add(existing);
+                    }
+                    if (candidates.isEmpty()) continue;
+
+                    List<PathObject> replacements = new ArrayList<>();
+                    for (PathObject existing : candidates) {
+                        try {
+                            PathObject shifted = qupath.lib.objects.PathObjectTools
+                                    .transformObject(existing, shift, true, true);
+                            if (shifted != null) replacements.add(shifted);
+                        } catch (Exception transEx) {
+                            logger.debug("SIFT shift (back) failed: {}", transEx.getMessage());
+                        }
+                    }
+                    if (!replacements.isEmpty()) {
+                        targetHierarchy.removeObjects(candidates, true);
+                        targetHierarchy.addObjects(replacements);
+                        targetEntry.saveImageData(targetData);
+                        touchedEntries.add(targetEntry);
+                        objsTranslated += replacements.size();
+                    }
+                }
+                refinedCountOut[0]++;
+                appendStatus(results, String.format(
+                        "    %s: SIFT offset (%.2f, %.2f) um, inliers=%d, conf=%.2f, "
+                                + "applied to %d object(s) across %d entry(ies)%n",
+                        position, offsetX, offsetY, inliers, confidence,
+                        objsTranslated, entriesAtPos.size()));
+            } catch (Exception ex) {
+                String reason = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+                siftFailures.add(position + ": " + reason);
+                appendStatus(results, "    " + position + ": SIFT FAILED (" + reason + ")\n");
+                logger.warn("SIFT back-refinement failed for position {}: {}", position, reason, ex);
             } finally {
                 if (baseTmp != null && !baseTmp.delete()) baseTmp.deleteOnExit();
                 if (subTmp != null && !subTmp.delete()) subTmp.deleteOnExit();

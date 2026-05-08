@@ -651,11 +651,28 @@ public class ForwardPropagationWorkflow {
         public final int siblingsAutoCreated;
         public final List<String> perSiblingLog;
 
+        /**
+         * Per-target-entry list of just-written objects, keyed by entry.
+         * Used by post-prop SIFT refinement to translate the freshly-added
+         * objects without scanning the whole hierarchy. Includes both the
+         * unflipped base and any legacy flipped siblings that received
+         * mirror copies. Empty if no objects were written.
+         */
+        public final java.util.Map<ProjectImageEntry<BufferedImage>, List<PathObject>> writtenByEntry;
+
         FanOutResult(int totalObjects, int siblingsUpdated, int siblingsAutoCreated, List<String> perSiblingLog) {
+            this(totalObjects, siblingsUpdated, siblingsAutoCreated, perSiblingLog,
+                    new java.util.LinkedHashMap<>());
+        }
+
+        FanOutResult(int totalObjects, int siblingsUpdated, int siblingsAutoCreated,
+                List<String> perSiblingLog,
+                java.util.Map<ProjectImageEntry<BufferedImage>, List<PathObject>> writtenByEntry) {
             this.totalObjects = totalObjects;
             this.siblingsUpdated = siblingsUpdated;
             this.siblingsAutoCreated = siblingsAutoCreated;
             this.perSiblingLog = perSiblingLog;
+            this.writtenByEntry = writtenByEntry;
         }
     }
 
@@ -819,6 +836,8 @@ public class ForwardPropagationWorkflow {
         int siblingsUpdated = 0;
         int totalWritten = 0;
         List<PathObject> writtenObjects = java.util.Collections.emptyList();
+        java.util.Map<ProjectImageEntry<BufferedImage>, List<PathObject>> writtenByEntry =
+                new java.util.LinkedHashMap<>();
         if (afterCount > beforeCount) {
             // Capture the freshly-added objects so we can fan them out to legacy
             // flipped siblings without re-running the math.
@@ -826,6 +845,7 @@ public class ForwardPropagationWorkflow {
             writtenObjects = all.subList(beforeCount, all.size());
             writtenObjects = new ArrayList<>(writtenObjects); // detach view
             base.saveImageData(baseData);
+            writtenByEntry.put(base, new ArrayList<>(writtenObjects));
             siblingsUpdated = 1;
             totalWritten += written;
             perSiblingLog.add(String.format("  %s -> %s: %d objects (alignFlip=(%s, %s))",
@@ -877,6 +897,7 @@ public class ForwardPropagationWorkflow {
                         sibHierarchy.addObjects(mirrored);
                         sibling.saveImageData(sibData);
                         int added = sibHierarchy.getAllObjects(false).size() - beforeSib;
+                        writtenByEntry.put(sibling, new ArrayList<>(mirrored));
                         siblingsUpdated++;
                         totalWritten += added;
                         perSiblingLog.add(String.format("  %s -> %s: %d objects (mirror=(%s, %s))",
@@ -905,7 +926,7 @@ public class ForwardPropagationWorkflow {
         }
         logger.info("Back-prop complete: {} sibling(s) updated, {} object(s) total",
                 siblingsUpdated, totalWritten);
-        return new FanOutResult(totalWritten, siblingsUpdated, 0, perSiblingLog);
+        return new FanOutResult(totalWritten, siblingsUpdated, 0, perSiblingLog, writtenByEntry);
     }
 
     /**
