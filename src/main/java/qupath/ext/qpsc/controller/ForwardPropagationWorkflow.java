@@ -1367,7 +1367,13 @@ public class ForwardPropagationWorkflow {
                         }
                     }
                 } catch (Exception e) {
-                    logger.debug("Active config could not resolve FOV: {}", e.getMessage());
+                    logger.warn(
+                            "Active config could not resolve FOV (modality='{}', objective='{}', "
+                                    + "detector='{}'): {}. Falling through to next FOV source.",
+                            modality,
+                            objective,
+                            detector,
+                            e.getMessage());
                 }
                 // Cross-scope fallback: load source-scope's config.
                 if (sourceScope != null && !sourceScope.isEmpty()) {
@@ -1410,9 +1416,9 @@ public class ForwardPropagationWorkflow {
             }
         }
 
-        // Source 3: live microscope (legacy fallback). Skip when the entry was
-        // acquired on a scope different from the active one -- the live FOV
-        // will be the wrong scope's optics.
+        // Cross-scope guard: skip live-microscope-derived sources when the entry
+        // was acquired on a different scope from the active one -- live optics
+        // would be the wrong scope's.
         if (entry != null) {
             String entryScope = entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
             String activeScope = null;
@@ -1430,12 +1436,79 @@ public class ForwardPropagationWorkflow {
                 return null;
             }
         }
+
+        // Source 3: live detector pixel dimensions + entry's recorded pixel size.
+        // Detector dimensions in pixels don't change with objective, so even when
+        // the user has a different objective mounted now than at acquisition, we
+        // can derive the camera's pixel dimensions from the live FOV / live pixel
+        // size and combine with the entry's recorded pixel size to compute the
+        // correct FOV for this specific entry. This is the right fallback when
+        // source 2 (config) fails and the user has a different objective mounted.
+        if (entry != null) {
+            try {
+                MicroscopeController mc = MicroscopeController.getInstance();
+                if (mc != null && mc.isConnected()) {
+                    double[] liveFov = mc.getCameraFOV();
+                    double livePxSize = mc.getSocketClient().getMicroscopePixelSize();
+                    double entryPxSize = entry.readImageData()
+                            .getServer()
+                            .getPixelCalibration()
+                            .getAveragedPixelSizeMicrons();
+                    if (liveFov != null && liveFov[0] > 0 && liveFov[1] > 0 && livePxSize > 0 && entryPxSize > 0) {
+                        double detW = liveFov[0] / livePxSize;
+                        double detH = liveFov[1] / livePxSize;
+                        double[] fov = {detW * entryPxSize, detH * entryPxSize};
+                        logger.info(
+                                "FOV from live detector dims + entry pixel size: {}x{} um "
+                                        + "(detector {}x{} px, entry pxSize={} um/px)",
+                                String.format("%.2f", fov[0]),
+                                String.format("%.2f", fov[1]),
+                                String.format("%.0f", detW),
+                                String.format("%.0f", detH),
+                                String.format("%.4f", entryPxSize));
+                        return fov;
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Source 3 (detector dims + entry pxSize) FOV failed: {}", e.getMessage());
+            }
+        }
+
+        // Source 4 (last resort): raw live FOV. Only safe when the user has the
+        // same objective mounted as at acquisition. Sanity-checked against the
+        // entry's pixel size; rejected if the mounted objective disagrees.
         try {
             MicroscopeController mc = MicroscopeController.getInstance();
             if (mc != null && mc.isConnected()) {
                 double[] fov = mc.getCameraFOV();
                 if (fov != null && fov[0] > 0 && fov[1] > 0) {
-                    logger.debug("FOV from live microscope: {}x{} um", fov[0], fov[1]);
+                    if (entry != null) {
+                        try {
+                            double entryPxSize = entry.readImageData()
+                                    .getServer()
+                                    .getPixelCalibration()
+                                    .getAveragedPixelSizeMicrons();
+                            double livePxSize = mc.getSocketClient().getMicroscopePixelSize();
+                            if (entryPxSize > 0 && livePxSize > 0) {
+                                double ratio = livePxSize / entryPxSize;
+                                if (ratio < 0.9 || ratio > 1.1) {
+                                    logger.warn(
+                                            "Source 4 raw live FOV rejected: live pixel size {} um/px "
+                                                    + "does not match entry '{}' pixel size {} um/px "
+                                                    + "(ratio {}). Mount the acquisition objective or "
+                                                    + "stamp fov_x_um/fov_y_um metadata on this entry.",
+                                            String.format("%.4f", livePxSize),
+                                            entry.getImageName(),
+                                            String.format("%.4f", entryPxSize),
+                                            String.format("%.2f", ratio));
+                                    return null;
+                                }
+                            }
+                        } catch (Exception sanityEx) {
+                            logger.debug("Live-FOV pixel-size sanity check failed: {}", sanityEx.getMessage());
+                        }
+                    }
+                    logger.info("FOV from live microscope (raw): {}x{} um", fov[0], fov[1]);
                     return fov;
                 }
             }
