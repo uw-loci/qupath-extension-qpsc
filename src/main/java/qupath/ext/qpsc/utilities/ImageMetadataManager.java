@@ -816,7 +816,7 @@ public class ImageMetadataManager {
      * <ul>
      *   <li>its {@code base_image} metadata equals {@code baseName} AND its
      *       stripped image name equals {@code baseName} OR matches the
-     *       {@code <baseName>.<ext>} or {@code <baseName>.<ext> (flipped …)} pattern;</li>
+     *       {@code <baseName>.<ext>} or {@code <baseName>.<ext> (flipped ...)} pattern;</li>
      *   <li>its stripped image name equals {@code baseName} (legacy entries
      *       lacking {@code base_image} metadata).</li>
      * </ul>

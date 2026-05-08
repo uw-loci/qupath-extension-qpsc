@@ -14,8 +14,8 @@ import org.junit.jupiter.api.Test;
  * to drive end-to-end. These tests pin down the building blocks instead:
  *
  * <ul>
- *   <li>{@link ForwardPropagationWorkflow#createFlip} — flip transform geometry.</li>
- *   <li>The XOR delta-flip used by {@code propagateBackFanOut} — a point in the
+ *   <li>{@link ForwardPropagationWorkflow#createFlip} -- flip transform geometry.</li>
+ *   <li>The XOR delta-flip used by {@code propagateBackFanOut} -- a point in the
  *       canonical sibling's pixel frame maps to its mirror in any other sibling
  *       whose flip differs by exactly one axis.</li>
  *   <li>{@code subToStage} composed with the inverse of a fabricated

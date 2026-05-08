@@ -104,7 +104,7 @@ public final class FlippedDuplicateMigrator {
                 // Find the unflipped base sharing the same base_image metadata.
                 String baseName = ImageMetadataManager.getBaseImage(dup);
                 if (baseName == null || baseName.isEmpty()) {
-                    // Derive base name by stripping the " (flipped …)" suffix.
+                    // Derive base name by stripping the " (flipped ...)" suffix.
                     int paren = dupName.indexOf(" (flipped");
                     String prefix = paren > 0 ? dupName.substring(0, paren) : dupName;
                     baseName = qupath.lib.common.GeneralTools.stripExtension(prefix);

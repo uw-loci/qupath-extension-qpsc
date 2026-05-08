@@ -1341,7 +1341,7 @@ public class StageControlPanel extends VBox {
             RadioButton noneRadio = new RadioButton();
             noneRadio.setToggleGroup(previewGroup);
             noneRadio.setSelected(true); // Start in deactivated state.
-            Label noneLabel = new Label("(None — deactivate all)");
+            Label noneLabel = new Label("(None -- deactivate all)");
             noneLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888;");
             noneRadio.setOnAction(e -> {
                 if (resolvedProfile == null) {
