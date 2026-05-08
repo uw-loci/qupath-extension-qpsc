@@ -20,6 +20,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.RadioButton;
@@ -42,7 +43,9 @@ import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow.Direction;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow.FanOutResult;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow.MissingSourceConfigException;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.SiftAutoAlignHelper;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -149,6 +152,98 @@ public final class PropagationManagerDialog {
                         + "selected). Use this when re-propagating refined source annotations -- the old "
                         + "copies on the targets will be removed first so you don't get overlapping "
                         + "duplicates with slightly different shapes."));
+
+        // -- SIFT refinement toggle + reference selectors ------------------
+        CheckBox siftRefineCheck = new CheckBox("Refine with SIFT after propagation (slow)");
+        siftRefineCheck.setSelected(PersistentPreferences.isPropSiftEnabled());
+        siftRefineCheck.setTooltip(new Tooltip(
+                "After propagation, run a per-position SIFT match between the base image and a "
+                        + "user-selected reference channel of each position (e.g. PPM 90deg vs OCUS40 H&E). "
+                        + "The matched offset is applied to all subs at that position to remove residual "
+                        + "alignment-fit error. Requires the reference channel to be image-type-compatible "
+                        + "with the base (brightfield-like vs brightfield-like). Slow: ~10s per position."));
+        siftRefineCheck.selectedProperty().addListener((obs, was, sel) ->
+                PersistentPreferences.setPropSiftEnabled(sel));
+
+        Button siftSettingsBtn = new Button("SIFT Settings...");
+        siftSettingsBtn.setTooltip(new Tooltip(
+                "Configure the SIFT matching parameters used by post-propagation refinement. "
+                        + "Independent of the alignment-time SIFT settings."));
+        siftSettingsBtn.setOnAction(e -> SiftAutoAlignHelper
+                .showPropagationSettingsDialog(siftSettingsBtn.getScene() != null
+                        ? siftSettingsBtn.getScene().getWindow() : null));
+        siftSettingsBtn.disableProperty().bind(siftRefineCheck.selectedProperty().not());
+
+        HBox siftRow = new HBox(8, siftRefineCheck, siftSettingsBtn);
+        siftRow.setAlignment(Pos.CENTER_LEFT);
+
+        // Reference selector: discriminator key + value. Populated lazily from
+        // the project's first selected (or first non-empty) group's subs.
+        Label refLabel = new Label("Reference image:");
+        ComboBox<String> refKeyCombo = new ComboBox<>();
+        ComboBox<String> refValueCombo = new ComboBox<>();
+        refKeyCombo.setEditable(false);
+        refValueCombo.setEditable(false);
+        refKeyCombo.setPrefWidth(140);
+        refValueCombo.setPrefWidth(140);
+
+        refKeyCombo.disableProperty().bind(siftRefineCheck.selectedProperty().not());
+        refValueCombo.disableProperty().bind(siftRefineCheck.selectedProperty().not());
+
+        // Populate the key combo with metadata fields likely to discriminate
+        // channels within a position group. The user picks one to act as the
+        // reference selector key.
+        refKeyCombo.getItems().addAll(
+                ImageMetadataManager.ANGLE,
+                ImageMetadataManager.MODALITY,
+                ImageMetadataManager.OBJECTIVE,
+                ImageMetadataManager.IMAGE_INDEX,
+                ImageMetadataManager.DETECTOR_ID);
+        String savedRefKey = PersistentPreferences.getPropSiftReferenceMetadataKey();
+        if (savedRefKey != null && refKeyCombo.getItems().contains(savedRefKey)) {
+            refKeyCombo.setValue(savedRefKey);
+        } else {
+            refKeyCombo.setValue(ImageMetadataManager.ANGLE);
+        }
+
+        // Repopulate the value combo whenever the key changes; pull the
+        // distinct values across all subs in all groups so the user sees
+        // every option that exists in the project.
+        Runnable repopulateValues = () -> {
+            String key = refKeyCombo.getValue();
+            if (key == null) {
+                refValueCombo.getItems().clear();
+                return;
+            }
+            java.util.Set<String> distinct = new java.util.TreeSet<>();
+            for (PropagationGroupItem grp : groups) {
+                for (ProjectImageEntry<BufferedImage> sub : grp.getSubAcquisitions()) {
+                    String v = sub.getMetadata().get(key);
+                    if (v != null && !v.isEmpty()) distinct.add(v);
+                }
+            }
+            refValueCombo.getItems().setAll(distinct);
+            String savedVal = PersistentPreferences.getPropSiftReferenceMetadataValue();
+            if (savedVal != null && distinct.contains(savedVal)) {
+                refValueCombo.setValue(savedVal);
+            } else if (!distinct.isEmpty()) {
+                refValueCombo.setValue(distinct.iterator().next());
+            } else {
+                refValueCombo.setValue(null);
+            }
+        };
+        refKeyCombo.valueProperty().addListener((obs, oldK, newK) -> {
+            if (newK != null) PersistentPreferences.setPropSiftReferenceMetadataKey(newK);
+            repopulateValues.run();
+        });
+        refValueCombo.valueProperty().addListener((obs, oldV, newV) -> {
+            if (newV != null) PersistentPreferences.setPropSiftReferenceMetadataValue(newV);
+        });
+        repopulateValues.run();
+
+        HBox refSelectorRow = new HBox(8, refLabel, refKeyCombo, new Label("="), refValueCombo);
+        refSelectorRow.setAlignment(Pos.CENTER_LEFT);
+        refLabel.disableProperty().bind(siftRefineCheck.selectedProperty().not());
 
         // -- Group summary table -------------------------------------------
         TableView<PropagationGroupItem> groupTable = new TableView<>(FXCollections.observableArrayList(groups));
@@ -355,7 +450,9 @@ public final class PropagationManagerDialog {
         propagateBtn.setStyle("-fx-font-weight: bold;");
         propagateBtn.setOnAction(e -> runPropagation(
                 qupath, project, groups, groupTable, subChecks, classChecks, unclassifiedCheck,
-                forwardBtn, backBtn, autoCreateCheck, replaceExistingCheck, progress, results, propagateBtn));
+                forwardBtn, backBtn, autoCreateCheck, replaceExistingCheck,
+                siftRefineCheck, refKeyCombo, refValueCombo,
+                progress, results, propagateBtn));
 
         Button closeBtn = new Button("Close");
         closeBtn.setOnAction(e -> dialog.close());
@@ -376,6 +473,8 @@ public final class PropagationManagerDialog {
                 dirBox,
                 autoCreateCheck,
                 replaceExistingCheck,
+                siftRow,
+                refSelectorRow,
                 classLabel,
                 classScroll,
                 new Separator(),
@@ -408,6 +507,9 @@ public final class PropagationManagerDialog {
             RadioButton backBtn,
             CheckBox autoCreateCheck,
             CheckBox replaceExistingCheck,
+            CheckBox siftRefineCheck,
+            ComboBox<String> refKeyCombo,
+            ComboBox<String> refValueCombo,
             ProgressBar progress,
             TextArea results,
             Button propagateBtn) {
@@ -438,6 +540,15 @@ public final class PropagationManagerDialog {
                 .collect(Collectors.toSet());
         boolean autoCreate = autoCreateCheck.isSelected();
         boolean replaceExisting = replaceExistingCheck.isSelected();
+        boolean siftRefine = siftRefineCheck.isSelected();
+        String refKey = refKeyCombo.getValue();
+        String refValue = refValueCombo.getValue();
+        if (siftRefine && (refKey == null || refValue == null || refKey.isBlank() || refValue.isBlank())) {
+            new Alert(Alert.AlertType.WARNING,
+                    "SIFT refinement is enabled but the reference image selection is incomplete. "
+                            + "Pick a metadata key and a value, or uncheck the option.").showAndWait();
+            return;
+        }
 
         results.appendText("=== Propagation started: direction=" + dir
                 + ", " + checkedGroups.size() + " group(s) ===\n");
@@ -475,6 +586,13 @@ public final class PropagationManagerDialog {
         // ONE actionable warning at the end naming every file the user needs.
         Map<String, String> missingConfigs = new LinkedHashMap<>(); // scope -> filename
         Map<String, Set<String>> missingConfigSubs = new LinkedHashMap<>(); // scope -> subs
+
+        // Collect SIFT refinement outcomes across every group so the summary
+        // block at the end of the run reports them in one place rather than
+        // burying them in the per-group log spam.
+        List<String> siftFailures = new ArrayList<>();
+        int[] siftRefinedCount = {0};
+        int[] siftAttemptedCount = {0};
 
         Thread worker = new Thread(() -> {
             int grandTotal = 0;
@@ -610,6 +728,8 @@ public final class PropagationManagerDialog {
                                 alignFlipX, alignFlipY, flipSource, baseWidth, baseHeight);
                         appendStatus(results, "  source: " + base.getImageName()
                                 + " (" + sourceObjects.size() + " objects)\n");
+                        Map<ProjectImageEntry<BufferedImage>, List<PathObject>> propagatedPerSub =
+                                new LinkedHashMap<>();
                         for (ProjectImageEntry<BufferedImage> sub : grp.getSubAcquisitions()) {
                             if (!selectedSubs.contains(sub)) continue;
                             try {
@@ -623,11 +743,15 @@ public final class PropagationManagerDialog {
                                         touchedEntries.add(sub);
                                     }
                                 }
-                                int count = ForwardPropagationWorkflow.propagateForward(
+                                List<PathObject> newObjs = ForwardPropagationWorkflow.propagateForwardAndCapture(
                                         alignment, alignFlipX, alignFlipY, baseWidth, baseHeight,
                                         sourceObjects, sub);
+                                int count = newObjs.size();
                                 groupTotal += count;
-                                if (count > 0) touchedEntries.add(sub);
+                                if (count > 0) {
+                                    touchedEntries.add(sub);
+                                    propagatedPerSub.put(sub, newObjs);
+                                }
                                 appendStatus(results, String.format(
                                         "    -> %s: %d objects%n", sub.getImageName(), count));
                             } catch (MissingSourceConfigException mce) {
@@ -643,6 +767,23 @@ public final class PropagationManagerDialog {
                                 appendStatus(results, String.format(
                                         "    -> %s: FAILED (%s)%n", sub.getImageName(), ex.getMessage()));
                                 logger.error("Forward propagation failed", ex);
+                            }
+                        }
+
+                        // ------- SIFT post-propagation refinement (forward) -------
+                        if (siftRefine && !propagatedPerSub.isEmpty()) {
+                            try {
+                                runSiftRefinementForward(
+                                        base, baseWidth, baseHeight,
+                                        alignment, alignFlipX, alignFlipY,
+                                        propagatedPerSub, refKey, refValue,
+                                        results, siftFailures,
+                                        siftRefinedCount, siftAttemptedCount,
+                                        touchedEntries);
+                            } catch (Exception siftEx) {
+                                logger.error("SIFT refinement worker failed", siftEx);
+                                appendStatus(results,
+                                        "  SIFT refinement aborted: " + siftEx.getMessage() + "\n");
                             }
                         }
                     } else {
@@ -724,6 +865,24 @@ public final class PropagationManagerDialog {
                         "=== Done: " + finalTotal + " object(s) propagated across "
                                 + checkedGroups.size() + " group(s)"
                                 + (finalErrors > 0 ? ", " + finalErrors + " error(s)" : "") + " ===\n"));
+
+                if (siftRefine && siftAttemptedCount[0] > 0) {
+                    Platform.runLater(() -> {
+                        StringBuilder summary = new StringBuilder();
+                        summary.append("=== SIFT refinement summary ===\n");
+                        summary.append(String.format(
+                                "Refined: %d/%d position(s)%n",
+                                siftRefinedCount[0], siftAttemptedCount[0]));
+                        if (!siftFailures.isEmpty()) {
+                            summary.append("Failed:\n");
+                            for (String f : siftFailures) {
+                                summary.append("  - ").append(f).append("\n");
+                            }
+                        }
+                        summary.append("===============================\n");
+                        appendStatus(results, summary.toString());
+                    });
+                }
 
                 if (!missingConfigs.isEmpty()) {
                     Platform.runLater(() -> {
@@ -908,5 +1067,305 @@ public final class PropagationManagerDialog {
         hierarchy.removeObjects(toRemove, true);
         entry.saveImageData(data);
         return toRemove.size();
+    }
+
+    /**
+     * Per-position SIFT refinement after forward propagation.
+     *
+     * <p>Groups the just-propagated objects by {@code annotation_name}; for each
+     * position, finds the user-selected reference sub (via {@code refKey =
+     * refValue}), reads a base-side region and a reference-sub-side region as
+     * PNG, and runs image-vs-image SIFT to recover the residual offset. The
+     * resulting offset is applied as a sub-pixel translation to every just-
+     * propagated object on every sub at that position. Failures are appended
+     * to {@code siftFailures} so the worker can report them in a single block
+     * at the end of the run rather than burying them in the per-group log.
+     */
+    private static void runSiftRefinementForward(
+            ProjectImageEntry<BufferedImage> base,
+            int baseWidth,
+            int baseHeight,
+            AffineTransform baseToStage,
+            boolean alignFlipX,
+            boolean alignFlipY,
+            Map<ProjectImageEntry<BufferedImage>, List<PathObject>> propagatedPerSub,
+            String refKey,
+            String refValue,
+            TextArea results,
+            List<String> siftFailures,
+            int[] refinedCountOut,
+            int[] attemptedCountOut,
+            Set<ProjectImageEntry<BufferedImage>> touchedEntries) throws Exception {
+
+        // Read base-side metadata once -- shared across all positions.
+        var baseData = base.readImageData();
+        var baseServer = baseData.getServer();
+        double basePixelSize = baseServer.getPixelCalibration().getAveragedPixelSizeMicrons();
+        if (Double.isNaN(basePixelSize) || basePixelSize <= 0) {
+            appendStatus(results, "  SIFT refinement skipped: base has no pixel size\n");
+            return;
+        }
+
+        // Cache the SIFT settings once per call.
+        double minPxUm = PersistentPreferences.getPropSiftMinPixelSize();
+        double ratioThreshold = PersistentPreferences.getPropSiftRatioThreshold();
+        int minMatches = PersistentPreferences.getPropSiftMinMatchCount();
+        double contrastThreshold = PersistentPreferences.getPropSiftContrastThreshold();
+        double searchMarginUm = PersistentPreferences.getPropSiftSearchMarginUm();
+        int nFeatures = PersistentPreferences.getPropSiftNFeatures();
+        String monoNorm = PersistentPreferences.getPropSiftMonoNormalization();
+        double pctLow = PersistentPreferences.getPropSiftPercentileLow();
+        double pctHigh = PersistentPreferences.getPropSiftPercentileHigh();
+        boolean claheEnabled = PersistentPreferences.isPropSiftClaheEnabled();
+        double claheClip = PersistentPreferences.getPropSiftClaheClipLimit();
+
+        // Group subs by annotation_name so each "position" in stage space is
+        // refined together. PPM has 4 angles per position; OWS3 has 2 channels.
+        Map<String, List<ProjectImageEntry<BufferedImage>>> byPosition = new LinkedHashMap<>();
+        for (ProjectImageEntry<BufferedImage> sub : propagatedPerSub.keySet()) {
+            String pos = sub.getMetadata().get(ImageMetadataManager.ANNOTATION_NAME);
+            if (pos == null) pos = "(no annotation_name)";
+            byPosition.computeIfAbsent(pos, k -> new ArrayList<>()).add(sub);
+        }
+
+        appendStatus(results, "  --- SIFT refinement (forward) ---\n");
+
+        var mc = qupath.ext.qpsc.controller.MicroscopeController.getInstance();
+        if (!mc.isConnected()) {
+            try {
+                mc.userTriggeredConnect();
+            } catch (Exception connectEx) {
+                appendStatus(results,
+                        "  SIFT skipped: server not connected (" + connectEx.getMessage() + ")\n");
+                for (String position : byPosition.keySet()) {
+                    siftFailures.add(position + ": server not connected");
+                }
+                attemptedCountOut[0] += byPosition.size();
+                return;
+            }
+        }
+        var client = mc.getSocketClient();
+
+        for (Map.Entry<String, List<ProjectImageEntry<BufferedImage>>> posEntry : byPosition.entrySet()) {
+            String position = posEntry.getKey();
+            List<ProjectImageEntry<BufferedImage>> positionSubs = posEntry.getValue();
+            attemptedCountOut[0]++;
+
+            // Pick the reference sub by metadata match.
+            ProjectImageEntry<BufferedImage> refSub = null;
+            for (ProjectImageEntry<BufferedImage> s : positionSubs) {
+                String mv = s.getMetadata().get(refKey);
+                if (mv != null && mv.equals(refValue)) { refSub = s; break; }
+            }
+            if (refSub == null) {
+                String reason = String.format("no sub matches %s=%s", refKey, refValue);
+                siftFailures.add(position + ": " + reason);
+                appendStatus(results, "    " + position + ": SKIP (" + reason + ")\n");
+                continue;
+            }
+
+            List<PathObject> refObjs = propagatedPerSub.get(refSub);
+            if (refObjs == null || refObjs.isEmpty()) {
+                String reason = "reference sub had no propagated objects";
+                siftFailures.add(position + ": " + reason);
+                appendStatus(results, "    " + position + ": SKIP (" + reason + ")\n");
+                continue;
+            }
+
+            // Build the reference sub's per-image transforms.
+            var refData = refSub.readImageData();
+            var refServer = refData.getServer();
+            double refPixelSize = refServer.getPixelCalibration().getAveragedPixelSizeMicrons();
+            int refSubWidth = refServer.getWidth();
+            int refSubHeight = refServer.getHeight();
+            double[] xyOffsetRef = ImageMetadataManager.getXYOffset(refSub);
+            double[] fovRef = ForwardPropagationWorkflow.resolveFovForEntry(refSub);
+            if (fovRef == null) {
+                siftFailures.add(position + ": cannot resolve FOV for reference sub");
+                appendStatus(results, "    " + position + ": SKIP (no FOV for reference sub)\n");
+                continue;
+            }
+            double correctedRefX = xyOffsetRef[0] - fovRef[0] / 2.0;
+            double correctedRefY = xyOffsetRef[1] - fovRef[1] / 2.0;
+
+            // Compute refSub's just-propagated bbox in sub px, expand by margin.
+            double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY;
+            double maxX = Double.NEGATIVE_INFINITY, maxY = Double.NEGATIVE_INFINITY;
+            for (PathObject o : refObjs) {
+                ROI roi = o.getROI();
+                if (roi == null) continue;
+                minX = Math.min(minX, roi.getBoundsX());
+                minY = Math.min(minY, roi.getBoundsY());
+                maxX = Math.max(maxX, roi.getBoundsX() + roi.getBoundsWidth());
+                maxY = Math.max(maxY, roi.getBoundsY() + roi.getBoundsHeight());
+            }
+            if (!Double.isFinite(minX)) {
+                siftFailures.add(position + ": all reference objects had null ROIs");
+                continue;
+            }
+            double marginSubPx = searchMarginUm / refPixelSize;
+            int subRoiX = (int) Math.max(0, Math.floor(minX - marginSubPx));
+            int subRoiY = (int) Math.max(0, Math.floor(minY - marginSubPx));
+            int subRoiW = (int) Math.min(refSubWidth - subRoiX, Math.ceil(maxX - minX + 2 * marginSubPx));
+            int subRoiH = (int) Math.min(refSubHeight - subRoiY, Math.ceil(maxY - minY + 2 * marginSubPx));
+            if (subRoiW <= 0 || subRoiH <= 0) {
+                siftFailures.add(position + ": sub bbox after margin clipped to empty");
+                continue;
+            }
+
+            // Convert the sub-px bbox corners to unflipped base-px via:
+            //   sub_px -> stage_um (subToStage) -> alignment-frame base_px (baseToStage^-1)
+            //   -> unflipped base_px (alignFlip^-1 == alignFlip; mirror is involution).
+            AffineTransform stageToSub = new AffineTransform();
+            stageToSub.scale(1.0 / refPixelSize, 1.0 / refPixelSize);
+            stageToSub.translate(-correctedRefX, -correctedRefY);
+            AffineTransform combined = new AffineTransform(stageToSub);
+            combined.concatenate(baseToStage);
+            if (alignFlipX || alignFlipY) {
+                AffineTransform alignFlip = ForwardPropagationWorkflow.createFlip(
+                        alignFlipX, alignFlipY, baseWidth, baseHeight);
+                combined.concatenate(alignFlip);
+            }
+            AffineTransform combinedInverse;
+            try {
+                combinedInverse = combined.createInverse();
+            } catch (Exception nonInvertible) {
+                siftFailures.add(position + ": combined transform is non-invertible");
+                continue;
+            }
+
+            double[] subCorners = {
+                    subRoiX, subRoiY,
+                    subRoiX + subRoiW, subRoiY,
+                    subRoiX + subRoiW, subRoiY + subRoiH,
+                    subRoiX, subRoiY + subRoiH };
+            double[] baseCorners = new double[8];
+            combinedInverse.transform(subCorners, 0, baseCorners, 0, 4);
+            double bMinX = Math.min(Math.min(baseCorners[0], baseCorners[2]),
+                    Math.min(baseCorners[4], baseCorners[6]));
+            double bMaxX = Math.max(Math.max(baseCorners[0], baseCorners[2]),
+                    Math.max(baseCorners[4], baseCorners[6]));
+            double bMinY = Math.min(Math.min(baseCorners[1], baseCorners[3]),
+                    Math.min(baseCorners[5], baseCorners[7]));
+            double bMaxY = Math.max(Math.max(baseCorners[1], baseCorners[3]),
+                    Math.max(baseCorners[5], baseCorners[7]));
+            int baseRoiX = (int) Math.max(0, Math.floor(bMinX));
+            int baseRoiY = (int) Math.max(0, Math.floor(bMinY));
+            int baseRoiW = (int) Math.min(baseWidth - baseRoiX, Math.ceil(bMaxX - bMinX));
+            int baseRoiH = (int) Math.min(baseHeight - baseRoiY, Math.ceil(bMaxY - bMinY));
+            if (baseRoiW <= 0 || baseRoiH <= 0) {
+                siftFailures.add(position + ": base bbox clipped to empty");
+                continue;
+            }
+
+            // Read both regions and write to temp PNG files.
+            java.io.File baseTmp = null, subTmp = null;
+            try {
+                baseTmp = java.io.File.createTempFile("sift_prop_base_", ".png");
+                subTmp = java.io.File.createTempFile("sift_prop_sub_", ".png");
+
+                qupath.lib.regions.RegionRequest baseReq =
+                        qupath.lib.regions.RegionRequest.createInstance(
+                                baseServer.getPath(), 1.0, baseRoiX, baseRoiY, baseRoiW, baseRoiH);
+                java.awt.image.BufferedImage baseImg = baseServer.readRegion(baseReq);
+                javax.imageio.ImageIO.write(baseImg, "PNG", baseTmp);
+
+                qupath.lib.regions.RegionRequest subReq =
+                        qupath.lib.regions.RegionRequest.createInstance(
+                                refServer.getPath(), 1.0, subRoiX, subRoiY, subRoiW, subRoiH);
+                java.awt.image.BufferedImage subImg = refServer.readRegion(subReq);
+                javax.imageio.ImageIO.write(subImg, "PNG", subTmp);
+
+                String response = client.siftMatchTwoImages(
+                        baseTmp.getAbsolutePath(), subTmp.getAbsolutePath(),
+                        basePixelSize, refPixelSize,
+                        false, false,
+                        minPxUm, ratioThreshold, minMatches, contrastThreshold, nFeatures,
+                        monoNorm, pctLow, pctHigh, claheEnabled, claheClip);
+
+                if (!response.startsWith("SUCCESS:")) {
+                    String reason = response.startsWith("FAILED:") ? response.substring(7) : response;
+                    siftFailures.add(position + ": " + reason);
+                    appendStatus(results, "    " + position + ": SIFT FAILED (" + reason + ")\n");
+                    continue;
+                }
+                String[] parts = response.substring(8).split("\\|");
+                String[] offsets = parts[0].split(",");
+                double offsetX = Double.parseDouble(offsets[0]);
+                double offsetY = Double.parseDouble(offsets[1]);
+                int inliers = 0;
+                double confidence = 0;
+                for (String part : parts) {
+                    if (part.startsWith("inliers:")) inliers = Integer.parseInt(part.substring(8));
+                    if (part.startsWith("confidence:")) confidence = Double.parseDouble(part.substring(11));
+                }
+
+                // Apply the offset (in stage um) as a sub-pixel translation to
+                // every just-propagated object on every sub in this position.
+                int objsTranslated = 0;
+                for (ProjectImageEntry<BufferedImage> sib : positionSubs) {
+                    List<PathObject> sibObjs = propagatedPerSub.get(sib);
+                    if (sibObjs == null || sibObjs.isEmpty()) continue;
+                    var sibData = sib.readImageData();
+                    double sibPixelSize = sibData.getServer().getPixelCalibration()
+                            .getAveragedPixelSizeMicrons();
+                    if (Double.isNaN(sibPixelSize) || sibPixelSize <= 0) continue;
+                    double dxPx = offsetX / sibPixelSize;
+                    double dyPx = offsetY / sibPixelSize;
+                    AffineTransform shift = AffineTransform.getTranslateInstance(dxPx, dyPx);
+
+                    var sibHierarchy = sibData.getHierarchy();
+                    // The captured `sibObjs` references are stale (different ImageData
+                    // instance); match by name + class on the freshly read hierarchy.
+                    Set<String> targetNames = new HashSet<>();
+                    Set<PathClass> targetClasses = new HashSet<>();
+                    for (PathObject p : sibObjs) {
+                        targetNames.add(p.getName() == null ? "" : p.getName());
+                        if (p.getPathClass() != null) targetClasses.add(p.getPathClass());
+                    }
+
+                    List<PathObject> candidates = new ArrayList<>();
+                    for (PathObject existing : sibHierarchy.getAllObjects(false)) {
+                        if (existing.isRootObject() || existing.getROI() == null) continue;
+                        String n = existing.getName() == null ? "" : existing.getName();
+                        if (!targetNames.contains(n)) continue;
+                        candidates.add(existing);
+                    }
+                    if (candidates.isEmpty()) continue;
+
+                    List<PathObject> replacements = new ArrayList<>();
+                    for (PathObject existing : candidates) {
+                        try {
+                            PathObject shifted = qupath.lib.objects.PathObjectTools
+                                    .transformObject(existing, shift, true, true);
+                            if (shifted != null) replacements.add(shifted);
+                        } catch (Exception transEx) {
+                            logger.debug("SIFT shift failed on object: {}", transEx.getMessage());
+                        }
+                    }
+                    if (!replacements.isEmpty()) {
+                        sibHierarchy.removeObjects(candidates, true);
+                        sibHierarchy.addObjects(replacements);
+                        sib.saveImageData(sibData);
+                        touchedEntries.add(sib);
+                        objsTranslated += replacements.size();
+                    }
+                }
+                refinedCountOut[0]++;
+                appendStatus(results, String.format(
+                        "    %s: SIFT offset (%.2f, %.2f) um, inliers=%d, conf=%.2f, "
+                                + "applied to %d object(s) across %d sub(s)%n",
+                        position, offsetX, offsetY, inliers, confidence,
+                        objsTranslated, positionSubs.size()));
+            } catch (Exception ex) {
+                String reason = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+                siftFailures.add(position + ": " + reason);
+                appendStatus(results, "    " + position + ": SIFT FAILED (" + reason + ")\n");
+                logger.warn("SIFT refinement failed for position {}: {}", position, reason, ex);
+            } finally {
+                if (baseTmp != null && !baseTmp.delete()) baseTmp.deleteOnExit();
+                if (subTmp != null && !subTmp.delete()) subTmp.deleteOnExit();
+            }
+        }
     }
 }

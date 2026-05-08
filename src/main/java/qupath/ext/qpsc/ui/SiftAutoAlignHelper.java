@@ -322,9 +322,96 @@ public final class SiftAutoAlignHelper {
      *     to. May be null, in which case the dialog falls back to
      *     screen-center positioning.
      */
+    /**
+     * Read/write strategy for the SIFT settings dialog. Lets the same dialog
+     * body persist into different preference namespaces -- the default impl
+     * targets the single-tile-refinement keys; the propagation impl targets
+     * the propagation-refinement keys.
+     */
+    public interface SiftPrefsAccessor {
+        double getMinPixelSize();      void setMinPixelSize(double v);
+        double getRatioThreshold();    void setRatioThreshold(double v);
+        int    getMinMatchCount();     void setMinMatchCount(int v);
+        double getContrastThreshold(); void setContrastThreshold(double v);
+        double getSearchMarginUm();    void setSearchMarginUm(double v);
+        double getConfidenceThreshold(); void setConfidenceThreshold(double v);
+        String getMonoNormalization(); void setMonoNormalization(String v);
+        double getPercentileLow();     void setPercentileLow(double v);
+        double getPercentileHigh();    void setPercentileHigh(double v);
+        boolean isClaheEnabled();      void setClaheEnabled(boolean v);
+        double getClaheClipLimit();    void setClaheClipLimit(double v);
+    }
+
+    /** Single-tile-refinement / autoAlign SIFT settings. Default scope. */
+    public static final SiftPrefsAccessor DEFAULT_PREFS = new SiftPrefsAccessor() {
+        public double getMinPixelSize()      { return PersistentPreferences.getSiftMinPixelSize(); }
+        public void setMinPixelSize(double v){ PersistentPreferences.setSiftMinPixelSize(v); }
+        public double getRatioThreshold()    { return PersistentPreferences.getSiftRatioThreshold(); }
+        public void setRatioThreshold(double v){ PersistentPreferences.setSiftRatioThreshold(v); }
+        public int    getMinMatchCount()     { return PersistentPreferences.getSiftMinMatchCount(); }
+        public void setMinMatchCount(int v)  { PersistentPreferences.setSiftMinMatchCount(v); }
+        public double getContrastThreshold() { return PersistentPreferences.getSiftContrastThreshold(); }
+        public void setContrastThreshold(double v){ PersistentPreferences.setSiftContrastThreshold(v); }
+        public double getSearchMarginUm()    { return PersistentPreferences.getSiftSearchMarginUm(); }
+        public void setSearchMarginUm(double v){ PersistentPreferences.setSiftSearchMarginUm(v); }
+        public double getConfidenceThreshold(){ return PersistentPreferences.getSiftConfidenceThreshold(); }
+        public void setConfidenceThreshold(double v){ PersistentPreferences.setSiftConfidenceThreshold(v); }
+        public String getMonoNormalization() { return PersistentPreferences.getSiftMonoNormalization(); }
+        public void setMonoNormalization(String v){ PersistentPreferences.setSiftMonoNormalization(v); }
+        public double getPercentileLow()     { return PersistentPreferences.getSiftPercentileLow(); }
+        public void setPercentileLow(double v){ PersistentPreferences.setSiftPercentileLow(v); }
+        public double getPercentileHigh()    { return PersistentPreferences.getSiftPercentileHigh(); }
+        public void setPercentileHigh(double v){ PersistentPreferences.setSiftPercentileHigh(v); }
+        public boolean isClaheEnabled()      { return PersistentPreferences.isSiftClaheEnabled(); }
+        public void setClaheEnabled(boolean v){ PersistentPreferences.setSiftClaheEnabled(v); }
+        public double getClaheClipLimit()    { return PersistentPreferences.getSiftClaheClipLimit(); }
+        public void setClaheClipLimit(double v){ PersistentPreferences.setSiftClaheClipLimit(v); }
+    };
+
+    /** Propagation refinement SIFT settings. Independent scope. */
+    public static final SiftPrefsAccessor PROPAGATION_PREFS = new SiftPrefsAccessor() {
+        public double getMinPixelSize()      { return PersistentPreferences.getPropSiftMinPixelSize(); }
+        public void setMinPixelSize(double v){ PersistentPreferences.setPropSiftMinPixelSize(v); }
+        public double getRatioThreshold()    { return PersistentPreferences.getPropSiftRatioThreshold(); }
+        public void setRatioThreshold(double v){ PersistentPreferences.setPropSiftRatioThreshold(v); }
+        public int    getMinMatchCount()     { return PersistentPreferences.getPropSiftMinMatchCount(); }
+        public void setMinMatchCount(int v)  { PersistentPreferences.setPropSiftMinMatchCount(v); }
+        public double getContrastThreshold() { return PersistentPreferences.getPropSiftContrastThreshold(); }
+        public void setContrastThreshold(double v){ PersistentPreferences.setPropSiftContrastThreshold(v); }
+        public double getSearchMarginUm()    { return PersistentPreferences.getPropSiftSearchMarginUm(); }
+        public void setSearchMarginUm(double v){ PersistentPreferences.setPropSiftSearchMarginUm(v); }
+        public double getConfidenceThreshold(){ return PersistentPreferences.getPropSiftConfidenceThreshold(); }
+        public void setConfidenceThreshold(double v){ PersistentPreferences.setPropSiftConfidenceThreshold(v); }
+        public String getMonoNormalization() { return PersistentPreferences.getPropSiftMonoNormalization(); }
+        public void setMonoNormalization(String v){ PersistentPreferences.setPropSiftMonoNormalization(v); }
+        public double getPercentileLow()     { return PersistentPreferences.getPropSiftPercentileLow(); }
+        public void setPercentileLow(double v){ PersistentPreferences.setPropSiftPercentileLow(v); }
+        public double getPercentileHigh()    { return PersistentPreferences.getPropSiftPercentileHigh(); }
+        public void setPercentileHigh(double v){ PersistentPreferences.setPropSiftPercentileHigh(v); }
+        public boolean isClaheEnabled()      { return PersistentPreferences.isPropSiftClaheEnabled(); }
+        public void setClaheEnabled(boolean v){ PersistentPreferences.setPropSiftClaheEnabled(v); }
+        public double getClaheClipLimit()    { return PersistentPreferences.getPropSiftClaheClipLimit(); }
+        public void setClaheClipLimit(double v){ PersistentPreferences.setPropSiftClaheClipLimit(v); }
+    };
+
+    /**
+     * Show the SIFT settings dialog using propagation-scoped preferences.
+     * Same UI as {@link #showSettingsDialog(Window)} but persists into a
+     * separate preference namespace so the propagation refinement settings
+     * don't trample the single-tile-refinement defaults.
+     */
+    public static void showPropagationSettingsDialog(Window ownerWindow) {
+        buildAndShowSettingsDialog(ownerWindow, PROPAGATION_PREFS, "SIFT Settings (Propagation Refinement)");
+    }
+
     public static void showSettingsDialog(Window ownerWindow) {
+        buildAndShowSettingsDialog(ownerWindow, DEFAULT_PREFS, "SIFT Matching Settings");
+    }
+
+    private static void buildAndShowSettingsDialog(
+            Window ownerWindow, SiftPrefsAccessor prefs, String title) {
         Dialog<Void> dialog = new Dialog<>();
-        dialog.setTitle("SIFT Matching Settings");
+        dialog.setTitle(title);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
         dialog.getDialogPane().setPrefWidth(400);
         dialog.initModality(Modality.NONE);
@@ -339,7 +426,7 @@ public final class SiftAutoAlignHelper {
 
         int row = 0;
 
-        Spinner<Double> minPxSpinner = new Spinner<>(0.1, 5.0, PersistentPreferences.getSiftMinPixelSize(), 0.1);
+        Spinner<Double> minPxSpinner = new Spinner<>(0.1, 5.0, prefs.getMinPixelSize(), 0.1);
         minPxSpinner.setEditable(true);
         minPxSpinner.setPrefWidth(90);
         grid.add(new Label("Min pixel size (um):"), 0, row);
@@ -349,7 +436,7 @@ public final class SiftAutoAlignHelper {
         minPxHelp.setWrapText(true);
         grid.add(minPxHelp, 0, ++row, 2, 1);
 
-        Spinner<Double> ratioSpinner = new Spinner<>(0.3, 0.95, PersistentPreferences.getSiftRatioThreshold(), 0.05);
+        Spinner<Double> ratioSpinner = new Spinner<>(0.3, 0.95, prefs.getRatioThreshold(), 0.05);
         ratioSpinner.setEditable(true);
         ratioSpinner.setPrefWidth(90);
         grid.add(new Label("Ratio threshold:"), 0, ++row);
@@ -359,7 +446,7 @@ public final class SiftAutoAlignHelper {
         ratioHelp.setWrapText(true);
         grid.add(ratioHelp, 0, ++row, 2, 1);
 
-        Spinner<Integer> minMatchSpinner = new Spinner<>(3, 50, PersistentPreferences.getSiftMinMatchCount(), 1);
+        Spinner<Integer> minMatchSpinner = new Spinner<>(3, 50, prefs.getMinMatchCount(), 1);
         minMatchSpinner.setPrefWidth(90);
         grid.add(new Label("Min match count:"), 0, ++row);
         grid.add(minMatchSpinner, 1, row);
@@ -369,7 +456,7 @@ public final class SiftAutoAlignHelper {
         grid.add(matchHelp, 0, ++row, 2, 1);
 
         Spinner<Double> contrastSpinner =
-                new Spinner<>(0.001, 0.2, PersistentPreferences.getSiftContrastThreshold(), 0.005);
+                new Spinner<>(0.001, 0.2, prefs.getContrastThreshold(), 0.005);
         contrastSpinner.setEditable(true);
         contrastSpinner.setPrefWidth(90);
         grid.add(new Label("Contrast threshold:"), 0, ++row);
@@ -379,7 +466,7 @@ public final class SiftAutoAlignHelper {
         contrastHelp.setWrapText(true);
         grid.add(contrastHelp, 0, ++row, 2, 1);
 
-        Spinner<Double> marginSpinner = new Spinner<>(50.0, 500.0, PersistentPreferences.getSiftSearchMarginUm(), 10.0);
+        Spinner<Double> marginSpinner = new Spinner<>(50.0, 500.0, prefs.getSearchMarginUm(), 10.0);
         marginSpinner.setEditable(true);
         marginSpinner.setPrefWidth(90);
         grid.add(new Label("Search margin (um):"), 0, ++row);
@@ -389,7 +476,7 @@ public final class SiftAutoAlignHelper {
         marginHelp.setWrapText(true);
         grid.add(marginHelp, 0, ++row, 2, 1);
 
-        Spinner<Double> confSpinner = new Spinner<>(0.1, 1.0, PersistentPreferences.getSiftConfidenceThreshold(), 0.05);
+        Spinner<Double> confSpinner = new Spinner<>(0.1, 1.0, prefs.getConfidenceThreshold(), 0.05);
         confSpinner.setEditable(true);
         confSpinner.setPrefWidth(90);
         grid.add(new Label("Auto-accept confidence:"), 0, ++row);
@@ -406,7 +493,7 @@ public final class SiftAutoAlignHelper {
 
         ChoiceBox<String> monoNormChoice = new ChoiceBox<>();
         monoNormChoice.getItems().addAll("PERCENTILE", "MIN_MAX", "BIT_SHIFT");
-        String currentMono = PersistentPreferences.getSiftMonoNormalization();
+        String currentMono = prefs.getMonoNormalization();
         monoNormChoice.setValue(monoNormChoice.getItems().contains(currentMono) ? currentMono : "PERCENTILE");
         monoNormChoice.setPrefWidth(150);
         grid.add(new Label("16-bit -> 8-bit:"), 0, ++row);
@@ -421,14 +508,14 @@ public final class SiftAutoAlignHelper {
         grid.add(monoHelp, 0, ++row, 2, 1);
 
         Spinner<Double> pctLowSpinner =
-                new Spinner<>(0.0, 50.0, PersistentPreferences.getSiftPercentileLow(), 0.5);
+                new Spinner<>(0.0, 50.0, prefs.getPercentileLow(), 0.5);
         pctLowSpinner.setEditable(true);
         pctLowSpinner.setPrefWidth(90);
         grid.add(new Label("Percentile low:"), 0, ++row);
         grid.add(pctLowSpinner, 1, row);
 
         Spinner<Double> pctHighSpinner =
-                new Spinner<>(50.0, 100.0, PersistentPreferences.getSiftPercentileHigh(), 0.5);
+                new Spinner<>(50.0, 100.0, prefs.getPercentileHigh(), 0.5);
         pctHighSpinner.setEditable(true);
         pctHighSpinner.setPrefWidth(90);
         grid.add(new Label("Percentile high:"), 0, ++row);
@@ -442,7 +529,7 @@ public final class SiftAutoAlignHelper {
         grid.add(pctHelp, 0, ++row, 2, 1);
 
         CheckBox claheCheckbox = new CheckBox("Apply CLAHE (contrast equalisation)");
-        claheCheckbox.setSelected(PersistentPreferences.isSiftClaheEnabled());
+        claheCheckbox.setSelected(prefs.isClaheEnabled());
         grid.add(claheCheckbox, 0, ++row, 2, 1);
         Label claheHelp = new Label(
                 "Cross-modality contrast normalisation. Strongly recommended when matching a monochrome "
@@ -453,7 +540,7 @@ public final class SiftAutoAlignHelper {
         grid.add(claheHelp, 0, ++row, 2, 1);
 
         Spinner<Double> claheClipSpinner =
-                new Spinner<>(0.5, 10.0, PersistentPreferences.getSiftClaheClipLimit(), 0.25);
+                new Spinner<>(0.5, 10.0, prefs.getClaheClipLimit(), 0.25);
         claheClipSpinner.setEditable(true);
         claheClipSpinner.setPrefWidth(90);
         grid.add(new Label("CLAHE clip limit:"), 0, ++row);
@@ -467,20 +554,21 @@ public final class SiftAutoAlignHelper {
 
         dialog.setResultConverter(bt -> {
             if (bt == ButtonType.OK) {
-                PersistentPreferences.setSiftMinPixelSize(minPxSpinner.getValue());
-                PersistentPreferences.setSiftRatioThreshold(ratioSpinner.getValue());
-                PersistentPreferences.setSiftMinMatchCount(minMatchSpinner.getValue());
-                PersistentPreferences.setSiftContrastThreshold(contrastSpinner.getValue());
-                PersistentPreferences.setSiftSearchMarginUm(marginSpinner.getValue());
-                PersistentPreferences.setSiftConfidenceThreshold(confSpinner.getValue());
-                PersistentPreferences.setSiftMonoNormalization(monoNormChoice.getValue());
-                PersistentPreferences.setSiftPercentileLow(pctLowSpinner.getValue());
-                PersistentPreferences.setSiftPercentileHigh(pctHighSpinner.getValue());
-                PersistentPreferences.setSiftClaheEnabled(claheCheckbox.isSelected());
-                PersistentPreferences.setSiftClaheClipLimit(claheClipSpinner.getValue());
+                prefs.setMinPixelSize(minPxSpinner.getValue());
+                prefs.setRatioThreshold(ratioSpinner.getValue());
+                prefs.setMinMatchCount(minMatchSpinner.getValue());
+                prefs.setContrastThreshold(contrastSpinner.getValue());
+                prefs.setSearchMarginUm(marginSpinner.getValue());
+                prefs.setConfidenceThreshold(confSpinner.getValue());
+                prefs.setMonoNormalization(monoNormChoice.getValue());
+                prefs.setPercentileLow(pctLowSpinner.getValue());
+                prefs.setPercentileHigh(pctHighSpinner.getValue());
+                prefs.setClaheEnabled(claheCheckbox.isSelected());
+                prefs.setClaheClipLimit(claheClipSpinner.getValue());
                 logger.info(
-                        "SIFT settings updated: minPx={}, ratio={}, minMatches={}, contrast={}, margin={}, "
+                        "{} updated: minPx={}, ratio={}, minMatches={}, contrast={}, margin={}, "
                                 + "confidence={}, monoNorm={}, pctLow={}, pctHigh={}, clahe={}, claheClip={}",
+                        title,
                         minPxSpinner.getValue(),
                         ratioSpinner.getValue(),
                         minMatchSpinner.getValue(),

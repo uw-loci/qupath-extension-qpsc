@@ -342,6 +342,60 @@ public class ForwardPropagationWorkflow {
     }
 
     /**
+     * Like {@link #propagateForward(AffineTransform, boolean, boolean, int, int, List, ProjectImageEntry)}
+     * but returns the list of newly-added objects (in their post-propagation
+     * sub-pixel frame) so callers can post-process them, e.g. apply a SIFT
+     * residual offset.
+     */
+    public static List<PathObject> propagateForwardAndCapture(
+            AffineTransform baseToStage,
+            boolean alignFlipX,
+            boolean alignFlipY,
+            int baseWidth,
+            int baseHeight,
+            List<PathObject> sourceObjects,
+            ProjectImageEntry<BufferedImage> subEntry)
+            throws Exception {
+        ImageData<BufferedImage> subData = subEntry.readImageData();
+        PathObjectHierarchy subHierarchy = subData.getHierarchy();
+        double subPixelSize = subData.getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
+        if (Double.isNaN(subPixelSize) || subPixelSize <= 0) {
+            throw new IllegalStateException("Sub-image has no valid pixel size");
+        }
+        double[] xyOffset = ImageMetadataManager.getXYOffset(subEntry);
+        int subWidth = subData.getServer().getWidth();
+        int subHeight = subData.getServer().getHeight();
+        double[] fov = resolveFovForEntry(subEntry);
+        if (fov == null) {
+            throw new IllegalStateException(
+                    "Cannot determine FOV for sub-image '" + subEntry.getImageName() + "'.");
+        }
+        double halfFovX = fov[0] / 2.0;
+        double halfFovY = fov[1] / 2.0;
+        double correctedOffsetX = xyOffset[0] - halfFovX;
+        double correctedOffsetY = xyOffset[1] - halfFovY;
+        AffineTransform stageToSub = new AffineTransform();
+        stageToSub.scale(1.0 / subPixelSize, 1.0 / subPixelSize);
+        stageToSub.translate(-correctedOffsetX, -correctedOffsetY);
+        AffineTransform combined = new AffineTransform(stageToSub);
+        combined.concatenate(baseToStage);
+        if (alignFlipX || alignFlipY) {
+            if (baseWidth <= 0 || baseHeight <= 0) {
+                throw new IllegalArgumentException(
+                        "propagateForwardAndCapture with alignFlip set requires baseWidth/baseHeight > 0");
+            }
+            AffineTransform alignFlip = createFlip(alignFlipX, alignFlipY, baseWidth, baseHeight);
+            combined.concatenate(alignFlip);
+        }
+        List<PathObject> propagated = transformAndClip(sourceObjects, combined, subWidth, subHeight);
+        if (!propagated.isEmpty()) {
+            subHierarchy.addObjects(propagated);
+            subEntry.saveImageData(subData);
+        }
+        return propagated;
+    }
+
+    /**
      * Back propagation: sub-image objects -> base image (unflipped base frame).
      *
      * <p>Transform chain: {@code sub_pixels -> stage_microns -> alignment_frame_pixels
@@ -1173,7 +1227,7 @@ public class ForwardPropagationWorkflow {
      * @param entry The project image entry (may be null)
      * @return [fovX, fovY] in microns, or null if unavailable
      */
-    private static double[] resolveFovForEntry(ProjectImageEntry<BufferedImage> entry) {
+    public static double[] resolveFovForEntry(ProjectImageEntry<BufferedImage> entry) {
         // Source 1: per-image metadata (best -- recorded at acquisition time)
         if (entry != null) {
             Map<String, String> meta = entry.getMetadata();

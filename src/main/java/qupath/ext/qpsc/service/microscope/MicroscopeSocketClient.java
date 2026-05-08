@@ -295,6 +295,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         TLAPSE("tlapse__"),
         /** SIFT auto-alignment: snap + match against WSI region */
         SIFTAL("siftal__"),
+        /** SIFT image-vs-image: match two on-disk image files (no camera snap) */
+        SIFTIM("siftim__"),
 
         // Illumination & Profile Commands
         /** Get illumination state (power, range, on/off) */
@@ -6599,6 +6601,86 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
                 if (response.startsWith("FAILED")) {
                     throw new IOException("SIFT matching failed: " + response.substring(7));
+                }
+                return response;
+            } finally {
+                socket.setSoTimeout(readTimeout);
+            }
+        }
+    }
+
+    /**
+     * Run SIFT image-vs-image: match two on-disk image files (no camera snap).
+     *
+     * <p>Used by the propagation refinement workflow where both sides of the
+     * match are existing project images: a base WSI region as image A
+     * (reference) and a sub-acquisition region as image B. The returned offset
+     * is in micrometers in image-A's frame: positive X/Y means image B's
+     * content is shifted right/down relative to image A.
+     *
+     * @param imageAPath absolute path to image A (reference, e.g. base WSI region PNG)
+     * @param imageBPath absolute path to image B (matched image, e.g. sub region PNG)
+     * @param pixelSizeA pixel size of image A in micrometers
+     * @param pixelSizeB pixel size of image B in micrometers
+     * @return Response string with offset: "SUCCESS:x,y|inliers:N|confidence:C" or throws
+     * @throws IOException if communication fails or matching fails
+     */
+    public String siftMatchTwoImages(
+            String imageAPath,
+            String imageBPath,
+            double pixelSizeA,
+            double pixelSizeB,
+            boolean flipX,
+            boolean flipY,
+            double minPixelSizeUm,
+            double ratioThreshold,
+            int minMatchCount,
+            double contrastThreshold,
+            int nFeatures,
+            String monoNormalization,
+            double percentileLow,
+            double percentileHigh,
+            boolean claheEnabled,
+            double claheClipLimit)
+            throws IOException {
+        StringBuilder msg = new StringBuilder();
+        msg.append("--image-a ").append(imageAPath);
+        msg.append(" --image-b ").append(imageBPath);
+        msg.append(" --pixel-size-a ").append(pixelSizeA);
+        msg.append(" --pixel-size-b ").append(pixelSizeB);
+        msg.append(" --min-px ").append(minPixelSizeUm);
+        msg.append(" --ratio ").append(ratioThreshold);
+        msg.append(" --min-matches ").append(minMatchCount);
+        msg.append(" --contrast ").append(contrastThreshold);
+        if (nFeatures > 0) msg.append(" --nfeatures ").append(nFeatures);
+        if (monoNormalization != null && !monoNormalization.isBlank()) {
+            msg.append(" --mono-norm ").append(monoNormalization);
+        }
+        msg.append(" --pct-low ").append(percentileLow);
+        msg.append(" --pct-high ").append(percentileHigh);
+        msg.append(" --clahe ").append(claheEnabled ? "true" : "false");
+        msg.append(" --clahe-clip ").append(claheClipLimit);
+        if (flipX) msg.append(" --flip-x");
+        if (flipY) msg.append(" --flip-y");
+        msg.append(" ENDOFSTR");
+
+        synchronized (socketLock) {
+            output.write(Command.SIFTIM.getValue());
+            output.write(msg.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            output.flush();
+
+            logger.info("SIFTIM command sent");
+
+            socket.setSoTimeout(60_000); // 60s for image-vs-image SIFT
+            try {
+                byte[] buf = new byte[4096];
+                int n = input.read(buf);
+                if (n <= 0) throw new IOException("SIFTIM: no response");
+                String response = new String(buf, 0, n, java.nio.charset.StandardCharsets.UTF_8);
+                logger.info("SIFTIM response: {}", response);
+
+                if (response.startsWith("FAILED")) {
+                    throw new IOException("SIFT image-vs-image matching failed: " + response.substring(7));
                 }
                 return response;
             } finally {
