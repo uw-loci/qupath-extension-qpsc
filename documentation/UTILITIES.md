@@ -48,7 +48,7 @@ This document provides an overview of all utilities available in the QPSC extens
 
 ### [Live Camera Viewer](tools/live-viewer.md)
 
-Real-time camera feed with integrated stage control, histogram, and noise statistics. The primary tool for verifying microscope communication, positioning the stage, and checking camera settings before acquisition. Includes a virtual joystick, saved stage positions, and per-channel saturation monitoring.
+Real-time camera feed with integrated stage control, histogram, noise statistics, and **snapshot capture** (save frames as OME-TIFF with optional flat-field correction). The primary tool for verifying microscope communication, positioning the stage, and checking camera settings before acquisition. Includes a virtual joystick, saved stage positions, and per-channel saturation monitoring.
 
 ### [Camera Control](tools/camera-control.md)
 
