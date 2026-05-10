@@ -26,6 +26,29 @@ Real-time camera feed with integrated stage control, histogram, and noise statis
 
 Double-click on the camera image to center the stage at that position.
 
+### Snap
+
+The **Snap** button on the toolbar captures the current live frame and writes it to disk as an OME-TIFF.
+
+- Clicking Snap opens a file save dialog. The dialog defaults to the current QuPath project folder. Once you save to a different folder, subsequent Snaps in the same session default to that folder; the choice resets to the project folder when QuPath restarts.
+- The suggested filename includes the active modality and a `yyyyMMdd-HHmmss` timestamp so successive snaps do not overwrite each other.
+- The saved OME-TIFF embeds the current stage XY/Z, pixel size, modality, objective, and detector as OME-XML metadata.
+- Snap is disabled while Live is OFF and before the first frame arrives -- this avoids saving a stale buffer.
+- When **Show Tiles** is enabled and a tile from disk is being displayed, Snap still captures the **live feed**, not the on-disk tile. Stop the live feed and re-open if you want to defer.
+
+#### Snap options (right-click)
+
+Right-click the Snap button to open a context menu:
+
+| Option | Default | Description |
+|---|---|---|
+| Save raw bit depth | ON | Preserve the camera's native bit depth (16-bit when supported). Uncheck to apply the current display contrast and save as 8-bit. |
+| Apply background correction | OFF | Request a flat-field-corrected frame from the server via the `CORRECTFRAME` socket command. **Greyed out unless** the configured backgrounds match the live state -- same compatibility check the ACQUIRE workflow runs (modality + objective + detector + WB mode + current angle). Exposure mismatch and WB-mode mismatch produce a status-bar warning, not a block (matches ACQUIRE: flat-field correction is exposure-independent). |
+| Open file after save | OFF | After a successful save, open the file in the OS default image viewer. |
+| Reset save folder to project | -- | Forget the last-used save folder; the next snapshot defaults to the current project folder. |
+
+The status bar reports a clickable "Show in folder" link after each successful save.
+
 ### Focus Controls Toolbar
 
 The toolbar contains two focus buttons and a range selector:

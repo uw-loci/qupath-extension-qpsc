@@ -283,6 +283,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
         // Live Viewer Commands (core-level, bypasses MM studio/live window)
         /** Get latest frame from MM circular buffer */
         GETFRAME("getframe"),
+        /**
+         * Get the latest frame with server-side flat-field (background)
+         * correction applied. Same wire format as {@link #GETFRAME} on
+         * success; replies {@code FAILED:<reason>} on configuration errors.
+         * Java callers are expected to have validated settings-match via
+         * {@code BackgroundSettingsReader} + {@code ModalityHandler} before
+         * issuing this command.
+         */
+        CORRECTFRAME("crctfram"),
         /** Start continuous sequence acquisition (core-level) */
         STRTSEQ("strtseq_"),
         /** Stop continuous sequence acquisition (core-level) */
@@ -6266,6 +6275,93 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
             } catch (IOException e) {
                 // If auxiliary fails, clean it up so it can reconnect
+                cleanupAuxiliary();
+                throw e;
+            }
+        }
+    }
+
+    /**
+     * Gets the latest frame from the circular buffer with server-side
+     * flat-field (background) correction applied. Identical wire format
+     * to {@link #getFrame()} on success.
+     *
+     * <p>The server uses its current modality / objective / detector / WB
+     * mode / rotation angle to locate the matching background image. Java
+     * callers are expected to have validated settings-match via
+     * {@code BackgroundSettingsReader.findBackgroundSettings(...)} +
+     * {@code ModalityHandler.validateBackgroundSettings(...)} before
+     * issuing this command -- those are the same checks the ACQUIRE
+     * pre-flight runs.
+     *
+     * <p>On any server-side error (no background folder, file missing,
+     * shape mismatch) the server replies with a textual {@code FAILED:}
+     * payload; this method logs a warning and returns {@code null} so
+     * callers can fall back to an uncorrected snap.
+     *
+     * @return FrameData record, or null if no frame is available or the
+     *         server could not apply correction
+     * @throws IOException if communication itself fails
+     */
+    public qupath.ext.qpsc.ui.liveviewer.FrameData getCorrectedFrame() throws IOException {
+        synchronized (auxSocketLock) {
+            ensureAuxConnected();
+
+            try {
+                auxOutput.write(Command.CORRECTFRAME.getValue());
+                auxOutput.flush();
+
+                // Sniff the first byte: if it's an ASCII letter (e.g. 'F' for
+                // FAILED), this is a textual error response. Otherwise it's
+                // the high byte of the big-endian width int in a normal frame
+                // header. Camera widths are 4 bytes; even 1-megapixel frames
+                // have width 1024, so the high byte is small (0x00..0x10).
+                int peek = auxInput.read();
+                if (peek < 0) {
+                    throw new IOException("Aux socket closed during CORRECTFRAME");
+                }
+                if (peek >= 0x40) {
+                    // Probable text response. Drain the rest of the line and
+                    // up to a small upper bound to avoid hanging on a server
+                    // that does not terminate the reply.
+                    StringBuilder sb = new StringBuilder();
+                    sb.append((char) peek);
+                    int available = Math.min(auxInput.available(), 1024);
+                    for (int i = 0; i < available; i++) {
+                        int b = auxInput.read();
+                        if (b < 0) break;
+                        sb.append((char) b);
+                    }
+                    String msg = sb.toString().trim();
+                    logger.warn("CORRECTFRAME failed: {}", msg);
+                    return null;
+                }
+
+                // Read the rest of the 20-byte header (5 big-endian int32s).
+                byte[] rest = new byte[19];
+                auxInput.readFully(rest);
+                byte[] header = new byte[20];
+                header[0] = (byte) peek;
+                System.arraycopy(rest, 0, header, 1, 19);
+
+                ByteBuffer headerBuf = ByteBuffer.wrap(header).order(ByteOrder.BIG_ENDIAN);
+                int width = headerBuf.getInt();
+                int height = headerBuf.getInt();
+                int channels = headerBuf.getInt();
+                int bytesPerPixel = headerBuf.getInt();
+                int dataLength = headerBuf.getInt();
+
+                if (width == 0) {
+                    return null;
+                }
+
+                byte[] pixelData = new byte[dataLength];
+                auxInput.readFully(pixelData);
+
+                return new qupath.ext.qpsc.ui.liveviewer.FrameData(
+                        width, height, channels, bytesPerPixel, pixelData, System.currentTimeMillis());
+
+            } catch (IOException e) {
                 cleanupAuxiliary();
                 throw e;
             }

@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-*No unreleased changes.*
+### Added
+
+**Live Viewer**
+- **Snap button**: Capture and save the current live frame as an OME-TIFF with embedded metadata (stage position, pixel size, modality, objective, detector). Right-click context menu for options: save raw bit depth (default ON), apply background correction (default OFF, greyed out unless settings match), open file after save (default OFF), and reset save folder to project.
+
+**Socket protocol**
+- `CORRECTFRAME` command: Request a flat-field-corrected frame from the server using the configured background settings for the current modality, objective, detector, WB mode, and rotation angle. Same wire format as `GETFRAME` on success; returns `FAILED:<reason>` on configuration mismatches.
 
 ## [0.5.0] - 2026-05-07
 

@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import javafx.application.Platform;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -113,9 +114,24 @@ public class LiveViewerWindow {
     // Latest frame for cursor pixel readout (works even when not streaming)
     private volatile FrameData lastFrame;
 
+    // Snap button gate: latches true once at least one frame has been
+    // received from the server. Combined with liveActive in the binding so
+    // the Snap button is disabled when Live is OFF (avoids saving stale
+    // 30-minute-old buffer) and before the first frame arrives.
+    private final SimpleBooleanProperty hasFreshFrame = new SimpleBooleanProperty(false);
+    private final SimpleBooleanProperty liveActiveProperty = new SimpleBooleanProperty(false);
+
     // Thread pools
     private ScheduledExecutorService framePoller;
     private ExecutorService histogramExecutor;
+
+    /**
+     * Single-thread executor for OME-TIFF writes triggered by the Snap
+     * button. Separate from {@link #histogramExecutor} so a slow disk write
+     * cannot stall the histogram update cadence. BioFormats TiffWriter is
+     * not thread-safe, so this executor is single-threaded by design.
+     */
+    private ExecutorService snapIoExecutor;
 
     // FPS tracking
     private final AtomicInteger frameCount = new AtomicInteger(0);
@@ -185,6 +201,21 @@ public class LiveViewerWindow {
     }
 
     /**
+     * Lazily create the Snap-write executor. Daemon thread so it doesn't
+     * block JVM shutdown if a write is in flight.
+     */
+    private synchronized ExecutorService getOrCreateIoExecutor() {
+        if (snapIoExecutor == null) {
+            snapIoExecutor = Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "LiveViewer-SnapIO");
+                t.setDaemon(true);
+                return t;
+            });
+        }
+        return snapIoExecutor;
+    }
+
+    /**
      * Reconcile local liveActive + button visuals with the authoritative
      * streaming state reported by the socket client. Called from the
      * streamingActiveProperty listener so any path that stops/starts
@@ -195,6 +226,7 @@ public class LiveViewerWindow {
             return;
         }
         liveActive = nowActive;
+        liveActiveProperty.set(nowActive);
         updateLiveButtonStyle(nowActive);
         updateStatus(nowActive ? "Live ON" : "Live OFF");
         logger.info("Live button synced to server streaming state: {}", nowActive ? "ACTIVE" : "INACTIVE");
@@ -345,6 +377,7 @@ public class LiveViewerWindow {
             logger.warn("Failed to stop QPSC Live Viewer streaming: {}", e.getMessage());
         }
         instance.liveActive = false;
+        instance.liveActiveProperty.set(false);
         instance.lastFrameArrivalTime = 0;
         // Cosmetic UI update -- non-blocking
         Platform.runLater(() -> {
@@ -417,6 +450,7 @@ public class LiveViewerWindow {
             final boolean activeNow = started;
             final String reason = failureReason;
             instance.liveActive = activeNow;
+            instance.liveActiveProperty.set(activeNow);
             Platform.runLater(() -> {
                 if (instance == null) return;
                 instance.updateLiveButtonStyle(activeNow);
@@ -826,6 +860,17 @@ public class LiveViewerWindow {
         stageControlToggle.setStyle("-fx-font-size: 11px;");
         stageControlToggle.setTooltip(new Tooltip("Show/hide stage control panel"));
 
+        // Snap button: captures current frame, opens file save dialog, writes
+        // OME-TIFF (BG correction routed through CORRECTFRAME socket command
+        // when requested and settings match). Right-click for options.
+        Button snapButton = SnapAction.create(
+                () -> lastFrame,
+                contrastSettings,
+                getOrCreateIoExecutor(),
+                hasFreshFrame,
+                liveActiveProperty,
+                this::updateStatus);
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
@@ -838,6 +883,7 @@ public class LiveViewerWindow {
                 streamingFocusButton,
                 focusRangeCombo,
                 showTilesCheckBox,
+                snapButton,
                 spacer,
                 stageControlToggle,
                 scaleLabel,
@@ -1007,6 +1053,7 @@ public class LiveViewerWindow {
                         // Update state and UI on FX thread
                         Platform.runLater(() -> {
                             liveActive = newState;
+                            liveActiveProperty.set(newState);
                             updateLiveButtonStyle(newState);
                             liveToggleButton.setDisable(false);
                             updateRefineFocusButtonState();
@@ -1487,6 +1534,9 @@ public class LiveViewerWindow {
 
             // Frame arrived -- track arrival time and reset recovery counter
             lastFrame = frame;
+            if (!hasFreshFrame.get()) {
+                Platform.runLater(() -> hasFreshFrame.set(true));
+            }
             lastFrameArrivalTime = System.currentTimeMillis();
             if (recoveryAttempts > 0) {
                 logger.info("Frames restored after {} recovery attempt(s)", recoveryAttempts);
@@ -1601,6 +1651,7 @@ public class LiveViewerWindow {
             // Recovery exhausted -- turn off so the button stops lying
             logger.warn("No frames for {}ms, recovery exhausted -- turning live OFF", sinceLast);
             liveActive = false;
+            liveActiveProperty.set(false);
             try {
                 controller.stopContinuousAcquisition();
             } catch (IOException ex) {
@@ -2146,6 +2197,10 @@ public class LiveViewerWindow {
             histogramExecutor.shutdownNow();
             histogramExecutor = null;
         }
+        if (snapIoExecutor != null) {
+            snapIoExecutor.shutdown();
+            snapIoExecutor = null;
+        }
 
         // Stop stage control panel (joystick executor)
         if (stageControlPanel != null) {
@@ -2164,6 +2219,7 @@ public class LiveViewerWindow {
                 logger.warn("Failed to stop continuous acquisition: {}", e.getMessage());
             }
             liveActive = false;
+            liveActiveProperty.set(false);
         }
 
         // Close window

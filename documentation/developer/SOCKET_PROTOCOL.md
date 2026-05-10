@@ -213,8 +213,17 @@ ENDOFSTR
 | GETLIVE | `getlive_` | none | 1 byte: 0/1 |
 | SETLIVE | `setlive_` | 1 byte: 0/1 | 8-byte ack |
 | GETFRAME | `getframe` | none | image metadata + pixel data |
+| CORRECTFRAME | `crctfram` | none | image metadata + pixel data, or `FAILED:<reason>` |
 | STRTSEQ | `strtseq_` | none | 8-byte ack |
 | STOPSEQ | `stopseq_` | none | 8-byte ack |
+
+#### CORRECTFRAME
+
+Same wire format as `GETFRAME` on success (20-byte big-endian header followed by raw pixel bytes); the server applies flat-field correction using the background image for the current rotation angle before sending. On any configuration failure -- no `imageprocessing_<scope>.yml` peer file, modality not enabled in `background_correction`, missing per-angle background, shape mismatch -- the server sends a textual `FAILED:<reason>` payload instead, so the Java client can fall back to an uncorrected snap with a clear status message.
+
+Java is expected to have already validated settings-match (modality / objective / detector / WB mode / current angle) via `BackgroundSettingsReader.findBackgroundSettings(...)` + `ModalityHandler.validateBackgroundSettings(...)` before issuing this command -- the same pre-flight `AcquisitionConfigurationBuilder` runs for ACQUIRE. The server-side check is a second line of defense for racy YAML edits during a session, not the primary gate.
+
+The Live Viewer's right-click "Apply background correction" menu item routes through this command; clicking Snap with the option ticked sends `CORRECTFRAME` and writes the corrected pixels to the user's chosen OME-TIFF.
 
 ### Calibration & Testing
 
