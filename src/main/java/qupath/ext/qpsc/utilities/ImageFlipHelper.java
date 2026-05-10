@@ -285,12 +285,23 @@ public final class ImageFlipHelper {
 
     /**
      * Switch the QuPath viewer to {@code targetEntry} and complete
-     * {@code future} when the open is initiated. Performs the open on
-     * the FX thread.
+     * {@code future} when the open is initiated. Always defers to a
+     * later FX pulse via {@link Platform#runLater(Runnable)}.
+     *
+     * <p>Why always-defer (not "run now if on FX thread"): callers may
+     * arrive inside a JavaFX animation pulse -- e.g. when this is a
+     * synchronous continuation of a CompletableFuture completed by
+     * {@code ProjectHelper.setupProject}'s post-creation Timeline.
+     * {@code QuPathGUI.openImageEntry} calls {@code checkSaveChanges},
+     * which calls {@code Dialogs.showAndWait}; JavaFX throws
+     * "showAndWait is not allowed during animation or layout
+     * processing" if invoked inside a pulse, and the dialog returns
+     * null, causing an NPE in {@code Optional.orElse}. Deferring puts
+     * the open on the next pulse where modal dialogs are legal.
      */
     private static void switchOpenEntry(
             QuPathGUI gui, ProjectImageEntry<BufferedImage> targetEntry, CompletableFuture<Boolean> future) {
-        Runnable action = () -> {
+        Platform.runLater(() -> {
             try {
                 gui.refreshProject();
                 gui.openImageEntry(targetEntry);
@@ -300,11 +311,6 @@ public final class ImageFlipHelper {
                 logger.error("Failed to switch open entry to '{}'", targetEntry.getImageName(), e);
                 future.completeExceptionally(e);
             }
-        };
-        if (Platform.isFxApplicationThread()) {
-            action.run();
-        } else {
-            Platform.runLater(action);
-        }
+        });
     }
 }
