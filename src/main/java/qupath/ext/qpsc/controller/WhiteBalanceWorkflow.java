@@ -13,8 +13,11 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.QPScopeChecks;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.WhiteBalanceDialog;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 
 /**
@@ -146,6 +149,16 @@ public class WhiteBalanceWorkflow {
 
                         confirm.showAndWait().ifPresent(response -> {
                             if (response == ButtonType.OK) {
+                                String wbObjective = result.isSimple()
+                                        ? result.getSimpleParams().objective()
+                                        : result.getPPMParams().objective();
+                                String wbDetector = result.isSimple()
+                                        ? result.getSimpleParams().detector()
+                                        : result.getPPMParams().detector();
+                                if (!validateObjectiveBeforeCalibration(wbObjective, wbDetector, result.isSimple())) {
+                                    logger.info("White balance cancelled by objective pixel-size mismatch");
+                                    return;
+                                }
                                 if (result.isSimple()) {
                                     runSimpleCalibration(client, result.getSimpleParams());
                                 } else {
@@ -164,6 +177,30 @@ public class WhiteBalanceWorkflow {
                     });
                     return null;
                 });
+    }
+
+    /**
+     * Blocks calibration if MicroManager's pixel size disagrees with the chosen objective.
+     * The dialog's objective drives which YAML key the calibration is written under -- a mismatch
+     * means we'd silently store calibration values for the wrong magnification.
+     */
+    private static boolean validateObjectiveBeforeCalibration(String objective, String detector, boolean isSimple) {
+        if (objective == null || detector == null) {
+            return true;
+        }
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+            Double configPx = mgr.getHardwarePixelSize(objective, detector);
+            if (configPx == null || configPx <= 0.0) {
+                return true;
+            }
+            String modality = isSimple ? "white-balance (simple)" : "white-balance (PPM)";
+            return QPScopeChecks.validateObjectivePixelSize(objective, detector, modality, configPx);
+        } catch (Exception ex) {
+            logger.warn("Could not validate pixel size before WB calibration: {}", ex.getMessage());
+            return true;
+        }
     }
 
     /**

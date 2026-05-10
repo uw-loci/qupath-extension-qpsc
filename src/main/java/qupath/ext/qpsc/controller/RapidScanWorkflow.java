@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.basicstitching.workflow.StitchingWorkflow;
+import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.components.ObjectiveSelector;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -396,6 +397,17 @@ public class RapidScanWorkflow {
             double pxSize = fovState.pixelSize;
             double fovW = fovState.fovW;
             double fovH = fovState.fovH;
+
+            // Block if MicroManager's active pixel size disagrees with the chosen objective.
+            String selectedObj = objectiveCombo.getValue();
+            String selectedDet = detectorCombo.getValue();
+            if (selectedObj != null
+                    && selectedDet != null
+                    && !QPScopeChecks.validateObjectivePixelSize(selectedObj, selectedDet, "brightfield", pxSize)) {
+                statusLabel.setText("Workflow cancelled -- objective mismatch.");
+                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                return;
+            }
 
             startBtn.setDisable(true);
             statusLabel.setText("Scanning...");

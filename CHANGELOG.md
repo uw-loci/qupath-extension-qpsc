@@ -68,6 +68,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `MicroscopeAlignmentWorkflow` (standalone) now prefers `PersistentPreferences.getSelectedAnnotationClasses()` for tiling, with Tissue / valid-class fallback chain. Removed the silent "all annotations regardless of class" fallback that produced noisy / overlapping tile grids.
 - Existing Image Workflow's single-tile refinement prompt now reports the count and class names of annotations being tiled.
 
+**Objective pixel-size mismatch is a hard cancel across all acquisition workflows**
+- Threshold lowered from 25% to 5%. Adjacent magnifications differ by 2x, so 5% is wide enough to absorb calibration drift but narrow enough to catch any user-induced mismatch (turret moved without updating the wizard, etc.).
+- Removed the "Continue anyway?" confirm. On mismatch the workflow always cancels; user fixes MM or the wizard dropdown and restarts.
+- Warning dialog enlarged (620-720 px wide, monospace body) and now lists the wizard objective + expected pixel size, MM-reported pixel size, the closest configured objective for MM's value (so the user immediately sees what MM probably has active), modality, detector, diff percent, plain-language consequences, and the fix.
+- Gate now wired through Existing Image, Bounded Acquisition, Forward Propagation (offline-only -- gate is N/A there but documented), Microscope Alignment, Rapid Scan, WB Comparison, White Balance, and Background Collection. The previous code only checked Existing Image and Bounded; the others could silently produce gap-mosaics or write per-objective calibrations under the wrong magnification key.
+
 **Other**
 - Tile-handling preference (Delete / Zip / Keep) now actually runs after the Existing Image Workflow finishes stitching. The cleanup was previously only wired into `BoundedAcquisitionWorkflow`, so existing-image runs left their `tempTileDirectory` in place regardless of the preference. Both workflows now share `TileCleanupHelper.performCleanup`, and the Zip path only deletes originals if zipping succeeded. Background-correction tiles live in a separate config-specified folder and are unaffected.
 - Live Viewer focus range dropdown options 6-40um (was truncated 1-20um).
@@ -78,6 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- New `documentation/developer/WORKFLOW_DATA_FLOW.md` maps every acquisition workflow's read/compare/write/gate behavior. Required reading before changing any workflow's information flow.
 - New `documentation/developer/COORDINATE_TRANSFORMS.md` is now authoritative for the flip pipeline.
 - `documentation/developer/SOCKET_PROTOCOL.md` includes a full SIFTAL flag reference.
 - `documentation/PREFERENCES.md` covers all SIFT bit-depth normalization knobs.

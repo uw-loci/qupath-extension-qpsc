@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
+import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
@@ -142,6 +143,27 @@ public class BackgroundCollectionWorkflow {
                 angleExposures.size(),
                 wbMode,
                 detector);
+
+        // Block if MicroManager's pixel size disagrees with the chosen objective. The output
+        // folder structure encodes the objective magnification; a mismatch would file the
+        // background for the wrong magnification and silently corrupt later acquisitions that
+        // load it.
+        if (objective != null && detector != null) {
+            try {
+                String configFileLocation0 = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                var configManager0 = MicroscopeConfigManager.getInstance(configFileLocation0);
+                Double configPx = configManager0.getHardwarePixelSize(objective, detector);
+                if (configPx != null
+                        && configPx > 0.0
+                        && !QPScopeChecks.validateObjectivePixelSize(objective, detector, modality, configPx)) {
+                    logger.info("Background collection cancelled by objective pixel-size mismatch");
+                    return;
+                }
+            } catch (Exception ex) {
+                logger.warn("Could not validate pixel size before background collection: {}", ex.getMessage());
+                // Non-fatal -- proceed
+            }
+        }
 
         // Stop live viewer before background acquisition -- the server will snap images
         // which stops continuous acquisition at the hardware level. Without this, the

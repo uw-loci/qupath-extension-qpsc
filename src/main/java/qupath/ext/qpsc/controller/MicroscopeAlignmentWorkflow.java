@@ -16,6 +16,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -1106,6 +1107,23 @@ public class MicroscopeAlignmentWorkflow {
             String modeWithIndex,
             boolean stageInvertedX,
             boolean stageInvertedY) {
+
+        // Block alignment-tile creation if MicroManager's pixel size disagrees with the
+        // sample-setup objective. Tile FOV is computed from the chosen objective; a mismatch
+        // would lay out alignment tiles at the wrong stride.
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+            double configPx = mgr.getPixelSize(sampleSetup.objective(), sampleSetup.detector());
+            if (!QPScopeChecks.validateObjectivePixelSize(
+                    sampleSetup.objective(), sampleSetup.detector(), sampleSetup.modality(), configPx)) {
+                logger.info("Alignment cancelled by objective pixel-size mismatch");
+                return;
+            }
+        } catch (Exception ex) {
+            logger.warn("Could not validate pixel size before alignment tiling: {}", ex.getMessage());
+            // Non-fatal -- proceed with alignment
+        }
 
         try {
             // Delegate to TilingUtilities with explicit stage inversion parameters

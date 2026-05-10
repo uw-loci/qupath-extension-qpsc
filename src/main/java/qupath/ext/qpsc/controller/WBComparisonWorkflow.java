@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
@@ -130,6 +131,12 @@ public class WBComparisonWorkflow {
                 objective,
                 detector,
                 pixelSize);
+
+        // Block if MicroManager's active pixel size disagrees with the resolved objective.
+        if (!QPScopeChecks.validateObjectivePixelSize(objective, detector, modality, pixelSize)) {
+            logger.info("WB comparison cancelled by objective pixel-size mismatch");
+            return;
+        }
 
         // Get FOV (frame size in microns)
         double[] fov = configManager.getModalityFOV(modality, objective, detector);
