@@ -46,7 +46,8 @@ The Autofocus button changes appearance to communicate status:
 | Running | Label "Scanning...", disabled | Server is executing streaming autofocus | Hidden, disabled |
 | Success | Returns to "Autofocus" | Focus found and committed | Hidden |
 | Exposure too long | **Red** background | Client-side pre-check: exposure > ~40 ms | **Visible** |
-| Server unavailable | **Orange** background, label "NO FOCUS" | Server pre-flight gate refused (see below) | **Visible** |
+| Too many saturated pixels | Returns to "Autofocus", info dialog appears | Camera overexposed; saturation gate refused | **Visible** + info dialog |
+| Server unavailable | **Orange** background, label "NO FOCUS" | Server pre-flight gate refused (other reasons; see below) | **Visible** |
 | Error | **Red** background, label "FAILED" | Mid-scan error on server | **Visible** |
 
 After a successful Autofocus run, the Sweep Focus button is hidden again. It only appears when Autofocus cannot run.
@@ -61,7 +62,7 @@ If the exposure check passes, the server checks three additional pre-flight gate
 
 - **Stage speed property**: focus device must expose `MaxSpeed`, `Velocity`, `Speed`, or `MaxVelocity`. Piezo stages and demo adapters typically do not.
 - **Motion blur budget**: `min_velocity * exposure` must stay under ~0.5 um (25% of a nominal 20X DOF). On a Prior at MaxSpeed=1 (~11.5 um/s), the per-stage exposure ceiling is ~43 ms. Longer exposures (dark fluorescence, low-angle PPM) will refuse.
-- **Saturation**: fewer than 5% of pixels in a pre-scan snap may be saturated, or the focus metric will not discriminate.
+- **Saturation**: the saturated-pixel fraction in a pre-scan snap must be below a per-modality threshold (brightfield 50%, PPM 5%, fluorescence/widefield 2%, laser-scanning/SHG 1%) or the focus metric will not discriminate. When saturation is detected, an info dialog appears: *"Autofocus: too many saturated pixels -- reduce exposure or gain, then try again."*
 
 #### Slope without peak
 

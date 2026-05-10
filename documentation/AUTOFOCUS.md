@@ -133,7 +133,7 @@ Autofocus is **opt-in with a graceful fallback**. Before running, the client che
 |---|---|---|
 | Stage speed property | `MaxSpeed`, `Velocity`, `Speed`, or `MaxVelocity` exists and is writable on the focus device | Piezo stages without a velocity knob; demo adapters |
 | **Motion blur budget** | `expected_blur = min_velocity * exposure_ms` must be within 25% of DOF (~0.5 um default) | Long exposures on slow stages -- e.g., above ~43 ms on Prior at MaxSpeed=1 |
-| Saturation | Fewer than 5% of pixels saturated in a pre-scan snap | Camera overexposed -- metric would not discriminate |
+| Saturation | Saturated-pixel fraction below the per-modality threshold (brightfield 50%, PPM 5%, fluorescence/widefield 2%, laser-scanning/SHG 1%) | Camera overexposed -- focus metric would not discriminate. User sees a notification: *"Autofocus: too many saturated pixels -- reduce exposure or gain, then try again."* |
 
 **Exposure pre-check (client-side).** Before contacting the server, the Live Viewer queries the current camera exposure. If it exceeds ~40 ms (the blur-budget ceiling on a Prior at MaxSpeed=1), the Autofocus button turns red, a warning dialog appears (with a "don't show again" checkbox), and the Sweep Focus fallback becomes visible. For JAI per-channel cameras (PPM), the check uses `max(unified, R, G, B)`. The user can still click Autofocus after adjusting exposure.
 
