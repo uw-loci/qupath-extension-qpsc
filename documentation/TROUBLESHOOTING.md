@@ -1,6 +1,6 @@
 # QPSC Troubleshooting Guide & FAQ
 
-**Last Updated:** March 16, 2026
+**Last Updated:** May 10, 2026
 **Target Audience:** Pathologists, researchers, and microscopy users
 **Skill Level:** All levels (clear explanations provided)
 
@@ -367,6 +367,22 @@ If matching still fails on a tile that visually overlaps the camera's live view:
 Drive the stage roughly close (a few hundred microns is enough) using the joystick, Live Viewer click-to-center, or the initial transform estimate before clicking SIFT. If you genuinely need a wider capture range, raise the search margin -- but matching cost grows with margin squared, so 300-400 um is a reasonable upper bound.
 
 ### Acquisition Problems
+
+#### Q: "Objective Pixel-Size Mismatch -- Workflow Cancelled" error
+
+**A:** The dialog shows that MicroManager's active objective does not match the wizard's selection. The tile grid is planned for the wizard's objective; if the actual objective in MicroManager is different, tiles will be spaced incorrectly and the mosaic will not be usable.
+
+**What the dialog shows:**
+- Wizard objective and expected pixel size
+- MicroManager's reported pixel size
+- The closest configured objective that matches MicroManager's value (so you can see what MM probably has active)
+- The difference percent (threshold is 5%)
+
+**To fix:**
+1. **Option A (recommended):** Change the objective in MicroManager to match what the wizard selected, then restart the workflow.
+2. **Option B:** Change the wizard's objective dropdown to match what is physically on the microscope, then restart the workflow.
+
+**Why this matters:** The previous version allowed a "Continue anyway?" but this produced gap-mosaics (empty space between tiles at 10x spacing while acquiring at 20x FoV) or silent calibration mismatch (White Balance and Background Collection write files under the wrong magnification key). The 5% threshold is tight enough to catch any user-induced mismatch (like a turret change) but wide enough to absorb calibration drift. A mismatch always cancels now; fixing it and restarting is the safe path.
 
 #### Q: Acquisition starts but no images appear
 
@@ -1678,5 +1694,5 @@ Do you have an overview image of your sample?
 ---
 
 **Document Version:** 1.2
-**Last Updated:** March 16, 2026
+**Last Updated:** May 10, 2026
 **GitHub:** https://github.com/uw-loci/qupath-extension-qpsc
