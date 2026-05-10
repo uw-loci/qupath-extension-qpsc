@@ -829,20 +829,25 @@ public class TileProcessingUtilities {
     }
 
     /**
-     * Recursively delete a folder and all its contents (files and subdirectories).
-     * Used for cleaning up temporary tile directories after stitching.
+     * Delete tile images (.tif / .tiff) under {@code folderPath} and prune any
+     * directories that become empty as a result. Files that are not raw tiles --
+     * notably {@code TileConfiguration.txt}, {@code TileConfiguration_QP.txt}, and
+     * any {@code acquisition_command_*.txt} -- are preserved so the acquisition
+     * remains auditable and re-stitchable. The root directory itself is always
+     * preserved.
      *
-     * <p>This method walks the directory tree in reverse order (deepest first),
-     * which allows subdirectories to be empty before their parent directories
-     * are deleted. Both files and directories are processed.
+     * <p>Used by the post-acquisition cleanup helper for both the "Delete" and
+     * "Zip" tile-handling preferences. The Zip path archives the full tree first
+     * and then calls into here, so metadata files survive in two places: inside
+     * the archive and on disk.
      *
-     * <p>This method will log warnings for items that cannot be deleted but
-     * will continue attempting to delete remaining items.
+     * <p>Walks bottom-up (deepest first). File deletions log at trace level,
+     * skipped non-tiles at trace level, and only failures escalate to error.
      *
-     * @param folderPath Path to the folder to delete
+     * @param folderPath Path to the temporary tile directory
      */
     public static void deleteTilesAndFolder(String folderPath) {
-        logger.info("Deleting folder and all contents: {}", folderPath);
+        logger.info("Deleting tile images under (metadata preserved): {}", folderPath);
 
         try {
             Path dir = Paths.get(folderPath);
@@ -852,27 +857,55 @@ public class TileProcessingUtilities {
                 return;
             }
 
-            // Count items for logging
-            long fileCount = Files.walk(dir).filter(Files::isRegularFile).count();
-            long dirCount = Files.walk(dir).filter(Files::isDirectory).count() - 1; // Exclude root
-            logger.info("Found {} files and {} subdirectories to delete", fileCount, dirCount);
+            long tileCount;
+            try (var s = Files.walk(dir)) {
+                tileCount = s.filter(Files::isRegularFile)
+                        .filter(TileProcessingUtilities::isRawTile)
+                        .count();
+            }
+            logger.info("Found {} tile image(s) to delete", tileCount);
 
-            // Walk in reverse order (deepest first) to delete files and then empty directories
-            // Using Comparator.reverseOrder() ensures children are processed before parents
-            Files.walk(dir).sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
-                try {
-                    Files.delete(p);
-                    logger.trace("Deleted: {}", p);
-                } catch (IOException ex) {
-                    logger.error("Failed to delete: {}", p, ex);
-                }
-            });
+            // Pass 1: delete only raw tile files.
+            try (var s = Files.walk(dir)) {
+                s.filter(Files::isRegularFile)
+                        .filter(TileProcessingUtilities::isRawTile)
+                        .forEach(p -> {
+                            try {
+                                Files.delete(p);
+                                logger.trace("Deleted tile: {}", p);
+                            } catch (IOException ex) {
+                                logger.error("Failed to delete tile: {}", p, ex);
+                            }
+                        });
+            }
 
-            logger.info("Successfully deleted folder and all contents: {}", folderPath);
+            // Pass 2: prune empty directories bottom-up, but never the root.
+            try (var s = Files.walk(dir)) {
+                s.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
+                    if (p.equals(dir)) return;
+                    if (!Files.isDirectory(p)) return;
+                    try (var entries = Files.list(p)) {
+                        if (entries.findAny().isEmpty()) {
+                            Files.delete(p);
+                            logger.trace("Pruned empty dir: {}", p);
+                        }
+                    } catch (IOException ex) {
+                        logger.error("Failed to prune dir: {}", p, ex);
+                    }
+                });
+            }
+
+            logger.info("Tile cleanup complete (metadata preserved): {}", folderPath);
 
         } catch (IOException ex) {
-            logger.error("Error deleting folder: {}", folderPath, ex);
+            logger.error("Error during tile cleanup in folder: {}", folderPath, ex);
         }
+    }
+
+    /** True for files that are raw acquisition tiles (.tif / .tiff, case-insensitive). */
+    private static boolean isRawTile(Path p) {
+        String name = p.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
+        return name.endsWith(".tif") || name.endsWith(".tiff");
     }
 
     /**

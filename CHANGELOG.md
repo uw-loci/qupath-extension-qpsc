@@ -76,6 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Other**
 - Tile-handling preference (Delete / Zip / Keep) now actually runs after the Existing Image Workflow finishes stitching. The cleanup was previously only wired into `BoundedAcquisitionWorkflow`, so existing-image runs left their `tempTileDirectory` in place regardless of the preference. Both workflows now share `TileCleanupHelper.performCleanup`, and the Zip path only deletes originals if zipping succeeded. Background-correction tiles live in a separate config-specified folder and are unaffected.
+- Tile cleanup ("Delete" and the post-zip step) now removes only `.tif` / `.tiff` files and prunes empty subdirectories. Previously it nuked the entire `tempTileDirectory` tree, taking `TileConfiguration.txt`, `TileConfiguration_QP.txt`, and `acquisition_command_*.txt` with it. Stitched OME-TIFFs in `SlideImages/` were unaffected, but per-region metadata needed for re-stitching or auditing was lost. Metadata files now survive in place; raw tiles still get removed.
 - Live Viewer focus range dropdown options 6-40um (was truncated 1-20um).
 - Sweep Focus rejects boundary peaks and requires 2 flanking samples for parabolic interpolation; suppresses early-stop on flat metric / peak-at-start.
 - Test Standard/Adaptive Autofocus stops live view before running (no more "AF metric is whatever the camera last streamed" artifacts).
