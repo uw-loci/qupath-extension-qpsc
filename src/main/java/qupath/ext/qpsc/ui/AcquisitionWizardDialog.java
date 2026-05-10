@@ -1342,6 +1342,18 @@ public class AcquisitionWizardDialog {
         alert.setContentText(msg.toString());
         alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.CANCEL);
 
+        // Default Alert width truncates the wrapped content past the
+        // "may produce" line. Match the sizing UIFunctions.notifyUserOfError
+        // uses so the multi-line warning fits without clipping.
+        alert.getDialogPane().setMinWidth(500);
+        alert.getDialogPane().setPrefWidth(600);
+        javafx.scene.control.Label contentLabel =
+                (javafx.scene.control.Label) alert.getDialogPane().lookup(".content");
+        if (contentLabel != null) {
+            contentLabel.setWrapText(true);
+            contentLabel.setMaxWidth(550);
+        }
+
         // Wizard is always-on-top; helper parents + raises the alert.
         var result = UIFunctions.showAlertOverParent(alert, wizardStage);
         if (result.isPresent() && result.get() == ButtonType.YES) {
