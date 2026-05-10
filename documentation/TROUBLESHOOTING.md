@@ -433,6 +433,19 @@ Drive the stage roughly close (a few hundred microns is enough) using the joysti
 - Check `n_steps` (number of focus steps) - should be 15-25 for most applications
 - Verify `search_range_um` covers your sample thickness variation
 
+#### Q: Live Viewer shows only the cropped center after streaming Autofocus refused
+
+**A:** Fixed 2026-05-08 (microscope_command_server commit `44b0ab0`). Streaming AF crops the camera ROI to the centered 50% before the pre-flight checks (saturation, blur budget) so the scan frames transfer fewer pixels. The matching `_restore_roi` call lived inside the outer try/finally that wraps the scan execution -- but the two `UNAVAILABLE` early returns (blur-budget exceeded, saturation > threshold) were OUTSIDE that try block and skipped the restore. The Live Viewer kept rendering the cropped center on every subsequent frame poll until the user toggled live off. Symptom: the live image suddenly shrinks to the center 50% in each dimension after the Autofocus button reports "NO FOCUS" or shows a saturation dialog. Both UNAVAILABLE branches now restore the ROI explicitly before returning. If you still see this on a current build (`44b0ab0` or later), capture the server log and check for `STREAM_AF:restored camera ROI to ...` after the UNAVAILABLE line.
+
+#### Q: Streaming Autofocus refuses with "metric range X% of peak is within noise"
+
+**A:** This is the `metric_flat` refusal, raised when the focus metric varies by less than 8% of the peak across the scanned Z range. Two distinct failure modes share this message:
+
+1. **The scan window is genuinely inside one depth-of-field.** Widen the range from the Live Viewer dropdown (try 20-40um for low-mag objectives -- the OWS3 10x cannot resolve a focus shift across less than ~6um) or fall back to Sweep Focus.
+2. **The stage is not actually moving at the configured slow speed.** As of 2026-05-05 (commit `a5e2b87`) the server logs `STREAM_AF:post-scan stage Z=... (expected z_end=...); achieved X% of planned Y um` after the scan loop. If `X%` is below 50% or above 150%, the warning line names the YAML key to fix: `stage.streaming_af.slow_speed_value` and `stage.streaming_af.slow_speed_um_per_s`. The same commit dumps the per-sample (t, z, metric) trace on the refusal path so you can confirm whether all samples are at one Z (stuck stage) or actually swept (featureless sample).
+
+The 6um floor on the new range dropdown (commit `8a82529`) was chosen because 1-5um targets are not useful at low mag -- a 20um sweep on the OWS3 10x is itself near the detection threshold.
+
 #### Q: Autofocus is too slow
 
 **A:** Reduce the number of autofocus positions:

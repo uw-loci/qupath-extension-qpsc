@@ -72,14 +72,23 @@ The initial autofocus for each annotation uses a thorough Z search:
 
 ### Focus Metrics
 
-| Metric | Speed | Best For |
-|--------|-------|----------|
-| `normalized_variance` | ~5ms | General purpose (recommended default) |
-| `laplacian_variance` | ~5ms | Strong edges and gradients |
-| `sobel` | ~5ms | Edge-based, good for sharp features |
-| `brenner_gradient` | ~3ms | Fastest, simple gradient |
-| `robust_sharpness` | ~20ms | Noisy backgrounds, particles |
-| `hybrid_sharpness` | ~8ms | Balanced multi-metric |
+The full registry lives in `microscope_configurations/focus_metrics_manifest.yml` (canonical) with bundled copies at `qupath-extension-qpsc/src/main/resources/focus/focus_metrics_manifest.yml` and `microscope_imageprocessing/microscope_imageprocessing/focus/_packaged_manifest.yml`. Both Java (editor dropdown, header generator) and Python (runtime dispatcher) read it. Edit the canonical file -- never hardcode metric names in code.
+
+| Metric | Speed | Best For | Constraints |
+|--------|-------|----------|-------------|
+| `tenengrad` | ~3ms | Brightfield, PPM tissue (streaming-AF default for tissue) | -- |
+| `laplacian_variance` | ~5ms | Lower-mag BF; **best for sparse fluorescence** (FISH spots, beads, scattered objects) | -- |
+| `brenner_gradient` | ~3ms | Fast checks, low-contrast / dark-field | -- |
+| `normalized_variance` | ~5ms | High-mag brightfield with non-uniform illumination | **BF/PPM only, 20x+** -- the var/mean ratio is illumination-dominated at low mag (the OWS3 BF 10x failure mode from 2026-05-01) and unstable on FL where both var and mean are noise-dominated |
+| `vollath_f5` | ~5ms | Fluorescence and other shot-noise-dominated samples; periodic structure | streaming-only path |
+| `sobel` | ~5ms | High-contrast edge-rich tissue | standard / strategy paths only |
+| `p98_p2` | ~3ms | Fallback metric (auto-computed alongside the primary in standard AF) | **modality-agnostic as a peak finder, NOT as a "higher = sharper" comparator** -- focus pulls p2 down on BF and pulls p98 up on FL, so the curve peaks in both cases but the sign and magnitude meanings flip |
+| `robust_sharpness_metric` | ~20ms | dense_texture strategy with bright-particle noise | strategy path only |
+| `hybrid_sharpness_metric` | ~8ms | dense_texture strategy on BF/PPM tissue | **BF/PPM only** -- the mid-gray soft mask weights mid-gray pixels highest, which actively suppresses fluorescence (sharper FL field -> lower score) |
+
+**Manifest-declared constraints:** the `valid_modalities` and `min_magnification` fields on each metric entry drive the editor dropdown's constraint badges (`[BF/PPM only]`, `[20x+]`) and the per-modality binding warning. Constraints are informational, not enforced -- operators retain the ability to pick a metric outside its declared range when they have reason. See `claude-reports/2026-05-10_focus-metric-modality-and-streaming-af-roi-restore.md` for the design.
+
+**Channel reduction is uniform across modalities.** All metrics see a 2D grayscale array produced by an equal-weighted color mean across channels (alpha dropped). RGB BF (JAI 3-CCD BGRA) is averaged across B/G/R; mono BF (Hamamatsu) and fluorescence are pass-through. The earlier BT.601 luminance reduction over-weighted G and let cover-slip features in R win on PPM eosin (z=83 instead of z=92); the equal-mean form was confirmed on the standard-AF path and applied to streaming AF on 2026-05-04 (commit `4f35859`).
 
 ### Peak Validation
 
@@ -276,12 +285,13 @@ modalities:
   confocal:    { strategy: dark_field }
 ```
 
-### The Four Strategies
+### The Five Shipped Strategies
 
 | Strategy | Validity Gate | Score Metric | Failure Mode | Target Modalities |
 |----------|---------------|--------------|--------------|-------------------|
-| `dense_texture` | Texture threshold + tissue area fraction (current behavior) | `laplacian_variance` | `DEFER` (skip tile, try next) | H&E, IHC, PPM, confluent IF, BF channel of BF+IF |
+| `dense_texture` | Texture threshold + tissue area fraction | `laplacian_variance` | `DEFER` (skip tile, try next) | H&E, IHC, PPM, confluent IF, BF channel of BF+IF |
 | `sparse_signal` | Bright-spot count using `bg_median + k*MAD` threshold (no area requirement) | `laplacian_variance` on the spot ROIs, fallback `brenner_gradient` | `PROCEED` (run AF anyway on whatever signal is present) | Sparse fluorescence (beads, pollen, scattered cells, FISH spots) |
+| `dense_fluorescence` | Whole-FOV gradient energy above a floor (`total_gradient_energy`) | `vollath_f5` -- autocorrelation form rejects shot noise | `PROCEED` | Confluent fluorescent signal (whole-cell IF, dense membrane stains, packed nuclei). Closes the gap where picking `dense_texture` for an FL binding inherited `laplacian_variance` and its sparse-FL weakness. Added 2026-05-08 (commits `c67bd14`, `bd535e9`, `447d4dd`). |
 | `dark_field` | Whole-FOV gradient energy above a minimum | `brenner_gradient` | `PROCEED` | SHG, LSM, 2P, confocal, dark-field contrast |
 | `manual_only` | Always returns invalid | -- | `MANUAL_DIALOG` (always pop the manual focus dialog) | User-requested manual focus |
 

@@ -34,7 +34,7 @@ The toolbar contains two focus buttons and a range selector:
 |---|---|---|
 | **Autofocus** | Always visible | Primary focus button. Sends a streaming autofocus command to the server (~1 second on PPM at 0.73 ms exposure). |
 | **Sweep Focus** | Hidden | Fallback. Stepped-Z autofocus with edge retry (up to 3 total attempts). Works on any camera and any stage. Includes automatic refinement as a final phase. |
-| **Range dropdown** | Always visible | `Auto / 1um / 2um / 5um / 10um / 20um`. "Auto" uses `sweep_range_um` from `autofocus_<scope>.yml`. Explicit values override the YAML. Both Autofocus and Sweep Focus use this selection. |
+| **Range dropdown** | Always visible | `Auto / 6um / 10um / 15um / 20um / 30um / 40um`. "Auto" uses `sweep_range_um` from `autofocus_<scope>.yml`. Explicit values override the YAML. Both Autofocus and Sweep Focus use this selection. The 6-40um range targets low-mag use cases on the OWS3 10x where 20um can fall inside one depth-of-field; the previous 1-20um set was widened on 2026-05-08 (commit `8a82529`). The combo width was bumped to fit a 3-character `<n>um` label without truncation. |
 
 #### Button state transitions
 
@@ -62,7 +62,7 @@ If the exposure check passes, the server checks three additional pre-flight gate
 
 - **Stage speed property**: focus device must expose `MaxSpeed`, `Velocity`, `Speed`, or `MaxVelocity`. Piezo stages and demo adapters typically do not.
 - **Motion blur budget**: `min_velocity * exposure` must stay under ~0.5 um (25% of a nominal 20X DOF). On a Prior at MaxSpeed=1 (~11.5 um/s), the per-stage exposure ceiling is ~43 ms. Longer exposures (dark fluorescence, low-angle PPM) will refuse.
-- **Saturation**: the saturated-pixel fraction in a pre-scan snap must be below a per-modality threshold (brightfield 50%, PPM 5%, fluorescence/widefield 2%, laser-scanning/SHG 1%) or the focus metric will not discriminate. When saturation is detected, an info dialog appears: *"Autofocus: too many saturated pixels -- reduce exposure or gain, then try again."*
+- **Saturation**: the saturated-pixel fraction in a pre-scan snap must be below a per-modality threshold (brightfield 50%, PPM 5%, fluorescence/widefield 2%, laser-scanning/SHG 1%) or the focus metric will not discriminate. When saturation is detected, an info dialog appears: *"Autofocus: too many saturated pixels -- reduce exposure or gain, then try again."* Both this gate and the blur-budget gate now restore the camera ROI before returning UNAVAILABLE -- prior to 2026-05-08 the cropped scan ROI was left in place and the Live Viewer kept rendering the cropped area on every subsequent frame poll until the user toggled live off. See `claude-reports/2026-05-10_focus-metric-modality-and-streaming-af-roi-restore.md`.
 
 #### Slope without peak
 
