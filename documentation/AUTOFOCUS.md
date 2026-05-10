@@ -217,7 +217,7 @@ When a tile scheduled for AF lands at the end of the position list (e.g. spatial
 
 ## Modality-Aware Autofocus
 
-**Status: COMPLETE -- 2026-04-15.** Both AF call sites in `workflow.py` (pre-acquisition validation and per-tile drift check) now route through `af_strategy.is_valid()` / `af_strategy.brightness_acceptable()`. The strategy's `StrategyFailureMode` (DEFER / PROCEED / MANUAL) drives the existing defer-to-next-tile / manual-focus-dialog dispatch. The autofocus editor GUI (Extensions > QP Scope > Utilities > Autofocus Configuration Editor) has been extended with two new tabs that expose the full v2 strategy library and modality bindings for editing. See `claude-reports/2026-04-13_modality-aware-autofocus-design.md` for the original design and decision log.
+**Status: COMPLETE -- 2026-04-15.** Both AF call sites in `workflow.py` (pre-acquisition validation and per-tile drift check) now route through `af_strategy.is_valid()` / `af_strategy.brightness_acceptable()`. The strategy's `StrategyFailureMode` (DEFER / PROCEED / MANUAL) drives the existing defer-to-next-tile / manual-focus-dialog dispatch. The autofocus editor GUI (Extensions > QP Scope > Utilities > Autofocus Configuration Editor) has been extended with two new tabs that expose the full v2 strategy library and modality bindings for editing. This redesign was driven by autofocus failures on sparse-fluorescence samples (pollen, beads, FISH) where the old `has_sufficient_tissue` area gate was the wrong question to ask.
 
 ### Why
 

@@ -335,7 +335,7 @@ The optional `:dump=<path>` suffix is appended to any response when `--dump` was
 - `attempt_N/samples.csv` — CSV with columns (idx, wall_ms, z_assumed_um, z_actual_um, metric)
 - `attempt_N/manifest.json` — metadata (scan parameters, fit results, etc.)
 
-See `handlers/streaming_focus.py` and `claude-reports/2026-04-14_smooth-focus-design-and-probez-tooling.md` for the design rationale and PPM characterization results.
+See `handlers/streaming_focus.py` for the implementation.
 
 ### System
 

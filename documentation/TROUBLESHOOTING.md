@@ -327,8 +327,6 @@ Observe which direction the physical stage actually moves. If it moves in the la
 - `NORMAL`, `FLIP_H`, `FLIP_V`, `ROT_180` are the four axis-aligned values. These work everywhere, including the stitcher.
 - `ROT_90_CW`, `ROT_90_CCW`, `TRANSPOSE`, `ANTI_TRANSPOSE` are the rotation/transpose cases for scopes whose camera sensor is physically rotated 90°. The Live Viewer gestures work with them, but the stitcher does NOT fully support them — stitched output will be mis-oriented and a warning will be logged. If you actually have a rotated camera, file an issue and request full rotation support.
 
-**Design doc:** `claude-reports/2026-04-09_stage-image-transform-refactor.md`
-
 #### Q: Coordinate transformation fails - "No valid transformation found"
 
 **A:** The alignment calibration needs more data points:
@@ -1377,7 +1375,7 @@ python -m microscope_command_server.server --port 5000
 - **Saved preset isn't picked up after running alignment without clicking Reload:** older builds (before commit `2c5d7c1`, 2026-05-01) cached `activePreset` in memory. Pull the latest extension; the post-save image-change handler now re-resolves from disk.
 - **Macro overlay Y orientation disagrees with the Live Viewer:** known cosmetic mismatch on instruments without an explicit `slide_holder` / `inserts:` block in the YAML. The cursor positions correctly across the slide, but the macro IMAGE itself may render Y-mirrored from what the camera shows. This does not affect alignment correctness or stage moves; it's a display-only discrepancy between the scanner's macro Y direction and the camera's Y direction. Adding a measured `inserts:` block to the YAML lets `fromConfigMap` detect axis inversion from aperture corners and resolves it.
 
-**Background:** The Stage Map macro overlay placement, the `stageToScreen` direction used by the cursor, and the saved `macro->stage` transform must all agree on stage Y direction. The full layering is documented in `claude-reports/2026-05-01_stagemap-anchor-overlay-and-synthesized-insert.md` and the YAML/preference table in `claude-reports/2026-03-10_coordinate-system-terminology-standardization.md`.
+**Background:** Three things must agree on stage Y direction for an instrument's overlay to look right: (1) hardware stage polarity (`stageInvertedY` preference -- which way the stage moves on positive commands); (2) macro image display orientation (driven by the slide-holder `inserts:` block when measured, otherwise unspecified and assumed normal); (3) the saved `macro->stage` alignment transform. The cursor uses (1)+(3) and is therefore correct regardless of (2). The macro image rendering uses (2). When the YAML has no measured `inserts:` block, (2) defaults to "no flip" while the actual scanner Y direction may differ -- producing a cosmetic Y mirror in the macro image while cursor and stage moves remain correct. Adding a measured `inserts:` block lets the system detect axis inversion from aperture corners and resolves the cosmetic mismatch.
 
 ---
 

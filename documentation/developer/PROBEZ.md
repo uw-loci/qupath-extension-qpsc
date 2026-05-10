@@ -172,8 +172,6 @@ just a convenience wrapper.
 - `handlers/streaming_focus.py` uses the same pixel and metric helpers,
   and its pre-flight checks mirror the feasibility gates that
   PROBEZ step 5 validates.
-- `claude-reports/2026-04-14_smooth-focus-design-and-probez-tooling.md`
-  has the full design story and results from the PPM runs
   that shaped both PROBEZ and Streaming Autofocus.
 - `documentation/AUTOFOCUS.md` user-facing doc for the Live
   Viewer Streaming Autofocus button.
