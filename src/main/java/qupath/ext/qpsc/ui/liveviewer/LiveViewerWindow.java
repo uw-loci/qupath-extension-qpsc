@@ -1361,7 +1361,25 @@ public class LiveViewerWindow {
                                 || lower.contains("depth-of-field")
                                 || lower.contains("metric_flat");
 
-                        if (signalDead || !liveActive) {
+                        // Saturation refusals come from the pre-flight
+                        // check in streaming_focus.py. Silently falling
+                        // through to Sweep Focus would re-run an
+                        // identical check and fail the same way -- and
+                        // the user has no idea why their click did
+                        // nothing. Match the unique "saturated" token.
+                        boolean saturated = lower.contains("saturated");
+
+                        if (saturated) {
+                            sweepFocusButton.setVisible(true);
+                            sweepFocusButton.setManaged(true);
+                            String headline = "Autofocus: too many saturated pixels";
+                            Dialogs.showInfoNotification(
+                                    headline,
+                                    reason
+                                            + "\n\nStage left at current Z. "
+                                            + "Reduce exposure or gain, then try again.");
+                            updateStatus(headline + " -- stage left at current Z");
+                        } else if (signalDead || !liveActive) {
                             // Stage stays where it is. Show an explicit
                             // "Sweep Focus" button so the user can opt in
                             // manually if they believe a stepped scan
