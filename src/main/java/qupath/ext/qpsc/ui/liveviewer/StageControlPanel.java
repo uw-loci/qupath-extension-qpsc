@@ -3481,14 +3481,17 @@ public class StageControlPanel extends VBox {
         // Try sub-image alignment first.
         // Sub-images from BoundingBox acquisitions have their own pixel-to-stage
         // alignment registered by autoRegisterBoundsTransformIfAvailable(). This
-        // is the most accurate path -- use it when available.
+        // is the most accurate path -- use it when available. Sub-frame transforms
+        // live in alignmentFiles/derived/ as of Layer 3 of the 2026-05-11 lookup
+        // restructure; loadDerivedAlignment also falls back to the flat directory
+        // for backward compatibility with pre-restructure projects.
         if (gui.getProject() != null) {
             try {
                 @SuppressWarnings("unchecked")
                 Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
                 String subImageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
                 if (subImageName != null && !subImageName.isEmpty()) {
-                    AffineTransform subAlignment = AffineTransformManager.loadSlideAlignment(project, subImageName);
+                    AffineTransform subAlignment = AffineTransformManager.loadDerivedAlignment(project, subImageName);
                     if (subAlignment != null) {
                         double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
                                 new double[] {centroidX, centroidY}, subAlignment);

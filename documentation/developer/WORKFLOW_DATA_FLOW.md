@@ -28,6 +28,8 @@ workflow; update it when the data flow changes.
 | Optical flip (per scope pair) | `TransformPreset.flipMacroX/Y` (saved alignment preset) and per-slide alignment JSON | NOT per-entry metadata. See `claude-reports/design/2026-05-07_step-b-flipped-duplicate-restoration.md` |
 | Stage polarity | Stage-polarity preference (auto-detected once per scope) | Independent of optical flip |
 | Source scanner of an entry | `source_microscope` per-entry metadata | Set at import time |
+| Alignment-JSON pixel frame | `pixelFrame` field in each alignment JSON: `"macro"` or `"sub"` | Macro = transform scale equals macro image pixel size (canonical workflow input). Sub = transform scale equals the sub-image's own pixel calibration (Live Viewer Go-To-Centroid input). Workflows operating on macro-frame annotations refuse `"sub"` at load. Legacy JSONs without the field default to `"macro"`. |
+| Parent macro of a sub-image entry | `base_image` per-entry metadata (set at import) | Workflow paths resolve this via `AlignmentHelper.resolveMacroLookupKey` before any alignment lookup, so a sub-image entry never causes its own alignment JSON to be picked up. |
 
 The wizard's objective dropdown is **always** the source of truth for the
 workflow's geometry. MM's reported pixel size is only used to detect
@@ -62,6 +64,24 @@ Property Browser, future code paths, regressions). Behavior:
 The 5% threshold is in `QPScopeChecks.CAMERA_ROI_MISMATCH_THRESHOLD`. Same
 dialog plumbing as the pixel-size gate; FX-thread-safe.
 
+### 1b. Alignment pixel-frame (`AlignmentHelper.checkForSlideAlignment`)
+
+Layer 2 of the 2026-05-11 alignment-lookup restructure. Catches the case where
+the lookup somehow returns a sub-frame transform when the workflow needs a
+macro-frame one (e.g. a sub-image JSON ending up at the macro filename via
+external editing, or a future regression in Layer 1's `base_image` resolution).
+
+1. After the lookup-key resolution and the JSON read, inspect
+   `SlideAlignmentResult.getPixelFrame()`.
+2. If anything other than `"macro"`, log an error and show a hard-cancel
+   dialog explaining that the loaded transform is in the wrong frame, what
+   the lookup key was, and how to fix it (open the macro entry, restart).
+3. Return `null` from the workflow's alignment check so the caller aborts.
+
+Legacy JSONs that don't carry the field load as `"macro"` by default. The
+gate cannot fire for them, which is correct -- they predate sub-image
+auto-registration. Only `StitchingHelper`'s auto-register writes `"sub"`.
+
 ### 2. Objective pixel size (`QPScopeChecks.validateObjectivePixelSize`)
 
 1. If MM is unreachable or returns 0.0, the call is a no-op (returns `true`).
@@ -94,10 +114,10 @@ Each workflow column lists, in order:
 
 | Step | What |
 |---|---|
-| Read | Wizard objective+detector+modality (`AcquisitionWizardDialog`); macro pixel size from project entry; per-slide alignment JSON (`AffineTransformManager.loadSlideAlignmentWithFrame`); MM live pixel size for validation |
-| Compare | YAML pixel size for chosen objective vs MM live (5% threshold) |
-| Write | Tile config (`<sample>/<modality>/<region>/TileConfiguration.txt`, `_QP.txt`) in macro-pixel coords; per-slide alignment JSON refresh; acquisition command file |
-| Gate | `validateObjectivePixelSize` in `performAcquisition` (line 1071) -- after wizard, after alignment refinement, before `AcquisitionManager.execute()` |
+| Read | Wizard objective+detector+modality (`AcquisitionWizardDialog`); macro pixel size from project entry; per-slide alignment JSON (`AffineTransformManager.loadSlideAlignmentWithFrame`) -- lookup key is resolved through the open entry's `base_image` metadata via `AlignmentHelper.resolveMacroLookupKey`, so a sub-image entry resolves to the parent macro's key, never to its own auto-registered sub-frame JSON; MM live pixel size for validation |
+| Compare | YAML pixel size for chosen objective vs MM live (5% threshold); loaded alignment's `pixelFrame == "macro"` |
+| Write | Tile config (`<sample>/<modality>/<region>/TileConfiguration.txt`, `_QP.txt`) in macro-pixel coords; per-slide alignment JSON refresh (written under the macro lookup key, with `pixelFrame="macro"`); acquisition command file |
+| Gate | `validateObjectivePixelSize` and `validateCameraRoi` in `performAcquisition` (line 1071) -- after wizard, after alignment refinement, before `AcquisitionManager.execute()`. The pixel-frame gate runs earlier inside `AlignmentHelper.checkForSlideAlignment`. |
 
 Notes: the alignment refinement step (`SingleTileRefinement`) plans alignment
 tiles with the wizard's objective. If the wizard objective is changed after

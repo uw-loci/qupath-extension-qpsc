@@ -447,9 +447,12 @@ public class ExistingImageWorkflowV2 {
                 if (imageName == null) {
                     return;
                 }
+                // Resolve to the parent macro entry name via base_image metadata so a sub-image
+                // entry's name doesn't get used to pull in unrelated sub-image alignments.
+                String lookupKey = AlignmentHelper.resolveMacroLookupKey(project, gui.getImageData(), imageName);
                 java.io.File projectDir = project.getPath().toFile().getParentFile();
                 List<AffineTransformManager.SlideAlignmentRecord> records =
-                        AffineTransformManager.loadAllSlideAlignmentsFromDirectory(projectDir, imageName);
+                        AffineTransformManager.loadAllSlideAlignmentsFromDirectory(projectDir, lookupKey);
                 if (records.isEmpty()) {
                     return;
                 }
@@ -1038,22 +1041,27 @@ public class ExistingImageWorkflowV2 {
                 return;
             }
 
-            // Get the actual image file name (not metadata name which may be project name)
-            // Strip extension for consistency with base_image metadata lookups
+            // Get the actual image file name (not metadata name which may be project name).
+            // Resolve through base_image metadata so a sub-image entry doesn't cause us to
+            // save a parallel sub-image-keyed JSON; we want the refined transform to land
+            // back on the macro alignment file.
             String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
-            if (imageName != null) {
-                imageName = qupath.lib.common.GeneralTools.stripExtension(imageName);
-            }
+            String lookupKey = (imageName != null)
+                    ? AlignmentHelper.resolveMacroLookupKey(project, gui.getImageData(), imageName)
+                    : null;
 
-            if (imageName != null) {
+            if (lookupKey != null) {
                 // state.transform is in unflipped-base frame at this point: AlignmentHelper
                 // baked any alignment-time flip into it before we passed it through
                 // SingleTileRefinement. Record flipMacroX/Y = false so the next reload
                 // is idempotent (AlignmentHelper sees no flip to bake, transform stays
                 // in unflipped-base frame).
                 AffineTransformManager.saveSlideAlignment(
-                        project, imageName, state.modality, state.transform, null, false, false);
-                logger.info("Saved refined alignment for image: {} (flipMacroX=false, flipMacroY=false)", imageName);
+                        project, lookupKey, state.modality, state.transform, null, false, false);
+                logger.info(
+                        "Saved refined alignment for image: {} (lookupKey={}, flipMacroX=false, flipMacroY=false)",
+                        imageName,
+                        lookupKey);
             }
         }
 

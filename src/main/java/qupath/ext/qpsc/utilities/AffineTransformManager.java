@@ -705,6 +705,12 @@ public class AffineTransformManager {
         return t;
     }
 
+    /** Pixel-frame tag value: transform is in the macro image's pixel frame (macro scale). */
+    public static final String PIXEL_FRAME_MACRO = "macro";
+
+    /** Pixel-frame tag value: transform is in the sub-image's own pixel frame (camera scale). */
+    public static final String PIXEL_FRAME_SUB = "sub";
+
     public static void saveSlideAlignment(
             Project<BufferedImage> project,
             String sampleName,
@@ -734,13 +740,51 @@ public class AffineTransformManager {
             BufferedImage processedMacroImage,
             Boolean flipMacroX,
             Boolean flipMacroY) {
+        // Existing callers are the macro-frame paths (ManualAlignmentPath, ExistingAlignmentPath,
+        // ExistingImageWorkflowV2 refinement). Sub-image auto-registration paths must use the
+        // 9-arg overload with PIXEL_FRAME_SUB.
+        saveSlideAlignment(
+                project,
+                sampleName,
+                modality,
+                transform,
+                processedMacroImage,
+                flipMacroX,
+                flipMacroY,
+                PIXEL_FRAME_MACRO);
+    }
+
+    /**
+     * Full-control save: writes the transform plus an explicit {@code pixelFrame} tag declaring
+     * whether the transform is in macro-image pixel coords ({@link #PIXEL_FRAME_MACRO}) or in
+     * the sub-image's own pixel coords ({@link #PIXEL_FRAME_SUB}).
+     *
+     * <p>Workflows that operate on macro-frame annotations refuse to load a transform tagged
+     * {@code "sub"} (see {@code AlignmentHelper}). Live Viewer's Go-To-Centroid opts in to
+     * {@code "sub"} explicitly via {@link #loadSlideAlignmentForFrame}. Legacy JSONs written
+     * before this field existed default to {@code "macro"} on load.
+     */
+    public static void saveSlideAlignment(
+            Project<BufferedImage> project,
+            String sampleName,
+            String modality,
+            AffineTransform transform,
+            BufferedImage processedMacroImage,
+            Boolean flipMacroX,
+            Boolean flipMacroY,
+            String pixelFrame) {
 
         try {
             // Get project folder
             File projectDir = project.getPath().toFile().getParentFile();
 
-            // Create alignmentFiles directory
-            File alignmentDir = new File(projectDir, "alignmentFiles");
+            // Macro-frame alignments live in alignmentFiles/. Sub-frame auto-registrations
+            // live in alignmentFiles/derived/ so they cannot be reached by the macro lookup's
+            // prefix matching. Layer 3 of the 2026-05-11 alignment-lookup restructure.
+            boolean isDerived = PIXEL_FRAME_SUB.equals(pixelFrame);
+            File alignmentDir = isDerived
+                    ? new File(new File(projectDir, "alignmentFiles"), "derived")
+                    : new File(projectDir, "alignmentFiles");
             if (!alignmentDir.exists()) {
                 alignmentDir.mkdirs();
             }
@@ -789,6 +833,13 @@ public class AffineTransformManager {
             if (flipMacroX != null) alignmentData.put("flipMacroX", flipMacroX);
             if (flipMacroY != null) alignmentData.put("flipMacroY", flipMacroY);
 
+            // Pixel-frame tag (Layer 2 of the 2026-05-11 alignment-lookup restructure).
+            // Defense-in-depth: declares which pixel frame the transform is in so loaders
+            // can refuse mismatches. Sub-image auto-register paths stamp "sub"; everything
+            // else defaults to "macro" via the 8-arg overload.
+            alignmentData.put(
+                    "pixelFrame", (pixelFrame != null && !pixelFrame.isEmpty()) ? pixelFrame : PIXEL_FRAME_MACRO);
+
             // Mark that the saved macro image is in raw format (no display flips baked in).
             // Old alignment files without this flag have preference flips baked into the PNG.
             if (processedMacroImage != null) {
@@ -831,6 +882,65 @@ public class AffineTransformManager {
         } catch (Exception e) {
             logger.error("Failed to save slide alignment", e);
         }
+    }
+
+    /**
+     * Load a sub-frame alignment for the given sub-image entry. Looks first in
+     * {@code alignmentFiles/derived/} (where Layer 3 of the 2026-05-11 restructure puts new
+     * sub-image auto-registrations) and falls back to the legacy flat {@code alignmentFiles/}
+     * directory so projects with pre-restructure sub-image JSONs continue to work.
+     *
+     * <p>Intended for callers that explicitly want a sub-image's own pixel-frame transform --
+     * principally Live Viewer's Go-To-Centroid. Workflows operating on macro-frame annotations
+     * must NOT use this; they should call {@link #loadSlideAlignmentWithFrame(Project, String)}
+     * with a macro-resolved lookup key.
+     *
+     * @param subImageName the sub-image entry's filename, with or without extension
+     * @return transform in the sub-image's own pixel frame, or null if none found
+     */
+    public static AffineTransform loadDerivedAlignment(Project<BufferedImage> project, String subImageName) {
+        if (project == null || subImageName == null) return null;
+        try {
+            File projectDir = project.getPath().toFile().getParentFile();
+            if (projectDir == null) return null;
+            File derivedDir = new File(new File(projectDir, "alignmentFiles"), "derived");
+            if (derivedDir.exists()) {
+                AffineTransform t = loadSlideAlignmentFromSpecificDir(derivedDir, subImageName);
+                if (t != null) return t;
+            }
+            // Backward compatibility: legacy sub-image JSONs were written to the flat directory.
+            return loadSlideAlignmentFromDirectory(projectDir, subImageName);
+        } catch (Exception e) {
+            logger.error("Failed to load derived alignment for {}", subImageName, e);
+            return null;
+        }
+    }
+
+    /**
+     * Helper: variant of {@link #loadSlideAlignmentFromDirectory(File, String)} that reads from
+     * a specific alignment directory rather than {@code projectDir/alignmentFiles}. Used by
+     * {@link #loadDerivedAlignment} to read the {@code derived/} subdirectory.
+     */
+    private static AffineTransform loadSlideAlignmentFromSpecificDir(File alignmentDir, String sampleName) {
+        if (alignmentDir == null || !alignmentDir.exists() || sampleName == null) return null;
+        String activeMicroscope = null;
+        try {
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr != null) activeMicroscope = mgr.getMicroscopeName();
+        } catch (Exception ignore) {
+        }
+        if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
+            File scoped = new File(alignmentDir, sampleName + "_" + activeMicroscope + "_alignment.json");
+            if (scoped.exists()) {
+                AffineTransform t = readAlignmentJson(scoped, activeMicroscope);
+                if (t != null) return t;
+            }
+        }
+        File legacy = new File(alignmentDir, sampleName + "_alignment.json");
+        if (legacy.exists()) {
+            return readAlignmentJson(legacy, activeMicroscope);
+        }
+        return null;
     }
 
     public static AffineTransform loadSlideAlignment(Project<BufferedImage> project, String sampleName) {
@@ -914,11 +1024,18 @@ public class AffineTransformManager {
         private final AffineTransform transform;
         private final Boolean flipMacroX;
         private final Boolean flipMacroY;
+        private final String pixelFrame;
 
         public SlideAlignmentResult(AffineTransform transform, Boolean flipMacroX, Boolean flipMacroY) {
+            this(transform, flipMacroX, flipMacroY, PIXEL_FRAME_MACRO);
+        }
+
+        public SlideAlignmentResult(
+                AffineTransform transform, Boolean flipMacroX, Boolean flipMacroY, String pixelFrame) {
             this.transform = transform;
             this.flipMacroX = flipMacroX;
             this.flipMacroY = flipMacroY;
+            this.pixelFrame = (pixelFrame != null && !pixelFrame.isEmpty()) ? pixelFrame : PIXEL_FRAME_MACRO;
         }
 
         public AffineTransform getTransform() {
@@ -931,6 +1048,15 @@ public class AffineTransformManager {
 
         public Boolean getFlipMacroY() {
             return flipMacroY;
+        }
+
+        /**
+         * Which pixel frame the saved transform is in: {@link #PIXEL_FRAME_MACRO} (scale equals the
+         * macro image's pixel size) or {@link #PIXEL_FRAME_SUB} (scale equals the sub-image's own
+         * pixel calibration). Legacy JSONs without the field default to {@code "macro"}.
+         */
+        public String getPixelFrame() {
+            return pixelFrame;
         }
 
         public boolean hasFlipFrame() {
@@ -1070,7 +1196,9 @@ public class AffineTransformManager {
 
             Boolean fx = data.get("flipMacroX") instanceof Boolean ? (Boolean) data.get("flipMacroX") : null;
             Boolean fy = data.get("flipMacroY") instanceof Boolean ? (Boolean) data.get("flipMacroY") : null;
-            return new SlideAlignmentResult(transform, fx, fy);
+            Object pfObj = data.get("pixelFrame");
+            String pixelFrame = pfObj instanceof String ? (String) pfObj : PIXEL_FRAME_MACRO;
+            return new SlideAlignmentResult(transform, fx, fy, pixelFrame);
         } catch (Exception e) {
             logger.error("Error reading slide alignment file {}: {}", alignmentFile, e.getMessage());
             return null;

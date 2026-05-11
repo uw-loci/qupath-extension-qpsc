@@ -1410,9 +1410,21 @@ public class StitchingHelper {
             // (SingleTileRefinement, AcquisitionManager, ...) consume unflipped-base
             // pixel coords. Without this, PPM auto-registered alignments load as if
             // unflipped and SingleTileRefinement targets the XY-mirrored stage point.
-            AffineTransformManager.saveSlideAlignment(project, alignmentKey, modality, transform, null, flipX, flipY);
+            // Stamp pixelFrame="sub": this transform is in the sub-image's own pixel frame,
+            // not the macro frame. Layer 2 of the 2026-05-11 alignment-lookup restructure.
+            // Workflows operating on macro-frame annotations refuse to load this; only the
+            // Live Viewer's sub-image Go-To-Centroid path (which renders this sub-image) opts in.
+            AffineTransformManager.saveSlideAlignment(
+                    project,
+                    alignmentKey,
+                    modality,
+                    transform,
+                    null,
+                    flipX,
+                    flipY,
+                    AffineTransformManager.PIXEL_FRAME_SUB);
             logger.info(
-                    "Auto-registered stage alignment for '{}' from BoundingBox metadata "
+                    "Auto-registered stage alignment for '{}' (pixelFrame=sub) from BoundingBox metadata "
                             + "(bounds=({},{})->({},{}), image={}x{})",
                     alignmentKey,
                     metadata.stageBoundsX1Um,

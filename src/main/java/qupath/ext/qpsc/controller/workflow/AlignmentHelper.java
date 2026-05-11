@@ -8,9 +8,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
+import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
+import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
+import qupath.lib.projects.ProjectImageEntry;
 
 /**
  * Helper class for alignment-related operations in the workflow.
@@ -190,9 +193,18 @@ public class AlignmentHelper {
             return future;
         }
 
-        logger.info("Checking for slide-specific alignment for image: {}", imageName);
+        // Resolve the lookup key to the parent macro entry name via base_image metadata.
+        // When the open entry is a sub-image (a previously-stitched acquisition output),
+        // its auto-registered alignment JSON describes the sub-image's own pixel frame
+        // (scale = camera pixel size). Annotations in this workflow are in the macro
+        // pixel frame, so we must load the macro alignment, not the sub-image's. Mirrors
+        // the pattern in ForwardPropagationWorkflow.buildGroups (lines 100-104).
+        Project<BufferedImage> project = gui.getProject();
+        String lookupKey = resolveMacroLookupKey(project, gui.getImageData(), imageName);
 
-        // Try to load slide-specific alignment using IMAGE name (not sample name)
+        logger.info("Checking for slide-specific alignment for image: {} (lookupKey={})", imageName, lookupKey);
+
+        // Try to load slide-specific alignment using the resolved macro key
         AffineTransform slideTransform = null;
         String createdDate = null;
         Boolean alignFlipX = null;
@@ -202,33 +214,47 @@ public class AlignmentHelper {
         // alignment-time macro flip is captured -- Step B of the flip-relocation
         // refactor bakes this flip into the returned transform so all downstream
         // callers operate on unflipped-base pixel coords.
-        Project<BufferedImage> project = gui.getProject();
+        AffineTransformManager.SlideAlignmentResult loadedResult = null;
         if (project != null) {
-            AffineTransformManager.SlideAlignmentResult withFrame =
-                    AffineTransformManager.loadSlideAlignmentWithFrame(project, imageName);
-            if (withFrame != null) {
-                slideTransform = withFrame.getTransform();
-                alignFlipX = withFrame.getFlipMacroX();
-                alignFlipY = withFrame.getFlipMacroY();
+            loadedResult = AffineTransformManager.loadSlideAlignmentWithFrame(project, lookupKey);
+            if (loadedResult != null) {
+                slideTransform = loadedResult.getTransform();
+                alignFlipX = loadedResult.getFlipMacroX();
+                alignFlipY = loadedResult.getFlipMacroY();
             } else {
-                slideTransform = AffineTransformManager.loadSlideAlignment(project, imageName);
+                slideTransform = AffineTransformManager.loadSlideAlignment(project, lookupKey);
             }
-            createdDate = AffineTransformManager.getSlideAlignmentDate(project, imageName);
+            createdDate = AffineTransformManager.getSlideAlignmentDate(project, lookupKey);
         } else {
             // Try from project directory if no project is open
             File projectDir = new File(sample.projectsFolder(), sample.sampleName());
             if (projectDir.exists()) {
-                AffineTransformManager.SlideAlignmentResult withFrame =
-                        AffineTransformManager.loadSlideAlignmentWithFrameFromDirectory(projectDir, imageName);
-                if (withFrame != null) {
-                    slideTransform = withFrame.getTransform();
-                    alignFlipX = withFrame.getFlipMacroX();
-                    alignFlipY = withFrame.getFlipMacroY();
+                loadedResult = AffineTransformManager.loadSlideAlignmentWithFrameFromDirectory(projectDir, lookupKey);
+                if (loadedResult != null) {
+                    slideTransform = loadedResult.getTransform();
+                    alignFlipX = loadedResult.getFlipMacroX();
+                    alignFlipY = loadedResult.getFlipMacroY();
                 } else {
-                    slideTransform = AffineTransformManager.loadSlideAlignmentFromDirectory(projectDir, imageName);
+                    slideTransform = AffineTransformManager.loadSlideAlignmentFromDirectory(projectDir, lookupKey);
                 }
-                createdDate = AffineTransformManager.getSlideAlignmentDateFromDirectory(projectDir, imageName);
+                createdDate = AffineTransformManager.getSlideAlignmentDateFromDirectory(projectDir, lookupKey);
             }
+        }
+
+        // Layer 2 gate: refuse a sub-frame transform. The workflow operates on macro-frame
+        // annotation coords; loading a transform with scale = camera pixel size silently
+        // shrinks every stage move by camera_px / macro_px.
+        if (loadedResult != null
+                && loadedResult.getPixelFrame() != null
+                && !AffineTransformManager.PIXEL_FRAME_MACRO.equals(loadedResult.getPixelFrame())) {
+            logger.error(
+                    "Refusing slide alignment for '{}' -- pixelFrame='{}', expected '{}'.",
+                    lookupKey,
+                    loadedResult.getPixelFrame(),
+                    AffineTransformManager.PIXEL_FRAME_MACRO);
+            showPixelFrameMismatchDialog(lookupKey, loadedResult.getPixelFrame());
+            future.complete(null);
+            return future;
         }
 
         // Bake the alignment-frame flip into the returned transform so downstream
@@ -291,5 +317,103 @@ public class AlignmentHelper {
             return "Unknown";
         }
         return "General (" + preset.getName() + ")";
+    }
+
+    /**
+     * Resolves the slide-alignment lookup key for the currently-open entry.
+     *
+     * <p>When the entry is a sub-image (a stitched acquisition output), its own
+     * alignment JSON describes the sub-image's pixel frame, not the macro frame.
+     * Workflows operating on macro-frame annotations must look up the macro
+     * alignment, so we resolve through the entry's {@code base_image} metadata
+     * (set at import) before falling back to the stripped image filename.
+     *
+     * <p>Mirrors the pattern in {@code ForwardPropagationWorkflow.buildGroups}.
+     *
+     * @return the resolved lookup key; never null when {@code imageName} is non-null
+     */
+    /**
+     * Shows the FX-safe pixel-frame-mismatch dialog. Pattern matches
+     * {@code QPScopeChecks.showMismatchDialog}: blocking, OK-only, hard-cancel.
+     */
+    private static void showPixelFrameMismatchDialog(String lookupKey, String actualFrame) {
+        String title = "Slide Alignment Pixel-Frame Mismatch -- Workflow Cancelled";
+        String header = "The loaded slide alignment is in the wrong pixel frame.";
+        StringBuilder body = new StringBuilder();
+        body.append(String.format(
+                "The slide alignment file matched for this workflow is tagged %n  pixelFrame = \"%s\"%n", actualFrame));
+        body.append(String.format("but this workflow operates on macro-frame annotation coordinates,%n"));
+        body.append(String.format(
+                "which require an alignment tagged%n  pixelFrame = \"%s\".%n%n",
+                AffineTransformManager.PIXEL_FRAME_MACRO));
+        body.append("Sub-frame alignments are produced when a previously-stitched\n");
+        body.append("acquisition output is auto-registered. They are valid for the\n");
+        body.append("Live Viewer's Go-To-Centroid on that specific sub-image, but not\n");
+        body.append("for tile planning or annotation-driven acquisition.\n\n");
+        body.append(String.format("Lookup key used: %s%n%n", lookupKey));
+        body.append("To fix:\n");
+        body.append("  1. In QuPath's Project tab, open the macro slide entry\n");
+        body.append("     (typically the entry whose name has no _<mag>x_<region>_\n");
+        body.append("      suffix, often marked '(flipped XY)' for PPM).\n");
+        body.append("  2. Re-run the workflow.\n\n");
+        body.append("If the macro entry has no alignment yet, run 3-point Microscope\n");
+        body.append("Alignment first to create one.\n\n");
+        body.append("This workflow has been cancelled.");
+
+        if (javafx.application.Platform.isFxApplicationThread()) {
+            showPixelFrameMismatchDialogOnFx(title, header, body.toString());
+            return;
+        }
+        java.util.concurrent.FutureTask<Void> task = new java.util.concurrent.FutureTask<>(() -> {
+            showPixelFrameMismatchDialogOnFx(title, header, body.toString());
+            return null;
+        });
+        javafx.application.Platform.runLater(task);
+        try {
+            task.get();
+        } catch (Exception e) {
+            logger.warn("Failed to display pixel-frame mismatch dialog: {}", e.getMessage());
+        }
+    }
+
+    private static void showPixelFrameMismatchDialogOnFx(String title, String header, String body) {
+        javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+        alert.setTitle(title);
+        alert.setHeaderText(header);
+        alert.setContentText(body);
+        alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.OK);
+        alert.getDialogPane().setMinWidth(620);
+        alert.getDialogPane().setPrefWidth(720);
+        alert.getDialogPane().setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        javafx.scene.control.Label contentLabel =
+                (javafx.scene.control.Label) alert.getDialogPane().lookup(".content");
+        if (contentLabel != null) {
+            contentLabel.setWrapText(true);
+            contentLabel.setMaxWidth(680);
+            contentLabel.setStyle("-fx-font-family: 'monospace';");
+        }
+        javafx.scene.control.Label headerLabel =
+                (javafx.scene.control.Label) alert.getDialogPane().lookup(".header-panel .label");
+        if (headerLabel != null) {
+            headerLabel.setWrapText(true);
+            headerLabel.setMaxWidth(660);
+        }
+        alert.showAndWait();
+    }
+
+    public static String resolveMacroLookupKey(
+            Project<BufferedImage> project, qupath.lib.images.ImageData<BufferedImage> imageData, String imageName) {
+        String entryStripped = GeneralTools.stripExtension(imageName);
+        if (project == null || imageData == null) {
+            return entryStripped;
+        }
+        try {
+            ProjectImageEntry<BufferedImage> entry = project.getEntry(imageData);
+            String rawBase = ImageMetadataManager.getBaseImage(entry);
+            return (rawBase != null && !rawBase.isEmpty()) ? rawBase : entryStripped;
+        } catch (Exception e) {
+            logger.debug("Could not resolve base_image for entry; falling back to image name: {}", e.getMessage());
+            return entryStripped;
+        }
     }
 }
