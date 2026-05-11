@@ -63,6 +63,7 @@ public class StageMapCanvas extends StackPane {
     private static final Color FOV_COLOR = Color.ORANGE;
     private static final Color TARGET_COLOR = Color.rgb(0, 150, 255, 0.7);
     private static final Color OUT_OF_BOUNDS_COLOR = Color.rgb(255, 100, 100, 0.8);
+    private static final Color LIP_SHADE = Color.rgb(50, 50, 60, 0.45);
 
     // ========== Rendering Constants ==========
     private static final double CROSSHAIR_RADIUS = 6; // pixels
@@ -549,26 +550,70 @@ public class StageMapCanvas extends StackPane {
             // First fill with illegal zone color
             fillRectBlend(insertX, insertY, insertW, insertH, ILLEGAL_ZONE);
 
-            // Then overlay legal zones around slides
+            // Then overlay legal zones around each sample's usable interior
             double marginPx = currentInsert.getSlideMarginUm() * scale;
-            for (StageInsert.SlidePosition slide : currentInsert.getSlides()) {
-                int zx = (int) (offsetX + slide.getXOffsetUm() * scale - marginPx);
-                int zy = (int) (offsetY + slide.getYOffsetUm() * scale - marginPx);
-                int zw = (int) (slide.getWidthUm() * scale + 2 * marginPx);
-                int zh = (int) (slide.getHeightUm() * scale + 2 * marginPx);
-                fillRectBlend(zx, zy, zw, zh, LEGAL_ZONE);
+            for (StageInsert.SlidePosition sample : currentInsert.getSlides()) {
+                double[] interior = sample.getUsableInteriorInsertRelativeUm();
+                int zx = (int) (offsetX + interior[0] * scale - marginPx);
+                int zy = (int) (offsetY + interior[1] * scale - marginPx);
+                int zw = (int) ((interior[2] - interior[0]) * scale + 2 * marginPx);
+                int zh = (int) ((interior[3] - interior[1]) * scale + 2 * marginPx);
+                if (sample.getShape() == StageInsert.SlidePosition.Shape.CIRCLE) {
+                    // Concentric legal-zone circle around the usable interior
+                    double cx = offsetX + (interior[0] + interior[2]) / 2.0 * scale;
+                    double cy = offsetY + (interior[1] + interior[3]) / 2.0 * scale;
+                    double r = (interior[2] - interior[0]) / 2.0 * scale + marginPx;
+                    fillCircleBlend(cx, cy, r, LEGAL_ZONE);
+                } else {
+                    fillRectBlend(zx, zy, zw, zh, LEGAL_ZONE);
+                }
             }
         }
 
-        // Draw slides
-        for (StageInsert.SlidePosition slide : currentInsert.getSlides()) {
-            int sx = (int) (offsetX + slide.getXOffsetUm() * scale);
-            int sy = (int) (offsetY + slide.getYOffsetUm() * scale);
-            int sw = (int) (slide.getWidthUm() * scale);
-            int sh = (int) (slide.getHeightUm() * scale);
+        // Draw samples (shape-aware)
+        for (StageInsert.SlidePosition sample : currentInsert.getSlides()) {
+            int sx = (int) (offsetX + sample.getXOffsetUm() * scale);
+            int sy = (int) (offsetY + sample.getYOffsetUm() * scale);
+            int sw = (int) (sample.getWidthUm() * scale);
+            int sh = (int) (sample.getHeightUm() * scale);
 
-            fillRect(sx, sy, sw, sh, SLIDE_FILL);
-            drawRectBorder(sx, sy, sw, sh, SLIDE_BORDER, 2);
+            if (sample.getShape() == StageInsert.SlidePosition.Shape.CIRCLE) {
+                double cx = sx + sw / 2.0;
+                double cy = sy + sh / 2.0;
+                double r = sw / 2.0;
+                fillCircle(cx, cy, r, SLIDE_FILL);
+                drawCircleBorder(cx, cy, r, SLIDE_BORDER, 2);
+                if (sample.getLipInsetUm() > 0) {
+                    // Shaded annulus indicating the lip region (between outer edge and usable interior)
+                    double rInner = r - sample.getLipInsetUm() * scale;
+                    fillAnnulusBlend(cx, cy, rInner, r, LIP_SHADE);
+                }
+            } else {
+                fillRect(sx, sy, sw, sh, SLIDE_FILL);
+                drawRectBorder(sx, sy, sw, sh, SLIDE_BORDER, 2);
+                // Shaded bands indicating lip-covered ends of the long axis
+                if (sample.getLipAUm() > 0 || sample.getLipBUm() > 0) {
+                    int lipAPx = (int) (sample.getLipAUm() * scale);
+                    int lipBPx = (int) (sample.getLipBUm() * scale);
+                    if (sample.isVerticallyOriented()) {
+                        // Lip A = top of bounding box, Lip B = bottom
+                        if (lipAPx > 0) {
+                            fillRectBlend(sx, sy, sw, lipAPx, LIP_SHADE);
+                        }
+                        if (lipBPx > 0) {
+                            fillRectBlend(sx, sy + sh - lipBPx, sw, lipBPx, LIP_SHADE);
+                        }
+                    } else {
+                        // Lip A = left, Lip B = right
+                        if (lipAPx > 0) {
+                            fillRectBlend(sx, sy, lipAPx, sh, LIP_SHADE);
+                        }
+                        if (lipBPx > 0) {
+                            fillRectBlend(sx + sw - lipBPx, sy, lipBPx, sh, LIP_SHADE);
+                        }
+                    }
+                }
+            }
         }
 
         // Update insert border shape
@@ -602,11 +647,20 @@ public class StageMapCanvas extends StackPane {
             label.setFill(SLIDE_LABEL);
             label.setTextAlignment(TextAlignment.CENTER);
 
-            // Center the label
             double textWidth = label.getLayoutBounds().getWidth();
             double textHeight = label.getLayoutBounds().getHeight();
-            label.setX(sx + (sw - textWidth) / 2);
-            label.setY(sy + (sh + textHeight) / 2 - 2);
+            String anchor = slide.getLabelAnchor() != null ? slide.getLabelAnchor() : "center";
+            double textX = sx + (sw - textWidth) / 2;
+            double textY;
+            switch (anchor) {
+                case "top" -> textY = sy + textHeight + 2;
+                case "bottom" -> textY = sy + sh - 2;
+                case "outside_top" -> textY = sy - 2;
+                case "outside_bottom" -> textY = sy + sh + textHeight + 2;
+                default -> textY = sy + (sh + textHeight) / 2 - 2;
+            }
+            label.setX(textX);
+            label.setY(textY);
 
             slideLabels.add(label);
         }
@@ -653,6 +707,90 @@ public class StageMapCanvas extends StackPane {
         // Left and right
         fillRect(x, y, thickness, h, color);
         fillRect(x + w - thickness, y, thickness, h, color);
+    }
+
+    private void fillCircle(double cx, double cy, double radius, Color color) {
+        int imgW = (int) backgroundImage.getWidth();
+        int imgH = (int) backgroundImage.getHeight();
+        int minX = Math.max(0, (int) Math.floor(cx - radius));
+        int maxX = Math.min(imgW - 1, (int) Math.ceil(cx + radius));
+        int minY = Math.max(0, (int) Math.floor(cy - radius));
+        int maxY = Math.min(imgH - 1, (int) Math.ceil(cy + radius));
+        double r2 = radius * radius;
+        for (int px = minX; px <= maxX; px++) {
+            for (int py = minY; py <= maxY; py++) {
+                double dx = px + 0.5 - cx;
+                double dy = py + 0.5 - cy;
+                if (dx * dx + dy * dy <= r2) {
+                    pixelWriter.setColor(px, py, color);
+                }
+            }
+        }
+    }
+
+    private void fillCircleBlend(double cx, double cy, double radius, Color color) {
+        int imgW = (int) backgroundImage.getWidth();
+        int imgH = (int) backgroundImage.getHeight();
+        int minX = Math.max(0, (int) Math.floor(cx - radius));
+        int maxX = Math.min(imgW - 1, (int) Math.ceil(cx + radius));
+        int minY = Math.max(0, (int) Math.floor(cy - radius));
+        int maxY = Math.min(imgH - 1, (int) Math.ceil(cy + radius));
+        double r2 = radius * radius;
+        for (int px = minX; px <= maxX; px++) {
+            for (int py = minY; py <= maxY; py++) {
+                double dx = px + 0.5 - cx;
+                double dy = py + 0.5 - cy;
+                if (dx * dx + dy * dy <= r2) {
+                    Color existing = backgroundImage.getPixelReader().getColor(px, py);
+                    pixelWriter.setColor(px, py, blendColors(existing, color));
+                }
+            }
+        }
+    }
+
+    private void fillAnnulusBlend(double cx, double cy, double rInner, double rOuter, Color color) {
+        int imgW = (int) backgroundImage.getWidth();
+        int imgH = (int) backgroundImage.getHeight();
+        int minX = Math.max(0, (int) Math.floor(cx - rOuter));
+        int maxX = Math.min(imgW - 1, (int) Math.ceil(cx + rOuter));
+        int minY = Math.max(0, (int) Math.floor(cy - rOuter));
+        int maxY = Math.min(imgH - 1, (int) Math.ceil(cy + rOuter));
+        double rO2 = rOuter * rOuter;
+        double rI2 = rInner * rInner;
+        for (int px = minX; px <= maxX; px++) {
+            for (int py = minY; py <= maxY; py++) {
+                double dx = px + 0.5 - cx;
+                double dy = py + 0.5 - cy;
+                double d2 = dx * dx + dy * dy;
+                if (d2 <= rO2 && d2 >= rI2) {
+                    Color existing = backgroundImage.getPixelReader().getColor(px, py);
+                    pixelWriter.setColor(px, py, blendColors(existing, color));
+                }
+            }
+        }
+    }
+
+    private void drawCircleBorder(double cx, double cy, double radius, Color color, int thickness) {
+        int imgW = (int) backgroundImage.getWidth();
+        int imgH = (int) backgroundImage.getHeight();
+        int minX = Math.max(0, (int) Math.floor(cx - radius - thickness));
+        int maxX = Math.min(imgW - 1, (int) Math.ceil(cx + radius + thickness));
+        int minY = Math.max(0, (int) Math.floor(cy - radius - thickness));
+        int maxY = Math.min(imgH - 1, (int) Math.ceil(cy + radius + thickness));
+        double rOut = radius + 0.5 * thickness;
+        double rIn = Math.max(0, radius - 0.5 * thickness);
+        double rOut2 = rOut * rOut;
+        double rIn2 = rIn * rIn;
+        for (int px = minX; px <= maxX; px++) {
+            for (int py = minY; py <= maxY; py++) {
+                double dx = px + 0.5 - cx;
+                double dy = py + 0.5 - cy;
+                double d2 = dx * dx + dy * dy;
+                if (d2 <= rOut2 && d2 >= rIn2) {
+                    pixelWriter.setColor(px, py, color);
+                }
+            }
+        }
     }
 
     // ========== Overlay Updates ==========

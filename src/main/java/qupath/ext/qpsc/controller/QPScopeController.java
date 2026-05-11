@@ -152,6 +152,10 @@ public class QPScopeController {
                 logger.debug("Launching existing image acquisition workflow");
                 ExistingImageWorkflowV2.start();
             }
+            case "multiSlideExistingImage" -> {
+                logger.debug("Launching multi-slide existing image workflow (experimental)");
+                MultiSlideExistingImageWorkflow.start();
+            }
             case "microscopeAlignment" -> {
                 logger.debug("Launching microscope alignment workflow");
                 MicroscopeAlignmentWorkflow.run();

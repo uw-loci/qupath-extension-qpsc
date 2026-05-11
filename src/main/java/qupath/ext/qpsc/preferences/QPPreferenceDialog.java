@@ -164,6 +164,15 @@ public class QPPreferenceDialog {
     private static final BooleanProperty warnOnLowDiskSpaceProperty =
             PathPrefs.createPersistentPreference("warnOnLowDiskSpace", true);
 
+    // Experimental: enable the Multi-Slide Existing Image workflow menu entry.
+    // Default off because the workflow is still maturing -- the orchestration is
+    // a shepherding panel rather than fully automated, the assignment dialog
+    // only handles slide_holder carriers, and the acquisition path itself is
+    // unchanged from the single-slide workflow. Operators who want to try it
+    // on the 4-slide vertical holder can opt in here.
+    private static final BooleanProperty enableMultiSlideWorkflowProperty =
+            PathPrefs.createPersistentPreference("enableMultiSlideWorkflow", false);
+
     // Suppress the exposure-too-long warning dialog in the Live Viewer Autofocus button.
     // Controlled by the "don't show again" checkbox in the dialog, not the preferences pane.
     private static final BooleanProperty suppressExposureWarningProperty =
@@ -482,6 +491,16 @@ public class QPPreferenceDialog {
                         + "verified that disk space is sufficient.")
                 .build());
 
+        items.add(new PropertyItemBuilder<>(enableMultiSlideWorkflowProperty, Boolean.class)
+                .name("Enable Multi-Slide Workflow (experimental)")
+                .category(CATEGORY)
+                .description("Adds an experimental Multi-Slide Existing Image entry to the QP Scope menu. "
+                        + "The workflow assigns project macro images to slot positions in a multi-slide carrier "
+                        + "(e.g. the 4-slide vertical holder), then shepherds you through the regular "
+                        + "Existing Image workflow on each slot. Acquisition and alignment logic are unchanged; "
+                        + "this is an orchestration layer on top. Disable to hide the menu entry.")
+                .build());
+
         // Image name contents -- what metadata to include in generated filenames.
         // All metadata is always stored in QuPath regardless of these settings.
         items.add(new PropertyItemBuilder<>(includeObjectiveInFilenameProperty, Boolean.class)
@@ -744,6 +763,11 @@ public class QPPreferenceDialog {
 
     public static void setAutofocusEditorAdvancedMode(boolean advanced) {
         autofocusEditorAdvancedModeProperty.set(advanced);
+    }
+
+    /** Returns true if the experimental Multi-Slide Existing Image menu entry should be shown. */
+    public static boolean getEnableMultiSlideWorkflow() {
+        return enableMultiSlideWorkflowProperty.get();
     }
 
     /**

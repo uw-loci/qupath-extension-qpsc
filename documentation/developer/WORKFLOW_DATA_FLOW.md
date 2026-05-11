@@ -125,6 +125,17 @@ this step but before the acquisition phase, the tile config from refinement
 is stale. The current gate fires before acquisition only -- if you want to
 re-run alignment with a new objective, restart the workflow.
 
+### Multi-Slide Existing Image (`MultiSlideExistingImageWorkflow`, experimental)
+
+| Step | What |
+|---|---|
+| Read | Carrier registry (`StageInsertRegistry.getAvailableInserts()` filtered to multi-slot `SLIDE_HOLDER` carriers); project macro entries (those without `base_image` set); per-entry `slide_position` metadata to pre-fill the assignment dialog |
+| Compare | None of its own. Each per-slot single-slide invocation runs the full `ExistingImageWorkflowV2` validation chain (objective pixel size, camera ROI, alignment pixel frame) independently. |
+| Write | Per-assigned-entry metadata: `slide_position` (1..N), `slide_carrier` (carrier id like `quad_v`), `ms_run_id` (UUID). Stored via `ImageMetadataManager.setSlideAssignment`. Project synced once after assignment. |
+| Gate | Same gates as the single-slide workflow, one set per invoked slot. The MS controller adds no new gates. |
+
+Notes: this is an experimental shepherding layer over `ExistingImageWorkflowV2`. The MS panel does not modify the underlying acquisition or alignment logic; it tracks which carrier slot each project entry maps to and walks the user through running the single-slide workflow on each one. The menu entry only appears when `Enable Multi-Slide Workflow (experimental)` is on in QuPath preferences.
+
 ### Bounded Acquisition (`BoundedAcquisitionWorkflow`)
 
 | Step | What |

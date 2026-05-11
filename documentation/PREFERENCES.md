@@ -35,6 +35,7 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Disable All Autofocus (Danger)](#disable-all-autofocus-danger) | Boolean | OFF | Send `--af-disabled` on the wire so server runs zero AF |
 | Save Raw Tiles | Boolean | OFF | Save unprocessed tiles alongside corrected |
 | Warn On Low Disk Space | Boolean | ON | Alert when disk space is low before acquisition |
+| Enable Multi-Slide Workflow (experimental) | Boolean | OFF | Adds the MS-Existing Image menu entry for multi-slide carriers (e.g. quad_v) |
 | [Image name includes: Objective](#image-name-includes-objective) | Boolean | OFF | Add objective to filename |
 | [Image name includes: Modality](#image-name-includes-modality) | Boolean | OFF | Add modality to filename |
 | [Image name includes: Annotation](#image-name-includes-annotation) | Boolean | OFF | Add annotation name to filename |

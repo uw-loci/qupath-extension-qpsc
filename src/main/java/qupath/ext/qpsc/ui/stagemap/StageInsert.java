@@ -25,6 +25,17 @@ public class StageInsert {
     /** Conversion factor from millimeters to microns */
     private static final double MM_TO_UM = 1000.0;
 
+    /**
+     * Carrier kind discriminator. Slide-holder is the default and covers the
+     * legacy single-slide and quad-slide configurations. Dish-holder and well-plate
+     * are overlay-only at this point -- workflows still operate per-slide.
+     */
+    public enum Kind {
+        SLIDE_HOLDER,
+        DISH_HOLDER,
+        WELL_PLATE
+    }
+
     private final String id;
     private final String name;
     private final double widthUm;
@@ -33,6 +44,7 @@ public class StageInsert {
     private final double originYUm;
     private final double slideMarginUm;
     private final List<SlidePosition> slides;
+    private final Kind kind;
 
     // Axis inversion flags (detected from calibration points)
     // When true, larger stage values correspond to visually "left" or "top"
@@ -60,6 +72,22 @@ public class StageInsert {
             double originYUm,
             double slideMarginUm,
             List<SlidePosition> slides) {
+        this(id, name, widthMm, heightMm, originXUm, originYUm, slideMarginUm, slides, Kind.SLIDE_HOLDER);
+    }
+
+    /**
+     * Creates a new StageInsert with an explicit carrier kind.
+     */
+    public StageInsert(
+            String id,
+            String name,
+            double widthMm,
+            double heightMm,
+            double originXUm,
+            double originYUm,
+            double slideMarginUm,
+            List<SlidePosition> slides,
+            Kind kind) {
         this.id = id;
         this.name = name;
         this.widthUm = widthMm * MM_TO_UM;
@@ -68,6 +96,7 @@ public class StageInsert {
         this.originYUm = originYUm;
         this.slideMarginUm = slideMarginUm;
         this.slides = slides != null ? new ArrayList<>(slides) : new ArrayList<>();
+        this.kind = kind != null ? kind : Kind.SLIDE_HOLDER;
     }
 
     /**
@@ -95,6 +124,9 @@ public class StageInsert {
     @SuppressWarnings("unchecked")
     public static StageInsert fromConfigMap(String id, Map<String, Object> configMap, double slideMarginUm) {
         String name = (String) configMap.getOrDefault("name", id);
+
+        // Read carrier kind (new field; defaults to slide_holder for back-compat)
+        Kind kind = parseKind((String) configMap.get("kind"));
 
         // Read calibration reference points for aperture X bounds
         double apertureLeftX = getDoubleValue(configMap, "aperture_left_x_um", 0.0);
@@ -182,35 +214,48 @@ public class StageInsert {
         // Build slide positions
         List<SlidePosition> slides = new ArrayList<>();
 
-        // Check for multi-slide configuration (quad_v style)
-        int numSlides = ((Number) configMap.getOrDefault("num_slides", 1)).intValue();
-        double slideSpacingMm = getDoubleValue(configMap, "slide_spacing_mm", 0.0);
+        // Prefer the new explicit samples list when present; otherwise fall back
+        // to legacy num_slides / slide_spacing_mm derivation.
+        Object samplesObj = configMap.get("samples");
+        if (samplesObj instanceof List) {
+            buildSamplesFromList(
+                    slides,
+                    (List<Map<String, Object>>) samplesObj,
+                    apertureWidthUm,
+                    apertureHeightUm,
+                    slideWidthUm,
+                    slideHeightUm);
+        } else {
+            // Legacy path
+            int numSlides = ((Number) configMap.getOrDefault("num_slides", 1)).intValue();
+            double slideSpacingMm = getDoubleValue(configMap, "slide_spacing_mm", 0.0);
 
-        if (numSlides > 1 && slideSpacingMm > 0) {
-            // Multi-slide configuration
-            double slideSpacingUm = slideSpacingMm * MM_TO_UM;
-            double totalWidth = (numSlides - 1) * slideSpacingUm + slideWidthUm;
-            double startX = (apertureWidthUm - totalWidth) / 2.0; // Center the group
+            if (numSlides > 1 && slideSpacingMm > 0) {
+                // Multi-slide configuration
+                double slideSpacingUm = slideSpacingMm * MM_TO_UM;
+                double totalWidth = (numSlides - 1) * slideSpacingUm + slideWidthUm;
+                double startX = (apertureWidthUm - totalWidth) / 2.0; // Center the group
 
-            for (int i = 0; i < numSlides; i++) {
-                double xOffset = startX + i * slideSpacingUm;
+                for (int i = 0; i < numSlides; i++) {
+                    double xOffset = startX + i * slideSpacingUm;
+                    slides.add(new SlidePosition(
+                            "Slide " + (i + 1),
+                            xOffset / MM_TO_UM,
+                            slideYOffsetUm / MM_TO_UM,
+                            slideWidthMm,
+                            slideHeightUm / MM_TO_UM,
+                            slideHeightMm > slideWidthMm ? 90 : 0));
+                }
+            } else {
+                // Single slide configuration
                 slides.add(new SlidePosition(
-                        "Slide " + (i + 1),
-                        xOffset / MM_TO_UM,
+                        "Slide 1",
+                        slideXOffsetUm / MM_TO_UM,
                         slideYOffsetUm / MM_TO_UM,
                         slideWidthMm,
                         slideHeightUm / MM_TO_UM,
-                        slideHeightMm > slideWidthMm ? 90 : 0));
+                        0));
             }
-        } else {
-            // Single slide configuration
-            slides.add(new SlidePosition(
-                    "Slide 1",
-                    slideXOffsetUm / MM_TO_UM,
-                    slideYOffsetUm / MM_TO_UM,
-                    slideWidthMm,
-                    slideHeightUm / MM_TO_UM,
-                    0));
         }
 
         // Convert aperture dimensions back to mm for constructor
@@ -219,7 +264,7 @@ public class StageInsert {
 
         // Store axis inversion flags in the insert for rendering
         StageInsert insert = new StageInsert(
-                id, name, apertureWidthMm, apertureHeightMm, originXUm, originYUm, slideMarginUm, slides);
+                id, name, apertureWidthMm, apertureHeightMm, originXUm, originYUm, slideMarginUm, slides, kind);
         insert.xAxisInverted = xInverted;
         insert.yAxisInverted = yInverted;
 
@@ -237,6 +282,194 @@ public class StageInsert {
                 slides.size());
 
         return insert;
+    }
+
+    /**
+     * Parses a carrier kind string from YAML. Accepts slide_holder, dish_holder,
+     * well_plate (case-insensitive). Defaults to SLIDE_HOLDER on null or unknown.
+     */
+    private static Kind parseKind(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return Kind.SLIDE_HOLDER;
+        }
+        String norm = raw.trim().toLowerCase(java.util.Locale.ROOT);
+        return switch (norm) {
+            case "dish_holder", "dish" -> Kind.DISH_HOLDER;
+            case "well_plate", "plate", "wells" -> Kind.WELL_PLATE;
+            case "slide_holder", "slides", "slide" -> Kind.SLIDE_HOLDER;
+            default -> {
+                logger.warn("Unknown carrier kind '{}', defaulting to SLIDE_HOLDER", raw);
+                yield Kind.SLIDE_HOLDER;
+            }
+        };
+    }
+
+    /**
+     * Populates the slides list from an explicit `samples:` YAML list. Each entry
+     * is a map with a `kind` (slide / dish / well / well_grid) and shape-specific
+     * fields. Offsets are interpreted as center-relative-to-insert-center for
+     * ergonomics; we convert to the legacy corner-offset coordinate space.
+     */
+    @SuppressWarnings("unchecked")
+    private static void buildSamplesFromList(
+            List<SlidePosition> out,
+            List<Map<String, Object>> samples,
+            double apertureWidthUm,
+            double apertureHeightUm,
+            double defaultSlideWidthUm,
+            double defaultSlideHeightUm) {
+        int autoIndex = 0;
+        for (Map<String, Object> sample : samples) {
+            String sampleKind =
+                    String.valueOf(sample.getOrDefault("kind", "slide")).trim().toLowerCase(java.util.Locale.ROOT);
+            if ("well_grid".equals(sampleKind)) {
+                expandWellGrid(out, sample, apertureWidthUm, apertureHeightUm);
+                continue;
+            }
+            autoIndex++;
+            String id = String.valueOf(sample.getOrDefault("id", sampleKind + "_" + autoIndex));
+            String label = String.valueOf(sample.getOrDefault("label", "Sample " + autoIndex));
+            SlidePosition.Shape shape = parseShape((String) sample.get("shape"), sampleKind);
+            double rotationDeg = getDoubleValue(sample, "rotation_deg", 0.0);
+            double centerOffXUm = getDoubleValue(sample, "center_offset_x_mm", 0.0) * MM_TO_UM;
+            double centerOffYUm = getDoubleValue(sample, "center_offset_y_mm", 0.0) * MM_TO_UM;
+            String anchor = String.valueOf(sample.getOrDefault("label_anchor", "center"))
+                    .trim()
+                    .toLowerCase(java.util.Locale.ROOT);
+
+            double widthUm;
+            double heightUm;
+            double lipAUm = getDoubleValue(sample, "lip_a_mm", 0.0) * MM_TO_UM;
+            double lipBUm = getDoubleValue(sample, "lip_b_mm", 0.0) * MM_TO_UM;
+            double lipInsetUm = getDoubleValue(sample, "lip_inset_mm", 0.0) * MM_TO_UM;
+
+            if (shape == SlidePosition.Shape.CIRCLE) {
+                double diameterMm = getDoubleValue(sample, "diameter_mm", 0.0);
+                if (diameterMm <= 0) {
+                    diameterMm = getDoubleValue(sample, "well_diameter_mm", 0.0);
+                }
+                widthUm = diameterMm * MM_TO_UM;
+                heightUm = widthUm;
+            } else {
+                double widthMm = getDoubleValue(sample, "width_mm", defaultSlideWidthUm / MM_TO_UM);
+                double heightMm = getDoubleValue(sample, "height_mm", defaultSlideHeightUm / MM_TO_UM);
+                widthUm = widthMm * MM_TO_UM;
+                heightUm = heightMm * MM_TO_UM;
+            }
+
+            // Convert center-of-insert offset to corner offset from insert origin
+            double xOffsetUm = (apertureWidthUm / 2.0 + centerOffXUm) - widthUm / 2.0;
+            double yOffsetUm = (apertureHeightUm / 2.0 + centerOffYUm) - heightUm / 2.0;
+
+            SlidePosition.Kind sk = parseSampleKind(sampleKind);
+            SlidePosition pos = new SlidePosition(
+                    label,
+                    xOffsetUm / MM_TO_UM,
+                    yOffsetUm / MM_TO_UM,
+                    widthUm / MM_TO_UM,
+                    heightUm / MM_TO_UM,
+                    rotationDeg,
+                    id,
+                    sk,
+                    shape,
+                    lipAUm,
+                    lipBUm,
+                    lipInsetUm,
+                    anchor);
+            out.add(pos);
+        }
+    }
+
+    /**
+     * Expands a `well_grid` shorthand into N circular WELL samples.
+     * Offsets are computed relative to the insert center so that a1_center_offset
+     * defines the A1 well's center in insert-center coordinates.
+     */
+    private static void expandWellGrid(
+            List<SlidePosition> out, Map<String, Object> grid, double apertureWidthUm, double apertureHeightUm) {
+        int rows = ((Number) grid.getOrDefault("rows", 2)).intValue();
+        int cols = ((Number) grid.getOrDefault("cols", 3)).intValue();
+        double wellDiameterMm = getDoubleValue(grid, "well_diameter_mm", 34.8);
+        double rowSpacingMm = getDoubleValue(grid, "row_spacing_mm", 39.12);
+        double colSpacingMm = getDoubleValue(grid, "col_spacing_mm", 39.12);
+        double a1OffXMm = getDoubleValue(grid, "a1_center_offset_x_mm", -colSpacingMm * (cols - 1) / 2.0);
+        double a1OffYMm = getDoubleValue(grid, "a1_center_offset_y_mm", -rowSpacingMm * (rows - 1) / 2.0);
+        double lipInsetMm = getDoubleValue(grid, "lip_inset_mm", 0.0);
+        String rowLabels = String.valueOf(grid.getOrDefault("row_labels", defaultRowLabels(rows)));
+        String colLabels = String.valueOf(grid.getOrDefault("col_labels", defaultColLabels(cols)));
+
+        double diameterUm = wellDiameterMm * MM_TO_UM;
+        double lipInsetUm = lipInsetMm * MM_TO_UM;
+
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                double centerOffXUm = (a1OffXMm + c * colSpacingMm) * MM_TO_UM;
+                double centerOffYUm = (a1OffYMm + r * rowSpacingMm) * MM_TO_UM;
+                double xOffsetUm = (apertureWidthUm / 2.0 + centerOffXUm) - diameterUm / 2.0;
+                double yOffsetUm = (apertureHeightUm / 2.0 + centerOffYUm) - diameterUm / 2.0;
+                char rowCh = r < rowLabels.length() ? rowLabels.charAt(r) : (char) ('A' + r);
+                char colCh = c < colLabels.length() ? colLabels.charAt(c) : (char) ('1' + c);
+                String label = "" + rowCh + colCh;
+                String id = "well_" + label;
+                SlidePosition pos = new SlidePosition(
+                        label,
+                        xOffsetUm / MM_TO_UM,
+                        yOffsetUm / MM_TO_UM,
+                        diameterUm / MM_TO_UM,
+                        diameterUm / MM_TO_UM,
+                        0,
+                        id,
+                        SlidePosition.Kind.WELL,
+                        SlidePosition.Shape.CIRCLE,
+                        0,
+                        0,
+                        lipInsetUm,
+                        "center");
+                out.add(pos);
+            }
+        }
+    }
+
+    private static String defaultRowLabels(int rows) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < rows; i++) {
+            sb.append((char) ('A' + i));
+        }
+        return sb.toString();
+    }
+
+    private static String defaultColLabels(int cols) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < cols; i++) {
+            sb.append((char) ('1' + i));
+        }
+        return sb.toString();
+    }
+
+    private static SlidePosition.Shape parseShape(String raw, String sampleKind) {
+        if (raw != null) {
+            String norm = raw.trim().toLowerCase(java.util.Locale.ROOT);
+            if (norm.equals("circle") || norm.equals("disc") || norm.equals("disk")) {
+                return SlidePosition.Shape.CIRCLE;
+            }
+            if (norm.equals("rectangle") || norm.equals("rect")) {
+                return SlidePosition.Shape.RECTANGLE;
+            }
+        }
+        // Default shape per kind
+        return switch (sampleKind) {
+            case "dish", "well" -> SlidePosition.Shape.CIRCLE;
+            default -> SlidePosition.Shape.RECTANGLE;
+        };
+    }
+
+    private static SlidePosition.Kind parseSampleKind(String raw) {
+        if (raw == null) return SlidePosition.Kind.SLIDE;
+        return switch (raw) {
+            case "dish" -> SlidePosition.Kind.DISH;
+            case "well" -> SlidePosition.Kind.WELL;
+            default -> SlidePosition.Kind.SLIDE;
+        };
     }
 
     private static double getDoubleValue(Map<String, Object> map, String key, double defaultValue) {
@@ -293,6 +526,25 @@ public class StageInsert {
     /** Returns an unmodifiable list of slide positions */
     public List<SlidePosition> getSlides() {
         return Collections.unmodifiableList(slides);
+    }
+
+    /** Returns the carrier kind (slide_holder, dish_holder, well_plate). */
+    public Kind getKind() {
+        return kind;
+    }
+
+    /**
+     * Returns only the SLIDE-kind samples. Useful for callers that operate on
+     * rectangular slide positions specifically (e.g., the MS workflow).
+     */
+    public List<SlidePosition> getSlideSamples() {
+        List<SlidePosition> filtered = new ArrayList<>();
+        for (SlidePosition s : slides) {
+            if (s.getKind() == SlidePosition.Kind.SLIDE) {
+                filtered.add(s);
+            }
+        }
+        return Collections.unmodifiableList(filtered);
     }
 
     /**
@@ -522,6 +774,19 @@ public class StageInsert {
      */
     public static class SlidePosition {
 
+        /** Sample kind. SLIDE is the default for legacy carriers. */
+        public enum Kind {
+            SLIDE,
+            DISH,
+            WELL
+        }
+
+        /** Geometric shape of the sample's hit-test region. */
+        public enum Shape {
+            RECTANGLE,
+            CIRCLE
+        }
+
         private final String name;
         private final double xOffsetUm;
         private final double yOffsetUm;
@@ -529,8 +794,21 @@ public class StageInsert {
         private final double heightUm;
         private final double rotationDeg;
 
+        // New fields (defaults preserve legacy rectangle behaviour)
+        private final String id;
+        private final Kind kind;
+        private final Shape shape;
+        /** Lip width at end "a" of the long axis in microns. Rectangle samples only. */
+        private final double lipAUm;
+        /** Lip width at end "b" of the long axis in microns. Rectangle samples only. */
+        private final double lipBUm;
+        /** Radial lip inset in microns. Circle samples only. */
+        private final double lipInsetUm;
+        /** Label anchor hint for overlay rendering ("center", "bottom", "top", "outside_top", "outside_bottom"). */
+        private final String labelAnchor;
+
         /**
-         * Creates a new slide position.
+         * Creates a new slide position with legacy rectangle defaults.
          *
          * @param name        Display name (e.g., "Slide 1")
          * @param xOffsetMm   X offset from insert origin in millimeters
@@ -541,12 +819,54 @@ public class StageInsert {
          */
         public SlidePosition(
                 String name, double xOffsetMm, double yOffsetMm, double widthMm, double heightMm, double rotationDeg) {
+            this(
+                    name,
+                    xOffsetMm,
+                    yOffsetMm,
+                    widthMm,
+                    heightMm,
+                    rotationDeg,
+                    name,
+                    Kind.SLIDE,
+                    Shape.RECTANGLE,
+                    0,
+                    0,
+                    0,
+                    "center");
+        }
+
+        /**
+         * Creates a new sample with explicit kind, shape, and lip fields. Offsets
+         * are still corner-relative-to-insert-origin (in mm) to keep parity with
+         * the legacy constructor. Lip fields are in microns.
+         */
+        public SlidePosition(
+                String name,
+                double xOffsetMm,
+                double yOffsetMm,
+                double widthMm,
+                double heightMm,
+                double rotationDeg,
+                String id,
+                Kind kind,
+                Shape shape,
+                double lipAUm,
+                double lipBUm,
+                double lipInsetUm,
+                String labelAnchor) {
             this.name = name;
             this.xOffsetUm = xOffsetMm * MM_TO_UM;
             this.yOffsetUm = yOffsetMm * MM_TO_UM;
             this.widthUm = widthMm * MM_TO_UM;
             this.heightUm = heightMm * MM_TO_UM;
             this.rotationDeg = rotationDeg;
+            this.id = id != null ? id : name;
+            this.kind = kind != null ? kind : Kind.SLIDE;
+            this.shape = shape != null ? shape : Shape.RECTANGLE;
+            this.lipAUm = lipAUm;
+            this.lipBUm = lipBUm;
+            this.lipInsetUm = lipInsetUm;
+            this.labelAnchor = labelAnchor != null ? labelAnchor : "center";
         }
 
         /**
@@ -605,6 +925,46 @@ public class StageInsert {
             return rotationDeg;
         }
 
+        /** Returns the stable id of this sample (e.g., "slide_1", "well_A3"). */
+        public String getId() {
+            return id;
+        }
+
+        /** Returns the sample kind (SLIDE / DISH / WELL). */
+        public Kind getKind() {
+            return kind;
+        }
+
+        /** Returns the geometric shape (RECTANGLE / CIRCLE). */
+        public Shape getShape() {
+            return shape;
+        }
+
+        /** Returns the lip width at end "a" of the long axis, in microns. */
+        public double getLipAUm() {
+            return lipAUm;
+        }
+
+        /** Returns the lip width at end "b" of the long axis, in microns. */
+        public double getLipBUm() {
+            return lipBUm;
+        }
+
+        /** Returns the radial lip inset in microns (circles only). */
+        public double getLipInsetUm() {
+            return lipInsetUm;
+        }
+
+        /** Returns the label anchor hint for overlay rendering. */
+        public String getLabelAnchor() {
+            return labelAnchor;
+        }
+
+        /** Returns true if this sample's long axis is aligned with stage Y (rotation_deg == 90). */
+        public boolean isVerticallyOriented() {
+            return Math.abs(rotationDeg - 90.0) < 1.0 || Math.abs(rotationDeg + 90.0) < 1.0;
+        }
+
         // ========== Position Checking ==========
 
         /**
@@ -642,6 +1002,20 @@ public class StageInsert {
                 double marginUm,
                 boolean xInverted,
                 boolean yInverted) {
+            if (shape == Shape.CIRCLE) {
+                // Circle: AABB centered on the bounding box center.
+                double centerX = xInverted
+                        ? insertOriginX - xOffsetUm - widthUm / 2.0
+                        : insertOriginX + xOffsetUm + widthUm / 2.0;
+                double centerY = yInverted
+                        ? insertOriginY - yOffsetUm - heightUm / 2.0
+                        : insertOriginY + yOffsetUm + heightUm / 2.0;
+                double radius = widthUm / 2.0 + marginUm;
+                double dx = stageX - centerX;
+                double dy = stageY - centerY;
+                return (dx * dx + dy * dy) <= (radius * radius);
+            }
+
             double slideMinX, slideMaxX, slideMinY, slideMaxY;
 
             if (xInverted) {
@@ -665,6 +1039,35 @@ public class StageInsert {
             }
 
             return stageX >= slideMinX && stageX <= slideMaxX && stageY >= slideMinY && stageY <= slideMaxY;
+        }
+
+        /**
+         * Returns the usable interior in insert-relative coordinates: [minX, minY, maxX, maxY] in microns.
+         * For rectangles, the lip widths are subtracted from the long-axis ends. For circles, the lip inset
+         * shrinks the radius. The legacy long-axis convention is: rotation 0 means long axis is along X
+         * (lipA = left, lipB = right); rotation 90 means long axis is along Y (lipA = top, lipB = bottom).
+         */
+        public double[] getUsableInteriorInsertRelativeUm() {
+            if (shape == Shape.CIRCLE) {
+                double inset = Math.max(0, lipInsetUm);
+                return new double[] {
+                    xOffsetUm + inset, yOffsetUm + inset, xOffsetUm + widthUm - inset, yOffsetUm + heightUm - inset
+                };
+            }
+            double minX = xOffsetUm;
+            double maxX = xOffsetUm + widthUm;
+            double minY = yOffsetUm;
+            double maxY = yOffsetUm + heightUm;
+            if (isVerticallyOriented()) {
+                // Long axis is Y -- lip A is at min Y (top), lip B at max Y (bottom)
+                minY += lipAUm;
+                maxY -= lipBUm;
+            } else {
+                // Long axis is X -- lip A is at min X (left), lip B at max X (right)
+                minX += lipAUm;
+                maxX -= lipBUm;
+            }
+            return new double[] {minX, minY, maxX, maxY};
         }
 
         /**

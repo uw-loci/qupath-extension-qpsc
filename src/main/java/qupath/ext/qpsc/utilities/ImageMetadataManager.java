@@ -92,6 +92,13 @@ public class ImageMetadataManager {
     // PPM analysis metadata
     public static final String PPM_CALIBRATION = "ppm_calibration";
 
+    // Multi-slide carrier metadata. Set by the experimental MS-Existing Image
+    // workflow when assigning project entries to carrier slot positions; absent
+    // for normal single-slide projects.
+    public static final String SLIDE_POSITION = "slide_position";
+    public static final String SLIDE_CARRIER = "slide_carrier";
+    public static final String MS_RUN_ID = "ms_run_id";
+
     /**
      * Gets the next available image collection number for a project.
      * Scans all existing images to find the highest collection number and returns that + 1.
@@ -1015,5 +1022,51 @@ public class ImageMetadataManager {
         }
 
         return updated;
+    }
+
+    // ========== Multi-slide carrier metadata ==========
+
+    /**
+     * Returns the assigned slide-carrier slot position for the given entry, or
+     * {@code -1} when no slide_position metadata is present.
+     */
+    public static int getSlidePosition(ProjectImageEntry<?> entry) {
+        if (entry == null) return -1;
+        String raw = entry.getMetadata().get(SLIDE_POSITION);
+        if (raw == null || raw.isEmpty()) return -1;
+        try {
+            return Integer.parseInt(raw.trim());
+        } catch (NumberFormatException e) {
+            logger.warn("Invalid slide_position metadata '{}'", raw);
+            return -1;
+        }
+    }
+
+    /**
+     * Records the slide carrier slot position, carrier id, and MS run id on the
+     * given entry. Caller is responsible for calling {@link Project#syncChanges()}.
+     */
+    public static void setSlideAssignment(ProjectImageEntry<?> entry, int position, String carrierId, String msRunId) {
+        if (entry == null) return;
+        Map<String, String> md = entry.getMetadata();
+        md.put(SLIDE_POSITION, Integer.toString(position));
+        if (carrierId != null && !carrierId.isEmpty()) {
+            md.put(SLIDE_CARRIER, carrierId);
+        }
+        if (msRunId != null && !msRunId.isEmpty()) {
+            md.put(MS_RUN_ID, msRunId);
+        }
+    }
+
+    /** Returns the slide-carrier id this entry was assigned to, or null. */
+    public static String getSlideCarrier(ProjectImageEntry<?> entry) {
+        if (entry == null) return null;
+        return entry.getMetadata().get(SLIDE_CARRIER);
+    }
+
+    /** Returns the MS run id for this entry, or null. */
+    public static String getMsRunId(ProjectImageEntry<?> entry) {
+        if (entry == null) return null;
+        return entry.getMetadata().get(MS_RUN_ID);
     }
 }

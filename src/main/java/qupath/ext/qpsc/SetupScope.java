@@ -215,6 +215,32 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
+        // 2b) Multi-Slide Existing Image (experimental) - only shown when the preference is enabled.
+        // Drives the user through the regular Existing Image workflow across each slot of a
+        // multi-slide carrier (e.g. quad_v). Requires an open project containing the macro entries.
+        MenuItem multiSlideOption = null;
+        if (QPPreferenceDialog.getEnableMultiSlideWorkflow()) {
+            multiSlideOption = new MenuItem(res.getString("menu.multiSlideExistingImage"));
+            multiSlideOption
+                    .disableProperty()
+                    .bind(Bindings.createBooleanBinding(
+                            () -> !configValid || qupath.getProject() == null,
+                            qupath.imageDataProperty(),
+                            qupath.projectProperty()));
+            setMenuItemTooltip(
+                    multiSlideOption,
+                    "Experimental: assign project macro entries to slide-carrier slot positions, "
+                            + "then walk through the Existing Image workflow on each slot. "
+                            + "Enable in Preferences > QuPath Scope > Enable Multi-Slide Workflow (experimental).");
+            multiSlideOption.setOnAction(e -> {
+                try {
+                    QPScopeController.getInstance().startWorkflow("multiSlideExistingImage");
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
+            });
+        }
+
         // 3) Microscope alignment workflow (only enabled if macro is available -
         //    either directly from the current image or via project metadata chain)
         MenuItem alignmentOption = new MenuItem(res.getString("menu.microscopeAlignment"));
@@ -576,7 +602,11 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         extensionMenu.getItems().addAll(wizardOption, new SeparatorMenuItem());
 
         // 1. Acquisition
-        extensionMenu.getItems().addAll(boundedAcquisitionOption, existingImageOption, new SeparatorMenuItem());
+        extensionMenu.getItems().addAll(boundedAcquisitionOption, existingImageOption);
+        if (multiSlideOption != null) {
+            extensionMenu.getItems().add(multiSlideOption);
+        }
+        extensionMenu.getItems().add(new SeparatorMenuItem());
 
         // 2. Viewers & Controls
         extensionMenu.getItems().addAll(liveViewerOption, cameraControlOption, stageMapOption);

@@ -1,0 +1,271 @@
+package qupath.ext.qpsc.ui;
+
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.ChoiceBox;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Separator;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
+import javafx.stage.Window;
+import javafx.util.StringConverter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.ui.stagemap.StageInsert;
+import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
+import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.lib.projects.Project;
+import qupath.lib.projects.ProjectImageEntry;
+
+/**
+ * Modal dialog for assigning QuPath project entries to slide-carrier slot positions
+ * for the experimental Multi-Slide Existing Image workflow.
+ *
+ * <p>Lets the user pick a slide-holder carrier (filtered to multi-slot slide_holder
+ * inserts) and assign one project entry to each slot. Empty/"skip" slots are
+ * supported. On OK, slot assignments are returned to the caller; the caller is
+ * responsible for persisting {@code slide_position}, {@code slide_carrier}, and
+ * {@code ms_run_id} metadata on each assigned entry.
+ */
+public final class MultiSlideAssignmentDialog {
+
+    private static final Logger logger = LoggerFactory.getLogger(MultiSlideAssignmentDialog.class);
+
+    /** Result of one slot assignment row. */
+    public record SlotAssignment(int position, String slotLabel, ProjectImageEntry<BufferedImage> entry) {}
+
+    /** Result of the whole dialog: a chosen carrier + a list of per-slot assignments. */
+    public record Result(StageInsert carrier, List<SlotAssignment> assignments) {}
+
+    private MultiSlideAssignmentDialog() {}
+
+    /**
+     * Shows the assignment dialog. Returns a future completed with the chosen
+     * carrier + assignments, or null if the user cancels.
+     */
+    public static CompletableFuture<Result> show(Window owner, Project<BufferedImage> project) {
+        CompletableFuture<Result> future = new CompletableFuture<>();
+        Platform.runLater(() -> {
+            try {
+                showImpl(owner, project, future);
+            } catch (Exception e) {
+                logger.error("MultiSlideAssignmentDialog failed to open", e);
+                future.complete(null);
+            }
+        });
+        return future;
+    }
+
+    private static void showImpl(Window owner, Project<BufferedImage> project, CompletableFuture<Result> future) {
+        Stage stage = new Stage();
+        stage.initModality(Modality.APPLICATION_MODAL);
+        if (owner != null) {
+            stage.initOwner(owner);
+        }
+        stage.setTitle("Multi-Slide Existing Image (experimental)");
+
+        Label header = new Label("Assign project images to slide carrier positions");
+        header.setStyle("-fx-font-weight: bold; -fx-font-size: 13;");
+
+        Label intro = new Label("Pick a carrier. For each occupied slide position, choose the project "
+                + "image that maps to it. Leave a slot empty (or check Skip) for unoccupied positions. "
+                + "Pass 1 of the workflow will walk you through alignment and annotation per slide; "
+                + "Pass 2 acquires across all assigned slides.");
+        intro.setWrapText(true);
+        intro.setMaxWidth(560);
+
+        // Build the carrier dropdown -- only slide_holder kinds with >1 slot
+        List<StageInsert> carriers = new ArrayList<>();
+        for (StageInsert i : StageInsertRegistry.getAvailableInserts()) {
+            if (i.getKind() == StageInsert.Kind.SLIDE_HOLDER
+                    && i.getSlideSamples().size() > 1) {
+                carriers.add(i);
+            }
+        }
+
+        ComboBox<StageInsert> carrierBox = new ComboBox<>();
+        carrierBox.getItems().setAll(carriers);
+        carrierBox.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(StageInsert insert) {
+                if (insert == null) return "";
+                return insert.getName() + " (" + insert.getSlideSamples().size() + " slides)";
+            }
+
+            @Override
+            public StageInsert fromString(String s) {
+                return null;
+            }
+        });
+        if (!carriers.isEmpty()) {
+            carrierBox.getSelectionModel().select(0);
+        }
+
+        Label carrierLabel = new Label("Carrier:");
+        HBox carrierRow = new HBox(8, carrierLabel, carrierBox);
+        carrierRow.setStyle("-fx-alignment: center-left;");
+
+        // Sample candidate entries -- macros only (no base_image set)
+        List<ProjectImageEntry<BufferedImage>> macroCandidates = collectMacroCandidates(project);
+        if (macroCandidates.isEmpty()) {
+            Label warn = new Label("This project has no eligible macro entries. Add macro images first, then re-run.");
+            warn.setStyle("-fx-text-fill: #b00;");
+            Button close = new Button("Close");
+            close.setOnAction(e -> {
+                future.complete(null);
+                stage.close();
+            });
+            VBox v = new VBox(10, header, intro, warn, close);
+            v.setPadding(new Insets(12));
+            stage.setScene(new Scene(v));
+            stage.showAndWait();
+            return;
+        }
+
+        // Slot rows live in a GridPane; rebuilt on carrier change
+        GridPane slotGrid = new GridPane();
+        slotGrid.setHgap(8);
+        slotGrid.setVgap(6);
+        slotGrid.setPadding(new Insets(8, 0, 8, 0));
+
+        List<SlotRow> slotRows = new ArrayList<>();
+
+        Runnable rebuildSlots = () -> {
+            slotGrid.getChildren().clear();
+            slotRows.clear();
+            StageInsert selected = carrierBox.getValue();
+            if (selected == null) return;
+            int row = 0;
+            slotGrid.add(new Label("Slot"), 0, row);
+            slotGrid.add(new Label("Project image"), 1, row);
+            slotGrid.add(new Label("Skip"), 2, row);
+            row++;
+            int pos = 1;
+            for (StageInsert.SlidePosition slot : selected.getSlideSamples()) {
+                Label slotLabel = new Label(pos + ". " + slot.getName());
+                ChoiceBox<ProjectImageEntry<BufferedImage>> entryBox = new ChoiceBox<>();
+                entryBox.getItems().add(null);
+                entryBox.getItems().addAll(macroCandidates);
+                entryBox.setConverter(new StringConverter<>() {
+                    @Override
+                    public String toString(ProjectImageEntry<BufferedImage> entry) {
+                        return entry == null ? "(unassigned)" : entry.getImageName();
+                    }
+
+                    @Override
+                    public ProjectImageEntry<BufferedImage> fromString(String s) {
+                        return null;
+                    }
+                });
+                // Pre-fill from existing slide_position metadata if present
+                for (ProjectImageEntry<BufferedImage> e : macroCandidates) {
+                    int existing = ImageMetadataManager.getSlidePosition(e);
+                    String carrierId = ImageMetadataManager.getSlideCarrier(e);
+                    if (existing == pos
+                            && (carrierId == null || carrierId.isEmpty() || carrierId.equals(selected.getId()))) {
+                        entryBox.getSelectionModel().select(e);
+                        break;
+                    }
+                }
+                if (entryBox.getSelectionModel().getSelectedItem() == null) {
+                    entryBox.getSelectionModel().select(null);
+                }
+                CheckBox skip = new CheckBox();
+                skip.selectedProperty().addListener((obs, oldV, newV) -> {
+                    if (newV) {
+                        entryBox.getSelectionModel().select(null);
+                    }
+                    entryBox.setDisable(newV);
+                });
+                slotGrid.add(slotLabel, 0, row);
+                slotGrid.add(entryBox, 1, row);
+                slotGrid.add(skip, 2, row);
+                slotRows.add(new SlotRow(pos, slot.getName(), entryBox, skip));
+                pos++;
+                row++;
+            }
+        };
+        rebuildSlots.run();
+        carrierBox.valueProperty().addListener((obs, oldV, newV) -> rebuildSlots.run());
+
+        ScrollPane slotsScroll = new ScrollPane(slotGrid);
+        slotsScroll.setFitToWidth(true);
+        slotsScroll.setPrefViewportHeight(220);
+        VBox.setVgrow(slotsScroll, Priority.ALWAYS);
+
+        Button okButton = new Button("Start workflow");
+        Button cancelButton = new Button("Cancel");
+        HBox buttons = new HBox(10, cancelButton, okButton);
+        buttons.setStyle("-fx-alignment: center-right;");
+
+        Label hint = new Label("");
+        hint.setStyle("-fx-text-fill: #b00;");
+
+        okButton.setOnAction(e -> {
+            StageInsert chosen = carrierBox.getValue();
+            if (chosen == null) {
+                hint.setText("Please select a carrier.");
+                return;
+            }
+            List<SlotAssignment> assignments = new ArrayList<>();
+            for (SlotRow r : slotRows) {
+                if (r.skip.isSelected()) continue;
+                ProjectImageEntry<BufferedImage> entry =
+                        r.entryBox.getSelectionModel().getSelectedItem();
+                if (entry == null) continue;
+                assignments.add(new SlotAssignment(r.position, r.slotLabel, entry));
+            }
+            if (assignments.isEmpty()) {
+                hint.setText("Assign at least one slot before starting.");
+                return;
+            }
+            future.complete(new Result(chosen, Collections.unmodifiableList(assignments)));
+            stage.close();
+        });
+        cancelButton.setOnAction(e -> {
+            future.complete(null);
+            stage.close();
+        });
+        stage.setOnCloseRequest(e -> {
+            if (!future.isDone()) future.complete(null);
+        });
+
+        VBox root =
+                new VBox(10, header, intro, new Separator(), carrierRow, new Separator(), slotsScroll, hint, buttons);
+        root.setPadding(new Insets(14));
+        root.setStyle("-fx-pref-width: 620; -fx-pref-height: 520;");
+        stage.setScene(new Scene(root));
+        stage.showAndWait();
+    }
+
+    private static List<ProjectImageEntry<BufferedImage>> collectMacroCandidates(Project<BufferedImage> project) {
+        List<ProjectImageEntry<BufferedImage>> out = new ArrayList<>();
+        if (project == null) return out;
+        for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
+            String base = ImageMetadataManager.getBaseImage(entry);
+            if (base != null && !base.isEmpty()) {
+                // Sub-acquisition; not a macro.
+                continue;
+            }
+            out.add(entry);
+        }
+        return out;
+    }
+
+    private record SlotRow(
+            int position, String slotLabel, ChoiceBox<ProjectImageEntry<BufferedImage>> entryBox, CheckBox skip) {}
+}

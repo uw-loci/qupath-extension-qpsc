@@ -104,6 +104,17 @@ This workflow lets you target specific regions on an existing macro or overview 
 
 See [full documentation](tools/existing-image-acquisition.md) for step-by-step instructions, all options, and troubleshooting.
 
+### MS-Existing Image (experimental)
+
+If you enable **Enable Multi-Slide Workflow (experimental)** in Preferences, the menu gains an **MS-Existing Image (experimental)** entry. It is a shepherding layer over Workflow 2 for slide carriers that hold multiple slides (currently the 4-slide vertical holder, `quad_v`):
+
+1. Pick the carrier in the assignment dialog.
+2. For each slot, assign one project macro entry (or check Skip).
+3. The MS panel walks you through each assigned slot. For each slot you click **Open** to switch to its macro entry, then **Run Single-Slide Workflow** to launch the regular Existing Image workflow on that slot. When that workflow has finished for the slot, click **Mark Done**. Skip slots whose acquisition should not happen.
+4. Once every slot is Done or Skipped, click **Finish** to see a summary.
+
+Each assigned entry gets `slide_position`, `slide_carrier`, and `ms_run_id` metadata so the run is auditable and partial runs are recoverable after a crash. The acquisition and alignment logic of each slot is unchanged from the single-slide Workflow 2. This is an early experimental release; future iterations will add fully unattended operation.
+
 ---
 
 ## Workflow 3: Microscope Alignment
