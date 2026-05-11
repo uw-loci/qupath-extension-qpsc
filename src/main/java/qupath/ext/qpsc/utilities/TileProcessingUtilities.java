@@ -183,11 +183,8 @@ public class TileProcessingUtilities {
         if (stitchParams != null && stitchParams.containsKey("metadata")) {
             earlyMetadata = (StitchingMetadata) stitchParams.get("metadata");
         }
-        String outputName =
-                (earlyMetadata != null && earlyMetadata.sampleName != null && !earlyMetadata.sampleName.isEmpty())
-                        ? earlyMetadata.sampleName
-                        : sampleLabel;
-        config.outputFilename = outputName;
+        String outputName = resolveDisplayName(earlyMetadata, sampleLabel);
+        config.setOutputFilename(outputName);
         logger.info("Set outputFilename on StitchingConfig: {}", outputName);
 
         // Run stitching with retry on pyramid writer failure.
@@ -255,20 +252,15 @@ public class TileProcessingUtilities {
         if (matchingString.equals(".")) {
             logger.info("Processing batch stitching results...");
 
-            // Extract metadata early so we can use it for filename generation
-            // metadata.sampleName contains the source image name (for file naming)
-            // sampleLabel is the project folder name (for path construction)
+            // Extract metadata early so we can use it for filename generation.
+            // metadata.sampleName contains the source image name (for file naming);
+            // sampleLabel is the project folder name (for path construction).
             StitchingMetadata batchMetadata = null;
             if (stitchParams != null && stitchParams.containsKey("metadata")) {
                 batchMetadata = (StitchingMetadata) stitchParams.get("metadata");
             }
 
-            // Use metadata.sampleName for file naming if available (source image name)
-            // Fall back to sampleLabel (project folder name) if not available
-            String batchDisplayName =
-                    (batchMetadata != null && batchMetadata.sampleName != null && !batchMetadata.sampleName.isEmpty())
-                            ? batchMetadata.sampleName
-                            : sampleLabel;
+            String batchDisplayName = resolveDisplayName(batchMetadata, sampleLabel);
             logger.debug(
                     "Using display name for batch file naming: {} (metadata.sampleName={}, sampleLabel={})",
                     batchDisplayName,
@@ -443,11 +435,7 @@ public class TileProcessingUtilities {
                 metadata = (StitchingMetadata) stitchParams.get("metadata");
             }
 
-            // Use metadata.sampleName for file naming if available (source image name)
-            // Fall back to sampleLabel (project folder name) if not available
-            String displayName = (metadata != null && metadata.sampleName != null && !metadata.sampleName.isEmpty())
-                    ? metadata.sampleName
-                    : sampleLabel;
+            String displayName = resolveDisplayName(metadata, sampleLabel);
             logger.debug(
                     "Using display name for file naming: {} (metadata.sampleName={}, sampleLabel={})",
                     displayName,
@@ -730,6 +718,30 @@ public class TileProcessingUtilities {
      * @param annotationName The annotation name, potentially including temporary directory parts
      * @return The original region name without temporary directory components
      */
+    /**
+     * Resolve the human-readable name used for output files (and downstream
+     * project imports) for one stitching run. Prefers
+     * {@code metadata.sampleName} (the source image's name, set at acquisition
+     * time) and falls back to {@code sampleLabel} (the project's folder name)
+     * when no metadata is available.
+     *
+     * <p>This is the single source of truth for that decision. Previously the
+     * same logic lived in three slightly different inline expressions in
+     * {@link #stitchImagesAndUpdateProject}; the duplication was a real
+     * drift hazard (the conditions diverged in casing and null-handling
+     * across the three call sites). Always go through this helper.
+     *
+     * @param metadata    optional metadata bundle pulled from {@code stitchParams.get("metadata")}; may be {@code null}
+     * @param sampleLabel project folder name; the final fallback when metadata is absent or sampleName is blank
+     * @return the resolved display name; never {@code null} or empty unless {@code sampleLabel} itself is
+     */
+    static String resolveDisplayName(StitchingMetadata metadata, String sampleLabel) {
+        if (metadata != null && metadata.sampleName != null && !metadata.sampleName.isEmpty()) {
+            return metadata.sampleName;
+        }
+        return sampleLabel;
+    }
+
     private static String extractOriginalRegionName(String annotationName) {
         if (annotationName == null) {
             return "";

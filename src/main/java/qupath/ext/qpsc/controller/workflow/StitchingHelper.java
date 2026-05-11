@@ -1621,8 +1621,15 @@ public class StitchingHelper {
             return null;
         }
 
-        // Create a temporary isolation directory
-        String tempDirName = "_temp_" + angleStr.replace("-", "neg").replace(".", "_");
+        // Create a temporary isolation directory. UUID suffix guarantees two
+        // parallel isolations cannot collide on the same path even when they
+        // share an angle prefix or when an earlier attempt left an orphan
+        // _temp_* directory on disk. Truncate the UUID to keep the path
+        // short on Windows (260-char path limit) while still giving us
+        // ~10^9 collision space.
+        String uuidSuffix =
+                java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String tempDirName = "_temp_" + angleStr.replace("-", "neg").replace(".", "_") + "_" + uuidSuffix;
         Path tempIsolationDir = tileBaseDir.resolve(tempDirName);
         Path tempAngleDir = tempIsolationDir.resolve(angleStr);
 
