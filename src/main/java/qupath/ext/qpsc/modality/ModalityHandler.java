@@ -378,6 +378,29 @@ public interface ModalityHandler {
     }
 
     /**
+     * Returns a display name to apply to the single channel of a stitched output
+     * file, based on its filename, or {@code null} for "no override" (let QuPath
+     * use whatever channel name BioFormats found in the OME-XML).
+     *
+     * <p>Used by {@code QPProjectFunctions.addImageToProject} immediately after a
+     * stitched image is imported, so callers see a consistent, descriptive channel
+     * name (e.g. "PPM Subtracted") regardless of how BioFormats labelled the
+     * source TIFF. Without this, repeated PPM runs in the same project end up with
+     * channel names like "Channel 0" and "Channel 1" depending on whichever tile
+     * happened to be read first, which makes uniform display settings impossible.</p>
+     *
+     * <p>Only applied when the imported server reports {@code nChannels() == 1};
+     * multi-channel outputs are renamed via the channel-merge pipeline.</p>
+     *
+     * @param fileName the imported file name (e.g.
+     *     {@code "Sample_ppm_20x_region_7.0_biref.ome.tif"})
+     * @return the channel display name to apply, or {@code null} for no override
+     */
+    default String getChannelNameForOutput(String fileName) {
+        return null;
+    }
+
+    /**
      * Returns the default number of angles for time/storage estimates in the UI.
      *
      * <p>Used by the acquisition preview to estimate total images, time, and storage

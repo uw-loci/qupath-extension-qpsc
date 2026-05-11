@@ -268,6 +268,17 @@ tiles/
 
 The `.biref` and `.sum` directories are discovered by `StitchingHelper` via `PPMModalityHandler.getPostProcessingDirectorySuffixes()` and stitched as additional output images.
 
+### Channel Naming on Import
+
+When PPM post-processed outputs (`.biref` and `.sum` files) are imported into a QuPath project, they are assigned stable, descriptive channel names:
+
+| Output | Channel Name | Purpose |
+|--------|--------------|---------|
+| `_biref.ome.tif` | "PPM Subtracted" | Birefringence image (computed from +/- angle pair) |
+| `_sum.ome.tif` | "PPM Sum" | Sum of angle images (brightness reference) |
+
+The channel names persist across project re-opens and enable consistent display settings across repeated acquisitions. Without this, repeated PPM runs would have ambiguous channel names like "Channel 0" and "Channel 1" depending on which tile happened to be read first by BioFormats.
+
 ## PPM Menu Contributions
 
 `PPMModalityHandler.getModalityMenuContributions()` adds four items to the PPM menu in QuPath:

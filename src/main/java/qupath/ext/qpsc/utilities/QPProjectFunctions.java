@@ -20,7 +20,9 @@ import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.QPEx;
 import qupath.lib.gui.tools.GuiTools;
 import qupath.lib.images.ImageData;
+import qupath.lib.images.servers.ImageChannel;
 import qupath.lib.images.servers.ImageServer;
+import qupath.lib.images.servers.ImageServerMetadata;
 import qupath.lib.images.servers.ImageServers;
 import qupath.lib.images.servers.TransformedServerBuilder;
 import qupath.lib.objects.hierarchy.PathObjectHierarchy;
@@ -885,6 +887,56 @@ public class QPProjectFunctions {
     }
 
     /**
+     * If the active {@code ModalityHandler} maps this filename to a stable
+     * channel display name (e.g. ".biref" -> "PPM Subtracted"), apply it to the
+     * imported image's server metadata. Only single-channel servers are renamed;
+     * multi-channel outputs flow through the dedicated channel-merge pipeline,
+     * which handles their channel names separately.
+     *
+     * <p>The override persists across project re-opens because QuPath stores the
+     * server metadata snapshot in the entry's .qpdata file. Without this, repeated
+     * PPM runs end up with channel names like "Channel 0" and "Channel 1"
+     * depending on which tile BioFormats read first, breaking project-wide
+     * display-settings reuse.</p>
+     */
+    private static void applyChannelNameOverride(
+            ImageData<BufferedImage> imageData,
+            File imageFile,
+            qupath.ext.qpsc.modality.ModalityHandler modalityHandler) {
+        if (imageData == null || imageFile == null || modalityHandler == null) {
+            return;
+        }
+        String channelName;
+        try {
+            channelName = modalityHandler.getChannelNameForOutput(imageFile.getName());
+        } catch (Exception e) {
+            logger.warn("Channel name lookup threw for {}: {}", imageFile.getName(), e.getMessage());
+            return;
+        }
+        if (channelName == null || channelName.isBlank()) {
+            return;
+        }
+        ImageServer<BufferedImage> server = imageData.getServer();
+        if (server == null || server.nChannels() != 1) {
+            return;
+        }
+        ImageServerMetadata existing = server.getMetadata();
+        Integer color = existing.getChannels().isEmpty()
+                ? null
+                : existing.getChannels().get(0).getColor();
+        ImageChannel renamed = ImageChannel.getInstance(channelName, color);
+        ImageServerMetadata updated = new ImageServerMetadata.Builder(existing)
+                .channels(java.util.List.of(renamed))
+                .build();
+        try {
+            server.setMetadata(updated);
+            logger.info("Renamed channel of {} to '{}'", imageFile.getName(), channelName);
+        } catch (Exception e) {
+            logger.warn("Failed to set channel name override on {}: {}", imageFile.getName(), e.getMessage());
+        }
+    }
+
+    /**
      * Adds an image file to the specified QuPath project, with optional horizontal and vertical flipping.
      *
      * <p>This method handles two scenarios:</p>
@@ -956,6 +1008,11 @@ public class QPProjectFunctions {
             var imageType = determineImageType(imageFile, server, imageData, modalityHandler);
             imageData.setImageType(imageType);
 
+            // Apply modality-driven channel name override (e.g. ".biref" -> "PPM Subtracted").
+            // Persists across project re-opens because saveImageData stores the
+            // server metadata snapshot in the entry's .qpdata.
+            applyChannelNameOverride(imageData, imageFile, modalityHandler);
+
             // Set a user-friendly name for the image in the project
             entry.setImageName(imageFile.getName());
 
@@ -1012,6 +1069,9 @@ public class QPProjectFunctions {
         // Determine and set the image type using our unified method
         var imageType = determineImageType(imageFile, flipped, imageData, modalityHandler);
         imageData.setImageType(imageType);
+
+        // Apply modality-driven channel name override on the flipped path too.
+        applyChannelNameOverride(imageData, imageFile, modalityHandler);
 
         entry.setImageName(imageFile.getName());
 

@@ -223,6 +223,27 @@ public class PPMModalityHandler implements ModalityHandler {
     }
 
     /**
+     * Maps PPM stitched output filenames to stable channel display names so
+     * project-wide display settings work. The Python side emits subdirectory
+     * suffixes {@code .biref} and {@code .sum}; the stitcher converts those to
+     * the filename fragments {@code _biref} and {@code _sum}. Anything else
+     * (including the per-angle raw PPM outputs) keeps QuPath's default channel
+     * name.
+     */
+    @Override
+    public String getChannelNameForOutput(String fileName) {
+        if (fileName == null) return null;
+        String lower = fileName.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("_biref")) {
+            return "PPM Subtracted";
+        }
+        if (lower.contains("_sum")) {
+            return "PPM Sum";
+        }
+        return null;
+    }
+
+    /**
      * Returns 4 as the default angle count for PPM (minus, zero, plus, uncrossed).
      */
     @Override
