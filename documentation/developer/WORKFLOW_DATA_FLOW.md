@@ -41,8 +41,12 @@ anyway" path.
 
 ### 1. Camera ROI (`QPScopeChecks.validateCameraRoi`)
 
-Catches a cropped camera ROI silently persisting in MicroManager (typically
-the residue of a streaming-AF call that didn't restore on exit). Behavior:
+Catches a cropped camera ROI silently persisting in MicroManager. Historically
+the residue of a streaming-AF call that didn't restore on exit; as of
+microscope_command_server `7f40a47` (2026-05-11) the streaming-AF code path
+unconditionally clears the ROI to full sensor on every exit, so this gate is
+now belt-and-suspenders for non-streaming-AF ROI manipulation (operator-set MM
+Property Browser, future code paths, regressions). Behavior:
 
 1. If MM is unreachable or no detector dims are configured, the call is a
    no-op (returns `true`).
