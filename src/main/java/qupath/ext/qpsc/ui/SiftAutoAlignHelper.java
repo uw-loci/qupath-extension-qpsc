@@ -213,6 +213,21 @@ public final class SiftAutoAlignHelper {
      */
     public static HBox buildSiftButtonRow(
             QuPathGUI gui, PathObject targetTile, Window settingsOwnerSupplierTarget, Label statusLabel) {
+        return buildSiftButtonRow(gui, targetTile, settingsOwnerSupplierTarget, statusLabel, null);
+    }
+
+    /**
+     * Overload that invokes {@code onSiftSuccess} on the FX thread after SIFT
+     * has run AND returned a valid offset. Used by callers that gate further UI
+     * (e.g. the SingleTileRefinement Save button) on a real refinement having
+     * occurred so a quick "Save" click can't silently skip refinement.
+     */
+    public static HBox buildSiftButtonRow(
+            QuPathGUI gui,
+            PathObject targetTile,
+            Window settingsOwnerSupplierTarget,
+            Label statusLabel,
+            Runnable onSiftSuccess) {
         Button autoAlignButton = new Button("Auto-Align (SIFT)");
         autoAlignButton.setStyle(
                 "-fx-font-weight: bold; -fx-border-color: #4A90D9; " + "-fx-border-width: 2; -fx-border-radius: 3;");
@@ -253,6 +268,13 @@ public final class SiftAutoAlignHelper {
                                                     "Aligned! Offset: (%.1f, %.1f) um%s. Verify and Confirm.",
                                                     result[0], result[1], confStr));
                                             statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                                            if (onSiftSuccess != null) {
+                                                try {
+                                                    onSiftSuccess.run();
+                                                } catch (Exception cbEx) {
+                                                    logger.warn("onSiftSuccess callback failed", cbEx);
+                                                }
+                                            }
                                         } else {
                                             statusLabel.setText("SIFT matching failed. Align manually.");
                                             statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: orange;");

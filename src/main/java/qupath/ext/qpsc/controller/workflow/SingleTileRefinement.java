@@ -340,9 +340,11 @@ public class SingleTileRefinement {
 
         Label instructionLabel =
                 new Label("The microscope has moved to the estimated position for the selected tile.\n\n"
-                        + "Please use the microscope controls (or Stage Control dialog) to adjust\n"
-                        + "the stage position so that the live view matches the selected tile in QuPath.\n\n"
-                        + "When the alignment is correct, click 'Save Refined Position'.");
+                        + "Click 'Auto-Align (SIFT)' to refine the position automatically.\n"
+                        + "If matching fails, use the microscope controls (or Stage Control dialog)\n"
+                        + "to nudge the stage so the live view matches the tile, then run SIFT again.\n\n"
+                        + "'Save Refined Position' becomes available once SIFT has run successfully.\n"
+                        + "If you want to keep the predicted position without refining, click 'Skip Refinement'.");
         instructionLabel.setWrapText(true);
 
         // Tile info label
@@ -361,11 +363,16 @@ public class SingleTileRefinement {
             logger.info("Restored target tile selection: {}", tileName);
         });
 
-        // Action buttons
+        // Action buttons. Save is disabled until SIFT has run successfully so a
+        // quick click can't silently skip refinement -- if the user wants the
+        // predicted (unrefined) position they must use Skip Refinement.
         Button saveButton = new Button("Save Refined Position");
         saveButton.setDefaultButton(true);
         saveButton.setStyle(
                 "-fx-font-weight: bold; -fx-font-size: 13px; " + "-fx-base: #4CAF50; -fx-text-fill: white;");
+        saveButton.setDisable(true);
+        saveButton.setTooltip(new javafx.scene.control.Tooltip("Enabled after Auto-Align (SIFT) has run successfully.\n"
+                + "To keep the predicted position without refinement, click Skip Refinement instead."));
         saveButton.setOnAction(e -> {
             try {
                 // Get refined position
@@ -419,8 +426,10 @@ public class SingleTileRefinement {
 
         // Auto-Align (SIFT) + Settings... button row provided by the
         // shared helper so this dialog and the alignment-workflow confirm
-        // dialog stay visually consistent.
-        HBox siftButtonRow = SiftAutoAlignHelper.buildSiftButtonRow(gui, selectedTile, dialogStage, autoAlignStatus);
+        // dialog stay visually consistent. The callback enables Save once SIFT
+        // has run successfully.
+        HBox siftButtonRow = SiftAutoAlignHelper.buildSiftButtonRow(
+                gui, selectedTile, dialogStage, autoAlignStatus, () -> saveButton.setDisable(false));
 
         // Layout
         HBox restoreBox = new HBox(restoreButton);
