@@ -74,6 +74,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `MicroscopeAlignmentWorkflow` (standalone) now prefers `PersistentPreferences.getSelectedAnnotationClasses()` for tiling, with Tissue / valid-class fallback chain. Removed the silent "all annotations regardless of class" fallback that produced noisy / overlapping tile grids.
 - Existing Image Workflow's single-tile refinement prompt now reports the count and class names of annotations being tiled.
 
+**Cropped camera ROI is now a hard cancel across all acquisition workflows**
+- New `QPScopeChecks.validateCameraRoi(detector)` gate compares the live camera frame dimensions (queried from MicroManager via the existing `GETFRAME` socket call) against the configured sensor dimensions (`width_px` / `height_px` from `resources_LOCI.yml`). If they disagree by more than 5% on either axis, the workflow aborts with a dialog explaining how to fix the ROI in MicroManager.
+- Motivating incident: a prior streaming-AF call cropped the JAI camera ROI to the centered 50% (1024x772 from a 2064x1544 sensor) and did not restore on its exit path. The cropped state persisted across QuPath/server restarts (MM remembers the last ROI), and every subsequent acquisition captured tiles at half the planned FoV -- producing stitched mosaics with ~50% empty space between every tile and breaking alignment (single-tile refinement landed at the wrong stage X/Y, with no flip configured to explain it).
+- Wired through the same seven workflow gates as the pixel-size check: Existing Image, Bounded, Microscope Alignment, Rapid Scan, WB Comparison, White Balance, Background Collection.
+- Root cause -- the streaming-AF restore path that misses some exit branches -- belongs in the Python `microscope_command_server` and is not addressed here. This is a defense-in-depth gate so the symptom is caught before any acquisition or alignment writes corrupted data.
+
 **Objective pixel-size mismatch is a hard cancel across all acquisition workflows**
 - Threshold lowered from 25% to 5%. Adjacent magnifications differ by 2x, so 5% is wide enough to absorb calibration drift but narrow enough to catch any user-induced mismatch (turret moved without updating the wizard, etc.).
 - Removed the "Continue anyway?" confirm. On mismatch the workflow always cancels; user fixes MM or the wizard dropdown and restarts.

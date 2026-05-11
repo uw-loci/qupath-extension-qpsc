@@ -1072,6 +1072,9 @@ public class ExistingImageWorkflowV2 {
                         state.objective, state.detector, state.modality, configPixelSize)) {
                     return CompletableFuture.completedFuture(null); // user cancelled
                 }
+                if (!QPScopeChecks.validateCameraRoi(state.detector)) {
+                    return CompletableFuture.completedFuture(null); // ROI mismatch -- user cancelled
+                }
             } catch (Exception e) {
                 logger.warn("Could not validate pixel size before acquisition: {}", e.getMessage());
                 // Non-fatal -- proceed with acquisition

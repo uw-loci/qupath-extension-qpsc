@@ -408,6 +408,11 @@ public class RapidScanWorkflow {
                 statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
                 return;
             }
+            if (selectedDet != null && !QPScopeChecks.validateCameraRoi(selectedDet)) {
+                statusLabel.setText("Workflow cancelled -- camera ROI mismatch.");
+                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                return;
+            }
 
             startBtn.setDisable(true);
             statusLabel.setText("Scanning...");

@@ -196,7 +196,10 @@ public class WhiteBalanceWorkflow {
                 return true;
             }
             String modality = isSimple ? "white-balance (simple)" : "white-balance (PPM)";
-            return QPScopeChecks.validateObjectivePixelSize(objective, detector, modality, configPx);
+            if (!QPScopeChecks.validateObjectivePixelSize(objective, detector, modality, configPx)) {
+                return false;
+            }
+            return QPScopeChecks.validateCameraRoi(detector);
         } catch (Exception ex) {
             logger.warn("Could not validate pixel size before WB calibration: {}", ex.getMessage());
             return true;

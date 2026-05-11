@@ -228,6 +228,9 @@ public class BoundedAcquisitionWorkflow {
                     result.objective(), result.detector(), result.modality(), WSI_pixelSize_um)) {
                 return; // user cancelled
             }
+            if (!QPScopeChecks.validateCameraRoi(result.detector())) {
+                return; // ROI mismatch -- user cancelled
+            }
 
             // Validate stitching settings -- loop to let user fix preferences if needed
             if (!StitchingConfiguration.validateWithRetry()) {

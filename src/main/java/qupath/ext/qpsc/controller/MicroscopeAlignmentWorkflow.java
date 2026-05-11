@@ -1120,6 +1120,10 @@ public class MicroscopeAlignmentWorkflow {
                 logger.info("Alignment cancelled by objective pixel-size mismatch");
                 return;
             }
+            if (!QPScopeChecks.validateCameraRoi(sampleSetup.detector())) {
+                logger.info("Alignment cancelled by camera ROI mismatch");
+                return;
+            }
         } catch (Exception ex) {
             logger.warn("Could not validate pixel size before alignment tiling: {}", ex.getMessage());
             // Non-fatal -- proceed with alignment

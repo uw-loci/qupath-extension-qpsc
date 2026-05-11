@@ -137,6 +137,10 @@ public class WBComparisonWorkflow {
             logger.info("WB comparison cancelled by objective pixel-size mismatch");
             return;
         }
+        if (!QPScopeChecks.validateCameraRoi(detector)) {
+            logger.info("WB comparison cancelled by camera ROI mismatch");
+            return;
+        }
 
         // Get FOV (frame size in microns)
         double[] fov = configManager.getModalityFOV(modality, objective, detector);

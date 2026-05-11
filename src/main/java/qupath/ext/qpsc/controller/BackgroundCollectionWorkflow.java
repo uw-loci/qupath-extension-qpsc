@@ -159,6 +159,10 @@ public class BackgroundCollectionWorkflow {
                     logger.info("Background collection cancelled by objective pixel-size mismatch");
                     return;
                 }
+                if (!QPScopeChecks.validateCameraRoi(detector)) {
+                    logger.info("Background collection cancelled by camera ROI mismatch");
+                    return;
+                }
             } catch (Exception ex) {
                 logger.warn("Could not validate pixel size before background collection: {}", ex.getMessage());
                 // Non-fatal -- proceed

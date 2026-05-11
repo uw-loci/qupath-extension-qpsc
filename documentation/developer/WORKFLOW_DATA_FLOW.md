@@ -33,10 +33,32 @@ The wizard's objective dropdown is **always** the source of truth for the
 workflow's geometry. MM's reported pixel size is only used to detect
 disagreement with that choice.
 
-## The validation gate
+## The validation gates
 
-`QPScopeChecks.validateObjectivePixelSize(objective, detector, modality, configPx)`
-is the single gate. Behavior:
+Two gates run side by side before any tile-writing or calibration-writing
+workflow step. Both abort the workflow on failure; neither offers a "continue
+anyway" path.
+
+### 1. Camera ROI (`QPScopeChecks.validateCameraRoi`)
+
+Catches a cropped camera ROI silently persisting in MicroManager (typically
+the residue of a streaming-AF call that didn't restore on exit). Behavior:
+
+1. If MM is unreachable or no detector dims are configured, the call is a
+   no-op (returns `true`).
+2. Queries the live frame via `MicroscopeSocketClient.getFrame()` and reads
+   `width` / `height` from the returned `FrameData`.
+3. Compares against `width_px` / `height_px` for the detector in the merged
+   resources YAML (`getDetectorDimensions`). If both axes match within 5%,
+   passes.
+4. On mismatch: shows a dialog with config dims, live dims, diff percent,
+   and step-by-step instructions to reset the ROI in MicroManager. Returns
+   `false`.
+
+The 5% threshold is in `QPScopeChecks.CAMERA_ROI_MISMATCH_THRESHOLD`. Same
+dialog plumbing as the pixel-size gate; FX-thread-safe.
+
+### 2. Objective pixel size (`QPScopeChecks.validateObjectivePixelSize`)
 
 1. If MM is unreachable or returns 0.0, the call is a no-op (returns `true`).
 2. Compares `configPx` (from YAML for the wizard's chosen objective+detector)

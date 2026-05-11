@@ -119,6 +119,116 @@ public class QPScopeChecks {
     /** Maximum allowed fractional difference between wizard and MM pixel size before workflow cancels. */
     private static final double PIXEL_SIZE_MISMATCH_THRESHOLD = 0.05;
 
+    /** Maximum allowed fractional difference between live frame dims and configured sensor dims. */
+    private static final double CAMERA_ROI_MISMATCH_THRESHOLD = 0.05;
+
+    /**
+     * Validates that the live camera frame dimensions match the configured sensor dimensions for
+     * the given detector. A persistent ROI crop -- typically left behind by a prior streaming-AF
+     * call that didn't restore the camera -- silently halves (or otherwise reduces) every captured
+     * tile's physical FoV. The tile config still gets planned for the full-sensor FoV, so the
+     * stitched mosaic ends up with gaps between tiles and alignment lands at the wrong stage X/Y.
+     *
+     * <p>If the live frame dimensions disagree with the configured sensor dimensions by more than
+     * {@link #CAMERA_ROI_MISMATCH_THRESHOLD} (5%) in either axis, this method shows a warning
+     * dialog explaining what to fix in MicroManager and returns false. The caller must abort the
+     * workflow.
+     *
+     * @param detector the detector identifier (e.g., "LOCI_DETECTOR_JAI_001")
+     * @return true if MM is unreachable, the detector has no configured dims, or the live frame
+     *         matches the configured sensor within threshold; false if a mismatch was detected
+     */
+    public static boolean validateCameraRoi(String detector) {
+        if (detector == null || detector.isEmpty()) {
+            return true;
+        }
+
+        int[] configDims;
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+            configDims = mgr.getDetectorDimensions(detector);
+        } catch (Exception e) {
+            logger.warn("Could not read detector dims for ROI validation: {}", e.getMessage());
+            return true;
+        }
+        if (configDims == null || configDims.length < 2 || configDims[0] <= 0 || configDims[1] <= 0) {
+            logger.debug("No detector dims configured for '{}'; skipping ROI validation", detector);
+            return true;
+        }
+
+        int liveW;
+        int liveH;
+        try {
+            MicroscopeController controller = MicroscopeController.getInstance();
+            if (controller == null || !controller.isConnected()) {
+                logger.debug("Microscope not connected; skipping ROI validation");
+                return true;
+            }
+            // getFrame() triggers a real camera snap. ~100-300ms cost per gate is acceptable
+            // because the gate fires once per workflow invocation, not per tile.
+            qupath.ext.qpsc.ui.liveviewer.FrameData frame =
+                    controller.getSocketClient().getFrame();
+            liveW = frame.width();
+            liveH = frame.height();
+        } catch (Exception e) {
+            logger.warn("Could not query live frame dims for ROI validation: {}", e.getMessage());
+            return true;
+        }
+
+        int configW = configDims[0];
+        int configH = configDims[1];
+        double diffX = Math.abs((double) configW - liveW) / configW;
+        double diffY = Math.abs((double) configH - liveH) / configH;
+
+        logger.info(
+                "Camera ROI check: detector={}, config={}x{}, live={}x{}, diff=({}%, {}%)",
+                detector,
+                configW,
+                configH,
+                liveW,
+                liveH,
+                String.format("%.1f", diffX * 100),
+                String.format("%.1f", diffY * 100));
+
+        if (diffX <= CAMERA_ROI_MISMATCH_THRESHOLD && diffY <= CAMERA_ROI_MISMATCH_THRESHOLD) {
+            return true;
+        }
+
+        StringBuilder body = new StringBuilder();
+        body.append(String.format(
+                "The live camera frame dimensions do not match the configured sensor dimensions "
+                        + "(threshold is %.0f%%).%n%n",
+                CAMERA_ROI_MISMATCH_THRESHOLD * 100));
+        body.append("Configured sensor (from microscope resources YAML):\n");
+        body.append(String.format("  Detector:    %s%n", detector));
+        body.append(String.format("  Dimensions:  %d x %d px%n%n", configW, configH));
+        body.append("Live camera (queried from MicroManager):\n");
+        body.append(String.format("  Dimensions:  %d x %d px%n", liveW, liveH));
+        body.append(String.format("  Difference:  %.1f%% width, %.1f%% height%n%n", diffX * 100, diffY * 100));
+        body.append("The camera is cropped to a sub-region of the full sensor. This typically ");
+        body.append("happens when a prior streaming Autofocus call cropped the ROI and did not ");
+        body.append("restore it on exit -- the cropped state persists across sessions because ");
+        body.append("MicroManager remembers the last ROI.\n\n");
+        body.append("If you continue, every acquired tile will only cover part of the planned ");
+        body.append("field of view. The stitched mosaic will have empty space between tiles and ");
+        body.append("alignment will land at the wrong stage position.\n\n");
+        body.append("To fix:\n");
+        body.append("  1. Open MicroManager.\n");
+        body.append("  2. Find the camera's ROI / SubROI property (or use the 'Clear ROI' / ");
+        body.append("'Reset ROI' button in the toolbar).\n");
+        body.append(String.format("  3. Set ROI to full sensor (%d x %d) or clear it.%n", configW, configH));
+        body.append("  4. Restart this workflow.\n\n");
+        body.append("This workflow has been cancelled.");
+
+        showMismatchDialog(
+                "Camera ROI Mismatch -- Workflow Cancelled",
+                "MicroManager has the camera cropped to a sub-region of the full sensor.",
+                body.toString());
+
+        return false;
+    }
+
     /**
      * Validates that the QPSC config pixel size matches MicroManager's active pixel size calibration.
      * If they differ by more than {@link #PIXEL_SIZE_MISMATCH_THRESHOLD} (5%), shows a warning dialog
