@@ -368,6 +368,26 @@ Drive the stage roughly close (a few hundred microns is enough) using the joysti
 
 ### Acquisition Problems
 
+#### Q: "Camera ROI Mismatch -- Workflow Cancelled" error
+
+**A:** The live camera frame dimensions do not match the configured sensor dimensions. The camera is cropped to a sub-region of the full sensor — typically left behind by a prior streaming Autofocus call that did not restore the camera ROI on exit. MicroManager remembers the last ROI across sessions, so the cropped state persists.
+
+**What happens if you continue:** Every acquired tile captures only the cropped portion of the planned field of view. The stitched mosaic ends up with empty space between tiles and alignment lands at the wrong stage position.
+
+**What the dialog shows:**
+- Configured sensor dimensions (from microscope resources YAML)
+- Live camera dimensions (queried from MicroManager)
+- The percentage difference on each axis (threshold is 5%)
+- Step-by-step instructions to reset the ROI in MicroManager
+
+**To fix:**
+1. Open MicroManager
+2. Find the camera's ROI / SubROI property (or use the "Clear ROI" / "Reset ROI" button in the toolbar if available)
+3. Set ROI to full sensor dimensions or clear it completely
+4. Restart the workflow in QuPath
+
+**Why this matters:** A cropped ROI is invisible in the Live Viewer but has catastrophic effects on acquisition geometry. The tile grid is planned for the full sensor's field of view, but each tile captures only the cropped portion. The resulting mosaic has ~50% empty space between tiles (if cropped to 50%) and alignment calculations are completely wrong. This gate catches the condition before any data is corrupted.
+
 #### Q: "Objective Pixel-Size Mismatch -- Workflow Cancelled" error
 
 **A:** The dialog shows that MicroManager's active objective does not match the wizard's selection. The tile grid is planned for the wizard's objective; if the actual objective in MicroManager is different, tiles will be spaced incorrectly and the mosaic will not be usable.
