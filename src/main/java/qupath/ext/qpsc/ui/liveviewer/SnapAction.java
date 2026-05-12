@@ -14,12 +14,15 @@ import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ReadOnlyBooleanProperty;
 import javafx.beans.value.ObservableValue;
+import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.Tooltip;
+import javafx.scene.layout.StackPane;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
 import loci.formats.FormatTools;
@@ -150,7 +153,19 @@ public final class SnapAction {
     // ---------- Button + menu construction ----------
 
     private Button buildButton() {
-        Button b = new Button("Snap");
+        Button b = new Button();
+        // Layered graphic: "Snap" centered, small down-triangle anchored to the
+        // bottom-right corner to hint that a right-click context menu exists.
+        // The triangle is decorative -- screen readers will still see the
+        // button's accessible text via the centered label.
+        Label textLabel = new Label("Snap");
+        Label arrow = new Label("▾"); // BLACK DOWN-POINTING SMALL TRIANGLE
+        arrow.setStyle("-fx-font-size: 8px; -fx-text-fill: -fx-mid-text-color; -fx-padding: 0 1 0 0;");
+        arrow.setMouseTransparent(true);
+        StackPane content = new StackPane(textLabel, arrow);
+        StackPane.setAlignment(textLabel, Pos.CENTER);
+        StackPane.setAlignment(arrow, Pos.BOTTOM_RIGHT);
+        b.setGraphic(content);
         b.setOnAction(e -> handleSnap());
 
         ContextMenu menu = new ContextMenu();
