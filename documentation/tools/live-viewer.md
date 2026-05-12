@@ -57,7 +57,7 @@ The toolbar contains two focus buttons and a range selector:
 |---|---|---|
 | **Autofocus** | Always visible | Primary focus button. Sends a streaming autofocus command to the server (~1 second on PPM at 0.73 ms exposure). |
 | **Sweep Focus** | Hidden | Fallback. Stepped-Z autofocus with edge retry (up to 3 total attempts). Works on any camera and any stage. Includes automatic refinement as a final phase. |
-| **Range dropdown** | Always visible | Options are dynamically populated per objective based on magnification: 10x up to 100µm, 20x up to 50µm, 40x up to 20µm, 60x+ up to 10µm. "Auto" uses `sweep_range_um` from `autofocus_<scope>.yml`. Explicit values override the YAML. Both Autofocus and Sweep Focus use this selection. Higher magnifications have shallower depth-of-field, so wider search ranges waste time and may misfocus on debris. |
+| **Range dropdown** | Always visible | Options are dynamically populated per objective based on magnification: 4x/5x up to 200µm, 10x up to 100µm, 20x up to 50µm, 40x up to 20µm, 60x+ up to 10µm. "Auto" uses `sweep_range_um` from `autofocus_<scope>.yml`. Explicit values override the YAML. Both Autofocus and Sweep Focus use this selection. Higher magnifications have shallower depth-of-field, so wider search ranges waste time and may misfocus on debris. |
 
 #### Button state transitions
 
