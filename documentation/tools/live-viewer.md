@@ -57,7 +57,7 @@ The toolbar contains two focus buttons and a range selector:
 |---|---|---|
 | **Autofocus** | Always visible | Primary focus button. Sends a streaming autofocus command to the server (~1 second on PPM at 0.73 ms exposure). |
 | **Sweep Focus** | Hidden | Fallback. Stepped-Z autofocus with edge retry (up to 3 total attempts). Works on any camera and any stage. Includes automatic refinement as a final phase. |
-| **Range dropdown** | Always visible | `Auto / 6um / 10um / 15um / 20um / 30um / 40um`. "Auto" uses `sweep_range_um` from `autofocus_<scope>.yml`. Explicit values override the YAML. Both Autofocus and Sweep Focus use this selection. The 6-40um range targets low-mag use cases on the OWS3 10x where 20um can fall inside one depth-of-field; the previous 1-20um set was widened on 2026-05-08 (commit `8a82529`). The combo width was bumped to fit a 3-character `<n>um` label without truncation. |
+| **Range dropdown** | Always visible | Options are dynamically populated per objective based on magnification: 10x up to 100µm, 20x up to 50µm, 40x up to 20µm, 60x+ up to 10µm. "Auto" uses `sweep_range_um` from `autofocus_<scope>.yml`. Explicit values override the YAML. Both Autofocus and Sweep Focus use this selection. Higher magnifications have shallower depth-of-field, so wider search ranges waste time and may misfocus on debris. |
 
 #### Button state transitions
 
