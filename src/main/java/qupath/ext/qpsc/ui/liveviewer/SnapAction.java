@@ -423,7 +423,12 @@ public final class SnapAction {
                 return new BgCorrectionGate(false, "No active objective set (microscope.objective_in_use).");
             }
             if (detector == null || detector.isEmpty()) {
-                detector = cfg.getDefaultDetector();
+                // Probe default_detector directly rather than calling
+                // cfg.getDefaultDetector(), which logs ERROR when the key is
+                // missing. The gate runs every time the context menu opens; a
+                // missing config here just means BG correction can't be applied
+                // yet, not that anything has gone wrong.
+                detector = readString(cfg, "microscope", "default_detector");
             }
             if (detector == null || detector.isEmpty()) {
                 return new BgCorrectionGate(false, "No active detector set.");
