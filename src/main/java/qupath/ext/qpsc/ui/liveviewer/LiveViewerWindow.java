@@ -49,6 +49,7 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.ObjectiveUtils;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
@@ -791,14 +792,18 @@ public class LiveViewerWindow {
         streamingFocusButton.setOnAction(e -> handleStreamingFocus());
 
         focusRangeCombo = new ComboBox<>();
-        focusRangeCombo.getItems().addAll("Auto", "6um", "10um", "15um", "20um", "30um", "40um");
+        // Options are repopulated per-objective via updateFocusRangeOptions();
+        // start with a safe conservative set until the first objective resolves.
+        focusRangeCombo.getItems().addAll("Auto", "10um", "20um");
         focusRangeCombo.setValue("Auto");
-        // Width must fit "Auto" plus the 3-character "<n>um" labels with a
+        // Width must fit "Auto" plus the 4-character "<n>um" labels with a
         // dropdown chevron; 70 px clipped "20um" -> "20" on JavaFX 21.
         focusRangeCombo.setPrefWidth(95);
         focusRangeCombo.setTooltip(new Tooltip("Search range for autofocus.\n"
                 + "Auto: uses sweep_range_um from autofocus YAML.\n"
-                + "Explicit values override the YAML setting.\n"
+                + "Explicit values override the YAML setting.\n\n"
+                + "Options are capped per-objective: 10x allows up to 100um,\n"
+                + "20x up to 50um, 40x up to 20um, 60x+ up to 10um.\n"
                 + "Smaller = faster but must be closer to focus.\n"
                 + "Larger = searches wider but takes longer."));
         focusRangeCombo.setDisable(true);
@@ -940,7 +945,10 @@ public class LiveViewerWindow {
 
         // Stage control panel (on right side, expanded by default for visibility)
         stageControlPanel = new StageControlPanel();
-        stageControlPanel.setOnHardwareChanged(this::updateFovLabel);
+        stageControlPanel.setOnHardwareChanged(() -> {
+            updateFovLabel();
+            updateFocusRangeOptions();
+        });
         stageControlPanel.setOnFovOverlayToggle(this::toggleFovOverlay);
 
         // Wrap in ScrollPane to handle overflow when window is short
@@ -974,6 +982,7 @@ public class LiveViewerWindow {
         statusBar.setPadding(new Insets(4));
         statusBar.setAlignment(Pos.CENTER_LEFT);
         updateFovLabel();
+        updateFocusRangeOptions();
 
         // Bottom pane: Histogram, Noise Stats, Status Bar
         VBox bottomPane = new VBox(histogramPane, noiseStatsPanel, statusBar);
@@ -1878,6 +1887,79 @@ public class LiveViewerWindow {
     private Canvas fovOverlayCanvas;
     /** Whether the FoV overlay is currently visible. */
     private boolean fovOverlayVisible = false;
+
+    /**
+     * Repopulates the streaming-AF range dropdown based on the current objective.
+     *
+     * <p>Higher magnifications have shallower depth-of-field, so wide search ranges
+     * waste time and may misfocus on debris far from the tissue plane. This caps
+     * the offered options by magnification:
+     * <ul>
+     *   <li>4x/5x: up to 200 um</li>
+     *   <li>10x: up to 100 um</li>
+     *   <li>20x: up to 50 um</li>
+     *   <li>40x: up to 20 um</li>
+     *   <li>60x or higher: up to 10 um</li>
+     *   <li>Unknown objective: conservative default (10-30 um)</li>
+     * </ul>
+     *
+     * <p>"Auto" always remains as the first option and defers to the per-objective
+     * {@code sweep_range_um} field in {@code autofocus_<scope>.yml}. The previously
+     * selected value is preserved when still valid; otherwise the dropdown falls
+     * back to "Auto".
+     */
+    private void updateFocusRangeOptions() {
+        if (focusRangeCombo == null) return;
+        String objId = stageControlPanel != null ? stageControlPanel.getCurrentObjectiveId() : null;
+        String previousSelection = focusRangeCombo.getValue();
+
+        List<String> options = new ArrayList<>();
+        options.add("Auto");
+        int[] umOptions = focusRangeOptionsForObjective(objId);
+        for (int um : umOptions) {
+            options.add(um + "um");
+        }
+
+        focusRangeCombo.getItems().setAll(options);
+        if (previousSelection != null && options.contains(previousSelection)) {
+            focusRangeCombo.setValue(previousSelection);
+        } else {
+            focusRangeCombo.setValue("Auto");
+        }
+    }
+
+    /**
+     * Returns the magnification-appropriate range options (in um) for an objective.
+     * Excludes "Auto"; caller prepends it. Conservative fallback when magnification
+     * cannot be parsed.
+     */
+    private static int[] focusRangeOptionsForObjective(String objId) {
+        String magStr = objId == null ? null : ObjectiveUtils.extractMagnification(objId);
+        int mag = 0;
+        if (magStr != null && magStr.endsWith("x")) {
+            try {
+                mag = Integer.parseInt(magStr.substring(0, magStr.length() - 1));
+            } catch (NumberFormatException ignore) {
+                // mag stays 0 -> falls into the unknown bucket below
+            }
+        }
+        if (mag <= 0) {
+            return new int[] {10, 20, 30};
+        }
+        if (mag <= 5) {
+            return new int[] {20, 50, 100, 150, 200};
+        }
+        if (mag <= 10) {
+            return new int[] {10, 20, 30, 50, 75, 100};
+        }
+        if (mag <= 20) {
+            return new int[] {6, 10, 15, 20, 30, 50};
+        }
+        if (mag <= 40) {
+            return new int[] {4, 6, 10, 15, 20};
+        }
+        return new int[] {3, 5, 8, 10};
+    }
 
     /**
      * Updates the FoV size label in the status bar using the current objective/detector.
