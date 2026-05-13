@@ -202,6 +202,32 @@ The picked focus channel has two effects on the acquisition:
 
 The picked channel is persisted in `PersistentPreferences` across sessions, keyed per microscope/profile, so reopening the dialog remembers the last focus-channel choice. If no radio button is selected (either because persistence has no value yet or because the user cleared the selection), the server defaults to the first channel in library order.
 
+### Channel Presets (NEW -- 2026-05-13)
+
+The preset bar (visible when "Customize channel selection" is enabled) lets you save, load, and delete named snapshots of your entire channel configuration: which channels are selected, their exposure times, their intensity values, and the chosen focus channel.
+
+**How to use:**
+
+1. **Configure your channels** — Check/uncheck channels, adjust Exposure and Intensity spinners, and pick a Focus channel.
+2. **Save** — Click "Save..." to name and store this configuration. Names are limited to 40 characters and cannot contain TAB or pipe (`|`) characters.
+3. **Load** — Select a preset from the dropdown to instantly restore all channel settings.
+4. **Delete** — Select a preset and click "Delete" to remove it.
+
+Presets are stored in `PersistentPreferences` and persist across QuPath sessions. The system remembers the last-selected preset and reloads it when you reopen the dialog.
+
+### Test Current Channel (NEW -- 2026-05-13)
+
+The "Test Current Channel" button lets you verify a single channel's hardware settings without starting a full acquisition. Exactly one channel must be selected with "Customize channel selection" enabled.
+
+**How to use:**
+
+1. **Select one channel** — Check exactly one channel in the picker and ensure "Customize channel selection" is on.
+2. **Click "Test Current Channel"** — The button applies that channel's hardware state (filter configuration, LED, exposure, intensity) to the microscope.
+3. **View the result** — Live Viewer opens automatically so you can see the live feed and verify the channel looks correct. You can still adjust the Exposure and Intensity spinners in this dialog and click Test again to re-apply with new values.
+4. **Iterate** — Use this workflow to dial in the perfect settings before starting a full multi-tile acquisition.
+
+The Test button is disabled when the "Customize channel selection" checkbox is off, and status messages below the button report success or error details.
+
 ---
 
 ## 6. How It Reaches the Acquisition Loop

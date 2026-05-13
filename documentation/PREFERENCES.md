@@ -736,8 +736,13 @@ All keys live under the prefix `widefield.channel.`:
 | `widefield.channel.master_override_enabled` | String ("true" / "false") | `false` | State of the master **"Customize channel selection for this acquisition"** checkbox. When `false`, every library channel is acquired at its YAML default exposure and the per-channel rows below are ignored. When `true`, only checked channel rows are acquired and their per-channel spinner values are used. |
 | `widefield.channel.<id>.selected` | String ("true" / "false") | `false` | Whether channel `<id>` is checked in the picker. Only consulted when `master_override_enabled` is `true`. |
 | `widefield.channel.<id>.exposure_ms` | String (double) | Channel's library `exposure_ms` (from YAML, with profile overrides applied) | Per-channel exposure in milliseconds, as edited in the picker spinner. Only consulted when `master_override_enabled` is `true` and the channel is selected. |
+| `widefield.channel.<id>.intensity` | String (double) | Channel's library `intensity_property` value | Per-channel intensity, as edited in the picker spinner (only present if the channel declares `intensity_property` in YAML). Only consulted when `master_override_enabled` is `true`. |
+| `widefield.channel.focus_channel` | String | (empty) | The channel id selected as the autofocus reference channel. Persisted across sessions and dialogs. |
+| `widefield.channel.preset.names` | String (TAB-separated list) | (empty) | List of saved preset names, delimited by TAB characters. Used internally to populate the Preset dropdown. |
+| `widefield.channel.preset.<safeKey>` | String (pipe-delimited blob) | (none) | Preset data for the preset named `<safeKey>`. Format: `v1\|focus=<id>\|<chId>=<sel>:<exp>:<int>\|...` where `sel` is true/false, `exp` and `int` are doubles. `<safeKey>` is the preset name lowercased and with non-alphanumerics replaced by underscores. |
+| `widefield.channel.preset.last` | String | (empty) | The name of the last-selected preset, restored when the dialog reopens. |
 
-`<id>` is the channel id declared in the YAML library (e.g. `DAPI`, `FITC`, `BF`). One pair of `.selected` / `.exposure_ms` keys is written per channel the user has interacted with.
+`<id>` is the channel id declared in the YAML library (e.g. `DAPI`, `FITC`, `BF`).
 
 ### Resetting
 

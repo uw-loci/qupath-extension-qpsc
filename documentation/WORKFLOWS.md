@@ -169,6 +169,8 @@ When a channel-based profile is selected, the acquisition dialog grows a **Fluor
   - A per-channel **Exposure (ms)** spinner
   - A per-channel **Intensity** spinner (only for channels whose YAML library entry declares an `intensity_property`; greyed out otherwise)
   - A **Focus** radio button (one and only one channel per acquisition can be the focus channel)
+- A **Preset** bar (when master checkbox is enabled) with a dropdown to load saved presets, and **Save...** / **Delete** buttons to manage them. This lets you quickly recall and reapply previous channel configurations.
+- A **Test Current Channel** button (when master checkbox is enabled) to verify a single selected channel's hardware settings by applying it to the microscope and opening the Live Viewer. Useful for dialing in exposure and intensity values before starting a full acquisition.
 
 Default behavior (master checkbox OFF): the acquisition uses every channel in the library at its YAML-declared exposure and intensity. The Use/Exposure/Intensity controls are greyed out. The Focus radio buttons remain active so you can pick which channel drives autofocus even when you are not customizing anything else.
 

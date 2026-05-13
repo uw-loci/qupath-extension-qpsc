@@ -367,7 +367,8 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         testBtn.setTooltip(
                 new Tooltip("Apply the selected channel's hardware (cube / illumination / intensity / exposure)\n"
                         + "and open the Live Viewer so you can verify the result without leaving this dialog.\n"
-                        + "Exactly one channel must be selected with the master toggle on."));
+                        + "Exactly one channel must be selected; enable 'Customize channel selection' to use."));
+        testBtn.disableProperty().bind(masterOverride.selectedProperty().not());
         testBtn.setOnAction(e -> onTestCurrentChannel());
         HBox bar = new HBox(8, testBtn);
         bar.setAlignment(Pos.CENTER_LEFT);
