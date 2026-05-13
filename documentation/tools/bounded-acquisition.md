@@ -80,6 +80,8 @@ Real-time preview showing calculated acquisition details:
 | Est. Time | Rough time estimate |
 | Est. Storage | Rough storage estimate |
 
+**Stage Map visualization:** If the [Stage Map](stage-map.md) window is open, a translucent green rectangle shows the acquisition bounding-box region in real-time as you adjust the coordinates and region size. This helps you visualize the acquisition area relative to the slide and stage boundaries before starting acquisition.
+
 ## Workflow
 
 ### Step 1: Unified Acquisition Dialog

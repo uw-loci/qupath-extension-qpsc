@@ -14,6 +14,18 @@ Visual representation of the microscope stage insert showing slide positions. He
 - Connected to microscope server (see [Communication Settings](server-connection.md))
 - Stage insert configuration defined in the microscope configuration file
 
+## Visual Elements
+
+The Stage Map displays several visual indicators:
+
+| Element | Color | Meaning |
+|---------|-------|---------|
+| Crosshair circle | Lime green | Current stage position |
+| Crosshair lines | Lime green | Current stage X/Y position markers |
+| Target crosshair | Yellow (thin black outline) | Position under the mouse cursor on the Stage Map -- double-click to move the stage there |
+| FOV rectangle | Orange | Field of view at current position |
+| Bounding-box preview | Translucent green | Region that will be acquired when using [Bounded Acquisition](bounded-acquisition.md) (shown while the acquisition dialog is open) |
+
 ## Options
 
 | Option | Type | Default | Description |

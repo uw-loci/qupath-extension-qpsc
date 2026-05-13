@@ -167,8 +167,7 @@ public class StageMapWindow {
      * Shows a translucent rectangle on the Stage Map marking the bounding-box region
      * a workflow would acquire. No-op if the Stage Map window is not open.
      */
-    public static void setBoundingBoxPreview(
-            double minStageX, double minStageY, double maxStageX, double maxStageY) {
+    public static void setBoundingBoxPreview(double minStageX, double minStageY, double maxStageX, double maxStageY) {
         Platform.runLater(() -> {
             if (isVisible() && instance.canvas != null) {
                 instance.canvas.setBoundingBoxPreview(minStageX, minStageY, maxStageX, maxStageY);
