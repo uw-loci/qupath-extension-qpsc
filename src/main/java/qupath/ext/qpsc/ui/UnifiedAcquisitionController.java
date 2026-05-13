@@ -24,6 +24,7 @@ import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.WbMode;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -290,7 +291,13 @@ public class UnifiedAcquisitionController {
                 return createResult();
             });
 
-            return dialog.showAndWait();
+            try {
+                return dialog.showAndWait();
+            } finally {
+                // Always clear the stage-map preview once the dialog is dismissed --
+                // acquisition progress (if started) is shown by the acquisition overlay instead.
+                StageMapWindow.clearBoundingBoxPreview();
+            }
         }
 
         private void createProjectSection() {
@@ -1410,6 +1417,8 @@ public class UnifiedAcquisitionController {
                         x1, y1, x2, y2, (x1 + x2) / 2.0, (y1 + y2) / 2.0));
                 calculatedBoundsLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + accentColor("green") + ";");
 
+                StageMapWindow.setBoundingBoxPreview(x1, y1, x2, y2);
+
                 // Update preview labels
                 previewRegionLabel.setText(String.format("Region: %.2f x %.2f mm", width / 1000.0, height / 1000.0));
                 previewFOVLabel.setText(
@@ -1445,6 +1454,7 @@ public class UnifiedAcquisitionController {
             previewStorageLabel.setText("Est. Storage: --");
             previewErrorLabel.setText(message);
             previewErrorLabel.setVisible(true);
+            StageMapWindow.clearBoundingBoxPreview();
         }
 
         private String formatTime(double seconds) {

@@ -61,9 +61,12 @@ public class StageMapCanvas extends StackPane {
     private static final Color ILLEGAL_ZONE = Color.rgb(200, 100, 100, 0.15);
     private static final Color CROSSHAIR_COLOR = Color.LIME;
     private static final Color FOV_COLOR = Color.ORANGE;
-    private static final Color TARGET_COLOR = Color.rgb(0, 150, 255, 0.7);
+    private static final Color TARGET_COLOR = Color.YELLOW;
+    private static final Color TARGET_OUTLINE_COLOR = Color.BLACK;
     private static final Color OUT_OF_BOUNDS_COLOR = Color.rgb(255, 100, 100, 0.8);
     private static final Color LIP_SHADE = Color.rgb(50, 50, 60, 0.45);
+    private static final Color BOUNDING_BOX_PREVIEW_FILL = Color.rgb(0, 255, 0, 0.22);
+    private static final Color BOUNDING_BOX_PREVIEW_STROKE = Color.LIME;
 
     // ========== Rendering Constants ==========
     private static final double CROSSHAIR_RADIUS = 6; // pixels
@@ -82,7 +85,9 @@ public class StageMapCanvas extends StackPane {
     private Circle crosshairCircle;
     private Line crosshairLineH1, crosshairLineH2, crosshairLineV1, crosshairLineV2;
     private Rectangle fovRect;
+    private Line targetLineHBg, targetLineVBg; // Black backing for contrast
     private Line targetLineH, targetLineV;
+    private Rectangle boundingBoxPreviewRect;
     private List<Rectangle> slideRects = new ArrayList<>();
     private List<Text> slideLabels = new ArrayList<>();
     private Rectangle insertBorderRect;
@@ -120,6 +125,11 @@ public class StageMapCanvas extends StackPane {
     private double targetStageY = Double.NaN;
     private double fovWidthUm = 0;
     private double fovHeightUm = 0;
+    // Bounding-box preview: NaN = no preview shown
+    private double bboxPreviewMinX = Double.NaN;
+    private double bboxPreviewMinY = Double.NaN;
+    private double bboxPreviewMaxX = Double.NaN;
+    private double bboxPreviewMaxY = Double.NaN;
     private double scale = 1.0; // pixels per micron
     private double offsetX = 0; // canvas offset for centering
     private double offsetY = 0;
@@ -180,9 +190,20 @@ public class StageMapCanvas extends StackPane {
         fovRect.setStrokeWidth(1.5);
         fovRect.setVisible(false);
 
-        // Create target crosshair (dashed)
+        // Create target crosshair (dashed) - black backing layer for contrast first,
+        // then yellow foreground line slightly thinner so a thin black outline shows.
+        targetLineHBg = createTargetBackingLine();
+        targetLineVBg = createTargetBackingLine();
         targetLineH = createTargetLine();
         targetLineV = createTargetLine();
+
+        // Create bounding-box preview rectangle (translucent green fill)
+        boundingBoxPreviewRect = new Rectangle();
+        boundingBoxPreviewRect.setFill(BOUNDING_BOX_PREVIEW_FILL);
+        boundingBoxPreviewRect.setStroke(BOUNDING_BOX_PREVIEW_STROKE);
+        boundingBoxPreviewRect.setStrokeWidth(2);
+        boundingBoxPreviewRect.setVisible(false);
+        boundingBoxPreviewRect.setMouseTransparent(true);
 
         // Create insert border rectangle
         insertBorderRect = new Rectangle();
@@ -205,12 +226,15 @@ public class StageMapCanvas extends StackPane {
         macroOverlayView.setVisible(false);
         macroOverlayView.setMouseTransparent(true);
 
-        // Add all shapes to overlay (acquisition first, then macro, then shapes)
+        // Add all shapes to overlay (acquisition first, then macro, then shapes).
+        // Bounding-box preview sits above the macro image so it overlays the WSI macro,
+        // but below crosshair/FOV/target so the position indicators remain visible on top.
         overlayPane
                 .getChildren()
                 .addAll(
                         acquisitionOverlayView, // Behind everything
                         macroOverlayView, // Behind shapes but above acquisitions
+                        boundingBoxPreviewRect, // Above macro, below indicators
                         insertBorderRect,
                         crosshairCircle,
                         crosshairLineH1,
@@ -218,6 +242,8 @@ public class StageMapCanvas extends StackPane {
                         crosshairLineV1,
                         crosshairLineV2,
                         fovRect,
+                        targetLineHBg, // Black backing under target lines
+                        targetLineVBg,
                         targetLineH,
                         targetLineV);
 
@@ -279,7 +305,16 @@ public class StageMapCanvas extends StackPane {
     private Line createTargetLine() {
         Line line = new Line();
         line.setStroke(TARGET_COLOR);
-        line.setStrokeWidth(1);
+        line.setStrokeWidth(1.5);
+        line.getStrokeDashArray().addAll(4.0, 4.0);
+        line.setVisible(false);
+        return line;
+    }
+
+    private Line createTargetBackingLine() {
+        Line line = new Line();
+        line.setStroke(TARGET_OUTLINE_COLOR);
+        line.setStrokeWidth(3);
         line.getStrokeDashArray().addAll(4.0, 4.0);
         line.setVisible(false);
         return line;
@@ -799,6 +834,7 @@ public class StageMapCanvas extends StackPane {
         updateCrosshairOverlay();
         updateFOVOverlay();
         updateTargetOverlay();
+        updateBoundingBoxPreviewOverlay();
         if (acquisitionOverlayVisible) {
             compositeAndDisplayAcquisitions();
         }
@@ -915,6 +951,8 @@ public class StageMapCanvas extends StackPane {
         if (!showTarget || Double.isNaN(targetStageX) || Double.isNaN(targetStageY) || currentInsert == null) {
             targetLineH.setVisible(false);
             targetLineV.setVisible(false);
+            targetLineHBg.setVisible(false);
+            targetLineVBg.setVisible(false);
             return;
         }
 
@@ -922,6 +960,8 @@ public class StageMapCanvas extends StackPane {
         if (screenPos == null) {
             targetLineH.setVisible(false);
             targetLineV.setVisible(false);
+            targetLineHBg.setVisible(false);
+            targetLineVBg.setVisible(false);
             return;
         }
 
@@ -930,6 +970,18 @@ public class StageMapCanvas extends StackPane {
 
         boolean isLegal = currentInsert.isPositionLegal(targetStageX, targetStageY);
         Color color = isLegal ? TARGET_COLOR : OUT_OF_BOUNDS_COLOR;
+
+        targetLineHBg.setStartX(sx - CROSSHAIR_LINE_LENGTH);
+        targetLineHBg.setStartY(sy);
+        targetLineHBg.setEndX(sx + CROSSHAIR_LINE_LENGTH);
+        targetLineHBg.setEndY(sy);
+        targetLineHBg.setVisible(true);
+
+        targetLineVBg.setStartX(sx);
+        targetLineVBg.setStartY(sy - CROSSHAIR_LINE_LENGTH);
+        targetLineVBg.setEndX(sx);
+        targetLineVBg.setEndY(sy + CROSSHAIR_LINE_LENGTH);
+        targetLineVBg.setVisible(true);
 
         targetLineH.setStartX(sx - CROSSHAIR_LINE_LENGTH);
         targetLineH.setStartY(sy);
@@ -944,6 +996,61 @@ public class StageMapCanvas extends StackPane {
         targetLineV.setEndY(sy + CROSSHAIR_LINE_LENGTH);
         targetLineV.setStroke(color);
         targetLineV.setVisible(true);
+    }
+
+    private void updateBoundingBoxPreviewOverlay() {
+        if (!Platform.isFxApplicationThread()) {
+            Platform.runLater(this::updateBoundingBoxPreviewOverlay);
+            return;
+        }
+
+        if (Double.isNaN(bboxPreviewMinX)
+                || Double.isNaN(bboxPreviewMinY)
+                || Double.isNaN(bboxPreviewMaxX)
+                || Double.isNaN(bboxPreviewMaxY)
+                || currentInsert == null) {
+            boundingBoxPreviewRect.setVisible(false);
+            return;
+        }
+
+        double[] cornerA = stageToScreen(bboxPreviewMinX, bboxPreviewMinY);
+        double[] cornerB = stageToScreen(bboxPreviewMaxX, bboxPreviewMaxY);
+        if (cornerA == null || cornerB == null) {
+            boundingBoxPreviewRect.setVisible(false);
+            return;
+        }
+
+        double x = Math.min(cornerA[0], cornerB[0]);
+        double y = Math.min(cornerA[1], cornerB[1]);
+        double w = Math.abs(cornerB[0] - cornerA[0]);
+        double h = Math.abs(cornerB[1] - cornerA[1]);
+
+        boundingBoxPreviewRect.setX(x);
+        boundingBoxPreviewRect.setY(y);
+        boundingBoxPreviewRect.setWidth(w);
+        boundingBoxPreviewRect.setHeight(h);
+        boundingBoxPreviewRect.setVisible(true);
+    }
+
+    /**
+     * Shows a translucent green rectangle marking the bounding-box region a workflow
+     * would acquire. Stage coordinates in microns; min/max ordering is normalized.
+     */
+    public void setBoundingBoxPreview(double minStageX, double minStageY, double maxStageX, double maxStageY) {
+        this.bboxPreviewMinX = Math.min(minStageX, maxStageX);
+        this.bboxPreviewMinY = Math.min(minStageY, maxStageY);
+        this.bboxPreviewMaxX = Math.max(minStageX, maxStageX);
+        this.bboxPreviewMaxY = Math.max(minStageY, maxStageY);
+        updateBoundingBoxPreviewOverlay();
+    }
+
+    /** Hides the bounding-box preview rectangle. */
+    public void clearBoundingBoxPreview() {
+        this.bboxPreviewMinX = Double.NaN;
+        this.bboxPreviewMinY = Double.NaN;
+        this.bboxPreviewMaxX = Double.NaN;
+        this.bboxPreviewMaxY = Double.NaN;
+        updateBoundingBoxPreviewOverlay();
     }
 
     // ========== Acquisition Overlay Methods ==========

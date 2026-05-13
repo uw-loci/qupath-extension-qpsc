@@ -164,6 +164,28 @@ public class StageMapWindow {
     }
 
     /**
+     * Shows a translucent rectangle on the Stage Map marking the bounding-box region
+     * a workflow would acquire. No-op if the Stage Map window is not open.
+     */
+    public static void setBoundingBoxPreview(
+            double minStageX, double minStageY, double maxStageX, double maxStageY) {
+        Platform.runLater(() -> {
+            if (isVisible() && instance.canvas != null) {
+                instance.canvas.setBoundingBoxPreview(minStageX, minStageY, maxStageX, maxStageY);
+            }
+        });
+    }
+
+    /** Hides the bounding-box preview rectangle, if any. */
+    public static void clearBoundingBoxPreview() {
+        Platform.runLater(() -> {
+            if (instance != null && instance.canvas != null) {
+                instance.canvas.clearBoundingBoxPreview();
+            }
+        });
+    }
+
+    /**
      * Disposes of the window and resets the singleton for a clean re-open.
      * This prevents stale state issues when reopening after the microscope
      * disconnects or Live Mode is toggled.
