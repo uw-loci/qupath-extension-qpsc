@@ -1513,6 +1513,12 @@ public class StageControlPanel extends VBox {
 
             cameraModContent.getChildren().add(grid);
 
+            // Named channel-preset bar -- shares the WidefieldChannelPresetStore
+            // with the bounded-acquisition dialog's Fluorescence panel, so a
+            // preset saved here is immediately available in the acquisition
+            // dialog and vice versa.
+            cameraModContent.getChildren().add(buildChannelPresetBar(resolvedProfile));
+
             Label liveNote = new Label("Tip: select a channel radio first to switch the cube/light path; "
                     + "then the Exp/Intensity spinners drive the hardware live via SETEXP/SETPROP.");
             liveNote.setWrapText(true);
@@ -2372,6 +2378,188 @@ public class StageControlPanel extends VBox {
                 "Modality-Switch");
         t.setDaemon(true);
         t.start();
+    }
+
+    /**
+     * Builds the named channel-preset bar (ComboBox + Save / Delete) for the
+     * Camera tab's Fluorescence content. Shares
+     * {@link qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore}
+     * with the bounded-acquisition dialog, so presets round-trip between the
+     * two UIs.
+     *
+     * <p>Save semantics: captures the current per-channel exposure / intensity
+     * spinner values for every channel in the active library, and marks
+     * {@code selected=true} only on the channel whose preview radio is
+     * currently active (or none if "(None)" is selected).
+     *
+     * <p>Load semantics: writes each preset entry's exposure / intensity into
+     * the corresponding spinners (the spinner listeners then push to hardware
+     * via SETEXP / SETPROP for the active channel only). If exactly one
+     * channel in the preset is {@code selected=true} and we have a resolved
+     * APPLYCH profile, fire that channel's radio so APPLYCH switches the
+     * cube/light path. Otherwise the radio state is left alone.
+     */
+    private javafx.scene.layout.HBox buildChannelPresetBar(String resolvedProfile) {
+        ComboBox<String> combo = new ComboBox<>();
+        combo.setPromptText("(no preset)");
+        combo.setPrefWidth(160);
+        combo.setStyle("-fx-font-size: 10px;");
+        combo.setTooltip(
+                new Tooltip("Select a saved channel preset to populate the per-channel exposure / intensity spinners.\n"
+                        + "Presets are shared with the bounded-acquisition Fluorescence panel."));
+
+        boolean[] suppressListener = {false};
+        Runnable refresh = () -> {
+            suppressListener[0] = true;
+            try {
+                combo.getItems().setAll(qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.loadNames());
+                String last = qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.getLastPresetName();
+                if (!last.isEmpty() && combo.getItems().contains(last)) {
+                    combo.setValue(last);
+                } else {
+                    combo.setValue(null);
+                }
+            } finally {
+                suppressListener[0] = false;
+            }
+        };
+        refresh.run();
+
+        combo.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (suppressListener[0] || newVal == null || newVal.isEmpty()) return;
+            applyChannelPreset(newVal, resolvedProfile);
+        });
+
+        Button saveBtn = new Button("Save...");
+        saveBtn.setStyle("-fx-font-size: 10px;");
+        saveBtn.setTooltip(new Tooltip("Save the per-channel exposure / intensity spinner state as a named preset.\n"
+                + "The active preview channel (or none) becomes the preset's 'selected' channel."));
+        saveBtn.setOnAction(e -> {
+            TextInputDialog dialog = new TextInputDialog();
+            dialog.setTitle("Save Channel Preset");
+            dialog.setHeaderText("Save current channel spinner state");
+            dialog.setContentText("Preset name:");
+            dialog.showAndWait().ifPresent(rawName -> {
+                String name = rawName == null ? "" : rawName.trim();
+                String error = qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.validateName(name);
+                if (error != null) {
+                    cameraStatusLabel.setText(error);
+                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                    return;
+                }
+                boolean overwrite = qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.loadNames()
+                        .contains(name);
+                qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.savePreset(
+                        name, getActiveChannelId(), snapshotChannelState());
+                refresh.run();
+                cameraStatusLabel.setText((overwrite ? "Updated preset: " : "Saved preset: ") + name);
+                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+            });
+        });
+
+        Button deleteBtn = new Button("Delete");
+        deleteBtn.setStyle("-fx-font-size: 10px;");
+        deleteBtn.setTooltip(new Tooltip("Delete the currently-selected preset."));
+        deleteBtn.disableProperty().bind(combo.valueProperty().isNull());
+        deleteBtn.setOnAction(e -> {
+            String name = combo.getValue();
+            if (name == null || name.isEmpty()) return;
+            qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.deletePreset(name);
+            refresh.run();
+            cameraStatusLabel.setText("Deleted preset: " + name);
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+        });
+
+        Label label = new Label("Preset:");
+        label.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
+        javafx.scene.layout.HBox bar = new javafx.scene.layout.HBox(6, label, combo, saveBtn, deleteBtn);
+        bar.setAlignment(Pos.CENTER_LEFT);
+        return bar;
+    }
+
+    /** Returns the channel id whose preview radio is currently active, or null if "(None)" is. */
+    private String getActiveChannelId() {
+        for (var entry : cameraChannelRadios.entrySet()) {
+            if (entry.getValue().isSelected()) return entry.getKey();
+        }
+        return null;
+    }
+
+    /** Snapshot the current per-channel spinner state for preset save. */
+    private java.util.Map<String, qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.ChannelState>
+            snapshotChannelState() {
+        java.util.Map<String, qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.ChannelState> out =
+                new java.util.LinkedHashMap<>();
+        String activeId = getActiveChannelId();
+        for (var entry : cameraChannelExpSpinners.entrySet()) {
+            String id = entry.getKey();
+            Double exp = entry.getValue().getValue();
+            Spinner<Double> intSpinner = cameraChannelIntSpinners.get(id);
+            Double intensity = intSpinner != null ? intSpinner.getValue() : null;
+            boolean selected = id.equals(activeId);
+            out.put(
+                    id,
+                    new qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.ChannelState(
+                            selected, exp, intensity));
+        }
+        return out;
+    }
+
+    /**
+     * Apply a preset by name: write exposures / intensities into the
+     * per-channel spinners (the spinner listeners debounce and push to
+     * hardware), then -- if the preset has exactly one channel marked
+     * selected and we have a profile -- fire that channel's radio to drive
+     * APPLYCH.
+     */
+    private void applyChannelPreset(String name, String resolvedProfile) {
+        var preset = qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.loadPreset(name);
+        if (preset == null) {
+            cameraStatusLabel.setText("Preset '" + name + "' has no stored data.");
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+            return;
+        }
+        String singleSelectedId = null;
+        int selectedCount = 0;
+        for (var entry : preset.states().entrySet()) {
+            String id = entry.getKey();
+            var state = entry.getValue();
+            if (state.selected()) {
+                selectedCount++;
+                singleSelectedId = id;
+            }
+            Spinner<Double> exp = cameraChannelExpSpinners.get(id);
+            if (exp != null && state.exposureMs() != null) {
+                try {
+                    exp.getValueFactory().setValue(state.exposureMs());
+                } catch (Exception ex) {
+                    logger.warn("Set exposure spinner failed for '{}': {}", id, ex.getMessage());
+                }
+            }
+            Spinner<Double> intensity = cameraChannelIntSpinners.get(id);
+            if (intensity != null && state.intensity() != null && !intensity.isDisable()) {
+                try {
+                    intensity.getValueFactory().setValue(state.intensity());
+                } catch (Exception ex) {
+                    logger.warn("Set intensity spinner failed for '{}': {}", id, ex.getMessage());
+                }
+            }
+        }
+        qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.setLastPresetName(name);
+
+        // If the preset captured exactly one active channel and we know the
+        // APPLYCH profile, fire that radio so the cube/light path follows
+        // the preset. Multi-select presets leave the live radio alone --
+        // the Camera tab can only preview one channel at a time.
+        if (selectedCount == 1 && singleSelectedId != null && resolvedProfile != null) {
+            RadioButton radio = cameraChannelRadios.get(singleSelectedId);
+            if (radio != null) {
+                radio.setSelected(true);
+                radio.fire();
+            }
+        }
+        cameraStatusLabel.setText("Applied preset: " + name);
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
     }
 
     /**

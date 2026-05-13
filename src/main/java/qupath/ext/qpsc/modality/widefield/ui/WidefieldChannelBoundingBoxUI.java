@@ -28,6 +28,9 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.PropertyRef;
+import qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore;
+import qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.ChannelState;
+import qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.DecodedPreset;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
@@ -67,11 +70,8 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     private static final String PREF_KEY_PREFIX = "widefield.channel.";
     private static final String PREF_KEY_MASTER = PREF_KEY_PREFIX + "master_override_enabled";
     private static final String PREF_KEY_FOCUS_CHANNEL = PREF_KEY_PREFIX + "focus_channel";
-    // Named-preset persistence. NAMES is a TAB-separated list of display names;
-    // each preset is stored as a single pipe-delimited blob under DATA + safeKey.
-    private static final String PREF_KEY_PRESET_NAMES = PREF_KEY_PREFIX + "preset.names";
-    private static final String PREF_KEY_PRESET_DATA = PREF_KEY_PREFIX + "preset.";
-    private static final String PREF_KEY_LAST_PRESET = PREF_KEY_PREFIX + "preset.last";
+    // Named-preset persistence lives in WidefieldChannelPresetStore so the
+    // Live Viewer's Camera tab can share the same store.
 
     private final VBox root;
     private final CheckBox masterOverride;
@@ -332,7 +332,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                 new Tooltip("Select a saved channel preset to apply its checkbox / exposure / intensity values."));
         presetCombo.disableProperty().bind(masterOverride.selectedProperty().not());
 
-        refreshPresetCombo(PersistentPreferences.getStringPreference(PREF_KEY_LAST_PRESET, ""));
+        refreshPresetCombo(WidefieldChannelPresetStore.getLastPresetName());
 
         presetCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
             if (suppressPresetComboListener || newVal == null || newVal.isEmpty()) return;
@@ -378,7 +378,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     private void refreshPresetCombo(String selectAfter) {
         suppressPresetComboListener = true;
         try {
-            presetCombo.getItems().setAll(loadPresetNames());
+            presetCombo.getItems().setAll(WidefieldChannelPresetStore.loadNames());
             if (selectAfter != null
                     && !selectAfter.isEmpty()
                     && presetCombo.getItems().contains(selectAfter)) {
@@ -398,26 +398,14 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         dialog.setContentText("Preset name:");
         dialog.showAndWait().ifPresent(rawName -> {
             String name = rawName == null ? "" : rawName.trim();
-            if (name.isEmpty()) {
-                setStatus("Preset name cannot be empty.", true);
+            String error = WidefieldChannelPresetStore.validateName(name);
+            if (error != null) {
+                setStatus(error, true);
                 return;
             }
-            if (name.contains("\t") || name.contains("|")) {
-                setStatus("Preset name cannot contain TAB or '|' characters.", true);
-                return;
-            }
-            if (name.length() > 40) {
-                setStatus("Preset name too long (max 40 characters).", true);
-                return;
-            }
-            List<String> names = loadPresetNames();
-            boolean overwrite = names.contains(name);
-            persistPreset(name);
-            if (!overwrite) {
-                names.add(name);
-                persistPresetNames(names);
-            }
-            PersistentPreferences.setStringPreference(PREF_KEY_LAST_PRESET, name);
+            boolean overwrite = WidefieldChannelPresetStore.loadNames().contains(name);
+            Map<String, ChannelState> states = snapshotState();
+            WidefieldChannelPresetStore.savePreset(name, getFocusChannelId(), states);
             refreshPresetCombo(name);
             setStatus((overwrite ? "Updated preset: " : "Saved preset: ") + name, false);
         });
@@ -426,109 +414,60 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     private void onDeletePreset() {
         String name = presetCombo.getValue();
         if (name == null || name.isEmpty()) return;
-        List<String> names = loadPresetNames();
-        names.remove(name);
-        persistPresetNames(names);
-        PersistentPreferences.setStringPreference(PREF_KEY_PRESET_DATA + safeKey(name), null);
-        if (name.equals(PersistentPreferences.getStringPreference(PREF_KEY_LAST_PRESET, ""))) {
-            PersistentPreferences.setStringPreference(PREF_KEY_LAST_PRESET, null);
-        }
+        WidefieldChannelPresetStore.deletePreset(name);
         refreshPresetCombo(null);
         setStatus("Deleted preset: " + name, false);
     }
 
     private void applyPreset(String name) {
-        String blob = PersistentPreferences.getStringPreference(PREF_KEY_PRESET_DATA + safeKey(name), null);
-        if (blob == null || blob.isEmpty()) {
+        DecodedPreset preset = WidefieldChannelPresetStore.loadPreset(name);
+        if (preset == null) {
             setStatus("Preset '" + name + "' has no stored data.", true);
             return;
         }
-        // Format: v1|focus=<id>|<chId>=<sel>:<exp>:<int>|...
-        String[] parts = blob.split("\\|", -1);
-        if (parts.length < 1 || !"v1".equals(parts[0])) {
-            setStatus("Unsupported preset format for '" + name + "'.", true);
-            return;
-        }
-        String focusId = null;
-        Map<String, String[]> channelStates = new LinkedHashMap<>();
-        for (int i = 1; i < parts.length; i++) {
-            String part = parts[i];
-            if (part.startsWith("focus=")) {
-                focusId = part.substring("focus=".length());
-            } else {
-                int eq = part.indexOf('=');
-                if (eq < 1) continue;
-                String chId = part.substring(0, eq);
-                String[] fields = part.substring(eq + 1).split(":", -1); // selected:exposure:intensity
-                channelStates.put(chId, fields);
-            }
-        }
         for (Map.Entry<String, CheckBox> entry : channelCheckboxes.entrySet()) {
             String id = entry.getKey();
-            String[] fields = channelStates.get(id);
-            if (fields == null) {
+            ChannelState state = preset.states().get(id);
+            if (state == null) {
                 // Channel not in preset -- leave its current state alone.
                 continue;
             }
             try {
-                entry.getValue().setSelected(Boolean.parseBoolean(fields[0]));
-                if (fields.length > 1 && !fields[1].isEmpty()) {
+                entry.getValue().setSelected(state.selected());
+                if (state.exposureMs() != null) {
                     Spinner<Double> exp = channelExposures.get(id);
-                    if (exp != null) exp.getValueFactory().setValue(Double.parseDouble(fields[1]));
+                    if (exp != null) exp.getValueFactory().setValue(state.exposureMs());
                 }
-                if (fields.length > 2 && !fields[2].isEmpty()) {
+                if (state.intensity() != null) {
                     Spinner<Double> intensity = channelIntensities.get(id);
-                    if (intensity != null) intensity.getValueFactory().setValue(Double.parseDouble(fields[2]));
+                    if (intensity != null) intensity.getValueFactory().setValue(state.intensity());
                 }
             } catch (Exception ex) {
                 logger.warn("Failed to apply preset field for channel '{}': {}", id, ex.getMessage());
             }
         }
+        String focusId = preset.focusId();
         if (focusId != null && channelFocusRadios.containsKey(focusId)) {
             channelFocusRadios.get(focusId).setSelected(true);
         }
-        PersistentPreferences.setStringPreference(PREF_KEY_LAST_PRESET, name);
+        WidefieldChannelPresetStore.setLastPresetName(name);
         setStatus("Applied preset: " + name, false);
     }
 
-    private void persistPreset(String name) {
-        StringBuilder sb = new StringBuilder("v1");
-        String focusId = getFocusChannelId();
-        if (focusId != null) {
-            sb.append("|focus=").append(focusId);
-        }
+    private Map<String, ChannelState> snapshotState() {
+        Map<String, ChannelState> states = new LinkedHashMap<>();
         for (Map.Entry<String, CheckBox> entry : channelCheckboxes.entrySet()) {
             String id = entry.getKey();
-            boolean selected = entry.getValue().isSelected();
             Spinner<Double> exp = channelExposures.get(id);
             Spinner<Double> intensity = channelIntensities.get(id);
-            sb.append("|").append(id).append("=").append(selected).append(":");
-            if (exp != null && exp.getValue() != null) sb.append(exp.getValue());
-            sb.append(":");
-            if (intensity != null && intensity.getValue() != null) sb.append(intensity.getValue());
+            states.put(
+                    id,
+                    new ChannelState(
+                            entry.getValue().isSelected(),
+                            exp != null ? exp.getValue() : null,
+                            intensity != null ? intensity.getValue() : null));
         }
-        PersistentPreferences.setStringPreference(PREF_KEY_PRESET_DATA + safeKey(name), sb.toString());
-    }
-
-    private List<String> loadPresetNames() {
-        String raw = PersistentPreferences.getStringPreference(PREF_KEY_PRESET_NAMES, "");
-        if (raw.isEmpty()) return new ArrayList<>();
-        List<String> out = new ArrayList<>();
-        for (String s : raw.split("\t")) {
-            if (!s.isEmpty()) out.add(s);
-        }
-        return out;
-    }
-
-    private void persistPresetNames(List<String> names) {
-        PersistentPreferences.setStringPreference(PREF_KEY_PRESET_NAMES, String.join("\t", names));
-    }
-
-    private static String safeKey(String name) {
-        // Java Preferences keys are capped at 80 chars. Compact, deterministic
-        // mapping: lowercase + non-alphanumerics -> '_'. Names are validated to
-        // <= 40 chars on save, so total key length stays well under the limit.
-        return name.toLowerCase().replaceAll("[^a-z0-9_-]", "_");
+        return states;
     }
 
     private void setStatus(String message, boolean isError) {
