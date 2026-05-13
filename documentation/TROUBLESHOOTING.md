@@ -468,12 +468,36 @@ Combined, the symptom (live image stuck at the central 50% after Autofocus repor
 
 #### Q: Streaming Autofocus refuses with "metric range X% of peak is within noise"
 
-**A:** This is the `metric_flat` refusal, raised when the focus metric varies by less than 8% of the peak across the scanned Z range. Two distinct failure modes share this message:
+**A:** This is the `metric_flat` refusal, raised when the focus metric varies by less than 4% of the peak across the scanned Z range AND no clean Gaussian shape is detected AND no monotonic slope is detected. Three distinct failure modes share this message:
 
-1. **The scan window is genuinely inside one depth-of-field.** Widen the range from the Live Viewer dropdown (try 20-40um for low-mag objectives -- the OWS3 10x cannot resolve a focus shift across less than ~6um) or fall back to Sweep Focus.
+1. **The scan window is genuinely inside one depth-of-field.** Widen the range from the Live Viewer dropdown (the dropdown now repopulates per-objective: 10x up to 100 um, 20x up to 50 um, 40x up to 20 um, 60x+ up to 10 um -- see [tools/live-viewer.md](tools/live-viewer.md)) or fall back to Sweep Focus.
 2. **The stage is not actually moving at the configured slow speed.** As of 2026-05-05 (commit `a5e2b87`) the server logs `STREAM_AF:post-scan stage Z=... (expected z_end=...); achieved X% of planned Y um` after the scan loop. If `X%` is below 50% or above 150%, the warning line names the YAML key to fix: `stage.streaming_af.slow_speed_value` and `stage.streaming_af.slow_speed_um_per_s`. The same commit dumps the per-sample (t, z, metric) trace on the refusal path so you can confirm whether all samples are at one Z (stuck stage) or actually swept (featureless sample).
+3. **The metric is the wrong tool for this objective / sample.** As of 2026-05-12 (commits `401f014` through `8d89d9b`), three layered edge-detection checks fire BEFORE this refusal so a peak just past the scan boundary or a clean monotonic slope across the scan gets a retry walk instead of UNAVAILABLE. If you still see `metric_flat` after those checks, the metric genuinely has no signal in this Z range -- consider changing `score_metric` per objective in `autofocus_<scope>.yml` (see "Streaming Autofocus keeps focusing on dust" below).
 
-The 6um floor on the new range dropdown (commit `8a82529`) was chosen because 1-5um targets are not useful at low mag -- a 20um sweep on the OWS3 10x is itself near the detection threshold.
+#### Q: Streaming Autofocus commits the wrong Z when I start far from focus
+
+**A:** Fixed 2026-05-12 (commit `8d89d9b`). Previously, when streaming AF started 10-30 um from focus, the gaussian fit converged at the edge of the sampled samples (where `_gaussian_peak` clamps `mu` to `[z_arr.min(), z_arr.max()]`), and the algorithm committed that boundary-pinned peak instead of walking past it to find the real peak. The legacy edge-of-window check used the commanded `z_start`/`z_end` with a 10%-of-range tolerance, but `HEAD_DISCARD_MS=600` removed the first ~7 um of every scan, so a peak at the actual sampled boundary sat 7 um inside the commanded boundary and was mis-classified as interior.
+
+The fix adds three layered checks before the success commit:
+1. **mu-at-sampled-boundary**: when the gaussian fits a clean peak (R^2 >= 0.70, sigma < 0.45*span) and `mu` is within `sigma_fit` of the first/last in-motion sample's z, classify as `edge_low`/`edge_high` and walk one full range in that direction. Returns `best_z = mu_fit` as a fallback.
+2. **Pearson-correlation slope detector**: when the gaussian fit is degenerate (sigma at upper bound), check Pearson r between z and metric; if `|r| >= 0.5` and amplitude >= 0.5%, classify as `edge_low`/`edge_high` per sign of r.
+3. **Post-loop mu-fallback**: when retries exhaust without a `success`, commit to the best `mu` from an earlier mu-at-boundary attempt instead of UNAVAILABLE.
+
+Diagnostic: a successful walk-and-recover logs `STREAM_AF:gaussian mu=... pinned within ... um of sampled ... boundary` on attempt 1, followed by `STREAM_AF:committed final Z=...` after attempt 2 finds the real peak. See `claude-reports/2026-05-12_streaming-af-edge-detection-layers.md` for the full design and verification protocol.
+
+#### Q: Streaming Autofocus keeps focusing on dust / commits to a non-tissue Z
+
+**A:** The default per-objective `score_metric` in `autofocus_<scope>.yml` is `laplacian_variance` for PPM modalities. This metric is `var(scipy.ndimage.laplace(gray))` -- variance of squared Laplace responses -- which means a handful of sharp dust pixels at a non-tissue focus plane can outvote broader tissue contrast (the squared per-pixel responses blow up for high-curvature outliers). The AF then walks toward the dust speck, not the tissue.
+
+Workaround: change `score_metric` for the affected objective to `brenner_gradient`. Brenner is `sum((I[x+2] - I[x])^2)` -- still squared, but a directional first difference where broader tissue features contribute area-proportionally. Confirmed 2026-05-12 on OWS3 PPM 10x: laplacian_variance committed Z=-16.7 (dust) when true tissue focus was at Z=-26; switching to brenner_gradient found Z=-26 on the same FOV.
+
+Steps:
+1. Open the Autofocus Editor (Extensions > QP Scope > Autofocus Editor)
+2. Select the affected objective (e.g. `LOCI_OBJECTIVE_OLYMPUS_10X_001`)
+3. Change `score_metric` from `laplacian_variance` to `brenner_gradient`
+4. Save and retry.
+
+The packaged manifest's default per-modality is still `laplacian_variance`; per-rig YAML override is the current recommendation. If multiple rigs hit this, consider promoting `brenner_gradient` to the modality default (out of scope for now -- need more evidence across scopes/scenes).
 
 #### Q: Autofocus is too slow
 
