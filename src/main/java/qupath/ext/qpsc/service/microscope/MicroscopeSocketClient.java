@@ -1724,9 +1724,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
             int originalTimeout = readTimeout;
             try {
                 if (socket != null) {
-                    // Streaming AF scan is fast (<2s on PPM) but give it headroom
-                    // for slow hardware and serial overhead.
-                    socket.setSoTimeout(30000);
+                    // Worst-case AF time: 3 attempts (MAX_EDGE_RETRIES=2 +
+                    // initial), each scan window ~8-12s at slow stage speeds,
+                    // plus per-attempt fit/retry overhead. On sparse fluorescence
+                    // samples the full 3-attempt sequence has been observed at
+                    // ~70s. 180s gives headroom for slower stages and longer
+                    // sweep ranges without surfacing the false-positive
+                    // "MicroManager likely crashed" reconnect path that fires
+                    // when the client abandons the primary socket mid-command.
+                    socket.setSoTimeout(180000);
                 }
 
                 output.write(Command.STRMAFZ.getValue());
