@@ -42,7 +42,7 @@ import qupath.lib.gui.prefs.QuPathStyleManager;
  * <p>
  * Key features:
  * <ul>
- *   <li>TitledPane sections for Project, Hardware, Region, and Advanced options</li>
+ *   <li>TitledPane sections for Project, Hardware, Region, and Modality-Specific options</li>
  *   <li>Real-time acquisition preview showing tile count, time estimate, storage estimate</li>
  *   <li>Debounced preview updates (300ms delay) for responsive feedback</li>
  *   <li>Persistent preferences for all fields and section expansion states</li>
@@ -940,7 +940,7 @@ public class UnifiedAcquisitionController {
 
             advancedContent.getChildren().addAll(afGrid, new Separator(), modalityContentBox);
 
-            advancedPane = new TitledPane("ADVANCED OPTIONS", advancedContent);
+            advancedPane = new TitledPane("MODALITY-SPECIFIC OPTIONS", advancedContent);
             advancedPane.setExpanded(false); // Collapsed by default
             advancedPane.setStyle("-fx-font-weight: bold;");
         }

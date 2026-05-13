@@ -59,7 +59,7 @@ The center position defines the midpoint of the acquisition area. Tiles extend e
 | Corner 2 X/Y | Spinner | Opposite corner coordinates |
 | Get Stage Position | Button | Populate each corner from current stage position |
 
-### Advanced Options (Collapsed by Default)
+### Modality-Specific Options (Collapsed by Default)
 
 | Option | Type | Description |
 |--------|------|-------------|

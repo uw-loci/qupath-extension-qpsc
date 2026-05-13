@@ -866,7 +866,7 @@ public class ExistingImageAcquisitionController {
 
             content.getChildren().addAll(afGrid, new Separator(), modalityPane);
 
-            advancedPane = new TitledPane("ADVANCED OPTIONS", content);
+            advancedPane = new TitledPane("MODALITY-SPECIFIC OPTIONS", content);
             advancedPane.setExpanded(false);
             advancedPane.setStyle("-fx-font-weight: bold;");
         }
