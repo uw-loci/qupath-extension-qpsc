@@ -105,6 +105,23 @@ public final class ImageFlipHelper {
             return future;
         }
 
+        // If the open entry is a sub-acquisition (stitched output with xy_offset
+        // metadata and a base_image distinct from its own name), no flipped sibling
+        // applies. Sub-images are pyramid outputs from the active microscope's
+        // camera, so the (source_scanner, target_microscope) preset flip is a
+        // property of the parent macro -- not of the sub-image. Worse,
+        // findFlippedSibling matches by shared base_image, which means a
+        // sub-image and the macro's (flipped XY) companion appear as siblings;
+        // without this guard, the helper switches the open entry from the
+        // sub-image to the macro's flipped companion, dropping all sub-image
+        // annotations and producing the broken-sub-image-acquisition regression.
+        if (isSubAcquisitionEntry(openEntry)) {
+            logger.info(
+                    "validateAndFlipIfNeeded: open entry '{}' is a sub-acquisition -- no-op", openEntry.getImageName());
+            future.complete(true);
+            return future;
+        }
+
         // Resolve the flip we need.
         boolean flipX;
         boolean flipY;
@@ -281,6 +298,21 @@ public final class ImageFlipHelper {
     public static boolean isFlippedSiblingName(String name) {
         if (name == null) return false;
         return name.endsWith("(flipped X)") || name.endsWith("(flipped Y)") || name.endsWith("(flipped XY)");
+    }
+
+    /**
+     * @return true if {@code entry} looks like a sub-acquisition: it carries a
+     *     non-zero {@code xy_offset} and a {@code base_image} distinct from its
+     *     own stripped name. Mirrors {@code ExistingImageWorkflowV2.isSubAcquisition}.
+     */
+    private static boolean isSubAcquisitionEntry(ProjectImageEntry<BufferedImage> entry) {
+        if (entry == null) return false;
+        double[] offset = ImageMetadataManager.getXYOffset(entry);
+        if (offset[0] == 0 && offset[1] == 0) return false;
+        String baseImage = ImageMetadataManager.getBaseImage(entry);
+        if (baseImage == null || baseImage.isEmpty()) return false;
+        String ownName = qupath.lib.common.GeneralTools.stripExtension(entry.getImageName());
+        return !baseImage.equals(ownName);
     }
 
     /**

@@ -525,6 +525,20 @@ public class ExistingImageWorkflowV2 {
         private CompletableFuture<WorkflowState> routeSubWorkflow(WorkflowState state) {
             if (state == null) return CompletableFuture.completedFuture(null);
 
+            // Sub-acquisitions take priority over slide-specific alignment. Their
+            // pixel coords are in the camera's pixel frame, while the slide-specific
+            // alignment (resolved via base_image since 18a800d) is the parent
+            // macro's transform in macro pixel coords. Applying the macro transform
+            // to sub-image annotation coords shrinks every stage move by
+            // camera_px / macro_px (the symptom class of the 2026-05-10 MH_Colon
+            // incident). Sub-image annotations always go through offset-based
+            // targeting, which builds a fresh sub-image-pixel -> stage transform
+            // from xy_offset + pixel size.
+            if (isSubAcquisition()) {
+                logger.info("Routing to sub-acquisition offset-based targeting path");
+                return processSubAcquisitionPath(state);
+            }
+
             // If we have a slide-specific alignment (including previously refined ones),
             // use it directly -- unless the user wants a full manual re-alignment.
             // SINGLE_TILE refinement is handled later in handleRefinement() and needs
@@ -535,14 +549,6 @@ public class ExistingImageWorkflowV2 {
                         "Using slide-specific alignment (refinement={}) - delegating to existing workflow logic",
                         state.refinementChoice);
                 return processSlideSpecificAlignment(state);
-            }
-
-            // Check if this is a sub-acquisition with offset metadata.
-            // Sub-acquisitions can compute their pixel-to-stage transform directly
-            // from xy_offset + pixel size, without needing macro/green box detection.
-            if (isSubAcquisition()) {
-                logger.info("Routing to sub-acquisition offset-based targeting path");
-                return processSubAcquisitionPath(state);
             }
 
             // Route based on alignment choice - both delegate to working implementations
@@ -805,38 +811,23 @@ public class ExistingImageWorkflowV2 {
 
             // Delegate to ProjectHelper for proper project setup
             return ProjectHelper.setupProject(gui, state.sample)
-                    .thenCompose(projectInfo -> {
+                    .thenApply(projectInfo -> {
                         if (projectInfo == null) {
                             throw new RuntimeException("Project setup failed");
                         }
                         state.projectInfo = projectInfo;
-
-                        // Validate and flip image if needed -- pass preset flip state explicitly
-                        // (see processSlideSpecificAlignment for the OWS3 incident this avoids).
-                        @SuppressWarnings("unchecked")
-                        Project<BufferedImage> proj = (Project<BufferedImage>) projectInfo.getCurrentProject();
-                        AffineTransformManager.TransformPreset presetForFlip =
-                                state.alignmentChoice != null ? state.alignmentChoice.selectedTransform() : null;
-                        boolean requiresFlipX = FlipResolver.resolveFlipX(null, presetForFlip, null);
-                        boolean requiresFlipY = FlipResolver.resolveFlipY(null, presetForFlip, null);
-                        String sampleNameForFlip2 = state.sample != null ? state.sample.sampleName() : null;
-                        return ImageFlipHelper.validateAndFlipIfNeeded(
-                                        gui, proj, sampleNameForFlip2, requiresFlipX, requiresFlipY)
-                                .thenApply(validated -> {
-                                    if (validated) {
-                                        verifyOpenEntryMatchesPreset(gui, proj, requiresFlipX, requiresFlipY);
-                                    }
-                                    return validated;
-                                });
+                        return state;
                     })
-                    .thenCompose(validated -> {
-                        if (!validated) {
-                            throw new RuntimeException("Image validation failed");
-                        }
-
-                        // Build transform from offset metadata.
-                        // This must happen AFTER flip validation since the image dimensions
-                        // and pixel coordinates are from the (possibly flipped) server.
+                    .thenCompose(s -> {
+                        // No validateAndFlipIfNeeded for sub-images: the sub-image
+                        // pyramid is already in the active scope's stage-aligned
+                        // frame (the stitcher baked any flip into TileConfiguration),
+                        // and sub-image entries do not have flipped siblings. The
+                        // (source_scanner, target_microscope) preset flip is a
+                        // property of the parent macro -- not of the sub-image's
+                        // own pixel coordinates. The flipX/flipY metadata read
+                        // above is the sub-image's stage-relative orientation and
+                        // is folded into the offset-based transform below.
                         AffineTransform transform = buildOffsetBasedTransform(
                                 xyOffset, flipX, flipY, entryModality, entryObjective, entryDetector);
 

@@ -28,6 +28,8 @@ A `(flipped X|Y|XY)` companion entry is **still created on demand** by the align
 
 `ImageFlipHelper.validateAndFlipIfNeeded` is the entry point for "ensure the sibling exists and is the open entry". It resolves flip from the preset using the open entry's `SOURCE_MICROSCOPE` metadata + active microscope name, and either reuses an existing sibling or creates one via `QPProjectFunctions.createFlippedDuplicate`.
 
+**`validateAndFlipIfNeeded` is a no-op for sub-acquisitions.** The flipped-sibling concept applies only to imported macro entries -- a sub-image is a pyramid output from the active microscope's camera, already in the active scope's stage-aligned frame, and has no flipped companion. The helper short-circuits when the open entry has a non-zero `xy_offset` and a `base_image` distinct from its own name (the same predicate `ExistingImageWorkflowV2.isSubAcquisition` uses for routing). Without this guard, `findFlippedSibling`'s `base_image` match would resolve a sub-image to the parent macro's `(flipped XY)` sibling and silently switch the open entry across, dropping all sub-image annotations. See `claude-reports/design/2026-05-13_subimage-acquisition-routing-fix.md` for the full incident.
+
 ### Step 1: QuPath Full-Res, unflipped base
 
 Annotations live on the unflipped base entry. The optional `(flipped XY)` sibling, when present, mirrors annotation coordinates via `TransformationFunctions.transformHierarchy` so back-propagation keeps the two in sync. Full-resolution pixel coordinates are interpreted in the unflipped pixel frame for transform purposes.
@@ -200,7 +202,7 @@ The `--hint-z` flag tells the server to start its autofocus search near the pred
 | `utilities/AffineTransformManager.java` | Persistent transform storage (JSON); `TransformPreset.flipMacroX/Y` per-pair flip; `saveSlideAlignment` 7-arg overload writes per-slide `flipMacroX/Y` |
 | `utilities/AffineTransform3D.java` | 3D transform with Z scale/offset |
 | `utilities/FlipResolver.java` | Resolves macro flip in priority order: per-image metadata (legacy), active preset, per-detector YAML, default false |
-| `utilities/ImageFlipHelper.java` | `validateAndFlipIfNeeded` -- ensures a `(flipped X|Y|XY)` sibling exists and is the open entry on scopes where the active `(source_scanner, target_microscope)` preset has `flipMacroX/Y = true`. For visual UX during alignment only; not authoritative for flip state. |
+| `utilities/ImageFlipHelper.java` | `validateAndFlipIfNeeded` -- ensures a `(flipped X|Y|XY)` sibling exists and is the open entry on scopes where the active `(source_scanner, target_microscope)` preset has `flipMacroX/Y = true`. For visual UX during alignment only; not authoritative for flip state. **No-op when the open entry is a sub-acquisition** (sub-images do not have flipped siblings). |
 | `controller/workflow/AlignmentHelper.java` | `checkForSlideAlignment` — single normalization point that bakes alignment-frame flip into the loaded transform |
 | `controller/ForwardPropagationWorkflow.java` | `createFlip(flipX, flipY, w, h)` flip transform; back/forward propagation also baked through this |
 | `utilities/TilingUtilities.java` | Grid computation with axis inversion |

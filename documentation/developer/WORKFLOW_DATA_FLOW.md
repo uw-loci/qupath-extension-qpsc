@@ -125,6 +125,23 @@ this step but before the acquisition phase, the tile config from refinement
 is stale. The current gate fires before acquisition only -- if you want to
 re-run alignment with a new objective, restart the workflow.
 
+**Sub-image-as-source path (`processSubAcquisitionPath`).** When the open
+entry is a previously-acquired sub-image (non-zero `xy_offset`, `base_image`
+distinct from its own name), `routeSubWorkflow` dispatches to the
+offset-based path **before** the slide-specific-alignment branch. The
+sub-image branch builds its pixel -> stage transform directly from the
+entry's `xy_offset`, the image's pixel calibration, and a half-FOV
+correction derived from the entry's `modality / objective / detector`
+metadata. It does **not** consume the parent macro's alignment JSON; doing
+so would apply a macro-pixel transform to sub-image (camera-pixel)
+annotation coords and shrink every stage move by `camera_px / macro_px`
+(see the 2026-05-10 MH_Colon incident class, and the 2026-05-13
+sub-image-acquisition-routing fix for the routing regression that this
+ordering closes). The sub-image branch also does not call
+`ImageFlipHelper.validateAndFlipIfNeeded`, because sub-images have no
+flipped sibling -- the helper itself short-circuits for sub-acquisition
+entries.
+
 ### Multi-Slide Existing Image (`MultiSlideExistingImageWorkflow`, experimental)
 
 | Step | What |
