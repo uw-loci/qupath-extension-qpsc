@@ -315,6 +315,7 @@ Payload flags (text, terminated by `ENDOFSTR`):
 | `--objective <id>` | no | Caller's preferred objective (e.g. `LOCI_OBJECTIVE_OLYMPUS_20X_POL_001`). If missing, the server auto-resolves via pixel-size match against `config.hardware.objectives`. |
 | `--range <um>` | no | Override of `sweep_range_um` from the yaml. |
 | `--dump 1` | no | Enable server-side frame dumping (TIFs + CSV + manifest). When set, the server writes all captured frames and per-frame metrics to a diagnostics folder and includes the path in the response. Used by the Autofocus Configuration Editor's Test button for offline analysis. |
+| `--max-attempts <n>` | no | Cap on focus-search attempts (edge retries). Pass 0 (default) to use the server default (MAX_EDGE_RETRIES + 1 = 3), appropriate for Live Viewer "find focus from scratch" use. Pass 1 from tile-AF to perform a single fast scan with the previous tile's Z as a tight seed. |
 
 Server-side sequence:
 
