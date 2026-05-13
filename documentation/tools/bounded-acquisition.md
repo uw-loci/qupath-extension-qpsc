@@ -66,6 +66,18 @@ The center position defines the midpoint of the acquisition area. Tiles extend e
 | WB Mode | ComboBox | White balance mode (JAI cameras only): Off, Camera AWB, Simple, or Per-angle calibrated exposures. Applies immediately on selection. |
 | Angle Overrides | Various | Modality-specific options (e.g., PPM angle overrides) |
 
+**Fluorescence / Widefield IF channel presets:**
+
+When using a fluorescence-style modality with a channel library, a channel-preset bar appears below the per-channel checkbox and spinner fields:
+
+| Option | Type | Description |
+|--------|------|-------------|
+| Preset Dropdown | ComboBox | Select a saved channel preset to restore per-channel exposure and intensity values from a previous session. |
+| Save... | Button | Capture the current checkbox and spinner state (which channels are checked, their exposure and intensity values) as a named preset. Preset names must be unique and under 40 characters. |
+| Delete | Button | Delete the currently-selected preset. |
+
+Presets are shared with the [Live Viewer](live-viewer.md) Camera tab, so a preset saved during acquisition setup in the bounded-acquisition dialog is immediately available in the Live Viewer, and vice versa.
+
 ### Acquisition Preview
 
 Real-time preview showing calculated acquisition details:
