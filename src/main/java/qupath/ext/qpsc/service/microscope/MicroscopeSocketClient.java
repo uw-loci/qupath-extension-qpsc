@@ -1694,6 +1694,27 @@ public class MicroscopeSocketClient implements AutoCloseable {
     public StreamingFocusResult streamingFocus(
             String yamlPath, String objective, String modality, double rangeOverrideUm, boolean dumpFrames)
             throws IOException {
+        return streamingFocus(yamlPath, objective, modality, rangeOverrideUm, dumpFrames, 0);
+    }
+
+    /**
+     * Variant that also caps the server-side edge-retry budget.
+     *
+     * @param maxAttempts Maximum number of scan attempts before refusal. Pass
+     *                    0 to use the server default (MAX_EDGE_RETRIES + 1 = 3,
+     *                    appropriate for Live Viewer "find focus from scratch"
+     *                    use). Pass 1 from acquisition tile-AF so the call is
+     *                    a single fast scan -- the previous tile's Z is a tight
+     *                    seed and a multi-attempt walk is wasted budget.
+     */
+    public StreamingFocusResult streamingFocus(
+            String yamlPath,
+            String objective,
+            String modality,
+            double rangeOverrideUm,
+            boolean dumpFrames,
+            int maxAttempts)
+            throws IOException {
         if (yamlPath == null || yamlPath.isEmpty()) {
             throw new IllegalArgumentException("yamlPath is required for streamingFocus");
         }
@@ -1711,6 +1732,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
         if (dumpFrames) {
             msgBuilder.append(" --dump 1");
+        }
+        if (maxAttempts > 0) {
+            msgBuilder.append(" --max-attempts ").append(maxAttempts);
         }
         msgBuilder.append(" ").append(END_MARKER);
         String message = msgBuilder.toString();
