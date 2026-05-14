@@ -137,6 +137,7 @@ Each annotation's acquisition is added to the project as it completes. Metadata 
 | Poor alignment at edges | Too few alignment points | Add more calibration points spread across the image |
 | Auto-Align (SIFT) fails near correct tile | Bit-depth mismatch (16-bit camera vs 8-bit H&E WSI) | SIFT Settings should default to `PERCENTILE` 2/98 + CLAHE on. If still failing, raise CLAHE clip to 4.0 or widen percentile to 0.5/99.5. See [Preferences > SIFT Auto-Alignment](../PREFERENCES.md#sift-auto-alignment). |
 | Auto-Align (SIFT) fails far from tile | Stage too far from target | Drive the stage roughly close (live view should partially overlap the tile) before clicking SIFT. SIFT is a refinement, not a search. |
+| "Sub-image Acquired on a Different Microscope -- Workflow Cancelled" | Sub-image opened on a different scope than the one that acquired it | See [TROUBLESHOOTING.md: Sub-image Cross-Scope Mismatch](../TROUBLESHOOTING.md#q-sub-image-acquired-on-a-different-microscope--workflow-cancelled) for two ways to resolve this. |
 
 ## See Also
 
