@@ -392,6 +392,25 @@ Drive the stage roughly close (a few hundred microns is enough) using the joysti
 
 **If the dialog fires after `7f40a47` is on the server:** capture the server log and grep for `STREAM_AF:entry camera ROI` — if the first AF run after MM startup logs a cropped entry, the camera was already cropped before the Live Viewer was opened (operator-set, or an external Python session). If you see a `STREAM_AF:cropped` line without a matching `STREAM_AF:restored ... [full sensor]` line at the end of the same run, file an issue: the absolute anchoring has been defeated.
 
+#### Q: "Source Microscope Missing -- Workflow Cancelled" error
+
+**A:** The open entry has no `source_microscope` metadata, and the active microscope requires a flipped sibling for visual-UX during alignment.
+
+**What this means:**
+- The image was imported without recording which microscope (scanner) it came from
+- The active microscope has saved alignment presets with `flipMacroX` or `flipMacroY` set (meaning the optical path is flipped)
+- The workflow cannot determine which preset's flip state applies to this entry, so it refuses to proceed
+
+**Why this matters:** Without knowing the source microscope, the workflow can't resolve which preset to use. On a flip-needing scope, proceeding with the wrong flip assumption would cause the live camera view to disagree with the annotations by a mirror, breaking alignment and driving the stage to the wrong physical location.
+
+**To fix:**
+1. Go to **Microscope → Stage Map**
+2. Click **Stamp Source Microscope** button
+3. Select the microscope (scanner) that originally captured the overview image
+4. Restart the workflow
+
+**Alternative:** If you don't know the original source microscope, open the parent macro entry (overview image) instead of a sub-image and re-run the workflow on that.
+
 #### Q: "Objective Pixel-Size Mismatch -- Workflow Cancelled" error
 
 **A:** The dialog shows that MicroManager's active objective does not match the wizard's selection. The tile grid is planned for the wizard's objective; if the actual objective in MicroManager is different, tiles will be spaced incorrectly and the mosaic will not be usable.

@@ -117,13 +117,16 @@ Each workflow column lists, in order:
 | Read | Wizard objective+detector+modality (`AcquisitionWizardDialog`); macro pixel size from project entry; per-slide alignment JSON (`AffineTransformManager.loadSlideAlignmentWithFrame`) -- lookup key is resolved through the open entry's `base_image` metadata via `AlignmentHelper.resolveMacroLookupKey`, so a sub-image entry resolves to the parent macro's key, never to its own auto-registered sub-frame JSON; MM live pixel size for validation |
 | Compare | YAML pixel size for chosen objective vs MM live (5% threshold); loaded alignment's `pixelFrame == "macro"` |
 | Write | Tile config (`<sample>/<modality>/<region>/TileConfiguration.txt`, `_QP.txt`) in macro-pixel coords; per-slide alignment JSON refresh (written under the macro lookup key, with `pixelFrame="macro"`); acquisition command file |
-| Gate | `validateObjectivePixelSize` and `validateCameraRoi` in `performAcquisition` (line 1071) -- after wizard, after alignment refinement, before `AcquisitionManager.execute()`. The pixel-frame gate runs earlier inside `AlignmentHelper.checkForSlideAlignment`. |
+| Gate | `validateObjectivePixelSize` and `validateCameraRoi` fire at **three** points: (a) `AcquisitionWizardDialog.confirmCalibrationStatus` -- before the workflow even launches, so a wizard-vs-MM objective mismatch surfaces before any project / flipped-duplicate / alignment-JSON writes; (b) `ExistingImageWorkflowV2.handleRefinement` -- before any tile creation or stage motion (defense-in-depth if the wizard gate was unable to run, e.g. MM not connected at wizard time); (c) `ExistingImageWorkflowV2.performAcquisition` -- final backstop, catches MM state that changed during refinement. The pixel-frame gate runs earlier inside `AlignmentHelper.checkForSlideAlignment`. |
 
-Notes: the alignment refinement step (`SingleTileRefinement`) plans alignment
-tiles with the wizard's objective. If the wizard objective is changed after
-this step but before the acquisition phase, the tile config from refinement
-is stale. The current gate fires before acquisition only -- if you want to
-re-run alignment with a new objective, restart the workflow.
+Notes: the wizard-time gate is the user-facing "you picked the wrong
+objective" warning. The two workflow-time gates are safety nets: they
+cover (a) the case where MM was offline when the wizard opened and a
+delayed connection allowed the workflow to start, and (b) the case where
+the user changed objective in MicroManager mid-workflow. All three call
+`validateMMAgainstSelection`, which is a thin wrapper around the same
+two `QPScopeChecks` methods, so the threshold (5% pixel size, 5% sensor
+ROI) and the diagnostic dialog content are identical at every layer.
 
 **Sub-image-as-source path (`processSubAcquisitionPath`).** When the open
 entry is a previously-acquired sub-image (non-zero `xy_offset`, `base_image`
