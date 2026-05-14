@@ -390,6 +390,10 @@ public class BoundedAcquisitionWorkflow {
                                 // Null means "use YAML default" and produces no CLI flag.
                                 config.commandBuilder().afStrategy(result.afStrategy());
 
+                                // Per-tile snap-loop inner axis (loop-order toggle).
+                                // Null means "use per-modality default" and produces no CLI flag.
+                                config.commandBuilder().innerAxis(result.innerAxis());
+
                                 logger.info(
                                         "Starting acquisition - Sample: {}, Mode: {}, Angles: {}, wbMode: {}",
                                         result.sampleName(),

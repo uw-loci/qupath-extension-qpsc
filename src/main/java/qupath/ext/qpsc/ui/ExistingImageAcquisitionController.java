@@ -10,6 +10,8 @@ import java.util.stream.Collectors;
 import javafx.animation.PauseTransition;
 import javafx.application.ColorScheme;
 import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
+import javafx.beans.value.ObservableBooleanValue;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -26,6 +28,7 @@ import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.WbMode;
+import qupath.ext.qpsc.modality.widefield.ui.WidefieldChannelBoundingBoxUI;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
@@ -130,7 +133,12 @@ public class ExistingImageAcquisitionController {
             // White balance settings (JAI camera only)
             boolean enableWhiteBalance,
             boolean perAngleWhiteBalance,
-            String wbMode) {}
+            String wbMode,
+
+            // Per-tile snap-loop inner axis. Null = omit the flag and let the
+            // server fall back to its per-modality default. Values: "z",
+            // "channel", "angle".
+            String innerAxis) {}
 
     /**
      * Shows the consolidated acquisition dialog.
@@ -217,6 +225,13 @@ public class ExistingImageAcquisitionController {
         private TitledPane modalityPane;
         private VBox modalityContent;
         private ComboBox<String> afStrategyCombo;
+
+        // Z-stack section: loop-order toggle (channel-inner / angle-inner alternative).
+        private CheckBox zStackEnableCheck;
+        private RadioButton loopOrderInnerZRadio;
+        private RadioButton loopOrderInnerAltRadio;
+        private Label loopOrderLabel;
+        private VBox loopOrderRow;
 
         // UI Components - White Balance (hidden for non-JAI or non-WB modalities)
         private Label wbLabel;
@@ -872,11 +887,12 @@ public class ExistingImageAcquisitionController {
         }
 
         private TitledPane createZStackSection() {
-            CheckBox enableCheck = new CheckBox("Enable Z-stack acquisition");
-            enableCheck.setTooltip(
+            zStackEnableCheck = new CheckBox("Enable Z-stack acquisition");
+            zStackEnableCheck.setTooltip(
                     new Tooltip("Acquire multiple Z-planes at each tile position and compute a projection. "
                             + "Essential for thick samples and SHG/multiphoton imaging."));
-            enableCheck.setSelected(PersistentPreferences.isZStackEnabled());
+            zStackEnableCheck.setSelected(PersistentPreferences.isZStackEnabled());
+            CheckBox enableCheck = zStackEnableCheck;
 
             Spinner<Double> rangeSpinner = new Spinner<>(1.0, 2000.0, PersistentPreferences.getZStackRange(), 5.0);
             rangeSpinner.setEditable(true);
@@ -938,7 +954,41 @@ public class ExistingImageAcquisitionController {
             grid.add(projectionCombo, 1, 2);
             grid.add(infoLabel, 0, 3, 2, 1);
 
-            VBox zContent = new VBox(8, enableCheck, grid);
+            // Loop-order toggle: mirrors the one in UnifiedAcquisitionController.
+            // Disabled when Z-stack is off OR (widefield) fewer than 2 channels
+            // are selected. Hidden for non-participating modalities (BF, LSM).
+            ToggleGroup loopOrderGroup = new ToggleGroup();
+            loopOrderInnerZRadio = new RadioButton();
+            loopOrderInnerAltRadio = new RadioButton();
+            loopOrderInnerZRadio.setToggleGroup(loopOrderGroup);
+            loopOrderInnerAltRadio.setToggleGroup(loopOrderGroup);
+            loopOrderInnerZRadio.setSelected(true);
+            loopOrderInnerZRadio.setTooltip(new Tooltip("Loop order across Z and channels (widefield) or angles (PPM). "
+                    + "Default sweeps Z inner -- fewer filter / rotation changes, faster."));
+            loopOrderInnerAltRadio.setTooltip(
+                    new Tooltip("Alternative loop order. Widefield: 'Channels per Z' re-images every "
+                            + "channel at each Z -- slower but tightly Z-registered for live samples. "
+                            + "PPM: 'Z per angle' sweeps Z per angle -- fewer rotation moves on z-stacks."));
+            loopOrderInnerAltRadio.selectedProperty().addListener((obs, oldV, newV) -> {
+                String family = loopOrderFamily(modalityBox != null ? modalityBox.getValue() : null);
+                if (family == null) return;
+                String chosen;
+                if (PersistentPreferences.LOOP_ORDER_FAMILY_WIDEFIELD.equals(family)) {
+                    chosen = newV ? "channel" : "z";
+                } else {
+                    chosen = newV ? "z" : "angle";
+                }
+                PersistentPreferences.setAcqLoopOrder(family, chosen);
+            });
+            loopOrderLabel = new Label("Loop order:");
+            loopOrderLabel.setStyle("-fx-font-weight: bold;");
+            HBox loopOrderRadios = new HBox(15, loopOrderInnerZRadio, loopOrderInnerAltRadio);
+            loopOrderRadios.setAlignment(Pos.CENTER_LEFT);
+            loopOrderRow = new VBox(4, loopOrderLabel, loopOrderRadios);
+            loopOrderRow.setPadding(new Insets(8, 0, 0, 0));
+            updateLoopOrderToggle(modalityBox != null ? modalityBox.getValue() : null);
+
+            VBox zContent = new VBox(8, enableCheck, grid, loopOrderRow);
             zContent.setPadding(new Insets(5));
 
             TitledPane pane = new TitledPane("Z-STACK OPTIONS", zContent);
@@ -946,6 +996,80 @@ public class ExistingImageAcquisitionController {
             pane.setAnimated(false);
             pane.setStyle("-fx-font-weight: bold;");
             return pane;
+        }
+
+        private static String loopOrderFamily(String modality) {
+            if (modality == null) {
+                return null;
+            }
+            String norm = modality.toLowerCase();
+            if (norm.startsWith("ppm")) {
+                return PersistentPreferences.LOOP_ORDER_FAMILY_PPM;
+            }
+            if (norm.startsWith("fl")
+                    || norm.startsWith("widefield")
+                    || norm.startsWith("epi")
+                    || norm.startsWith("fluorescence")) {
+                return PersistentPreferences.LOOP_ORDER_FAMILY_WIDEFIELD;
+            }
+            return null;
+        }
+
+        private void updateLoopOrderToggle(String modality) {
+            if (loopOrderInnerZRadio == null || loopOrderInnerAltRadio == null) {
+                return;
+            }
+            String family = loopOrderFamily(modality);
+            loopOrderInnerZRadio.disableProperty().unbind();
+            loopOrderInnerAltRadio.disableProperty().unbind();
+            loopOrderLabel.setDisable(false);
+
+            if (PersistentPreferences.LOOP_ORDER_FAMILY_PPM.equals(family)) {
+                loopOrderInnerZRadio.setText("Angle per Z (current default)");
+                loopOrderInnerAltRadio.setText("Z per angle (fast for thicker slides)");
+                loopOrderInnerZRadio
+                        .disableProperty()
+                        .bind(zStackEnableCheck.selectedProperty().not());
+                loopOrderInnerAltRadio
+                        .disableProperty()
+                        .bind(zStackEnableCheck.selectedProperty().not());
+                String saved = PersistentPreferences.getAcqLoopOrder(family);
+                boolean useAlt = "z".equalsIgnoreCase(saved);
+                loopOrderInnerAltRadio.setSelected(useAlt);
+                loopOrderInnerZRadio.setSelected(!useAlt);
+                loopOrderRow.setVisible(true);
+                loopOrderRow.setManaged(true);
+            } else if (PersistentPreferences.LOOP_ORDER_FAMILY_WIDEFIELD.equals(family)) {
+                loopOrderInnerZRadio.setText("Z per channel (fast, fixed slides)");
+                loopOrderInnerAltRadio.setText("Channels per Z (drift-tolerant)");
+                ObservableBooleanValue multipleChannels = modalityUI instanceof WidefieldChannelBoundingBoxUI wfUi
+                        ? wfUi.hasMultipleChannelsSelectedProperty()
+                        : null;
+                if (multipleChannels != null) {
+                    loopOrderInnerZRadio
+                            .disableProperty()
+                            .bind(zStackEnableCheck.selectedProperty().not().or(Bindings.not(multipleChannels)));
+                    loopOrderInnerAltRadio
+                            .disableProperty()
+                            .bind(zStackEnableCheck.selectedProperty().not().or(Bindings.not(multipleChannels)));
+                } else {
+                    loopOrderInnerZRadio
+                            .disableProperty()
+                            .bind(zStackEnableCheck.selectedProperty().not());
+                    loopOrderInnerAltRadio
+                            .disableProperty()
+                            .bind(zStackEnableCheck.selectedProperty().not());
+                }
+                String saved = PersistentPreferences.getAcqLoopOrder(family);
+                boolean useAlt = "channel".equalsIgnoreCase(saved);
+                loopOrderInnerAltRadio.setSelected(useAlt);
+                loopOrderInnerZRadio.setSelected(!useAlt);
+                loopOrderRow.setVisible(true);
+                loopOrderRow.setManaged(true);
+            } else {
+                loopOrderRow.setVisible(false);
+                loopOrderRow.setManaged(false);
+            }
         }
 
         private void createPreviewPanel() {
@@ -1113,6 +1237,11 @@ public class ExistingImageAcquisitionController {
 
             // Update white balance visibility based on current detector and modality
             updateWhiteBalanceVisibility();
+
+            // Refresh the loop-order toggle in the Z-stack section (labels +
+            // disable binding depend on the new modality's family and channel
+            // count). Re-applies the saved per-family pick from preferences.
+            updateLoopOrderToggle(modality);
         }
 
         /**
@@ -1777,6 +1906,22 @@ public class ExistingImageAcquisitionController {
                         enableWhiteBalance,
                         perAngleWhiteBalance);
 
+                // Resolve --inner-axis from the loop-order toggle. Null means
+                // "use server's per-modality default" so byte-identical wire
+                // format is preserved when the toggle stays on default.
+                String innerAxis = null;
+                String loopFamily = loopOrderFamily(modality);
+                if (loopFamily != null
+                        && loopOrderInnerAltRadio != null
+                        && !loopOrderInnerAltRadio.isDisabled()
+                        && loopOrderInnerAltRadio.isSelected()) {
+                    if (PersistentPreferences.LOOP_ORDER_FAMILY_WIDEFIELD.equals(loopFamily)) {
+                        innerAxis = "channel";
+                    } else if (PersistentPreferences.LOOP_ORDER_FAMILY_PPM.equals(loopFamily)) {
+                        innerAxis = "z";
+                    }
+                }
+
                 return new ExistingImageAcquisitionConfig(
                         sampleName,
                         projectsFolder,
@@ -1794,7 +1939,8 @@ public class ExistingImageAcquisitionController {
                         afStrategyProtocol,
                         enableWhiteBalance,
                         perAngleWhiteBalance,
-                        wbMode);
+                        wbMode,
+                        innerAxis);
 
             } catch (Exception e) {
                 logger.error("Error creating result", e);

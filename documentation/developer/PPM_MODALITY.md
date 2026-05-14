@@ -279,6 +279,14 @@ When PPM post-processed outputs (`.biref` and `.sum` files) are imported into a 
 
 The channel names persist across project re-opens and enable consistent display settings across repeated acquisitions. Without this, repeated PPM runs would have ambiguous channel names like "Channel 0" and "Channel 1" depending on which tile happened to be read first by BioFormats.
 
+## Z-stack / angle loop-order toggle (2026-05-14)
+
+PPM acquisitions historically ran **z-outer / angle-inner**: every angle re-images at each z plane before z advances. When users start z-stacking PPM (e.g. 40x on thicker tissue slices) this becomes expensive -- a 5-z x 4-angle field pays 20 rotation-stage moves per tile when the same data could be acquired with 4.
+
+A loop-order toggle in the acquisition dialog flips the nest to **angle-outer / z-inner** ("Z per angle (fast for thicker slides)") via the `--inner-axis z` wire flag. The per-angle WB / JAI-calibration / exposure block is hoisted outside the inner z loop so it runs once per angle per tile (was once per angle-z, wastefully). Default remains angle-inner so existing PPM acquisitions are byte-identical; the toggle only changes anything for callers that explicitly request the alternative ordering.
+
+The new code path lives in `_acquire_tile_angles_angle_outer` in `microscope_command_server/acquisition/workflow.py`. The post-sweep birefringence creation and z-projection semantics match the default body.
+
 ## PPM Menu Contributions
 
 `PPMModalityHandler.getModalityMenuContributions()` adds four items to the PPM menu in QuPath:

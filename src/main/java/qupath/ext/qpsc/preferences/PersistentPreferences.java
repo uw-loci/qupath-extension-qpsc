@@ -1598,6 +1598,47 @@ public class PersistentPreferences {
         zStackProjectionProperty.set(v);
     }
 
+    // --- Per-tile loop-order toggle (channel/z or angle/z nesting) ---
+    // Stored per-modality-family so widefield and PPM remember their picks
+    // independently. Values: widefield {"z", "channel"}; ppm {"angle", "z"}.
+    // Defaults preserve current server-side behavior.
+
+    private static final StringProperty acqLoopOrderWidefieldProperty =
+            PathPrefs.createPersistentPreference("qpscAcqLoopOrder.widefield", "z");
+    private static final StringProperty acqLoopOrderPpmProperty =
+            PathPrefs.createPersistentPreference("qpscAcqLoopOrder.ppm", "angle");
+
+    /** Modality-family keys understood by {@link #getAcqLoopOrder(String)}. */
+    public static final String LOOP_ORDER_FAMILY_WIDEFIELD = "widefield";
+
+    public static final String LOOP_ORDER_FAMILY_PPM = "ppm";
+
+    /**
+     * Returns the user's saved inner-axis pick for the given modality family
+     * ({@code "widefield"} or {@code "ppm"}). Unknown families fall back to
+     * the empty string (caller should treat as "omit the flag").
+     */
+    public static String getAcqLoopOrder(String modalityFamily) {
+        if (LOOP_ORDER_FAMILY_WIDEFIELD.equalsIgnoreCase(modalityFamily)) {
+            return acqLoopOrderWidefieldProperty.get();
+        }
+        if (LOOP_ORDER_FAMILY_PPM.equalsIgnoreCase(modalityFamily)) {
+            return acqLoopOrderPpmProperty.get();
+        }
+        return "";
+    }
+
+    public static void setAcqLoopOrder(String modalityFamily, String value) {
+        if (value == null) {
+            value = "";
+        }
+        if (LOOP_ORDER_FAMILY_WIDEFIELD.equalsIgnoreCase(modalityFamily)) {
+            acqLoopOrderWidefieldProperty.set(value);
+        } else if (LOOP_ORDER_FAMILY_PPM.equalsIgnoreCase(modalityFamily)) {
+            acqLoopOrderPpmProperty.set(value);
+        }
+    }
+
     // ================== BACKGROUND COLLECTION ==================
     private static final StringProperty lastBackgroundOutputPath =
             PathPrefs.createPersistentPreference("LastBackgroundOutputPath", "");

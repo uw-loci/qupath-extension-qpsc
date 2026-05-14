@@ -102,6 +102,11 @@ public class AcquisitionCommandBuilder {
     private Double zPixelSize; // Z pixel size in um (for OME-TIFF metadata)
     private String zProjection; // Projection type: "max", "min", "sum", "mean", "std"
 
+    // Loop-order toggle for the per-tile snap loop. Null = omit the flag and
+    // let the server fall back to its per-modality default (z-inner for
+    // widefield channels, angle-inner for PPM). Values: "z", "channel", "angle".
+    private String innerAxis = null;
+
     // Optional parameters for time-lapse.
     // Defaults: timepoints=1, intervalSec=0 (single snap, no interval).
     // Signatures only at Task #1 -- buildSocketMessage does NOT emit these yet.
@@ -400,6 +405,18 @@ public class AcquisitionCommandBuilder {
     /** Set Z-stack projection type ("max", "min", "sum", "mean", "std"). Default: "max". */
     public AcquisitionCommandBuilder zProjection(String projection) {
         this.zProjection = projection;
+        return this;
+    }
+
+    /**
+     * Set the per-tile snap-loop inner axis. Allowed values: "z", "channel",
+     * "angle". Pass {@code null} (the default) to omit the flag and let the
+     * server fall back to its per-modality default (z-inner for widefield
+     * channels, angle-inner for PPM) -- this preserves byte-identical command
+     * lines for callers that don't care.
+     */
+    public AcquisitionCommandBuilder innerAxis(String innerAxis) {
+        this.innerAxis = innerAxis;
         return this;
     }
 
@@ -736,6 +753,12 @@ public class AcquisitionCommandBuilder {
         }
         if (zStackEnabled && zProjection != null && !zProjection.isEmpty()) {
             args.addAll(Arrays.asList("--z-projection", zProjection));
+        }
+        // Loop-order toggle: only emit when explicitly set. Omission keeps
+        // wire-format byte-identical with pre-toggle builds for callers that
+        // don't care about loop ordering.
+        if (innerAxis != null && !innerAxis.isEmpty()) {
+            args.addAll(Arrays.asList("--inner-axis", innerAxis));
         }
 
         // Add Z-focus hint from tilt prediction model

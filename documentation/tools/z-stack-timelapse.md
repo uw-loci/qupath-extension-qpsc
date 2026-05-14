@@ -53,7 +53,25 @@ Both Z-stack and time-lapse support every modality the acquisition workflow hand
 
 - **PPM / multi-angle:** all configured rotation angles are acquired at each Z plane or time point. Files suffixed with the angle: `z0000_Z10.0_angle90.tif`.
 - **Brightfield (single-angle, single-channel):** standard Z-stack-then-project per tile.
-- **Widefield IF / fluorescence (multi-channel):** Z-stack runs *per channel* (commit `e8e3799`). For each tile, the workflow iterates channels (channel-outer, Z-inner ordering minimizes filter wheel changes), accumulates Z planes per channel, and applies the configured projection per channel. Stage Z is restored to center between channels. Saturation runaway detection fires once per tile per channel.
+- **Widefield IF / fluorescence (multi-channel):** Z-stack runs *per channel* by default (commit `e8e3799`). For each tile, the workflow iterates channels (channel-outer, Z-inner ordering minimizes filter wheel changes), accumulates Z planes per channel, and applies the configured projection per channel. Stage Z is restored to center between channels. Saturation runaway detection fires once per tile per channel.
+
+### Loop-order toggle (added 2026-05-14)
+
+Both the **Bounded Acquisition** and **Existing Image Acquisition** dialogs grow a "Loop order:" row inside the Z-stack section when:
+
+- Z-stack is enabled, AND
+- the active modality is widefield (channel-based) and 2+ channels are selected, OR the active modality is PPM (the toggle always applies if z-stack is on -- angle count comes from the config).
+
+The toggle is hidden for modalities that don't participate (brightfield, LSM single-channel, etc.).
+
+| Modality | Default | Alternative | Trade-off |
+|---|---|---|---|
+| Widefield IF | **Z per channel** (channel-outer / z-inner). One channel sweeps the full z-stack, then switch channels. | **Channels per Z** (z-outer / channel-inner). Every channel re-images at each z plane. | Default: fewer filter-cube switches, fast for fixed slides. Alternative: slower (channels x z_planes switches per tile), but tightly z-registered for live samples or drifting workflows. |
+| PPM | **Angle per Z** (z-outer / angle-inner). Each angle re-images at every z plane. | **Z per angle** (angle-outer / z-inner). Each angle sweeps the full z-stack before rotation. | Default: the historical PPM ordering. Alternative: fewer rotation-stage moves per tile (angles instead of angles x z_planes) -- faster when z-stacking thicker tissue slides on a 40x objective. |
+
+The choice persists per-modality-family via PersistentPreferences (`qpscAcqLoopOrder.widefield` / `qpscAcqLoopOrder.ppm`). The wire format adds one optional `--inner-axis {z|channel|angle}` flag on the `acquire_` command (see `documentation/developer/SOCKET_PROTOCOL.md`); the flag is omitted when the user keeps the default, so callers that don't care produce byte-identical command lines.
+
+Future extension: when time-lapse / multi-position support adds a third axis, `--inner-axis` either grows new values (`time`) or pairs with a `--axis-order` flag for full N-axis nesting -- the named-axis vocabulary is intentionally additive.
 
 ## Per-Tile Z-Stacks (Multi-Tile Acquisition)
 

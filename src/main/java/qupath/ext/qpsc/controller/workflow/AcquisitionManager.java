@@ -787,6 +787,10 @@ public class AcquisitionManager {
                 // Null means "use YAML default" and produces no CLI flag.
                 config.commandBuilder().afStrategy(state.afStrategy);
 
+                // Per-tile snap-loop inner axis (loop-order toggle).
+                // Null means "use per-modality default" and produces no CLI flag.
+                config.commandBuilder().innerAxis(state.innerAxis);
+
                 logger.info("Acquisition parameters for {}:", annotation.getName());
                 logger.info("  Config: {}", configFileLocation);
                 logger.info("  Sample: {}", actualSampleName);

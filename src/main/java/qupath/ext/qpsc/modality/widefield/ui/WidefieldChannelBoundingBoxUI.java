@@ -5,6 +5,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javafx.application.Platform;
+import javafx.beans.Observable;
+import javafx.beans.binding.Bindings;
+import javafx.beans.binding.BooleanBinding;
+import javafx.beans.value.ObservableBooleanValue;
 import javafx.geometry.HPos;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -96,6 +100,9 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     private ComboBox<String> presetCombo;
     private Label statusLabel;
     private boolean suppressPresetComboListener = false;
+    // Updated when the per-row checkboxes flip; consumers bind their disable
+    // state to this so the loop-order toggle vanishes for single-channel runs.
+    private BooleanBinding multipleChannelsSelectedBinding;
 
     public WidefieldChannelBoundingBoxUI() {
         root = new VBox(5);
@@ -300,6 +307,28 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         if (focusToggleGroup.getSelectedToggle() == null && !channelFocusRadios.isEmpty()) {
             channelFocusRadios.values().iterator().next().setSelected(true);
         }
+
+        // Wire the "2+ channels selected" binding now that all checkboxes exist.
+        // Re-evaluates whenever any per-row checkbox flips. Consumers (e.g. the
+        // loop-order toggle in the parent dialog) bind their disable state to
+        // this so the toggle disappears for single-channel runs.
+        Observable[] cbDeps = channelCheckboxes.values().stream()
+                .map(CheckBox::selectedProperty)
+                .toArray(Observable[]::new);
+        multipleChannelsSelectedBinding = Bindings.createBooleanBinding(
+                () -> {
+                    int count = 0;
+                    for (CheckBox cb : channelCheckboxes.values()) {
+                        if (cb.isSelected()) {
+                            count++;
+                            if (count >= 2) {
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                },
+                cbDeps);
 
         Label hint = new Label(String.format(
                 "Library has %d channels. Default mode uses all of them at YAML exposures.", library.size()));
@@ -760,5 +789,16 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
      */
     public boolean hasChannels() {
         return !channelCheckboxes.isEmpty();
+    }
+
+    /**
+     * Observable that is {@code true} when 2+ channels are checked in the
+     * picker. Returns {@code null} when the UI is a placeholder (no library
+     * loaded) -- callers should null-check and treat null as "always false".
+     * Used by the loop-order toggle in the parent dialog to disable itself
+     * when the channel count makes the choice meaningless.
+     */
+    public ObservableBooleanValue hasMultipleChannelsSelectedProperty() {
+        return multipleChannelsSelectedBinding;
     }
 }

@@ -348,6 +348,7 @@ public class ExistingImageWorkflowV2 {
                     config.channelIntensityOverrides() == null ? Map.of() : config.channelIntensityOverrides();
             state.focusChannelId = config.focusChannelId();
             state.afStrategy = config.afStrategy();
+            state.innerAxis = config.innerAxis();
 
             // Store whether this is an existing project
             state.isExistingProject = config.isExistingProject();
@@ -1234,6 +1235,7 @@ public class ExistingImageWorkflowV2 {
         public Map<String, Double> channelIntensityOverrides = Map.of();
         public String focusChannelId;
         public String afStrategy;
+        public String innerAxis;
         public PathObject refinementTile;
 
         // V2-specific fields
