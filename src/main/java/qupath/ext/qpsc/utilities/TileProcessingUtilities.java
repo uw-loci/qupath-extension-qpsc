@@ -346,10 +346,11 @@ public class TileProcessingUtilities {
                             logger.debug("Importing {} to project on FX thread", pathToImport);
 
                             // Add to project with metadata if available
+                            qupath.lib.projects.ProjectImageEntry<BufferedImage> imported = null;
                             if (finalMetadata != null) {
                                 // Stitched images from microscope don't need flipping - they come with correct
                                 // orientation
-                                QPProjectFunctions.addImageToProjectWithMetadata(
+                                imported = QPProjectFunctions.addImageToProjectWithMetadata(
                                         project,
                                         new File(pathToImport),
                                         finalMetadata.parentEntry,
@@ -362,6 +363,12 @@ public class TileProcessingUtilities {
                             } else {
                                 QPProjectFunctions.addImageToProject(
                                         new File(pathToImport), project, false, false, modalityHandler);
+                            }
+                            // Stamp the acquiring scope so the Existing Image
+                            // workflow can refuse cross-scope sub-image
+                            // acquisition (review finding H3).
+                            if (imported != null) {
+                                ImageMetadataManager.setAcquiredOnMicroscope(imported, resolveActiveMicroscopeName());
                             }
 
                             logger.info("Successfully imported {} to project", new File(pathToImport).getName());
@@ -585,9 +592,10 @@ public class TileProcessingUtilities {
 
                 try {
                     // Add to project with metadata if available
+                    qupath.lib.projects.ProjectImageEntry<BufferedImage> imported = null;
                     if (finalMetadata != null) {
                         // Stitched images from microscope don't need flipping - they come with correct orientation
-                        QPProjectFunctions.addImageToProjectWithMetadata(
+                        imported = QPProjectFunctions.addImageToProjectWithMetadata(
                                 project,
                                 new File(lastProcessedPath),
                                 finalMetadata.parentEntry,
@@ -605,6 +613,12 @@ public class TileProcessingUtilities {
                     } else {
                         QPProjectFunctions.addImageToProject(
                                 new File(lastProcessedPath), project, false, false, modalityHandler);
+                    }
+                    // Stamp the acquiring scope so the Existing Image
+                    // workflow can refuse cross-scope sub-image acquisition
+                    // (review finding H3).
+                    if (imported != null) {
+                        ImageMetadataManager.setAcquiredOnMicroscope(imported, resolveActiveMicroscopeName());
                     }
 
                     logger.info("Successfully added image to project");
@@ -682,6 +696,25 @@ public class TileProcessingUtilities {
      * that were not present before stitching started. Called on stitching failure
      * to clean up corrupt partial output before a retry.
      */
+    /**
+     * Returns the active microscope's display name from the config manager, or
+     * {@code null} when none is set or the config reports "Unknown". Mirrors the
+     * private resolver in {@code StitchingHelper}; used at sub-image stitch-import
+     * time to stamp the entry's {@code acquired_on_microscope} so the Existing
+     * Image workflow can refuse cross-scope sub-image acquisition (finding H3).
+     */
+    private static String resolveActiveMicroscopeName() {
+        try {
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr == null) return null;
+            String name = mgr.getMicroscopeName();
+            return (name == null || name.isEmpty() || "Unknown".equals(name)) ? null : name;
+        } catch (Exception e) {
+            logger.debug("Could not resolve active microscope name: {}", e.getMessage());
+            return null;
+        }
+    }
+
     private static void cleanupCorruptStitchingOutput(File outputDir, Set<String> existingFiles) {
         File[] candidates = outputDir.listFiles((dir, name) ->
                 (name.endsWith(".ome.tif") || name.endsWith(".ome.zarr")) && !existingFiles.contains(name));

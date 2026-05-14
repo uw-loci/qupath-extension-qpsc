@@ -33,6 +33,7 @@ import qupath.ext.qpsc.ui.DualProgressDialog;
 import qupath.ext.qpsc.ui.StitchingBlockingDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
+import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
@@ -1463,6 +1464,7 @@ public class StitchingHelper {
                     continue;
                 }
                 try {
+                    qupath.lib.projects.ProjectImageEntry<java.awt.image.BufferedImage> imported = null;
                     if (metadata != null) {
                         // Pass false/false for flip flags here -- the stitcher
                         // already baked the flip into the pyramid via
@@ -1474,7 +1476,7 @@ public class StitchingHelper {
                         // metadata.flipX/Y is still saved by applyImageMetadata
                         // for downstream consumers that need to know the
                         // pyramid's stage-relative orientation.
-                        QPProjectFunctions.addImageToProjectWithMetadata(
+                        imported = QPProjectFunctions.addImageToProjectWithMetadata(
                                 project,
                                 f,
                                 metadata.parentEntry,
@@ -1493,6 +1495,11 @@ public class StitchingHelper {
                                 metadata.sourceMicroscope);
                     } else {
                         QPProjectFunctions.addImageToProject(f, project, false, false, handler);
+                    }
+                    // Stamp the acquiring scope so cross-scope sub-image
+                    // acquisition can be refused later (review finding H3).
+                    if (imported != null) {
+                        ImageMetadataManager.setAcquiredOnMicroscope(imported, resolveSourceMicroscope());
                     }
                     // Every per-channel file gets its own alignment keyed by
                     // its own file name, so Move-to-centroid works on any of
@@ -1524,6 +1531,7 @@ public class StitchingHelper {
             try {
                 logger.info("Importing merged multichannel file to project: {}", mergedFile.getName());
 
+                qupath.lib.projects.ProjectImageEntry<java.awt.image.BufferedImage> imported = null;
                 if (metadata != null) {
                     // Pass false/false for flip flags -- the per-channel
                     // pyramids were already written with the stitcher's
@@ -1535,7 +1543,7 @@ public class StitchingHelper {
                     // whose stitcher flags are non-trivial (e.g. OWS3 with
                     // inverted stage polarity). flipX/Y is still applied to
                     // metadata for downstream consumers.
-                    QPProjectFunctions.addImageToProjectWithMetadata(
+                    imported = QPProjectFunctions.addImageToProjectWithMetadata(
                             project,
                             mergedFile,
                             metadata.parentEntry,
@@ -1554,6 +1562,11 @@ public class StitchingHelper {
                             metadata.sourceMicroscope);
                 } else {
                     QPProjectFunctions.addImageToProject(mergedFile, project, false, false, handler);
+                }
+                // Stamp the acquiring scope so cross-scope sub-image
+                // acquisition can be refused later (review finding H3).
+                if (imported != null) {
+                    ImageMetadataManager.setAcquiredOnMicroscope(imported, resolveSourceMicroscope());
                 }
                 logger.info("Merged multichannel file imported to project: {}", mergedFile.getName());
 

@@ -67,6 +67,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 false,
                 false,
+                null,
                 null);
 
         assertEquals("TestSample", config.sampleName());
@@ -94,6 +95,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 false,
                 false,
+                null,
                 null);
 
         assertEquals("BF", config.modality());
@@ -121,6 +123,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 false,
                 false,
+                null,
                 null);
 
         assertTrue(config.useExistingAlignment());
@@ -153,6 +156,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 false,
                 false,
+                null,
                 null);
 
         assertNotNull(config.angleOverrides());
@@ -181,6 +185,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 false,
                 false,
+                null,
                 null);
 
         assertTrue(config.isExistingProject());
@@ -206,6 +211,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 false,
                 false,
+                null,
                 null);
 
         assertFalse(config.isExistingProject());
@@ -237,6 +243,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 false,
                 false,
+                null,
                 null);
 
         assertTrue(highConfig.alignmentConfidence() >= highThreshold, "85% confidence should be above high threshold");
@@ -265,6 +272,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 false,
                 false,
+                null,
                 null);
 
         double conf = medConfig.alignmentConfidence();
@@ -293,6 +301,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 false,
                 false,
+                null,
                 null);
 
         assertTrue(lowConfig.alignmentConfidence() < lowThreshold, "35% confidence should be below low threshold");
@@ -320,6 +329,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 false,
                 false,
+                null,
                 null);
 
         assertFalse(manualConfig.useExistingAlignment());
@@ -349,7 +359,8 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 true,
                 true,
-                "per_angle");
+                "per_angle",
+                null);
 
         assertTrue(config.enableWhiteBalance());
         assertTrue(config.perAngleWhiteBalance());

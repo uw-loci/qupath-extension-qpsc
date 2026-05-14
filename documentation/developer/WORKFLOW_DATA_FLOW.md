@@ -142,6 +142,24 @@ ordering closes). The sub-image branch also does not call
 flipped sibling -- the helper itself short-circuits for sub-acquisition
 entries.
 
+**Sub-image cross-scope gate (`processSubAcquisitionPath`, added 2026-05-14).**
+Before any stage motion, the sub-image branch checks the entry's
+`acquired_on_microscope` metadata against the active microscope name. The
+field is stamped at stitch-import time (see `StitchingHelper` and
+`TileProcessingUtilities`); legacy sub-images without the field fall back
+to `AffineTransformManager.getDerivedAlignmentMicroscope`, which parses
+the filename of any derived alignment JSON. On mismatch the workflow
+hard-cancels with a clear dialog -- the entry's `xy_offset` is in the
+acquiring scope's stage frame and is meaningless on any other scope. When
+neither source surfaces an acquiring-scope name, the gate logs at WARN
+and proceeds (preserving the pre-2026-05-14 behavior for legacy projects
+that pre-date both data sources). Same-scope sub-image acquisition is
+unchanged. The compose-through-parent alternative was considered and
+rejected: too much new code, adds another silent-fallback class. Users
+who want to acquire from a sub-image on a different scope should open
+the parent macro entry and let the cross-scope alignment path compose a
+fresh active-scope transform there.
+
 ### Multi-Slide Existing Image (`MultiSlideExistingImageWorkflow`, experimental)
 
 | Step | What |

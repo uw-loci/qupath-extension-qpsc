@@ -898,6 +898,47 @@ public class AffineTransformManager {
      * @param subImageName the sub-image entry's filename, with or without extension
      * @return transform in the sub-image's own pixel frame, or null if none found
      */
+    /**
+     * Returns the microscope name recorded on any derived alignment JSON for
+     * {@code subImageName}, by parsing the filename
+     * {@code <subImageName>_<microscope>_alignment.json}. Used as the legacy
+     * fallback for the cross-scope sub-image gate in the Existing Image
+     * workflow: when a sub-image entry was acquired before the
+     * {@code acquired_on_microscope} metadata field shipped (2026-05-14), the
+     * derived JSON's filename is the most reliable record of which scope
+     * acquired it.
+     *
+     * <p>Returns {@code null} when no derived JSON exists, when only the
+     * legacy unscoped {@code <subImageName>_alignment.json} is present (no
+     * microscope encoded), or when the project / sub-image name is null.
+     */
+    public static String getDerivedAlignmentMicroscope(Project<BufferedImage> project, String subImageName) {
+        if (project == null || subImageName == null || subImageName.isEmpty()) return null;
+        try {
+            File projectDir = project.getPath().toFile().getParentFile();
+            if (projectDir == null) return null;
+            File derivedDir = new File(new File(projectDir, "alignmentFiles"), "derived");
+            if (!derivedDir.exists() || !derivedDir.isDirectory()) return null;
+            String stripped = qupath.lib.common.GeneralTools.stripExtension(subImageName);
+            String prefix = stripped + "_";
+            String suffix = "_alignment.json";
+            File[] candidates = derivedDir.listFiles((dir, n) -> n.startsWith(prefix) && n.endsWith(suffix));
+            if (candidates == null || candidates.length == 0) return null;
+            // Pick the most recently modified -- if a sub-image has been re-acquired on
+            // multiple scopes, the latest acquisition's JSON wins.
+            File newest = candidates[0];
+            for (File f : candidates) {
+                if (f.lastModified() > newest.lastModified()) newest = f;
+            }
+            String name = newest.getName();
+            String middle = name.substring(prefix.length(), name.length() - suffix.length());
+            return middle.isEmpty() ? null : middle;
+        } catch (Exception e) {
+            logger.debug("Could not read derived alignment microscope for '{}': {}", subImageName, e.getMessage());
+            return null;
+        }
+    }
+
     public static AffineTransform loadDerivedAlignment(Project<BufferedImage> project, String subImageName) {
         if (project == null || subImageName == null) return null;
         try {

@@ -793,6 +793,47 @@ public class ExistingImageWorkflowV2 {
             Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
             ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
 
+            // Cross-scope sub-image gate (review finding H3). The sub-image's xy_offset
+            // is in the ACQUIRING scope's stage frame -- meaningless on any other
+            // microscope. Refuse the acquisition before any stage motion. Falls back
+            // to the derived alignment JSON's filename when the per-entry field is
+            // missing (legacy sub-images acquired before 2026-05-14).
+            String acquiredOn = ImageMetadataManager.getAcquiredOnMicroscope(entry);
+            if (acquiredOn == null || acquiredOn.isEmpty()) {
+                String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+                if (imageName != null) {
+                    acquiredOn = AffineTransformManager.getDerivedAlignmentMicroscope(project, imageName);
+                }
+            }
+            String activeMicroscope = null;
+            try {
+                MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+                if (mgr != null) {
+                    String name = mgr.getMicroscopeName();
+                    if (name != null && !name.isEmpty() && !"Unknown".equals(name)) {
+                        activeMicroscope = name;
+                    }
+                }
+            } catch (Exception ignore) {
+            }
+            if (acquiredOn != null && activeMicroscope != null && !acquiredOn.equals(activeMicroscope)) {
+                logger.error(
+                        "Refusing sub-image acquisition: entry acquired on '{}' but active scope is '{}'",
+                        acquiredOn,
+                        activeMicroscope);
+                showSubImageCrossScopeMismatchDialog(acquiredOn, activeMicroscope, entry.getImageName());
+                CompletableFuture<WorkflowState> cancelled = new CompletableFuture<>();
+                cancelled.completeExceptionally(
+                        new CancellationException("Sub-image acquired on a different microscope"));
+                return cancelled;
+            }
+            if (acquiredOn == null) {
+                logger.warn(
+                        "Sub-image cross-scope gate: open entry '{}' has no acquired_on_microscope metadata "
+                                + "and no derived alignment JSON exposing one; proceeding without the gate.",
+                        entry.getImageName());
+            }
+
             double[] xyOffset = ImageMetadataManager.getXYOffset(entry);
             boolean flipX = ImageMetadataManager.isFlippedX(entry);
             boolean flipY = ImageMetadataManager.isFlippedY(entry);
@@ -1022,8 +1063,22 @@ public class ExistingImageWorkflowV2 {
 
         /**
          * Saves the refined alignment.
+         *
+         * <p>No-op when the open entry is a sub-acquisition. The offset-based transform built
+         * by {@link #processSubAcquisitionPath} is deterministic from {@code xy_offset} +
+         * pixel size + half-FOV correction; persisting it under the parent macro's lookup
+         * key (which {@link AlignmentHelper#resolveMacroLookupKey} would resolve to) writes
+         * a sub-image-pixel-frame transform tagged {@code pixelFrame="macro"} and silently
+         * corrupts every future macro-entry run. Found during the 2026-05-13 review as
+         * direct fallout from the 2603535 routing fix.
          */
         private void saveRefinedAlignment(WorkflowState state) {
+            if (isSubAcquisition()) {
+                logger.debug("saveRefinedAlignment: open entry is a sub-acquisition; "
+                        + "offset-based transform is deterministic and not persisted.");
+                return;
+            }
+
             @SuppressWarnings("unchecked")
             Project<BufferedImage> project = state.projectInfo != null
                     ? (Project<BufferedImage>) state.projectInfo.getCurrentProject()
@@ -1217,6 +1272,72 @@ public class ExistingImageWorkflowV2 {
                     "verifyOpenEntryMatchesPreset: no-op under Step B (flip required={}, {})",
                     requiresFlipX,
                     requiresFlipY);
+        }
+
+        /**
+         * Hard-cancel dialog for the cross-scope sub-image gate (review finding H3).
+         * FX-safe, blocking, OK-only -- mirrors {@code AlignmentHelper.showPixelFrameMismatchDialog}.
+         */
+        private static void showSubImageCrossScopeMismatchDialog(
+                String acquiredOn, String activeMicroscope, String entryName) {
+            String title = "Sub-image Acquired on a Different Microscope -- Workflow Cancelled";
+            String header = "This sub-image was acquired on a different microscope.";
+            StringBuilder body = new StringBuilder();
+            body.append(String.format(
+                    "The open entry%n  '%s'%nwas acquired on microscope '%s',%n"
+                            + "but the active microscope is '%s'.%n%n",
+                    entryName, acquiredOn, activeMicroscope));
+            body.append("Sub-image acquisitions use the entry's xy_offset metadata\n");
+            body.append("for stage targeting. That offset is in the ACQUIRING scope's\n");
+            body.append("stage frame and is not meaningful on any other microscope --\n");
+            body.append("driving the stage from it would land at the wrong physical\n");
+            body.append("location.\n\n");
+            body.append("To fix, choose one of:\n");
+            body.append(String.format("  1. Open this sub-image on '%s' to run the acquisition there.%n", acquiredOn));
+            body.append("  2. Open the parent macro entry and run the workflow against\n");
+            body.append("     a fresh annotation on the macro -- the cross-scope alignment\n");
+            body.append("     path will compose a transform for this microscope.\n\n");
+            body.append("This workflow has been cancelled.");
+
+            Runnable show = () -> {
+                javafx.scene.control.Alert alert =
+                        new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+                alert.setTitle(title);
+                alert.setHeaderText(header);
+                alert.setContentText(body.toString());
+                alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.OK);
+                alert.getDialogPane().setMinWidth(620);
+                alert.getDialogPane().setPrefWidth(720);
+                alert.getDialogPane().setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+                javafx.scene.control.Label contentLabel =
+                        (javafx.scene.control.Label) alert.getDialogPane().lookup(".content");
+                if (contentLabel != null) {
+                    contentLabel.setWrapText(true);
+                    contentLabel.setMaxWidth(680);
+                    contentLabel.setStyle("-fx-font-family: 'monospace';");
+                }
+                javafx.scene.control.Label headerLabel =
+                        (javafx.scene.control.Label) alert.getDialogPane().lookup(".header-panel .label");
+                if (headerLabel != null) {
+                    headerLabel.setWrapText(true);
+                    headerLabel.setMaxWidth(660);
+                }
+                alert.showAndWait();
+            };
+            if (Platform.isFxApplicationThread()) {
+                show.run();
+                return;
+            }
+            java.util.concurrent.FutureTask<Void> task = new java.util.concurrent.FutureTask<>(() -> {
+                show.run();
+                return null;
+            });
+            Platform.runLater(task);
+            try {
+                task.get();
+            } catch (Exception e) {
+                logger.warn("Failed to display sub-image cross-scope mismatch dialog: {}", e.getMessage());
+            }
         }
     }
 

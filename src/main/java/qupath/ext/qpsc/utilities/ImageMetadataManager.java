@@ -65,6 +65,19 @@ public class ImageMetadataManager {
     // and the user's MicroscopeSelectionDialog choice for imported macros.
     public static final String SOURCE_MICROSCOPE = "source_microscope";
 
+    // The microscope that PHYSICALLY CAPTURED this image (as distinct from
+    // {@link #SOURCE_MICROSCOPE}, which on a sub-image is inherited from the
+    // parent macro and names the scanner that produced the original WSI).
+    // Used by the Existing Image workflow to gate sub-image acquisitions when
+    // a user opens a sub-image on a microscope different from the one that
+    // acquired it -- xy_offset is in the acquiring scope's stage frame and
+    // is not meaningful on any other scope. Source-of-truth is
+    // {@code MicroscopeConfigManager.getMicroscopeName()} at stitch-import
+    // time. Macro entries do not carry this field (they were not acquired
+    // by any QPSC microscope). Added 2026-05-14 as part of the
+    // cross-scope-sub-image hard-cancel gate (review finding H3).
+    public static final String ACQUIRED_ON_MICROSCOPE = "acquired_on_microscope";
+
     // Camera field of view at acquisition time (microns). Needed for
     // coordinate propagation when the microscope is not connected.
     public static final String FOV_X_UM = "fov_x_um";
@@ -759,6 +772,50 @@ public class ImageMetadataManager {
     public static String getDetectorId(ProjectImageEntry<?> entry) {
         if (entry == null) return null;
         return entry.getMetadata().get(DETECTOR_ID);
+    }
+
+    /**
+     * Gets the microscope that physically captured this image, distinct from
+     * {@link #getSourceMicroscope}. Returns {@code null} for entries that
+     * predate the {@link #ACQUIRED_ON_MICROSCOPE} field (set on every
+     * sub-image stitch-import starting 2026-05-14) and for imported macros
+     * (which weren't acquired by a QPSC microscope).
+     *
+     * @param entry The image entry
+     * @return The acquiring microscope name (e.g., "PPM", "OWS3"), or null if not set
+     */
+    public static String getAcquiredOnMicroscope(ProjectImageEntry<?> entry) {
+        if (entry == null) return null;
+        return entry.getMetadata().get(ACQUIRED_ON_MICROSCOPE);
+    }
+
+    /**
+     * Stamps the acquiring microscope on a sub-image entry. Called from the
+     * stitch-import sites in {@code StitchingHelper} after the entry is
+     * added to the project; lets the Existing Image workflow refuse
+     * cross-scope sub-image acquisition before any stage motion. A null or
+     * empty {@code microscopeName} clears the field.
+     */
+    public static void setAcquiredOnMicroscope(ProjectImageEntry<?> entry, String microscopeName) {
+        if (entry == null) return;
+        if (microscopeName == null || microscopeName.isEmpty()) {
+            entry.getMetadata().remove(ACQUIRED_ON_MICROSCOPE);
+            return;
+        }
+        entry.getMetadata().put(ACQUIRED_ON_MICROSCOPE, microscopeName);
+    }
+
+    /**
+     * Gets the source microscope/scanner that produced this image. See the
+     * {@link #SOURCE_MICROSCOPE} field doc for the distinction from
+     * {@link #getAcquiredOnMicroscope}.
+     *
+     * @param entry The image entry
+     * @return The source microscope name, or null if not set
+     */
+    public static String getSourceMicroscope(ProjectImageEntry<?> entry) {
+        if (entry == null) return null;
+        return entry.getMetadata().get(SOURCE_MICROSCOPE);
     }
 
     /**
