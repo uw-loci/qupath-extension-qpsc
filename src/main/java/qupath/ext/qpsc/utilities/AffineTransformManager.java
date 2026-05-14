@@ -763,6 +763,10 @@ public class AffineTransformManager {
      * {@code "sub"} (see {@code AlignmentHelper}). Live Viewer's Go-To-Centroid opts in to
      * {@code "sub"} explicitly via {@link #loadSlideAlignmentForFrame}. Legacy JSONs written
      * before this field existed default to {@code "macro"} on load.
+     *
+     * <p>This 8-arg form passes {@code objective=null} and {@code detector=null} to the
+     * 10-arg form; existing macro-path callers that don't yet plumb the objective/detector
+     * stay backward-compatible.
      */
     public static void saveSlideAlignment(
             Project<BufferedImage> project,
@@ -773,6 +777,41 @@ public class AffineTransformManager {
             Boolean flipMacroX,
             Boolean flipMacroY,
             String pixelFrame) {
+        saveSlideAlignment(
+                project,
+                sampleName,
+                modality,
+                transform,
+                processedMacroImage,
+                flipMacroX,
+                flipMacroY,
+                pixelFrame,
+                null,
+                null);
+    }
+
+    /**
+     * Full-control save with objective + detector. Same semantics as the 8-arg form, plus the
+     * objective and detector that the alignment was built against are persisted into the JSON.
+     * The Existing Image workflow reads these on load to advise the user when the wizard's
+     * current objective differs from the one the alignment was refined against (review
+     * finding H8). Legacy JSONs without these fields load with {@code objective=null} and
+     * {@code detector=null}; the advisory dialog only fires when both sides have values.
+     *
+     * @param objective objective identifier the alignment was built at, or null to omit
+     * @param detector detector identifier the alignment was built with, or null to omit
+     */
+    public static void saveSlideAlignment(
+            Project<BufferedImage> project,
+            String sampleName,
+            String modality,
+            AffineTransform transform,
+            BufferedImage processedMacroImage,
+            Boolean flipMacroX,
+            Boolean flipMacroY,
+            String pixelFrame,
+            String objective,
+            String detector) {
 
         try {
             // Get project folder
@@ -839,6 +878,20 @@ public class AffineTransformManager {
             // else defaults to "macro" via the 8-arg overload.
             alignmentData.put(
                     "pixelFrame", (pixelFrame != null && !pixelFrame.isEmpty()) ? pixelFrame : PIXEL_FRAME_MACRO);
+
+            // Objective + detector (review finding H8, 2026-05-14). The Existing Image
+            // workflow reads these on load to advise the user when the wizard's objective
+            // differs from the one this alignment was refined against -- a class of failure
+            // the 5% pixel-size gate cannot catch when both objectives report the same
+            // pixel size in YAML but differ in physical context (e.g. SIFT-refined
+            // translation at 10x reused at 20x). Legacy JSONs that don't carry these
+            // fields load with null and the advisory dialog won't fire.
+            if (objective != null && !objective.isEmpty()) {
+                alignmentData.put("objective", objective);
+            }
+            if (detector != null && !detector.isEmpty()) {
+                alignmentData.put("detector", detector);
+            }
 
             // Mark that the saved macro image is in raw format (no display flips baked in).
             // Old alignment files without this flag have preference flips baked into the PNG.
@@ -1066,17 +1119,31 @@ public class AffineTransformManager {
         private final Boolean flipMacroX;
         private final Boolean flipMacroY;
         private final String pixelFrame;
+        private final String objective;
+        private final String detector;
 
         public SlideAlignmentResult(AffineTransform transform, Boolean flipMacroX, Boolean flipMacroY) {
-            this(transform, flipMacroX, flipMacroY, PIXEL_FRAME_MACRO);
+            this(transform, flipMacroX, flipMacroY, PIXEL_FRAME_MACRO, null, null);
         }
 
         public SlideAlignmentResult(
                 AffineTransform transform, Boolean flipMacroX, Boolean flipMacroY, String pixelFrame) {
+            this(transform, flipMacroX, flipMacroY, pixelFrame, null, null);
+        }
+
+        public SlideAlignmentResult(
+                AffineTransform transform,
+                Boolean flipMacroX,
+                Boolean flipMacroY,
+                String pixelFrame,
+                String objective,
+                String detector) {
             this.transform = transform;
             this.flipMacroX = flipMacroX;
             this.flipMacroY = flipMacroY;
             this.pixelFrame = (pixelFrame != null && !pixelFrame.isEmpty()) ? pixelFrame : PIXEL_FRAME_MACRO;
+            this.objective = (objective != null && !objective.isEmpty()) ? objective : null;
+            this.detector = (detector != null && !detector.isEmpty()) ? detector : null;
         }
 
         public AffineTransform getTransform() {
@@ -1098,6 +1165,23 @@ public class AffineTransformManager {
          */
         public String getPixelFrame() {
             return pixelFrame;
+        }
+
+        /**
+         * Objective identifier the alignment was built against (e.g. "20x"), or null when the JSON
+         * predates the field (2026-05-14, review finding H8). Macro-path loaders use this to
+         * advise the user when the wizard's current objective differs.
+         */
+        public String getObjective() {
+            return objective;
+        }
+
+        /**
+         * Detector identifier the alignment was built with, or null when the JSON predates the
+         * field. See {@link #getObjective()}.
+         */
+        public String getDetector() {
+            return detector;
         }
 
         public boolean hasFlipFrame() {
@@ -1239,7 +1323,11 @@ public class AffineTransformManager {
             Boolean fy = data.get("flipMacroY") instanceof Boolean ? (Boolean) data.get("flipMacroY") : null;
             Object pfObj = data.get("pixelFrame");
             String pixelFrame = pfObj instanceof String ? (String) pfObj : PIXEL_FRAME_MACRO;
-            return new SlideAlignmentResult(transform, fx, fy, pixelFrame);
+            Object objObj = data.get("objective");
+            String objective = objObj instanceof String ? (String) objObj : null;
+            Object detObj = data.get("detector");
+            String detector = detObj instanceof String ? (String) detObj : null;
+            return new SlideAlignmentResult(transform, fx, fy, pixelFrame, objective, detector);
         } catch (Exception e) {
             logger.error("Error reading slide alignment file {}: {}", alignmentFile, e.getMessage());
             return null;

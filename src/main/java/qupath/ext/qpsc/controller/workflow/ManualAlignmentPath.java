@@ -246,12 +246,17 @@ public class ManualAlignmentPath {
                                 transform,
                                 null,
                                 flipMacroX,
-                                flipMacroY);
+                                flipMacroY,
+                                AffineTransformManager.PIXEL_FRAME_MACRO,
+                                state.sample.objective(),
+                                state.sample.detector());
                         logger.info(
-                                "Saved slide-specific transform for image: {} (flipMacroX={}, flipMacroY={})",
+                                "Saved slide-specific transform for image: {} (flipMacroX={}, flipMacroY={}, objective={}, detector={})",
                                 imageName,
                                 flipMacroX,
-                                flipMacroY);
+                                flipMacroY,
+                                state.sample.objective(),
+                                state.sample.detector());
                     } else {
                         logger.warn("Cannot save slide-specific transform - no image name available");
                     }

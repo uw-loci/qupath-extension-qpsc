@@ -445,12 +445,17 @@ public class ExistingAlignmentPath {
                 state.transform,
                 processedMacroImage,
                 flipMacroX,
-                flipMacroY);
+                flipMacroY,
+                AffineTransformManager.PIXEL_FRAME_MACRO,
+                state.sample.objective(),
+                state.sample.detector());
         logger.info(
-                "Saved slide-specific alignment for image: {} (flipMacroX={}, flipMacroY={})",
+                "Saved slide-specific alignment for image: {} (flipMacroX={}, flipMacroY={}, objective={}, detector={})",
                 imageName,
                 flipMacroX,
-                flipMacroY);
+                flipMacroY,
+                state.sample.objective(),
+                state.sample.detector());
     }
 
     // Helper methods

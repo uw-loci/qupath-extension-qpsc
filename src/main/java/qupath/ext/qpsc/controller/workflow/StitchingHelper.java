@@ -1423,7 +1423,9 @@ public class StitchingHelper {
                     null,
                     flipX,
                     flipY,
-                    AffineTransformManager.PIXEL_FRAME_SUB);
+                    AffineTransformManager.PIXEL_FRAME_SUB,
+                    metadata.objective,
+                    metadata.detector);
             logger.info(
                     "Auto-registered stage alignment for '{}' (pixelFrame=sub) from BoundingBox metadata "
                             + "(bounds=({},{})->({},{}), image={}x{})",

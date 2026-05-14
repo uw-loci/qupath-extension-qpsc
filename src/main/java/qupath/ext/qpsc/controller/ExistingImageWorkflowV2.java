@@ -144,6 +144,22 @@ public class ExistingImageWorkflowV2 {
                         .thenCompose(this::performAcquisition)
                         .thenCompose(this::waitForCompletion)
                         .thenAccept(result -> {
+                            // Gate the success-only side effects (beep, ACQUISITION_COMPLETE
+                            // notification, aggressive tile cleanup) on a non-null result.
+                            // The chain's null-state-propagation pattern (every internal
+                            // method returns completedFuture(null) on cancel/short-circuit)
+                            // means we can reach this branch after the pixel-size gate, the
+                            // camera-ROI gate, or any internal cancel -- without distinguishing
+                            // them from real success. Without this gate the operator could
+                            // hear the success beep + see ACQUISITION_COMPLETE notification
+                            // after cancelling at the gate. Review finding H5. cleanup() must
+                            // still run on both paths so resource leaks (preserved annotations,
+                            // currentTransform singleton) are cleared either way.
+                            if (result == null) {
+                                logger.info("Workflow short-circuited; skipping success notification");
+                                cleanup();
+                                return;
+                            }
                             cleanupTilesAfterStitching();
                             cleanup();
                             showSuccessNotification();
@@ -165,6 +181,22 @@ public class ExistingImageWorkflowV2 {
                         .thenCompose(this::performAcquisition)
                         .thenCompose(this::waitForCompletion)
                         .thenAccept(result -> {
+                            // Gate the success-only side effects (beep, ACQUISITION_COMPLETE
+                            // notification, aggressive tile cleanup) on a non-null result.
+                            // The chain's null-state-propagation pattern (every internal
+                            // method returns completedFuture(null) on cancel/short-circuit)
+                            // means we can reach this branch after the pixel-size gate, the
+                            // camera-ROI gate, or any internal cancel -- without distinguishing
+                            // them from real success. Without this gate the operator could
+                            // hear the success beep + see ACQUISITION_COMPLETE notification
+                            // after cancelling at the gate. Review finding H5. cleanup() must
+                            // still run on both paths so resource leaks (preserved annotations,
+                            // currentTransform singleton) are cleared either way.
+                            if (result == null) {
+                                logger.info("Workflow short-circuited; skipping success notification");
+                                cleanup();
+                                return;
+                            }
                             cleanupTilesAfterStitching();
                             cleanup();
                             showSuccessNotification();
@@ -1166,13 +1198,26 @@ public class ExistingImageWorkflowV2 {
                 // baked any alignment-time flip into it before we passed it through
                 // SingleTileRefinement. Record flipMacroX/Y = false so the next reload
                 // is idempotent (AlignmentHelper sees no flip to bake, transform stays
-                // in unflipped-base frame).
+                // in unflipped-base frame). Also record objective + detector so the next
+                // load can advise the user when the wizard's objective differs from the
+                // one this refinement was built against (review finding H8).
                 AffineTransformManager.saveSlideAlignment(
-                        project, lookupKey, state.modality, state.transform, null, false, false);
+                        project,
+                        lookupKey,
+                        state.modality,
+                        state.transform,
+                        null,
+                        false,
+                        false,
+                        AffineTransformManager.PIXEL_FRAME_MACRO,
+                        state.objective,
+                        state.detector);
                 logger.info(
-                        "Saved refined alignment for image: {} (lookupKey={}, flipMacroX=false, flipMacroY=false)",
+                        "Saved refined alignment for image: {} (lookupKey={}, objective={}, detector={})",
                         imageName,
-                        lookupKey);
+                        lookupKey,
+                        state.objective,
+                        state.detector);
             }
         }
 

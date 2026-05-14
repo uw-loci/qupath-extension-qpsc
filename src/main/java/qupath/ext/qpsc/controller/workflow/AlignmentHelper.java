@@ -257,6 +257,31 @@ public class AlignmentHelper {
             return future;
         }
 
+        // Objective-context advisory (review finding H8, 2026-05-14). When the saved
+        // alignment records the objective it was built against, compare against the
+        // wizard's choice now. The pixel-size gate catches mismatches between MM live
+        // and the wizard, but cannot catch "transform refined at 10x reused with the
+        // wizard set to 20x" when both objectives happen to match MM's live pixel size.
+        // Refinement adds a translation that's tied to the 10x tile center; replaying
+        // at 20x reuses that translation, losing the per-tile correction. Surfaces
+        // only when both sides have values -- legacy JSONs (no objective field) load
+        // with null and the dialog is silent.
+        if (loadedResult != null
+                && loadedResult.getObjective() != null
+                && sample != null
+                && sample.objective() != null
+                && !loadedResult.getObjective().equals(sample.objective())) {
+            logger.warn(
+                    "Slide alignment objective mismatch: saved='{}', wizard='{}' -- prompting user",
+                    loadedResult.getObjective(),
+                    sample.objective());
+            if (!confirmContinueWithObjectiveMismatch(lookupKey, loadedResult.getObjective(), sample.objective())) {
+                logger.info("User cancelled at objective-mismatch advisory");
+                future.complete(null);
+                return future;
+            }
+        }
+
         // Bake the alignment-frame flip into the returned transform so downstream
         // callers (AcquisitionManager, AnnotationOrderingService, ...) consume
         // unflipped-base pixel coords directly. baseToStage_new = baseToStage *
@@ -373,6 +398,76 @@ public class AlignmentHelper {
             task.get();
         } catch (Exception e) {
             logger.warn("Failed to display pixel-frame mismatch dialog: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Advisory dialog for the objective-mismatch case (review finding H8). Modal, blocking,
+     * Continue / Cancel buttons. Returns {@code true} when the user chose to continue with the
+     * loaded alignment, {@code false} when they cancelled (or the dialog failed to show, which
+     * also short-circuits the workflow conservatively).
+     */
+    private static boolean confirmContinueWithObjectiveMismatch(
+            String lookupKey, String savedObjective, String wizardObjective) {
+        String title = "Alignment Objective Mismatch";
+        String header = "The saved alignment was built at a different objective.";
+        StringBuilder body = new StringBuilder();
+        body.append(String.format(
+                "The slide alignment for%n  '%s'%nwas saved at objective '%s'.%n"
+                        + "The wizard is configured for objective '%s'.%n%n",
+                lookupKey, savedObjective, wizardObjective));
+        body.append("Continuing reuses the saved transform, including any refinement\n");
+        body.append("translation that was tied to the saved objective's tile geometry.\n");
+        body.append("On a different objective the per-tile correction is approximate;\n");
+        body.append("the linear (scale+rotation) part of the transform is still valid\n");
+        body.append("but you may see small per-tile drift relative to the annotations.\n\n");
+        body.append("Recommended: cancel, switch the wizard to the saved objective, or\n");
+        body.append("re-run alignment refinement at the new objective.\n\n");
+        body.append("Continue anyway with the saved alignment?");
+
+        final boolean[] result = {false};
+        Runnable show = () -> {
+            javafx.scene.control.Alert alert =
+                    new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+            alert.setTitle(title);
+            alert.setHeaderText(header);
+            alert.setContentText(body.toString());
+            alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.OK, javafx.scene.control.ButtonType.CANCEL);
+            alert.getDialogPane().setMinWidth(620);
+            alert.getDialogPane().setPrefWidth(720);
+            alert.getDialogPane().setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+            javafx.scene.control.Label contentLabel =
+                    (javafx.scene.control.Label) alert.getDialogPane().lookup(".content");
+            if (contentLabel != null) {
+                contentLabel.setWrapText(true);
+                contentLabel.setMaxWidth(680);
+                contentLabel.setStyle("-fx-font-family: 'monospace';");
+            }
+            javafx.scene.control.Label headerLabel =
+                    (javafx.scene.control.Label) alert.getDialogPane().lookup(".header-panel .label");
+            if (headerLabel != null) {
+                headerLabel.setWrapText(true);
+                headerLabel.setMaxWidth(660);
+            }
+            result[0] = alert.showAndWait()
+                    .filter(b -> b == javafx.scene.control.ButtonType.OK)
+                    .isPresent();
+        };
+        if (javafx.application.Platform.isFxApplicationThread()) {
+            show.run();
+            return result[0];
+        }
+        java.util.concurrent.FutureTask<Void> task = new java.util.concurrent.FutureTask<>(() -> {
+            show.run();
+            return null;
+        });
+        javafx.application.Platform.runLater(task);
+        try {
+            task.get();
+            return result[0];
+        } catch (Exception e) {
+            logger.warn("Failed to display objective-mismatch dialog: {}", e.getMessage());
+            return false;
         }
     }
 
