@@ -931,6 +931,39 @@ If `base_gain` is set higher than 4.0, the R/B channels are clamped to 4.0x whil
 
 **Best practice:** Keep same project open to add multiple samples, or close/reopen between completely different experiments
 
+#### Q: "Sub-image Acquired on a Different Microscope -- Workflow Cancelled"
+
+**A:** This error appears when you try to acquire from a sub-image using the Existing Image workflow, but the sub-image was acquired on a different microscope than the one currently active.
+
+**Why this matters:** Sub-images are acquired at a specific stage position on a specific microscope. When you use the Existing Image workflow, the sub-image's `xy_offset` metadata is interpreted as stage coordinates **on the acquiring microscope's stage frame**. If you try to use those same coordinates on a different microscope, the stage will move to the wrong physical location.
+
+**What you see:**
+- A dialog explaining the problem
+- The name of the microscope that acquired the sub-image
+- The name of the currently active microscope
+- Two options to fix it
+
+**To fix:**
+
+**Option 1 (Recommended if possible):** Open the sub-image on the microscope that originally acquired it
+1. Switch Micro-Manager or the scope selector to the original acquiring microscope
+2. Restart QuPath or reconnect to the microscope
+3. Open the sub-image entry
+4. Run Acquire from Existing Image on that microscope
+
+**Option 2 (More flexible):** Open the parent macro entry instead
+1. Find and open the parent macro image (usually the overview image that contains this sub-image)
+2. Draw a new annotation on the parent for the region you want
+3. Run Acquire from Existing Image on the parent
+4. The cross-scope alignment path will compose a fresh transform for the current microscope
+
+**When this constraint applies:**
+- You are using **Acquire from Existing Image** on a sub-image (an image that was created from a prior Bounded Acquisition or Acquire from Existing Image workflow)
+- The active microscope name differs from the one that acquired the sub-image
+- The system blocks the acquisition to prevent silent stage position errors
+
+**Legacy note:** Sub-images acquired before 2026-05-14 may not have the microscope-name metadata. The system falls back to parsing the microscope name from the derived alignment JSON filename. If neither source exists, the gate logs a warning and proceeds (preserving pre-2026-05-14 behavior).
+
 ### Multi-Channel Acquisition (Widefield IF, BF+IF)
 
 Quick fixes for the most common multi-channel failure modes. For the full reference on how channels are configured in YAML, how profile-level overrides work, and more exotic failures, see [CHANNELS.md](CHANNELS.md).
