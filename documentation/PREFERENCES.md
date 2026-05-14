@@ -721,6 +721,23 @@ This dropdown appears in the Bounding Box acquisition dialog, Existing Image acq
 
 ---
 
+## Loop Order (Persistent Preferences)
+
+The per-tile snap-loop inner-axis preference stores the user's choice of loop nesting (Z-inner vs channel-inner for widefield, or angle-inner vs z-inner for PPM) on a per-modality-family basis. These keys are backed by QuPath's standard `PathPrefs` persistent-preference mechanism (the same store as `qpscZStackEnabled` and the rest of the Z-stack block) and are written whenever the user picks the alternative radio in the loop-order toggle of the Z-stack acquisition dialog.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `qpscAcqLoopOrder.widefield` | String | `"z"` | Loop nesting choice for widefield / fluorescence multi-channel acquisitions. Values: `"z"` (Z per channel, default -- channel-outer / z-inner nesting, fewer filter changes) or `"channel"` (channels per Z -- z-outer / channel-inner, slower but tightly z-registered). |
+| `qpscAcqLoopOrder.ppm` | String | `"angle"` | Loop nesting choice for PPM multi-angle acquisitions. Values: `"angle"` (angle per Z, default -- z-outer / angle-inner, the historical PPM ordering) or `"z"` (z per angle -- angle-outer / z-inner, fewer rotation moves on thicker z-stacks). |
+
+The loop-order toggle appears in both the Bounded Acquisition and Existing Image Acquisition dialogs whenever Z-stack is enabled AND the active modality is widefield (2+ channels selected) or PPM. The user's choice for each family is stored in these preferences and restored when that family is selected again, even across sessions. See [Z-Stack / Time-Lapse > Loop-order toggle](tools/z-stack-timelapse.md#loop-order-toggle-added-2026-05-14) for the user-facing rationale.
+
+### Resetting
+
+There is no in-app reset button specific to these keys. They live in QuPath's standard user-preferences XML alongside every other `PathPrefs`-backed preference (path varies per OS / QuPath version -- on Linux / WSL typically under `~/.java/.userPrefs/qupath/`). Deleting the `qpscAcqLoopOrder.widefield` and `qpscAcqLoopOrder.ppm` entries there resets both families to their per-modality defaults. Restart QuPath after editing the XML.
+
+---
+
 ## Channel Picker (Persistent Preferences)
 
 Preferences persisted by the multi-channel acquisition UI (`WidefieldChannelBoundingBoxUI`). These keys do **not** appear in QuPath's Preferences panel -- they are stored as dynamic string preferences under the QPSC extension's `dynamic` Java Preferences node and are written whenever the user ticks a checkbox or edits an exposure spinner in the channel picker. They are listed here for developers, for debugging, and for users who want to reset the picker to a clean state.
