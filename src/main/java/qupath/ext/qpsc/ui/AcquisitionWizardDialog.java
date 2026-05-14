@@ -23,6 +23,7 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.QPScopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
@@ -1291,6 +1292,31 @@ public class AcquisitionWizardDialog {
         StepStatus connStatus = CalibrationChecker.checkServerConnection();
         if (connStatus.status() == Status.NOT_READY) {
             warnings.add("Server: " + connStatus.message());
+        }
+
+        // Live MM-vs-wizard validation: if the server is reachable, confirm the wizard's
+        // objective/detector match what MicroManager actually reports (pixel size + sensor
+        // ROI). A mismatch here is a hard block -- proceeding plans tiles at the wrong FOV
+        // and silently mis-samples every captured tile. The checks short-circuit cleanly
+        // when MM is not connected, so they are safe to call before the warnings dialog.
+        // QPScopeChecks shows its own diagnostic dialog (parented to wizardStage so it
+        // surfaces over the always-on-top wizard), so we return immediately on false.
+        if (connStatus.status() != Status.NOT_READY) {
+            try {
+                String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
+                double configPixelSize = configManager.getPixelSize(objective, detector);
+                if (!QPScopeChecks.validateObjectivePixelSize(
+                        objective, detector, modality, configPixelSize, wizardStage)) {
+                    return false;
+                }
+                if (!QPScopeChecks.validateCameraRoi(detector, wizardStage)) {
+                    return false;
+                }
+            } catch (Exception e) {
+                logger.warn("Could not validate MM state against wizard selection: {}", e.getMessage());
+                // Non-fatal at wizard time -- the workflow's pre-acquisition gate is a backstop.
+            }
         }
 
         // Check white balance

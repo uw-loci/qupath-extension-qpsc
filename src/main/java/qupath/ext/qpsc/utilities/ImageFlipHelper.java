@@ -134,6 +134,21 @@ public final class ImageFlipHelper {
                     flipY,
                     sampleName);
         } else {
+            // Missing source_microscope on a flip-needing scope: hard-cancel.
+            // Otherwise resolveFlipFromPreset silently returns (false, false) and
+            // the workflow runs against the unflipped macro on a scope that
+            // requires a flip -- the exact failure 9f4fb96 fixed for entries
+            // that DO carry source_microscope. Review finding H1.
+            String src = openEntry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+            if ((src == null || src.isBlank()) && isActiveScopeFlipNeeding()) {
+                logger.error(
+                        "validateAndFlipIfNeeded: entry '{}' has no SOURCE_MICROSCOPE metadata and the "
+                                + "active microscope requires a flipped sibling; refusing to proceed.",
+                        openEntry.getImageName());
+                showMissingSourceMicroscopeDialog(openEntry.getImageName());
+                future.completeExceptionally(new RuntimeException("source_microscope missing on a flip-needing scope"));
+                return future;
+            }
             boolean[] resolved = resolveFlipFromPreset(openEntry);
             flipX = resolved[0];
             flipY = resolved[1];
@@ -193,6 +208,98 @@ public final class ImageFlipHelper {
      */
     public static boolean[] resolveRequiredFlipFromPreset(ProjectImageEntry<BufferedImage> openEntry) {
         return resolveFlipFromPreset(openEntry);
+    }
+
+    /**
+     * Hard-cancel dialog for the missing-{@code source_microscope} gate
+     * (review finding H1). FX-safe, blocking, OK-only.
+     */
+    private static void showMissingSourceMicroscopeDialog(String entryName) {
+        String title = "Source Microscope Missing -- Workflow Cancelled";
+        String header = "This entry has no source-scanner metadata.";
+        StringBuilder body = new StringBuilder();
+        body.append(String.format(
+                "The open entry%n  '%s'%nhas no 'source_microscope' metadata, but the active%n"
+                        + "microscope requires a flipped sibling for visual-UX during%n"
+                        + "alignment (one or more saved presets for this scope have%n"
+                        + "flipMacroX or flipMacroY set).%n%n",
+                entryName));
+        body.append("Without source_microscope we cannot resolve which preset's flip%n");
+        body.append("state applies, and the workflow would silently run against the%n");
+        body.append("unflipped macro -- targeting the wrong physical location.%n%n");
+        body.append("To fix, stamp the source scanner via:%n");
+        body.append("  Microscope -> Stage Map -> Stamp Source Microscope%n");
+        body.append("Then re-run the workflow.%n%n");
+        body.append("This workflow has been cancelled.");
+
+        Runnable show = () -> {
+            javafx.scene.control.Alert alert =
+                    new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+            alert.setTitle(title);
+            alert.setHeaderText(header);
+            alert.setContentText(body.toString());
+            alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.OK);
+            alert.getDialogPane().setMinWidth(620);
+            alert.getDialogPane().setPrefWidth(720);
+            alert.getDialogPane().setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+            javafx.scene.control.Label contentLabel =
+                    (javafx.scene.control.Label) alert.getDialogPane().lookup(".content");
+            if (contentLabel != null) {
+                contentLabel.setWrapText(true);
+                contentLabel.setMaxWidth(680);
+                contentLabel.setStyle("-fx-font-family: 'monospace';");
+            }
+            javafx.scene.control.Label headerLabel =
+                    (javafx.scene.control.Label) alert.getDialogPane().lookup(".header-panel .label");
+            if (headerLabel != null) {
+                headerLabel.setWrapText(true);
+                headerLabel.setMaxWidth(660);
+            }
+            alert.showAndWait();
+        };
+        if (Platform.isFxApplicationThread()) {
+            show.run();
+            return;
+        }
+        java.util.concurrent.FutureTask<Void> task = new java.util.concurrent.FutureTask<>(() -> {
+            show.run();
+            return null;
+        });
+        Platform.runLater(task);
+        try {
+            task.get();
+        } catch (Exception e) {
+            logger.warn("Failed to display missing-source dialog: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * @return {@code true} when any saved preset for the active microscope has
+     *     {@code flipMacroX} or {@code flipMacroY} set to true -- i.e. operating
+     *     on a macro from some scanner on this scope requires building a flipped
+     *     sibling for visual UX. Used as the "is the active scope flip-needing"
+     *     predicate in the missing-{@code source_microscope} hard-cancel gate
+     *     (review finding H1).
+     */
+    public static boolean isActiveScopeFlipNeeding() {
+        try {
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            String activeMicroscope = mgr != null ? mgr.getMicroscopeName() : null;
+            if (activeMicroscope == null || activeMicroscope.isBlank()) return false;
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath == null || configPath.isBlank()) return false;
+            AffineTransformManager atm = new AffineTransformManager(new File(configPath).getParent());
+            for (AffineTransformManager.TransformPreset preset : atm.getTransformsForMicroscope(activeMicroscope)) {
+                if (!preset.hasFlipState()) continue;
+                if (Boolean.TRUE.equals(preset.getFlipMacroX()) || Boolean.TRUE.equals(preset.getFlipMacroY())) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            logger.warn("isActiveScopeFlipNeeding: probe failed: {}", e.getMessage());
+            return false;
+        }
     }
 
     /**

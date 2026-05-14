@@ -46,14 +46,33 @@ public class SingleTileRefinement {
 
     /**
      * Result of refinement containing both the transform and the selected tile.
+     *
+     * <p>{@code accepted} distinguishes a user-confirmed refinement (Save Refined
+     * Position, or SIFT auto-accept above the confidence threshold) from a
+     * pass-through (Skip Refinement, X-close, or tile-deselection): pass-through
+     * returns the initial transform unchanged. Consumers must check
+     * {@code accepted} before persisting state -- writing the per-slide JSON on a
+     * skip overwrites its {@code flipMacroX/Y} provenance and the alignment
+     * cannot then be reconstructed from the original preset (review finding H7).
      */
     public static class RefinementResult {
         public final AffineTransform transform;
         public final PathObject selectedTile;
+        public final boolean accepted;
 
+        /**
+         * Pass-through constructor: {@code accepted} defaults to {@code false}.
+         * Use when returning the initial transform unchanged (Skip / X-close /
+         * cancelled tile selection).
+         */
         public RefinementResult(AffineTransform transform, PathObject selectedTile) {
+            this(transform, selectedTile, false);
+        }
+
+        public RefinementResult(AffineTransform transform, PathObject selectedTile, boolean accepted) {
             this.transform = transform;
             this.selectedTile = selectedTile;
+            this.accepted = accepted;
         }
     }
 
@@ -251,7 +270,7 @@ public class SingleTileRefinement {
                                                         String.format(
                                                                 "Alignment refined automatically (confidence %.0f%%)",
                                                                 confidence * 100));
-                                                future.complete(new RefinementResult(refined, selectedTile));
+                                                future.complete(new RefinementResult(refined, selectedTile, true));
                                             });
                                             return;
                                         } else {
@@ -389,7 +408,7 @@ public class SingleTileRefinement {
                         "Refine Alignment", "The alignment has been refined and saved for this slide.");
 
                 dialogStage.close();
-                future.complete(new RefinementResult(refinedTransform, selectedTile));
+                future.complete(new RefinementResult(refinedTransform, selectedTile, true));
             } catch (IOException ex) {
                 logger.error("Failed to get stage position", ex);
                 Dialogs.showErrorMessage("Error", "Failed to read stage position: " + ex.getMessage());

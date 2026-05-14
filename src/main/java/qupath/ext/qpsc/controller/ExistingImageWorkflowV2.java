@@ -465,6 +465,19 @@ public class ExistingImageWorkflowV2 {
                     if (sourceMicroscope == null || activeMicroscope.equals(sourceMicroscope)) {
                         continue;
                     }
+                    // Cross-scope composition assumes the source record is in macro pixel
+                    // coords -- composing a sub-frame transform with a macro-frame preset
+                    // produces the 2026-05-10 MH_Colon shrunk-grid class. The directory
+                    // scanner already separates derived/ from flat alignmentFiles/, so
+                    // this gate is defense-in-depth against hand-edited or hand-placed
+                    // sub-frame files in the flat directory (review finding H4).
+                    if (!AffineTransformManager.PIXEL_FRAME_MACRO.equals(record.getPixelFrame())) {
+                        logger.warn(
+                                "Skipping cross-scope candidate {}: pixelFrame={} (need 'macro')",
+                                record.getFile().getName(),
+                                record.getPixelFrame());
+                        continue;
+                    }
                     // Find a (sourceScanner) shared by a preset on the active scope AND a preset
                     // on the source scope. The macro source must agree -- the composition routes
                     // pixels through the shared macro frame.
@@ -990,9 +1003,24 @@ public class ExistingImageWorkflowV2 {
 
         /**
          * Handles refinement based on user's choice.
+         *
+         * <p>Gates pixel-size + camera-ROI validation here, before any refinement work
+         * (tile creation, stage motion). Refinement allocates tiles using the wizard's
+         * objective/detector FOV; if MicroManager is on a different objective, the FOV is
+         * wrong and {@link qupath.ext.qpsc.utilities.TilingUtilities} throws an opaque
+         * "too many tiles" error 60+ seconds in. The wizard now runs the same check at
+         * launch time, but this gate stays as defense-in-depth for cases where the wizard
+         * gate could not run (e.g. MM not connected at wizard time, or MM state changed
+         * between wizard and refinement). The pre-acquisition gate further downstream is
+         * a third layer of defense for state that changes during refinement.
          */
         private CompletableFuture<WorkflowState> handleRefinement(WorkflowState state) {
             if (state == null) return CompletableFuture.completedFuture(null);
+
+            if (!validateMMAgainstSelection(state)) {
+                logger.warn("Pixel-size or camera-ROI validation failed before refinement; cancelling workflow");
+                return CompletableFuture.completedFuture(null);
+            }
 
             switch (state.refinementChoice) {
                 case NONE:
@@ -1009,6 +1037,31 @@ public class ExistingImageWorkflowV2 {
 
                 default:
                     return CompletableFuture.completedFuture(state);
+            }
+        }
+
+        /**
+         * Verifies the wizard's objective/detector still match MicroManager. Returns false if a
+         * mismatch dialog was shown and the workflow should cancel; true to proceed. Errors during
+         * the check are logged as warnings and treated as pass-through -- the workflow has further
+         * gates downstream.
+         */
+        private boolean validateMMAgainstSelection(WorkflowState state) {
+            try {
+                String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
+                double configPixelSize = configManager.getPixelSize(state.objective, state.detector);
+                if (!QPScopeChecks.validateObjectivePixelSize(
+                        state.objective, state.detector, state.modality, configPixelSize)) {
+                    return false;
+                }
+                if (!QPScopeChecks.validateCameraRoi(state.detector)) {
+                    return false;
+                }
+                return true;
+            } catch (Exception e) {
+                logger.warn("Could not validate MM state against wizard selection: {}", e.getMessage());
+                return true;
             }
         }
 
@@ -1050,12 +1103,23 @@ public class ExistingImageWorkflowV2 {
 
             return SingleTileRefinement.performRefinement(gui, state.annotations, state.transform)
                     .thenApply(result -> {
+                        state.refinementTile = result.selectedTile;
+                        // Only consume the refined transform + persist the JSON when the
+                        // user actually accepted a refinement (Save Refined Position) or
+                        // SIFT auto-accepted. Skip / X-close return the initial transform
+                        // unchanged with accepted=false; re-installing it is a no-op but
+                        // re-writing the per-slide JSON destroys its original flipMacroX/Y
+                        // provenance (review finding H7).
+                        if (!result.accepted) {
+                            logger.info(
+                                    "Refinement not accepted (skip / cancel / X-close); preserving prior alignment");
+                            return state;
+                        }
                         if (result.transform != null) {
                             state.transform = result.transform;
                             MicroscopeController.getInstance().setCurrentTransform(result.transform);
                             logger.info("Updated transform with refined alignment");
                         }
-                        state.refinementTile = result.selectedTile;
                         saveRefinedAlignment(state);
                         return state;
                     });
@@ -1118,21 +1182,12 @@ public class ExistingImageWorkflowV2 {
         private CompletableFuture<WorkflowState> performAcquisition(WorkflowState state) {
             if (state == null) return CompletableFuture.completedFuture(null);
 
-            // Validate pixel size against MicroManager before acquisition
-            try {
-                String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-                MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
-                double configPixelSize = configManager.getPixelSize(state.objective, state.detector);
-                if (!QPScopeChecks.validateObjectivePixelSize(
-                        state.objective, state.detector, state.modality, configPixelSize)) {
-                    return CompletableFuture.completedFuture(null); // user cancelled
-                }
-                if (!QPScopeChecks.validateCameraRoi(state.detector)) {
-                    return CompletableFuture.completedFuture(null); // ROI mismatch -- user cancelled
-                }
-            } catch (Exception e) {
-                logger.warn("Could not validate pixel size before acquisition: {}", e.getMessage());
-                // Non-fatal -- proceed with acquisition
+            // Defense-in-depth: the wizard and pre-refinement gates already ran the same
+            // check; this catches the case where MM state changed during refinement (user
+            // switched objective in MicroManager, applied a ROI crop, etc.).
+            if (!validateMMAgainstSelection(state)) {
+                logger.warn("Pixel-size or camera-ROI validation failed before acquisition; cancelling workflow");
+                return CompletableFuture.completedFuture(null);
             }
 
             logger.info("Starting acquisition phase");
@@ -1162,11 +1217,22 @@ public class ExistingImageWorkflowV2 {
 
         /**
          * Cleans up resources after workflow completion.
+         *
+         * <p>Clears {@code MicroscopeController.currentTransform} so the next workflow
+         * (or any inter-workflow Live Viewer Go-To-Centroid click) cannot consume a
+         * stale transform installed by this run. The Live Viewer panel has a
+         * three-tier fallback (derived/, flat per-slide JSON, then in-session
+         * {@code currentTransform}); clearing the singleton just pushes it to load
+         * from disk on the next centroid click -- a net improvement over the
+         * residue class of bug (cancelling a sub-image run, then clicking on the
+         * macro, would otherwise drive the stage with the sub-image transform).
+         * Review finding H6.
          */
         private void cleanup() {
             logger.info("Workflow completed - cleaning up");
             // Clear any preserved annotations (should already be restored, but cleanup just in case)
             AnnotationPreservationService.clearPreservedAnnotations();
+            MicroscopeController.getInstance().setCurrentTransform(null);
         }
 
         /**

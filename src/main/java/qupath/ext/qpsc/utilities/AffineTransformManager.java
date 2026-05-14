@@ -1320,11 +1320,23 @@ public class AffineTransformManager {
         private final AffineTransform transform;
         private final String microscope;
         private final File file;
+        private final String pixelFrame;
 
+        /**
+         * Legacy constructor: defaults {@code pixelFrame} to "macro" for
+         * callers that predate the field. The 2026-05-11 lookup restructure
+         * (commit 18a800d) added {@code pixelFrame}; pre-restructure JSONs
+         * are macro-frame by construction.
+         */
         public SlideAlignmentRecord(AffineTransform transform, String microscope, File file) {
+            this(transform, microscope, file, PIXEL_FRAME_MACRO);
+        }
+
+        public SlideAlignmentRecord(AffineTransform transform, String microscope, File file, String pixelFrame) {
             this.transform = transform;
             this.microscope = microscope;
             this.file = file;
+            this.pixelFrame = pixelFrame != null ? pixelFrame : PIXEL_FRAME_MACRO;
         }
 
         public AffineTransform getTransform() {
@@ -1337,6 +1349,17 @@ public class AffineTransformManager {
 
         public File getFile() {
             return file;
+        }
+
+        /**
+         * Returns the saved alignment's pixel frame ({@code "macro"} or
+         * {@code "sub"}). Cross-scope composition requires macro-frame records
+         * -- a sub-frame record fed to {@code CrossScopeTransformBuilder.compose}
+         * would silently mix camera-pixel scale with macro-pixel preset
+         * transforms (review finding H4).
+         */
+        public String getPixelFrame() {
+            return pixelFrame;
         }
     }
 
@@ -1393,7 +1416,9 @@ public class AffineTransformManager {
                 if (tv == null || tv.size() != 6) continue;
                 AffineTransform t =
                         new AffineTransform(tv.get(0), tv.get(1), tv.get(2), tv.get(3), tv.get(4), tv.get(5));
-                out.add(new SlideAlignmentRecord(t, fileScope, f));
+                Object pixelFrameObj = data.get("pixelFrame");
+                String pixelFrame = pixelFrameObj instanceof String ? (String) pixelFrameObj : PIXEL_FRAME_MACRO;
+                out.add(new SlideAlignmentRecord(t, fileScope, f, pixelFrame));
             } catch (Exception e) {
                 logger.warn("loadAllSlideAlignments: failed to parse {}: {}", f.getName(), e.getMessage());
             }

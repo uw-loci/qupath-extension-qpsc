@@ -6,10 +6,12 @@ import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
+import javafx.stage.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.ObjectiveUtils;
 import qupath.fx.dialogs.Dialogs;
@@ -139,6 +141,16 @@ public class QPScopeChecks {
      *         matches the configured sensor within threshold; false if a mismatch was detected
      */
     public static boolean validateCameraRoi(String detector) {
+        return validateCameraRoi(detector, null);
+    }
+
+    /**
+     * Same as {@link #validateCameraRoi(String)} but routes the mismatch dialog through
+     * {@link UIFunctions#showAlertOverParent} when {@code parentStage} is non-null. Use this
+     * overload when the caller lives inside an always-on-top stage (e.g. the Acquisition Wizard);
+     * a plain {@code showAndWait} alert sinks behind such a stage while still holding modal focus.
+     */
+    public static boolean validateCameraRoi(String detector, Window parentStage) {
         if (detector == null || detector.isEmpty()) {
             return true;
         }
@@ -224,7 +236,8 @@ public class QPScopeChecks {
         showMismatchDialog(
                 "Camera ROI Mismatch -- Workflow Cancelled",
                 "MicroManager has the camera cropped to a sub-region of the full sensor.",
-                body.toString());
+                body.toString(),
+                parentStage);
 
         return false;
     }
@@ -245,6 +258,18 @@ public class QPScopeChecks {
      */
     public static boolean validateObjectivePixelSize(
             String objective, String detector, String modality, double configPixelSize) {
+        return validateObjectivePixelSize(objective, detector, modality, configPixelSize, null);
+    }
+
+    /**
+     * Same as {@link #validateObjectivePixelSize(String, String, String, double)} but routes the
+     * mismatch dialog through {@link UIFunctions#showAlertOverParent} when {@code parentStage} is
+     * non-null. Use this overload when the caller lives inside an always-on-top stage (e.g. the
+     * Acquisition Wizard); a plain {@code showAndWait} alert sinks behind such a stage while still
+     * holding modal focus.
+     */
+    public static boolean validateObjectivePixelSize(
+            String objective, String detector, String modality, double configPixelSize, Window parentStage) {
 
         double mmPixelSize;
         try {
@@ -337,19 +362,24 @@ public class QPScopeChecks {
         showMismatchDialog(
                 "Objective Pixel-Size Mismatch -- Workflow Cancelled",
                 "MicroManager's active objective does not match the wizard's selection.",
-                body.toString());
+                body.toString(),
+                parentStage);
 
         return false;
     }
 
-    /** Shows the mismatch warning, blocking until dismissed regardless of calling thread. */
-    private static void showMismatchDialog(String title, String header, String body) {
+    /**
+     * Shows the mismatch warning, blocking until dismissed regardless of calling thread.
+     * When {@code parent} is non-null, the alert is parented + co-floated via
+     * {@link UIFunctions#showAlertOverParent} so it does not sink behind an always-on-top caller.
+     */
+    private static void showMismatchDialog(String title, String header, String body, Window parent) {
         if (Platform.isFxApplicationThread()) {
-            showMismatchDialogOnFxThread(title, header, body);
+            showMismatchDialogOnFxThread(title, header, body, parent);
             return;
         }
         FutureTask<Void> task = new FutureTask<>(() -> {
-            showMismatchDialogOnFxThread(title, header, body);
+            showMismatchDialogOnFxThread(title, header, body, parent);
             return null;
         });
         Platform.runLater(task);
@@ -360,7 +390,7 @@ public class QPScopeChecks {
         }
     }
 
-    private static void showMismatchDialogOnFxThread(String title, String header, String body) {
+    private static void showMismatchDialogOnFxThread(String title, String header, String body, Window parent) {
         Alert alert = new Alert(Alert.AlertType.WARNING);
         alert.setTitle(title);
         alert.setHeaderText(header);
@@ -383,7 +413,11 @@ public class QPScopeChecks {
             headerLabel.setMaxWidth(660);
         }
 
-        alert.showAndWait();
+        if (parent != null) {
+            UIFunctions.showAlertOverParent(alert, parent);
+        } else {
+            alert.showAndWait();
+        }
     }
 
     /**
