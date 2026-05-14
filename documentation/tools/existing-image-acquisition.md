@@ -47,6 +47,8 @@ Selected transforms are validated before use. Invalid transforms show a warning 
 | Single-Tile Refinement | Refine alignment using one reference tile. Quick adjustment for minor drift. |
 | Full Manual Alignment | Create new transform with multiple points. Use the first time or after hardware changes. |
 
+**Objective Mismatch Advisory:** If you load a saved alignment that was created at a different objective than your wizard's current setting (e.g., refinement at 10x, but wizard set to 20x), a modal dialog appears. The dialog explains that refinement translations are tied to the objective's tile geometry; reusing at a different objective preserves the scale and rotation but loses per-tile precision. You can continue with the loaded alignment or cancel to adjust the wizard's objective or re-align.
+
 ### Annotation Class Selection
 
 | Column | Type | Description |
