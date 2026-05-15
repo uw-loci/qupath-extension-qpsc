@@ -140,6 +140,7 @@ public class ExistingImageWorkflowV2 {
                         .thenCompose(this::initializeFromConfig)
                         .thenCompose(this::checkExistingSlideAlignment)
                         .thenCompose(this::routeSubWorkflow)
+                        .thenCompose(this::reReadAnnotationsAfterRouting)
                         .thenCompose(this::handleRefinement)
                         .thenCompose(this::performAcquisition)
                         .thenCompose(this::waitForCompletion)
@@ -176,7 +177,7 @@ public class ExistingImageWorkflowV2 {
                         .thenCompose(this::initializeFromConfig)
                         .thenCompose(this::checkExistingSlideAlignment)
                         .thenCompose(this::routeSubWorkflow)
-                        .thenCompose(this::ensureAnnotationsExist) // Call annotation helper if none exist
+                        .thenCompose(this::reReadAnnotationsAfterRouting)
                         .thenCompose(this::handleRefinement)
                         .thenCompose(this::performAcquisition)
                         .thenCompose(this::waitForCompletion)
@@ -246,6 +247,28 @@ public class ExistingImageWorkflowV2 {
          * Ensures annotations exist for acquisition, prompting for creation if needed.
          * Shows a user-friendly dialog with options when no annotations are detected.
          */
+        /**
+         * Centralized post-routing annotation re-read (review finding M9). Sits after
+         * {@code routeSubWorkflow} returns and before {@code handleRefinement}: nulls
+         * {@code state.annotations} and re-reads against the current open entry's
+         * hierarchy. The slide-specific routing branch already nulled + re-read
+         * internally; the other branches relied on inner helpers
+         * ({@code ExistingAlignmentPath.ensureAnnotationsForTransform},
+         * {@code AnnotationHelper.ensureAnnotationsExist}). This consolidates the
+         * invariant -- "after routing, annotations are always read against the
+         * post-flip hierarchy" -- in one place.
+         *
+         * <p>Inner re-reads in {@code ExistingAlignmentPath.createTransform} and
+         * {@code ManualAlignmentPath.createManualAlignment} stay in place as
+         * defense-in-depth. They will be removed in a follow-on commit after one
+         * OWS3-PPM verification cycle on the slide-specific path.
+         */
+        private CompletableFuture<WorkflowState> reReadAnnotationsAfterRouting(WorkflowState state) {
+            if (state == null) return CompletableFuture.completedFuture(null);
+            state.annotations = null;
+            return ensureAnnotationsExist(state);
+        }
+
         private CompletableFuture<WorkflowState> ensureAnnotationsExist(WorkflowState state) {
             if (state == null) return CompletableFuture.completedFuture(null);
 
