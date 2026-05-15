@@ -302,33 +302,75 @@ public class AlignmentHelper {
             }
         }
 
-        // Bake the alignment-frame flip into the returned transform so downstream
-        // callers (AcquisitionManager, AnnotationOrderingService, ...) consume
-        // unflipped-base pixel coords directly. baseToStage_new = baseToStage *
-        // createFlip(alignFlipX, alignFlipY, baseWidth, baseHeight). Requires the
-        // base image dimensions; read them from the currently-open image (which
-        // is the unflipped base by convention after Step B).
-        if (slideTransform != null
-                && alignFlipX != null
-                && alignFlipY != null
-                && (alignFlipX || alignFlipY)
-                && gui.getImageData() != null) {
-            try {
-                int baseWidth = gui.getImageData().getServer().getWidth();
-                int baseHeight = gui.getImageData().getServer().getHeight();
-                AffineTransform flip = qupath.ext.qpsc.controller.ForwardPropagationWorkflow.createFlip(
-                        alignFlipX, alignFlipY, baseWidth, baseHeight);
-                AffineTransform composed = new AffineTransform(slideTransform);
-                composed.concatenate(flip);
-                slideTransform = composed;
-                logger.info(
-                        "Baked alignment-frame flip ({}, {}) into slide transform; downstream uses unflipped-base pixel coords",
-                        alignFlipX,
-                        alignFlipY);
-            } catch (Exception e) {
-                logger.warn(
-                        "Could not bake alignment flip into transform; downstream may misalign: {}", e.getMessage());
+        // Bake the alignment-frame -> current-entry-frame flip delta into the returned
+        // transform so downstream callers (AcquisitionManager, AnnotationOrderingService,
+        // tile creation, refinement) can feed pixel coords from the CURRENT open entry's
+        // hierarchy directly.
+        //
+        // Step B's original design assumed the workflow always ran with the UNFLIPPED
+        // BASE as the open entry (validateAndFlipIfNeeded would create / switch to the
+        // flipped sibling for the visual-UX of the alignment step, but downstream
+        // operated on base-frame coords). If alignFlipX/Y was true, we unconditionally
+        // baked it in so saved(flipped) became baked(unflipped) -> stage.
+        //
+        // That assumption breaks when the user opens the flipped sibling directly:
+        // ImageFlipHelper.validateAndFlipIfNeeded no-ops on already-flipped entries, the
+        // workflow stays on the sibling, and the hierarchy yields FLIPPED-frame coords.
+        // An unconditional bake then double-flips and the stage lands at the X/Y mirror
+        // (verified 2026-05-15 from OWS3 logs: tile at flipped-frame (94746, 36206)
+        // moved to stage (5474, -7625) when the correct target was ~(22180, -9982)).
+        //
+        // Fix: bake only the DELTA -- bakeX = alignFlipX XOR currentEntryFlipX, same Y.
+        // Both-on or both-off => no bake; saved transform's native frame already matches
+        // the current entry's coord space.
+        boolean currentEntryFlipX = false;
+        boolean currentEntryFlipY = false;
+        try {
+            if (project != null && gui.getImageData() != null) {
+                ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
+                if (openEntry != null) {
+                    currentEntryFlipX = ImageMetadataManager.isFlippedX(openEntry);
+                    currentEntryFlipY = ImageMetadataManager.isFlippedY(openEntry);
+                }
             }
+        } catch (Exception e) {
+            logger.debug(
+                    "Could not read current-entry flip metadata for bake delta; assuming unflipped: {}",
+                    e.getMessage());
+        }
+        if (slideTransform != null && alignFlipX != null && alignFlipY != null && gui.getImageData() != null) {
+            boolean bakeX = alignFlipX != currentEntryFlipX;
+            boolean bakeY = alignFlipY != currentEntryFlipY;
+            if (!bakeX && !bakeY) {
+                logger.info(
+                        "Alignment frame ({}, {}) matches current entry frame ({}, {}); skipping bake",
+                        alignFlipX,
+                        alignFlipY,
+                        currentEntryFlipX,
+                        currentEntryFlipY);
+            } else
+                try {
+                    int baseWidth = gui.getImageData().getServer().getWidth();
+                    int baseHeight = gui.getImageData().getServer().getHeight();
+                    AffineTransform flip = qupath.ext.qpsc.controller.ForwardPropagationWorkflow.createFlip(
+                            bakeX, bakeY, baseWidth, baseHeight);
+                    AffineTransform composed = new AffineTransform(slideTransform);
+                    composed.concatenate(flip);
+                    slideTransform = composed;
+                    logger.info(
+                            "Baked frame-delta flip ({}, {}) into slide transform "
+                                    + "(alignFrame=({}, {}), currentEntryFrame=({}, {}))",
+                            bakeX,
+                            bakeY,
+                            alignFlipX,
+                            alignFlipY,
+                            currentEntryFlipX,
+                            currentEntryFlipY);
+                } catch (Exception e) {
+                    logger.warn(
+                            "Could not bake alignment flip into transform; downstream may misalign: {}",
+                            e.getMessage());
+                }
         }
 
         if (slideTransform != null) {
