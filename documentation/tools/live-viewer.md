@@ -135,7 +135,7 @@ The Navigate tab combines movement controls and direct position entry in a singl
 |--------|------|-------------|
 | X / Y / Z / R Fields | TextField | Enter absolute coordinates (um) or rotation angle to move to |
 | Move Buttons | Button | Move the stage to the entered coordinate for that axis |
-| Go to Centroid | Button | Move the stage to the centroid of the current QuPath annotation |
+| Go to Centroid | Button | Move the stage to the centroid of the current QuPath annotation. Enabled when the open image has alignment data (sub-image offset metadata, bounding-box stage bounds, or derived alignment). The status text indicates which alignment type is available. |
 
 ### Stage Control - Saved Points Tab
 
