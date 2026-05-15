@@ -6,9 +6,9 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.StreamingFocusResult;
-import qupath.ext.qpsc.utilities.AfFailureHint;
 import qupath.ext.qpsc.ui.liveviewer.RefineFocusController.Outcome;
 import qupath.ext.qpsc.ui.liveviewer.RefineFocusController.StatusCallback;
+import qupath.ext.qpsc.utilities.AfFailureHint;
 
 /**
  * Thin Java-side wrapper around the server's STRMAFZ (streaming autofocus) command.
@@ -110,16 +110,16 @@ public class StreamingFocusController {
                     return;
 
                 case UNAVAILABLE:
-                    String unavailableMsg = "Autofocus unavailable: " + result.reason
-                            + "\n\n" + AfFailureHint.format(modality, result.reason);
+                    String unavailableMsg = "Autofocus unavailable: " + result.reason + "\n\n"
+                            + AfFailureHint.format(modality, result.reason);
                     logger.info("Autofocus UNAVAILABLE: {}", result.reason);
                     finish(callback, unavailableMsg, Outcome.FAILED);
                     return;
 
                 case FAILED:
                 default:
-                    String failMsg = "Autofocus failed: " + result.reason
-                            + "\n\n" + AfFailureHint.format(modality, result.reason);
+                    String failMsg = "Autofocus failed: " + result.reason + "\n\n"
+                            + AfFailureHint.format(modality, result.reason);
                     logger.warn("Autofocus FAILED: {}", result.reason);
                     finish(callback, failMsg, Outcome.ERROR);
                     return;

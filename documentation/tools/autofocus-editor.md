@@ -76,6 +76,7 @@ The Sweep Drift Check section configures a periodic Z sweep that monitors focus 
 Below the streaming-AF panel, the **Test Streaming Autofocus** button runs a single streaming-AF pass at the current stage position with frame dumping enabled (server-side `--dump`). On completion a non-modal popup opens with:
 
 - **Status header** -- `SUCCESS` / `UNAVAILABLE` / `FAILED` plus a one-line reason from the server.
+- **Diagnostic hint** (on non-SUCCESS) -- If the test fails or is unavailable, a human-readable hint explains the likely cause and points you to where to change the AF strategy.
 - **Dump path** -- absolute path to the folder of dumped TIFs and the per-frame metric/Z log, so you can open the captures in your tool of choice for offline review.
 - **Time-domain chart** -- focus metric vs `wall_ms`, with the actual stage Z (offset + scaled) overlaid as a second series. Lets you see whether the metric peak lands while the stage is moving or after it has settled.
 - **Space-domain chart** -- focus metric vs `Z_actual`, sorted by Z so the polyline does not zig-zag when the stage was stationary at the start of the run. This is the curve the streaming-AF peak finder actually fits.

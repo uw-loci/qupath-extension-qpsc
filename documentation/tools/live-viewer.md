@@ -73,6 +73,15 @@ The Autofocus button changes appearance to communicate status:
 | Server unavailable | **Orange** background, label "NO FOCUS" | Server pre-flight gate refused (other reasons; see below) | **Visible** |
 | Error | **Red** background, label "FAILED" | Mid-scan error on server | **Visible** |
 
+When Autofocus returns UNAVAILABLE or FAILED, the error message now includes a **diagnostic hint** explaining the likely cause and how to fix it. For example:
+- **"metric_flat"** → sparse vs. dense texture strategy mismatch
+- **"no peak found"** → Z starting position or search range too narrow
+- **"saturation"** → reduce exposure or illumination
+- **"blur"** → exposure too long for streaming AF (try Sweep Focus)
+- **"no_slow_speed"** → stage hardware limitation (use Sweep Focus)
+
+The hint also points you to where to change the AF strategy: the acquisition wizard's Advanced panel (one-time override) or Settings > Autofocus Configuration > Modality Bindings (persistent).
+
 After a successful Autofocus run, the Sweep Focus button is hidden again. It only appears when Autofocus cannot run.
 
 #### Exposure pre-check (client-side)

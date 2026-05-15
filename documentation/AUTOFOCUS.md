@@ -210,6 +210,12 @@ When autofocus fails (both primary and fallback metrics), the system can request
 
 - A dialog appears in QuPath asking the user to manually adjust focus
 - Options: **Retry** (re-runs AF at current position), **Use Current** (accept whatever Z is set), **Cancel** (abort acquisition)
+- The dialog now includes a **diagnostic hint** explaining why AF failed and suggesting how to fix it. Common failures include:
+  - **Sparse vs. dense strategy mismatch** -- e.g., pollen with a tissue-texture strategy (switch to `sparse_signal`)
+  - **Z starting position far from focus** -- widen the search range or move closer manually and retry
+  - **Exposure issues** -- saturation (reduce exposure) or too-long exposure for streaming AF (use Sweep Focus)
+  - **Narrow search range** -- increase `sweep_range_um` for this objective
+- The hint also points you to where to change the AF strategy: the acquisition wizard's Advanced panel (one-time override) or Settings > Autofocus Configuration > Modality Bindings (persistent)
 - The server sends keepalive pings every 30 seconds while waiting
 
 This can be disabled with the **"No Manual Autofocus"** preference (Extensions > QP Scope > Preferences), in which case failures automatically use the current Z position.
@@ -360,6 +366,20 @@ See the [Autofocus Editor](tools/autofocus-editor.md) for detailed parameter des
 ---
 
 ## Troubleshooting
+
+### Reading autofocus failure hints
+
+When autofocus fails, QPSC now provides diagnostic hints in:
+- The **Live Viewer** error dialog (Autofocus or Sweep Focus)
+- The **Autofocus Editor** Test button result popup
+- The **Manual Focus** dialog (during acquisition)
+
+These hints name the likely cause and suggest fixes. Common hints:
+- **metric_flat / within noise** -- Sample type doesn't match the current AF strategy (e.g., sparse particles with a dense-texture strategy). Switch to `sparse_signal` for beads/pollen or `dark_field` for low-contrast samples. Two places to change: acquisition wizard Advanced panel (one-time) or Settings > Autofocus Configuration > Modality Bindings (persistent).
+- **no peak found / edge** -- Z starting position is far from focus. Move the stage closer manually, or widen `sweep_range_um` for this objective.
+- **saturation** -- Camera is overexposed. Reduce exposure time, close the aperture, or lower illumination.
+- **blur** -- Exposure is too long for streaming AF's motion blur budget. Try Sweep Focus instead, which has no blur constraint.
+- **no_slow_speed** -- Stage hardware cannot run streaming AF. Use Sweep Focus, or update the stage's configuration.
 
 ### Autofocus fails on first tile
 - The AF position may be on a blank region or hole in tissue
