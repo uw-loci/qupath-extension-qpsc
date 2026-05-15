@@ -274,7 +274,8 @@ public class StitchingHelper {
                 stageBoundsX1Um,
                 stageBoundsY1Um,
                 stageBoundsX2Um,
-                stageBoundsY2Um);
+                stageBoundsY2Um,
+                sample);
         return performStitchingInternal(
                 regionName,
                 sample,
@@ -762,7 +763,8 @@ public class StitchingHelper {
             Double stageBoundsX1Um,
             Double stageBoundsY1Um,
             Double stageBoundsX2Um,
-            Double stageBoundsY2Um) {
+            Double stageBoundsY2Um,
+            SampleSetupResult sample) {
 
         // Get parent entry (the current open image) - may be null in Bounded Acquisition
         ProjectImageEntry<BufferedImage> parentEntry = null;
@@ -802,6 +804,38 @@ public class StitchingHelper {
         String detector = qupath.ext.qpsc.preferences.PersistentPreferences.getLastDetector();
         if (detector != null && detector.isEmpty()) detector = null;
 
+        // Camera FOV in stage microns. Required by
+        // autoRegisterBoundsTransformIfAvailable so it can compute the
+        // correct ASYMMETRIC image bounds: TilingUtilities anchors the tile
+        // grid with the first tile's CENTER on the annotation top-left, so
+        // the top/left extension is always exactly half a FOV, while the
+        // bottom/right extension can be more (ceiling rounding adds extra
+        // tiles to cover the far edge). Without FOV, the auto-register
+        // code's symmetric-halfFOV assumption put pixel(0,0) at the wrong
+        // stage corner, which manifested 2026-05-15 as a half-FOV Y-axis
+        // error on the OWS3 Move-to-Centroid path.
+        Double fovXUm = null;
+        Double fovYUm = null;
+        try {
+            qupath.ext.qpsc.utilities.MicroscopeConfigManager mgr =
+                    qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr != null && sample != null) {
+                double[] fov = mgr.getCameraFOV(sample.modality(), sample.objective(), sample.detector());
+                if (fov != null && fov.length == 2) {
+                    fovXUm = fov[0];
+                    fovYUm = fov[1];
+                }
+            }
+        } catch (Exception e) {
+            logger.warn(
+                    "Could not resolve camera FOV for bounded acquisition metadata "
+                            + "(modality={}, objective={}, detector={}): {}",
+                    sample != null ? sample.modality() : null,
+                    sample != null ? sample.objective() : null,
+                    sample != null ? sample.detector() : null,
+                    e.getMessage());
+        }
+
         return new StitchingMetadata(
                 parentEntry,
                 xOffset,
@@ -809,8 +843,8 @@ public class StitchingHelper {
                 flipX,
                 flipY,
                 sampleName,
-                null, // modality (unused in region path)
-                null, // objective
+                sample != null ? sample.modality() : null,
+                sample != null ? sample.objective() : null,
                 null, // angle
                 null, // annotationName
                 null, // imageIndex
@@ -818,8 +852,8 @@ public class StitchingHelper {
                 stageBoundsY1Um,
                 stageBoundsX2Um,
                 stageBoundsY2Um,
-                null, // fovXUm -- not available in region path
-                null, // fovYUm
+                fovXUm,
+                fovYUm,
                 detector,
                 sourceMicroscope);
     }
@@ -1339,26 +1373,71 @@ public class StitchingHelper {
                 heightPx = server.getHeight();
                 pixelSizeUm = server.getPixelCalibration().getAveragedPixelSizeMicrons();
             }
-            // The stage bounds from metadata are the ANNOTATION bounds, but the
-            // stitched image extends half a camera FOV beyond them in each direction
-            // (TilingUtilities centers the first tile on the annotation edge).
-            // Compute the actual image extent and adjust the origin accordingly.
+            // The stage bounds from metadata are the ANNOTATION bounds. The
+            // stitched image extends beyond them on both sides, but NOT
+            // symmetrically:
+            //   - TOP/LEFT extension is ALWAYS exactly half a camera FOV.
+            //     TilingUtilities.processBoundingBoxTilingRequest centers the
+            //     first tile on the annotation's top-left corner, so the
+            //     image's top-left corner sits exactly half a FOV before the
+            //     annotation's top-left.
+            //   - BOTTOM/RIGHT extension is whatever the tile grid resolves
+            //     to: ceil(width / xStep) (+1 for exact divisions) rows /
+            //     columns, with each tile's frame extending one full FOV from
+            //     its center. For non-exact fits the bottom/right side gets
+            //     MORE than half a FOV. Verified 2026-05-15 against OWS3
+            //     bounded-acquisition output (the annotation was offset half a
+            //     FOV from the image's geometric center in Y but not X,
+            //     producing a half-FOV Y error in Move-to-Centroid).
+            //
+            // Preferred path: anchor TOP/LEFT at exactly half FOV (which we
+            // can do when metadata.fovXUm/fovYUm are known) and derive
+            // BOTTOM/RIGHT from the actual stitched image extent. Fallback:
+            // when FOV is unknown (legacy metadata), average symmetrically;
+            // this matches the prior behaviour and is byte-identical when the
+            // tile grid happens to fit exactly.
             double imageExtentX = widthPx * pixelSizeUm;
             double imageExtentY = heightPx * pixelSizeUm;
             double annotExtentX = metadata.stageBoundsX2Um - metadata.stageBoundsX1Um;
             double annotExtentY = metadata.stageBoundsY2Um - metadata.stageBoundsY1Um;
-            double halfFovX = (imageExtentX - annotExtentX) / 2.0;
-            double halfFovY = (imageExtentY - annotExtentY) / 2.0;
 
-            // Adjust bounds to reflect the actual image origin (half FOV before annotation edge)
-            double imgX1 = metadata.stageBoundsX1Um - halfFovX;
-            double imgY1 = metadata.stageBoundsY1Um - halfFovY;
-            double imgX2 = metadata.stageBoundsX2Um + halfFovX;
-            double imgY2 = metadata.stageBoundsY2Um + halfFovY;
+            double topLeftExtX;
+            double topLeftExtY;
+            if (metadata.fovXUm != null && metadata.fovYUm != null && metadata.fovXUm > 0 && metadata.fovYUm > 0) {
+                topLeftExtX = metadata.fovXUm / 2.0;
+                topLeftExtY = metadata.fovYUm / 2.0;
+                logger.info(
+                        "Anchoring image bounds at top/left = half FOV (fovX={}, fovY={} um); "
+                                + "bottom/right derived from imageExtent ({}, {} um) - annotExtent ({}, {} um) - topLeftExt",
+                        metadata.fovXUm,
+                        metadata.fovYUm,
+                        String.format("%.1f", imageExtentX),
+                        String.format("%.1f", imageExtentY),
+                        String.format("%.1f", annotExtentX),
+                        String.format("%.1f", annotExtentY));
+            } else {
+                topLeftExtX = (imageExtentX - annotExtentX) / 2.0;
+                topLeftExtY = (imageExtentY - annotExtentY) / 2.0;
+                logger.info(
+                        "Camera FOV not in metadata -- falling back to symmetric half-FOV assumption "
+                                + "(topLeftExtX={}, topLeftExtY={} um). May be off by tile-grid rounding asymmetry.",
+                        String.format("%.1f", topLeftExtX),
+                        String.format("%.1f", topLeftExtY));
+            }
 
+            // imgX1/Y1 fixed by the tile-grid anchor; imgX2/Y2 derived from
+            // the actual stitched image extent so the math stays self-consistent
+            // even when bottom/right extension > half FOV.
+            double imgX1 = metadata.stageBoundsX1Um - topLeftExtX;
+            double imgY1 = metadata.stageBoundsY1Um - topLeftExtY;
+            double imgX2 = imgX1 + imageExtentX;
+            double imgY2 = imgY1 + imageExtentY;
+
+            double bottomRightExtX = imgX2 - metadata.stageBoundsX2Um;
+            double bottomRightExtY = imgY2 - metadata.stageBoundsY2Um;
             logger.info(
                     "Stage bounds adjustment: annotation ({},{}) -> ({},{}), "
-                            + "image ({},{}) -> ({},{}) (halfFOV={},{})",
+                            + "image ({},{}) -> ({},{}) (topLeftExt=({},{}), bottomRightExt=({},{}))",
                     String.format("%.1f", metadata.stageBoundsX1Um),
                     String.format("%.1f", metadata.stageBoundsY1Um),
                     String.format("%.1f", metadata.stageBoundsX2Um),
@@ -1367,8 +1446,10 @@ public class StitchingHelper {
                     String.format("%.1f", imgY1),
                     String.format("%.1f", imgX2),
                     String.format("%.1f", imgY2),
-                    String.format("%.1f", halfFovX),
-                    String.format("%.1f", halfFovY));
+                    String.format("%.1f", topLeftExtX),
+                    String.format("%.1f", topLeftExtY),
+                    String.format("%.1f", bottomRightExtX),
+                    String.format("%.1f", bottomRightExtY));
 
             // Account for image flips: when the stitched image is displayed
             // flipped (via TransformedServerBuilder), QuPath pixel coordinates
