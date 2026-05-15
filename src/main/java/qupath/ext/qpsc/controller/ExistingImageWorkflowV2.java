@@ -96,11 +96,11 @@ public class ExistingImageWorkflowV2 {
                         && imageData.getHierarchy() != null
                         && !imageData.getHierarchy().getAnnotationObjects().isEmpty()) {
                     logger.info("Standalone image with annotations detected - preserving for project creation");
-                    boolean captured = AnnotationPreservationService.captureAnnotations(gui);
+                    boolean captured = state.annotationPreservation.captureAnnotations(gui);
                     if (captured) {
                         logger.info(
                                 "Preserved {} annotations from standalone image",
-                                AnnotationPreservationService.getPreservedAnnotationCount());
+                                state.annotationPreservation.getPreservedAnnotationCount());
                     }
                 }
             }
@@ -722,7 +722,7 @@ public class ExistingImageWorkflowV2 {
             // any cleanup or error).
 
             // Delegate to ProjectHelper for proper project setup
-            return ProjectHelper.setupProject(gui, state.sample)
+            return ProjectHelper.setupProject(gui, state.sample, state.annotationPreservation)
                     .thenCompose(projectInfo -> {
                         if (projectInfo == null) {
                             throw new RuntimeException("Project setup failed");
@@ -1032,7 +1032,7 @@ public class ExistingImageWorkflowV2 {
             }
 
             // Delegate to ProjectHelper for proper project setup
-            return ProjectHelper.setupProject(gui, state.sample)
+            return ProjectHelper.setupProject(gui, state.sample, state.annotationPreservation)
                     .thenApply(projectInfo -> {
                         if (projectInfo == null) {
                             throw new RuntimeException("Project setup failed");
@@ -1411,7 +1411,7 @@ public class ExistingImageWorkflowV2 {
         private void cleanup() {
             logger.info("Workflow completed - cleaning up");
             // Clear any preserved annotations (should already be restored, but cleanup just in case)
-            AnnotationPreservationService.clearPreservedAnnotations();
+            state.annotationPreservation.clearPreservedAnnotations();
             MicroscopeController.getInstance().setCurrentTransform(null);
         }
 
@@ -1480,7 +1480,7 @@ public class ExistingImageWorkflowV2 {
             }
 
             // Clear preserved annotations on error to prevent stale data
-            AnnotationPreservationService.clearPreservedAnnotations();
+            state.annotationPreservation.clearPreservedAnnotations();
 
             cleanup();
             return null;
@@ -1685,6 +1685,14 @@ public class ExistingImageWorkflowV2 {
         public ProjectHelper.ProjectInfo projectInfo;
         public List<PathObject> annotations = new ArrayList<>();
         public List<CompletableFuture<Void>> stitchingFutures = new ArrayList<>();
+
+        /**
+         * Per-workflow annotation-preservation service (review finding M12).
+         * Previously a static singleton; one instance per workflow now keeps
+         * preserved annotations from leaking across concurrent or restarted runs.
+         */
+        public final AnnotationPreservationService annotationPreservation = new AnnotationPreservationService();
+
         public double pixelSize;
         public Map<String, Double> angleOverrides;
         public Map<String, Double> channelIntensityOverrides = Map.of();

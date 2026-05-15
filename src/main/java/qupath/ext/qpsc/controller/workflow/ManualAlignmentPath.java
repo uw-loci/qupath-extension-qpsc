@@ -74,7 +74,7 @@ public class ManualAlignmentPath {
         return loadPixelSize()
                 .thenCompose(pixelSize -> {
                     state.pixelSize = pixelSize;
-                    return ProjectHelper.setupProject(gui, state.sample);
+                    return ProjectHelper.setupProject(gui, state.sample, state.annotationPreservation);
                 })
                 .thenCompose(projectInfo -> {
                     if (projectInfo == null) {

@@ -13,35 +13,37 @@ import qupath.lib.objects.PathObjectTools;
 import qupath.lib.objects.hierarchy.PathObjectHierarchy;
 
 /**
- * Service for preserving annotations when transitioning from standalone images to projects.
+ * Per-workflow service for preserving annotations when transitioning from
+ * standalone images to projects.
  *
- * <p>When a user drags an image into QuPath without a project and draws annotations,
- * then starts the Existing Image Acquisition workflow, this service:
+ * <p>When a user drags an image into QuPath without a project and draws
+ * annotations, then starts the Existing Image Acquisition workflow, this
+ * service:
  * <ol>
  *   <li>Captures annotation data before the project is created</li>
  *   <li>Stores annotations in memory during project creation</li>
  *   <li>Restores annotations to the new project with optional coordinate transformation</li>
  * </ol>
  *
- * <p>This solves the problem where annotations would be lost when:
- * <ul>
- *   <li>No project exists to save annotations to</li>
- *   <li>The image is re-imported into a new project</li>
- *   <li>Image flipping changes coordinate systems</li>
- * </ul>
+ * <p>This was originally implemented with static state. Phase 10 of the
+ * 2026-05-13 review remediation (M12) converted it to a per-instance service
+ * so concurrent / restarted workflows cannot leak preserved annotations
+ * across runs. One instance per workflow run; the owning {@code WorkflowState}
+ * holds it.
  *
  * <p>Usage pattern:
  * <pre>
  * // Before project creation (when project is null)
- * AnnotationPreservationService.captureAnnotations(gui);
+ * AnnotationPreservationService preservation = new AnnotationPreservationService();
+ * preservation.captureAnnotations(gui);
  *
  * // ... create project, import image ...
  *
  * // After project setup
- * AnnotationPreservationService.restoreAnnotations(gui, flipX, flipY);
+ * preservation.restoreAnnotations(gui, flipX, flipY);
  *
  * // Cleanup (or on error)
- * AnnotationPreservationService.clearPreservedAnnotations();
+ * preservation.clearPreservedAnnotations();
  * </pre>
  *
  * @author Mike Nelson
@@ -50,11 +52,12 @@ import qupath.lib.objects.hierarchy.PathObjectHierarchy;
 public class AnnotationPreservationService {
     private static final Logger logger = LoggerFactory.getLogger(AnnotationPreservationService.class);
 
-    // Temporary storage for annotations during workflow
-    // Using static storage since this is a per-session workflow operation
-    private static List<PathObject> preservedAnnotations = null;
-    private static int sourceImageWidth = 0;
-    private static int sourceImageHeight = 0;
+    // Per-instance state. Phase 10 (M12) removed the static fields that
+    // backed this service so distinct workflow runs cannot leak preserved
+    // annotations into one another.
+    private List<PathObject> preservedAnnotations = null;
+    private int sourceImageWidth = 0;
+    private int sourceImageHeight = 0;
 
     /**
      * Captures annotations from the current image before project creation.
@@ -65,7 +68,7 @@ public class AnnotationPreservationService {
      * @param gui QuPath GUI instance
      * @return true if annotations were captured, false if no annotations exist or error occurred
      */
-    public static boolean captureAnnotations(QuPathGUI gui) {
+    public boolean captureAnnotations(QuPathGUI gui) {
         if (gui == null) {
             logger.warn("Cannot capture annotations: GUI is null");
             return false;
@@ -138,7 +141,7 @@ public class AnnotationPreservationService {
      * @param flipY Whether Y coordinates should be flipped
      * @return true if annotations were restored successfully
      */
-    public static boolean restoreAnnotations(QuPathGUI gui, boolean flipX, boolean flipY) {
+    public boolean restoreAnnotations(QuPathGUI gui, boolean flipX, boolean flipY) {
         if (!hasPreservedAnnotations()) {
             logger.debug("No preserved annotations to restore");
             return false;
@@ -230,7 +233,7 @@ public class AnnotationPreservationService {
      *   <li>When an error occurs during the workflow</li>
      * </ul>
      */
-    public static void clearPreservedAnnotations() {
+    public void clearPreservedAnnotations() {
         if (preservedAnnotations != null) {
             int count = preservedAnnotations.size();
             preservedAnnotations.clear();
@@ -246,7 +249,7 @@ public class AnnotationPreservationService {
      *
      * @return true if there are preserved annotations
      */
-    public static boolean hasPreservedAnnotations() {
+    public boolean hasPreservedAnnotations() {
         return preservedAnnotations != null && !preservedAnnotations.isEmpty();
     }
 
@@ -255,7 +258,7 @@ public class AnnotationPreservationService {
      *
      * @return Number of preserved annotations, or 0 if none
      */
-    public static int getPreservedAnnotationCount() {
+    public int getPreservedAnnotationCount() {
         return preservedAnnotations != null ? preservedAnnotations.size() : 0;
     }
 
@@ -264,7 +267,7 @@ public class AnnotationPreservationService {
      *
      * @return Source image width in pixels, or 0 if no annotations captured
      */
-    public static int getSourceImageWidth() {
+    public int getSourceImageWidth() {
         return sourceImageWidth;
     }
 
@@ -273,7 +276,7 @@ public class AnnotationPreservationService {
      *
      * @return Source image height in pixels, or 0 if no annotations captured
      */
-    public static int getSourceImageHeight() {
+    public int getSourceImageHeight() {
         return sourceImageHeight;
     }
 

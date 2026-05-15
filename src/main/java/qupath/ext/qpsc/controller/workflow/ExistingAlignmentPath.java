@@ -216,14 +216,15 @@ public class ExistingAlignmentPath {
      * @return CompletableFuture with context passed through
      */
     private CompletableFuture<GreenBoxContext> setupProject(GreenBoxContext context) {
-        return ProjectHelper.setupProject(gui, state.sample).thenApply(projectInfo -> {
-            if (projectInfo == null) {
-                throw new RuntimeException("Project setup failed");
-            }
+        return ProjectHelper.setupProject(gui, state.sample, state.annotationPreservation)
+                .thenApply(projectInfo -> {
+                    if (projectInfo == null) {
+                        throw new RuntimeException("Project setup failed");
+                    }
 
-            state.projectInfo = projectInfo;
-            return context;
-        });
+                    state.projectInfo = projectInfo;
+                    return context;
+                });
     }
 
     /**

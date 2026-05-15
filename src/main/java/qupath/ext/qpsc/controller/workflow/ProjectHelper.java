@@ -122,9 +122,14 @@ public class ProjectHelper {
      *
      * @param gui QuPath GUI instance
      * @param sample Sample setup information
+     * @param preservation the workflow's per-instance annotation-preservation service
+     *     (review finding M12; the static singleton was retired in Phase 10). When the
+     *     service has captured annotations from a standalone image, this method restores
+     *     them into the freshly-created project entry.
      * @return CompletableFuture containing project information
      */
-    public static CompletableFuture<ProjectInfo> setupProject(QuPathGUI gui, SampleSetupResult sample) {
+    public static CompletableFuture<ProjectInfo> setupProject(
+            QuPathGUI gui, SampleSetupResult sample, AnnotationPreservationService preservation) {
 
         CompletableFuture<ProjectInfo> future = new CompletableFuture<>();
 
@@ -169,15 +174,15 @@ public class ProjectHelper {
 
                     // Restore preserved annotations if any (from standalone image workflow)
                     // This handles the case where user drew annotations before starting workflow
-                    if (AnnotationPreservationService.hasPreservedAnnotations()) {
+                    if (preservation != null && preservation.hasPreservedAnnotations()) {
                         logger.info(
                                 "Restoring {} preserved annotations after project creation",
-                                AnnotationPreservationService.getPreservedAnnotationCount());
+                                preservation.getPreservedAnnotationCount());
 
                         // Restore WITHOUT flip - the image was imported unflipped.
                         // Annotations will be transformed when the flipped duplicate is created
                         // by ImageFlipHelper.validateAndFlipIfNeeded() later in the workflow.
-                        boolean restored = AnnotationPreservationService.restoreAnnotations(gui, false, false);
+                        boolean restored = preservation.restoreAnnotations(gui, false, false);
 
                         if (restored) {
                             // Save the annotations to the project entry
@@ -198,7 +203,7 @@ public class ProjectHelper {
                         }
 
                         // Clear preserved annotations after restoration
-                        AnnotationPreservationService.clearPreservedAnnotations();
+                        preservation.clearPreservedAnnotations();
                     }
 
                     // Save macro dimensions if available
