@@ -659,6 +659,21 @@ public class UIFunctions {
                     + "- Use Current Focus - Accept current focus and continue\n"
                     + "- Cancel - Stop the acquisition";
         }
+        // Append a generic strategy hint -- the manual-focus path is server-
+        // initiated and does not carry a specific failure reason, but
+        // pointing the operator at the strategy controls is still useful
+        // when AF repeatedly fails because the sample type does not match
+        // the modality's bound strategy (e.g. pollen on a tissue strategy
+        // or vice versa). The hint footer matches the language used by
+        // streaming AF refusals so operators see consistent guidance.
+        message += "\n\n"
+                + "If autofocus keeps failing on a sample type that worked previously,\n"
+                + "the bound AF strategy may not fit. Common mismatches:\n"
+                + "- Sparse particles (beads, pollen) with a dense-texture strategy.\n"
+                + "- Dense tissue with a sparse-signal strategy.\n\n"
+                + "To change focus strategy:\n"
+                + "- This run only: acquisition wizard's Advanced panel -> AF strategy dropdown.\n"
+                + "- Persistent: Settings -> Autofocus Configuration -> Modality Bindings.";
         alert.setContentText(message);
         // Modality.NONE so the user can actually interact with the Live
         // Viewer focus controls -- the whole point of this dialog is to

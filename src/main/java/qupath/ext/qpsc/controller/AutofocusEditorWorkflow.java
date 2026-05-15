@@ -649,6 +649,15 @@ public class AutofocusEditorWorkflow {
         headerLabel.setWrapText(true);
         root.getChildren().add(headerLabel);
 
+        if (result.status != qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.StreamingFocusResult.Status.SUCCESS
+                && result.reason != null) {
+            Label hintLabel = new Label(
+                    qupath.ext.qpsc.utilities.AfFailureHint.format(null, result.reason));
+            hintLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #444;");
+            hintLabel.setWrapText(true);
+            root.getChildren().add(hintLabel);
+        }
+
         if (result.dumpPath == null || result.dumpPath.isEmpty()) {
             root.getChildren().add(new Label("Server did not return a dump path -- nothing to plot."));
         } else {
