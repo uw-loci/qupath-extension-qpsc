@@ -970,6 +970,37 @@ public class ExistingImageWorkflowV2 {
                     entryObjective,
                     entryDetector);
 
+            // M5 -- missing entry-objective is a hard cancel. buildOffsetBasedTransform
+            // falls back to MicroscopeController.getCameraFOV() (live MM state) when the
+            // entry's objective metadata is null, silently producing a half-FOV correction
+            // based on whatever objective MM happens to be on -- which may not match the
+            // saved sub-image. Refuse the acquisition rather than risk a half-FOV shift.
+            if (entryObjective == null || entryObjective.isEmpty()) {
+                logger.error(
+                        "Refusing sub-image acquisition: entry '{}' has no 'objective' metadata; "
+                                + "cannot compute the half-FOV correction safely",
+                        entry.getImageName());
+                showMissingEntryObjectiveDialog(entry.getImageName());
+                CompletableFuture<WorkflowState> cancelled = new CompletableFuture<>();
+                cancelled.completeExceptionally(
+                        new CancellationException("Sub-image entry missing objective metadata"));
+                return cancelled;
+            }
+
+            // M4 -- entry-objective vs wizard-objective advisory. The entry's objective
+            // drives the half-FOV correction in buildOffsetBasedTransform; the wizard's
+            // objective drives the tile grid. A mismatch shifts tiles by half the
+            // FOV-delta with no warning. Continue/Cancel advisory before any stage motion.
+            if (state.objective != null
+                    && !state.objective.equals(entryObjective)
+                    && !confirmContinueWithEntryObjectiveMismatch(
+                            entry.getImageName(), entryObjective, state.objective)) {
+                logger.info("User cancelled at sub-image entry-objective mismatch advisory");
+                CompletableFuture<WorkflowState> cancelled = new CompletableFuture<>();
+                cancelled.completeExceptionally(new CancellationException("Sub-image entry-objective mismatch"));
+                return cancelled;
+            }
+
             // Delegate to ProjectHelper for proper project setup
             return ProjectHelper.setupProject(gui, state.sample)
                     .thenApply(projectInfo -> {
@@ -1523,6 +1554,94 @@ public class ExistingImageWorkflowV2 {
             } catch (Exception e) {
                 logger.warn("Failed to display sub-image cross-scope mismatch dialog: {}", e.getMessage());
             }
+        }
+
+        /**
+         * Hard-cancel dialog when a sub-image entry has no {@code objective} metadata
+         * (review finding M5). The half-FOV correction in {@link #buildOffsetBasedTransform}
+         * cannot resolve safely without it -- the previous fallback to
+         * {@code MicroscopeController.getCameraFOV()} returns whatever objective MM is on
+         * right now, which may not match the saved sub-image.
+         */
+        private static void showMissingEntryObjectiveDialog(String entryName) {
+            String title = "Sub-image Missing Objective -- Workflow Cancelled";
+            String header = "This sub-image has no objective metadata.";
+            StringBuilder body = new StringBuilder();
+            body.append(String.format("The open entry%n  '%s'%nhas no 'objective' metadata.%n%n", entryName));
+            body.append("Sub-image acquisitions use the entry's recorded objective to\n");
+            body.append("compute a half-FOV correction for the tile-grid origin. Without\n");
+            body.append("it we cannot tell which FOV the saved offset was built against;\n");
+            body.append("the previous fallback to MicroManager's live state silently used\n");
+            body.append("whatever objective happened to be in place, which may not match.\n\n");
+            body.append("To fix, re-acquire the sub-image with the current workflow (which\n");
+            body.append("stamps the objective on import), or hand-edit the project entry's\n");
+            body.append("metadata to add the correct objective.\n\n");
+            body.append("This workflow has been cancelled.");
+
+            Runnable show = () -> {
+                javafx.scene.control.Alert alert =
+                        new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+                alert.setTitle(title);
+                alert.setHeaderText(header);
+                alert.setContentText(body.toString());
+                alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.OK);
+                alert.getDialogPane().setMinWidth(620);
+                alert.getDialogPane().setPrefWidth(720);
+                alert.getDialogPane().setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+                javafx.scene.control.Label contentLabel =
+                        (javafx.scene.control.Label) alert.getDialogPane().lookup(".content");
+                if (contentLabel != null) {
+                    contentLabel.setWrapText(true);
+                    contentLabel.setMaxWidth(680);
+                    contentLabel.setStyle("-fx-font-family: 'monospace';");
+                }
+                javafx.scene.control.Label headerLabel =
+                        (javafx.scene.control.Label) alert.getDialogPane().lookup(".header-panel .label");
+                if (headerLabel != null) {
+                    headerLabel.setWrapText(true);
+                    headerLabel.setMaxWidth(660);
+                }
+                alert.showAndWait();
+            };
+            if (Platform.isFxApplicationThread()) {
+                show.run();
+                return;
+            }
+            java.util.concurrent.FutureTask<Void> task = new java.util.concurrent.FutureTask<>(() -> {
+                show.run();
+                return null;
+            });
+            Platform.runLater(task);
+            try {
+                task.get();
+            } catch (Exception e) {
+                logger.warn("Failed to display missing-entry-objective dialog: {}", e.getMessage());
+            }
+        }
+
+        /**
+         * Continue / Cancel advisory when the sub-image's recorded objective differs from
+         * the wizard's current objective (review finding M4). Delegates to the shared
+         * {@link AlignmentHelper#confirmContinueDialog(String, String, String)}.
+         */
+        private static boolean confirmContinueWithEntryObjectiveMismatch(
+                String entryName, String entryObjective, String wizardObjective) {
+            String title = "Sub-image Objective Mismatch";
+            String header = "The sub-image was acquired at a different objective.";
+            StringBuilder body = new StringBuilder();
+            body.append(String.format(
+                    "The open entry%n  '%s'%nwas acquired at objective '%s'.%n"
+                            + "The wizard is configured for objective '%s'.%n%n",
+                    entryName, entryObjective, wizardObjective));
+            body.append("The entry's objective drives the half-FOV correction applied\n");
+            body.append("to the tile-grid origin; the wizard's objective drives the\n");
+            body.append("tile grid itself. A mismatch shifts every tile by half the\n");
+            body.append("FOV-delta between the two objectives.\n\n");
+            body.append("Recommended: cancel, switch the wizard to the entry's\n");
+            body.append("objective, or re-acquire the sub-image at the desired\n");
+            body.append("objective.\n\n");
+            body.append("Continue anyway with this objective mismatch?");
+            return AlignmentHelper.confirmContinueDialog(title, header, body.toString());
         }
     }
 

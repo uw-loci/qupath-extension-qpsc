@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
+import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.common.GeneralTools;
@@ -282,6 +283,25 @@ public class AlignmentHelper {
             }
         }
 
+        // Legacy-JSON flip-frame advisory (review finding M6). Pre-Phase-3 JSONs do not
+        // record flipMacroX / flipMacroY. We cannot tell which frame the transform was
+        // built in. When the active scope's saved presets require a flip (i.e. flipping
+        // matters for some scanner-on-this-scope pairing), reusing a legacy alignment
+        // risks applying a flipped-frame transform to unflipped pixel coords (or vice
+        // versa) -- the Move-to-Centroid X-mirror class. Continue/Cancel advisory only;
+        // legacy data may still be usable when the alignment-time frame happened to
+        // match what the workflow will run in now.
+        if (loadedResult != null && !loadedResult.hasFlipFrame() && ImageFlipHelper.isActiveScopeFlipNeeding()) {
+            logger.warn(
+                    "Legacy slide alignment for '{}' has no flipMacroX/Y; active scope is flip-needing -- prompting user",
+                    lookupKey);
+            if (!confirmContinueWithLegacyFlipFrame(lookupKey)) {
+                logger.info("User cancelled at legacy-flip-frame advisory");
+                future.complete(null);
+                return future;
+            }
+        }
+
         // Bake the alignment-frame flip into the returned transform so downstream
         // callers (AcquisitionManager, AnnotationOrderingService, ...) consume
         // unflipped-base pixel coords directly. baseToStage_new = baseToStage *
@@ -407,6 +427,32 @@ public class AlignmentHelper {
      * loaded alignment, {@code false} when they cancelled (or the dialog failed to show, which
      * also short-circuits the workflow conservatively).
      */
+    /**
+     * Continue / Cancel advisory for a legacy alignment JSON (review finding M6).
+     * Pre-Phase-3 JSONs do not record {@code flipMacroX} / {@code flipMacroY}; when the
+     * active scope requires a flip for some saved preset, reusing such an alignment
+     * risks applying a flipped-frame transform to unflipped pixel coords or vice versa.
+     */
+    private static boolean confirmContinueWithLegacyFlipFrame(String lookupKey) {
+        String title = "Legacy Alignment -- Flip Frame Unknown";
+        String header = "This alignment was saved before flip-frame tracking.";
+        StringBuilder body = new StringBuilder();
+        body.append(String.format(
+                "The slide alignment for%n  '%s'%nwas saved before the flip frame was recorded%n"
+                        + "(no 'flipMacroX' / 'flipMacroY' field on the JSON).%n%n",
+                lookupKey));
+        body.append("The active microscope's saved presets require a flipped sibling\n");
+        body.append("for at least one source scanner -- flipping matters for this\n");
+        body.append("scope. We cannot tell whether the saved transform was built in\n");
+        body.append("the flipped or unflipped frame. Reusing it risks an X-mirrored\n");
+        body.append("Move-to-Centroid / acquisition target.\n\n");
+        body.append("Recommended: cancel and re-run Microscope Alignment for this\n");
+        body.append("slide; the new JSON will record the frame and downstream\n");
+        body.append("workflows will compose it correctly.\n\n");
+        body.append("Continue anyway with the legacy alignment?");
+        return confirmContinueDialog(title, header, body.toString());
+    }
+
     private static boolean confirmContinueWithObjectiveMismatch(
             String lookupKey, String savedObjective, String wizardObjective) {
         String title = "Alignment Objective Mismatch";
