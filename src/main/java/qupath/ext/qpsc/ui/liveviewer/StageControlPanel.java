@@ -3680,7 +3680,8 @@ public class StageControlPanel extends VBox {
                 Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
                 ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
                 if (openEntry != null) {
-                    double[] bounds = qupath.ext.qpsc.utilities.ImageMetadataManager.getBoundingBoxStageBounds(openEntry);
+                    double[] bounds =
+                            qupath.ext.qpsc.utilities.ImageMetadataManager.getBoundingBoxStageBounds(openEntry);
                     if (bounds != null) {
                         boolean[] flips = qupath.ext.qpsc.utilities.ImageMetadataManager.getStitcherFlips(openEntry);
                         int widthPx = gui.getImageData().getServer().getWidth();

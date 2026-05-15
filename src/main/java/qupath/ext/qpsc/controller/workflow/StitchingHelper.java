@@ -1454,9 +1454,7 @@ public class StitchingHelper {
                                         ? e.getURIs().iterator().next()
                                         : null;
                                 return u != null
-                                        && new java.io.File(u)
-                                                .getAbsolutePath()
-                                                .equals(importedFile.getAbsolutePath());
+                                        && new java.io.File(u).getAbsolutePath().equals(importedFile.getAbsolutePath());
                             } catch (Exception ex) {
                                 return false;
                             }
@@ -1482,8 +1480,7 @@ public class StitchingHelper {
                             importedFile.getName());
                 }
             } catch (Exception entryEx) {
-                logger.warn(
-                        "Failed to stamp bounding-box stage bounds metadata on entry: {}", entryEx.getMessage());
+                logger.warn("Failed to stamp bounding-box stage bounds metadata on entry: {}", entryEx.getMessage());
             }
         } catch (Exception e) {
             logger.warn("Failed to auto-register stage alignment for {}: {}", importedFile.getName(), e.getMessage());

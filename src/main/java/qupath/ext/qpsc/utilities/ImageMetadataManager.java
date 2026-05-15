@@ -734,7 +734,13 @@ public class ImageMetadataManager {
      * the per-slide alignment JSON lookup.
      */
     public static void setBoundingBoxStageBounds(
-            ProjectImageEntry<?> entry, double x1Um, double y1Um, double x2Um, double y2Um, boolean flipX, boolean flipY) {
+            ProjectImageEntry<?> entry,
+            double x1Um,
+            double y1Um,
+            double x2Um,
+            double y2Um,
+            boolean flipX,
+            boolean flipY) {
         if (entry == null) return;
         Map<String, String> meta = entry.getMetadata();
         meta.put(STAGE_BOUNDS_X1_UM, String.valueOf(x1Um));
