@@ -102,6 +102,25 @@ public class ImageMetadataManager {
     public static final String SOURCE_ROI_FLIP_X = "source_roi_flip_x";
     public static final String SOURCE_ROI_FLIP_Y = "source_roi_flip_y";
 
+    // Stage bounds of a BoundingBox-acquired stitched image (microns), recorded
+    // by StitchingHelper.autoRegisterBoundsTransformIfAvailable. These describe
+    // the actual extent of the IMAGE on disk (annotation bounds plus the half-FOV
+    // tile-grid overshoot on each side), and are the canonical, self-contained
+    // record of where the image lives in stage coordinates. They live on the
+    // entry alongside the auto-registered alignment JSON so that Live Viewer
+    // Move-to-Centroid works even if the JSON lookup fails (cross-scope guard,
+    // restructured directory, legacy file without microscope field, etc.).
+    public static final String STAGE_BOUNDS_X1_UM = "stage_bounds_x1_um";
+    public static final String STAGE_BOUNDS_Y1_UM = "stage_bounds_y1_um";
+    public static final String STAGE_BOUNDS_X2_UM = "stage_bounds_x2_um";
+    public static final String STAGE_BOUNDS_Y2_UM = "stage_bounds_y2_um";
+
+    // Stitcher flip flags applied to the pyramid when it was built. Recorded
+    // alongside STAGE_BOUNDS_* so the Move-to-Centroid path can rebuild the
+    // pixel->stage transform from scratch.
+    public static final String STITCHER_FLIP_X = "stitcher_flip_x";
+    public static final String STITCHER_FLIP_Y = "stitcher_flip_y";
+
     // PPM analysis metadata
     public static final String PPM_CALIBRATION = "ppm_calibration";
 
@@ -703,6 +722,66 @@ public class ImageMetadataManager {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /**
+     * Stamp the BoundingBox stage bounds + stitcher flips on the entry. Records
+     * the actual extent of the stitched IMAGE (annotation bounds plus half-FOV
+     * overshoot on each side, the same numbers
+     * {@code StitchingHelper.autoRegisterBoundsTransformIfAvailable} uses when
+     * building the auto-registered alignment). Lets the Live Viewer recompute
+     * the pixel->stage transform straight from the entry without depending on
+     * the per-slide alignment JSON lookup.
+     */
+    public static void setBoundingBoxStageBounds(
+            ProjectImageEntry<?> entry, double x1Um, double y1Um, double x2Um, double y2Um, boolean flipX, boolean flipY) {
+        if (entry == null) return;
+        Map<String, String> meta = entry.getMetadata();
+        meta.put(STAGE_BOUNDS_X1_UM, String.valueOf(x1Um));
+        meta.put(STAGE_BOUNDS_Y1_UM, String.valueOf(y1Um));
+        meta.put(STAGE_BOUNDS_X2_UM, String.valueOf(x2Um));
+        meta.put(STAGE_BOUNDS_Y2_UM, String.valueOf(y2Um));
+        if (flipX) meta.put(STITCHER_FLIP_X, "1");
+        else meta.remove(STITCHER_FLIP_X);
+        if (flipY) meta.put(STITCHER_FLIP_Y, "1");
+        else meta.remove(STITCHER_FLIP_Y);
+    }
+
+    /**
+     * Read the BoundingBox stage bounds stamped by
+     * {@link #setBoundingBoxStageBounds}.
+     *
+     * @return [x1, y1, x2, y2] in microns, or null if not stamped (or invalid)
+     */
+    public static double[] getBoundingBoxStageBounds(ProjectImageEntry<?> entry) {
+        if (entry == null) return null;
+        Map<String, String> meta = entry.getMetadata();
+        String x1s = meta.get(STAGE_BOUNDS_X1_UM);
+        String y1s = meta.get(STAGE_BOUNDS_Y1_UM);
+        String x2s = meta.get(STAGE_BOUNDS_X2_UM);
+        String y2s = meta.get(STAGE_BOUNDS_Y2_UM);
+        if (x1s == null || y1s == null || x2s == null || y2s == null) return null;
+        try {
+            double x1 = Double.parseDouble(x1s);
+            double y1 = Double.parseDouble(y1s);
+            double x2 = Double.parseDouble(x2s);
+            double y2 = Double.parseDouble(y2s);
+            if (x2 <= x1 || y2 <= y1) return null;
+            return new double[] {x1, y1, x2, y2};
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Read the stitcher flip flags stamped by {@link #setBoundingBoxStageBounds}.
+     *
+     * @return [flipX, flipY], both false when not stamped
+     */
+    public static boolean[] getStitcherFlips(ProjectImageEntry<?> entry) {
+        if (entry == null) return new boolean[] {false, false};
+        Map<String, String> meta = entry.getMetadata();
+        return new boolean[] {"1".equals(meta.get(STITCHER_FLIP_X)), "1".equals(meta.get(STITCHER_FLIP_Y))};
     }
 
     /**

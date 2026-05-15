@@ -3666,13 +3666,66 @@ public class StageControlPanel extends VBox {
         double centroidX = selectedObject.getROI().getCentroidX();
         double centroidY = selectedObject.getROI().getCentroidY();
 
-        // Try sub-image alignment first.
-        // Sub-images from BoundingBox acquisitions have their own pixel-to-stage
-        // alignment registered by autoRegisterBoundsTransformIfAvailable(). This
-        // is the most accurate path -- use it when available. Sub-frame transforms
-        // live in alignmentFiles/derived/ as of Layer 3 of the 2026-05-11 lookup
-        // restructure; loadDerivedAlignment also falls back to the flat directory
-        // for backward compatibility with pre-restructure projects.
+        // First: per-entry bounding-box metadata path (most reliable for
+        // BoundingBox acquisitions). The stage bounds + stitcher flips are
+        // stamped on the entry by StitchingHelper.autoRegisterBoundsTransformIfAvailable
+        // and travel WITH the entry -- no JSON lookup, no cross-scope guard,
+        // no directory restructure to trip over. Rebuilt 2026-05-15 after the
+        // alignment-lookup restructure (commit 18a800d) broke the JSON path
+        // for bounded acquisitions (cross-scope guard rejecting legacy files /
+        // derived directory vs flat directory confusion).
+        if (gui.getProject() != null) {
+            try {
+                @SuppressWarnings("unchecked")
+                Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+                ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
+                if (openEntry != null) {
+                    double[] bounds = qupath.ext.qpsc.utilities.ImageMetadataManager.getBoundingBoxStageBounds(openEntry);
+                    if (bounds != null) {
+                        boolean[] flips = qupath.ext.qpsc.utilities.ImageMetadataManager.getStitcherFlips(openEntry);
+                        int widthPx = gui.getImageData().getServer().getWidth();
+                        int heightPx = gui.getImageData().getServer().getHeight();
+                        double imgX1 = bounds[0];
+                        double imgY1 = bounds[1];
+                        double imgX2 = bounds[2];
+                        double imgY2 = bounds[3];
+                        boolean flipX = flips[0];
+                        boolean flipY = flips[1];
+                        double originX = flipX ? imgX2 : imgX1;
+                        double originY = flipY ? imgY2 : imgY1;
+                        double scaleX = (flipX ? -1 : 1) * (imgX2 - imgX1) / widthPx;
+                        double scaleY = (flipY ? -1 : 1) * (imgY2 - imgY1) / heightPx;
+                        double stageX = originX + scaleX * centroidX;
+                        double stageY = originY + scaleY * centroidY;
+                        logger.info(
+                                "BoundingBox centroid via entry metadata: pixel ({}, {}) -> stage ({}, {}) "
+                                        + "[bounds=({},{})->({},{}) flip=({},{})]",
+                                String.format("%.1f", centroidX),
+                                String.format("%.1f", centroidY),
+                                String.format("%.1f", stageX),
+                                String.format("%.1f", stageY),
+                                String.format("%.1f", imgX1),
+                                String.format("%.1f", imgY1),
+                                String.format("%.1f", imgX2),
+                                String.format("%.1f", imgY2),
+                                flipX,
+                                flipY);
+                        moveToStagePosition(stageX, stageY);
+                        return;
+                    }
+                }
+            } catch (Exception e) {
+                logger.debug("Could not use bounding-box entry-metadata path: {}", e.getMessage());
+            }
+        }
+
+        // Fallback: sub-image alignment JSON. Used for entries that pre-date
+        // the 2026-05-15 per-entry-metadata stamp, or for sub-images other
+        // than BoundingBox (e.g. annotation-based sub-acquisitions whose
+        // alignment is auto-registered from a parent macro). Sub-frame
+        // transforms live in alignmentFiles/derived/ as of Layer 3 of the
+        // 2026-05-11 lookup restructure; loadDerivedAlignment also falls
+        // back to the flat directory for backward compatibility.
         if (gui.getProject() != null) {
             try {
                 @SuppressWarnings("unchecked")

@@ -1436,6 +1436,55 @@ public class StitchingHelper {
                     metadata.stageBoundsY2Um,
                     widthPx,
                     heightPx);
+
+            // Stamp the bounds + stitcher flips directly on the project entry as
+            // metadata. This is the SELF-CONTAINED record of where the image lives
+            // in stage coordinates: it lives with the entry, survives microscope
+            // renames / cross-scope opens / alignment-directory restructures, and
+            // lets Live Viewer Move-to-Centroid rebuild the transform on the fly
+            // without depending on the alignment-JSON lookup chain (which has
+            // historically been the weak link -- see the 2026-05-15 regression
+            // where the cross-scope guard / derived-directory restructure caused
+            // loadDerivedAlignment to return null for valid bounded acquisitions).
+            try {
+                ProjectImageEntry<BufferedImage> boundsEntry = project.getImageList().stream()
+                        .filter(e -> {
+                            try {
+                                java.net.URI u = e.getURIs().iterator().hasNext()
+                                        ? e.getURIs().iterator().next()
+                                        : null;
+                                return u != null
+                                        && new java.io.File(u)
+                                                .getAbsolutePath()
+                                                .equals(importedFile.getAbsolutePath());
+                            } catch (Exception ex) {
+                                return false;
+                            }
+                        })
+                        .findFirst()
+                        .orElse(null);
+                if (boundsEntry != null) {
+                    ImageMetadataManager.setBoundingBoxStageBounds(
+                            boundsEntry, imgX1, imgY1, imgX2, imgY2, flipX, flipY);
+                    project.syncChanges();
+                    logger.info(
+                            "Stamped bounding-box stage bounds on entry '{}': ({},{}) -> ({},{}) [flip=({},{})]",
+                            boundsEntry.getImageName(),
+                            String.format("%.1f", imgX1),
+                            String.format("%.1f", imgY1),
+                            String.format("%.1f", imgX2),
+                            String.format("%.1f", imgY2),
+                            flipX,
+                            flipY);
+                } else {
+                    logger.debug(
+                            "Could not locate project entry for {} to stamp stage bounds metadata",
+                            importedFile.getName());
+                }
+            } catch (Exception entryEx) {
+                logger.warn(
+                        "Failed to stamp bounding-box stage bounds metadata on entry: {}", entryEx.getMessage());
+            }
         } catch (Exception e) {
             logger.warn("Failed to auto-register stage alignment for {}: {}", importedFile.getName(), e.getMessage());
         }
