@@ -3735,6 +3735,91 @@ public class StageControlPanel extends VBox {
                 if (subImageName != null && !subImageName.isEmpty()) {
                     AffineTransform subAlignment = AffineTransformManager.loadDerivedAlignment(project, subImageName);
                     if (subAlignment != null) {
+                        // ====================================================
+                        // BEGIN one-shot metadata backfill (introduced 2026-05-15).
+                        //
+                        // WHY THIS EXISTS:
+                        //   Bounded acquisitions made BEFORE 2026-05-15 didn't
+                        //   stamp STAGE_BOUNDS_*_UM / STITCHER_FLIP_* on the
+                        //   project entry -- that stamp only ships from the
+                        //   accompanying StitchingHelper change forward. Those
+                        //   older entries DO have a working sub-image alignment
+                        //   JSON (otherwise this branch wouldn't have fired),
+                        //   so we can reconstruct the per-entry metadata from
+                        //   the transform geometry. Doing it here means the
+                        //   first centroid click on an old entry heals it, and
+                        //   subsequent clicks take the primary metadata path
+                        //   above without touching the JSON-lookup chain.
+                        //
+                        // HOW IT WORKS:
+                        //   autoRegisterBoundsTransformIfAvailable builds the
+                        //   transform as:
+                        //     scaleX = (flipX ? -1 : 1) * (imgX2 - imgX1) / w
+                        //     scaleY = (flipY ? -1 : 1) * (imgY2 - imgY1) / h
+                        //     originX = flipX ? imgX2 : imgX1
+                        //     originY = flipY ? imgY2 : imgY1
+                        //   So pixel(0) -> origin and pixel(w,h) -> opposite
+                        //   corner. We recover [imgX1, imgY1, imgX2, imgY2]
+                        //   as min/max of those two stage points, and
+                        //   flipX/flipY from the sign of scaleX/scaleY. The
+                        //   recovered numbers are byte-identical to what the
+                        //   save site wrote, so the future metadata-path math
+                        //   matches the JSON-path math exactly.
+                        //
+                        // HOW TO REMOVE LATER:
+                        //   Delete this block (between BEGIN and END markers).
+                        //   No other code reads from or depends on it.
+                        //   Safe to strip once enough time has passed that
+                        //   pre-2026-05-15 bounded entries are no longer in
+                        //   active use, or once the older entries have been
+                        //   touched at least once and self-healed.
+                        // ====================================================
+                        try {
+                            ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
+                            if (openEntry != null
+                                    && qupath.ext.qpsc.utilities.ImageMetadataManager.getBoundingBoxStageBounds(
+                                                    openEntry)
+                                            == null
+                                    && Math.abs(subAlignment.getShearX()) < 1e-9
+                                    && Math.abs(subAlignment.getShearY()) < 1e-9) {
+                                int wPx = gui.getImageData().getServer().getWidth();
+                                int hPx = gui.getImageData().getServer().getHeight();
+                                double scaleX = subAlignment.getScaleX();
+                                double scaleY = subAlignment.getScaleY();
+                                double originX = subAlignment.getTranslateX();
+                                double originY = subAlignment.getTranslateY();
+                                double cornerX = originX + scaleX * wPx;
+                                double cornerY = originY + scaleY * hPx;
+                                double imgX1 = Math.min(originX, cornerX);
+                                double imgY1 = Math.min(originY, cornerY);
+                                double imgX2 = Math.max(originX, cornerX);
+                                double imgY2 = Math.max(originY, cornerY);
+                                boolean flipXRecovered = scaleX < 0;
+                                boolean flipYRecovered = scaleY < 0;
+                                qupath.ext.qpsc.utilities.ImageMetadataManager.setBoundingBoxStageBounds(
+                                        openEntry, imgX1, imgY1, imgX2, imgY2, flipXRecovered, flipYRecovered);
+                                project.syncChanges();
+                                logger.info(
+                                        "Backfilled bounding-box metadata on legacy entry '{}': "
+                                                + "bounds=({},{}) -> ({},{}) flip=({},{}) "
+                                                + "[recovered from alignment JSON; see 2026-05-15 regression report]",
+                                        openEntry.getImageName(),
+                                        String.format("%.1f", imgX1),
+                                        String.format("%.1f", imgY1),
+                                        String.format("%.1f", imgX2),
+                                        String.format("%.1f", imgY2),
+                                        flipXRecovered,
+                                        flipYRecovered);
+                            }
+                        } catch (Exception backfillEx) {
+                            logger.debug(
+                                    "Could not backfill bounding-box metadata from alignment JSON: {}",
+                                    backfillEx.getMessage());
+                        }
+                        // ====================================================
+                        // END one-shot metadata backfill.
+                        // ====================================================
+
                         double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
                                 new double[] {centroidX, centroidY}, subAlignment);
                         logger.info(
