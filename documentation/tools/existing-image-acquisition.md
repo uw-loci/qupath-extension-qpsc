@@ -39,6 +39,8 @@ The acquisition dialog consolidates all options in a single scrollable panel. Yo
 
 Selected transforms are validated before use. Invalid transforms show a warning and allow reselection.
 
+**Cross-Scope Alignment:** If no per-slide alignment exists for the active microscope but one was built for another microscope on the same sample, the system can compose an alignment through the shared macro frame. When this occurs, a modal dialog appears explaining that cross-scope alignment is approximate and asking you to confirm before proceeding. The refinement options are automatically disabled for cross-scope acquisitions (see Refinement Options below). After acquisition, run Microscope Alignment on this microscope to build a native target-scope alignment that future acquisitions can reuse without composition.
+
 ### Refinement Options
 
 | Option | Description |
@@ -48,6 +50,8 @@ Selected transforms are validated before use. Invalid transforms show a warning 
 | Full Manual Alignment | Create new transform with multiple points. Use the first time or after hardware changes. |
 
 **Objective Mismatch Advisory:** If you load a saved alignment that was created at a different objective than your wizard's current setting (e.g., refinement at 10x, but wizard set to 20x), a modal dialog appears. The dialog explains that refinement translations are tied to the objective's tile geometry; reusing at a different objective preserves the scale and rotation but loses per-tile precision. You can continue with the loaded alignment or cancel to adjust the wizard's objective or re-align.
+
+**Cross-Scope Alignment Refinement:** When a cross-scope alignment is composed (see Alignment Selection above), refinement options are automatically disabled. Single-tile and full manual refinement on the target scope would mis-frame the composed transform that was built in the source scope's coordinate system. If you need refinement after a cross-scope acquisition, the recommended approach is to run Microscope Alignment on the target microscope to build a native alignment that is properly framed in that scope's coordinates. Future acquisitions using that native alignment can then use refinement normally.
 
 ### Annotation Class Selection
 
