@@ -15,10 +15,17 @@ The acquisition dialog consolidates all options in a single scrollable panel. Yo
 
 ## Prerequisites
 
-- QuPath project open with a macro/overview image
-- Annotations drawn on the image defining regions to acquire
+- QuPath project open with an image entry and annotations defining regions to acquire
 - Valid coordinate alignment between image and stage (see [Microscope Alignment](microscope-alignment.md))
 - Python microscope server running
+
+### Macro Image Requirement for Scanner-Preset Alignment
+
+The **"Use existing alignment"** option with saved scanner presets requires a macro image to be reachable from the current entry. The scanner-preset path runs green-box detection on the macro to localize the whole-slide image on the microscope slide. Sub-images acquired by prior QPSC workflows (Bounded Acquisition, etc.) typically do not have a reachable macro, so in those cases the scanner-preset combo is disabled.
+
+When a macro is not available, you can still use:
+- **Slide-specific alignment** (if available) — auto-registered alignments saved during prior QPSC acquisitions on this slide do not require a macro.
+- **Manual alignment** — create a new alignment or re-run the Microscope Alignment tool on the current image.
 
 ### Sub-Image Requirements
 
@@ -41,11 +48,15 @@ If you see a dialog titled "Sub-image Objective Mismatch," the sub-image was acq
 
 ### Alignment Selection
 
+The workflow offers three paths to align the image with the microscope stage:
+
 | Option | Type | Description |
 |--------|------|-------------|
-| Use Saved Transform | ComboBox | Select from previously saved coordinate transforms |
-| Create New Transform | Button | Opens the alignment workflow to create a new transform |
-| Last Used Transform | Button | Uses the most recently used transform |
+| Use Existing Alignment | RadioButton | Select from previously saved scanner-preset transforms. **Requires a macro image** — if unavailable, slide-specific alignments (below) are used instead. If neither scanner presets nor slide-specific alignment is available, you must choose manual alignment. |
+| Manual Alignment | RadioButton | Create a new alignment using the Microscope Alignment workflow. Does not require a macro image. |
+| Refinement Options | - | After selecting an alignment method, choose whether to refine it with zero, one, or multiple reference tiles before acquiring the full region. |
+
+When scanning from a sub-image that lacks a macro, the "Use Existing Alignment" option may display available scanner transforms but the combo will be disabled (greyed out). Slide-specific alignments saved during prior QPSC acquisitions remain available as alternatives to manual alignment.
 
 Selected transforms are validated before use. Invalid transforms show a warning and allow reselection.
 
@@ -152,6 +163,7 @@ Each annotation's acquisition is added to the project as it completes. Metadata 
 |-------|-------|----------|
 | "No annotations found" | No annotations on image | Draw annotations on the macro image before starting |
 | "Transform validation failed" | Alignment is off | Run refinement or create a new transform |
+| Scanner-preset combo is greyed out / unavailable | Image has no reachable macro (common for sub-images from prior QPSC acquisitions) | Use manual alignment, or if a slide-specific alignment was created during a prior acquisition, select "Use Existing Alignment" to access it directly without the scanner-preset combo. |
 | Images appear shifted | Coordinate mismatch | Check flip/invert settings in Preferences |
 | "Pixel size not set" | Missing calibration | Set image pixel size in QuPath image properties |
 | Poor alignment at edges | Too few alignment points | Add more calibration points spread across the image |
