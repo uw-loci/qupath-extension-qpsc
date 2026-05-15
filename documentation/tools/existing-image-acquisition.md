@@ -20,6 +20,16 @@ The acquisition dialog consolidates all options in a single scrollable panel. Yo
 - Valid coordinate alignment between image and stage (see [Microscope Alignment](microscope-alignment.md))
 - Python microscope server running
 
+### Sub-Image Requirements
+
+When acquiring from a sub-image (an image created by a prior Bounded Acquisition or Acquire from Existing Image workflow), the sub-image entry must have **objective metadata**. This records which microscope objective was used when the sub-image was originally acquired, and is critical for accurate coordinate transformation on subsequent acquisitions.
+
+If you see a dialog titled "Sub-image Missing Objective -- Workflow Cancelled," the opened sub-image lacks this metadata. To fix, either:
+1. **Re-acquire the sub-image** using the current workflow, which will stamp the objective on import.
+2. **Hand-edit the project entry metadata** to add the correct objective name (advanced; not recommended unless you know the original objective).
+
+If you see a dialog titled "Sub-image Objective Mismatch," the sub-image was acquired at a different objective than the wizard's current setting. The mismatch shifts every tile by half the field-of-view difference between the two objectives. Recommended: cancel, switch the wizard to the entry's objective, or re-acquire the sub-image at the desired objective.
+
 ## Options
 
 ### Sample Setup
@@ -49,7 +59,9 @@ Selected transforms are validated before use. Invalid transforms show a warning 
 | Single-Tile Refinement | Refine alignment using one reference tile. Quick adjustment for minor drift. |
 | Full Manual Alignment | Create new transform with multiple points. Use the first time or after hardware changes. |
 
-**Objective Mismatch Advisory:** If you load a saved alignment that was created at a different objective than your wizard's current setting (e.g., refinement at 10x, but wizard set to 20x), a modal dialog appears. The dialog explains that refinement translations are tied to the objective's tile geometry; reusing at a different objective preserves the scale and rotation but loses per-tile precision. You can continue with the loaded alignment or cancel to adjust the wizard's objective or re-align.
+**Saved Alignment Objective Mismatch Advisory:** If you load a saved alignment that was created at a different objective than your wizard's current setting (e.g., alignment refined at 10x, but wizard set to 20x), a modal dialog appears. The dialog explains that refinement translations are tied to the objective's tile geometry; reusing at a different objective preserves the scale and rotation but loses per-tile precision. You can continue with the loaded alignment or cancel to adjust the wizard's objective or re-align. (Note: this is distinct from a sub-image entry's objective mismatch, which is checked separately and has its own advisory.)
+
+**Legacy Alignment Flip-Frame Advisory:** If you load an alignment JSON that was saved before flip-frame tracking was introduced (no `flipMacroX` / `flipMacroY` fields in the JSON file), and the active microscope has any saved preset requiring a flipped sibling (meaning flip matters for some scanner-on-this-scope pairing), a modal dialog appears. The dialog explains that we cannot determine whether the saved transform was built in a flipped or unflipped frame, and reusing it risks applying the wrong frame to your coordinates. Recommended: cancel and re-run Microscope Alignment for this slide to rebuild the JSON with flip-frame metadata. You can continue with the legacy alignment at your own risk if you are confident the frame is correct.
 
 **Cross-Scope Alignment Refinement:** When a cross-scope alignment is composed (see Alignment Selection above), refinement options are automatically disabled. Single-tile and full manual refinement on the target scope would mis-frame the composed transform that was built in the source scope's coordinate system. If you need refinement after a cross-scope acquisition, the recommended approach is to run Microscope Alignment on the target microscope to build a native alignment that is properly framed in that scope's coordinates. Future acquisitions using that native alignment can then use refinement normally.
 

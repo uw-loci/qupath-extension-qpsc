@@ -327,6 +327,22 @@ Observe which direction the physical stage actually moves. If it moves in the la
 - `NORMAL`, `FLIP_H`, `FLIP_V`, `ROT_180` are the four axis-aligned values. These work everywhere, including the stitcher.
 - `ROT_90_CW`, `ROT_90_CCW`, `TRANSPOSE`, `ANTI_TRANSPOSE` are the rotation/transpose cases for scopes whose camera sensor is physically rotated 90°. The Live Viewer gestures work with them, but the stitcher does NOT fully support them — stitched output will be mis-oriented and a warning will be logged. If you actually have a rotated camera, file an issue and request full rotation support.
 
+#### Q: "Legacy Alignment -- Flip Frame Unknown"
+
+**A:** This dialog appears when you load a slide alignment that was saved before flip-frame metadata was recorded (no `flipMacroX` / `flipMacroY` fields), and the active microscope's saved presets require a flipped sibling for at least one source scanner.
+
+**What this means:**
+- The alignment JSON was created before Phase 3 (May 2026) when flip-frame tracking was introduced
+- The active microscope has at least one preset pair where flipping matters (e.g., flipped and unflipped macro images for the same source scanner)
+- We cannot determine which frame the saved transform was built in
+- Reusing it risks applying a flipped-frame transform to unflipped pixel coordinates (or vice versa), causing an X-mirror effect
+
+**Why this matters:** On a flip-needing scope, frame mismatch produces coordinates that are mirrored horizontally. Your annotations will appear to disagree by X, and acquired tiles will land at X-mirrored positions.
+
+**To fix:**
+1. **Recommended:** Cancel the workflow, run **Microscope Alignment** on this slide to rebuild the alignment JSON with current flip-frame metadata, then retry.
+2. **At your own risk:** Continue anyway if you are confident the saved alignment's frame matches what the workflow will use now.
+
 #### Q: Coordinate transformation fails - "No valid transformation found"
 
 **A:** The alignment calibration needs more data points:
@@ -367,6 +383,36 @@ If matching still fails on a tile that visually overlaps the camera's live view:
 Drive the stage roughly close (a few hundred microns is enough) using the joystick, Live Viewer click-to-center, or the initial transform estimate before clicking SIFT. If you genuinely need a wider capture range, raise the search margin -- but matching cost grows with margin squared, so 300-400 um is a reasonable upper bound.
 
 ### Acquisition Problems
+
+#### Q: "Sub-image Missing Objective -- Workflow Cancelled" error
+
+**A:** The open sub-image entry has no `objective` metadata, and the workflow cannot safely proceed with acquisition.
+
+**What this means:**
+- The sub-image was acquired without recording which microscope objective was used
+- The objective is critical for computing the half-FOV correction applied to the tile-grid origin
+- Without it, the system would fall back to whatever objective Micro-Manager happens to be on right now, which may not match the saved sub-image's original objective
+- This fallback could shift all tiles by half a field of view with no warning
+
+**To fix:**
+1. **Recommended:** Re-acquire the sub-image using the current workflow. The new acquisition will stamp the objective metadata on import.
+2. **Alternative:** If you know the original objective, hand-edit the project entry's metadata to add it (not recommended unless you are certain of the value).
+
+#### Q: "Sub-image Objective Mismatch" Continue/Cancel dialog
+
+**A:** The open sub-image's recorded objective differs from the wizard's current objective setting.
+
+**What this means:**
+- The sub-image was acquired at objective A (recorded in entry metadata)
+- The wizard is configured for objective B
+- The entry's objective drives the half-FOV correction; the wizard's objective drives the tile grid size
+- A mismatch shifts every tile by half the FOV difference between the two objectives (may be hundreds of microns)
+
+**To fix:**
+1. **Recommended:** Cancel and either:
+   - Switch the wizard to the entry's objective (safest)
+   - Re-acquire the sub-image at the wizard's desired objective (if you want to keep that objective)
+2. **At your own risk:** Continue anyway (you accept the shift risk)
 
 #### Q: "Camera ROI Mismatch -- Workflow Cancelled" error
 
