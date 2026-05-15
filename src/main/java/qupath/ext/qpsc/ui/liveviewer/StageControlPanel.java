@@ -3593,6 +3593,36 @@ public class StageControlPanel extends VBox {
         boolean hasAlignment = currentTransform != null;
 
         if (!hasAlignment) {
+            // BoundingBox sub-image path: either the per-entry stage-bounds
+            // metadata (2026-05-15+) or the sub-image alignment JSON in
+            // alignmentFiles/derived/ (older entries) is enough for
+            // handleGoToCentroid to navigate, even though loadSlideAlignment
+            // above doesn't reach those. Check both so the button stays
+            // enabled for bounded acquisitions.
+            boolean hasBoundedSubImageAlignment = false;
+            if (gui != null && gui.getProject() != null && gui.getImageData() != null) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+                    ProjectImageEntry<BufferedImage> entry =
+                            QPProjectFunctions.findImageInProject(project, gui.getImageData());
+                    if (entry != null
+                            && qupath.ext.qpsc.utilities.ImageMetadataManager.getBoundingBoxStageBounds(entry)
+                                    != null) {
+                        hasBoundedSubImageAlignment = true;
+                    }
+                    if (!hasBoundedSubImageAlignment) {
+                        String subName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+                        if (subName != null && !subName.isEmpty()) {
+                            AffineTransform derived = AffineTransformManager.loadDerivedAlignment(project, subName);
+                            if (derived != null) hasBoundedSubImageAlignment = true;
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.debug("Could not check bounded sub-image alignment: {}", e.getMessage());
+                }
+            }
+
             // Check if this is a sub-image with XY offset metadata
             boolean hasXYOffset = false;
             if (gui != null && gui.getProject() != null && gui.getImageData() != null) {
@@ -3610,7 +3640,9 @@ public class StageControlPanel extends VBox {
                 }
             }
 
-            if (hasXYOffset) {
+            if (hasBoundedSubImageAlignment) {
+                centroidStatus.setText("BoundingBox alignment available");
+            } else if (hasXYOffset) {
                 centroidStatus.setText("Sub-image: offset-based navigation");
             } else {
                 goToCentroidBtn.setDisable(true);
