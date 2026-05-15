@@ -424,14 +424,26 @@ public class AlignmentHelper {
         body.append("Recommended: cancel, switch the wizard to the saved objective, or\n");
         body.append("re-run alignment refinement at the new objective.\n\n");
         body.append("Continue anyway with the saved alignment?");
+        return confirmContinueDialog(title, header, body.toString());
+    }
 
+    /**
+     * FX-safe modal Continue / Cancel dialog. Returns {@code true} when the user
+     * chose Continue, {@code false} when they cancelled (or the dialog failed to
+     * show, which also short-circuits the workflow conservatively).
+     *
+     * <p>Extracted from the H8 objective-mismatch dialog so other advisories
+     * (M8 cross-scope, M4 sub-image objective, M5 missing objective, M6 legacy
+     * JSON) share the same FX-safe pattern.
+     */
+    public static boolean confirmContinueDialog(String title, String header, String body) {
         final boolean[] result = {false};
         Runnable show = () -> {
             javafx.scene.control.Alert alert =
                     new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
             alert.setTitle(title);
             alert.setHeaderText(header);
-            alert.setContentText(body.toString());
+            alert.setContentText(body);
             alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.OK, javafx.scene.control.ButtonType.CANCEL);
             alert.getDialogPane().setMinWidth(620);
             alert.getDialogPane().setPrefWidth(720);
@@ -466,7 +478,7 @@ public class AlignmentHelper {
             task.get();
             return result[0];
         } catch (Exception e) {
-            logger.warn("Failed to display objective-mismatch dialog: {}", e.getMessage());
+            logger.warn("Failed to display Continue/Cancel dialog '{}': {}", title, e.getMessage());
             return false;
         }
     }

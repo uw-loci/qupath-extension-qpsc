@@ -448,8 +448,58 @@ public class ExistingImageWorkflowV2 {
                 // No alignment for the active scope. Check whether one exists for a
                 // *different* scope that we can route through the macro frame to here.
                 tryComposeCrossScopeAlignment(state);
+                if (state.crossScope) {
+                    // Review finding M8: surface the cross-scope decision so the operator
+                    // can opt out before tiles get created against an approximate transform.
+                    if (!confirmCrossScopeAlignment(state)) {
+                        logger.info("User cancelled cross-scope alignment");
+                        return null;
+                    }
+                    // Review finding M2: refinement on the *target* scope mis-frames the
+                    // composed transform's expected pixel input (the source per-slide
+                    // alignment was built in the source scope's frame, not this one).
+                    // Auto-downgrade so single-tile / full-manual can't silently corrupt
+                    // a freshly composed transform. The user is told in the confirmation
+                    // dialog and can run Microscope Alignment afterwards for a native
+                    // target-scope alignment that future acquisitions can reuse without
+                    // composition.
+                    if (state.refinementChoice != null
+                            && state.refinementChoice != RefinementSelectionController.RefinementChoice.NONE) {
+                        logger.info(
+                                "Auto-downgrading refinement from {} to NONE for cross-scope acquisition",
+                                state.refinementChoice);
+                        state.refinementChoice = RefinementSelectionController.RefinementChoice.NONE;
+                    }
+                }
                 return state;
             });
+        }
+
+        /**
+         * Modal Continue / Cancel confirmation for a freshly composed cross-scope
+         * alignment (review finding M8). Returns {@code true} when the user chose to
+         * proceed, {@code false} on cancel. Delegates to the shared
+         * {@link AlignmentHelper#confirmContinueDialog(String, String, String)}.
+         */
+        private boolean confirmCrossScopeAlignment(WorkflowState state) {
+            String title = "Cross-Scope Alignment Composed";
+            String header = "Reusing an alignment from another microscope";
+            StringBuilder body = new StringBuilder();
+            body.append("No per-slide alignment exists for this microscope.\n");
+            body.append("An alignment from a different microscope has been composed\n");
+            body.append("through the shared macro frame:\n\n");
+            body.append("  ").append(state.alignmentSource).append("\n\n");
+            body.append("Cross-scope alignment is approximate. Linear scale and\n");
+            body.append("rotation are preserved, but per-tile accuracy depends on\n");
+            body.append("how closely both scopes agree on the macro frame.\n\n");
+            body.append("Single-tile and full manual refinement are disabled for\n");
+            body.append("cross-scope acquisitions -- refinement on the target scope\n");
+            body.append("would mis-frame the composed transform.\n\n");
+            body.append("Recommended: after acquisition, run Microscope Alignment on\n");
+            body.append("this slide to build a native target-scope alignment that\n");
+            body.append("future acquisitions can reuse without composition.\n\n");
+            body.append("Continue with the cross-scope alignment?");
+            return AlignmentHelper.confirmContinueDialog(title, header, body.toString());
         }
 
         /**
@@ -488,6 +538,30 @@ public class ExistingImageWorkflowV2 {
                         AffineTransformManager.loadAllSlideAlignmentsFromDirectory(projectDir, lookupKey);
                 if (records.isEmpty()) {
                     return;
+                }
+
+                // Deterministic candidate order: newest file wins on ties (review finding M7).
+                // The original code iterated whatever order the filesystem returned, so two
+                // operators on the same project could see different cross-scope compositions
+                // chosen. Sort by lastModified desc and log the sorted list so field
+                // diagnostics can confirm which candidate won.
+                records = new ArrayList<>(records);
+                records.sort((a, b) ->
+                        Long.compare(b.getFile().lastModified(), a.getFile().lastModified()));
+                if (logger.isInfoEnabled()) {
+                    StringBuilder sb = new StringBuilder("Cross-scope candidates (newest first):");
+                    for (AffineTransformManager.SlideAlignmentRecord r : records) {
+                        sb.append("\n  ")
+                                .append(r.getFile().getName())
+                                .append(" (scope=")
+                                .append(r.getMicroscope())
+                                .append(", pixelFrame=")
+                                .append(r.getPixelFrame())
+                                .append(", lastModified=")
+                                .append(r.getFile().lastModified())
+                                .append(")");
+                    }
+                    logger.info(sb.toString());
                 }
 
                 AffineTransformManager mgr = new AffineTransformManager(new java.io.File(configPath).getParent());
