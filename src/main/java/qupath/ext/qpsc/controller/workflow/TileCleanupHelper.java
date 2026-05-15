@@ -71,19 +71,24 @@ public class TileCleanupHelper {
             return;
         }
 
-        if ("Delete".equals(handling) || forceDelete) {
-            logger.info("Deleting all tiles and subdirectories in: {}", tempTileDir);
-            TileProcessingUtilities.deleteTilesAndFolder(tempTileDir);
-        } else if ("Zip".equals(handling)) {
+        if ("Zip".equals(handling)) {
             logger.info("Zipping tiles before deletion: {}", tempTileDir);
             boolean zipSuccess = TileProcessingUtilities.zipTilesAndMove(tempTileDir);
             if (zipSuccess) {
                 logger.info("Zip successful, now deleting original tiles");
                 TileProcessingUtilities.deleteTilesAndFolder(tempTileDir);
                 logger.info("Zipped and archived temporary tiles from: {}", tempTileDir);
+            } else if (forceDelete) {
+                // Zip failed on the error path; delete anyway (no point keeping
+                // corrupt tiles when the workflow already failed).
+                logger.error("Zip failed during force-delete; falling back to delete");
+                TileProcessingUtilities.deleteTilesAndFolder(tempTileDir);
             } else {
                 logger.error("Zip failed - keeping original tiles for safety");
             }
+        } else if ("Delete".equals(handling) || forceDelete) {
+            logger.info("Deleting all tiles and subdirectories in: {}", tempTileDir);
+            TileProcessingUtilities.deleteTilesAndFolder(tempTileDir);
         } else {
             logger.info("Keeping temporary tiles at: {}", tempTileDir);
         }

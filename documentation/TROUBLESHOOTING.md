@@ -918,10 +918,10 @@ If `base_gain` is set higher than 4.0, the R/B channels are clamped to 4.0x whil
 #### Q: Can I delete the TempTiles folder?
 
 **A:** **After stitching completes - YES**
-- QuPath automatically deletes temp tiles after successful stitching
-- If stitching failed, tiles remain so you can re-stitch (see "Stitching failed but my tiles were acquired" above)
+- QuPath automatically deletes temp tiles after successful stitching (or zips them if you selected that preference)
+- **On acquisition/stitching failure, tiles are always deleted** regardless of your tile-handling preference (see PREFERENCES > Tile Handling Method). This prevents incomplete/corrupt tile sets from accumulating. Tile recovery is only possible if you selected "Zip" in preferences -- the zip archive will be created even on error
 - You can manually delete TempTiles folder after confirming stitched images are correct
-- Keep tiles if you need to re-run stitching with different parameters
+- To keep tiles for re-stitching on a successful run, set your preference to "None" (keep tiles) or "Zip" (compress them)
 
 #### Q: Stitched images are huge - can I reduce file size?
 

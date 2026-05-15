@@ -471,6 +471,8 @@ Controls what happens to intermediate tile images after stitching completes.
 | **Zip** | Compress tiles into a zip archive after stitching |
 | **Delete** | Remove tile images after successful stitching |
 
+**Important:** On acquisition or refinement failure, temporary tiles are always deleted regardless of this preference. The preference applies only to successful runs. This prevents incomplete or corrupt tile sets from accumulating on disk.
+
 **Recommendations:**
 - **None**: During debugging or when you might need to re-stitch
 - **Zip**: For archival purposes with disk space management
