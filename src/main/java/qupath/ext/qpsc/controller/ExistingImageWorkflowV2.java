@@ -523,7 +523,12 @@ public class ExistingImageWorkflowV2 {
          */
         private CompletableFuture<WorkflowState> initializeFromConfig(ExistingImageAcquisitionConfig config) {
             if (config == null) {
-                return CompletableFuture.completedFuture(null);
+                // Phase 12: explicit cancellation so handleError is the single
+                // workflow terminal, not the null-state propagation pattern. The
+                // .exceptionally chain treats CancellationException as user cancel
+                // (logs "Workflow cancelled by user" without an error dialog).
+                return CompletableFuture.failedFuture(
+                        new CancellationException("Acquisition configuration dialog cancelled"));
             }
 
             logger.info("Initializing workflow from consolidated config");
@@ -632,8 +637,9 @@ public class ExistingImageWorkflowV2 {
                     // Review finding M8: surface the cross-scope decision so the operator
                     // can opt out before tiles get created against an approximate transform.
                     if (!confirmCrossScopeAlignment(state)) {
-                        logger.info("User cancelled cross-scope alignment");
-                        return null;
+                        // Phase 12: throw rather than return null so handleError is the
+                        // single workflow terminal.
+                        throw new CancellationException("User cancelled cross-scope alignment");
                     }
                     // Review finding M2: refinement on the *target* scope mis-frames the
                     // composed transform's expected pixel input (the source per-slide
@@ -1026,8 +1032,10 @@ public class ExistingImageWorkflowV2 {
             // Delegate to the existing working implementation
             return new ExistingAlignmentPath(gui, state).execute().thenApply(legacyState -> {
                 if (legacyState == null) {
-                    // ExistingAlignmentPath returned null (e.g. no macro image, user cancelled)
-                    return null;
+                    // ExistingAlignmentPath returned null (e.g. no macro image, user cancelled).
+                    // Phase 12: explicit cancellation routes through handleError instead of
+                    // propagating null through the chain.
+                    throw new CancellationException("ExistingAlignmentPath cancelled (no macro / user cancel)");
                 }
                 // Copy back relevant state from the working implementation
                 state.transform = legacyState.transform;
@@ -1374,7 +1382,11 @@ public class ExistingImageWorkflowV2 {
 
             if (!validateMMAgainstSelection(state)) {
                 logger.warn("Pixel-size or camera-ROI validation failed before refinement; cancelling workflow");
-                return CompletableFuture.completedFuture(null);
+                // Phase 12: explicit cancellation -- the validate dialog already informed
+                // the user, so handleError just logs "Workflow cancelled by user" and runs
+                // cleanup.
+                return CompletableFuture.failedFuture(
+                        new CancellationException("Pre-refinement MM/wizard validation failed"));
             }
 
             switch (state.refinementChoice) {
@@ -1586,7 +1598,10 @@ public class ExistingImageWorkflowV2 {
             // switched objective in MicroManager, applied a ROI crop, etc.).
             if (!validateMMAgainstSelection(state)) {
                 logger.warn("Pixel-size or camera-ROI validation failed before acquisition; cancelling workflow");
-                return CompletableFuture.completedFuture(null);
+                // Phase 12: explicit cancellation through handleError. The validate dialog
+                // already informed the user.
+                return CompletableFuture.failedFuture(
+                        new CancellationException("Pre-acquisition MM/wizard validation failed"));
             }
 
             logger.info("Starting acquisition phase");
