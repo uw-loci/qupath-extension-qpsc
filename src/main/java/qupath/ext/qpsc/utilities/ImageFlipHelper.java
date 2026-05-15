@@ -5,11 +5,13 @@ import java.io.File;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
+import javafx.beans.value.ChangeListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.images.ImageData;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 
@@ -424,7 +426,8 @@ public final class ImageFlipHelper {
 
     /**
      * Switch the QuPath viewer to {@code targetEntry} and complete
-     * {@code future} when the open is initiated. Always defers to a
+     * {@code future} when the target entry's {@code ImageData} is
+     * actually installed in the viewer. Always defers to a
      * later FX pulse via {@link Platform#runLater(Runnable)}.
      *
      * <p>Why always-defer (not "run now if on FX thread"): callers may
@@ -437,19 +440,89 @@ public final class ImageFlipHelper {
      * processing" if invoked inside a pulse, and the dialog returns
      * null, causing an NPE in {@code Optional.orElse}. Deferring puts
      * the open on the next pulse where modal dialogs are legal.
+     *
+     * <p>Why subscribe to {@code imageDataProperty} (review finding M10):
+     * {@code openImageEntry} kicks off image loading on a background
+     * thread and returns before the new {@code ImageData} is installed.
+     * Completing the future immediately after the call returns lets
+     * downstream {@code .thenCompose} continuations read
+     * {@code gui.getImageData()} and see the OLD entry's hierarchy.
+     * The change listener waits for the install to commit to the
+     * viewer before signalling. A 5-second timeout fallback prevents
+     * deadlock if the install never fires (e.g. user cancelled a
+     * checkSaveChanges dialog).
      */
     private static void switchOpenEntry(
             QuPathGUI gui, ProjectImageEntry<BufferedImage> targetEntry, CompletableFuture<Boolean> future) {
         Platform.runLater(() -> {
+            String targetName = targetEntry.getImageName();
+            // Listener completes the future when the viewer's ImageData
+            // actually changes to a non-null value -- meaning openImageEntry's
+            // background install committed. Match by name (the only stable
+            // identifier we have without reading the entry's data again).
+            // AtomicReference is used so the listener body can self-remove
+            // without forward-reference issues.
+            java.util.concurrent.atomic.AtomicReference<ChangeListener<ImageData<BufferedImage>>> listenerRef =
+                    new java.util.concurrent.atomic.AtomicReference<>();
+            ChangeListener<ImageData<BufferedImage>> listener = (obs, oldImage, newImage) -> {
+                if (newImage == null) return;
+                String installedName =
+                        newImage.getServer() != null && newImage.getServer().getMetadata() != null
+                                ? newImage.getServer().getMetadata().getName()
+                                : null;
+                if (installedName == null || (targetName != null && !targetName.equals(installedName))) {
+                    // Some other change (race with an unrelated open / refresh).
+                    // Keep waiting for the right one; the timeout fallback
+                    // below guarantees we don't deadlock.
+                    return;
+                }
+                gui.getViewer().imageDataProperty().removeListener(listenerRef.get());
+                logger.info("Switched open entry to '{}' (ImageData installed)", targetName);
+                future.complete(true);
+            };
+            listenerRef.set(listener);
             try {
+                gui.getViewer().imageDataProperty().addListener(listener);
                 gui.refreshProject();
                 gui.openImageEntry(targetEntry);
-                logger.info("Switched open entry to '{}'", targetEntry.getImageName());
-                future.complete(true);
+                logger.info("openImageEntry initiated for '{}'; waiting for ImageData install", targetName);
             } catch (Exception e) {
-                logger.error("Failed to switch open entry to '{}'", targetEntry.getImageName(), e);
+                gui.getViewer().imageDataProperty().removeListener(listener);
+                logger.error("Failed to switch open entry to '{}'", targetName, e);
                 future.completeExceptionally(e);
+                return;
             }
+            // Timeout fallback. If the install never fires (e.g. user cancelled
+            // the checkSaveChanges dialog), the workflow chain would deadlock
+            // waiting on this future. After 5 seconds, remove the listener and
+            // resolve based on whether the open eventually succeeded.
+            CompletableFuture.delayedExecutor(5, java.util.concurrent.TimeUnit.SECONDS)
+                    .execute(() -> Platform.runLater(() -> {
+                        if (future.isDone()) return;
+                        gui.getViewer().imageDataProperty().removeListener(listenerRef.get());
+                        ImageData<BufferedImage> current = gui.getImageData();
+                        String currentName = current != null
+                                        && current.getServer() != null
+                                        && current.getServer().getMetadata() != null
+                                ? current.getServer().getMetadata().getName()
+                                : null;
+                        if (targetName != null && targetName.equals(currentName)) {
+                            // Install committed before listener fired (or listener missed it);
+                            // accept the open.
+                            logger.warn(
+                                    "switchOpenEntry timeout: viewer already shows '{}'; completing future",
+                                    currentName);
+                            future.complete(true);
+                        } else {
+                            logger.error(
+                                    "switchOpenEntry timeout: expected '{}' but viewer shows '{}'",
+                                    targetName,
+                                    currentName);
+                            future.completeExceptionally(new java.util.concurrent.TimeoutException(
+                                    "Image switch did not commit within 5s: expected '" + targetName
+                                            + "', viewer shows '" + currentName + "'"));
+                        }
+                    }));
         });
     }
 }

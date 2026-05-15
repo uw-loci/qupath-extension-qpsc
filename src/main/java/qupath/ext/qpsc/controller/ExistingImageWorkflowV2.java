@@ -713,8 +713,13 @@ public class ExistingImageWorkflowV2 {
 
             logger.info("Processing slide-specific alignment with existing transform");
 
-            // Set the transform
-            MicroscopeController.getInstance().setCurrentTransform(state.transform);
+            // M11 -- setCurrentTransform is intentionally deferred until after
+            // validateAndFlipIfNeeded succeeds (see the .thenApply below). The previous
+            // location installed it before project setup / flip validation, leaving a
+            // window in which a Live Viewer click could read an unvalidated transform.
+            // Phase 2 H6 clears the singleton on cleanup, but H6 + M11 together close
+            // both ends of the window (install only after validation passes; clear on
+            // any cleanup or error).
 
             // Delegate to ProjectHelper for proper project setup
             return ProjectHelper.setupProject(gui, state.sample)
@@ -765,6 +770,8 @@ public class ExistingImageWorkflowV2 {
                                     // reads gui.getImageData() downstream.
                                     if (validated) {
                                         verifyOpenEntryMatchesPreset(gui, project, requiresFlipX, requiresFlipY);
+                                        // M11 -- install the transform only after validation passes.
+                                        MicroscopeController.getInstance().setCurrentTransform(state.transform);
                                     }
                                     return validated;
                                 });
