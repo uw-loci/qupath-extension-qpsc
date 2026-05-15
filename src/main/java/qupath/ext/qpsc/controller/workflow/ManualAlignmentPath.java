@@ -212,12 +212,15 @@ public class ManualAlignmentPath {
                     @SuppressWarnings("unchecked")
                     Project<BufferedImage> project = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
 
-                    // Get the actual image file name (not metadata name which may be project name)
-                    // Strip extension for consistency with base_image metadata lookups
-                    String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
-                    if (imageName != null) {
-                        imageName = qupath.lib.common.GeneralTools.stripExtension(imageName);
-                    }
+                    // Resolve the canonical macro lookup key (base_image when present, else
+                    // the stripped filename). Keeps load and save in lockstep with
+                    // AlignmentHelper.checkForSlideAlignment + saveRefinedAlignment, which
+                    // both go through resolveMacroLookupKey. A flipped sibling entry's
+                    // file name still resolves to the unflipped base via base_image.
+                    String rawImageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+                    String imageName = rawImageName != null
+                            ? AlignmentHelper.resolveMacroLookupKey(project, gui.getImageData(), rawImageName)
+                            : null;
 
                     if (imageName != null) {
                         // Capture the macro flip frame this manual alignment was built in
