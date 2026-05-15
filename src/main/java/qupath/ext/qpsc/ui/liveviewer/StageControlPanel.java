@@ -1331,6 +1331,10 @@ public class StageControlPanel extends VBox {
             Label intCol = new Label("Intensity");
             for (Label l : new Label[] {prevCol, idCol, expCol, intCol}) {
                 l.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
+                // GridPane otherwise sizes column 0 to the narrow RadioButton
+                // below, truncating the "Preview" header to "...". Force each
+                // header to its preferred width so the text always renders.
+                l.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
             }
             grid.add(prevCol, 0, 0);
             grid.add(idCol, 1, 0);
@@ -2399,7 +2403,7 @@ public class StageControlPanel extends VBox {
      * APPLYCH profile, fire that channel's radio so APPLYCH switches the
      * cube/light path. Otherwise the radio state is left alone.
      */
-    private javafx.scene.layout.HBox buildChannelPresetBar(String resolvedProfile) {
+    private javafx.scene.layout.VBox buildChannelPresetBar(String resolvedProfile) {
         ComboBox<String> combo = new ComboBox<>();
         combo.setPromptText("(no preset)");
         combo.setPrefWidth(160);
@@ -2472,7 +2476,14 @@ public class StageControlPanel extends VBox {
 
         Label label = new Label("Preset:");
         label.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
-        javafx.scene.layout.HBox bar = new javafx.scene.layout.HBox(6, label, combo, saveBtn, deleteBtn);
+        // Two-row layout: combo on the Presets line, Save/Delete on the next
+        // line. The Camera tab is narrow enough that a single-row layout
+        // truncates the label to "Pr..." and the buttons to one letter each.
+        javafx.scene.layout.HBox topRow = new javafx.scene.layout.HBox(6, label, combo);
+        topRow.setAlignment(Pos.CENTER_LEFT);
+        javafx.scene.layout.HBox bottomRow = new javafx.scene.layout.HBox(6, saveBtn, deleteBtn);
+        bottomRow.setAlignment(Pos.CENTER_LEFT);
+        javafx.scene.layout.VBox bar = new javafx.scene.layout.VBox(4, topRow, bottomRow);
         bar.setAlignment(Pos.CENTER_LEFT);
         return bar;
     }
