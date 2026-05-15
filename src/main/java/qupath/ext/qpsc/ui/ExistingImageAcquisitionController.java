@@ -191,6 +191,7 @@ public class ExistingImageAcquisitionController {
         private List<AffineTransformManager.TransformPreset> availableTransforms;
         private AffineTransformManager transformManager;
         private boolean hasSlideAlignment; // True if _alignment.json exists for current image
+        private boolean hasMacroImage; // True if a macro image is reachable from this entry
 
         // UI Components - Banner
         private HBox variantBanner;
@@ -295,6 +296,20 @@ public class ExistingImageAcquisitionController {
             // Check for slide-specific alignment (auto-registered from BoundingBox acquisition)
             this.hasSlideAlignment = detectSlideSpecificAlignment();
             logger.info("Slide-specific alignment for current image: {}", hasSlideAlignment);
+
+            // Detect whether a macro image is reachable. The scanner-preset
+            // "Use existing alignment" path runs green-box detection on a macro
+            // to localise the WSI on the slide; without a macro that path
+            // cannot proceed. QPSC-acquired images (BoundingBox stitches, etc.)
+            // typically have no macro, so without this check the dialog would
+            // happily route to ExistingAlignmentPath and fail at runtime with
+            // "Macro Image Required". Slide-specific alignments and manual
+            // alignment do NOT need a macro and remain available.
+            this.hasMacroImage = (gui != null)
+                    && qupath.ext.qpsc.utilities.MacroImageUtility.retrieveMacroImageWithFallback(
+                                    gui, defaultSampleName)
+                            != null;
+            logger.info("Macro image reachable for current entry: {}", hasMacroImage);
         }
 
         private boolean detectSlideSpecificAlignment() {
@@ -659,7 +674,12 @@ public class ExistingImageAcquisitionController {
             manualAlignRadio.setToggleGroup(alignmentGroup);
 
             boolean hasScannerTransforms = !availableTransforms.isEmpty();
-            boolean hasTransforms = hasScannerTransforms || hasSlideAlignment;
+            // Scanner-preset path runs green-box detection on a macro; without a
+            // macro it cannot fire. A slide-specific alignment is independent of
+            // the macro and remains usable. "Use existing alignment" is only
+            // truly available if at least one of those routes is open.
+            boolean scannerPresetUsable = hasScannerTransforms && hasMacroImage;
+            boolean hasTransforms = scannerPresetUsable || hasSlideAlignment;
             if (hasTransforms) {
                 useExistingRadio.setSelected(true);
             } else {
@@ -738,8 +758,11 @@ public class ExistingImageAcquisitionController {
             transformSelectionBox.getChildren().addAll(transformLabel, transformCombo, confidenceLabel);
 
             // Hide scanner preset combo when only slide alignment is available
-            // (no scanner preset to select -- the slide-specific alignment is used directly)
-            boolean showScannerCombo = hasScannerTransforms && useExistingRadio.isSelected();
+            // (no scanner preset to select -- the slide-specific alignment is used directly).
+            // Also hide when there is no reachable macro: the scanner-preset
+            // route relies on green-box detection in the macro, so the combo is
+            // not actionable without one.
+            boolean showScannerCombo = scannerPresetUsable && useExistingRadio.isSelected();
             transformSelectionBox.setVisible(showScannerCombo);
             transformSelectionBox.setManaged(showScannerCombo);
 
@@ -761,11 +784,18 @@ public class ExistingImageAcquisitionController {
             if (hasSlideAlignment) {
                 recommendationLabel.setText("[i] Image has auto-registered alignment from QPSC acquisition. "
                         + "Ready to acquire without additional alignment setup.");
-            } else if (hasScannerTransforms) {
+            } else if (scannerPresetUsable) {
                 recommendationLabel.setText(
                         "[i] Recommendation: Use Existing Alignment (found " + availableTransforms.size()
                                 + " saved transform" + (availableTransforms.size() > 1 ? "s" : "")
                                 + ")");
+            } else if (hasScannerTransforms) {
+                // Scanner presets exist but no macro -- the green-box detection
+                // path cannot run on this image, so the user must pick manual.
+                recommendationLabel.setText("[i] Manual alignment required: "
+                        + availableTransforms.size() + " saved scanner transform"
+                        + (availableTransforms.size() > 1 ? "s" : "")
+                        + " available, but this image has no macro for green-box detection.");
             } else {
                 recommendationLabel.setText("[i] Manual alignment required (no saved transforms found)");
             }
@@ -1395,7 +1425,9 @@ public class ExistingImageAcquisitionController {
 
             useExistingRadio.selectedProperty().addListener((obs, old, selected) -> {
                 // Show scanner combo only when selected AND scanner presets exist
-                boolean showScanner = selected && !availableTransforms.isEmpty();
+                // AND a macro is reachable (the combo path requires green-box
+                // detection on a macro image).
+                boolean showScanner = selected && !availableTransforms.isEmpty() && hasMacroImage;
                 transformSelectionBox.setVisible(showScanner);
                 transformSelectionBox.setManaged(showScanner);
                 refinementBox.setVisible(selected);
