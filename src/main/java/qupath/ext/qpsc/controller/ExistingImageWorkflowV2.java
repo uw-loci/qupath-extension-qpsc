@@ -589,11 +589,16 @@ public class ExistingImageWorkflowV2 {
 
                 AffineTransformManager mgr = new AffineTransformManager(new java.io.File(configPath).getParent());
 
+                // Phase 11: count cross-scope candidates considered so we can surface a
+                // non-modal info dialog when records existed but none could compose to
+                // the active scope. Pairs with Phase 6's M8 success dialog.
+                int crossScopeCandidatesConsidered = 0;
                 for (AffineTransformManager.SlideAlignmentRecord record : records) {
                     String sourceMicroscope = record.getMicroscope();
                     if (sourceMicroscope == null || activeMicroscope.equals(sourceMicroscope)) {
                         continue;
                     }
+                    crossScopeCandidatesConsidered++;
                     // Cross-scope composition assumes the source record is in macro pixel
                     // coords -- composing a sub-frame transform with a macro-frame preset
                     // produces the 2026-05-10 MH_Colon shrunk-grid class. The directory
@@ -649,6 +654,20 @@ public class ExistingImageWorkflowV2 {
                                     e.getMessage());
                         }
                     }
+                }
+                // Phase 11: non-modal info dialog when records existed for other scopes but
+                // none could compose. Pairs with Phase 6's M8 success dialog. Skipped when
+                // there were zero cross-scope candidates -- silence is correct there
+                // (this is the common "fresh project on this scope" case).
+                if (crossScopeCandidatesConsidered > 0 && !state.crossScope) {
+                    final int considered = crossScopeCandidatesConsidered;
+                    Platform.runLater(() -> Dialogs.showInfoNotification(
+                            "No Cross-Scope Alignment Available",
+                            considered
+                                    + " per-slide alignment(s) from other microscopes were "
+                                    + "considered, but none could be composed through a shared "
+                                    + "scanner preset to the active scope. Manual alignment will "
+                                    + "be required."));
                 }
             } catch (Exception e) {
                 logger.warn("Cross-scope alignment probe failed: {}", e.getMessage(), e);
@@ -769,7 +788,6 @@ public class ExistingImageWorkflowV2 {
                                     // flipped entry but the swap can race the worker thread that
                                     // reads gui.getImageData() downstream.
                                     if (validated) {
-                                        verifyOpenEntryMatchesPreset(gui, project, requiresFlipX, requiresFlipY);
                                         // M11 -- install the transform only after validation passes.
                                         MicroscopeController.getInstance().setCurrentTransform(state.transform);
                                     }
@@ -933,6 +951,19 @@ public class ExistingImageWorkflowV2 {
          */
         private CompletableFuture<WorkflowState> processSubAcquisitionPath(WorkflowState state) {
             if (state == null) return CompletableFuture.completedFuture(null);
+
+            // Phase 11: catch missing sample early with a clear message rather than
+            // letting setupProject NPE on state.sample.projectsFolder(). The check
+            // is defensive -- initializeFromConfig populates state.sample -- but the
+            // resulting error is much clearer than the downstream NPE.
+            if (state.sample == null) {
+                CompletableFuture<WorkflowState> failed = new CompletableFuture<>();
+                failed.completeExceptionally(
+                        new IllegalStateException("processSubAcquisitionPath: state.sample is null -- "
+                                + "initializeFromConfig did not run or returned null state. "
+                                + "This is a workflow-chain bug, not a user error."));
+                return failed;
+            }
 
             logger.info("Processing sub-acquisition with offset-based targeting");
 
@@ -1226,7 +1257,18 @@ public class ExistingImageWorkflowV2 {
                     return false;
                 }
                 return true;
+            } catch (IllegalArgumentException e) {
+                // Phase 11: configuration error (e.g. missing objective in YAML, bad detector
+                // key) -- the previous catch (Exception) swallowed these and let the workflow
+                // proceed against a misconfigured MM/wizard combination, surfacing the failure
+                // 60+ seconds later inside TilingUtilities. Propagate as a workflow cancellation
+                // so the user sees a clear dialog at the gate.
+                logger.error("Configuration error during MM/wizard validation: {}", e.getMessage());
+                throw new IllegalStateException(
+                        "Configuration error during MM/wizard validation: " + e.getMessage(), e);
             } catch (Exception e) {
+                // Transient failures (socket I/O, MM not connected). Log and pass-through;
+                // downstream gates run again before stage motion.
                 logger.warn("Could not validate MM state against wizard selection: {}", e.getMessage());
                 return true;
             }
@@ -1289,6 +1331,26 @@ public class ExistingImageWorkflowV2 {
                         }
                         saveRefinedAlignment(state);
                         return state;
+                    })
+                    .whenComplete((s, ex) -> {
+                        // Phase 11: on exception from refinement (not Skip / X-close, which
+                        // are normal non-accepted paths), force-delete the refinement tile
+                        // directory so a crashed refinement does not leave tiles polluting
+                        // the project. Skip / X-close return normally with accepted=false;
+                        // the workflow continues to acquisition which reuses the same dir,
+                        // so we leave tiles in place on the non-exception path.
+                        if (ex != null && state.projectInfo != null) {
+                            String tempTileDir = state.projectInfo.getTempTileDirectory();
+                            if (tempTileDir != null && !tempTileDir.isBlank()) {
+                                try {
+                                    TileCleanupHelper.performCleanup(tempTileDir, true);
+                                } catch (Exception cleanupEx) {
+                                    logger.warn(
+                                            "Failed to clean refinement tiles after exception: {}",
+                                            cleanupEx.getMessage());
+                                }
+                            }
+                        }
                     });
         }
 
@@ -1413,6 +1475,11 @@ public class ExistingImageWorkflowV2 {
             // Clear any preserved annotations (should already be restored, but cleanup just in case)
             state.annotationPreservation.clearPreservedAnnotations();
             MicroscopeController.getInstance().setCurrentTransform(null);
+            // Phase 11: safety net for AcquisitionManager.processAnnotations throwing after
+            // setAcquisitionActive(true) but before its whenComplete reset. Without this the
+            // flag stays stuck across runs and PROBEZ / Live Viewer paths see acquisitionActive
+            // forever.
+            MicroscopeController.getInstance().setAcquisitionActive(false);
         }
 
         /**
@@ -1482,42 +1549,24 @@ public class ExistingImageWorkflowV2 {
             // Clear preserved annotations on error to prevent stale data
             state.annotationPreservation.clearPreservedAnnotations();
 
+            // Phase 11: force-delete temporary tiles on error so a failed run does not
+            // leave them on disk even when the user's preference is "Keep" (Keep is for
+            // diagnostics on success; on error the tiles are usually incomplete /
+            // corrupt). cleanupTilesAfterStitching honours the preference and runs only
+            // on the success branch; this is the error-path equivalent.
+            try {
+                if (state != null && state.projectInfo != null) {
+                    String tempTileDir = state.projectInfo.getTempTileDirectory();
+                    if (tempTileDir != null && !tempTileDir.isBlank()) {
+                        TileCleanupHelper.performCleanup(tempTileDir, true);
+                    }
+                }
+            } catch (Exception cleanupEx) {
+                logger.warn("Failed to clean up tiles on error path: {}", cleanupEx.getMessage());
+            }
+
             cleanup();
             return null;
-        }
-
-        /**
-         * Verifies that the QuPath GUI's currently-open project entry has the flip metadata
-         * the saved alignment preset requires. Aborts the workflow with a clear modal if not.
-         *
-         * <p>The saved per-slide {@code fullRes->stage} transform was built in the pixel frame
-         * of whatever entry was open at save time. Running acquisition from a mismatched frame
-         * sends unflipped pixel coords through a flipped-frame transform (or vice versa),
-         * producing an X-mirrored stage target. {@link ImageFlipHelper#validateAndFlipIfNeeded}
-         * is supposed to swap to the matching entry, but the swap is asynchronous on the FX
-         * thread and the worker thread that reads {@code gui.getImageData()} downstream can
-         * race the swap and read stale data. Verified 2026-05-02 OWS3: Go-to-Centroid lands
-         * at the X-mirror on the unflipped entry but at the correct location on the flipped
-         * duplicate, and the acquisition follows whichever entry is actually open.
-         *
-         * <p>The user explicitly asked us to detect this case and either auto-switch reliably
-         * or warn. Auto-switch's reliability is what's currently broken, so we surface a
-         * clear instruction instead: switch manually and re-run.
-         */
-        /**
-         * Step B of the flip-relocation refactor: the open entry no longer
-         * needs to match the preset's flip frame. Annotation pixel coords are
-         * interpreted in the unflipped-base frame and the alignment flip is
-         * baked into {@code state.transform} by
-         * {@link qupath.ext.qpsc.controller.workflow.AlignmentHelper#checkForSlideAlignment}.
-         * Kept as a no-op so the existing call chain compiles unchanged.
-         */
-        private void verifyOpenEntryMatchesPreset(
-                QuPathGUI gui, Project<BufferedImage> project, boolean requiresFlipX, boolean requiresFlipY) {
-            logger.debug(
-                    "verifyOpenEntryMatchesPreset: no-op under Step B (flip required={}, {})",
-                    requiresFlipX,
-                    requiresFlipY);
         }
 
         /**

@@ -36,9 +36,28 @@ public class TileCleanupHelper {
      * @param tempTileDir Path to the temporary tile directory
      */
     public static void performCleanup(String tempTileDir) {
+        performCleanup(tempTileDir, false);
+    }
+
+    /**
+     * Performs tile cleanup with optional override of the "Keep" preference.
+     *
+     * <p>When {@code forceDelete} is {@code true}, the method ignores the user's
+     * tile-handling preference and always deletes the tile directory. Used by
+     * workflow error / cancel paths (review finding Phase 11) so a failed
+     * acquisition does not leave temporary tile folders on disk even when the
+     * user normally keeps them for diagnostics. "Zip" remains honoured as a
+     * better-than-delete fallback on the force path.
+     *
+     * @param tempTileDir Path to the temporary tile directory
+     * @param forceDelete When true, fall through to delete even if the
+     *     preference is "Keep" or any other non-Delete value (Zip still wins
+     *     when successful)
+     */
+    public static void performCleanup(String tempTileDir, boolean forceDelete) {
         String handling = QPPreferenceDialog.getTileHandlingMethodProperty();
 
-        logger.info("Performing tile cleanup - method: {}, path: {}", handling, tempTileDir);
+        logger.info("Performing tile cleanup - method: {}, force={}, path: {}", handling, forceDelete, tempTileDir);
 
         // Validate the path exists
         File tileDir = new File(tempTileDir);
@@ -52,7 +71,7 @@ public class TileCleanupHelper {
             return;
         }
 
-        if ("Delete".equals(handling)) {
+        if ("Delete".equals(handling) || forceDelete) {
             logger.info("Deleting all tiles and subdirectories in: {}", tempTileDir);
             TileProcessingUtilities.deleteTilesAndFolder(tempTileDir);
         } else if ("Zip".equals(handling)) {
