@@ -254,9 +254,17 @@ public class StitchingBlockingDialog {
                 warning.getButtonTypes().setAll(ButtonType.YES, ButtonType.NO);
                 warning.setResizable(true);
 
-                // Make the dialog modal relative to the stitching dialog
+                // Parent the warning to the STITCHING dialog's window (not its
+                // owner). A child window stacks above its parent natively, and
+                // it's important that the warning sees the stitching dialog as
+                // its parent so JavaFX manages z-order between the two.
+                Window stitchingWindow = dialog.getDialogPane().getScene() != null
+                        ? dialog.getDialogPane().getScene().getWindow()
+                        : null;
                 warning.initModality(Modality.APPLICATION_MODAL);
-                warning.initOwner(dialog.getOwner());
+                if (stitchingWindow != null) {
+                    warning.initOwner(stitchingWindow);
+                }
 
                 // Make NO the default button
                 Button noButton = (Button) warning.getDialogPane().lookupButton(ButtonType.NO);
@@ -266,11 +274,38 @@ public class StitchingBlockingDialog {
                 yesButton.setDefaultButton(false);
                 yesButton.setStyle("-fx-base: #ff6b6b;"); // Red color to indicate danger
 
-                // Set always on top
-                warning.getDialogPane().sceneProperty().addListener((obs, oldScene, newScene) -> {
-                    if (newScene != null && newScene.getWindow() instanceof Stage warningStage) {
+                // Drop the parent's alwaysOnTop while the warning is up. Even
+                // with showingWarning gating the keep-on-top timer, the parent
+                // can still claim the front via focus events on Windows and
+                // hide the warning. Restored in the result handler below.
+                if (stitchingWindow instanceof Stage parentStage) {
+                    parentStage.setAlwaysOnTop(false);
+                }
+
+                // Once shown, raise the warning above the stitching dialog AND
+                // offset it so the two are visible side-by-side. The stitching
+                // dialog is ~450 px wide; placing the warning below it with a
+                // small cascade keeps both readable without overlap, so the
+                // user always has an out even if a z-order glitch sneaks the
+                // parent back to the front momentarily.
+                warning.setOnShown(shown -> {
+                    Window warningWindow = warning.getDialogPane().getScene() != null
+                            ? warning.getDialogPane().getScene().getWindow()
+                            : null;
+                    if (warningWindow instanceof Stage warningStage) {
                         warningStage.setAlwaysOnTop(true);
                         warningStage.toFront();
+                        if (stitchingWindow != null && stitchingWindow.getWidth() > 0 && warningWindow.getWidth() > 0) {
+                            double parentX = stitchingWindow.getX();
+                            double parentY = stitchingWindow.getY();
+                            double parentW = stitchingWindow.getWidth();
+                            double parentH = stitchingWindow.getHeight();
+                            double warnW = warningWindow.getWidth();
+                            // Place the warning beneath the stitching dialog,
+                            // horizontally centred on it, with a 20 px gap.
+                            warningStage.setX(parentX + (parentW - warnW) / 2.0);
+                            warningStage.setY(parentY + parentH + 20.0);
+                        }
                     }
                 });
 
@@ -320,8 +355,23 @@ public class StitchingBlockingDialog {
                 return;
             }
 
-            // Call callback on JavaFX thread and reset warning flag
+            // Call callback on JavaFX thread and reset warning flag. Restore
+            // the parent's alwaysOnTop (we dropped it when opening the warning
+            // so it could not shove its way over the warning). If the user
+            // confirmed YES, the stitching dialog is about to be closed and
+            // restoring alwaysOnTop is harmless; on NO we need the parent back
+            // on top so it keeps blocking QuPath interaction as intended.
             Platform.runLater(() -> {
+                Window stitchingWindow = dialog.getDialogPane().getScene() != null
+                        ? dialog.getDialogPane().getScene().getWindow()
+                        : null;
+                if (stitchingWindow instanceof Stage parentStage
+                        && parentStage.isShowing()
+                        && !isComplete.get()
+                        && !result.get()) {
+                    parentStage.setAlwaysOnTop(true);
+                    parentStage.toFront();
+                }
                 callback.accept(result.get());
                 showingWarning.set(false);
             });
@@ -381,9 +431,13 @@ public class StitchingBlockingDialog {
                         stage.toFront();
                         stage.requestFocus();
 
-                        // Add a periodic timer to keep dialog on top during stitching
+                        // Add a periodic timer to keep dialog on top during stitching.
+                        // The showingWarning gate is essential: without it, the timer fires
+                        // every 2 s while the Dismiss-confirmation alert is open and shoves
+                        // the stitching dialog (which is wider) back in front, hiding the
+                        // confirmation and making the dismiss flow unusable.
                         Timeline keepOnTop = new Timeline(new KeyFrame(Duration.seconds(2), e -> {
-                            if (!instance.isComplete.get() && stage.isShowing()) {
+                            if (!instance.isComplete.get() && stage.isShowing() && !instance.showingWarning.get()) {
                                 stage.toFront();
                                 stage.setAlwaysOnTop(true); // Re-apply in case it was lost
                             }
