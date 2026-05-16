@@ -605,8 +605,30 @@ public class AutofocusEditorWorkflow {
                         qupath.ext.qpsc.controller.MicroscopeController mc =
                                 qupath.ext.qpsc.controller.MicroscopeController.getInstance();
                         qupath.ext.qpsc.service.microscope.MicroscopeSocketClient sc = mc.getSocketClient();
+
+                        // Query the active modality via GETCAP so the test
+                        // exercises the same modality-aware routing the Live
+                        // Viewer would use (saturation threshold, on_failure
+                        // policy, etc.). Without this the server falls back
+                        // to its strict default saturation threshold (0.05)
+                        // and logs "modality 'unknown'", giving misleading
+                        // results when configuring per-modality bindings.
+                        String activeModality = null;
+                        try {
+                            qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.CapabilityResult cap =
+                                    sc.getCapabilities(null);
+                            if (cap != null && cap.modality != null && cap.modality.name != null) {
+                                activeModality = cap.modality.name;
+                                logger.info("Test Streaming AF: querying with active modality '{}'", activeModality);
+                            }
+                        } catch (Exception capEx) {
+                            logger.warn(
+                                    "Test Streaming AF: GETCAP failed ({}); proceeding with modality=null",
+                                    capEx.getMessage());
+                        }
+
                         qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.StreamingFocusResult result =
-                                sc.streamingFocus(yamlPath, null, null, Double.NaN, true);
+                                sc.streamingFocus(yamlPath, null, activeModality, Double.NaN, true);
                         Platform.runLater(() -> showStreamingAfTestResult(result));
                     } catch (Exception ex) {
                         logger.error("Test Streaming AF failed", ex);
