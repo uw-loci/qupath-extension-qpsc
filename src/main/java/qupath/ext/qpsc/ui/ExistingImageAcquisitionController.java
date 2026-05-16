@@ -320,7 +320,16 @@ public class ExistingImageAcquisitionController {
             @SuppressWarnings("unchecked")
             Project<java.awt.image.BufferedImage> project = (Project<java.awt.image.BufferedImage>) gui.getProject();
             java.awt.geom.AffineTransform t = AffineTransformManager.loadSlideAlignment(project, imageName);
-            return t != null;
+            if (t != null) return true;
+            // Fallback: an open entry stamped with BoundingBox stage metadata
+            // (QPSC-acquired stitch) yields a slide-specific transform via
+            // ImageMetadataManager.buildBoundingBoxPixelToStageTransform. Mirror
+            // the workflow's AlignmentHelper.checkForSlideAlignment fallback so
+            // the dialog routes these images through the "image has alignment"
+            // path instead of forcing manual alignment.
+            var openEntry = project.getEntry(gui.getImageData());
+            return openEntry != null
+                    && qupath.ext.qpsc.utilities.ImageMetadataManager.getBoundingBoxStageBounds(openEntry) != null;
         }
 
         /** Returns true when QuPath is using a dark color scheme. */

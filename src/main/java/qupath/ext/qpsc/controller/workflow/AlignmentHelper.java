@@ -373,10 +373,35 @@ public class AlignmentHelper {
                 }
         }
 
+        // Fallback when no JSON exists: derive a pixel-to-stage transform from
+        // the open entry's BoundingBox metadata. QPSC-acquired stitches stamp
+        // STAGE_BOUNDS_* + STITCHER_FLIP_* on the entry; the same metadata that
+        // powers Go-to-Centroid yields a complete slide-specific alignment with
+        // no macro or manual setup needed. Without this fallback the workflow
+        // would force the user into Manual alignment even though the image's
+        // stage coordinates are already known.
+        String boundsSource = null;
+        if (slideTransform == null && project != null && gui.getImageData() != null) {
+            try {
+                ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
+                int widthPx = gui.getImageData().getServer().getWidth();
+                int heightPx = gui.getImageData().getServer().getHeight();
+                AffineTransform bbTransform =
+                        ImageMetadataManager.buildBoundingBoxPixelToStageTransform(openEntry, widthPx, heightPx);
+                if (bbTransform != null) {
+                    slideTransform = bbTransform;
+                    boundsSource = "BoundingBox metadata (" + imageName + ")";
+                    logger.info("Derived slide-specific alignment from BoundingBox entry metadata for {}", imageName);
+                }
+            } catch (Exception e) {
+                logger.debug("Could not derive BoundingBox-based alignment: {}", e.getMessage());
+            }
+        }
+
         if (slideTransform != null) {
             // Calculate confidence for this slide-specific alignment
             double confidence = calculateConfidence(true, createdDate);
-            String source = "Slide-specific (" + imageName + ")";
+            String source = boundsSource != null ? boundsSource : "Slide-specific (" + imageName + ")";
 
             logger.info(
                     "Found slide-specific alignment with confidence: {} (source: {})",

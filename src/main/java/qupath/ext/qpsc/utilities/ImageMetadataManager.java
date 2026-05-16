@@ -791,6 +791,44 @@ public class ImageMetadataManager {
     }
 
     /**
+     * Build the pixel-to-stage AffineTransform for a BoundingBox-acquired entry
+     * from its stamped per-entry metadata (stage bounds + stitcher flips).
+     *
+     * <p>This is the same linear map that the Live Viewer's "Go to Centroid"
+     * derives from {@link #getBoundingBoxStageBounds} and
+     * {@link #getStitcherFlips} -- treating the image's full pixel extent as
+     * covering the stamped stage rectangle, with stitcher flips choosing which
+     * stage corner the (0,0) pixel maps to. Returns null when the entry has
+     * no bounding-box metadata, when widthPx or heightPx is non-positive, or
+     * when the stamped bounds are degenerate.
+     *
+     * <p>Lets the workflow use a slide-derived alignment for QPSC-acquired
+     * images even when the per-slide alignment JSON was never written (e.g.
+     * acquisitions made before auto-register existed). The transform produced
+     * matches the one Go-to-Centroid already uses, so single-tile or no-
+     * refinement acquisitions on this entry land where the dot was clicked.
+     */
+    public static java.awt.geom.AffineTransform buildBoundingBoxPixelToStageTransform(
+            ProjectImageEntry<?> entry, int widthPx, int heightPx) {
+        if (entry == null || widthPx <= 0 || heightPx <= 0) return null;
+        double[] bounds = getBoundingBoxStageBounds(entry);
+        if (bounds == null) return null;
+        boolean[] flips = getStitcherFlips(entry);
+        double imgX1 = bounds[0];
+        double imgY1 = bounds[1];
+        double imgX2 = bounds[2];
+        double imgY2 = bounds[3];
+        boolean flipX = flips[0];
+        boolean flipY = flips[1];
+        double originX = flipX ? imgX2 : imgX1;
+        double originY = flipY ? imgY2 : imgY1;
+        double scaleX = (flipX ? -1.0 : 1.0) * (imgX2 - imgX1) / widthPx;
+        double scaleY = (flipY ? -1.0 : 1.0) * (imgY2 - imgY1) / heightPx;
+        // AffineTransform(m00, m10, m01, m11, m02, m12)
+        return new java.awt.geom.AffineTransform(scaleX, 0.0, 0.0, scaleY, originX, originY);
+    }
+
+    /**
      * Gets the Z offset for an image entry.
      *
      * @param entry The image entry
