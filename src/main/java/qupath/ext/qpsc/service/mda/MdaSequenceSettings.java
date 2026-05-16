@@ -1,0 +1,37 @@
+package qupath.ext.qpsc.service.mda;
+
+import java.util.List;
+
+record MdaSequenceSettings(
+        int version,
+        int numFrames,
+        double intervalMs,
+        boolean useFrames,
+        boolean useCustomIntervals,
+        List<Double> customIntervalsMs,
+        List<Double> slices,
+        boolean useSlices,
+        boolean relativeZSlice,
+        boolean slicesFirst,
+        double sliceZStepUm,
+        double sliceZBottomUm,
+        double sliceZTopUm,
+        boolean keepShutterOpenSlices,
+        List<MdaChannelSpec> channels,
+        boolean useChannels,
+        String channelGroup,
+        boolean keepShutterOpenChannels,
+        boolean timeFirst,
+        boolean usePositionList,
+        boolean useAutofocus,
+        int skipAutofocusCount,
+        boolean save,
+        String saveMode,
+        String root,
+        String prefix,
+        String comment,
+        int acqOrderMode,
+        boolean shouldDisplayImages,
+        int cameraTimeout,
+        boolean isTestAcquisition,
+        int displayTimeUnit) {}

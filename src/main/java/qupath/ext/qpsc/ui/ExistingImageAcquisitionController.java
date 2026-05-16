@@ -24,17 +24,29 @@ import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.workflow.AlignmentHelper;
+import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
+import qupath.ext.qpsc.modality.ChannelExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.WbMode;
+import qupath.ext.qpsc.modality.ppm.ui.PPMBoundingBoxUI;
 import qupath.ext.qpsc.modality.widefield.ui.WidefieldChannelBoundingBoxUI;
+import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
+import qupath.ext.qpsc.service.AngleResolutionService;
+import qupath.ext.qpsc.service.ChannelResolutionService;
+import qupath.ext.qpsc.service.mda.MdaExportAction;
+import qupath.ext.qpsc.service.mda.MdaExportContext;
+import qupath.ext.qpsc.service.mda.TileStagePos;
+import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.ObjectiveUtils;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.SampleNameValidator;
 import qupath.lib.gui.QuPathGUI;
@@ -1254,6 +1266,228 @@ public class ExistingImageAcquisitionController {
             }
         }
 
+        /**
+         * Builds an {@link MdaExportContext} snapshot from the dialog's current state.
+         * Called by the "Save as MicroManager MDA..." button on the modality panel
+         * via a {@code Supplier}. Returns {@link MdaExportContext#notReady(String)}
+         * when preconditions aren't met (no annotations, no project, etc.) so the
+         * panel can surface a friendly INFORMATION alert.
+         *
+         * <p>This mirrors the OK-button path's command-building (via
+         * {@link AcquisitionConfigurationBuilder}) so the exported MDA files
+         * match what would be acquired if the user pressed Start Acquisition.
+         * Tiles are generated on-demand into the per-region project subdirectory
+         * (same as the auto-save path) so the exported {@code .pos} file uses
+         * stage micrometers from the same transform pipeline.
+         */
+        private MdaExportContext buildMdaExportContext() {
+            try {
+                if (annotations == null || annotations.isEmpty()) {
+                    return MdaExportContext.notReady(
+                            "Select at least one annotation before exporting MicroManager MDA files.");
+                }
+                String sampleName =
+                        sampleNameField != null ? sampleNameField.getText().trim() : "";
+                if (sampleName.isEmpty()) {
+                    return MdaExportContext.notReady("Enter a sample name before exporting MDA.");
+                }
+                String folderText = folderField != null ? folderField.getText().trim() : "";
+                if (folderText.isEmpty()) {
+                    return MdaExportContext.notReady("Enter a projects folder before exporting MDA.");
+                }
+                File projectsFolder = new File(folderText);
+                String modality = modalityBox != null ? modalityBox.getValue() : null;
+                String objective = extractIdFromDisplayString(objectiveBox != null ? objectiveBox.getValue() : null);
+                String detector = extractIdFromDisplayString(detectorBox != null ? detectorBox.getValue() : null);
+                if (modality == null || objective == null || detector == null) {
+                    return MdaExportContext.notReady("Select modality, objective, and detector before exporting MDA.");
+                }
+
+                SampleSetupResult sample =
+                        new SampleSetupResult(sampleName, projectsFolder, modality, objective, detector);
+
+                String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configFileLocation);
+
+                String enhancedModality = ObjectiveUtils.createEnhancedFolderName(modality, objective);
+                java.nio.file.Path sampleRoot = projectsFolder.toPath().resolve(sampleName);
+                java.nio.file.Path modalityRoot = sampleRoot.resolve(enhancedModality);
+
+                // Per-region overrides (channel + angle + focus) read from the panel
+                // -- same source the OK path uses.
+                Map<String, Double> angleOverrides = modalityUI != null ? modalityUI.getAngleOverrides() : null;
+                String focusChannelId = modalityUI != null ? modalityUI.getFocusChannelId() : null;
+                Map<String, Double> channelIntensityOverrides =
+                        modalityUI != null ? modalityUI.getChannelIntensityOverrides() : Map.of();
+                if (channelIntensityOverrides == null) {
+                    channelIntensityOverrides = Map.of();
+                }
+
+                // Resolve angles + channels (mirrors AcquisitionManager.performSingleAnnotationAcquisition).
+                String wbMode;
+                if (wbModeComboBox == null || !wbModeComboBox.isVisible()) {
+                    wbMode = "off";
+                } else {
+                    String wbModeDisplay = wbModeComboBox.getValue();
+                    wbMode = WbMode.fromDisplayName(wbModeDisplay != null ? wbModeDisplay : "Off")
+                            .getProtocolName();
+                }
+                List<AngleExposure> angleExposures = AngleResolutionService.resolve(
+                                enhancedModality, objective, detector, angleOverrides, wbMode)
+                        .join();
+                List<ChannelExposure> channelExposures = ChannelResolutionService.resolve(
+                        enhancedModality, objective, detector, angleOverrides, focusChannelId);
+
+                if (ChannelResolutionService.isEmptySelectionForChannelBasedModality(
+                        enhancedModality, objective, detector, angleOverrides)) {
+                    return MdaExportContext.notReady(
+                            "No fluorescence channels selected. Enable at least one channel before exporting MDA.");
+                }
+
+                double pixelSize = mgr.getPixelSize(objective, detector);
+                AcquisitionConfigurationBuilder.AcquisitionConfiguration config =
+                        AcquisitionConfigurationBuilder.buildConfiguration(
+                                sample,
+                                configFileLocation,
+                                enhancedModality,
+                                annotations.get(0).getName() == null
+                                        ? "region"
+                                        : annotations.get(0).getName(),
+                                angleExposures,
+                                channelExposures,
+                                projectsFolder.getAbsolutePath(),
+                                sampleName,
+                                pixelSize,
+                                wbMode);
+                AcquisitionCommandBuilder cmdBuilder = config.commandBuilder();
+                if (wbMode != null) {
+                    cmdBuilder.wbMode(wbMode);
+                }
+                if (channelIntensityOverrides != null && !channelIntensityOverrides.isEmpty()) {
+                    cmdBuilder.channelIntensityOverrides(channelIntensityOverrides);
+                }
+                cmdBuilder.focusChannel(focusChannelId);
+                // Let the modality handler tweak the builder (e.g. disable debayer for LSM).
+                ModalityRegistry.getHandler(modality).configureCommandBuilder(cmdBuilder);
+
+                // Build the per-region tile lists. For pre-acquisition export we
+                // synthesize centroids directly from the annotation bounds + camera
+                // FOV without writing files (avoids polluting the project before
+                // the user commits to actually acquiring).
+                double[] fovMicrons = mgr.getCameraFOV(modality, objective, detector);
+                double fovWumicrons = fovMicrons[0];
+                double fovHumicrons = fovMicrons[1];
+                double overlap = QPPreferenceDialog.getTileOverlapPercentProperty();
+                double imagePixelSize = pixelSize;
+                try {
+                    var gui = qupath.lib.gui.QuPathGUI.getInstance();
+                    if (gui != null && gui.getImageData() != null) {
+                        imagePixelSize = gui.getImageData()
+                                .getServer()
+                                .getPixelCalibration()
+                                .getAveragedPixelSizeMicrons();
+                    }
+                } catch (Exception ignored) {
+                    // Fall back to detector pixel size.
+                }
+                // Resolve the alignment transform so synthesized centroids land in stage micrometers.
+                AffineTransformManager.TransformPreset preset =
+                        (useExistingRadio != null && useExistingRadio.isSelected() && transformCombo != null)
+                                ? transformCombo.getValue()
+                                : null;
+                AffineTransform transform = preset != null ? preset.getTransform() : null;
+
+                List<MdaExportAction.RegionPlan> regionPlans = new ArrayList<>(annotations.size());
+                for (PathObject ann : annotations) {
+                    if (ann == null || ann.getROI() == null) {
+                        continue;
+                    }
+                    String regionName = ann.getName() != null ? ann.getName() : "region";
+                    java.nio.file.Path regionDir = modalityRoot.resolve(regionName);
+                    List<TileStagePos> tiles = synthesizeTileCentroids(
+                            ann, fovWumicrons, fovHumicrons, overlap, imagePixelSize, transform);
+                    regionPlans.add(new MdaExportAction.RegionPlan(regionName, regionDir, tiles));
+                }
+                if (regionPlans.isEmpty()) {
+                    return MdaExportContext.notReady("No usable annotations to export.");
+                }
+
+                Map<String, Channel> channelLibrary = new LinkedHashMap<>();
+                try {
+                    for (Channel ch : mgr.getModalityChannels(modality)) {
+                        channelLibrary.put(ch.id(), ch);
+                    }
+                } catch (Exception e) {
+                    logger.debug("No channel library for modality '{}': {}", modality, e.getMessage());
+                }
+
+                return MdaExportContext.ready(sample, cmdBuilder, regionPlans, mgr, channelLibrary);
+            } catch (Exception ex) {
+                logger.error("Could not build MDA export context: {}", ex.getMessage(), ex);
+                return MdaExportContext.notReady("Could not prepare MDA export: "
+                        + (ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage()));
+            }
+        }
+
+        /**
+         * Tiles {@code annotation} into a grid of frame-sized cells with overlap and
+         * maps the cell centroids through {@code transform} to obtain stage
+         * micrometers. Returns an empty list if the annotation has no ROI.
+         *
+         * <p>This intentionally avoids writing {@code TileConfiguration.txt} files
+         * (the heavyweight {@link qupath.ext.qpsc.utilities.TilingUtilities} path
+         * pollutes the project before the user has committed to an acquisition).
+         */
+        private static List<TileStagePos> synthesizeTileCentroids(
+                PathObject annotation,
+                double fovWumicrons,
+                double fovHumicrons,
+                double overlapPercent,
+                double imagePixelSizeUm,
+                AffineTransform transform) {
+            if (annotation == null || annotation.getROI() == null) {
+                return List.of();
+            }
+            var roi = annotation.getROI();
+            double fovWpx = fovWumicrons / imagePixelSizeUm;
+            double fovHpx = fovHumicrons / imagePixelSizeUm;
+            double strideX = fovWpx * (1.0 - overlapPercent / 100.0);
+            double strideY = fovHpx * (1.0 - overlapPercent / 100.0);
+            if (strideX <= 0 || strideY <= 0) {
+                return List.of();
+            }
+            // Buffer one full FOV on each side (matches TilingUtilities addBuffer=true).
+            double minX = roi.getBoundsX() - fovWpx / 2.0;
+            double minY = roi.getBoundsY() - fovHpx / 2.0;
+            double maxX = roi.getBoundsX() + roi.getBoundsWidth() + fovWpx / 2.0;
+            double maxY = roi.getBoundsY() + roi.getBoundsHeight() + fovHpx / 2.0;
+            int cols = (int) Math.ceil((maxX - minX) / strideX);
+            int rows = (int) Math.ceil((maxY - minY) / strideY);
+            if (cols < 1) cols = 1;
+            if (rows < 1) rows = 1;
+            List<TileStagePos> out = new ArrayList<>(cols * rows);
+            int idx = 0;
+            for (int r = 0; r < rows; r++) {
+                for (int c = 0; c < cols; c++) {
+                    double cxPx = minX + c * strideX + fovWpx / 2.0;
+                    double cyPx = minY + r * strideY + fovHpx / 2.0;
+                    double[] src = new double[] {cxPx, cyPx};
+                    double[] dst = new double[2];
+                    if (transform != null) {
+                        transform.transform(src, 0, dst, 0, 1);
+                    } else {
+                        // No alignment yet -- fall back to QuPath pixel * pixel-size
+                        // so the .pos file still carries plausible-magnitude values
+                        // (calibrated stage coords just aren't available).
+                        dst[0] = cxPx * imagePixelSizeUm;
+                        dst[1] = cyPx * imagePixelSizeUm;
+                    }
+                    out.add(new TileStagePos(String.valueOf(idx++), dst[0], dst[1], 0.0));
+                }
+            }
+            return out;
+        }
+
         private void updateModalityUI(String modality) {
             ModalityHandler handler = ModalityRegistry.getHandler(modality);
             Optional<ModalityHandler.BoundingBoxUI> uiOpt = handler.createBoundingBoxUI();
@@ -1267,6 +1501,14 @@ public class ExistingImageAcquisitionController {
                 modalityContent.getChildren().add(modalityUI.getNode());
                 modalityPane.setExpanded(true); // Auto-expand when there's content
                 logger.debug("Added modality UI for: {}", modality);
+                // Wire the "Save as MicroManager MDA..." button on the panel
+                // so it can build an export context from this dialog's live state.
+                java.util.function.Supplier<MdaExportContext> supplier = this::buildMdaExportContext;
+                if (modalityUI instanceof WidefieldChannelBoundingBoxUI wfUi) {
+                    wfUi.installMdaExportContext(supplier);
+                } else if (modalityUI instanceof PPMBoundingBoxUI ppmUi) {
+                    ppmUi.installMdaExportContext(supplier);
+                }
             } else {
                 modalityUI = null;
                 // Show placeholder when no modality-specific UI

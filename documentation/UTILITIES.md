@@ -192,6 +192,34 @@ The artifact-aware method combines artifact masking with Otsu thresholding to ha
 
 ---
 
+## Exporting to Micro-Manager MDA
+
+Every QPSC acquisition writes a Micro-Manager 2.0 compatible Multi-Dimensional Acquisition (MDA) plan alongside the tiles. This lets you re-acquire the same geometry (positions, channels, Z-stack) directly from Micro-Manager's MDA window -- useful for cross-checking, repeat runs after a hardware change, or handing the plan to a collaborator who acquires through MM rather than QPSC.
+
+**File locations** (per region, in the per-region folder beside `TileConfiguration.txt`):
+
+- `<projects>/<sample>/<enhancedModality>/<region>/MDA_<region>.txt` -- MM `SequenceSettings` JSON. MM's MDA "Load..." filter shows `.txt` by default.
+- `<projects>/<sample>/<enhancedModality>/<region>/MDA_<region>.pos` -- MM `PositionList` JSON.
+- `<projects>/<sample>/<enhancedModality>/<region>/MDA_NOTES.txt` -- plaintext provenance, the autofocus caveat, and any dropped multi-group presets or fallback device names.
+
+**How to load in Micro-Manager 2.0:**
+
+1. Open the **Multi-Dimensional Acquisition** window. Click **Load...** and select `MDA_<region>.txt`.
+2. Open the **Stage Position List** window. Click **Load...** and select `MDA_<region>.pos`.
+3. Review channels, Z range and step, and positions in the MM dialogs -- they should match the QPSC plan.
+
+**Triggers.** The MDA files are written automatically at the start of every acquisition (auto-save). They can also be exported without acquiring via the **Save as MicroManager MDA...** button on the widefield and PPM acquisition setup dialogs; the button opens a confirmation alert with the saved path so you can jump straight to the folder.
+
+**Autofocus.** QPSC runs per-tile, server-side streaming autofocus. MM 2.0 uses its own per-position `AutofocusManager`, which is a different mechanism. To keep MM from fighting our AF after the fact, the exported MDA sets `useAutofocus: false`. If you want MM to autofocus when re-running the plan, re-enable the "Autofocus" checkbox in the MDA window and pick an MM AF method.
+
+**PPM caveat.** PPM rotation angles do not map to MM `ConfigGroup` channels. PPM MDA files are written positions-only (`useChannels: false`); the angle list and rationale are recorded in `MDA_NOTES.txt`.
+
+**Multi-group channels caveat.** A QPSC channel can carry presets across more than one MM `ConfigGroup`. MM's `SequenceSettings` allows only one channel group per channels list, so the writer keeps the first preset's group and lists the dropped presets in `MDA_NOTES.txt`. If you need the dropped presets active in MM, apply them manually (or future-edit the MDA file) before running.
+
+**Live progress panel.** During acquisition the existing per-annotation progress bar gains a small dimension panel beneath it: a static summary line (tiles, channels or angles, Z, T, total images, estimated duration) plus live counters (`Channel: FITC`, `Z step 3/9`, `Tile 47/84`). A time-lapse progress bar slot is reserved and lights up when `timepoints > 1`. The MDA auto-save path is shown as an `MDA: <path>` label so you can find the saved files without leaving the dialog. If the counters ever drift from server reality, the per-axis labels collapse to a single "Dimension counters out of sync; showing aggregate only" note and the aggregate bar continues unaffected.
+
+---
+
 ## See Also
 
 - [Workflows Guide](WORKFLOWS.md) - Step-by-step workflow documentation

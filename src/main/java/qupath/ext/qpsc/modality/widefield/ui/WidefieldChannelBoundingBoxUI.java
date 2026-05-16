@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import javafx.application.Platform;
 import javafx.beans.Observable;
 import javafx.beans.binding.Bindings;
@@ -37,6 +39,9 @@ import qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.ChannelSta
 import qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.DecodedPreset;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.mda.MdaExportAction;
+import qupath.ext.qpsc.service.mda.MdaExportContext;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
@@ -103,6 +108,11 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     // Updated when the per-row checkboxes flip; consumers bind their disable
     // state to this so the loop-order toggle vanishes for single-channel runs.
     private BooleanBinding multipleChannelsSelectedBinding;
+    // "Save as MicroManager MDA..." button. Always built but hidden until the
+    // parent dialog installs an MdaExportContext supplier so the button has
+    // access to the current sample / region / cmdBuilder state.
+    private Button saveMdaButton;
+    private Supplier<MdaExportContext> mdaContextSupplier;
 
     public WidefieldChannelBoundingBoxUI() {
         root = new VBox(5);
@@ -336,11 +346,13 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
 
         HBox presetBar = buildPresetBar();
         HBox testBar = buildTestBar();
+        HBox mdaBar = buildMdaBar();
         statusLabel = new Label();
         statusLabel.setStyle("-fx-font-size: 11px;");
         statusLabel.setWrapText(true);
 
-        root.getChildren().addAll(new Separator(), title, masterOverride, grid, presetBar, testBar, statusLabel, hint);
+        root.getChildren()
+                .addAll(new Separator(), title, masterOverride, grid, presetBar, testBar, mdaBar, statusLabel, hint);
     }
 
     private static Label boldLabel(String text) {
@@ -402,6 +414,100 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         HBox bar = new HBox(8, testBtn);
         bar.setAlignment(Pos.CENTER_LEFT);
         return bar;
+    }
+
+    private HBox buildMdaBar() {
+        saveMdaButton = new Button("Save as MicroManager MDA...");
+        saveMdaButton.setTooltip(
+                new Tooltip("Write Micro-Manager-compatible files (MDA_<region>.txt, .pos, NOTES) for each\n"
+                        + "selected region. Use this to set up an MM run that mirrors the planned\n"
+                        + "QPSC acquisition without actually starting acquisition."));
+        // Hidden until the parent dialog calls installMdaExportContext so we don't
+        // expose a button that has no parent state to act on.
+        saveMdaButton.setVisible(false);
+        saveMdaButton.setManaged(false);
+        saveMdaButton.setOnAction(e -> onSaveMda());
+        HBox bar = new HBox(8, saveMdaButton);
+        bar.setAlignment(Pos.CENTER_LEFT);
+        return bar;
+    }
+
+    /**
+     * Installs the parent dialog's MDA-export context supplier and reveals the
+     * "Save as MicroManager MDA..." button. The supplier is invoked on the FX
+     * thread when the button is clicked, so it can read the parent dialog's
+     * live state (sample/objective/detector spinners, selected annotations).
+     * Pass {@code null} to hide the button again.
+     */
+    public void installMdaExportContext(Supplier<MdaExportContext> supplier) {
+        this.mdaContextSupplier = supplier;
+        if (saveMdaButton != null) {
+            boolean show = supplier != null;
+            saveMdaButton.setVisible(show);
+            saveMdaButton.setManaged(show);
+        }
+    }
+
+    private void onSaveMda() {
+        if (mdaContextSupplier == null) {
+            return; // Button shouldn't be visible without a supplier; guard anyway.
+        }
+        MdaExportContext ctx;
+        try {
+            ctx = mdaContextSupplier.get();
+        } catch (RuntimeException ex) {
+            logger.error("MDA export context build failed: {}", ex.getMessage(), ex);
+            javafx.scene.Scene scene = root.getScene();
+            javafx.stage.Window win = scene != null ? scene.getWindow() : null;
+            javafx.scene.control.Alert err = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.ERROR);
+            err.setTitle("MicroManager MDA Export");
+            err.setHeaderText("Failed to build export context");
+            err.setContentText(ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
+            UIFunctions.showAlertOverParent(err, win);
+            return;
+        }
+        if (ctx == null || ctx.hasError()) {
+            javafx.scene.Scene scene = root.getScene();
+            javafx.stage.Window win = scene != null ? scene.getWindow() : null;
+            javafx.scene.control.Alert info =
+                    new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.INFORMATION);
+            info.setTitle("MicroManager MDA Export");
+            info.setHeaderText("Not ready to export");
+            info.setContentText(
+                    ctx != null
+                                    && ctx.errorMessage() != null
+                                    && !ctx.errorMessage().isBlank()
+                            ? ctx.errorMessage()
+                            : "Select at least one region and confirm channel/Z settings before exporting MDA.");
+            UIFunctions.showAlertOverParent(info, win);
+            return;
+        }
+        // Capture window now; the export runs on a background thread but alerts
+        // must re-parent to whatever Stage owns this panel right now.
+        javafx.scene.Scene scene = root.getScene();
+        final javafx.stage.Window parentWindow = scene != null ? scene.getWindow() : null;
+        saveMdaButton.setDisable(true);
+        setStatus("Writing MicroManager MDA files...", false);
+        CompletableFuture.runAsync(() -> {
+                    try {
+                        MdaExportAction.exportAndConfirm(
+                                parentWindow,
+                                ctx.sample(),
+                                ctx.cmdBuilder(),
+                                ctx.regions(),
+                                ctx.configManager(),
+                                ctx.channelLibrary());
+                    } finally {
+                        Platform.runLater(() -> {
+                            saveMdaButton.setDisable(false);
+                            setStatus("", false);
+                        });
+                    }
+                })
+                .exceptionally(t -> {
+                    logger.error("MDA export task failed unexpectedly: {}", t.getMessage(), t);
+                    return null;
+                });
     }
 
     private void refreshPresetCombo(String selectAfter) {

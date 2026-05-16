@@ -16,6 +16,7 @@ import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.PresetRef;
 import qupath.ext.qpsc.modality.PropertyRef;
 import qupath.ext.qpsc.modality.PropertyWrite;
+import qupath.ext.qpsc.service.mda.MmStageDevices;
 
 /**
  * MicroscopeConfigManager
@@ -48,6 +49,10 @@ public class MicroscopeConfigManager {
     // External imageprocessing settings loaded from imageprocessing_{microscope}.yml
     // Contains imaging_profiles and background_correction settings
     private volatile Map<String, Object> imageprocessingData;
+
+    // One-shot WARN guard for missing mm_stage_devices: block. Volatile so concurrent
+    // callers don't all log -- a single warn per config load is enough.
+    private volatile boolean warnedNoMmStageDevices = false;
 
     /**
      * Private constructor: loads microscope YAML, shared LOCI resources, external autofocus settings, and imageprocessing settings.
@@ -1113,6 +1118,30 @@ public class MicroscopeConfigManager {
     /** Raw stage value to restore after the slow sweep. */
     public String getStreamingAfNormalSpeedValue() {
         return getString("stage", "streaming_af", "normal_speed_value");
+    }
+
+    /**
+     * Returns the Micro-Manager device names used for XY and Z stages.
+     * Falls back to {@code ("XYStage", "ZStage")} (MM's demo defaults) with a one-shot
+     * WARN log line when the YAML block is missing -- this keeps MDA export functional
+     * on configs that haven't been updated yet.
+     */
+    public MmStageDevices getMmStageDevices() {
+        Map<String, Object> section = getSection("mm_stage_devices");
+        if (section == null) {
+            if (!warnedNoMmStageDevices) {
+                warnedNoMmStageDevices = true;
+                logger.warn("No mm_stage_devices: block in microscope YAML; MDA export will use MM demo defaults "
+                        + "(XYStage / ZStage). Add an mm_stage_devices: block with xy_stage and z_stage "
+                        + "entries to override.");
+            }
+            return new MmStageDevices("XYStage", "ZStage");
+        }
+        Object xy = section.get("xy_stage");
+        Object z = section.get("z_stage");
+        String xyName = (xy instanceof String s && !s.isBlank()) ? s : "XYStage";
+        String zName = (z instanceof String s && !s.isBlank()) ? s : "ZStage";
+        return new MmStageDevices(xyName, zName);
     }
 
     /**

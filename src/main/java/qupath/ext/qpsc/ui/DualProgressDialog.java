@@ -16,6 +16,7 @@ import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.Modality;
@@ -23,6 +24,8 @@ import javafx.stage.Stage;
 import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.model.AcquisitionPlan;
+import qupath.ext.qpsc.service.mda.LiveDimensionDecomposer;
 
 /**
  * Dual progress dialog that shows both total workflow progress and current annotation progress.
@@ -126,6 +129,23 @@ public class DualProgressDialog {
     private final ListView<String> stitchingListView;
     private final Label stitchingCountLabel;
 
+    // Multi-dimensional state panel
+    private final VBox dimensionPanel;
+    private final Label summaryLabel;
+    private final HBox perAxisRow;
+    private final Label channelLabel;
+    private final Label angleLabel;
+    private final Label zLabel;
+    private final Label tileLabel;
+    private final ProgressBar timepointProgressBar;
+    private final Label mdaPathLabel;
+    private final Label driftNotice;
+    private volatile AcquisitionPlan currentPlan;
+    // One-shot per annotation: once drift is detected we stop touching the per-axis
+    // labels for the rest of the annotation so a transient miscount can't cause the
+    // UI to thrash. Reset in startAnnotation / setAcquisitionPlan.
+    private volatile boolean drifted = false;
+
     /**
      * Creates a new dual progress dialog with default timing window size.
      *
@@ -181,6 +201,32 @@ public class DualProgressDialog {
         stitchingSection.setVisible(false);
         stitchingSection.setManaged(false); // Don't take space when hidden
 
+        // Multi-dimensional state panel
+        summaryLabel = new Label("");
+        summaryLabel.setStyle("-fx-font-size: 11px;");
+        channelLabel = new Label("");
+        angleLabel = new Label("");
+        zLabel = new Label("");
+        tileLabel = new Label("");
+        perAxisRow = new HBox(12, channelLabel, angleLabel, zLabel, tileLabel);
+        perAxisRow.setAlignment(Pos.CENTER_LEFT);
+        timepointProgressBar = new ProgressBar(0);
+        timepointProgressBar.setPrefWidth(350);
+        timepointProgressBar.setVisible(false);
+        timepointProgressBar.setManaged(false);
+        mdaPathLabel = new Label("");
+        mdaPathLabel.setWrapText(true);
+        mdaPathLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        mdaPathLabel.setVisible(false);
+        mdaPathLabel.setManaged(false);
+        driftNotice = new Label("");
+        driftNotice.setStyle("-fx-font-style: italic;");
+        driftNotice.setVisible(false);
+        driftNotice.setManaged(false);
+        dimensionPanel = new VBox(4, summaryLabel, perAxisRow, timepointProgressBar, mdaPathLabel, driftNotice);
+        dimensionPanel.setVisible(false);
+        dimensionPanel.setManaged(false);
+
         // Layout
         VBox vbox = new VBox(8);
         vbox.setStyle("-fx-padding: 15;");
@@ -202,6 +248,7 @@ public class DualProgressDialog {
                         currentHeader,
                         currentProgressBar,
                         currentProgressLabel,
+                        dimensionPanel,
                         new Separator(),
                         stitchingSection, // Stitching status - hidden until active
                         timeLabel,
@@ -273,6 +320,17 @@ public class DualProgressDialog {
 
         // Reset first tile flag for this annotation to detect full autofocus time
         this.firstTileProcessed.set(false);
+
+        drifted = false;
+        Platform.runLater(() -> {
+            mdaPathLabel.setText("");
+            mdaPathLabel.setVisible(false);
+            mdaPathLabel.setManaged(false);
+            driftNotice.setVisible(false);
+            driftNotice.setManaged(false);
+            timepointProgressBar.setProgress(0);
+            applyPlanVisibility(currentPlan);
+        });
 
         logger.info("Started tracking annotation '{}' with {} expected files", annotationName, expectedFiles);
     }
@@ -834,6 +892,206 @@ public class DualProgressDialog {
             // Allow window to be closed
             stage.setOnCloseRequest(e -> close());
         });
+    }
+
+    // ==================== Dimension Panel Methods ====================
+
+    /**
+     * Install the per-annotation plan and prime the static summary.
+     * Call once per annotation, before any updateDimensions calls.
+     * Hides the per-axis row if plan is null.
+     */
+    public void setAcquisitionPlan(AcquisitionPlan plan) {
+        this.currentPlan = plan;
+        this.drifted = false;
+        Runnable r = () -> {
+            if (plan == null) {
+                dimensionPanel.setVisible(false);
+                dimensionPanel.setManaged(false);
+                return;
+            }
+            summaryLabel.setText(buildSummary(plan));
+            dimensionPanel.setVisible(true);
+            dimensionPanel.setManaged(true);
+            driftNotice.setVisible(false);
+            driftNotice.setManaged(false);
+            if (plan.timepoints() > 1) {
+                timepointProgressBar.setVisible(true);
+                timepointProgressBar.setManaged(true);
+                timepointProgressBar.setProgress(0);
+            } else {
+                timepointProgressBar.setVisible(false);
+                timepointProgressBar.setManaged(false);
+            }
+            applyPlanVisibility(plan);
+        };
+        if (Platform.isFxApplicationThread()) {
+            r.run();
+        } else {
+            Platform.runLater(r);
+        }
+    }
+
+    /**
+     * Update the live per-axis counters from the current aggregate tile index.
+     * Called from the same monitor callback that drives the existing progress bar.
+     * Idempotent; safe to call from any thread (wraps in Platform.runLater).
+     * If decomposer flags drift, switches to the driftNotice presentation and
+     * stops updating per-axis labels for the rest of the annotation.
+     */
+    public void updateDimensions(long k) {
+        AcquisitionPlan plan = this.currentPlan;
+        if (plan == null || drifted) {
+            return;
+        }
+        LiveDimensionDecomposer.Decomposition decomp = LiveDimensionDecomposer.decompose(k, plan);
+        Runnable r = () -> {
+            if (decomp.drifted()) {
+                if (!drifted) {
+                    drifted = true;
+                    logger.warn("Dimension decomposition drifted at k={} plan={}", k, plan);
+                }
+                channelLabel.setVisible(false);
+                channelLabel.setManaged(false);
+                angleLabel.setVisible(false);
+                angleLabel.setManaged(false);
+                zLabel.setVisible(false);
+                zLabel.setManaged(false);
+                tileLabel.setVisible(false);
+                tileLabel.setManaged(false);
+                perAxisRow.setVisible(false);
+                perAxisRow.setManaged(false);
+                driftNotice.setText("Dimension counters out of sync; showing aggregate only");
+                driftNotice.setVisible(true);
+                driftNotice.setManaged(true);
+                return;
+            }
+            if (plan.ppm()) {
+                if (plan.angleCount() > 1 && angleIdxInRange(decomp.angleIdx(), plan.angleLabels())) {
+                    angleLabel.setText("Angle: " + plan.angleLabels().get(decomp.angleIdx()) + " deg");
+                }
+            } else {
+                if (plan.chCount() > 1 && chIdxInRange(decomp.chIdx(), plan.channelLabels())) {
+                    channelLabel.setText("Channel: " + plan.channelLabels().get(decomp.chIdx()));
+                }
+            }
+            if (plan.zCount() > 1) {
+                zLabel.setText("Z " + (decomp.zIdx() + 1) + "/" + plan.zCount());
+            }
+            if (plan.nPositions() > 0) {
+                tileLabel.setText("Tile " + (decomp.posIdx() + 1) + "/" + plan.nPositions());
+            }
+            if (plan.timepoints() > 1) {
+                timepointProgressBar.setProgress((decomp.tIdx() + 1.0) / plan.timepoints());
+            }
+        };
+        if (Platform.isFxApplicationThread()) {
+            r.run();
+        } else {
+            Platform.runLater(r);
+        }
+    }
+
+    /**
+     * Set the path label shown beneath the dimension panel. Pass null to clear.
+     * Wraps in Platform.runLater.
+     */
+    public void setLastMdaPath(java.nio.file.Path mdaSettingsFile) {
+        Runnable r = () -> {
+            if (mdaSettingsFile == null) {
+                mdaPathLabel.setText("");
+                mdaPathLabel.setVisible(false);
+                mdaPathLabel.setManaged(false);
+            } else {
+                mdaPathLabel.setText("MDA: " + mdaSettingsFile.toString());
+                mdaPathLabel.setVisible(true);
+                mdaPathLabel.setManaged(true);
+            }
+        };
+        if (Platform.isFxApplicationThread()) {
+            r.run();
+        } else {
+            Platform.runLater(r);
+        }
+    }
+
+    private static boolean chIdxInRange(int idx, List<String> labels) {
+        return labels != null && idx >= 0 && idx < labels.size();
+    }
+
+    private static boolean angleIdxInRange(int idx, List<Double> labels) {
+        return labels != null && idx >= 0 && idx < labels.size();
+    }
+
+    private String buildSummary(AcquisitionPlan plan) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Tiles: ").append(plan.nPositions());
+        if (plan.ppm()) {
+            sb.append(" | Angles: ").append(plan.angleCount());
+        } else {
+            sb.append(" | Channels: ").append(plan.chCount());
+        }
+        if (plan.zCount() > 1) {
+            sb.append(" | Z: ").append(plan.zCount());
+        }
+        if (plan.timepoints() > 1) {
+            sb.append(" | T: ").append(plan.timepoints());
+        }
+        sb.append(" | Total: ").append(plan.totalImages());
+        return sb.toString();
+    }
+
+    private void applyPlanVisibility(AcquisitionPlan plan) {
+        if (plan == null) {
+            perAxisRow.setVisible(false);
+            perAxisRow.setManaged(false);
+            return;
+        }
+        boolean degenerate =
+                plan.chCount() <= 1 && plan.angleCount() <= 1 && plan.zCount() <= 1 && plan.timepoints() <= 1;
+        if (degenerate) {
+            perAxisRow.setVisible(false);
+            perAxisRow.setManaged(false);
+            return;
+        }
+        perAxisRow.setVisible(true);
+        perAxisRow.setManaged(true);
+
+        boolean showChannel = !plan.ppm() && plan.chCount() > 1;
+        channelLabel.setVisible(showChannel);
+        channelLabel.setManaged(showChannel);
+        if (showChannel) {
+            channelLabel.setText("Channel: --");
+        } else {
+            channelLabel.setText("");
+        }
+
+        boolean showAngle = plan.ppm() && plan.angleCount() > 1;
+        angleLabel.setVisible(showAngle);
+        angleLabel.setManaged(showAngle);
+        if (showAngle) {
+            angleLabel.setText("Angle: -- deg");
+        } else {
+            angleLabel.setText("");
+        }
+
+        boolean showZ = plan.zCount() > 1;
+        zLabel.setVisible(showZ);
+        zLabel.setManaged(showZ);
+        if (showZ) {
+            zLabel.setText("Z 1/" + plan.zCount());
+        } else {
+            zLabel.setText("");
+        }
+
+        boolean showTile = plan.nPositions() > 0;
+        tileLabel.setVisible(showTile);
+        tileLabel.setManaged(showTile);
+        if (showTile) {
+            tileLabel.setText("Tile 1/" + plan.nPositions());
+        } else {
+            tileLabel.setText("");
+        }
     }
 
     // ==================== Stitching Status Methods ====================

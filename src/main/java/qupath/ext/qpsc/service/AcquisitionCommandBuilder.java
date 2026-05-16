@@ -503,6 +503,61 @@ public class AcquisitionCommandBuilder {
         return this;
     }
 
+    // ---- Inspection accessors used by the MDA writer integration ---------
+    // These read-only accessors let MdaRequestBuilder turn an already-configured
+    // command builder back into an MdaWriteRequest without duplicating the
+    // upstream resolution logic. Reflection was rejected per project policy.
+
+    /** Returns the per-channel acquisition sequence, or null if not set. */
+    public List<ChannelExposure> getChannelExposures() {
+        return channelExposures;
+    }
+
+    /** Returns the per-angle acquisition sequence, or null if not set. */
+    public List<AngleExposure> getAngleExposures() {
+        return angleExposures;
+    }
+
+    /** Returns the raw scan-type string (e.g. {@code "PPM"}, {@code "Fluorescence"}). */
+    public String getScanType() {
+        return scanType;
+    }
+
+    /** Returns true if Z-stack acquisition was enabled via {@link #enableZStack(double, double, double)}. */
+    public boolean isZStackEnabled() {
+        return zStackEnabled;
+    }
+
+    /** Returns the Z-stack start position in micrometers, or null if Z-stack disabled. */
+    public Double getZStart() {
+        return zStart;
+    }
+
+    /** Returns the Z-stack end position in micrometers, or null if Z-stack disabled. */
+    public Double getZEnd() {
+        return zEnd;
+    }
+
+    /** Returns the Z-stack step size in micrometers, or null if Z-stack disabled. */
+    public Double getZStep() {
+        return zStep;
+    }
+
+    /** Returns the per-tile snap-loop inner axis ({@code "z"}, {@code "channel"}, {@code "angle"}), or null. */
+    public String getInnerAxis() {
+        return innerAxis;
+    }
+
+    /** Returns the number of timepoints (>= 1; 1 disables time-lapse). */
+    public int getTimepoints() {
+        return timepoints;
+    }
+
+    /** Returns the inter-timepoint interval in seconds. */
+    public double getIntervalSec() {
+        return intervalSec;
+    }
+
     /**
      * Gets the enhanced scan type that includes magnification from the objective.
      * If no objective is set, magnification cannot be extracted, or scan type is already enhanced,

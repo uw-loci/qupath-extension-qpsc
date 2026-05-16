@@ -2,7 +2,13 @@ package qupath.ext.qpsc.modality.ppm.ui;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
+import javafx.application.Platform;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
@@ -10,10 +16,17 @@ import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.stage.Window;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ppm.PPMPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.mda.MdaExportAction;
+import qupath.ext.qpsc.service.mda.MdaExportContext;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
@@ -21,10 +34,17 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
  */
 public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
 
+    private static final Logger logger = LoggerFactory.getLogger(PPMBoundingBoxUI.class);
+
     private final VBox root;
     private final CheckBox overrideAngles;
     private final Spinner<Double> plusSpinner;
     private final Spinner<Double> minusSpinner;
+    // "Save as MicroManager MDA..." button. Always built but hidden until the
+    // parent dialog installs an MdaExportContext supplier so the button has
+    // access to the current sample / region / cmdBuilder state.
+    private final Button saveMdaButton;
+    private Supplier<MdaExportContext> mdaContextSupplier;
 
     @SuppressWarnings("unchecked")
     public PPMBoundingBoxUI() {
@@ -111,7 +131,83 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
             }
         });
 
-        root.getChildren().addAll(new Separator(), label, overrideAngles, grid);
+        saveMdaButton = new Button("Save as MicroManager MDA...");
+        saveMdaButton.setTooltip(
+                new Tooltip("Write Micro-Manager-compatible files (MDA_<region>.txt, .pos, NOTES) for each\n"
+                        + "selected region. Use this to set up an MM run that mirrors the planned\n"
+                        + "QPSC acquisition without actually starting acquisition."));
+        saveMdaButton.setVisible(false);
+        saveMdaButton.setManaged(false);
+        saveMdaButton.setOnAction(e -> onSaveMda());
+        HBox mdaBar = new HBox(8, saveMdaButton);
+        mdaBar.setAlignment(Pos.CENTER_LEFT);
+
+        root.getChildren().addAll(new Separator(), label, overrideAngles, grid, mdaBar);
+    }
+
+    /**
+     * Installs the parent dialog's MDA-export context supplier and reveals the
+     * "Save as MicroManager MDA..." button. The supplier is invoked on the FX
+     * thread when the button is clicked, so it can read the parent dialog's
+     * live state. Pass {@code null} to hide the button again.
+     */
+    public void installMdaExportContext(Supplier<MdaExportContext> supplier) {
+        this.mdaContextSupplier = supplier;
+        boolean show = supplier != null;
+        saveMdaButton.setVisible(show);
+        saveMdaButton.setManaged(show);
+    }
+
+    private void onSaveMda() {
+        if (mdaContextSupplier == null) {
+            return;
+        }
+        MdaExportContext ctx;
+        try {
+            ctx = mdaContextSupplier.get();
+        } catch (RuntimeException ex) {
+            logger.error("MDA export context build failed: {}", ex.getMessage(), ex);
+            Window win = root.getScene() != null ? root.getScene().getWindow() : null;
+            Alert err = new Alert(Alert.AlertType.ERROR);
+            err.setTitle("MicroManager MDA Export");
+            err.setHeaderText("Failed to build export context");
+            err.setContentText(ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
+            UIFunctions.showAlertOverParent(err, win);
+            return;
+        }
+        if (ctx == null || ctx.hasError()) {
+            Window win = root.getScene() != null ? root.getScene().getWindow() : null;
+            Alert info = new Alert(Alert.AlertType.INFORMATION);
+            info.setTitle("MicroManager MDA Export");
+            info.setHeaderText("Not ready to export");
+            info.setContentText(
+                    ctx != null
+                                    && ctx.errorMessage() != null
+                                    && !ctx.errorMessage().isBlank()
+                            ? ctx.errorMessage()
+                            : "Select at least one region and confirm channel/Z settings before exporting MDA.");
+            UIFunctions.showAlertOverParent(info, win);
+            return;
+        }
+        final Window parentWindow = root.getScene() != null ? root.getScene().getWindow() : null;
+        saveMdaButton.setDisable(true);
+        CompletableFuture.runAsync(() -> {
+                    try {
+                        MdaExportAction.exportAndConfirm(
+                                parentWindow,
+                                ctx.sample(),
+                                ctx.cmdBuilder(),
+                                ctx.regions(),
+                                ctx.configManager(),
+                                ctx.channelLibrary());
+                    } finally {
+                        Platform.runLater(() -> saveMdaButton.setDisable(false));
+                    }
+                })
+                .exceptionally(t -> {
+                    logger.error("MDA export task failed unexpectedly: {}", t.getMessage(), t);
+                    return null;
+                });
     }
 
     @Override

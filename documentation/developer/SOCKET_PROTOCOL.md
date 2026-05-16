@@ -22,6 +22,8 @@ graph LR
 
 The dual-socket design allows the live viewer and stage controls to operate during long-running acquisitions. Each socket gets its own handler thread on the server.
 
+See also [Client-side dimension inference (no protocol change)](#client-side-dimension-inference-no-protocol-change) at the end of this document for how the live progress panel infers per-axis counters from the existing tile index without any new socket commands.
+
 ## Protocol Format
 
 ### Command Structure
@@ -388,3 +390,23 @@ The client polls STATUS and PROGRESS on a background thread while the primary so
 | Autofocus test | 120 s |
 | Background acquisition | 180 s |
 | Z-stack / time-lapse | 600 s |
+
+## Client-side dimension inference (no protocol change)
+
+The live progress panel (under-progress-bar "Channel: ... | Z step N/M | Tile K/T" counters) does **not** add new socket commands. It reuses the existing tile-index PROGRESS poll and decodes per-axis state purely on the Java side, given the deterministic per-position loop order the server already uses.
+
+**Loop hierarchy assumed by the decomposer** (time dimension outermost when present, `for t: for pos: ...`):
+
+- Widefield default (`innerAxis=z`): per-position `for ch: for z`.
+- Widefield `innerAxis=channel`: per-position `for z: for ch`.
+- PPM default (`innerAxis=angle`): per-position `for z: for angle`.
+- PPM `innerAxis=z`: per-position `for angle: for z`.
+
+**Java consumers:**
+
+- `qupath.ext.qpsc.service.mda.LiveDimensionDecomposer` -- pure-arithmetic helper that turns a tile index `k` plus an `AcquisitionPlan` into `(t, posIdx, chIdx, zIdx)`.
+- `qupath.ext.qpsc.model.AcquisitionPlan` -- record carrying counts (positions, channels, Z, T), `innerAxis`, and total image count. Built once per annotation and shared between the MDA auto-save path and the live counters.
+
+**Drift handling:** if any computed index exceeds its expected dimension, the per-axis labels collapse to a single note ("Dimension counters out of sync; showing aggregate only") and the aggregate progress bar continues unaffected. A WARN log line carries `k`, the plan, and the observed counts.
+
+**Warning:** if the server's per-position loop order ever changes, the Java decomposer will drift and the live counters will collapse to an aggregate-only display. Update `LiveDimensionDecomposer` and add a server-side dimension-event protocol if the loop order needs to vary per acquisition.

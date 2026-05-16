@@ -588,6 +588,22 @@ The packaged manifest's default per-modality is still `laplacian_variance`; per-
 
 **A:** Fixed 2026-04-26 (commit `e86ae06`). `AcquisitionManager.monitorAcquisition` was computing `stepsPerPosition` as `max(channels, angles)` and ignoring Z-planes entirely. With FITC + Cy5 + 11 Z-planes the server reported 264 progress increments but Java divided by 2 instead of 22, overshooting the 12-position denominator. Now the multiplier includes `ceil(zRange/zStep) + 1` when Z-stack is enabled, matching the existing logic in `BoundedAcquisitionWorkflow`.
 
+### Micro-Manager MDA Export
+
+See [UTILITIES.md -- Exporting to Micro-Manager MDA](UTILITIES.md#exporting-to-micro-manager-mda) for the full feature overview.
+
+#### Q: MM MDA file loaded, but autofocus fails to run.
+
+**A:** Expected. QPSC ran its own per-tile server-side streaming autofocus during the original acquisition, so the exported MDA writes `useAutofocus: false` to keep MM's `AutofocusManager` from fighting that focus. If you want MM to autofocus when re-running the plan, re-tick the **Autofocus** checkbox in the MDA window and pick an MM AF method.
+
+#### Q: Stage Position List "Load..." button shows the .pos file but positions don't appear.
+
+**A:** The `.pos` file references stage devices by name. Confirm the `mm_stage_devices:` block in the microscope YAML (`xy_stage` and `z_stage`) names the same device labels as your MM hardware config (default `XYStage` and `ZStage`). If they differ, edit the YAML and re-export, or hand-edit the `stageName` entries in `MDA_<region>.pos` to match the MM device labels. If the YAML block was omitted, the writer falls back to `("XYStage", "ZStage")` and logs a WARN to that effect.
+
+#### Q: Live progress shows "Dimension counters out of sync".
+
+**A:** The client-side decomposer detected a tile index past its expected total, so it cannot map the index back to a single channel / Z / position. The aggregate progress bar is still accurate. Check the latest WARN log line (it carries `k`, the plan counts, and the observed indices) and report if this is reproducible -- it most likely indicates the server's per-position loop order changed and `LiveDimensionDecomposer` needs an update. See [SOCKET_PROTOCOL.md -- Client-side dimension inference](developer/SOCKET_PROTOCOL.md#client-side-dimension-inference-no-protocol-change).
+
 ### Stitching Issues
 
 #### Q: Stitching takes forever - QuPath freezes

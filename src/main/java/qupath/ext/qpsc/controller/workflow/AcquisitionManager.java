@@ -27,15 +27,21 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.ExistingImageWorkflowV2.WorkflowState;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ChannelExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.model.AcquisitionPlan;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AngleResolutionService;
 import qupath.ext.qpsc.service.AnnotationOrderingService;
 import qupath.ext.qpsc.service.ChannelResolutionService;
 import qupath.ext.qpsc.service.ManualFocusHandler;
+import qupath.ext.qpsc.service.mda.MdaRequestBuilder;
+import qupath.ext.qpsc.service.mda.MdaSettingsWriter;
+import qupath.ext.qpsc.service.mda.MdaWriteResult;
+import qupath.ext.qpsc.service.mda.TileStagePos;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.AnnotationAcquisitionDialog;
 import qupath.ext.qpsc.ui.DualProgressDialog;
@@ -834,6 +840,46 @@ public class AcquisitionManager {
                         getParentFlipY(),
                         state.sample.detector());
 
+                // MDA export: write MM-compatible sibling files next to TileConfiguration.txt
+                // and build the per-annotation AcquisitionPlan for the live dimension panel.
+                // Failures here must NOT abort acquisition -- log a WARN and continue with a
+                // null plan so the monitor loop still drives the aggregate progress bar.
+                AcquisitionPlan acquisitionPlan = null;
+                Path mdaSettingsPath = null;
+                try {
+                    Path regionDir = Paths.get(state.projectInfo.getTempTileDirectory(), annotation.getName());
+                    List<TileStagePos> tiles = readTilesFromConfig(regionDir);
+                    Map<String, Channel> channelLibrary = resolveChannelLibrary(baseModality);
+                    MdaRequestBuilder.Built built = MdaRequestBuilder.build(
+                            regionDir,
+                            annotation.getName(),
+                            state.sample,
+                            config.commandBuilder(),
+                            tiles,
+                            configManager,
+                            channelLibrary);
+                    MdaWriteResult mdaResult = MdaSettingsWriter.write(built.request());
+                    acquisitionPlan = built.plan();
+                    mdaSettingsPath = mdaResult.settingsFile();
+                    logger.info(
+                            "Wrote MDA export for {}: {} ({} positions, {} channels, {} z, {} angles, {} timepoints)",
+                            annotation.getName(),
+                            mdaSettingsPath,
+                            acquisitionPlan.nPositions(),
+                            acquisitionPlan.chCount(),
+                            acquisitionPlan.zCount(),
+                            acquisitionPlan.angleCount(),
+                            acquisitionPlan.timepoints());
+                } catch (IOException | RuntimeException mdaEx) {
+                    logger.warn(
+                            "MDA export failed for {}: {} -- acquisition will continue without MDA files.",
+                            annotation.getName(),
+                            mdaEx.getMessage(),
+                            mdaEx);
+                    acquisitionPlan = null;
+                    mdaSettingsPath = null;
+                }
+
                 // Apply Z-focus prediction if model is ready (tilt correction)
                 if (state.transform != null) {
                     double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
@@ -934,7 +980,8 @@ public class AcquisitionManager {
                 MicroscopeController.getInstance().startAcquisition(config.commandBuilder());
 
                 // Monitor progress
-                return monitorAcquisition(annotation, angleExposures, channelExposures, progressDialog);
+                return monitorAcquisition(
+                        annotation, angleExposures, channelExposures, acquisitionPlan, mdaSettingsPath, progressDialog);
 
             } catch (Exception e) {
                 logger.error("Acquisition failed for {}", annotation.getName(), e);
@@ -957,6 +1004,8 @@ public class AcquisitionManager {
      * @param annotation The annotation being acquired
      * @param angleExposures Rotation angles for calculating expected files
      * @param channelExposures Channel list (for widefield IF); may be null or empty
+     * @param acquisitionPlan Pre-built per-annotation plan for the live dimension panel; may be null when MDA export failed
+     * @param mdaSettingsPath Path to the MDA settings file just written, or null when MDA export failed
      * @return true if completed successfully, false if cancelled/failed
      * @throws IOException if communication with microscope fails
      */
@@ -964,6 +1013,8 @@ public class AcquisitionManager {
             PathObject annotation,
             List<AngleExposure> angleExposures,
             List<qupath.ext.qpsc.modality.ChannelExposure> channelExposures,
+            AcquisitionPlan acquisitionPlan,
+            Path mdaSettingsPath,
             DualProgressDialog progressDialog)
             throws IOException {
 
@@ -1022,10 +1073,17 @@ public class AcquisitionManager {
         // Correct the steps-per-position now that channels are
         // resolved -- the initial call in processAnnotations could
         // only see angles. Idempotent when the value is unchanged.
+        // Install the AcquisitionPlan + MDA path AFTER startAnnotation so the
+        // panel renders from the first updateDimensions tick; startAnnotation
+        // wipes mdaPathLabel, so re-applying both here keeps them visible.
         if (progressDialog != null && !progressDialog.isCancelled()) {
+            final AcquisitionPlan planForUi = acquisitionPlan;
+            final Path mdaPathForUi = mdaSettingsPath;
             Platform.runLater(() -> {
                 progressDialog.setStepsPerPosition(stepsPerPositionForProgress);
                 progressDialog.startAnnotation(annotation.getName(), expectedFiles);
+                progressDialog.setAcquisitionPlan(planForUi);
+                progressDialog.setLastMdaPath(mdaPathForUi);
             });
         }
 
@@ -1051,7 +1109,10 @@ public class AcquisitionManager {
                         progressCounter.set(progress.current);
                         // Update dual progress dialog
                         if (progressDialog != null && !progressDialog.isCancelled()) {
-                            Platform.runLater(() -> progressDialog.updateCurrentAnnotationProgress(progress.current));
+                            Platform.runLater(() -> {
+                                progressDialog.updateCurrentAnnotationProgress(progress.current);
+                                progressDialog.updateDimensions((long) progress.current);
+                            });
                         }
 
                         // Show acquired tile in Live Viewer (if enabled)
@@ -1664,6 +1725,80 @@ public class AcquisitionManager {
             logger.info("Wrote acquisition info to: {}", infoFile);
         } catch (IOException e) {
             logger.warn("Could not write acquisition info: {}", e.getMessage());
+        }
+    }
+
+    // Pattern matches a transformed TileConfiguration.txt line: "123.tif; ; (x.xxx, y.yyy)"
+    // where x/y are signed decimals in stage micrometers (post-transformTileConfiguration).
+    private static final java.util.regex.Pattern TILE_CONFIG_LINE =
+            java.util.regex.Pattern.compile("(\\S+\\.tif);\\s*;\\s*\\(([^,]+),\\s*([^)]+)\\)");
+
+    /**
+     * Parses {@code TileConfiguration.txt} from the given region directory into per-tile stage centroids.
+     * Used by the MDA writer integration -- mirrors the data that just got written there by
+     * {@code TransformationFunctions.transformTileConfiguration}. Returns an empty list (with a WARN)
+     * if the file is missing or unparseable so the caller can decide whether to abort.
+     */
+    private static List<TileStagePos> readTilesFromConfig(Path regionDir) {
+        Path configFile = regionDir.resolve("TileConfiguration.txt");
+        if (!Files.exists(configFile)) {
+            logger.warn("TileConfiguration.txt not found in {}; MDA position list will be empty", regionDir);
+            return List.of();
+        }
+        try {
+            List<String> lines = Files.readAllLines(configFile, StandardCharsets.UTF_8);
+            List<TileStagePos> tiles = new ArrayList<>(lines.size());
+            for (String raw : lines) {
+                String line = raw == null ? "" : raw.trim();
+                if (line.isEmpty() || line.startsWith("#") || line.startsWith("dim")) {
+                    continue;
+                }
+                java.util.regex.Matcher m = TILE_CONFIG_LINE.matcher(line);
+                if (!m.find()) {
+                    continue;
+                }
+                String label = m.group(1);
+                try {
+                    double x = Double.parseDouble(m.group(2).trim());
+                    double y = Double.parseDouble(m.group(3).trim());
+                    tiles.add(new TileStagePos(label, x, y, 0.0));
+                } catch (NumberFormatException nfe) {
+                    logger.debug("Skipping unparseable TileConfiguration line: {}", line);
+                }
+            }
+            return tiles;
+        } catch (IOException ioe) {
+            logger.warn("Could not read TileConfiguration.txt at {}: {}", configFile, ioe.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Resolves the channel library (id -> Channel) for the active modality via the modality handler,
+     * matching the resolution path used by {@code ChannelResolutionService}. Returns an empty map for
+     * non-channel-based modalities (PPM and other angle-only paths) so {@link MdaRequestBuilder} can
+     * fall back to its degenerate ResolvedChannel form.
+     */
+    private Map<String, Channel> resolveChannelLibrary(String baseModality) {
+        if (baseModality == null || state == null || state.sample == null) {
+            return Map.of();
+        }
+        try {
+            ModalityHandler handler = ModalityRegistry.getHandler(baseModality);
+            List<Channel> channels = handler.getChannels(
+                            baseModality, state.sample.objective(), state.sample.detector())
+                    .join();
+            if (channels == null || channels.isEmpty()) {
+                return Map.of();
+            }
+            Map<String, Channel> byId = new java.util.LinkedHashMap<>();
+            for (Channel ch : channels) {
+                byId.put(ch.id(), ch);
+            }
+            return byId;
+        } catch (Exception e) {
+            logger.debug("Could not resolve channel library for modality '{}': {}", baseModality, e.getMessage());
+            return Map.of();
         }
     }
 

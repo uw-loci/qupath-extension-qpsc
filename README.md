@@ -61,6 +61,7 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 | **Multi-angle Imaging (PPM)** | Polarized light microscopy with automatic rotation sequences |
 | **[Multi-channel widefield immunofluorescence](documentation/CHANNELS.md)** | Vendor-agnostic channel library: driven entirely by YAML presets and device property writes, works with any Micro-Manager-driven illuminator |
 | **[BF + IF](documentation/WORKFLOWS.md#multi-channel-acquisition-widefield-if-bfif)** | Combined brightfield + immunofluorescence in a single acquisition pass on single-camera scopes |
+| **[Micro-Manager MDA Export](documentation/UTILITIES.md#exporting-to-micro-manager-mda)** | Auto-exports MicroManager-compatible MDA files (`.txt` settings + `.pos` positions) alongside every acquisition, with manual export via "Save as MicroManager MDA..." on the setup dialogs |
 
 ### Live Imaging & Stage Control
 
