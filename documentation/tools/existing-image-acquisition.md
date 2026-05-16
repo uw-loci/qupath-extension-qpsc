@@ -68,8 +68,8 @@ If alignment records from other microscopes exist but *cannot* be composed throu
 
 | Option | Description |
 |--------|-------------|
-| No Refinement | Use saved transform directly (fastest). Best when transform is known to be accurate. |
-| Single-Tile Refinement | Refine alignment using one reference tile. Quick adjustment for minor drift. |
+| No Refinement | Use saved transform directly (fastest). Best when transform is known to be accurate. Default when a prior QPSC acquisition has auto-registered alignment on the current slide. |
+| Single-Tile Refinement | Refine alignment using one reference tile. Quick adjustment for minor drift or when a slide has been removed and re-seated since the last acquisition. The corrected alignment is saved for subsequent acquisitions. |
 | Full Manual Alignment | Create new transform with multiple points. Use the first time or after hardware changes. |
 
 **Saved Alignment Objective Mismatch Advisory:** If you load a saved alignment that was created at a different objective than your wizard's current setting (e.g., alignment refined at 10x, but wizard set to 20x), a modal dialog appears. The dialog explains that refinement translations are tied to the objective's tile geometry; reusing at a different objective preserves the scale and rotation but loses per-tile precision. You can continue with the loaded alignment or cancel to adjust the wizard's objective or re-align. (Note: this is distinct from a sub-image entry's objective mismatch, which is checked separately and has its own advisory.)
@@ -110,7 +110,7 @@ Choose how to align QuPath image coordinates with physical stage positions. You 
 
 ### Step 3: Refinement Options
 
-Select the level of alignment refinement needed. No Refinement is fastest; Single-Tile Refinement corrects for minor drift; Full Manual Alignment is most thorough.
+Select the level of alignment refinement needed. No Refinement is fastest and is the default when a slide has auto-registered alignment from a prior QPSC acquisition. Choose Single-Tile Refinement to correct for minor drift or when a slide has been physically removed and re-seated since the last acquisition — the corrected alignment is saved for future acquisitions. Use Full Manual Alignment for the first time or after significant hardware changes.
 
 If you choose Single-Tile Refinement, the workflow first generates tile detections from the **annotation classes you selected for collection** (not from every annotation in the image). The tile-selection dialog then lets you pick one of those tiles as the reference. This avoids the noisy/overlapping tile grids that used to appear when unrelated annotations got tiled alongside the ones you actually wanted to acquire. The dialog reports the count and class names so you can confirm the right set was tiled.
 
@@ -170,6 +170,7 @@ Each annotation's acquisition is added to the project as it completes. Metadata 
 | Auto-Align (SIFT) fails near correct tile | Bit-depth mismatch (16-bit camera vs 8-bit H&E WSI) | SIFT Settings should default to `PERCENTILE` 2/98 + CLAHE on. If still failing, raise CLAHE clip to 4.0 or widen percentile to 0.5/99.5. See [Preferences > SIFT Auto-Alignment](../PREFERENCES.md#sift-auto-alignment). |
 | Auto-Align (SIFT) fails far from tile | Stage too far from target | Drive the stage roughly close (live view should partially overlap the tile) before clicking SIFT. SIFT is a refinement, not a search. |
 | "Sub-image Acquired on a Different Microscope -- Workflow Cancelled" | Sub-image opened on a different scope than the one that acquired it | See [TROUBLESHOOTING.md: Sub-image Cross-Scope Mismatch](../TROUBLESHOOTING.md#q-sub-image-acquired-on-a-different-microscope--workflow-cancelled) for two ways to resolve this. |
+| Images appear misaligned after a slide is removed and re-seated | Slide position changed, alignment from prior acquisition is no longer valid | Use Single-Tile Refinement in the Refinement Options step to correct for the new position; the corrected alignment is saved for subsequent acquisitions. |
 
 ## See Also
 
