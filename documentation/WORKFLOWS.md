@@ -94,6 +94,10 @@ This workflow lets you target specific regions on an existing macro or overview 
 - You want to acquire specific regions at higher magnification.
 - You want to use tissue detection or manual annotations to define what to scan.
 
+### Automatic Alignment for QPSC-Acquired Images
+
+When you run this workflow on an image that was previously acquired through QPSC (Bounded Acquisition, Acquire from Existing Image, etc.), the workflow automatically detects the acquisition metadata embedded in that image and uses it for alignment. You do not need to manually create an alignment transform or specify a saved preset — QPSC-acquired images are recognized and aligned automatically. This is especially helpful for multi-step acquisitions where you acquire at low magnification, then acquire sub-regions at higher magnification from those results.
+
 ### Variations
 
 **No annotations on the image:** If you start the workflow without annotations, QPSC offers three options: run automatic tissue detection (artifact-aware filtering is applied by default -- see [Preferences](PREFERENCES.md#tissue-detection-parameters) for tuning), draw annotations manually, or cancel.

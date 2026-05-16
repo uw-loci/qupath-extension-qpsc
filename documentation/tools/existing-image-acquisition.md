@@ -24,7 +24,7 @@ The acquisition dialog consolidates all options in a single scrollable panel. Yo
 The **"Use existing alignment"** option with saved scanner presets requires a macro image to be reachable from the current entry. The scanner-preset path runs green-box detection on the macro to localize the whole-slide image on the microscope slide. Sub-images acquired by prior QPSC workflows (Bounded Acquisition, etc.) typically do not have a reachable macro, so in those cases the scanner-preset combo is disabled.
 
 When a macro is not available, you can still use:
-- **Slide-specific alignment** (if available) — auto-registered alignments saved during prior QPSC acquisitions on this slide do not require a macro.
+- **Slide-specific alignment** (if available) — QPSC-acquired images automatically carry alignment metadata from their acquisition stage coordinates. Even without an explicit saved JSON alignment file, QPSC stitches are recognized and can be used directly. For other images, manual alignment creates a JSON file that remains available for future acquisitions on the same slide.
 - **Manual alignment** — create a new alignment or re-run the Microscope Alignment tool on the current image.
 
 ### Sub-Image Requirements
