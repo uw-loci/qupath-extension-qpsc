@@ -741,8 +741,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
             // callers (stage poll, focus rollback) silently swallow the
             // throw, so without this the latch becomes invisible.
             maybeReshowUnresponsiveModal();
-            throw new IOException("Microscope server unresponsive (MicroManager likely crashed). "
-                    + "Restart MicroManager + the Python server, then click Retry.");
+            throw new IOException("Microscope server unresponsive. "
+                    + "Restart the Python server first; if that doesn't help, restart MicroManager too. "
+                    + "Then click Retry.");
         }
         // Enforce cooldown after failed attempts to prevent reconnection floods
         long now = System.currentTimeMillis();
@@ -3513,7 +3514,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         serverUnresponsiveSuspended = true;
                         logger.error(
                                 "Microscope server accepting connections but not responding to CONFIG "
-                                        + "after {} attempts. MicroManager likely crashed. Suspending "
+                                        + "after {} attempts. Likely a stuck server connection thread "
+                                        + "(can also be a true MicroManager crash, but stuck-thread is "
+                                        + "more common -- e.g. after a streaming AF abort). Suspending "
                                         + "automatic reconnection until user retries.",
                                 attempts);
                         // Claim the modal slot so a concurrent aux call cannot
@@ -3573,15 +3576,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
             javafx.scene.control.Alert alert =
                     new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.ERROR);
             alert.setTitle("Microscope Server Unresponsive");
-            alert.setHeaderText(
-                    reshown ? "MicroManager still appears unresponsive." : "MicroManager appears to have crashed.");
-            alert.setContentText("The microscope server is accepting connections but not responding to commands. "
-                    + "This typically means MicroManager itself has crashed or lost its "
-                    + "connection to the camera.\n\n"
-                    + "To recover:\n"
-                    + "  1. Restart MicroManager\n"
-                    + "  2. Restart the Python microscope server\n"
-                    + "  3. Click Retry below\n\n"
+            alert.setHeaderText(reshown ? "Server still unresponsive." : "Microscope server is not responding.");
+            alert.setContentText("The microscope server is accepting TCP connections but not responding to "
+                    + "CONFIG commands. This is usually a stuck server connection thread "
+                    + "(e.g. after a streaming AF abort left an operation mid-flight) and "
+                    + "less often a true MicroManager crash. Live view from an existing "
+                    + "connection may still work, but new operations will hang.\n\n"
+                    + "To recover (try in order):\n"
+                    + "  1. Restart the Python microscope server (often sufficient).\n"
+                    + "  2. If that doesn't help, also restart MicroManager.\n"
+                    + "  3. Click Retry below once at least the Python server is back up.\n\n"
                     + (lastFailureMessage != null ? "Last error: " + lastFailureMessage + "\n\n" : "")
                     + "Automatic reconnection has been suspended to prevent log spam.");
             javafx.scene.control.ButtonType retry =

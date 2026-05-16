@@ -1300,6 +1300,26 @@ and pick it (or `manual_only`) as the modality's default. The GUI dropdown for s
 3. Update microscope-command-server to v1.1.0 or later (CONFIG handshake required since v0.3.0)
 4. Check Python server console for the specific rejection reason
 
+#### "Microscope server is not responding" (accepts connections but not responding to commands)
+
+**Meaning:** The Python microscope server is accepting TCP connections but not responding to configuration or workflow commands. New operations will hang, but existing Live Viewer connections may still work.
+
+**Likely causes:**
+- A stuck server connection thread, usually from a streaming autofocus abort that left an operation mid-flight (most common)
+- True MicroManager crash or loss of camera connection (less common)
+- Server process hung due to unresponsive hardware
+
+**Solution (try in order):**
+1. **Restart the Python microscope server first** - This resolves the stuck-thread issue in most cases and is faster than restarting MicroManager
+   - Stop the server process
+   - Start it again (e.g., `python microscope_command_server/server.py`)
+   - Click **Retry** on the dialog once the server is back up
+2. **If Python server restart doesn't help, also restart MicroManager**
+   - Close MicroManager completely
+   - Reload your hardware configuration
+   - Verify Live Viewer shows frames again
+   - Click **Retry** on the dialog
+
 ### Configuration Errors
 
 #### "Pixel size must be set for annotation-based workflows"
