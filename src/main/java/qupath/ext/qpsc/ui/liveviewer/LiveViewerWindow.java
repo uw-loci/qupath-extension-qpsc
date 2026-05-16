@@ -1222,6 +1222,35 @@ public class LiveViewerWindow {
             return;
         }
 
+        // YAML-disable shortcut: when stage.streaming_af.enabled is false
+        // in config_<scope>.yml, the rig's stage cannot do continuous-
+        // velocity moves and streaming AF would either fail or trigger
+        // the rapid_jump abort path server-side. Route the click straight
+        // to Sweep Focus -- it uses blocking step-and-snap, works on any
+        // stage, and avoids the server-side streaming code path entirely
+        // (including the camera ROI crop / restore that has caused
+        // CONFIG hangs on OWS3 2026-05-16 when the rapid_jump path runs).
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath != null && !configPath.isEmpty()) {
+                qupath.ext.qpsc.utilities.MicroscopeConfigManager cfg =
+                        qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(configPath);
+                Boolean enabled = cfg.getBoolean("stage", "streaming_af", "enabled");
+                if (enabled != null && !enabled) {
+                    logger.info("Streaming AF disabled in YAML (stage.streaming_af.enabled=false); "
+                            + "routing Live Viewer Autofocus button to Sweep Focus directly.");
+                    updateStatus("Autofocus: streaming disabled on this rig -- using Sweep Focus");
+                    handleSweepFocus();
+                    return;
+                }
+            }
+        } catch (Exception ex) {
+            // YAML read failures shouldn't break the AF button -- fall
+            // through to the regular streaming path, which will either
+            // succeed or surface its own error.
+            logger.debug("Streaming AF YAML enable-check failed ({}); continuing with streaming", ex.getMessage());
+        }
+
         if (!QPPreferenceDialog.getSuppressExposureWarning()) {
             try {
                 // Trust the user's UI intent: read the per-channel spinner

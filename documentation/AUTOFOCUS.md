@@ -166,6 +166,8 @@ If no peak is found but a focus slope is detected (monotonic profile after edge 
 
 Autofocus reads `sweep_range_um` from `autofocus_<scope>.yml` per objective. There is no separate range field -- Autofocus and the stepped Sweep Drift Check share the same range knob. Change it in the [Autofocus Configuration Editor](tools/autofocus-editor.md) and both paths use the new value.
 
+**Disabling streaming AF via YAML:** On rigs where the stage cannot perform continuous-velocity moves (e.g. some legacy or low-cost stages), set `stage.streaming_af.enabled: false` in your microscope YAML config (`config_<scope>.yml`). When this setting is false, the Live Viewer Autofocus button automatically routes to Sweep Focus, which uses blocking step-and-snap moves and works on any stage. This avoids server-side failures and the motion blur that would occur if streaming were attempted on stages without a velocity knob. If you don't set this, the button defaults to streaming AF (the fast path).
+
 ### How the server picks an objective
 
 The Live Viewer button does not currently pass an objective identifier, so the server resolves it in a 3-tier lookup:
