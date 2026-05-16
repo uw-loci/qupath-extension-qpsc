@@ -792,7 +792,9 @@ public class ExistingImageAcquisitionController {
 
             if (hasSlideAlignment) {
                 recommendationLabel.setText("[i] Image has auto-registered alignment from QPSC acquisition. "
-                        + "Ready to acquire without additional alignment setup.");
+                        + "Proceed without refinement is the default. If the slide has been removed and "
+                        + "re-seated since acquisition, choose Single-tile refinement below to correct for "
+                        + "the new position; the corrected alignment is saved for the next acquisition.");
             } else if (scannerPresetUsable) {
                 recommendationLabel.setText(
                         "[i] Recommendation: Use Existing Alignment (found " + availableTransforms.size()
@@ -1397,7 +1399,9 @@ public class ExistingImageAcquisitionController {
             if (hasSlideAlignment) {
                 noRefineRadio.setSelected(true);
                 refinementRecommendationLabel.setText("[i] Recommendation: Proceed without refinement "
-                        + "(auto-registered from acquisition coordinates)");
+                        + "(auto-registered from acquisition coordinates). Pick Single-tile refinement "
+                        + "if the slide was removed and re-seated since the last acquisition -- the "
+                        + "corrected alignment is saved for next time.");
                 return;
             }
 
