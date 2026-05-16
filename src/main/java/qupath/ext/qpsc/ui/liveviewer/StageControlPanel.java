@@ -29,6 +29,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.RadioButton;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.Slider;
 import javafx.scene.control.Spinner;
@@ -1043,7 +1044,18 @@ public class StageControlPanel extends VBox {
             applyProfileForModality(currentCameraModality);
         });
 
-        tab.setContent(cameraContent);
+        // Wrap in a ScrollPane so the Fluorescence modality (per-channel
+        // grid + preset bar + tip + Save-to-Profile + Save/Load preset rows)
+        // doesn't push cameraStatusLabel / fullControlBtn / fovOverlayBtn
+        // off the bottom edge. The outer stageScrollPane in LiveViewerWindow
+        // can't help because TabPane internally constrains its tab content's
+        // height and clips overflow.
+        ScrollPane cameraScroll = new ScrollPane(cameraContent);
+        cameraScroll.setFitToWidth(true);
+        cameraScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        cameraScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        cameraScroll.setStyle("-fx-background-color: transparent;");
+        tab.setContent(cameraScroll);
         return tab;
     }
 
