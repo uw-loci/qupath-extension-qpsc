@@ -624,4 +624,104 @@ public class MinorFunctions {
         throw new IOException(
                 String.format("Files.delete failed after %d attempts: %s", maxAttempts, path), lastException);
     }
+
+    /**
+     * Moves a directory to {@code target}; on persistent {@link Files#move}
+     * failure, falls back to a recursive copy and then deletes the source tree.
+     *
+     * <p>Intended for the multi-angle PPM stitching cleanup path where Windows
+     * occasionally pins tile files past the end of stitching (BioFormats /
+     * ImageIO file-handle release lag, antivirus scans). When the fast
+     * rename-style move keeps failing we still must restore the original angle
+     * directory or downstream re-stitching cannot find its tiles, so we eat
+     * the copy cost rather than leaving them orphaned inside a {@code _temp_*}
+     * isolation directory.
+     *
+     * @param source         source directory (must exist)
+     * @param target         target directory (must not exist)
+     * @param moveAttempts   number of {@code Files.move} attempts before falling back
+     * @param initialDelayMs initial backoff between move attempts (doubled each retry)
+     * @return true if the fast move succeeded, false if the copy fallback was used
+     * @throws IOException if both the move and the copy fallback fail
+     */
+    public static boolean moveDirectoryWithRetryAndCopyFallback(
+            Path source, Path target, int moveAttempts, long initialDelayMs) throws IOException {
+        try {
+            moveWithRetry(source, target, moveAttempts, initialDelayMs);
+            return true;
+        } catch (IOException moveFailure) {
+            logger.warn(
+                    "Files.move exhausted after {} attempts ({} -> {}); falling back to recursive copy+delete",
+                    moveAttempts,
+                    source,
+                    target,
+                    moveFailure);
+        }
+
+        // Copy fallback: walk source, recreate at target. Open file handles on
+        // source files don't block Files.copy on Windows the way they block
+        // Files.move, so this path generally succeeds even when move can't.
+        try {
+            Files.walkFileTree(source, new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, java.nio.file.attribute.BasicFileAttributes attrs)
+                        throws IOException {
+                    Path rel = source.relativize(dir);
+                    Path dest = target.resolve(rel.toString());
+                    if (!Files.exists(dest)) {
+                        Files.createDirectories(dest);
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFile(Path file, java.nio.file.attribute.BasicFileAttributes attrs)
+                        throws IOException {
+                    Path rel = source.relativize(file);
+                    Path dest = target.resolve(rel.toString());
+                    Files.copy(file, dest, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException copyFailure) {
+            throw new IOException(
+                    String.format(
+                            "Copy fallback failed restoring %s -> %s; tiles remain in the source location",
+                            source, target),
+                    copyFailure);
+        }
+
+        logger.info("Copy fallback restored {} -> {}; deleting source tree", source, target);
+
+        // Best-effort delete of the source tree; even partial deletion is fine
+        // because the authoritative copy now lives at target. Failure here only
+        // leaves disk-space cruft, not lost data.
+        try {
+            Files.walkFileTree(source, new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult visitFile(Path file, java.nio.file.attribute.BasicFileAttributes attrs) {
+                    try {
+                        Files.deleteIfExists(file);
+                    } catch (IOException ignore) {
+                        // Leave it; deletion is best-effort after a successful copy.
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
+                    try {
+                        Files.deleteIfExists(dir);
+                    } catch (IOException ignore) {
+                        // Same -- best-effort.
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException deleteFailure) {
+            logger.warn("Copy succeeded but cleanup of source tree {} failed: {}", source, deleteFailure.getMessage());
+        }
+
+        return false;
+    }
 }

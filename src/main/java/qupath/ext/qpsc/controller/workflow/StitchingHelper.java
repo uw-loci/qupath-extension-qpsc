@@ -1825,13 +1825,26 @@ public class StitchingHelper {
             // Always restore the directory structure.
             // On Windows, BioFormats readers / TIFF writers may still hold file handles
             // briefly after close, causing AccessDeniedException on Files.move.
-            // Retry with exponential backoff (200ms, 400ms, 800ms, 1600ms, 3200ms).
+            // Retry with exponential backoff (200ms, 400ms, 800ms, 1600ms, 3200ms);
+            // if move-back still fails, fall back to a recursive copy so the
+            // original angle directory is always restored -- without that
+            // fallback, a stranded _temp_<angle>_<hash> directory leaves the
+            // tiles unreachable for any future re-stitch.
             logger.info("Starting cleanup - restoring directory structure for angle {}", angleStr);
             try {
                 if (Files.exists(tempAngleDir)) {
                     logger.info("Restoring directory from {} to {}", tempAngleDir, angleDir);
-                    MinorFunctions.moveWithRetry(tempAngleDir, angleDir, 5, 200);
-                    logger.info("Successfully restored {} from isolation", angleStr);
+                    boolean fastMove =
+                            MinorFunctions.moveDirectoryWithRetryAndCopyFallback(tempAngleDir, angleDir, 5, 200);
+                    if (fastMove) {
+                        logger.info("Successfully restored {} from isolation", angleStr);
+                    } else {
+                        logger.warn(
+                                "Move-back exhausted retries for angle {}; restored via copy fallback. "
+                                        + "Tiles are at {}.",
+                                angleStr,
+                                angleDir);
+                    }
                 } else {
                     logger.warn("Temporary angle directory no longer exists: {}", tempAngleDir);
                 }

@@ -733,10 +733,16 @@ public class WBComparisonWorkflow {
                     null);
         } finally {
             // Always restore the directory structure.
-            // Retry with backoff for Windows file handle release delays.
+            // Retry with backoff for Windows file handle release delays; if
+            // move still fails, fall back to copy so tiles aren't stranded
+            // in a _temp_<angle> directory.
             try {
                 if (Files.exists(tempAngleDir)) {
-                    MinorFunctions.moveWithRetry(tempAngleDir, angleDir, 5, 200);
+                    boolean fastMove =
+                            MinorFunctions.moveDirectoryWithRetryAndCopyFallback(tempAngleDir, angleDir, 5, 200);
+                    if (!fastMove) {
+                        logger.warn("Move-back exhausted retries for {}; restored via copy fallback.", angleStr);
+                    }
                 }
                 if (Files.exists(tempIsolationDir)) {
                     MinorFunctions.deleteWithRetry(tempIsolationDir, 5, 200);
