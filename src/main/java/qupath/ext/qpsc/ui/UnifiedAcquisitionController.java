@@ -21,16 +21,29 @@ import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.modality.Channel;
+import qupath.ext.qpsc.modality.ChannelExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.WbMode;
+import qupath.ext.qpsc.modality.ppm.ui.PPMBoundingBoxUI;
 import qupath.ext.qpsc.modality.widefield.ui.WidefieldChannelBoundingBoxUI;
+import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
+import qupath.ext.qpsc.service.AngleResolutionService;
+import qupath.ext.qpsc.service.ChannelResolutionService;
+import qupath.ext.qpsc.service.mda.MdaExportAction;
+import qupath.ext.qpsc.service.mda.MdaExportContext;
+import qupath.ext.qpsc.service.mda.TileStagePos;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
+import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.ObjectiveUtils;
 import qupath.ext.qpsc.utilities.SampleNameValidator;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.prefs.QuPathStyleManager;
@@ -1283,6 +1296,15 @@ public class UnifiedAcquisitionController {
             if (uiOpt.isPresent()) {
                 modalityUI = uiOpt.get();
                 modalityContentBox.getChildren().add(modalityUI.getNode());
+                // Wire the "Save as MicroManager MDA..." button on the modality
+                // panel so LSM (and any bounding-box workflow) can export an
+                // MDA file before running the QPSC acquisition.
+                java.util.function.Supplier<MdaExportContext> supplier = this::buildMdaExportContext;
+                if (modalityUI instanceof WidefieldChannelBoundingBoxUI wfUi) {
+                    wfUi.installMdaExportContext(supplier);
+                } else if (modalityUI instanceof PPMBoundingBoxUI ppmUi) {
+                    ppmUi.installMdaExportContext(supplier);
+                }
             } else {
                 modalityUI = null;
                 Label noOptions = new Label("No additional options for " + modality + " modality.");
@@ -1299,6 +1321,227 @@ public class UnifiedAcquisitionController {
             // participating modalities). The persisted pick for this family
             // is restored.
             updateLoopOrderToggle(modality);
+        }
+
+        /**
+         * Builds an {@link MdaExportContext} snapshot from the dialog's current state
+         * for the bounding-box workflow. Mirrors the per-annotation variant in
+         * {@code ExistingImageAcquisitionController} but synthesizes a single
+         * region named {@code "bounds"} from the start+size or two-corners inputs.
+         * Bounding-box coordinates are already in stage micrometers, so no
+         * alignment transform is applied to tile centroids.
+         */
+        private MdaExportContext buildMdaExportContext() {
+            try {
+                String sampleName =
+                        sampleNameField != null ? sampleNameField.getText().trim() : "";
+                if (sampleName.isEmpty()) {
+                    return MdaExportContext.notReady("Enter a sample name before exporting MDA.");
+                }
+                String folderText = folderField != null ? folderField.getText().trim() : "";
+                if (folderText.isEmpty()) {
+                    return MdaExportContext.notReady("Enter a projects folder before exporting MDA.");
+                }
+                File projectsFolder = new File(folderText);
+
+                String modality = modalityBox != null ? modalityBox.getValue() : null;
+                String objective = extractIdFromDisplayString(objectiveBox != null ? objectiveBox.getValue() : null);
+                String detector = extractIdFromDisplayString(detectorBox != null ? detectorBox.getValue() : null);
+                if (modality == null || objective == null || detector == null) {
+                    return MdaExportContext.notReady("Select modality, objective, and detector before exporting MDA.");
+                }
+
+                double[] bounds = parseBoundsForExport();
+                if (bounds == null) {
+                    return MdaExportContext.notReady(
+                            "Fill in the bounding-box coordinates (positive width/height) before exporting MDA.");
+                }
+                double x1 = bounds[0], y1 = bounds[1], x2 = bounds[2], y2 = bounds[3];
+
+                SampleSetupResult sample =
+                        new SampleSetupResult(sampleName, projectsFolder, modality, objective, detector);
+
+                String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configFileLocation);
+
+                String enhancedModality = ObjectiveUtils.createEnhancedFolderName(modality, objective);
+                java.nio.file.Path regionDir = projectsFolder
+                        .toPath()
+                        .resolve(sampleName)
+                        .resolve(enhancedModality)
+                        .resolve("bounds");
+
+                Map<String, Double> angleOverrides = modalityUI != null ? modalityUI.getAngleOverrides() : null;
+                String focusChannelId = modalityUI != null ? modalityUI.getFocusChannelId() : null;
+                Map<String, Double> channelIntensityOverrides =
+                        modalityUI != null ? modalityUI.getChannelIntensityOverrides() : Map.of();
+                if (channelIntensityOverrides == null) {
+                    channelIntensityOverrides = Map.of();
+                }
+
+                String wbMode;
+                if (wbModeComboBox == null || !wbModeComboBox.isVisible()) {
+                    wbMode = "off";
+                } else {
+                    String wbModeDisplay = wbModeComboBox.getValue();
+                    wbMode = WbMode.fromDisplayName(wbModeDisplay != null ? wbModeDisplay : "Off")
+                            .getProtocolName();
+                }
+
+                List<AngleExposure> angleExposures = AngleResolutionService.resolve(
+                                enhancedModality, objective, detector, angleOverrides, wbMode)
+                        .join();
+                List<ChannelExposure> channelExposures = ChannelResolutionService.resolve(
+                        enhancedModality, objective, detector, angleOverrides, focusChannelId);
+
+                if (ChannelResolutionService.isEmptySelectionForChannelBasedModality(
+                        enhancedModality, objective, detector, angleOverrides)) {
+                    return MdaExportContext.notReady(
+                            "No fluorescence channels selected. Enable at least one channel before exporting MDA.");
+                }
+
+                double pixelSize = mgr.getPixelSize(objective, detector);
+                AcquisitionConfigurationBuilder.AcquisitionConfiguration config =
+                        AcquisitionConfigurationBuilder.buildConfiguration(
+                                sample,
+                                configFileLocation,
+                                enhancedModality,
+                                "bounds",
+                                angleExposures,
+                                channelExposures,
+                                projectsFolder.getAbsolutePath(),
+                                sampleName,
+                                pixelSize,
+                                wbMode);
+                AcquisitionCommandBuilder cmdBuilder = config.commandBuilder();
+                if (wbMode != null) {
+                    cmdBuilder.wbMode(wbMode);
+                }
+                if (!channelIntensityOverrides.isEmpty()) {
+                    cmdBuilder.channelIntensityOverrides(channelIntensityOverrides);
+                }
+                cmdBuilder.focusChannel(focusChannelId);
+                ModalityRegistry.getHandler(modality).configureCommandBuilder(cmdBuilder);
+
+                double[] fov = mgr.getModalityFOV(modality, objective, detector);
+                if (fov == null || fov.length < 2) {
+                    return MdaExportContext.notReady(
+                            "Could not resolve camera FOV for the selected hardware combination.");
+                }
+                double overlap = QPPreferenceDialog.getTileOverlapPercentProperty();
+                List<TileStagePos> tiles = synthesizeBoundsCentroids(x1, y1, x2, y2, fov[0], fov[1], overlap);
+                if (tiles.isEmpty()) {
+                    return MdaExportContext.notReady(
+                            "Bounding box produced zero tiles -- check width/height and overlap.");
+                }
+
+                List<MdaExportAction.RegionPlan> regionPlans =
+                        List.of(new MdaExportAction.RegionPlan("bounds", regionDir, tiles));
+
+                Map<String, Channel> channelLibrary = new LinkedHashMap<>();
+                try {
+                    for (Channel ch : mgr.getModalityChannels(modality)) {
+                        channelLibrary.put(ch.id(), ch);
+                    }
+                } catch (Exception e) {
+                    logger.debug("No channel library for modality '{}': {}", modality, e.getMessage());
+                }
+
+                return MdaExportContext.ready(sample, cmdBuilder, regionPlans, mgr, channelLibrary);
+            } catch (Exception ex) {
+                logger.error("Could not build MDA export context: {}", ex.getMessage(), ex);
+                return MdaExportContext.notReady("Could not prepare MDA export: "
+                        + (ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage()));
+            }
+        }
+
+        /**
+         * Parses the bounding-box inputs (handles both start+size and two-corners
+         * modes) and returns {@code [x1, y1, x2, y2]} in stage micrometers, or
+         * {@code null} if any field is empty / unparseable / yields non-positive
+         * extent. Mirrors {@code updatePreviewPanel}'s parse so MDA export uses
+         * the same geometry the preview shows.
+         */
+        private double[] parseBoundsForExport() {
+            try {
+                String startXStr = startXField != null ? startXField.getText().trim() : "";
+                String startYStr = startYField != null ? startYField.getText().trim() : "";
+                if (startXStr.isEmpty() || startYStr.isEmpty()) {
+                    return null;
+                }
+                double startX = Double.parseDouble(startXStr);
+                double startY = Double.parseDouble(startYStr);
+
+                double x1, y1, x2, y2;
+                if (startSizeMode != null && startSizeMode.isSelected()) {
+                    String widthStr = widthField != null ? widthField.getText().trim() : "";
+                    String heightStr =
+                            heightField != null ? heightField.getText().trim() : "";
+                    if (widthStr.isEmpty() || heightStr.isEmpty()) {
+                        return null;
+                    }
+                    double width = Double.parseDouble(widthStr);
+                    double height = Double.parseDouble(heightStr);
+                    if (width <= 0 || height <= 0) return null;
+                    x1 = startX - width / 2.0;
+                    y1 = startY - height / 2.0;
+                    x2 = startX + width / 2.0;
+                    y2 = startY + height / 2.0;
+                } else {
+                    String endXStr = endXField != null ? endXField.getText().trim() : "";
+                    String endYStr = endYField != null ? endYField.getText().trim() : "";
+                    if (endXStr.isEmpty() || endYStr.isEmpty()) return null;
+                    double endX = Double.parseDouble(endXStr);
+                    double endY = Double.parseDouble(endYStr);
+                    x1 = Math.min(startX, endX);
+                    y1 = Math.min(startY, endY);
+                    x2 = Math.max(startX, endX);
+                    y2 = Math.max(startY, endY);
+                    if ((x2 - x1) <= 0 || (y2 - y1) <= 0) return null;
+                }
+                return new double[] {x1, y1, x2, y2};
+            } catch (NumberFormatException nfe) {
+                return null;
+            }
+        }
+
+        /**
+         * Generates tile centroids in stage micrometers for a bounding box,
+         * mirroring {@code TilingUtilities.processBoundingBoxTilingRequest}'s
+         * half-frame buffer on each side. No alignment transform is applied --
+         * inputs are already in stage coordinates.
+         */
+        private static List<TileStagePos> synthesizeBoundsCentroids(
+                double x1,
+                double y1,
+                double x2,
+                double y2,
+                double frameWidthUm,
+                double frameHeightUm,
+                double overlapPercent) {
+            double strideX = frameWidthUm * (1.0 - overlapPercent / 100.0);
+            double strideY = frameHeightUm * (1.0 - overlapPercent / 100.0);
+            if (strideX <= 0 || strideY <= 0) {
+                return List.of();
+            }
+            double minX = x1 - frameWidthUm / 2.0;
+            double minY = y1 - frameHeightUm / 2.0;
+            double maxX = x2 + frameWidthUm / 2.0;
+            double maxY = y2 + frameHeightUm / 2.0;
+            int cols = (int) Math.ceil((maxX - minX) / strideX);
+            int rows = (int) Math.ceil((maxY - minY) / strideY);
+            if (cols < 1) cols = 1;
+            if (rows < 1) rows = 1;
+            List<TileStagePos> out = new ArrayList<>(cols * rows);
+            int idx = 0;
+            for (int r = 0; r < rows; r++) {
+                for (int c = 0; c < cols; c++) {
+                    double cx = minX + c * strideX + frameWidthUm / 2.0;
+                    double cy = minY + r * strideY + frameHeightUm / 2.0;
+                    out.add(new TileStagePos(String.valueOf(idx++), cx, cy, 0.0));
+                }
+            }
+            return out;
         }
 
         /**
