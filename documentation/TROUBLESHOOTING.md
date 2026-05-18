@@ -647,6 +647,25 @@ See [UTILITIES.md -- Exporting to Micro-Manager MDA](UTILITIES.md#exporting-to-m
 2. Look for Python server errors during acquisition (acquisition might have failed silently)
 3. Verify Python server completed acquisition successfully before stitching started
 
+#### Q: Stitching Recovery says "OMEPyramidWriter tile-write errors" - what does this mean?
+
+**A:** The base (full-resolution) image wrote successfully, but tile writes failed at one or more of the downsampled pyramid levels. The file opens in QuPath (so it looks fine in the project pane if you were to import it manually), but **the upper pyramid levels are typically all-black** -- the QuPath viewer renders black when you zoom out. The Stitching Recovery workflow now detects this and refuses to import the broken file.
+
+**Why it happens (root cause):**
+This is a QuPath / OMEPyramidWriter bug, not a disk-space or permissions problem. At pyramid levels whose dimensions are not a clean multiple of the tile size (512 px), the writer's internal tile-iteration count disagrees with the per-level dimensions stored in the underlying TiffWriter. Tiles get queued past the right or bottom edge, the TiffWriter rejects them with `FormatException: X:1024 must be < 854` (or similar), and the writer occasionally NPEs on `this.initialized` when multiple resolution levels' tile-write workers race. The base level wrote OK, hence "image opens"; the upper levels did not, hence "upper levels are black."
+
+**What you'll see:**
+- Dialog: "N failed angles produced OMEPyramidWriter tile-write errors and were NOT imported"
+- Log (Scripting > Show log) contains multiple `Error writing Tile: level=N, bounds=(...)` entries from `qupath.lib.images.writers.ome.OMEPyramidWriter`, with cause `FormatException: ... must be <` or `NullPointerException: ... this.initialized is null`
+- Any output `.ome.tif` the writer produced before the recovery aborted is left on disk but **not** registered in the project
+
+**How to recover:**
+1. The tiles in `TempTiles/` are preserved -- a Stitching Recovery re-run is cheap to try (sometimes the level-overlap race goes the other way and the same input stitches cleanly).
+2. If a re-run also fails, change the **Output format** in the Stitching Recovery dialog to **OME-ZARR**; the OME-ZARR writer does not go through `OMEPyramidWriter` and is not affected by this bug.
+3. As a last resort, re-acquire the region. The bug is in the OME-TIFF pyramid writer, not the acquisition.
+
+The underlying writer issue is in QuPath core (`qupath.lib.images.writers.ome.OMEPyramidWriter`) and is being tracked there; the recovery workflow's job here is to make sure broken outputs never silently land in the project.
+
 #### Q: Stitching failed but my tiles were acquired - how do I re-stitch?
 
 **A:** This is fully recoverable. Your tiles and TileConfiguration.txt files are preserved in the TempTiles folder after a stitching failure.
