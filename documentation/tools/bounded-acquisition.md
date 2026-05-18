@@ -65,6 +65,7 @@ The center position defines the midpoint of the acquisition area. Tiles extend e
 |--------|------|-------------|
 | WB Mode | ComboBox | White balance mode (JAI cameras only): Off, Camera AWB, Simple, or Per-angle calibrated exposures. Applies immediately on selection. |
 | Angle Overrides | Various | Modality-specific options (e.g., PPM angle overrides) |
+| Save as MicroManager MDA... | Button | Export the current bounding-box acquisition setup as a Micro-Manager MDA (Multi-Dimensional Acquisition) file. Requires sample name, projects folder, hardware configuration, and complete bounding-box coordinates. The MDA file can then be run directly in Micro-Manager to re-acquire the same region. |
 
 **Fluorescence / Widefield IF channel presets:**
 
