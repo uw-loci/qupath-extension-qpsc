@@ -60,6 +60,59 @@ public class StitchingRecoveryWorkflow {
     private static final Logger logger = LoggerFactory.getLogger(StitchingRecoveryWorkflow.class);
 
     /**
+     * Name of the QuPath logger that emits per-tile pyramid-write errors. The
+     * underlying OMETiffWriter (via BioFormats) raises these as logged ERRORs
+     * rather than throwing them out of StitchingWorkflow.run, so they are
+     * invisible to the recovery workflow's return path. The recovery used to
+     * report every angle as "succeeded" even when this logger had spammed
+     * dozens of NullPointerException / FormatException entries per stitch and
+     * the resulting .ome.tif had garbled pyramid levels. We watch the logger
+     * with a Logback appender (see installOmePyramidErrorCounter) and treat
+     * any non-zero error delta during a stitch as a failure.
+     */
+    private static final String OME_PYRAMID_WRITER_LOGGER = "qupath.lib.images.writers.ome.OMEPyramidWriter";
+
+    private static final AtomicInteger omePyramidErrorCounter = new AtomicInteger();
+    private static volatile boolean omePyramidErrorCounterInstalled = false;
+    private static final Object omePyramidInstallLock = new Object();
+
+    private static void installOmePyramidErrorCounter() {
+        if (omePyramidErrorCounterInstalled) return;
+        synchronized (omePyramidInstallLock) {
+            if (omePyramidErrorCounterInstalled) return;
+            try {
+                org.slf4j.Logger slf4jLogger = LoggerFactory.getLogger(OME_PYRAMID_WRITER_LOGGER);
+                if (!(slf4jLogger instanceof ch.qos.logback.classic.Logger logbackLogger)) {
+                    logger.warn(
+                            "OME pyramid writer logger is not a Logback logger ({}); "
+                                    + "per-tile error detection disabled.",
+                            slf4jLogger.getClass().getName());
+                    omePyramidErrorCounterInstalled = true;
+                    return;
+                }
+                ch.qos.logback.core.AppenderBase<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                        new ch.qos.logback.core.AppenderBase<>() {
+                            @Override
+                            protected void append(ch.qos.logback.classic.spi.ILoggingEvent event) {
+                                if (event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.ERROR)) {
+                                    omePyramidErrorCounter.incrementAndGet();
+                                }
+                            }
+                        };
+                appender.setName("QPSC-OMEPyramidErrorCounter");
+                appender.setContext(logbackLogger.getLoggerContext());
+                appender.start();
+                logbackLogger.addAppender(appender);
+                omePyramidErrorCounterInstalled = true;
+                logger.info("Installed OME pyramid writer error counter for stitching recovery");
+            } catch (Throwable t) {
+                logger.warn("Could not install OME pyramid writer error counter: {}", t.getMessage());
+                omePyramidErrorCounterInstalled = true; // don't keep retrying
+            }
+        }
+    }
+
+    /**
      * Entry point - shows dialog and runs stitching recovery.
      */
     public static void run() {
@@ -513,6 +566,14 @@ public class StitchingRecoveryWorkflow {
             futures.add(stitchPool.submit(() -> {
                 logger.info("=== Processing angle {}/{}: '{}' ===", angleNum, totalAngles, angleName);
 
+                // Snapshot the OMEPyramidWriter error counter so we can tell
+                // post-stitch whether ANY tile-write error fired during this
+                // angle. The counter is global; in sequential mode this gives
+                // exact per-angle attribution, in parallel mode it conserva-
+                // tively flags any angle whose stitch overlapped with errors.
+                installOmePyramidErrorCounter();
+                final int errorsBeforeStitch = omePyramidErrorCounter.get();
+
                 try {
                     StitchingConfig config = new StitchingConfig(
                             "Coordinates in TileConfiguration.txt file",
@@ -564,6 +625,29 @@ public class StitchingRecoveryWorkflow {
 
                     if (outPath == null) {
                         logger.error("Stitching returned null for angle '{}'", angleName);
+                        failureCount.incrementAndGet();
+                        return;
+                    }
+
+                    // The OMEPyramidWriter logs per-tile errors at ERROR level
+                    // but does NOT raise them out of StitchingWorkflow.run --
+                    // the workflow returns the output path and reports
+                    // "1 successful, 0 failed" even when dozens of tiles
+                    // failed to write. The resulting .ome.tif opens fine in
+                    // QuPath but has garbled pyramid levels (incorrect tile
+                    // counts vs image-level dimensions on non-power-of-two
+                    // bases). Treat a non-zero error delta as a stitch
+                    // failure and refuse to import the broken file.
+                    int errorsAfterStitch = omePyramidErrorCounter.get();
+                    int errorDelta = errorsAfterStitch - errorsBeforeStitch;
+                    if (errorDelta > 0) {
+                        logger.error(
+                                "Stitching for angle '{}' produced {} OMEPyramidWriter tile-write errors -- "
+                                        + "output at {} is likely incomplete (garbled pyramid levels). "
+                                        + "Skipping project import for this angle.",
+                                angleName,
+                                errorDelta,
+                                outPath);
                         failureCount.incrementAndGet();
                         return;
                     }
@@ -633,9 +717,18 @@ public class StitchingRecoveryWorkflow {
             } else if (finalSuccess > 0) {
                 Dialogs.showWarningNotification(
                         "Stitching Recovery Partial",
-                        String.format("%d angle(s) succeeded, %d failed.", finalSuccess, finalFailure));
+                        String.format(
+                                "%d angle(s) succeeded, %d failed.%n"
+                                        + "Failed angles produced OMEPyramidWriter tile-write errors "
+                                        + "and were NOT imported (check the log for details).",
+                                finalSuccess, finalFailure));
             } else {
-                Dialogs.showErrorMessage("Stitching Recovery Failed", "No angles were successfully stitched.");
+                Dialogs.showErrorMessage(
+                        "Stitching Recovery Failed",
+                        "No angles were successfully stitched. Check the log for "
+                                + "'Error writing Tile' entries from OMEPyramidWriter -- "
+                                + "the output .ome.tif files are incomplete and were not "
+                                + "imported into the project.");
             }
         });
 
