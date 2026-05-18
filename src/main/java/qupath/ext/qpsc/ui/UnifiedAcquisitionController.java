@@ -1333,8 +1333,19 @@ public class UnifiedAcquisitionController {
          */
         private MdaExportContext buildMdaExportContext() {
             try {
-                String sampleName =
-                        sampleNameField != null ? sampleNameField.getText().trim() : "";
+                // When a project is already open, the OK path uses the open
+                // project's folder name as the effective sample name (see
+                // BoundedAcquisitionWorkflow's actualSampleName derivation);
+                // mirror that here so MDA files land inside the open project,
+                // not in a sibling folder named after whatever stale value
+                // PersistentPreferences.getLastSampleName() returned.
+                String sampleName;
+                if (hasOpenProject && existingProjectName != null) {
+                    sampleName = existingProjectName;
+                } else {
+                    sampleName =
+                            sampleNameField != null ? sampleNameField.getText().trim() : "";
+                }
                 if (sampleName.isEmpty()) {
                     return MdaExportContext.notReady("Enter a sample name before exporting MDA.");
                 }

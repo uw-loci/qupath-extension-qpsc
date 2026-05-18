@@ -1286,8 +1286,19 @@ public class ExistingImageAcquisitionController {
                     return MdaExportContext.notReady(
                             "Select at least one annotation before exporting MicroManager MDA files.");
                 }
-                String sampleName =
-                        sampleNameField != null ? sampleNameField.getText().trim() : "";
+                // When a project is already open, the OK path derives the
+                // effective sample name from the open project's folder name
+                // (the QPProjectFunctions layout that AcquisitionManager
+                // uses); mirror that here so MDA files land inside the open
+                // project, not in a sibling folder named after whatever stale
+                // value sat in PersistentPreferences.getLastSampleName().
+                String sampleName;
+                if (hasOpenProject && existingProjectName != null) {
+                    sampleName = existingProjectName;
+                } else {
+                    sampleName =
+                            sampleNameField != null ? sampleNameField.getText().trim() : "";
+                }
                 if (sampleName.isEmpty()) {
                     return MdaExportContext.notReady("Enter a sample name before exporting MDA.");
                 }
