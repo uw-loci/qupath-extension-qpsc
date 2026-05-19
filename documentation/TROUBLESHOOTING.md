@@ -327,12 +327,28 @@ Observe which direction the physical stage actually moves. If it moves in the la
 - `NORMAL`, `FLIP_H`, `FLIP_V`, `ROT_180` are the four axis-aligned values. These work everywhere, including the stitcher.
 - `ROT_90_CW`, `ROT_90_CCW`, `TRANSPOSE`, `ANTI_TRANSPOSE` are the rotation/transpose cases for scopes whose camera sensor is physically rotated 90°. The Live Viewer gestures work with them, but the stitcher does NOT fully support them — stitched output will be mis-oriented and a warning will be logged. If you actually have a rotated camera, file an issue and request full rotation support.
 
-#### Q: "Legacy Alignment -- Flip Frame Unknown"
+#### Q: "Alignment Flip Frame Unverified"
 
-**A:** This dialog appears when you load a slide alignment that was saved before flip-frame metadata was recorded (no `flipMacroX` / `flipMacroY` fields), and the active microscope's saved presets require a flipped sibling for at least one source scanner.
+**A:** This dialog appears when you load a slide alignment that was saved before flip-frame verification was implemented (May 19, 2026). The alignment JSON has `flipMacroX` and `flipMacroY` fields but lacks the `flipFrameVerified` indicator, and the active microscope's saved presets require a flipped sibling for at least one source scanner.
 
 **What this means:**
-- The alignment JSON was created before Phase 3 (May 2026) when flip-frame tracking was introduced
+- The alignment was saved between May 2026 (when flip-frame metadata was first introduced) and May 19, 2026 (when verification stamping was added)
+- During that window, alignments saved the flip metadata but always hardcoded it to `false`, regardless of whether the transform was actually built on the flipped-sibling image
+- If the alignment was built on a flipped-sibling image but recorded as `(false, false)`, downstream workflows will apply an extra flip and send the stage to the X/Y mirror of the intended target
+- The 2026-05-18 OWS3 acquisition log shows this exact failure: annotation appearance flipped, partially overlapped with slide tissue
+
+**Why this matters:** On a flip-needing scope, frame mismatch produces coordinates that are mirrored horizontally. Your annotations will appear to disagree by X, and acquired tiles will land at X-mirrored positions.
+
+**To fix:**
+1. **Recommended:** Cancel the workflow, run **Microscope Alignment** on this slide to rebuild the alignment JSON with the new flip-frame verification stamping, then retry. The new JSON will record `flipFrameVerified: true` and downstream workflows will compose it correctly.
+2. **At your own risk:** Continue anyway if you are confident this alignment was built on the unflipped base entry (not the flipped sibling).
+
+#### Q: "Legacy Alignment -- Flip Frame Unknown"
+
+**A:** This dialog appears when you load a slide alignment saved before flip-frame metadata was introduced (before May 2026), and the active microscope's saved presets require a flipped sibling for at least one source scanner.
+
+**What this means:**
+- The alignment JSON predates Phase 3 (May 2026) and has no `flipMacroX` / `flipMacroY` fields at all
 - The active microscope has at least one preset pair where flipping matters (e.g., flipped and unflipped macro images for the same source scanner)
 - We cannot determine which frame the saved transform was built in
 - Reusing it risks applying a flipped-frame transform to unflipped pixel coordinates (or vice versa), causing an X-mirror effect
@@ -340,7 +356,7 @@ Observe which direction the physical stage actually moves. If it moves in the la
 **Why this matters:** On a flip-needing scope, frame mismatch produces coordinates that are mirrored horizontally. Your annotations will appear to disagree by X, and acquired tiles will land at X-mirrored positions.
 
 **To fix:**
-1. **Recommended:** Cancel the workflow, run **Microscope Alignment** on this slide to rebuild the alignment JSON with current flip-frame metadata, then retry.
+1. **Recommended:** Cancel the workflow, run **Microscope Alignment** on this slide to rebuild the alignment JSON with flip-frame metadata, then retry.
 2. **At your own risk:** Continue anyway if you are confident the saved alignment's frame matches what the workflow will use now.
 
 #### Q: Coordinate transformation fails - "No valid transformation found"
