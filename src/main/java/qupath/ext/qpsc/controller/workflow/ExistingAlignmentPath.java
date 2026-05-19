@@ -435,12 +435,20 @@ public class ExistingAlignmentPath {
         // Get the processed macro image from the state
         BufferedImage processedMacroImage = context.getProcessedMacroImage();
 
-        // Capture the macro flip frame the alignment was built in so back-prop can
-        // pick the correct sibling without consulting external state. See
-        // claude-reports/2026-05-03_propagation-manager-rework for context.
-        var preset = state.alignmentChoice != null ? state.alignmentChoice.selectedTransform() : null;
-        boolean flipMacroX = FlipResolver.resolveFlipX(null, preset, null);
-        boolean flipMacroY = FlipResolver.resolveFlipY(null, preset, null);
+        // Capture the macro flip frame the alignment was built in by reading the
+        // OPEN ENTRY's flip metadata. This must match exactly what
+        // AlignmentHelper.checkForSlideAlignment reads as `currentEntryFlipX/Y`
+        // on the next load (it calls ImageMetadataManager.isFlippedX/Y on the
+        // open entry); otherwise the bake-delta
+        // `bake = alignFlip XOR currentEntryFlip` either over-flips or
+        // under-flips. Using preset-driven flip here (FlipResolver) can diverge
+        // from the entry's actual flip metadata -- e.g. when source_microscope
+        // is missing the resolver returns (false, false) even when the open
+        // entry is the flipped sibling -- and was the cause of the 2026-05-18
+        // stage-mirror bug.
+        ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
+        boolean flipMacroX = openEntry != null && ImageMetadataManager.isFlippedX(openEntry);
+        boolean flipMacroY = openEntry != null && ImageMetadataManager.isFlippedY(openEntry);
 
         AffineTransformManager.saveSlideAlignment(
                 project,

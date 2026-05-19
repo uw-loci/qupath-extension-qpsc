@@ -302,6 +302,36 @@ public class AlignmentHelper {
             }
         }
 
+        // Suspect-mis-labelled-frame advisory (2026-05-19). Pre-fix save sites
+        // (saveRefinedAlignment, ManualAlignmentPath, ExistingAlignmentPath)
+        // hardcoded flipMacroX/Y=false regardless of whether the transform was
+        // actually built on the flipped sibling. Such a JSON loads with
+        // alignFlip=(false,false) but the transform inside consumes flipped-
+        // frame pixel coords, and the bake-delta downstream then sends the
+        // stage to the X/Y mirror (the symptom from the 2026-05-18 acquisition
+        // log: "the run collected an unflipped XY set of coordinate positions,
+        // annotation appearance flipped, only partially overlapped with the
+        // selected tissue"). New saves stamp flipFrameVerified=true so we can
+        // tell legitimate "built on unflipped base" alignments from pre-fix
+        // mis-labelled ones; without that stamp, alignFlip=(false,false) on a
+        // flip-needing scope is suspicious and worth a Continue/Cancel prompt.
+        if (loadedResult != null
+                && loadedResult.hasFlipFrame()
+                && !loadedResult.isFlipFrameVerified()
+                && Boolean.FALSE.equals(alignFlipX)
+                && Boolean.FALSE.equals(alignFlipY)
+                && ImageFlipHelper.isActiveScopeFlipNeeding()) {
+            logger.warn(
+                    "Slide alignment for '{}' has alignFlip=(false,false) but flipFrameVerified is absent and the "
+                            + "active scope is flip-needing -- prompting user (may be a pre-2026-05-19 mis-labelled JSON)",
+                    lookupKey);
+            if (!confirmContinueWithUnverifiedFlipFrame(lookupKey)) {
+                logger.info("User cancelled at unverified-flip-frame advisory");
+                future.complete(null);
+                return future;
+            }
+        }
+
         // Bake the alignment-frame -> current-entry-frame flip delta into the returned
         // transform so downstream callers (AcquisitionManager, AnnotationOrderingService,
         // tile creation, refinement) can feed pixel coords from the CURRENT open entry's
@@ -517,6 +547,44 @@ public class AlignmentHelper {
         body.append("slide; the new JSON will record the frame and downstream\n");
         body.append("workflows will compose it correctly.\n\n");
         body.append("Continue anyway with the legacy alignment?");
+        return confirmContinueDialog(title, header, body.toString());
+    }
+
+    /**
+     * Continue / Cancel advisory for a pre-2026-05-19 alignment JSON whose
+     * {@code flipMacroX}/{@code flipMacroY} fields are present but were hardcoded
+     * to {@code false} by the buggy save sites. Pre-fix save sites recorded
+     * {@code (false, false)} regardless of whether the transform was actually
+     * built on the flipped sibling, so the bake-delta on load can over-flip
+     * and send the stage to the X/Y mirror.
+     *
+     * <p>Post-fix saves stamp {@code flipFrameVerified = true}; absence of that
+     * stamp combined with {@code alignFlip = (false, false)} on a flip-needing
+     * scope is the signature of a mis-labelled JSON. Continue / Cancel only --
+     * pre-fix data may still be correct if the alignment was genuinely built
+     * on the unflipped base entry.
+     */
+    private static boolean confirmContinueWithUnverifiedFlipFrame(String lookupKey) {
+        String title = "Alignment Flip Frame Unverified";
+        String header = "This alignment may have a mis-labelled pixel frame.";
+        StringBuilder body = new StringBuilder();
+        body.append(String.format(
+                "The slide alignment for%n  '%s'%nrecords flipMacroX=false and flipMacroY=false,%n"
+                        + "but it was saved before flip-frame stamping was verified%n"
+                        + "(no 'flipFrameVerified' field on the JSON).%n%n",
+                lookupKey));
+        body.append("The active microscope's saved presets require a flipped sibling\n");
+        body.append("for at least one source scanner. If this alignment was actually\n");
+        body.append("built on the flipped sibling entry but mis-labelled as unflipped,\n");
+        body.append("downstream workflows will apply an extra flip and send the stage\n");
+        body.append("to the X/Y mirror of the intended target. The 2026-05-18 OWS3\n");
+        body.append("acquisition log shows this exact failure mode: annotation\n");
+        body.append("appearance flipped, only partially overlapped with the slide tissue.\n\n");
+        body.append("Recommended: cancel and re-run Microscope Alignment for this\n");
+        body.append("slide on the UNFLIPPED BASE entry; the new JSON will record\n");
+        body.append("flipFrameVerified=true and downstream workflows will compose\n");
+        body.append("it correctly.\n\n");
+        body.append("Continue anyway?");
         return confirmContinueDialog(title, header, body.toString());
     }
 

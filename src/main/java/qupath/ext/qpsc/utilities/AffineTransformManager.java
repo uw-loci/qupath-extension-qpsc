@@ -871,6 +871,16 @@ public class AffineTransformManager {
             });
             if (flipMacroX != null) alignmentData.put("flipMacroX", flipMacroX);
             if (flipMacroY != null) alignmentData.put("flipMacroY", flipMacroY);
+            // flipFrameVerified marks JSONs written by save sites that record the
+            // ACTUAL frame the transform was built in (the open entry's FLIP_X/Y),
+            // not a hardcoded false. Older JSONs (pre 2026-05-19) lack this field
+            // and may mis-label a flipped-frame transform as unflipped; the load-
+            // side advisory uses its absence + alignFlip=(false,false) + an active
+            // scope that requires a flip to prompt the user before silently
+            // applying a bake-delta that would send the stage to the X/Y mirror.
+            if (flipMacroX != null && flipMacroY != null) {
+                alignmentData.put("flipFrameVerified", true);
+            }
 
             // Pixel-frame tag (Layer 2 of the 2026-05-11 alignment-lookup restructure).
             // Defense-in-depth: declares which pixel frame the transform is in so loaders
@@ -1121,14 +1131,15 @@ public class AffineTransformManager {
         private final String pixelFrame;
         private final String objective;
         private final String detector;
+        private final boolean flipFrameVerified;
 
         public SlideAlignmentResult(AffineTransform transform, Boolean flipMacroX, Boolean flipMacroY) {
-            this(transform, flipMacroX, flipMacroY, PIXEL_FRAME_MACRO, null, null);
+            this(transform, flipMacroX, flipMacroY, PIXEL_FRAME_MACRO, null, null, false);
         }
 
         public SlideAlignmentResult(
                 AffineTransform transform, Boolean flipMacroX, Boolean flipMacroY, String pixelFrame) {
-            this(transform, flipMacroX, flipMacroY, pixelFrame, null, null);
+            this(transform, flipMacroX, flipMacroY, pixelFrame, null, null, false);
         }
 
         public SlideAlignmentResult(
@@ -1138,12 +1149,24 @@ public class AffineTransformManager {
                 String pixelFrame,
                 String objective,
                 String detector) {
+            this(transform, flipMacroX, flipMacroY, pixelFrame, objective, detector, false);
+        }
+
+        public SlideAlignmentResult(
+                AffineTransform transform,
+                Boolean flipMacroX,
+                Boolean flipMacroY,
+                String pixelFrame,
+                String objective,
+                String detector,
+                boolean flipFrameVerified) {
             this.transform = transform;
             this.flipMacroX = flipMacroX;
             this.flipMacroY = flipMacroY;
             this.pixelFrame = (pixelFrame != null && !pixelFrame.isEmpty()) ? pixelFrame : PIXEL_FRAME_MACRO;
             this.objective = (objective != null && !objective.isEmpty()) ? objective : null;
             this.detector = (detector != null && !detector.isEmpty()) ? detector : null;
+            this.flipFrameVerified = flipFrameVerified;
         }
 
         public AffineTransform getTransform() {
@@ -1186,6 +1209,18 @@ public class AffineTransformManager {
 
         public boolean hasFlipFrame() {
             return flipMacroX != null && flipMacroY != null;
+        }
+
+        /**
+         * True when the JSON was written by a save site that records the actual frame the
+         * transform was built in (post-2026-05-19 fix). False for JSONs older than that
+         * fix, whose flipMacroX/Y were hardcoded false regardless of the build-time frame
+         * and may therefore mis-label a flipped-frame transform as unflipped. The macro-
+         * path loader uses this to advise the user before silently consuming a potentially
+         * mis-labelled transform on a flip-needing scope.
+         */
+        public boolean isFlipFrameVerified() {
+            return flipFrameVerified;
         }
     }
 
@@ -1327,7 +1362,9 @@ public class AffineTransformManager {
             String objective = objObj instanceof String ? (String) objObj : null;
             Object detObj = data.get("detector");
             String detector = detObj instanceof String ? (String) detObj : null;
-            return new SlideAlignmentResult(transform, fx, fy, pixelFrame, objective, detector);
+            Object verObj = data.get("flipFrameVerified");
+            boolean flipFrameVerified = verObj instanceof Boolean && (Boolean) verObj;
+            return new SlideAlignmentResult(transform, fx, fy, pixelFrame, objective, detector, flipFrameVerified);
         } catch (Exception e) {
             logger.error("Error reading slide alignment file {}: {}", alignmentFile, e.getMessage());
             return null;

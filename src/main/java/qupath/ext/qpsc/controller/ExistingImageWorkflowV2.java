@@ -1560,28 +1560,45 @@ public class ExistingImageWorkflowV2 {
                     : null;
 
             if (lookupKey != null) {
-                // state.transform is in unflipped-base frame at this point: AlignmentHelper
-                // baked any alignment-time flip into it before we passed it through
-                // SingleTileRefinement. Record flipMacroX/Y = false so the next reload
-                // is idempotent (AlignmentHelper sees no flip to bake, transform stays
-                // in unflipped-base frame). Also record objective + detector so the next
-                // load can advise the user when the wizard's objective differs from the
-                // one this refinement was built against (review finding H8).
+                // Record flipMacroX/Y to match the CURRENT OPEN ENTRY's frame. AlignmentHelper's
+                // bake-delta on load is "bake = alignFlip XOR currentEntryFlip" (the
+                // ImageMetadataManager.isFlippedX/Y read on the open entry). For the next load
+                // to be idempotent (no spurious bake), the saved alignFlip must equal the frame
+                // the transform actually consumes. The transform that came out of
+                // SingleTileRefinement consumes pixel coords from the currently-open entry's
+                // hierarchy, so the saved alignFlip should equal the open entry's flip
+                // metadata -- not a hardcoded false (which mis-labelled flipped-sibling
+                // alignments and caused the 2026-05-18 stage-mirror bug).
+                boolean openEntryFlipX = false;
+                boolean openEntryFlipY = false;
+                try {
+                    ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
+                    if (openEntry != null) {
+                        openEntryFlipX = ImageMetadataManager.isFlippedX(openEntry);
+                        openEntryFlipY = ImageMetadataManager.isFlippedY(openEntry);
+                    }
+                } catch (Exception e) {
+                    logger.warn(
+                            "Could not read open-entry flip metadata for saveRefinedAlignment; defaulting to (false, false): {}",
+                            e.getMessage());
+                }
                 AffineTransformManager.saveSlideAlignment(
                         project,
                         lookupKey,
                         state.modality,
                         state.transform,
                         null,
-                        false,
-                        false,
+                        openEntryFlipX,
+                        openEntryFlipY,
                         AffineTransformManager.PIXEL_FRAME_MACRO,
                         state.objective,
                         state.detector);
                 logger.info(
-                        "Saved refined alignment for image: {} (lookupKey={}, objective={}, detector={})",
+                        "Saved refined alignment for image: {} (lookupKey={}, flipMacroX={}, flipMacroY={}, objective={}, detector={})",
                         imageName,
                         lookupKey,
+                        openEntryFlipX,
+                        openEntryFlipY,
                         state.objective,
                         state.detector);
             }

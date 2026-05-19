@@ -224,24 +224,22 @@ public class ManualAlignmentPath {
 
                     if (imageName != null) {
                         // Capture the macro flip frame this manual alignment was built in
-                        // by resolving the active (source_scanner, target_microscope)
-                        // preset's flipMacroX/Y. The legacy `FlipResolver(null, null, null)`
-                        // call always returned (false, false) post-Step-B (the global flip
-                        // preferences are gone), which mis-recorded the JSON as "no flip"
-                        // even when the operator was clicking on the flipped sibling. With
-                        // a wrong frame on the JSON, AlignmentHelper.checkForSlideAlignment
-                        // and StageControlPanel.handleGoToCentroid skip the flip-bake on
-                        // load, so the saved transform (in flipped frame) gets applied to
-                        // unflipped pixel coords and Move-to-Centroid drives to the XY
-                        // mirror. Resolving from the preset matches what
-                        // ImageFlipHelper.validateAndFlipIfNeeded used to switch the open
-                        // entry in the first place.
+                        // by reading the OPEN ENTRY's flip metadata. This must match exactly
+                        // what AlignmentHelper.checkForSlideAlignment reads as
+                        // `currentEntryFlipX/Y` on the next load (it calls
+                        // ImageMetadataManager.isFlippedX/Y on the open entry); otherwise
+                        // the bake-delta `bake = alignFlip XOR currentEntryFlip` either
+                        // over-flips or under-flips. Using preset-driven flip here
+                        // (resolveRequiredFlipFromPreset) can diverge from the entry's
+                        // actual flip metadata -- e.g. when source_microscope is missing
+                        // the preset resolver returns (false, false) even when the open
+                        // entry is the flipped sibling -- and was the cause of the
+                        // 2026-05-18 stage-mirror bug.
                         ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
-                        boolean[] flipFromPreset = openEntry != null
-                                ? qupath.ext.qpsc.utilities.ImageFlipHelper.resolveRequiredFlipFromPreset(openEntry)
-                                : new boolean[] {false, false};
-                        boolean flipMacroX = flipFromPreset[0];
-                        boolean flipMacroY = flipFromPreset[1];
+                        boolean flipMacroX = openEntry != null
+                                && qupath.ext.qpsc.utilities.ImageMetadataManager.isFlippedX(openEntry);
+                        boolean flipMacroY = openEntry != null
+                                && qupath.ext.qpsc.utilities.ImageMetadataManager.isFlippedY(openEntry);
                         AffineTransformManager.saveSlideAlignment(
                                 project,
                                 imageName, // Use image name without extension for base_image compatibility
