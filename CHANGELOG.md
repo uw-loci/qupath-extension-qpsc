@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Named presets**: Save, load, and delete named snapshots of channel configurations (selected channels, exposure, intensity, focus channel). Presets persist across QuPath sessions and are listed in a dropdown for quick recall.
 - **Test Current Channel**: Apply a single selected channel's hardware state to the microscope and open Live Viewer for verification without starting a full acquisition. Useful for dialing in exposure and intensity settings before multi-tile acquisition.
 
+### Fixed
+
+**Re-stitch Tiles**
+- Output folder now anchored to `<projectDir>/SlideImages` (matching the regular acquisition path) instead of landing under the imaging-mode folder or tile-selection folder.
+- Output filenames now correctly follow the user-configured naming pattern (respecting FilenameIncludeModality, Objective, Annotation, Angle preferences) instead of duplicating angle names and misplacing indices.
+- Compression and output-format selectors are now type-safe, and the compression choices are filtered by the selected format: OME-TIFF offers the full compression set, while ZARR-backed formats (OME_ZARR, OME_TIFF_VIA_ZARR) are restricted to LZW, ZLIB, Uncompressed, and Default. Codecs with no real ZARR algorithm can no longer be selected, so invalid combinations that would throw at the writer are now impossible.
+- **OME_TIFF_VIA_ZARR format** now available: stitch to ZARR, then automatically queue a background conversion to OME-TIFF.
+
 
 ## [0.5.0] - 2026-05-07
 
