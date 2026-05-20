@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Bounded Acquisition**
 - **Time-lapse acquisition**: Collapsible **TIME-LAPSE OPTIONS** pane in the acquisition dialog. Enable to repeat the full region acquisition over multiple timepoints at a fixed interval. Includes spinner controls for number of timepoints and interval (seconds between timepoint starts). If a timepoint exceeds the interval, a one-time "falling behind" warning is shown (modal dialog + push notification if configured) and acquisition continues. The feature is optional and backward-compatible; omitting time-lapse settings yields single-timepoint acquisitions identical to pre-time-lapse builds. New socket protocol commands `REQTWARN` (best-effort, auto-disables against older servers) and ACQUIRE flags `--timepoints` / `--interval`.
 
+**Make Project Portable**
+- Now deletes the raw individual tile images (the per-mode acquisition folders alongside `SlideImages`) by default after swapping ZARR-backed entries to TIFF, since those tiles are only needed to re-stitch. A **Keep individual tile images** checkbox preserves them. The dialog shows the tile count and size, warns that the deletions are permanent, and asks for confirmation before doing any work. Acquisition metadata files inside the tile folders are preserved -- only raw tile images are removed.
+
 ### Fixed
 
 **Alignment transform loading (flip bake elimination)**

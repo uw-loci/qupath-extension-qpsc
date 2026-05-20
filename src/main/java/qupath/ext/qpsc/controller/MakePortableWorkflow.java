@@ -15,6 +15,7 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ScrollPane;
@@ -24,6 +25,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.utilities.TileProcessingUtilities;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
@@ -37,13 +39,21 @@ import qupath.lib.projects.ProjectImageEntry;
  * by the OME_TIFF_VIA_ZARR background conversion), and offers to swap the
  * project entries from ZARR to TIFF using {@code entry.updateURIs()}.
  *
- * <p>After swapping, the ZARR intermediates are deleted. The result is a
- * project that uses only single-file OME-TIFFs, making it easy to copy
- * off the acquisition workstation.
+ * <p>After swapping, the ZARR intermediates are deleted. By default the raw
+ * individual tile images (the per-mode acquisition folders alongside
+ * {@code SlideImages}) are also deleted, since they are only needed to
+ * re-stitch; a "Keep individual tile images" checkbox preserves them. The
+ * result is a project that uses only single-file OME-TIFFs, making it easy
+ * to copy off the acquisition workstation.
+ *
+ * <p>The dialog warns that the deletions are permanent and asks for
+ * confirmation before doing any work.
  *
  * <p>All annotations, detections, image type, metadata, and thumbnails are
  * preserved because {@code updateURIs()} only changes the backing file URI
- * without touching the entry's data directory.
+ * without touching the entry's data directory. Acquisition metadata files
+ * inside the tile folders are also preserved -- only raw tile images are
+ * removed.
  */
 public class MakePortableWorkflow {
 
@@ -158,10 +168,107 @@ public class MakePortableWorkflow {
     }
 
     // ------------------------------------------------------------------
+    // Individual tile images
+    // ------------------------------------------------------------------
+
+    /** Result of scanning the sample folder for individual (un-stitched) tile images. */
+    private static class TileScan {
+        final List<Path> tileDirs;
+        final long tileFileCount;
+        final long tileSizeBytes;
+
+        TileScan(List<Path> tileDirs, long tileFileCount, long tileSizeBytes) {
+            this.tileDirs = tileDirs;
+            this.tileFileCount = tileFileCount;
+            this.tileSizeBytes = tileSizeBytes;
+        }
+    }
+
+    /**
+     * Scan the sample folder for acquisition tile directories -- the per-mode
+     * folders (e.g. {@code ppm_10x_1}) that sit alongside {@code SlideImages}
+     * and hold the raw, un-stitched tile images.
+     *
+     * <p>The sample folder is derived from a ZARR entry's path:
+     * {@code <sampleDir>/SlideImages/<name>.ome.zarr}. A tile directory is any
+     * direct child of the sample folder other than {@code SlideImages} and the
+     * QuPath {@code data} directory that contains at least one raw tile image.
+     */
+    private static TileScan scanTileDirectories(List<ZarrEntry> entries) {
+        List<Path> tileDirs = new ArrayList<>();
+        if (entries.isEmpty()) return new TileScan(tileDirs, 0, 0);
+
+        Path slideImagesDir = entries.get(0).zarrPath.getParent();
+        if (slideImagesDir == null) return new TileScan(tileDirs, 0, 0);
+        Path sampleDir = slideImagesDir.getParent();
+        if (sampleDir == null || !Files.isDirectory(sampleDir)) return new TileScan(tileDirs, 0, 0);
+
+        long totalCount = 0;
+        long totalBytes = 0;
+        try (Stream<Path> children = Files.list(sampleDir)) {
+            for (Path child : children.filter(Files::isDirectory).toList()) {
+                String name = child.getFileName().toString();
+                if (name.equals("SlideImages") || name.equals("data")) continue;
+                long[] stat = tileStats(child);
+                if (stat[0] > 0) {
+                    tileDirs.add(child);
+                    totalCount += stat[0];
+                    totalBytes += stat[1];
+                }
+            }
+        } catch (IOException e) {
+            logger.warn("Could not scan sample folder for tile images: {}", e.getMessage());
+        }
+
+        logger.info(
+                "Found {} tile image(s) across {} acquisition folder(s) under {}",
+                totalCount,
+                tileDirs.size(),
+                sampleDir);
+        return new TileScan(tileDirs, totalCount, totalBytes);
+    }
+
+    /** Returns {@code [rawTileCount, totalBytes]} for raw tile images under {@code dir}. */
+    private static long[] tileStats(Path dir) {
+        long count = 0;
+        long bytes = 0;
+        try (Stream<Path> walk = Files.walk(dir)) {
+            for (Path p : walk.filter(Files::isRegularFile).toList()) {
+                if (!isRawTile(p)) continue;
+                count++;
+                try {
+                    bytes += Files.size(p);
+                } catch (IOException ignored) {
+                    // size unavailable; count still increments
+                }
+            }
+        } catch (IOException e) {
+            logger.debug("Could not stat tile dir {}: {}", dir, e.getMessage());
+        }
+        return new long[] {count, bytes};
+    }
+
+    /** True for raw acquisition tile images (.tif/.tiff, excluding stitched .ome.tif). */
+    private static boolean isRawTile(Path p) {
+        String name = p.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
+        if (name.endsWith(".ome.tif") || name.endsWith(".ome.tiff")) return false;
+        return name.endsWith(".tif") || name.endsWith(".tiff");
+    }
+
+    /** Format a byte count as a human-readable GB/MB string. */
+    private static String formatBytes(long bytes) {
+        return bytes > 1_000_000_000
+                ? String.format("%.1f GB", bytes / 1_000_000_000.0)
+                : String.format("%d MB", bytes / 1_000_000);
+    }
+
+    // ------------------------------------------------------------------
     // Dialog
     // ------------------------------------------------------------------
 
     private static void showPortabilityDialog(QuPathGUI gui, Project<BufferedImage> project, List<ZarrEntry> entries) {
+
+        TileScan tileScan = scanTileDirectories(entries);
 
         Stage dialog = new Stage();
         dialog.setTitle("Make Project Portable");
@@ -183,8 +290,34 @@ public class MakePortableWorkflow {
         }
         ScrollPane scrollPane = new ScrollPane(entryList);
         scrollPane.setFitToWidth(true);
-        scrollPane.setPrefHeight(200);
+        scrollPane.setPrefHeight(170);
         VBox.setVgrow(scrollPane, Priority.ALWAYS);
+
+        // Individual-tile-image controls
+        boolean hasTiles = !tileScan.tileDirs.isEmpty();
+        CheckBox keepTilesCheckbox = new CheckBox("Keep individual tile images");
+        keepTilesCheckbox.setSelected(false);
+        keepTilesCheckbox.setDisable(!hasTiles);
+
+        Label tileInfoLabel = new Label();
+        tileInfoLabel.setWrapText(true);
+        if (hasTiles) {
+            tileInfoLabel.setText(String.format(
+                    "Found %d individual tile image(s) in %d acquisition folder(s) (%s). "
+                            + "These are deleted by default -- they are only needed to re-stitch. "
+                            + "Check the box above to keep them.",
+                    tileScan.tileFileCount, tileScan.tileDirs.size(), formatBytes(tileScan.tileSizeBytes)));
+            tileInfoLabel.setStyle("-fx-text-fill: #b06000;");
+        } else {
+            tileInfoLabel.setText("No individual tile images found in the project folder.");
+        }
+
+        // Warning label
+        Label warningLabel = new Label("Warning: this permanently deletes the ZARR intermediates"
+                + (hasTiles ? " and the individual tile images" : "")
+                + ". This cannot be undone.");
+        warningLabel.setWrapText(true);
+        warningLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: red;");
 
         // Progress bar (hidden initially)
         ProgressBar progressBar = new ProgressBar(0);
@@ -217,8 +350,32 @@ public class MakePortableWorkflow {
         });
 
         makePortableBtn.setOnAction(e -> {
+            boolean keepTiles = keepTilesCheckbox.isSelected();
+            long readyN =
+                    entries.stream().filter(ze -> ze.status == TiffStatus.READY).count();
+
+            StringBuilder confirmMsg = new StringBuilder();
+            confirmMsg.append(String.format(
+                    "%d image(s) will be swapped from ZARR to TIFF and the ZARR intermediates deleted.%n%n", readyN));
+            if (hasTiles) {
+                if (keepTiles) {
+                    confirmMsg.append("Individual tile images will be KEPT.\n\n");
+                } else {
+                    confirmMsg.append(String.format(
+                            "%d individual tile image(s) (%s) will be DELETED.%n%n",
+                            tileScan.tileFileCount, formatBytes(tileScan.tileSizeBytes)));
+                }
+            }
+            confirmMsg.append("This cannot be undone. Continue?");
+
+            boolean confirmed = Dialogs.showConfirmDialog("Make Project Portable", confirmMsg.toString());
+            if (!confirmed) {
+                return;
+            }
+
             makePortableBtn.setDisable(true);
             refreshBtn.setDisable(true);
+            keepTilesCheckbox.setDisable(true);
             progressBar.setVisible(true);
 
             Thread worker = new Thread(
@@ -256,6 +413,20 @@ public class MakePortableWorkflow {
                             }
                         }
 
+                        // Delete individual tile images unless the user chose to keep them.
+                        if (!keepTiles && !tileScan.tileDirs.isEmpty()) {
+                            Platform.runLater(() -> statusLabel.setText("Deleting individual tile images..."));
+                            for (Path tileDir : tileScan.tileDirs) {
+                                try {
+                                    TileProcessingUtilities.deleteTilesAndFolder(tileDir.toString());
+                                } catch (Exception ex) {
+                                    logger.error(
+                                            "Failed to delete tile images in {}: {}", tileDir, ex.getMessage(), ex);
+                                }
+                            }
+                            freedBytes += tileScan.tileSizeBytes;
+                        }
+
                         final int s = succeeded;
                         final int f = failed;
                         final long freed = freedBytes;
@@ -267,9 +438,7 @@ public class MakePortableWorkflow {
                                 logger.error("Failed to sync project: {}", ex.getMessage());
                             }
 
-                            String freedStr = freed > 1_000_000_000
-                                    ? String.format("%.1f GB", freed / 1_000_000_000.0)
-                                    : String.format("%d MB", freed / 1_000_000);
+                            String freedStr = formatBytes(freed);
 
                             if (f == 0) {
                                 statusLabel.setText(String.format("Done! %d images converted, %s freed.", s, freedStr));
@@ -299,9 +468,18 @@ public class MakePortableWorkflow {
 
         HBox buttons = new HBox(10, refreshBtn, makePortableBtn, closeBtn);
 
-        root.getChildren().addAll(summaryLabel, scrollPane, progressBar, statusLabel, buttons);
+        root.getChildren()
+                .addAll(
+                        summaryLabel,
+                        scrollPane,
+                        keepTilesCheckbox,
+                        tileInfoLabel,
+                        warningLabel,
+                        progressBar,
+                        statusLabel,
+                        buttons);
 
-        dialog.setScene(new Scene(root, 550, 380));
+        dialog.setScene(new Scene(root, 560, 470));
         dialog.show();
     }
 
