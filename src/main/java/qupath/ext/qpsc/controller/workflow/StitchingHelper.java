@@ -2022,7 +2022,7 @@ public class StitchingHelper {
      * @param compression TIFF compression type (e.g. "LZW", "J2K")
      * @param label       Human-readable label for logging (e.g. annotation name)
      */
-    private static void queueBackgroundZarrToTiffConversion(List<String> zarrPaths, String compression, String label) {
+    public static void queueBackgroundZarrToTiffConversion(List<String> zarrPaths, String compression, String label) {
 
         List<String> toConvert =
                 zarrPaths.stream().filter(p -> p.endsWith(".ome.zarr")).toList();

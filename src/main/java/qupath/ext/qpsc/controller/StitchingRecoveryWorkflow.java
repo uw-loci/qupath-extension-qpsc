@@ -10,6 +10,7 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -32,6 +33,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.basicstitching.workflow.StitchingWorkflow;
+import qupath.ext.qpsc.controller.workflow.StitchingHelper;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
@@ -40,8 +42,8 @@ import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.fx.dialogs.Dialogs;
-import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.images.writers.ome.OMEPyramidWriter;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 
@@ -214,22 +216,44 @@ public class StitchingRecoveryWorkflow {
         HBox pixelBox = new HBox(8, pixelField, pixelSourceLabel);
         pixelBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
-        // Compression
-        Label compressionLabel = new Label("Compression:");
-        ComboBox<String> compressionCombo = new ComboBox<>();
-        compressionCombo.getItems().addAll("LZW", "JPEG", "zstd", "Uncompressed");
-        compressionCombo.setValue("LZW");
-
-        // Output format
+        // Output format -- exposes all three options (OME_TIFF, OME_ZARR,
+        // OME_TIFF_VIA_ZARR). Declared before compression so the format-change
+        // listener can re-filter the compression choices.
         Label formatLabel = new Label("Output format:");
-        ComboBox<String> formatCombo = new ComboBox<>();
-        formatCombo.getItems().addAll("OME_TIFF", "OME_ZARR");
+        ComboBox<StitchingConfig.OutputFormat> formatCombo = new ComboBox<>();
+        formatCombo.getItems().addAll(StitchingConfig.OutputFormat.values());
         try {
-            StitchingConfig.OutputFormat currentFormat = QPPreferenceDialog.getOutputFormatProperty();
-            formatCombo.setValue(currentFormat.name());
+            formatCombo.setValue(QPPreferenceDialog.getOutputFormatProperty());
         } catch (Exception e) {
-            formatCombo.setValue("OME_TIFF");
+            formatCombo.setValue(StitchingConfig.OutputFormat.OME_TIFF);
         }
+
+        // Compression -- choices filtered by the current format. Mirrors
+        // QPPreferenceDialog.getCompressionTypesForFormat so the recovery
+        // dialog can never select a codec the writer would reject (the
+        // previous hardcoded "Uncompressed" / "zstd" strings would throw
+        // IllegalArgumentException at UtilityFunctions.getCompressionType
+        // for the TIFF path).
+        Label compressionLabel = new Label("Compression:");
+        ComboBox<OMEPyramidWriter.CompressionType> compressionCombo = new ComboBox<>();
+        compressionCombo.getItems().setAll(QPPreferenceDialog.getCompressionTypesForFormat(formatCombo.getValue()));
+        OMEPyramidWriter.CompressionType prefCompression;
+        try {
+            prefCompression = QPPreferenceDialog.getCompressionTypeProperty();
+        } catch (Exception e) {
+            prefCompression = OMEPyramidWriter.CompressionType.LZW;
+        }
+        compressionCombo.setValue(
+                compressionCombo.getItems().contains(prefCompression)
+                        ? prefCompression
+                        : OMEPyramidWriter.CompressionType.LZW);
+
+        formatCombo.valueProperty().addListener((obs, oldFormat, newFormat) -> {
+            List<OMEPyramidWriter.CompressionType> allowed = QPPreferenceDialog.getCompressionTypesForFormat(newFormat);
+            OMEPyramidWriter.CompressionType current = compressionCombo.getValue();
+            compressionCombo.getItems().setAll(allowed);
+            compressionCombo.setValue(allowed.contains(current) ? current : OMEPyramidWriter.CompressionType.LZW);
+        });
 
         // Matching string
         Label matchLabel = new Label("Matching string:");
@@ -258,10 +282,10 @@ public class StitchingRecoveryWorkflow {
         grid.add(metadataLabel, 0, 2, 3, 1);
         grid.add(pixelLabel, 0, 3);
         grid.add(pixelBox, 1, 3, 2, 1);
-        grid.add(compressionLabel, 0, 4);
-        grid.add(compressionCombo, 1, 4);
-        grid.add(formatLabel, 0, 5);
-        grid.add(formatCombo, 1, 5);
+        grid.add(formatLabel, 0, 4);
+        grid.add(formatCombo, 1, 4);
+        grid.add(compressionLabel, 0, 5);
+        grid.add(compressionCombo, 1, 5);
         grid.add(matchLabel, 0, 6);
         grid.add(matchField, 1, 6);
         grid.add(parallelCheck, 0, 7, 3, 1);
@@ -292,13 +316,15 @@ public class StitchingRecoveryWorkflow {
                 // Remember for next time
                 PersistentPreferences.setRestitchPixelSize(pixelField.getText().trim());
                 PersistentPreferences.setRestitchParallelAngles(parallelCheck.isSelected());
-                String compression = compressionCombo.getValue();
+                // Compression must be passed as the enum's name() so
+                // UtilityFunctions.getCompressionType(...) can map it back via
+                // OMEPyramidWriter.CompressionType.valueOf.
+                String compression = compressionCombo.getValue().name();
                 String matchingString = matchField.getText().trim();
                 if (matchingString.isEmpty()) {
                     matchingString = ".";
                 }
-                StitchingConfig.OutputFormat outputFormat =
-                        StitchingConfig.OutputFormat.valueOf(formatCombo.getValue());
+                StitchingConfig.OutputFormat outputFormat = formatCombo.getValue();
                 boolean parallel = parallelCheck.isSelected();
 
                 // Run stitching in background
@@ -469,14 +495,15 @@ public class StitchingRecoveryWorkflow {
             }
         }
 
-        // Output goes to a "SlideImages" sibling directory (or same parent if no parent)
-        File parentDir = tileFolderFile.getParentFile();
-        String outputFolder;
-        if (parentDir != null && parentDir.getName().equals("TempTiles")) {
-            outputFolder = new File(parentDir.getParentFile(), "SlideImages").getAbsolutePath();
-        } else {
-            outputFolder = new File(parentDir, "SlideImages").getAbsolutePath();
-        }
+        // Output goes to <projectDir>/SlideImages, matching the regular
+        // acquisition path (TileProcessingUtilities.stitchImagesAndUpdateProject
+        // line 131 builds <projectsFolder>/<sampleLabel>/SlideImages).
+        // project.getPath() is .../<sampleName>/<sampleName>.qpproj, so
+        // project.getPath().getParent() resolves to the sample folder.
+        // Previously this used tileFolder.getParent()/SlideImages, which placed
+        // output under the imaging-mode folder (or the annotation folder for
+        // legacy _temp_* selections) instead of alongside the project.
+        final String outputFolder = resolveSlideImagesFolder(project, tileFolderFile);
 
         File outputDir = new File(outputFolder);
         if (!outputDir.exists() && !outputDir.mkdirs()) {
@@ -527,6 +554,9 @@ public class StitchingRecoveryWorkflow {
 
         AtomicInteger successCount = new AtomicInteger();
         AtomicInteger failureCount = new AtomicInteger();
+        // Collected for the OME_TIFF_VIA_ZARR background conversion at the end.
+        // Synchronized because angle workers may run in parallel.
+        java.util.List<String> successfulOutputs = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
 
         // Capture fields for use inside lambda (must be effectively final)
         final String finalSampleName = sampleName;
@@ -586,18 +616,15 @@ public class StitchingRecoveryWorkflow {
                             1.0, // zSpacingMicrons
                             outputFormat);
 
-                    // Generate output filename using ImageNameGenerator (respects Preferences)
-                    String extension = outputFormat == StitchingConfig.OutputFormat.OME_ZARR ? ".ome.zarr" : ".ome.tif";
-                    String generatedName = ImageNameGenerator.generateImageName(
-                            fnSampleName,
-                            fnImageIndex,
-                            fnModality,
-                            fnObjective,
-                            fnAnnotationName,
-                            isRootDir ? null : angleName,
-                            extension);
-                    // Strip extension since StitchingWorkflow appends it
-                    config.outputFilename = GeneralTools.stripExtension(generatedName);
+                    // Set outputFilename to a simple sanitized sample base.
+                    // StitchingWorkflow appends "_<subdirName>" (the angle dir
+                    // name) so the stitcher produces "<sampleName>_<angle>.<ext>".
+                    // We rename to the user-configured pattern AFTER the stitch
+                    // completes (see post-stitch rename below). Pushing the
+                    // full ImageNameGenerator name in here caused duplication
+                    // (Sample_..._0.0_001_0.0.ome.tif) because the index landed
+                    // before the stitcher's appended subdir name.
+                    config.outputFilename = ImageNameGenerator.sanitizeForFilename(fnSampleName);
 
                     // Pass the composite stage/camera transform to the
                     // tile-config stitching strategy. Must match the
@@ -615,15 +642,15 @@ public class StitchingRecoveryWorkflow {
                             stitcherFlags[0],
                             stitcherFlags[1],
                             siTransform);
-                    String outPath;
+                    String stitchedOutPath;
                     try {
-                        outPath = StitchingWorkflow.run(config);
+                        stitchedOutPath = StitchingWorkflow.run(config);
                     } finally {
                         qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = false;
                         qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = false;
                     }
 
-                    if (outPath == null) {
+                    if (stitchedOutPath == null) {
                         logger.error("Stitching returned null for angle '{}'", angleName);
                         failureCount.incrementAndGet();
                         return;
@@ -647,13 +674,32 @@ public class StitchingRecoveryWorkflow {
                                         + "Skipping project import for this angle.",
                                 angleName,
                                 errorDelta,
-                                outPath);
+                                stitchedOutPath);
                         failureCount.incrementAndGet();
                         return;
                     }
 
+                    // Apply the user-configured naming pattern. The stitcher
+                    // wrote "<sampleName>_<angleName>.<ext>" (because we set
+                    // outputFilename to the sample base and the workflow
+                    // appended the subdir name). Now rename to the pattern
+                    // produced by ImageNameGenerator, which honours the
+                    // FilenameInclude{Modality,Objective,Annotation,Angle}
+                    // preferences and places the index at the end.
+                    String extension = outputFormat.stitchAsZarr() ? ".ome.zarr" : ".ome.tif";
+                    String desiredName = ImageNameGenerator.generateImageName(
+                            fnSampleName,
+                            fnImageIndex,
+                            fnModality,
+                            fnObjective,
+                            fnAnnotationName,
+                            isRootDir ? null : angleName,
+                            extension);
+                    final String outPath = renameStitchedOutput(stitchedOutPath, desiredName, extension);
+
                     logger.info("Stitching completed for '{}': {}", angleName, outPath);
                     successCount.incrementAndGet();
+                    successfulOutputs.add(outPath);
 
                     // Import to project with metadata
                     final String finalAngle = isRootDir ? null : angleName;
@@ -708,6 +754,15 @@ public class StitchingRecoveryWorkflow {
         final int finalSuccess = successCount.get();
         final int finalFailure = failureCount.get();
         logger.info("=== STITCHING RECOVERY COMPLETE: {} succeeded, {} failed ===", finalSuccess, finalFailure);
+
+        // For OME_TIFF_VIA_ZARR, the stitcher wrote .ome.zarr; queue the
+        // background conversion that turns each ZARR into a sibling .ome.tif.
+        // Mirrors the main acquisition path (StitchingHelper queues this from
+        // its run() continuations).
+        if (outputFormat == StitchingConfig.OutputFormat.OME_TIFF_VIA_ZARR && !successfulOutputs.isEmpty()) {
+            StitchingHelper.queueBackgroundZarrToTiffConversion(
+                    new java.util.ArrayList<>(successfulOutputs), compression, "Recovery: " + sampleName);
+        }
 
         Platform.runLater(() -> {
             if (finalSuccess > 0 && finalFailure == 0) {
@@ -796,5 +851,73 @@ public class StitchingRecoveryWorkflow {
         }
         logger.warn("Parent image '{}' not found in project", parentImageName);
         return null;
+    }
+
+    /**
+     * Resolve the SlideImages output folder for recovery. Prefers the
+     * project's parent directory (matches the regular acquisition path's
+     * sample-level SlideImages folder), falling back to the tile folder's
+     * parent if the project path is unavailable.
+     */
+    private static String resolveSlideImagesFolder(Project<BufferedImage> project, File tileFolderFile) {
+        try {
+            File projectDir = project.getPath().getParent().toFile();
+            return new File(projectDir, "SlideImages").getAbsolutePath();
+        } catch (Exception e) {
+            File parentDir = tileFolderFile.getParentFile();
+            String fallback = new File(parentDir, "SlideImages").getAbsolutePath();
+            logger.warn("Could not resolve project directory for SlideImages output; falling back to {}", fallback);
+            return fallback;
+        }
+    }
+
+    /**
+     * Rename a stitcher output (TIFF file or ZARR directory) to the configured
+     * naming pattern, returning the new absolute path. Falls back to the
+     * original path when rename fails or the target equals the source.
+     *
+     * <p>If the desired name already exists, appends {@code _2}, {@code _3}, ...
+     * before the extension until a unique name is found, matching the
+     * {@code UtilityFunctions.getUniqueFilePath} convention.
+     *
+     * @param stitchedPath absolute path the stitcher returned
+     * @param desiredName  bare filename produced by {@link ImageNameGenerator}
+     *                     (includes extension)
+     * @param extension    expected extension, either {@code .ome.tif} or
+     *                     {@code .ome.zarr}
+     */
+    private static String renameStitchedOutput(String stitchedPath, String desiredName, String extension) {
+        File initial = new File(stitchedPath);
+        File desired = new File(initial.getParent(), desiredName);
+        if (initial.getAbsolutePath().equals(desired.getAbsolutePath())) {
+            return stitchedPath;
+        }
+        File target = uniqueWithExtension(desired, extension);
+        if (initial.renameTo(target)) {
+            logger.info("Renamed stitched output to configured pattern: {} -> {}", initial.getName(), target.getName());
+            return target.getAbsolutePath();
+        }
+        logger.warn(
+                "Could not rename stitched output {} -> {}; keeping stitcher default name",
+                initial.getName(),
+                target.getName());
+        return stitchedPath;
+    }
+
+    /**
+     * Append {@code _2}, {@code _3}, ... before the extension until the
+     * candidate path does not exist. If {@code file} already doesn't exist,
+     * returns it unchanged.
+     */
+    private static File uniqueWithExtension(File file, String extension) {
+        if (!file.exists()) return file;
+        String name = file.getName();
+        String stem = name.endsWith(extension) ? name.substring(0, name.length() - extension.length()) : name;
+        int n = 2;
+        while (true) {
+            File candidate = new File(file.getParent(), stem + "_" + n + extension);
+            if (!candidate.exists()) return candidate;
+            n++;
+        }
     }
 }

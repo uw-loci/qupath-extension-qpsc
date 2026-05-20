@@ -1153,7 +1153,7 @@ public class QPPreferenceDialog {
      * silently fall back to zstd which is misleading. Only types that produce the
      * expected compression algorithm are offered.
      */
-    private static List<OMEPyramidWriter.CompressionType> getCompressionTypesForFormat(
+    public static List<OMEPyramidWriter.CompressionType> getCompressionTypesForFormat(
             StitchingConfig.OutputFormat format) {
         if (format != null && format.stitchAsZarr()) {
             return List.of(
