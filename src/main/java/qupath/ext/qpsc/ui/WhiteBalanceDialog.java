@@ -140,6 +140,24 @@ public class WhiteBalanceDialog {
             ) {}
 
     /**
+     * Returns the currently persisted advanced calibration parameters without
+     * opening the dialog. Use this from workflows (e.g. WB Comparison) that
+     * need to honor whatever the user last tuned in the WB dialog's Advanced
+     * Settings pane, instead of hardcoding their own gain caps.
+     */
+    public static AdvancedWBParams getPersistedAdvancedParams() {
+        return new AdvancedWBParams(
+                maxGainDbProperty.get(),
+                gainThresholdRatioProperty.get(),
+                maxIterationsProperty.get(),
+                calibrateBlackLevelProperty.get(),
+                baseGainProperty.get(),
+                exposureSoftCapMsProperty.get(),
+                boostedMaxGainDbProperty.get(),
+                gainAnalogRbMaxProperty.get());
+    }
+
+    /**
      * Result record for Simple White Balance configuration.
      */
     public record SimpleWBParams(

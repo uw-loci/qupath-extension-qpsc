@@ -20,6 +20,8 @@ import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.service.AcquisitionMonitorService;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.WBComparisonDialog;
+import qupath.ext.qpsc.ui.WhiteBalanceDialog;
+import qupath.ext.qpsc.ui.WhiteBalanceDialog.AdvancedWBParams;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
@@ -510,6 +512,14 @@ public class WBComparisonWorkflow {
             throws Exception {
         logger.info("[{}] Starting white balance calibration", wbMode);
 
+        // Honor whatever the user last tuned in the WB dialog's Advanced
+        // Settings pane (gain caps, base gain, iteration limits, etc.) so
+        // the comparison test exercises the same calibration path as a
+        // standalone WB run. Tolerance stays fixed at 5.0 here for a
+        // consistent convergence criterion across the three modes.
+        AdvancedWBParams adv = WhiteBalanceDialog.getPersistedAdvancedParams();
+        double tolerance = 5.0;
+
         switch (wbMode) {
             case "camera_awb" -> {
                 // No automated calibration -- the user must trigger AWB manually
@@ -526,15 +536,15 @@ public class WBComparisonWorkflow {
                         outputPath,
                         baseExposure,
                         targetIntensity,
-                        5.0, // tolerance
-                        6.0, // maxGainDb
-                        0.75, // gainThresholdRatio
-                        15, // maxIterations
-                        false, // calibrateBlackLevel
-                        1.0, // baseGain
-                        100.0, // exposureSoftCapMs
-                        12.0, // boostedMaxGainDb
-                        4.0, // gainAnalogRbMax (hardware-spec default; raise via WB dialog if Phase 1c saturates)
+                        tolerance,
+                        adv.maxGainDb(),
+                        adv.gainThresholdRatio(),
+                        adv.maxIterations(),
+                        adv.calibrateBlackLevel(),
+                        adv.baseGain(),
+                        adv.exposureSoftCapMs(),
+                        adv.boostedMaxGainDb(),
+                        adv.gainAnalogRbMax(),
                         configPath,
                         objective,
                         detector,
@@ -582,15 +592,15 @@ public class WBComparisonWorkflow {
                         uncrossExp,
                         targetIntensity,
                         targetIntensity,
-                        5.0, // tolerance
-                        6.0, // maxGainDb
-                        0.75, // gainThresholdRatio
-                        15, // maxIterations
-                        false, // calibrateBlackLevel
-                        1.0, // baseGain
-                        100.0, // exposureSoftCapMs
-                        12.0, // boostedMaxGainDb
-                        4.0, // gainAnalogRbMax (hardware-spec default; raise via WB dialog if Phase 1c saturates)
+                        tolerance,
+                        adv.maxGainDb(),
+                        adv.gainThresholdRatio(),
+                        adv.maxIterations(),
+                        adv.calibrateBlackLevel(),
+                        adv.baseGain(),
+                        adv.exposureSoftCapMs(),
+                        adv.boostedMaxGainDb(),
+                        adv.gainAnalogRbMax(),
                         configPath,
                         objective,
                         detector);
