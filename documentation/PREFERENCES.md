@@ -24,6 +24,9 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Tissue Median Kernel](#tissue-median-kernel) | Integer | 17 | Median filter kernel size |
 | [Tissue Morph Close Kernel](#tissue-morph-close-kernel) | Integer | 7 | Morphological closing kernel size |
 | [Tissue Morph Close Iterations](#tissue-morph-close-iterations) | Integer | 3 | Morphological closing iterations |
+| [Enable time-lapse acquisition](#time-lapse-options) | Boolean | OFF | Repeat acquisition over multiple timepoints at fixed interval |
+| [Timepoints](#time-lapse-options) | Integer | 1 | Number of times full acquisition is repeated |
+| [Interval (s)](#time-lapse-options) | Double | 60.0 | Seconds between start of consecutive timepoints |
 | [Tile Handling Method](#tile-handling-method) | Choice | None | How to handle intermediate tiles |
 | [Tile Overlap Percent](#tile-overlap-percent) | Double | 10.0 | Overlap between adjacent tiles |
 | [Compression type](#compression-type) | Choice | LZW | OME pyramid compression |
@@ -450,6 +453,34 @@ Settings that control image acquisition and stitching behavior.
 ### Z-Stack Options
 
 Z-stack settings (enable, range, step, projection) are configured per-acquisition in the acquisition dialog under **Z-STACK OPTIONS**. These settings persist between sessions. See [Z-Stack / Time-Lapse](tools/z-stack-timelapse.md) for details.
+
+---
+
+### Time-Lapse Options
+
+| Property | Type | Default |
+|----------|------|---------|
+| Enable time-lapse acquisition | Boolean | OFF |
+| Timepoints | Integer | 1 |
+| Interval (s) | Double | 60.0 |
+
+**Description:**
+Time-lapse settings are configured per-acquisition in the acquisition dialog under **TIME-LAPSE OPTIONS**. When enabled, the full region acquisition repeats over multiple timepoints at a fixed interval.
+
+| Setting | Range | Purpose |
+|---------|-------|---------|
+| **Enable** | ON / OFF | Turns time-lapse loop on/off. When OFF, acquisition runs once (backward-compatible). |
+| **Timepoints** | 1-10000 | Number of times the full acquisition is repeated. |
+| **Interval (s)** | 0.0+ | Seconds between the *start* of consecutive timepoints. |
+
+**Behavior:**
+- If a timepoint takes longer than the requested interval, remaining timepoints start late and the acquisition continues.
+- The first time a timepoint exceeds the interval, QPSC shows a one-time "falling behind" warning (modal dialog + push notification if configured).
+- The warning is informational; the acquisition runs to completion regardless.
+- The feature is backward-compatible: omitting time-lapse settings produces single-timepoint acquisitions identical to pre-time-lapse builds.
+
+**Persistence:**
+These settings persist globally across sessions and are restored when you open the acquisition dialog. See [Bounded Acquisition](tools/bounded-acquisition.md#time-lapse-options-collapsed-by-default) for UI details and how the preview folds timepoints into total-images and time estimates.
 
 ---
 

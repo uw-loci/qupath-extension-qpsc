@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Named presets**: Save, load, and delete named snapshots of channel configurations (selected channels, exposure, intensity, focus channel). Presets persist across QuPath sessions and are listed in a dropdown for quick recall.
 - **Test Current Channel**: Apply a single selected channel's hardware state to the microscope and open Live Viewer for verification without starting a full acquisition. Useful for dialing in exposure and intensity settings before multi-tile acquisition.
 
+**Bounded Acquisition**
+- **Time-lapse acquisition**: Collapsible **TIME-LAPSE OPTIONS** pane in the acquisition dialog. Enable to repeat the full region acquisition over multiple timepoints at a fixed interval. Includes spinner controls for number of timepoints and interval (seconds between timepoint starts). If a timepoint exceeds the interval, a one-time "falling behind" warning is shown (modal dialog + push notification if configured) and acquisition continues. The feature is optional and backward-compatible; omitting time-lapse settings yields single-timepoint acquisitions identical to pre-time-lapse builds. New socket protocol commands `REQTWARN` (best-effort, auto-disables against older servers) and ACQUIRE flags `--timepoints` / `--interval`.
+
 ### Fixed
 
 **Alignment transform loading (flip bake elimination)**
