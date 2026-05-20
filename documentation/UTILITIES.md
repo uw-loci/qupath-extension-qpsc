@@ -28,6 +28,7 @@ This document provides an overview of all utilities available in the QPSC extens
 | Re-stitch Tiles | Re-stitch tiles from a failed or incomplete acquisition | Extensions > QP Scope > Utilities > Re-stitch Tiles... |
 | [Setup Wizard](tools/setup-wizard.md) | Create microscope config files (first-time setup) | Extensions > QP Scope > Utilities > Setup Wizard... |
 | [Communication Settings](tools/server-connection.md) | Configure server connection and notification alerts | Extensions > QP Scope > Utilities > Communication Settings... |
+| Make Project Portable | Convert ZARR-backed images to portable single-file OME-TIFFs | Extensions > QP Scope > Utilities > Make Project Portable... |
 | **JAI Camera Submenu** (conditional -- only when JAI detected) | | |
 | [White Balance Calibration](tools/white-balance-calibration.md) | Calibrate JAI 3-CCD camera white balance | Extensions > QP Scope > Utilities > JAI Camera > White Balance... |
 | [JAI Noise Characterization](tools/noise-characterization.md) | Measure camera noise statistics | Extensions > QP Scope > Utilities > JAI Camera > Noise Characterization... |
@@ -217,6 +218,37 @@ Every QPSC acquisition writes a Micro-Manager 2.0 compatible Multi-Dimensional A
 **Multi-group channels caveat.** A QPSC channel can carry presets across more than one MM `ConfigGroup`. MM's `SequenceSettings` allows only one channel group per channels list, so the writer keeps the first preset's group and lists the dropped presets in `MDA_NOTES.txt`. If you need the dropped presets active in MM, apply them manually (or future-edit the MDA file) before running.
 
 **Live progress panel.** During acquisition the existing per-annotation progress bar gains a small dimension panel beneath it: a static summary line (tiles, channels or angles, Z, T, total images, estimated duration) plus live counters (`Channel: FITC`, `Z step 3/9`, `Tile 47/84`). A time-lapse progress bar slot is reserved and lights up when `timepoints > 1`. The MDA auto-save path is shown as an `MDA: <path>` label so you can find the saved files without leaving the dialog. If the counters ever drift from server reality, the per-axis labels collapse to a single "Dimension counters out of sync; showing aggregate only" note and the aggregate bar continues unaffected.
+
+---
+
+## Make Project Portable
+
+Converts a project from ZARR-backed images to portable single-file OME-TIFF format, making it easy to copy the project off the acquisition workstation. This is particularly useful after using the OME_TIFF_VIA_ZARR output format, which writes fast to ZARR and queues automatic background conversion to OME-TIFF.
+
+**What It Does:**
+
+1. Scans the project for any ZARR-backed images (the intermediate directory format used during OME_TIFF_VIA_ZARR conversion)
+2. Converts them to single-file OME-TIFFs using the QuPath `updateURIs()` mechanism
+3. Deletes the ZARR intermediates to save space (the original per-mode acquisition tile folders can also be deleted)
+
+**What Gets Preserved:**
+
+- All annotations, detections, image metadata, and thumbnails remain unchanged
+- Acquisition metadata files inside the tile folders are preserved -- only raw tile images are removed by default
+
+**The Tile Image Deletion Decision:**
+
+When the dialog opens it shows:
+- The count and total size of individual (raw, un-stitched) tile images found in the project
+- A **Keep individual tile images** checkbox (unchecked by default)
+
+Individual tiles are only needed if you plan to **re-stitch** the acquisition. If you're confident the stitched result is final and just want to minimize storage, the default (delete) is recommended. The dialog shows the permanent deletion warning and requires confirmation before deleting anything.
+
+**When You Need It:**
+
+- You've acquired images using the OME_TIFF_VIA_ZARR output format and want the ZARR files removed
+- You want to archive or share a project with minimal file size (only single-file OME-TIFFs, no ZARR directories or raw tiles)
+- You're copying the project from the acquisition workstation to storage or a shared server
 
 ---
 
