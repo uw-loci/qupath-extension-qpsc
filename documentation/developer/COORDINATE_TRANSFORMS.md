@@ -14,15 +14,15 @@ A user draws annotations on a whole-slide image (WSI) in QuPath, measured in pix
 
 ```mermaid
 graph LR
-    QP["QuPath Full-Res<br/>unflipped-base pixels"]
-    BAKED["Per-slide transform<br/>(flip baked in by AlignmentHelper)"]
+    QP["QuPath Full-Res<br/>pixel frame of working entry"]
+    TRANSFORM["Per-slide transform<br/>(loaded as-is)"]
     ST["Stage<br/>micrometers, hardware origin"]
 
-    QP -->|"baked transform<br/>(unflipped pixels -> stage)"| ST
+    QP -->|"transform in entry's frame<br/>(entry pixels -> stage)"| ST
     ST -->|"inverse"| QP
 ```
 
-After the Step B refactor (2026-05-04, scope clarified 2026-05-07), there is **one canonical pixel frame** for downstream callers: the unflipped-base frame. The optical flip is captured on the saved `(source_scanner, target_microscope)` preset (`TransformPreset.flipMacroX/Y`) and on each per-slide alignment JSON (`flipMacroX/Y` field). `AlignmentHelper.checkForSlideAlignment` composes that flip into the loaded transform so every consumer downstream — `SingleTileRefinement`, `AcquisitionManager`, `ForwardPropagationWorkflow` — operates in unflipped-base pixel coords without further bookkeeping.
+The per-slide alignment JSON stores the pixel-to-stage transform in the **pixel frame of the entry the workflow runs on** — the flipped sibling for flip-needing scopes, the unflipped base for non-flip scopes. `AlignmentHelper.checkForSlideAlignment` loads this transform and returns it as-is; `validateAndFlipIfNeeded` puts the workflow on that same entry, so no frame conversion is needed. All save sites (`ManualAlignmentPath`, `ExistingAlignmentPath`, `saveRefinedAlignment`, `StitchingHelper.autoRegisterBoundsTransformIfAvailable`) write the transform in the pixel frame of the entry they are working on, recorded via `flipMacroX/Y` in the JSON.
 
 A `(flipped X|Y|XY)` companion entry is **still created on demand** by the alignment-bearing workflows (`ManualAlignmentPath`, `ExistingAlignmentPath`, anything that runs single-tile refinement) on scopes where the active preset has `flipMacroX/Y = true` (e.g. PPM). The companion exists for **visual-UX reasons only**: during alignment, the operator visually compares the QuPath display to the live camera view, and on a flipped scope the unflipped base and the live camera view disagree by a mirror. The sibling restores visual parity. The sibling is no longer authoritative for flip state — the preset and per-slide JSON are.
 
@@ -50,31 +50,18 @@ Sub-images now carry an `acquired_on_microscope` per-entry metadata field, stamp
 
 Annotations live on the unflipped base entry. The optional `(flipped XY)` sibling, when present, mirrors annotation coordinates via `TransformationFunctions.transformHierarchy` so back-propagation keeps the two in sync. Full-resolution pixel coordinates are interpreted in the unflipped pixel frame for transform purposes.
 
-### Step 2: Flip baking (alignment-time correction, applied once at load)
+### Step 2: Transform stored in working entry's pixel frame (no load-time baking)
 
-Each per-slide alignment JSON records the `flipMacroX/Y` frame the alignment was built in. On load, `AlignmentHelper.checkForSlideAlignment` composes:
+Each per-slide alignment JSON records, in `flipMacroX/Y`, the pixel frame the transform was saved in. On load, `AlignmentHelper.checkForSlideAlignment` returns this transform as-is; no frame conversion or flip baking is applied. This works because the save sites and the workflow operate on the **same entry**:
 
-```
-state.transform = saved_transform * createFlip(alignFlipX, alignFlipY, baseW, baseH)
-```
+| Save Site | Entry it operates on | flipMacroX/Y recorded |
+|---|---|---|
+| `ManualAlignmentPath` | the open entry at save time (`ImageMetadataManager.isFlippedX/Y`) -- the flipped sibling for flip-needing scopes | flipped sibling -> `true, true` (PPM); base -> `false, false` |
+| `ExistingAlignmentPath` + green-box | the open entry at save time (`ImageMetadataManager.isFlippedX/Y`) | as above |
+| `saveRefinedAlignment` | the open entry at save time (`ImageMetadataManager.isFlippedX/Y`) | as above |
+| `StitchingHelper.autoRegisterBoundsTransformIfAvailable` | sub-image (pixelFrame=`sub`, distinct path) | `metadata.flipX, metadata.flipY` |
 
-so the resulting transform consumes unflipped-base pixel coords directly. `createFlip` lives on `ForwardPropagationWorkflow` (also used by Forward/Back propagation):
-
-```java
-// ForwardPropagationWorkflow.createFlip(flipX, flipY, width, height)
-if (flipX && flipY) {
-    flip.translate(width, height);
-    flip.scale(-1, -1);
-} else if (flipX) {
-    flip.translate(width, 0);
-    flip.scale(-1, 1);
-} else if (flipY) {
-    flip.translate(0, height);
-    flip.scale(1, -1);
-}
-```
-
-When the JSON's `flipMacroX/Y` are both `false` (or absent for legacy files), the bake step is a no-op and the saved transform is used as-is.
+`ImageFlipHelper.validateAndFlipIfNeeded` puts the workflow on the flipped sibling for flip-needing scopes (the unflipped base otherwise) -- the same entry the save site wrote from -- so the loaded transform's pixel frame already matches the workflow's operating frame and is used directly. Two earlier loading paths instead composed a flip "bake-delta" into the transform (one at load in `checkForSlideAlignment`, one post-flip-switch); both double-flipped an already-correct transform and drove the stage to the X/Y mirror of the selected tile (PPM 2026-05-19). `flipMacroX/Y` is now purely documentation of the saved frame -- it is read by the cross-scope composer and the legacy/unverified-flip advisories, but never used to bake.
 
 ### Step 3: Affine Transform (alignment calibration)
 
@@ -142,7 +129,7 @@ graph TB
     subgraph "Optical Flip (per source-target preset, post Step B)"
         F["Light path mirrors the image<br/>relative to the physical slide"]
         F1["Captured per (source_scanner,<br/>target_microscope) preset"]
-        F2["Baked into per-slide transforms<br/>by AlignmentHelper at load time"]
+        F2["Recorded in per-slide JSON<br/>flipMacroX/Y; documents<br/>the frame the transform is in"]
     end
 
     subgraph "Stage Inversion (per-microscope)"
@@ -157,21 +144,23 @@ graph TB
 | What it is | Optical mirror in light path | Stage axis direction convention |
 | What it affects | Pixel-to-stage transform direction | Tile traversal order, transform sign |
 | Where configured | `TransformPreset.flipMacroX/Y` in `saved_transforms.json`; mirrored on each per-slide alignment JSON | QuPath preferences per microscope |
-| Applied when | `AlignmentHelper.checkForSlideAlignment` bakes the flip into the loaded transform | Computing tile grid positions |
-| Storage post Step B | Per-pair preset + per-slide JSON. **Not** per-image metadata; per-image `FLIP_X/FLIP_Y` is no longer load-bearing for new code (legacy projects may still carry it). | Auto-detected from `StageInsert` calibration when YAML has `slide_holder`/`inserts`; falls back to `(false, false)` in the synthesized path. |
+| Applied when | Each save site writes the transform in the frame of the entry it operates on; `AlignmentHelper.checkForSlideAlignment` loads it as-is (no bake) | Computing tile grid positions |
+| Storage post Step B | Per-pair preset + per-slide JSON `flipMacroX/Y` documents the frame. **Not** per-image metadata; per-image `FLIP_X/FLIP_Y` is no longer load-bearing for new code (legacy projects may still carry it). | Auto-detected from `StageInsert` calibration when YAML has `slide_holder`/`inserts`; falls back to `(false, false)` in the synthesized path. |
 
-### Per-slide JSON `flipMacroX/Y` — every save site must write the truth
+### Per-slide JSON `flipMacroX/Y` — records the pixel frame each transform was saved in
 
-`AlignmentHelper.checkForSlideAlignment` reads these two booleans from the per-slide JSON and composes the corresponding flip into the returned transform. If a save site omits the fields, the loader assumes the transform is in unflipped-base frame and skips the bake — which silently mis-frames the transform if the saved math was actually in flipped frame. The four save sites and the frame each writes:
+`AlignmentHelper.checkForSlideAlignment` reads `flipMacroX/Y` from the per-slide JSON purely as documentation of the frame the saved transform is in — this allows cross-scope alignment composition and legacy-flip advisories. The loader does **not** apply a flip bake; instead, the value lets `ImageFlipHelper.validateAndFlipIfNeeded` ensure the workflow runs on the correct entry. When `flipMacroX/Y` are omitted (BoundingBox fallback, legacy JSON), the loader assumes `false, false` and warns if a cross-scope compose attempt or legacy-flip check is needed.
+
+The save sites record the frame they operated in:
 
 | Caller | File | Frame of saved transform | `flipMacroX/Y` written |
 |---|---|---|---|
-| Manual 3-point alignment | `ManualAlignmentPath.java` | unflipped-base (post-Step-B clicks land on the unflipped display) | `false, false` |
-| Existing alignment + green-box | `ExistingAlignmentPath.java` | preset's macro frame | preset's `flipMacroX/Y` |
-| Refined alignment | `ExistingImageWorkflowV2.saveRefinedAlignment` | unflipped-base (state.transform was already baked unflipped before refinement) | `false, false` |
-| BoundingBox auto-register at stitch import | `StitchingHelper.autoRegisterBoundsTransformIfAvailable` | matches `StitchingMetadata.flipX/Y` (the flip the stitcher honoured on output) | `metadata.flipX, metadata.flipY` |
+| Manual 3-point alignment | `ManualAlignmentPath.java` | the open entry at save time -- the flipped sibling on flip-needing scopes | `ImageMetadataManager.isFlippedX/Y(openEntry)` |
+| Existing alignment + green-box | `ExistingAlignmentPath.java` | the open entry at save time | `ImageMetadataManager.isFlippedX/Y(openEntry)` |
+| Refined alignment | `ExistingImageWorkflowV2.saveRefinedAlignment` | the open entry at save time | `ImageMetadataManager.isFlippedX/Y(openEntry)` |
+| BoundingBox auto-register at stitch import | `StitchingHelper.autoRegisterBoundsTransformIfAvailable` | sub-image (`pixelFrame=sub`, distinct path) | `metadata.flipX, metadata.flipY` |
 
-When `metadata.flipX/Y == true` (PPM, where the optical path is XY-flipped), `StitchingHelper` builds a transform with negative scale signs and opposite-corner origins so that **flipped-frame** pixel coords map to stage. Saving `flipMacroX = true, flipMacroY = true` on the JSON tells `AlignmentHelper` to pre-compose the matching flip on load, so `state.transform` ends up in the unflipped-base frame the rest of the pipeline expects.
+The loaded transform is used in its saved frame — no baking applied. The workflow's open entry (determined by `validateAndFlipIfNeeded`) is the same entry the save site wrote from, so the frames match by construction.
 
 ## SIFT Alignment with Per-Detector Flip
 
@@ -219,7 +208,7 @@ The `--hint-z` flag tells the server to start its autofocus search near the pred
 | `utilities/AffineTransform3D.java` | 3D transform with Z scale/offset |
 | `utilities/FlipResolver.java` | Resolves macro flip in priority order: per-image metadata (legacy), active preset, per-detector YAML, default false |
 | `utilities/ImageFlipHelper.java` | `validateAndFlipIfNeeded` -- ensures a `(flipped X|Y|XY)` sibling exists and is the open entry on scopes where the active `(source_scanner, target_microscope)` preset has `flipMacroX/Y = true`. For visual UX during alignment only; not authoritative for flip state. **No-op when the open entry is a sub-acquisition** (sub-images do not have flipped siblings). |
-| `controller/workflow/AlignmentHelper.java` | `checkForSlideAlignment` — single normalization point that bakes alignment-frame flip into the loaded transform |
+| `controller/workflow/AlignmentHelper.java` | `checkForSlideAlignment` — loads per-slide alignment JSON and returns the transform in its saved frame; `flipMacroX/Y` documents the frame but no baking is applied |
 | `controller/ForwardPropagationWorkflow.java` | `createFlip(flipX, flipY, w, h)` flip transform; back/forward propagation also baked through this |
 | `utilities/TilingUtilities.java` | Grid computation with axis inversion |
 | `utilities/ZFocusPredictionModel.java` | Tilt correction model |
