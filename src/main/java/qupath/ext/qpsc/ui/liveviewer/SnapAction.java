@@ -159,7 +159,7 @@ public final class SnapAction {
         // The triangle is decorative -- screen readers will still see the
         // button's accessible text via the centered label.
         Label textLabel = new Label("Snap");
-        Label arrow = new Label("▾"); // BLACK DOWN-POINTING SMALL TRIANGLE
+        Label arrow = new Label("\u25BE"); // U+25BE down-triangle, escaped to keep source ASCII-clean
         arrow.setStyle("-fx-font-size: 8px; -fx-text-fill: -fx-mid-text-color; -fx-padding: 0 1 0 0;");
         arrow.setMouseTransparent(true);
         StackPane content = new StackPane(textLabel, arrow);

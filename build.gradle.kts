@@ -165,7 +165,7 @@ tasks.register("checkAsciiOnly") {
                     if (ch.code > 0x7F) {
                         violations.add(
                             "${file.relativeTo(projectDir)}:${idx + 1}:${col + 1}  " +
-                            "'$ch' (U+${"04X".format(ch.code)})"
+                            "'$ch' (U+${"%04X".format(ch.code)})"
                         )
                     }
                 }
