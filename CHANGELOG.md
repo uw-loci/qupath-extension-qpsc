@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Alignment transform loading (flip bake elimination)**
+- Per-slide alignment transforms now load in their saved pixel frame without additional flip baking. This eliminates a PPM refinement bug where the stage would jump to the X/Y-mirror position of the selected tile instead of the intended tile. Root cause: the saved transform was already in the correct frame (the flipped sibling for flip-needing scopes, the unflipped base otherwise), but earlier code applied an additional flip-delta bake both at load and post-flip-switch, double-flipping the transform. `AlignmentHelper.checkForSlideAlignment` now loads transforms as-is, and `ImageFlipHelper.validateAndFlipIfNeeded` ensures the workflow operates on the entry the saved transform was built in.
+- See `documentation/developer/COORDINATE_TRANSFORMS.md` § "Step 2" for the architectural shift.
+
 **Re-stitch Tiles**
 - Output folder now anchored to `<projectDir>/SlideImages` (matching the regular acquisition path) instead of landing under the imaging-mode folder or tile-selection folder.
 - Output filenames now correctly follow the user-configured naming pattern (respecting FilenameIncludeModality, Objective, Annotation, Angle preferences) instead of duplicating angle names and misplacing indices.
