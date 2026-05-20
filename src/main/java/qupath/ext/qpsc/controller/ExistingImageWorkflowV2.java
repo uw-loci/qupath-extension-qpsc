@@ -131,16 +131,13 @@ public class ExistingImageWorkflowV2 {
                                     annotationResult.selectedClasses.size(),
                                     annotationResult.selectedClasses);
 
-                            // Get actual annotations for the selected classes
+                            // Get actual annotations for the selected classes. Carrying
+                            // these across a flip switch is handled by
+                            // ImageFlipHelper.mirrorAnnotationsToSibling, which mirrors the
+                            // base's LIVE hierarchy onto the flipped sibling; the workflow
+                            // re-reads by class post-routing.
                             List<PathObject> selectedAnnotations =
                                     getAnnotationsForClasses(annotationResult.selectedClasses);
-                            // Capture deep copies before any routing / flip switch so that
-                            // reReadAnnotationsAfterRouting can sync them into the destination
-                            // entry's hierarchy. Without this, new annotations drawn on the
-                            // base entry never reach the flipped sibling and the workflow
-                            // acquires whatever was on the sibling instead of what the user
-                            // selected.
-                            captureUserSelectedAnnotations(state, selectedAnnotations);
                             return ExistingImageAcquisitionController.showDialog(
                                     defaultSampleName, selectedAnnotations);
                         })
@@ -265,165 +262,15 @@ public class ExistingImageWorkflowV2 {
          * invariant -- "after routing, annotations are always read against the
          * post-flip hierarchy" -- in one place.
          *
-         * <p>Inner re-reads in {@code ExistingAlignmentPath.createTransform} and
-         * {@code ManualAlignmentPath.createManualAlignment} stay in place as
-         * defense-in-depth. They will be removed in a follow-on commit after one
-         * OWS3-PPM verification cycle on the slide-specific path.
+         * <p>Carrying annotations across a flip switch is handled upstream by
+         * {@code ImageFlipHelper.mirrorAnnotationsToSibling}, which makes the
+         * flipped sibling's annotation set a deterministic mirror of the base's
+         * LIVE hierarchy. This method only re-reads; it does not transfer.
          */
         private CompletableFuture<WorkflowState> reReadAnnotationsAfterRouting(WorkflowState state) {
             if (state == null) return CompletableFuture.completedFuture(null);
-            // Sync user-selected annotations into the post-routing entry's hierarchy
-            // BEFORE the re-read. If the workflow switched to a flipped sibling that
-            // doesn't have annotations the user drew on the base after the sibling was
-            // created, this transforms them with the source -> current flip delta and
-            // adds them to the current hierarchy. Dedupe by name.
-            syncUserSelectedAnnotationsToCurrentEntry(state);
             state.annotations = null;
             return ensureAnnotationsExist(state);
-        }
-
-        /**
-         * Captures the user-selected annotations (deep copies) along with the source
-         * entry's flip metadata and dimensions. These follow the user across any
-         * routing / flip switch so the originally-selected annotations always end up
-         * on the entry the workflow actually runs against.
-         */
-        private void captureUserSelectedAnnotations(WorkflowState state, List<PathObject> selected) {
-            state.userSelectedAnnotations = new ArrayList<>();
-            if (selected == null || selected.isEmpty()) {
-                return;
-            }
-            try {
-                for (PathObject ann : selected) {
-                    PathObject copy = qupath.lib.objects.PathObjectTools.transformObject(ann, null, true, true);
-                    if (copy != null) {
-                        state.userSelectedAnnotations.add(copy);
-                    }
-                }
-                if (gui.getImageData() != null && gui.getProject() != null) {
-                    ProjectImageEntry<BufferedImage> sourceEntry =
-                            gui.getProject().getEntry(gui.getImageData());
-                    if (sourceEntry != null) {
-                        state.userSelectionSourceFlipX = ImageMetadataManager.isFlippedX(sourceEntry);
-                        state.userSelectionSourceFlipY = ImageMetadataManager.isFlippedY(sourceEntry);
-                    }
-                    state.userSelectionSourceImageWidth =
-                            gui.getImageData().getServer().getWidth();
-                    state.userSelectionSourceImageHeight =
-                            gui.getImageData().getServer().getHeight();
-                }
-                logger.info(
-                        "Captured {} user-selected annotations (sourceFlipX={}, sourceFlipY={}, sourceDims={}x{})",
-                        state.userSelectedAnnotations.size(),
-                        state.userSelectionSourceFlipX,
-                        state.userSelectionSourceFlipY,
-                        state.userSelectionSourceImageWidth,
-                        state.userSelectionSourceImageHeight);
-            } catch (Exception e) {
-                logger.warn("Failed to capture user-selected annotations for cross-flip sync: {}", e.getMessage());
-            }
-        }
-
-        /**
-         * Adds {@link WorkflowState#userSelectedAnnotations} to the currently-open
-         * entry's hierarchy when they are missing (by name). Transforms each
-         * annotation with the source -> current flip delta first so coordinates land
-         * in the right pixel frame. Save the entry's ImageData when anything was
-         * added so the new annotations persist.
-         *
-         * <p>Triggered by the user scenario: draw new annotations on the unflipped
-         * base, run the workflow with those classes selected, workflow finds the
-         * existing flipped sibling and switches to it. Pre-fix: the new annotations
-         * existed only on the base; post-fix they appear on the sibling too with
-         * coordinates flipped to match.
-         */
-        private void syncUserSelectedAnnotationsToCurrentEntry(WorkflowState state) {
-            if (state.userSelectedAnnotations == null || state.userSelectedAnnotations.isEmpty()) {
-                return;
-            }
-            if (gui.getImageData() == null || gui.getProject() == null) {
-                return;
-            }
-            try {
-                ProjectImageEntry<BufferedImage> currentEntry = gui.getProject().getEntry(gui.getImageData());
-                if (currentEntry == null) {
-                    logger.debug("syncUserSelectedAnnotations: no project entry for current image; skipping");
-                    return;
-                }
-                boolean currentFlipX = ImageMetadataManager.isFlippedX(currentEntry);
-                boolean currentFlipY = ImageMetadataManager.isFlippedY(currentEntry);
-                boolean applyFlipX = state.userSelectionSourceFlipX != currentFlipX;
-                boolean applyFlipY = state.userSelectionSourceFlipY != currentFlipY;
-                AffineTransform flip = null;
-                if (applyFlipX || applyFlipY) {
-                    int currentWidth = gui.getImageData().getServer().getWidth();
-                    int currentHeight = gui.getImageData().getServer().getHeight();
-                    flip = ForwardPropagationWorkflow.createFlip(applyFlipX, applyFlipY, currentWidth, currentHeight);
-                }
-                int added =
-                        mergeAnnotationsByName(gui.getImageData().getHierarchy(), state.userSelectedAnnotations, flip);
-                if (added > 0) {
-                    try {
-                        currentEntry.saveImageData(gui.getImageData());
-                        logger.info(
-                                "syncUserSelectedAnnotations: added {} annotation(s) to '{}' "
-                                        + "(applyFlipX={}, applyFlipY={}) and saved",
-                                added,
-                                currentEntry.getImageName(),
-                                applyFlipX,
-                                applyFlipY);
-                    } catch (Exception saveEx) {
-                        logger.warn(
-                                "syncUserSelectedAnnotations: could not save synced annotations: {}",
-                                saveEx.getMessage());
-                    }
-                }
-            } catch (Exception e) {
-                logger.warn("syncUserSelectedAnnotations: failed: {}", e.getMessage());
-            }
-        }
-
-        /**
-         * Adds each annotation from {@code source} to {@code targetHierarchy}, skipping
-         * any whose name already exists in the target. When {@code transform} is
-         * non-null, the source object is deep-copied with the transform applied.
-         *
-         * @return the number of annotations actually added.
-         */
-        private int mergeAnnotationsByName(
-                qupath.lib.objects.hierarchy.PathObjectHierarchy targetHierarchy,
-                List<PathObject> source,
-                AffineTransform transform) {
-            if (targetHierarchy == null || source == null) return 0;
-            java.util.Set<String> existingNames = new java.util.HashSet<>();
-            for (PathObject existing : targetHierarchy.getAnnotationObjects()) {
-                if (existing.getName() != null) {
-                    existingNames.add(existing.getName());
-                }
-            }
-            List<PathObject> toAdd = new ArrayList<>();
-            for (PathObject src : source) {
-                String name = src.getName();
-                if (name != null && existingNames.contains(name)) {
-                    continue;
-                }
-                try {
-                    PathObject copy = qupath.lib.objects.PathObjectTools.transformObject(src, transform, true, true);
-                    if (copy != null) {
-                        toAdd.add(copy);
-                    }
-                } catch (Exception e) {
-                    logger.warn(
-                            "mergeAnnotationsByName: failed to transform '{}': {}",
-                            src.getName() != null ? src.getName() : "<unnamed>",
-                            e.getMessage());
-                }
-            }
-            if (!toAdd.isEmpty()) {
-                targetHierarchy.addObjects(toAdd);
-                targetHierarchy.fireHierarchyChangedEvent(targetHierarchy.getRootObject());
-            }
-            return toAdd.size();
         }
 
         private CompletableFuture<WorkflowState> ensureAnnotationsExist(WorkflowState state) {
@@ -622,7 +469,11 @@ public class ExistingImageWorkflowV2 {
             return AlignmentHelper.checkForSlideAlignment(gui, state.sample).thenApply(slideResult -> {
                 if (slideResult != null) {
                     state.useExistingSlideAlignment = true;
+                    // RAW transform: the flip bake-delta is applied later, after the
+                    // flip switch, in processSlideSpecificAlignment.
                     state.transform = slideResult.getTransform();
+                    state.alignFlipX = slideResult.getAlignFlipX();
+                    state.alignFlipY = slideResult.getAlignFlipY();
                     state.alignmentConfidence = slideResult.getConfidence();
                     state.alignmentSource = slideResult.getSource();
                     logger.info(
@@ -951,6 +802,22 @@ public class ExistingImageWorkflowV2 {
                                     // flipped entry but the swap can race the worker thread that
                                     // reads gui.getImageData() downstream.
                                     if (validated) {
+                                        // Bake the flip delta NOW -- after validateAndFlipIfNeeded
+                                        // has switched the open entry to the working (flipped
+                                        // sibling) entry. checkForSlideAlignment returned the RAW
+                                        // transform; baking earlier (against the pre-flip base)
+                                        // produced the X/Y-mirror refinement bug. Skipped for
+                                        // cross-scope, whose composed transform must not be baked.
+                                        if (!state.crossScope) {
+                                            ProjectImageEntry<BufferedImage> workingEntry =
+                                                    project.getEntry(gui.getImageData());
+                                            state.transform = AlignmentHelper.bakeFlipDeltaForCurrentEntry(
+                                                    state.transform,
+                                                    state.alignFlipX,
+                                                    state.alignFlipY,
+                                                    workingEntry,
+                                                    gui.getImageData());
+                                        }
                                         // M11 -- install the transform only after validation passes.
                                         MicroscopeController.getInstance().setCurrentTransform(state.transform);
                                     }
@@ -1932,30 +1799,16 @@ public class ExistingImageWorkflowV2 {
         public final AnnotationPreservationService annotationPreservation = new AnnotationPreservationService();
 
         /**
-         * Annotations the user picked at the dialog, captured as deep copies before any
-         * routing / flip switching. These follow the user across an entry switch so
-         * annotations drawn on the base after the flipped sibling was created (and thus
-         * never copied to the sibling) still reach the acquisition. The inner
-         * routing paths null + re-read {@code annotations} against the post-flip
-         * hierarchy, which by itself drops new base-only annotations. Phase 8's
-         * consolidated re-read picks them up from {@link #userSelectedAnnotations} and
-         * syncs them in.
+         * Flip frame ({@code flipMacroX} / {@code flipMacroY}) recorded in the
+         * per-slide alignment JSON, captured by {@code checkExistingSlideAlignment}.
+         * {@link #transform} is stored RAW (unbaked); the flip bake-delta is applied
+         * post-flip-switch by {@code AlignmentHelper.bakeFlipDeltaForCurrentEntry}
+         * in {@code processSlideSpecificAlignment}. {@code null} when no JSON was
+         * loaded (BoundingBox-metadata fallback, legacy JSON) -- no bake applies.
          */
-        public List<PathObject> userSelectedAnnotations = new ArrayList<>();
+        public Boolean alignFlipX;
 
-        /**
-         * Flip state of the entry the user was on when {@link #userSelectedAnnotations}
-         * were captured. Used to compute the source -> current frame transform when
-         * the workflow has since switched to a flipped sibling (or back).
-         */
-        public boolean userSelectionSourceFlipX;
-
-        public boolean userSelectionSourceFlipY;
-
-        /** Source entry's dimensions, needed for the flip transform on sync. */
-        public int userSelectionSourceImageWidth;
-
-        public int userSelectionSourceImageHeight;
+        public Boolean alignFlipY;
 
         public double pixelSize;
         public Map<String, Double> angleOverrides;

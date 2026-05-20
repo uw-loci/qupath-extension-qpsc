@@ -7,9 +7,11 @@ import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.model.SampleSetupResult;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
@@ -59,19 +61,38 @@ public class AlignmentHelper {
         private final boolean refineRequested;
         private final double confidence;
         private final String source;
+        private final Boolean alignFlipX;
+        private final Boolean alignFlipY;
 
         public SlideAlignmentResult(AffineTransform transform, boolean refineRequested) {
-            this(transform, refineRequested, 0.7, "Unknown");
+            this(transform, refineRequested, 0.7, "Unknown", null, null);
         }
 
         public SlideAlignmentResult(
                 AffineTransform transform, boolean refineRequested, double confidence, String source) {
+            this(transform, refineRequested, confidence, source, null, null);
+        }
+
+        public SlideAlignmentResult(
+                AffineTransform transform,
+                boolean refineRequested,
+                double confidence,
+                String source,
+                Boolean alignFlipX,
+                Boolean alignFlipY) {
             this.transform = transform;
             this.refineRequested = refineRequested;
             this.confidence = confidence;
             this.source = source;
+            this.alignFlipX = alignFlipX;
+            this.alignFlipY = alignFlipY;
         }
 
+        /**
+         * @return the RAW (unbaked) pixel-to-stage transform as loaded from the
+         *     alignment JSON. The flip bake-delta is applied later by
+         *     {@link #bakeFlipDeltaForCurrentEntry} against the post-flip-switch entry.
+         */
         public AffineTransform getTransform() {
             return transform;
         }
@@ -86,6 +107,93 @@ public class AlignmentHelper {
 
         public String getSource() {
             return source;
+        }
+
+        /**
+         * @return the {@code flipMacroX} the alignment JSON was saved in, or
+         *     {@code null} when unknown (BoundingBox-metadata fallback, legacy JSON).
+         *     {@code null} means no bake delta can be computed.
+         */
+        public Boolean getAlignFlipX() {
+            return alignFlipX;
+        }
+
+        /** @return the JSON's {@code flipMacroY}, or {@code null}. See {@link #getAlignFlipX()}. */
+        public Boolean getAlignFlipY() {
+            return alignFlipY;
+        }
+    }
+
+    /**
+     * Composes the alignment-frame -> current-entry-frame flip "bake-delta" into a
+     * raw slide transform, against whatever entry is open <i>now</i>.
+     *
+     * <p>This is the relocated counterpart of the bake logic that used to live
+     * inside {@link #checkForSlideAlignment}. It must be called <b>after</b>
+     * {@code ImageFlipHelper.validateAndFlipIfNeeded} has switched the open entry
+     * to the working entry (the flipped sibling, or the base when no flip is
+     * needed) -- mirroring the load-raw-then-bake-against-current-entry pattern
+     * that {@code StageControlPanel.handleGoToCentroid} already uses correctly.
+     *
+     * <p>The delta is {@code bake = alignFlip XOR currentEntryFlip}. Both-on or
+     * both-off => no bake (the saved transform's native frame already matches the
+     * current entry). When {@code alignFlipX/Y} is {@code null} (BoundingBox
+     * fallback / legacy JSON) the raw transform is returned unchanged.
+     *
+     * @param rawTransform the unbaked transform from {@link SlideAlignmentResult#getTransform()}
+     * @param alignFlipX the JSON's {@code flipMacroX} (may be null)
+     * @param alignFlipY the JSON's {@code flipMacroY} (may be null)
+     * @param openEntry the entry currently open (post-flip-switch)
+     * @param imageData the open image data (for width/height of the flip)
+     * @return the baked transform, or {@code rawTransform} when no bake applies
+     */
+    public static AffineTransform bakeFlipDeltaForCurrentEntry(
+            AffineTransform rawTransform,
+            Boolean alignFlipX,
+            Boolean alignFlipY,
+            ProjectImageEntry<BufferedImage> openEntry,
+            qupath.lib.images.ImageData<BufferedImage> imageData) {
+        if (rawTransform == null || alignFlipX == null || alignFlipY == null || openEntry == null) {
+            return rawTransform;
+        }
+        boolean currentEntryFlipX = ImageMetadataManager.isFlippedX(openEntry);
+        boolean currentEntryFlipY = ImageMetadataManager.isFlippedY(openEntry);
+        boolean bakeX = alignFlipX != currentEntryFlipX;
+        boolean bakeY = alignFlipY != currentEntryFlipY;
+        if (!bakeX && !bakeY) {
+            logger.info(
+                    "Alignment frame ({}, {}) matches current entry frame ({}, {}); no bake",
+                    alignFlipX,
+                    alignFlipY,
+                    currentEntryFlipX,
+                    currentEntryFlipY);
+            return rawTransform;
+        }
+        if (imageData == null || imageData.getServer() == null) {
+            logger.warn("bakeFlipDeltaForCurrentEntry: no image data for flip dimensions; returning raw transform");
+            return rawTransform;
+        }
+        try {
+            int baseWidth = imageData.getServer().getWidth();
+            int baseHeight = imageData.getServer().getHeight();
+            AffineTransform flip = qupath.ext.qpsc.controller.ForwardPropagationWorkflow.createFlip(
+                    bakeX, bakeY, baseWidth, baseHeight);
+            AffineTransform composed = new AffineTransform(rawTransform);
+            composed.concatenate(flip);
+            logger.info(
+                    "Baked frame-delta flip ({}, {}) into slide transform "
+                            + "(alignFrame=({}, {}), currentEntryFrame=({}, {}))",
+                    bakeX,
+                    bakeY,
+                    alignFlipX,
+                    alignFlipY,
+                    currentEntryFlipX,
+                    currentEntryFlipY);
+            return composed;
+        } catch (Exception e) {
+            logger.warn(
+                    "bakeFlipDeltaForCurrentEntry: could not bake flip; returning raw transform: {}", e.getMessage());
+            return rawTransform;
         }
     }
 
@@ -267,19 +375,34 @@ public class AlignmentHelper {
         // at 20x reuses that translation, losing the per-tile correction. Surfaces
         // only when both sides have values -- legacy JSONs (no objective field) load
         // with null and the dialog is silent.
+        //
+        // Directional: only warn when the wizard objective is at a meaningfully
+        // higher magnification than the saved one (smaller pixel size). A 40x
+        // alignment replayed at 10x leaves the linear part intact and shrinks
+        // any refinement translation into a fraction of a 10x tile -- no risk.
+        // The reverse (10x -> 40x) extrapolates a 10x-tile-center translation
+        // across multiple 40x tiles and is the case the advisory exists for.
         if (loadedResult != null
                 && loadedResult.getObjective() != null
                 && sample != null
                 && sample.objective() != null
                 && !loadedResult.getObjective().equals(sample.objective())) {
-            logger.warn(
-                    "Slide alignment objective mismatch: saved='{}', wizard='{}' -- prompting user",
-                    loadedResult.getObjective(),
-                    sample.objective());
-            if (!confirmContinueWithObjectiveMismatch(lookupKey, loadedResult.getObjective(), sample.objective())) {
-                logger.info("User cancelled at objective-mismatch advisory");
-                future.complete(null);
-                return future;
+            if (wizardObjectiveIsSameOrCoarser(loadedResult, sample)) {
+                logger.info(
+                        "Slide alignment objective mismatch: saved='{}', wizard='{}' -- "
+                                + "wizard is at same or lower magnification, suppressing advisory.",
+                        loadedResult.getObjective(),
+                        sample.objective());
+            } else {
+                logger.warn(
+                        "Slide alignment objective mismatch: saved='{}', wizard='{}' -- prompting user",
+                        loadedResult.getObjective(),
+                        sample.objective());
+                if (!confirmContinueWithObjectiveMismatch(lookupKey, loadedResult.getObjective(), sample.objective())) {
+                    logger.info("User cancelled at objective-mismatch advisory");
+                    future.complete(null);
+                    return future;
+                }
             }
         }
 
@@ -332,76 +455,15 @@ public class AlignmentHelper {
             }
         }
 
-        // Bake the alignment-frame -> current-entry-frame flip delta into the returned
-        // transform so downstream callers (AcquisitionManager, AnnotationOrderingService,
-        // tile creation, refinement) can feed pixel coords from the CURRENT open entry's
-        // hierarchy directly.
-        //
-        // Step B's original design assumed the workflow always ran with the UNFLIPPED
-        // BASE as the open entry (validateAndFlipIfNeeded would create / switch to the
-        // flipped sibling for the visual-UX of the alignment step, but downstream
-        // operated on base-frame coords). If alignFlipX/Y was true, we unconditionally
-        // baked it in so saved(flipped) became baked(unflipped) -> stage.
-        //
-        // That assumption breaks when the user opens the flipped sibling directly:
-        // ImageFlipHelper.validateAndFlipIfNeeded no-ops on already-flipped entries, the
-        // workflow stays on the sibling, and the hierarchy yields FLIPPED-frame coords.
-        // An unconditional bake then double-flips and the stage lands at the X/Y mirror
-        // (verified 2026-05-15 from OWS3 logs: tile at flipped-frame (94746, 36206)
-        // moved to stage (5474, -7625) when the correct target was ~(22180, -9982)).
-        //
-        // Fix: bake only the DELTA -- bakeX = alignFlipX XOR currentEntryFlipX, same Y.
-        // Both-on or both-off => no bake; saved transform's native frame already matches
-        // the current entry's coord space.
-        boolean currentEntryFlipX = false;
-        boolean currentEntryFlipY = false;
-        try {
-            if (project != null && gui.getImageData() != null) {
-                ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
-                if (openEntry != null) {
-                    currentEntryFlipX = ImageMetadataManager.isFlippedX(openEntry);
-                    currentEntryFlipY = ImageMetadataManager.isFlippedY(openEntry);
-                }
-            }
-        } catch (Exception e) {
-            logger.debug(
-                    "Could not read current-entry flip metadata for bake delta; assuming unflipped: {}",
-                    e.getMessage());
-        }
-        if (slideTransform != null && alignFlipX != null && alignFlipY != null && gui.getImageData() != null) {
-            boolean bakeX = alignFlipX != currentEntryFlipX;
-            boolean bakeY = alignFlipY != currentEntryFlipY;
-            if (!bakeX && !bakeY) {
-                logger.info(
-                        "Alignment frame ({}, {}) matches current entry frame ({}, {}); skipping bake",
-                        alignFlipX,
-                        alignFlipY,
-                        currentEntryFlipX,
-                        currentEntryFlipY);
-            } else
-                try {
-                    int baseWidth = gui.getImageData().getServer().getWidth();
-                    int baseHeight = gui.getImageData().getServer().getHeight();
-                    AffineTransform flip = qupath.ext.qpsc.controller.ForwardPropagationWorkflow.createFlip(
-                            bakeX, bakeY, baseWidth, baseHeight);
-                    AffineTransform composed = new AffineTransform(slideTransform);
-                    composed.concatenate(flip);
-                    slideTransform = composed;
-                    logger.info(
-                            "Baked frame-delta flip ({}, {}) into slide transform "
-                                    + "(alignFrame=({}, {}), currentEntryFrame=({}, {}))",
-                            bakeX,
-                            bakeY,
-                            alignFlipX,
-                            alignFlipY,
-                            currentEntryFlipX,
-                            currentEntryFlipY);
-                } catch (Exception e) {
-                    logger.warn(
-                            "Could not bake alignment flip into transform; downstream may misalign: {}",
-                            e.getMessage());
-                }
-        }
+        // NOTE: the alignment-frame -> current-entry-frame flip "bake-delta" is
+        // intentionally NOT applied here. checkForSlideAlignment runs early in the
+        // workflow chain (checkExistingSlideAlignment), BEFORE
+        // ImageFlipHelper.validateAndFlipIfNeeded switches the open entry to the
+        // flipped sibling. Baking here against the pre-flip entry produces a
+        // transform in the wrong frame once the workflow flips -- the X/Y-mirror
+        // refinement bug. The raw transform plus alignFlipX/alignFlipY are returned
+        // instead; the caller composes the bake AFTER the flip switch, against the
+        // actual working entry, via bakeFlipDeltaForCurrentEntry().
 
         // Fallback when no JSON exists: derive a pixel-to-stage transform from
         // the open entry's BoundingBox metadata. QPSC-acquired stitches stamp
@@ -438,8 +500,11 @@ public class AlignmentHelper {
                     String.format("%.2f", confidence),
                     source);
 
-            // Return result - refinement choice is handled later by RefinementSelectionController
-            future.complete(new SlideAlignmentResult(slideTransform, false, confidence, source));
+            // Return result - refinement choice is handled later by RefinementSelectionController.
+            // alignFlipX/Y carry the JSON's recorded flip frame so the caller can bake the
+            // flip delta post-flip-switch (null for the BoundingBox fallback / legacy JSONs).
+            future.complete(
+                    new SlideAlignmentResult(slideTransform, false, confidence, source, alignFlipX, alignFlipY));
         } else {
             logger.info("No slide-specific alignment found");
             future.complete(null);
@@ -586,6 +651,54 @@ public class AlignmentHelper {
         body.append("it correctly.\n\n");
         body.append("Continue anyway?");
         return confirmContinueDialog(title, header, body.toString());
+    }
+
+    /**
+     * Suppress the H8 objective-mismatch advisory when the wizard objective is
+     * at the same or lower magnification (>= saved pixel size, within the same
+     * 5% tolerance the live pixel-size gate uses). Going from a finer alignment
+     * to a coarser acquisition leaves the linear transform valid and shrinks
+     * any refinement translation into a fraction of the new tile -- harmless.
+     *
+     * <p>Returns {@code false} (fall through to the advisory) when either
+     * pixel-size lookup fails, so a config gap can't accidentally silence the
+     * dialog.
+     */
+    private static boolean wizardObjectiveIsSameOrCoarser(
+            AffineTransformManager.SlideAlignmentResult loadedResult, SampleSetupResult sample) {
+        try {
+            String savedObjective = loadedResult.getObjective();
+            String savedDetector = loadedResult.getDetector();
+            String wizardObjective = sample.objective();
+            String wizardDetector = sample.detector();
+            if (savedObjective == null || wizardObjective == null) {
+                return false;
+            }
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+            // Saved detector may be null on JSONs written before detector
+            // tracking landed; fall back to the wizard detector so we can
+            // still compare at the same detector and isolate the objective.
+            String savedDetectorEffective = savedDetector != null ? savedDetector : wizardDetector;
+            double pxSaved = mgr.getPixelSize(savedObjective, savedDetectorEffective);
+            double pxWizard = mgr.getPixelSize(wizardObjective, wizardDetector);
+            if (pxSaved <= 0 || pxWizard <= 0) {
+                return false;
+            }
+            double tolerance = 0.05;
+            boolean sameOrCoarser = pxWizard >= pxSaved * (1.0 - tolerance);
+            logger.debug(
+                    "Objective-mismatch pixel-size compare: saved='{}'({} um) wizard='{}'({} um) sameOrCoarser={}",
+                    savedObjective,
+                    pxSaved,
+                    wizardObjective,
+                    pxWizard,
+                    sameOrCoarser);
+            return sameOrCoarser;
+        } catch (Exception e) {
+            logger.debug("Could not compare objective pixel sizes; will surface advisory: {}", e.getMessage());
+            return false;
+        }
     }
 
     private static boolean confirmContinueWithObjectiveMismatch(

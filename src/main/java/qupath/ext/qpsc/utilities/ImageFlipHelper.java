@@ -1,17 +1,23 @@
 package qupath.ext.qpsc.utilities;
 
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
+import qupath.lib.objects.PathObject;
+import qupath.lib.objects.PathObjectTools;
+import qupath.lib.objects.hierarchy.PathObjectHierarchy;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 
@@ -170,6 +176,10 @@ public final class ImageFlipHelper {
             logger.info(
                     "validateAndFlipIfNeeded: flipped sibling already exists ({}); switching open entry",
                     sibling.getImageName());
+            // Re-mirror so the sibling reflects the base's current LIVE annotations
+            // (including any drawn since the sibling was created) and re-runs don't
+            // accumulate duplicates -- the open entry is still the base here.
+            mirrorAnnotationsToSibling(gui, sibling, flipX, flipY);
             switchOpenEntry(gui, sibling, future);
             return future;
         }
@@ -188,6 +198,9 @@ public final class ImageFlipHelper {
                 future.complete(false);
                 return future;
             }
+            // Populate the freshly-created (annotation-free) sibling from the base's
+            // live hierarchy. createFlippedDuplicate no longer transfers annotations.
+            mirrorAnnotationsToSibling(gui, created, flipX, flipY);
             switchOpenEntry(gui, created, future);
         } catch (Exception e) {
             logger.error("validateAndFlipIfNeeded: failed to create flipped duplicate", e);
@@ -210,6 +223,107 @@ public final class ImageFlipHelper {
      */
     public static boolean[] resolveRequiredFlipFromPreset(ProjectImageEntry<BufferedImage> openEntry) {
         return resolveFlipFromPreset(openEntry);
+    }
+
+    /**
+     * Replace the flipped sibling's annotation set with a flip of the base's
+     * <b>live</b> hierarchy.
+     *
+     * <p>The flipped sibling is a derived mirror of the base, not an independent
+     * entry. Its annotations must be a deterministic function of the base's, so
+     * this method <i>replaces</i> rather than appends: it clears the sibling's
+     * existing annotations first, then transfers flip-transformed copies of the
+     * base's annotations. Replacing is what keeps re-runs idempotent (no
+     * accumulating duplicates) and lets an already-duplicated project self-heal
+     * on the next run-from-base.
+     *
+     * <p>The caller passes the base's LIVE hierarchy
+     * ({@code gui.getImageData().getHierarchy()}), not {@code baseEntry.readImageData()}
+     * (the persisted {@code .qpdata} file) -- deliberate: the live hierarchy
+     * carries annotations the user drew but never saved.
+     *
+     * <p>Must be called while the base is still the open entry -- i.e. before
+     * {@link #switchOpenEntry}. Best-effort: a failure is logged, not thrown, so
+     * a mirroring hiccup never aborts the workflow.
+     *
+     * @param baseHierarchy the base entry's live annotation hierarchy
+     * @param siblingEntry the {@code (flipped ...)} entry to repopulate
+     * @param flipX whether the sibling is X-flipped relative to the base
+     * @param flipY whether the sibling is Y-flipped relative to the base
+     * @param baseWidth base image width, for the flip transform
+     * @param baseHeight base image height, for the flip transform
+     */
+    public static void mirrorAnnotationsToSibling(
+            PathObjectHierarchy baseHierarchy,
+            ProjectImageEntry<BufferedImage> siblingEntry,
+            boolean flipX,
+            boolean flipY,
+            int baseWidth,
+            int baseHeight) {
+        if (baseHierarchy == null || siblingEntry == null) {
+            logger.warn("mirrorAnnotationsToSibling: null base hierarchy or sibling entry; skipping");
+            return;
+        }
+        try {
+            ImageData<BufferedImage> sibData = siblingEntry.readImageData();
+            PathObjectHierarchy sibHierarchy = sibData.getHierarchy();
+
+            // Replace step: clear whatever annotations the sibling currently holds.
+            List<PathObject> stale = new ArrayList<>(sibHierarchy.getAnnotationObjects());
+            if (!stale.isEmpty()) {
+                sibHierarchy.removeObjects(stale, false);
+            }
+
+            // Transfer flip-transformed copies of the base's annotations only
+            // (detections / tiles are workflow scratch, not part of the mirror).
+            AffineTransform flip = ForwardPropagationWorkflow.createFlip(flipX, flipY, baseWidth, baseHeight);
+            List<PathObject> mirrored = new ArrayList<>();
+            for (PathObject ann : baseHierarchy.getAnnotationObjects()) {
+                if (ann.getROI() == null) {
+                    continue;
+                }
+                PathObject copy = PathObjectTools.transformObject(ann, flip, true, true);
+                if (copy != null) {
+                    mirrored.add(copy);
+                }
+            }
+            if (!mirrored.isEmpty()) {
+                sibHierarchy.addObjects(mirrored);
+            }
+            sibHierarchy.fireHierarchyChangedEvent(sibHierarchy.getRootObject());
+            siblingEntry.saveImageData(sibData);
+            logger.info(
+                    "mirrorAnnotationsToSibling: replaced {} stale with {} mirrored annotation(s) on '{}' "
+                            + "(flipX={}, flipY={})",
+                    stale.size(),
+                    mirrored.size(),
+                    siblingEntry.getImageName(),
+                    flipX,
+                    flipY);
+        } catch (Exception e) {
+            logger.warn("mirrorAnnotationsToSibling failed for '{}': {}", siblingEntry.getImageName(), e.getMessage());
+        }
+    }
+
+    /**
+     * Convenience overload: extracts the base's live hierarchy and dimensions from
+     * the GUI's open image and delegates to
+     * {@link #mirrorAnnotationsToSibling(PathObjectHierarchy, ProjectImageEntry, boolean, boolean, int, int)}.
+     */
+    private static void mirrorAnnotationsToSibling(
+            QuPathGUI gui, ProjectImageEntry<BufferedImage> siblingEntry, boolean flipX, boolean flipY) {
+        ImageData<BufferedImage> baseData = gui != null ? gui.getImageData() : null;
+        if (baseData == null || baseData.getHierarchy() == null || baseData.getServer() == null) {
+            logger.warn("mirrorAnnotationsToSibling: no open base image; skipping annotation mirror");
+            return;
+        }
+        mirrorAnnotationsToSibling(
+                baseData.getHierarchy(),
+                siblingEntry,
+                flipX,
+                flipY,
+                baseData.getServer().getWidth(),
+                baseData.getServer().getHeight());
     }
 
     /**

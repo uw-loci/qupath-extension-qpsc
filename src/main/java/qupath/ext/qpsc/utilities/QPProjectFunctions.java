@@ -25,7 +25,6 @@ import qupath.lib.images.servers.ImageServer;
 import qupath.lib.images.servers.ImageServerMetadata;
 import qupath.lib.images.servers.ImageServers;
 import qupath.lib.images.servers.TransformedServerBuilder;
-import qupath.lib.objects.hierarchy.PathObjectHierarchy;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectIO;
 import qupath.lib.projects.ProjectImageEntry;
@@ -747,14 +746,13 @@ public class QPProjectFunctions {
             logger.warn("  Original={} um/px, Flipped={} um/px", originalPixelSize, flippedPixelSize);
         }
 
-        // Get hierarchies for transformation
-        PathObjectHierarchy originalHierarchy = originalData.getHierarchy();
-        PathObjectHierarchy flippedHierarchy = flippedData.getHierarchy();
-
-        // Transform hierarchy to account for flips
-        // Use the ORIGINAL (unflipped) server dimensions for transformation
-        TransformationFunctions.transformHierarchy(
-                originalHierarchy, flippedHierarchy, flipX, flipY, imageWidth, imageHeight);
+        // Annotations are intentionally NOT transferred here. The flipped sibling
+        // is a derived mirror of the base; its annotation set is populated (and
+        // re-populated on every run-from-base) by
+        // ImageFlipHelper.mirrorAnnotationsToSibling, which reads the base's LIVE
+        // hierarchy. Transferring here as well -- from the persisted .qpdata --
+        // would (a) miss unsaved annotations and (b) double up with the mirror
+        // step, producing duplicate annotations on the sibling.
 
         // Ensure original entry has base_image set before we inherit from it
         // This ensures both original and flipped entries share the same base_image
