@@ -1306,10 +1306,76 @@ public class ExistingImageWorkflowV2 {
 
         /**
          * Performs single-tile refinement.
+         *
+         * <p>The viewer's open entry can drift back to the unflipped base
+         * between routing and refinement. Observed on PPM 2026-05-20: the slow
+         * white-background data-bounds classifier (~20 s) saturates the FX
+         * thread, reordering the queued entry switch so the base is the open
+         * entry when refinement begins and the flipped sibling only commits
+         * afterwards. Tiles created while the base is open land on the base
+         * entry's hierarchy and are invisible once the viewer settles on the
+         * flipped sibling -- the tile-select dialog then shows zero tiles
+         * (user-visible symptom: "it did not create any tiles"). So before
+         * creating tiles we re-assert the flipped sibling as the open entry,
+         * then re-read the annotations from it. {@code validateAndFlipIfNeeded}
+         * is idempotent: a no-op when the sibling is already open.
          */
         private CompletableFuture<WorkflowState> performSingleTileRefinement(WorkflowState state) {
             if (state.annotations == null || state.annotations.isEmpty()) {
                 logger.warn("No annotations available for refinement");
+                return CompletableFuture.completedFuture(state);
+            }
+
+            return reassertFlippedSiblingForRefinement(state)
+                    .thenCompose(this::reReadAnnotationsAfterRouting)
+                    .thenCompose(this::createRefinementTilesAndRun);
+        }
+
+        /**
+         * Re-asserts that the flipped sibling (when the active preset requires
+         * one) is the open viewer entry, so refinement tile creation and the
+         * tile-select dialog operate on the same hierarchy. No-op for
+         * cross-scope alignments (their transform runs in the open entry's
+         * frame), when no project is set up, or when the preset needs no flip.
+         */
+        private CompletableFuture<WorkflowState> reassertFlippedSiblingForRefinement(WorkflowState state) {
+            if (state == null) return CompletableFuture.completedFuture(null);
+            if (state.crossScope || state.projectInfo == null) {
+                return CompletableFuture.completedFuture(state);
+            }
+            @SuppressWarnings("unchecked")
+            Project<BufferedImage> project = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
+            if (project == null) {
+                return CompletableFuture.completedFuture(state);
+            }
+            AffineTransformManager.TransformPreset presetForFlip =
+                    state.alignmentChoice != null ? state.alignmentChoice.selectedTransform() : null;
+            boolean requiresFlipX = FlipResolver.resolveFlipX(null, presetForFlip, null);
+            boolean requiresFlipY = FlipResolver.resolveFlipY(null, presetForFlip, null);
+            if (!requiresFlipX && !requiresFlipY) {
+                return CompletableFuture.completedFuture(state);
+            }
+            String sampleNameForFlip = state.sample != null ? state.sample.sampleName() : null;
+            logger.info("Re-asserting flipped sibling as open entry before refinement tile creation");
+            return ImageFlipHelper.validateAndFlipIfNeeded(
+                            gui, project, sampleNameForFlip, requiresFlipX, requiresFlipY)
+                    .thenApply(validated -> {
+                        if (!validated) {
+                            logger.warn("Flip re-assert before refinement returned not-validated; "
+                                    + "proceeding with the current open entry");
+                        }
+                        return state;
+                    });
+        }
+
+        /**
+         * Creates refinement tiles against the (now re-asserted) open entry and
+         * runs single-tile refinement.
+         */
+        private CompletableFuture<WorkflowState> createRefinementTilesAndRun(WorkflowState state) {
+            if (state == null) return CompletableFuture.completedFuture(null);
+            if (state.annotations == null || state.annotations.isEmpty()) {
+                logger.warn("No annotations available for refinement after sibling re-assert");
                 return CompletableFuture.completedFuture(state);
             }
 

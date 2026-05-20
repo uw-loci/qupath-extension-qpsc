@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Single-tile refinement (missing tiles on flip-needing scopes)**
+- Single-tile refinement could open the tile-select dialog with no tiles to pick when the workflow was started from the unflipped base image on a flip-needing scope (PPM). Root cause: the viewer's open entry could drift back to the base between routing and refinement (the slow white-background data-bounds classifier saturates the JavaFX thread, reordering the queued entry switch). Tiles were then created against the base entry's hierarchy and were invisible once the viewer settled on the flipped sibling. `performSingleTileRefinement` now re-asserts the flipped sibling as the open entry and re-reads annotations from it before creating tiles, so the annotations, tiles, and viewer all agree on one entry. Starting from the flipped sibling directly was already unaffected.
+
 **Alignment transform loading (flip bake elimination)**
 - Per-slide alignment transforms now load in their saved pixel frame without additional flip baking. This eliminates a PPM refinement bug where the stage would jump to the X/Y-mirror position of the selected tile instead of the intended tile. Root cause: the saved transform was already in the correct frame (the flipped sibling for flip-needing scopes, the unflipped base otherwise), but earlier code applied an additional flip-delta bake both at load and post-flip-switch, double-flipping the transform. `AlignmentHelper.checkForSlideAlignment` now loads transforms as-is, and `ImageFlipHelper.validateAndFlipIfNeeded` ensures the workflow operates on the entry the saved transform was built in.
 - See `documentation/developer/COORDINATE_TRANSFORMS.md` § "Step 2" for the architectural shift.
