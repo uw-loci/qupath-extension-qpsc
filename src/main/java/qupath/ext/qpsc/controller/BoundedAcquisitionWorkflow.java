@@ -390,6 +390,10 @@ public class BoundedAcquisitionWorkflow {
                                 // Null means "use YAML default" and produces no CLI flag.
                                 config.commandBuilder().afStrategy(result.afStrategy());
 
+                                // AF method benchmark (Advanced panel checkbox). When on, every
+                                // tile times sweep + streaming AF and applies neither.
+                                config.commandBuilder().afBenchmark(result.afBenchmark());
+
                                 // Per-tile snap-loop inner axis (loop-order toggle).
                                 // Null means "use per-modality default" and produces no CLI flag.
                                 config.commandBuilder().innerAxis(result.innerAxis());

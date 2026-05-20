@@ -64,6 +64,12 @@ public class AcquisitionCommandBuilder {
     // means "use the YAML default" (the on-dialog "Default (from config)" option).
     private String afStrategy;
 
+    // When true, emits --af-benchmark: every tile runs BOTH sweep and
+    // streaming autofocus (timed, neither result applied) so the two
+    // mechanisms can be compared inside a real acquisition loop. The
+    // server writes af_benchmark.csv to the acquisition output folder.
+    private boolean afBenchmark = false;
+
     // Background correction parameters
     private boolean backgroundCorrectionEnabled = false;
     private String backgroundCorrectionMethod;
@@ -254,6 +260,23 @@ public class AcquisitionCommandBuilder {
      */
     public AcquisitionCommandBuilder afStrategy(String strategyName) {
         this.afStrategy = strategyName;
+        return this;
+    }
+
+    /**
+     * Enables the autofocus method benchmark for this acquisition.
+     *
+     * <p>When enabled, every tile runs both the sweep drift-check and the
+     * streaming autofocus, times each, and applies neither result -- the
+     * stage stays at the pre-AF Z. The server writes per-tile timings to
+     * {@code af_benchmark.csv} in the acquisition output folder. Emitted as
+     * {@code --af-benchmark}.
+     *
+     * @param enabled {@code true} to run the benchmark instead of normal AF
+     * @return this builder instance for method chaining
+     */
+    public AcquisitionCommandBuilder afBenchmark(boolean enabled) {
+        this.afBenchmark = enabled;
         return this;
     }
 
@@ -703,6 +726,13 @@ public class AcquisitionCommandBuilder {
             args.add("--af-strategy");
             args.add(afStrategy);
             logger.debug("Autofocus strategy override: {}", afStrategy);
+        }
+
+        // Autofocus method benchmark: every tile times sweep + streaming AF
+        // and applies neither. Flag-only (no value), like --af-disabled.
+        if (afBenchmark) {
+            args.add("--af-benchmark");
+            logger.info("Autofocus method benchmark enabled (--af-benchmark)");
         }
 
         // Add angle/exposure parameters (skipped when channel-based)

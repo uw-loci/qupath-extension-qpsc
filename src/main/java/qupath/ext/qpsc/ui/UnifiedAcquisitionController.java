@@ -96,7 +96,12 @@ public class UnifiedAcquisitionController {
             String wbMode,
             // Per-tile snap-loop inner axis. Null = omit and let the server fall
             // back to its per-modality default. Values: "z", "channel", "angle".
-            String innerAxis) {}
+            String innerAxis,
+            // True when the AF method benchmark checkbox is ticked: every tile
+            // runs sweep + streaming AF (timed, neither applied) and the server
+            // writes af_benchmark.csv. Diagnostic mode -- acquired images drift
+            // out of focus since no AF result is applied.
+            boolean afBenchmark) {}
 
     /**
      * Shows the unified acquisition dialog.
@@ -182,6 +187,7 @@ public class UnifiedAcquisitionController {
         private VBox advancedContent;
         private VBox modalityContentBox;
         private ComboBox<String> afStrategyCombo;
+        private CheckBox afBenchmarkCheck;
 
         // UI Components - Z-stack Section
         private CheckBox zStackEnableCheck;
@@ -962,12 +968,28 @@ public class UnifiedAcquisitionController {
             afStrategyCombo.getItems().addAll(AfStrategyChoice.displayOrder());
             afStrategyCombo.setValue(AfStrategyChoice.protocolToDisplay(PersistentPreferences.getLastAfStrategy()));
             afStrategyCombo.setTooltip(new Tooltip(AfStrategyChoice.TOOLTIP));
+            // AF method benchmark: diagnostic mode. When ticked, every tile
+            // runs BOTH sweep and streaming autofocus (timed, neither result
+            // applied) and the server writes af_benchmark.csv. Acquired images
+            // drift out of focus since no AF is applied -- the CSV is the
+            // deliverable. Off by default.
+            afBenchmarkCheck = new CheckBox("Benchmark AF methods (sweep vs streaming, per tile)");
+            afBenchmarkCheck.setSelected(false);
+            afBenchmarkCheck.setTooltip(
+                    new Tooltip("Diagnostic mode. Each tile runs both sweep and streaming autofocus,"
+                            + " times each, and applies NEITHER result -- the stage stays at"
+                            + " the pre-AF Z. Per-tile timings are written to af_benchmark.csv"
+                            + " in the acquisition output folder. Acquired images will drift"
+                            + " out of focus; use a small grid (e.g. 3x3) and treat the images"
+                            + " as throwaway."));
+
             GridPane afGrid = new GridPane();
             afGrid.setHgap(10);
             afGrid.setVgap(5);
             afGrid.setPadding(new Insets(5));
             afGrid.add(new Label("Autofocus:"), 0, 0);
             afGrid.add(afStrategyCombo, 1, 0);
+            afGrid.add(afBenchmarkCheck, 0, 1, 2, 1);
 
             // === MODALITY-SPECIFIC SECTION ===
             modalityContentBox = new VBox(5);
@@ -2167,6 +2189,13 @@ public class UnifiedAcquisitionController {
                     logger.info("User selected AF strategy override: {}", afStrategyProtocol);
                 }
 
+                // AF method benchmark checkbox (Advanced panel). Diagnostic
+                // mode -- not persisted, defaults off every time the dialog opens.
+                boolean afBenchmark = afBenchmarkCheck != null && afBenchmarkCheck.isSelected();
+                if (afBenchmark) {
+                    logger.info("AF method benchmark enabled -- every tile will time sweep + streaming AF");
+                }
+
                 // Get angle / channel overrides if available
                 Map<String, Double> angleOverrides = null;
                 Map<String, Double> channelIntensityOverrides = Map.of();
@@ -2247,7 +2276,8 @@ public class UnifiedAcquisitionController {
                         enableWhiteBalance,
                         perAngleWhiteBalance,
                         wbMode,
-                        innerAxis);
+                        innerAxis,
+                        afBenchmark);
 
             } catch (Exception e) {
                 logger.error("Error creating result", e);
