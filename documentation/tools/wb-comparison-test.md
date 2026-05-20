@@ -70,6 +70,10 @@ At least one mode must be selected.
 | AF steps | Integer | 10 | Number of Z steps in the autofocus sweep. |
 | AF range (um) | Double | 50.0 | Total Z range for the autofocus sweep in micrometers. |
 
+### Calibration Parameters
+
+The WB Comparison Test uses calibration parameters (gain caps, base gain, iteration limits, etc.) that are persisted in the **White Balance Calibration dialog's Advanced Settings pane**. To customize how the comparison test calibrates white balance, open the White Balance Calibration dialog, adjust the Advanced Settings as desired, and then run the comparison test. The comparison test will use your saved settings instead of defaults, allowing you to evaluate WB modes with the same calibration tuning you would use for a standalone WB run.
+
 ## Workflow
 
 For each selected WB mode, the workflow performs these steps in sequence:
