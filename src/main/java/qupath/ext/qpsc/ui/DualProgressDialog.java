@@ -1062,11 +1062,22 @@ public class DualProgressDialog {
             perAxisRow.setManaged(false);
             return;
         }
-        boolean degenerate =
-                plan.chCount() <= 1 && plan.angleCount() <= 1 && plan.zCount() <= 1 && plan.timepoints() <= 1;
+        // "Degenerate" = nothing worth showing per-axis. A multi-position scan is
+        // NOT degenerate even with a single channel/angle/Z/timepoint: the
+        // positions axis still gets its "Tile n/N" label and fill bar. Omitting
+        // nPositions here hid the positions bar for every plain single-channel
+        // multi-tile acquisition (the early return below skipped the tile-bar
+        // setup at the end of this method).
+        boolean degenerate = plan.nPositions() <= 1
+                && plan.chCount() <= 1
+                && plan.angleCount() <= 1
+                && plan.zCount() <= 1
+                && plan.timepoints() <= 1;
         if (degenerate) {
             perAxisRow.setVisible(false);
             perAxisRow.setManaged(false);
+            tileProgressBar.setVisible(false);
+            tileProgressBar.setManaged(false);
             return;
         }
         perAxisRow.setVisible(true);
