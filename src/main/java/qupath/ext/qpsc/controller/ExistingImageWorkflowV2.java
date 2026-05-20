@@ -469,11 +469,9 @@ public class ExistingImageWorkflowV2 {
             return AlignmentHelper.checkForSlideAlignment(gui, state.sample).thenApply(slideResult -> {
                 if (slideResult != null) {
                     state.useExistingSlideAlignment = true;
-                    // RAW transform: the flip bake-delta is applied later, after the
-                    // flip switch, in processSlideSpecificAlignment.
+                    // The transform is in the pixel frame of the entry the workflow runs
+                    // on; used as-is, no flip bake (see processSlideSpecificAlignment).
                     state.transform = slideResult.getTransform();
-                    state.alignFlipX = slideResult.getAlignFlipX();
-                    state.alignFlipY = slideResult.getAlignFlipY();
                     state.alignmentConfidence = slideResult.getConfidence();
                     state.alignmentSource = slideResult.getSource();
                     logger.info(
@@ -802,22 +800,18 @@ public class ExistingImageWorkflowV2 {
                                     // flipped entry but the swap can race the worker thread that
                                     // reads gui.getImageData() downstream.
                                     if (validated) {
-                                        // Bake the flip delta NOW -- after validateAndFlipIfNeeded
-                                        // has switched the open entry to the working (flipped
-                                        // sibling) entry. checkForSlideAlignment returned the RAW
-                                        // transform; baking earlier (against the pre-flip base)
-                                        // produced the X/Y-mirror refinement bug. Skipped for
-                                        // cross-scope, whose composed transform must not be baked.
-                                        if (!state.crossScope) {
-                                            ProjectImageEntry<BufferedImage> workingEntry =
-                                                    project.getEntry(gui.getImageData());
-                                            state.transform = AlignmentHelper.bakeFlipDeltaForCurrentEntry(
-                                                    state.transform,
-                                                    state.alignFlipX,
-                                                    state.alignFlipY,
-                                                    workingEntry,
-                                                    gui.getImageData());
-                                        }
+                                        // No flip bake. The per-slide alignment JSON stores the
+                                        // transform in the pixel frame of the entry the workflow
+                                        // runs on -- the flipped sibling for flip-needing scopes,
+                                        // the base otherwise -- because saveRefinedAlignment /
+                                        // ManualAlignmentPath / ExistingAlignmentPath all write it
+                                        // back from that same entry. validateAndFlipIfNeeded has
+                                        // just put us on that entry, so the loaded transform is
+                                        // used as-is. Baking a flip delta here double-flipped a
+                                        // correct transform and drove the stage to the X/Y mirror
+                                        // (PPM 2026-05-19: tile selected lower-left, stage jumped
+                                        // upper-right). The Stage Map / Go-to-Centroid path also
+                                        // uses this transform raw for these JSONs.
                                         // M11 -- install the transform only after validation passes.
                                         MicroscopeController.getInstance().setCurrentTransform(state.transform);
                                     }
@@ -1797,18 +1791,6 @@ public class ExistingImageWorkflowV2 {
          * preserved annotations from leaking across concurrent or restarted runs.
          */
         public final AnnotationPreservationService annotationPreservation = new AnnotationPreservationService();
-
-        /**
-         * Flip frame ({@code flipMacroX} / {@code flipMacroY}) recorded in the
-         * per-slide alignment JSON, captured by {@code checkExistingSlideAlignment}.
-         * {@link #transform} is stored RAW (unbaked); the flip bake-delta is applied
-         * post-flip-switch by {@code AlignmentHelper.bakeFlipDeltaForCurrentEntry}
-         * in {@code processSlideSpecificAlignment}. {@code null} when no JSON was
-         * loaded (BoundingBox-metadata fallback, legacy JSON) -- no bake applies.
-         */
-        public Boolean alignFlipX;
-
-        public Boolean alignFlipY;
 
         public double pixelSize;
         public Map<String, Double> angleOverrides;

@@ -61,37 +61,25 @@ public class AlignmentHelper {
         private final boolean refineRequested;
         private final double confidence;
         private final String source;
-        private final Boolean alignFlipX;
-        private final Boolean alignFlipY;
 
         public SlideAlignmentResult(AffineTransform transform, boolean refineRequested) {
-            this(transform, refineRequested, 0.7, "Unknown", null, null);
+            this(transform, refineRequested, 0.7, "Unknown");
         }
 
         public SlideAlignmentResult(
                 AffineTransform transform, boolean refineRequested, double confidence, String source) {
-            this(transform, refineRequested, confidence, source, null, null);
-        }
-
-        public SlideAlignmentResult(
-                AffineTransform transform,
-                boolean refineRequested,
-                double confidence,
-                String source,
-                Boolean alignFlipX,
-                Boolean alignFlipY) {
             this.transform = transform;
             this.refineRequested = refineRequested;
             this.confidence = confidence;
             this.source = source;
-            this.alignFlipX = alignFlipX;
-            this.alignFlipY = alignFlipY;
         }
 
         /**
-         * @return the RAW (unbaked) pixel-to-stage transform as loaded from the
-         *     alignment JSON. The flip bake-delta is applied later by
-         *     {@link #bakeFlipDeltaForCurrentEntry} against the post-flip-switch entry.
+         * @return the pixel-to-stage transform loaded from the alignment JSON, used
+         *     as-is. The JSON stores the transform in the pixel frame of the entry
+         *     the workflow runs on (the flipped sibling for flip-needing scopes,
+         *     the base otherwise) -- the workflow always operates on that entry, so
+         *     no flip bake is applied.
          */
         public AffineTransform getTransform() {
             return transform;
@@ -107,93 +95,6 @@ public class AlignmentHelper {
 
         public String getSource() {
             return source;
-        }
-
-        /**
-         * @return the {@code flipMacroX} the alignment JSON was saved in, or
-         *     {@code null} when unknown (BoundingBox-metadata fallback, legacy JSON).
-         *     {@code null} means no bake delta can be computed.
-         */
-        public Boolean getAlignFlipX() {
-            return alignFlipX;
-        }
-
-        /** @return the JSON's {@code flipMacroY}, or {@code null}. See {@link #getAlignFlipX()}. */
-        public Boolean getAlignFlipY() {
-            return alignFlipY;
-        }
-    }
-
-    /**
-     * Composes the alignment-frame -> current-entry-frame flip "bake-delta" into a
-     * raw slide transform, against whatever entry is open <i>now</i>.
-     *
-     * <p>This is the relocated counterpart of the bake logic that used to live
-     * inside {@link #checkForSlideAlignment}. It must be called <b>after</b>
-     * {@code ImageFlipHelper.validateAndFlipIfNeeded} has switched the open entry
-     * to the working entry (the flipped sibling, or the base when no flip is
-     * needed) -- mirroring the load-raw-then-bake-against-current-entry pattern
-     * that {@code StageControlPanel.handleGoToCentroid} already uses correctly.
-     *
-     * <p>The delta is {@code bake = alignFlip XOR currentEntryFlip}. Both-on or
-     * both-off => no bake (the saved transform's native frame already matches the
-     * current entry). When {@code alignFlipX/Y} is {@code null} (BoundingBox
-     * fallback / legacy JSON) the raw transform is returned unchanged.
-     *
-     * @param rawTransform the unbaked transform from {@link SlideAlignmentResult#getTransform()}
-     * @param alignFlipX the JSON's {@code flipMacroX} (may be null)
-     * @param alignFlipY the JSON's {@code flipMacroY} (may be null)
-     * @param openEntry the entry currently open (post-flip-switch)
-     * @param imageData the open image data (for width/height of the flip)
-     * @return the baked transform, or {@code rawTransform} when no bake applies
-     */
-    public static AffineTransform bakeFlipDeltaForCurrentEntry(
-            AffineTransform rawTransform,
-            Boolean alignFlipX,
-            Boolean alignFlipY,
-            ProjectImageEntry<BufferedImage> openEntry,
-            qupath.lib.images.ImageData<BufferedImage> imageData) {
-        if (rawTransform == null || alignFlipX == null || alignFlipY == null || openEntry == null) {
-            return rawTransform;
-        }
-        boolean currentEntryFlipX = ImageMetadataManager.isFlippedX(openEntry);
-        boolean currentEntryFlipY = ImageMetadataManager.isFlippedY(openEntry);
-        boolean bakeX = alignFlipX != currentEntryFlipX;
-        boolean bakeY = alignFlipY != currentEntryFlipY;
-        if (!bakeX && !bakeY) {
-            logger.info(
-                    "Alignment frame ({}, {}) matches current entry frame ({}, {}); no bake",
-                    alignFlipX,
-                    alignFlipY,
-                    currentEntryFlipX,
-                    currentEntryFlipY);
-            return rawTransform;
-        }
-        if (imageData == null || imageData.getServer() == null) {
-            logger.warn("bakeFlipDeltaForCurrentEntry: no image data for flip dimensions; returning raw transform");
-            return rawTransform;
-        }
-        try {
-            int baseWidth = imageData.getServer().getWidth();
-            int baseHeight = imageData.getServer().getHeight();
-            AffineTransform flip = qupath.ext.qpsc.controller.ForwardPropagationWorkflow.createFlip(
-                    bakeX, bakeY, baseWidth, baseHeight);
-            AffineTransform composed = new AffineTransform(rawTransform);
-            composed.concatenate(flip);
-            logger.info(
-                    "Baked frame-delta flip ({}, {}) into slide transform "
-                            + "(alignFrame=({}, {}), currentEntryFrame=({}, {}))",
-                    bakeX,
-                    bakeY,
-                    alignFlipX,
-                    alignFlipY,
-                    currentEntryFlipX,
-                    currentEntryFlipY);
-            return composed;
-        } catch (Exception e) {
-            logger.warn(
-                    "bakeFlipDeltaForCurrentEntry: could not bake flip; returning raw transform: {}", e.getMessage());
-            return rawTransform;
         }
     }
 
@@ -455,15 +356,16 @@ public class AlignmentHelper {
             }
         }
 
-        // NOTE: the alignment-frame -> current-entry-frame flip "bake-delta" is
-        // intentionally NOT applied here. checkForSlideAlignment runs early in the
-        // workflow chain (checkExistingSlideAlignment), BEFORE
-        // ImageFlipHelper.validateAndFlipIfNeeded switches the open entry to the
-        // flipped sibling. Baking here against the pre-flip entry produces a
-        // transform in the wrong frame once the workflow flips -- the X/Y-mirror
-        // refinement bug. The raw transform plus alignFlipX/alignFlipY are returned
-        // instead; the caller composes the bake AFTER the flip switch, against the
-        // actual working entry, via bakeFlipDeltaForCurrentEntry().
+        // NOTE: no flip "bake-delta" is applied to the loaded transform. The
+        // per-slide JSON stores the transform in the pixel frame of the entry the
+        // workflow runs on -- the flipped sibling for flip-needing scopes
+        // (saveRefinedAlignment / ManualAlignmentPath / ExistingAlignmentPath all
+        // write it back from that entry). validateAndFlipIfNeeded puts the workflow
+        // on that same entry, so the transform is used as-is. An earlier
+        // checkForSlideAlignment baked a flip here and a later attempt baked it
+        // post-flip-switch; both double-flipped a correct transform and drove the
+        // stage to the X/Y mirror (PPM 2026-05-19). The Stage Map / Go-to-Centroid
+        // path likewise uses these JSONs' transforms raw.
 
         // Fallback when no JSON exists: derive a pixel-to-stage transform from
         // the open entry's BoundingBox metadata. QPSC-acquired stitches stamp
@@ -501,10 +403,7 @@ public class AlignmentHelper {
                     source);
 
             // Return result - refinement choice is handled later by RefinementSelectionController.
-            // alignFlipX/Y carry the JSON's recorded flip frame so the caller can bake the
-            // flip delta post-flip-switch (null for the BoundingBox fallback / legacy JSONs).
-            future.complete(
-                    new SlideAlignmentResult(slideTransform, false, confidence, source, alignFlipX, alignFlipY));
+            future.complete(new SlideAlignmentResult(slideTransform, false, confidence, source));
         } else {
             logger.info("No slide-specific alignment found");
             future.complete(null);
