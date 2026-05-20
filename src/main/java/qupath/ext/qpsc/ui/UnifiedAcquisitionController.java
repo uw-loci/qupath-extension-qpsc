@@ -165,6 +165,7 @@ public class UnifiedAcquisitionController {
         private Label previewAnglesLabel;
         private Label previewTotalImagesLabel;
         private Label previewTimeLabel;
+        private Label previewCompletionLabel;
         private Label previewStorageLabel;
         private Label previewErrorLabel;
 
@@ -913,6 +914,8 @@ public class UnifiedAcquisitionController {
             previewAnglesLabel = new Label("Angles: --");
             previewTotalImagesLabel = new Label("Total Images: --");
             previewTimeLabel = new Label("Est. Time: --");
+            previewTimeLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
+            previewCompletionLabel = new Label("Est. Completion: --");
             previewStorageLabel = new Label("Est. Storage: --");
             previewErrorLabel = new Label("Enter valid coordinates to see preview");
             previewErrorLabel.setStyle("-fx-font-style: italic; -fx-opacity: 0.65;");
@@ -928,6 +931,7 @@ public class UnifiedAcquisitionController {
                     previewTotalImagesLabel,
                     new Separator(),
                     previewTimeLabel,
+                    previewCompletionLabel,
                     previewStorageLabel,
                     previewErrorLabel);
             previewContent.setPadding(new Insets(10));
@@ -1933,6 +1937,7 @@ public class UnifiedAcquisitionController {
                 previewAnglesLabel.setText(anglesText);
                 previewTotalImagesLabel.setText(String.format("Total Images: %,d", totalImages));
                 previewTimeLabel.setText("Est. Time: " + timeEstimate);
+                previewCompletionLabel.setText("Est. Completion: " + formatCompletion(estimatedSeconds));
                 previewStorageLabel.setText("Est. Storage: " + storageEstimate);
 
                 previewErrorLabel.setVisible(false);
@@ -1952,6 +1957,7 @@ public class UnifiedAcquisitionController {
             previewAnglesLabel.setText("Angles: --");
             previewTotalImagesLabel.setText("Total Images: --");
             previewTimeLabel.setText("Est. Time: --");
+            previewCompletionLabel.setText("Est. Completion: --");
             previewStorageLabel.setText("Est. Storage: --");
             previewErrorLabel.setText(message);
             previewErrorLabel.setVisible(true);
@@ -1966,6 +1972,11 @@ public class UnifiedAcquisitionController {
             } else {
                 return String.format("%.1f hours", seconds / 3600.0);
             }
+        }
+
+        private String formatCompletion(double secondsFromNow) {
+            java.time.LocalDateTime done = java.time.LocalDateTime.now().plusSeconds((long) secondsFromNow);
+            return done.format(java.time.format.DateTimeFormatter.ofPattern("EEE MMM d, HH:mm"));
         }
 
         private String formatStorage(double megabytes) {
