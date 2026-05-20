@@ -79,6 +79,20 @@ When using a fluorescence-style modality with a channel library, a channel-prese
 
 Presets are shared with the [Live Viewer](live-viewer.md) Camera tab, so a preset saved during acquisition setup in the bounded-acquisition dialog is immediately available in the Live Viewer, and vice versa.
 
+### Time-Lapse Options (Collapsed by Default)
+
+A collapsible **TIME-LAPSE OPTIONS** pane repeats the entire acquisition over multiple timepoints at a fixed interval.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| Enable time-lapse acquisition | CheckBox | Turns the time-lapse loop on. When off, the acquisition runs once (no behavior change from earlier builds). |
+| Timepoints | Spinner | Number of times the full region acquisition is repeated. |
+| Interval (s) | Spinner | Seconds between the *start* of consecutive timepoints. |
+
+The Acquisition Preview folds the timepoint count into **Total Images** and the **Est. Time** estimate (an interval-bound run is timed as the time to start the last timepoint plus that timepoint's acquisition).
+
+If a timepoint takes longer than the requested interval, the remaining timepoints start late. The first time this happens the server reports a one-time "falling behind" warning: QPSC shows a modal dialog over the progress monitor and -- if push notifications are configured -- sends an alert. The acquisition continues to completion; the warning is informational. The warning channel is best-effort and auto-disables against older servers that do not support it.
+
 ### Acquisition Preview
 
 Real-time preview showing calculated acquisition details:

@@ -43,6 +43,9 @@ import qupath.ext.qpsc.service.mda.MdaSettingsWriter;
 import qupath.ext.qpsc.service.mda.MdaWriteResult;
 import qupath.ext.qpsc.service.mda.TileStagePos;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.service.notification.NotificationEvent;
+import qupath.ext.qpsc.service.notification.NotificationPriority;
+import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.ui.AnnotationAcquisitionDialog;
 import qupath.ext.qpsc.ui.DualProgressDialog;
 import qupath.ext.qpsc.ui.SaturationSummaryDialog;
@@ -1091,6 +1094,12 @@ public class AcquisitionManager {
         AtomicBoolean metadataRead = new AtomicBoolean(false);
         // Flag to track if we're currently handling a manual focus request (to avoid showing multiple dialogs)
         AtomicBoolean handlingManualFocus = new AtomicBoolean(false);
+        // One-shot latch for the time-lapse falling-behind warning. The server
+        // re-sends the same warning on every poll until acquisition ends, so we
+        // must show the modal + notification exactly once. Scoped to this
+        // monitorAcquisition call, so it naturally resets for the next
+        // annotation / acquisition.
+        AtomicBoolean timeLapseWarningShown = new AtomicBoolean(false);
 
         // For tile viewer: track previous progress to detect new tiles
         final AtomicInteger lastTileProgress = new AtomicInteger(0);
@@ -1218,6 +1227,31 @@ public class AcquisitionManager {
                         if (progressDialog != null) {
                             progressDialog.resumeTimingAfterManualFocus();
                         }
+                    },
+                    // Time-lapse falling-behind warning callback. Fired at most
+                    // once via the one-shot latch even though the server keeps
+                    // re-sending the warning every poll.
+                    warningMessage -> {
+                        if (!timeLapseWarningShown.compareAndSet(false, true)) {
+                            return;
+                        }
+                        logger.warn("Time-lapse falling behind: {}", warningMessage);
+                        // Fire-and-forget on the FX thread: never await the modal
+                        // on the monitor thread or acquisition polling stalls.
+                        Platform.runLater(() -> {
+                            Alert alert = new Alert(Alert.AlertType.WARNING);
+                            alert.setTitle("Time-lapse falling behind");
+                            alert.setHeaderText("Acquisition cannot keep pace with the requested interval");
+                            alert.setContentText(warningMessage);
+                            UIFunctions.showAlertOverParent(
+                                    alert, progressDialog != null ? progressDialog.getStage() : null);
+                        });
+                        NotificationService.getInstance()
+                                .notify(
+                                        "Time-lapse falling behind",
+                                        warningMessage,
+                                        NotificationPriority.HIGH,
+                                        NotificationEvent.ACQUISITION_WARNING);
                     },
                     500, // Poll every 500ms for responsive UI
                     ACQUISITION_TIMEOUT_MS);

@@ -301,6 +301,14 @@ public class AcquisitionConfigurationBuilder {
             logger.info("Z-stack enabled: range=+/-{} um, step={} um, projection={}", halfRange, step, code);
         }
 
+        // Time-lapse configuration from persistent preferences
+        if (PersistentPreferences.isTimeLapseEnabled()) {
+            int timepoints = PersistentPreferences.getTimeLapseTimepoints();
+            double intervalSec = PersistentPreferences.getTimeLapseIntervalSec();
+            acquisitionBuilder.timeLapse(timepoints, intervalSec);
+            logger.info("Time-lapse enabled: timepoints={}, interval={} s", timepoints, intervalSec);
+        }
+
         return new AcquisitionConfiguration(
                 objective,
                 detector,

@@ -122,7 +122,7 @@ public final class NotificationService {
         return switch (event) {
             case ACQUISITION_COMPLETE, ALL_ANGLES_COMPLETE -> QPPreferenceDialog.getNotifyOnAcquisition();
             case STITCHING_COMPLETE -> QPPreferenceDialog.getNotifyOnStitching();
-            case ACQUISITION_ERROR, STITCHING_ERROR -> QPPreferenceDialog.getNotifyOnErrors();
+            case ACQUISITION_ERROR, STITCHING_ERROR, ACQUISITION_WARNING -> QPPreferenceDialog.getNotifyOnErrors();
         };
     }
 }

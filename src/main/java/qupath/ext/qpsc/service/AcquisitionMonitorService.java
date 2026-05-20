@@ -51,6 +51,7 @@ public final class AcquisitionMonitorService {
                 config.progressCallback,
                 config.manualFocusCallback,
                 buildHardwareErrorCallback(socketClient, config),
+                config.timeLapseWarningCallback,
                 config.pollIntervalMs,
                 config.timeoutMs);
 
@@ -174,6 +175,7 @@ public final class AcquisitionMonitorService {
         Consumer<MicroscopeSocketClient.AcquisitionProgress> progressCallback;
         Consumer<Integer> manualFocusCallback;
         Consumer<String> hardwareErrorCallback;
+        Consumer<String> timeLapseWarningCallback;
         TimingCallback timingCallback;
         String tileDirPath;
         long pollIntervalMs = 500;
@@ -203,6 +205,12 @@ public final class AcquisitionMonitorService {
         /** Custom hardware error callback (overrides the default dialog). */
         public MonitorConfig hardwareError(Consumer<String> cb) {
             this.hardwareErrorCallback = cb;
+            return this;
+        }
+
+        /** Callback for time-lapse falling-behind warnings (receives the warning text). */
+        public MonitorConfig timeLapseWarning(Consumer<String> cb) {
+            this.timeLapseWarningCallback = cb;
             return this;
         }
 

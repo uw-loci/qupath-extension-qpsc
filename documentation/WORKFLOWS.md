@@ -78,6 +78,8 @@ Bounded Acquisition scans a rectangular region of the slide defined by stage coo
 - You know the approximate stage coordinates of the area you want (or you can read them from the Live Viewer or Stage Map).
 - You are setting up a new sample and want a quick initial scan.
 
+**Time-lapse:** The acquisition dialog has a collapsible **Time-Lapse Options** pane. Enable it to repeat the full region acquisition over multiple timepoints at a fixed interval. If a timepoint runs longer than the interval, QPSC shows a one-time "falling behind" warning (a modal dialog plus a push notification if alerts are configured) and continues to completion.
+
 See [full documentation](tools/bounded-acquisition.md) for step-by-step instructions, all options, and troubleshooting.
 
 ---

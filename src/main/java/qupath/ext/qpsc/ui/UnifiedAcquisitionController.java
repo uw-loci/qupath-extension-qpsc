@@ -189,6 +189,11 @@ public class UnifiedAcquisitionController {
         private Label loopOrderLabel;
         private VBox loopOrderRow;
 
+        // UI Components - Time-lapse Section
+        private CheckBox timeLapseEnableCheck;
+        private Spinner<Integer> timeLapseTimepointsSpinner;
+        private Spinner<Double> timeLapseIntervalSpinner;
+
         // UI Components - Validation
         private VBox errorSummaryPanel;
         private VBox errorListBox;
@@ -277,6 +282,7 @@ public class UnifiedAcquisitionController {
             createPreviewPanel();
             createAdvancedSection();
             TitledPane zStackPane = createZStackSection();
+            TitledPane timeLapsePane = createTimeLapseSection();
 
             // Setup debounced preview updates
             setupPreviewUpdateListeners();
@@ -290,6 +296,7 @@ public class UnifiedAcquisitionController {
                     regionPane,
                     advancedPane,
                     zStackPane,
+                    timeLapsePane,
                     createPreviewSection());
             mainContent.setPadding(new Insets(15));
 
@@ -1101,6 +1108,69 @@ public class UnifiedAcquisitionController {
             return pane;
         }
 
+        private TitledPane createTimeLapseSection() {
+            timeLapseEnableCheck = new CheckBox("Enable time-lapse acquisition");
+            timeLapseEnableCheck.setTooltip(
+                    new Tooltip("Repeat the full acquisition over multiple timepoints at a fixed interval. "
+                            + "The interval is the time between the start of consecutive timepoints."));
+            timeLapseEnableCheck.setSelected(PersistentPreferences.isTimeLapseEnabled());
+
+            timeLapseTimepointsSpinner = new Spinner<>(1, 10000, PersistentPreferences.getTimeLapseTimepoints(), 1);
+            timeLapseTimepointsSpinner.setEditable(true);
+            timeLapseTimepointsSpinner.setPrefWidth(100);
+            timeLapseTimepointsSpinner.setTooltip(new Tooltip("Number of times the full acquisition is repeated."));
+
+            timeLapseIntervalSpinner =
+                    new Spinner<>(0.0, Double.MAX_VALUE, PersistentPreferences.getTimeLapseIntervalSec(), 10.0);
+            timeLapseIntervalSpinner.setEditable(true);
+            timeLapseIntervalSpinner.setPrefWidth(100);
+            timeLapseIntervalSpinner.setTooltip(
+                    new Tooltip("Seconds between the start of consecutive timepoints. If a timepoint takes "
+                            + "longer than this, remaining timepoints start late and a warning is shown."));
+
+            timeLapseTimepointsSpinner
+                    .disableProperty()
+                    .bind(timeLapseEnableCheck.selectedProperty().not());
+            timeLapseIntervalSpinner
+                    .disableProperty()
+                    .bind(timeLapseEnableCheck.selectedProperty().not());
+
+            timeLapseEnableCheck.selectedProperty().addListener((obs, o, n) -> {
+                PersistentPreferences.setTimeLapseEnabled(n);
+                updatePreviewPanel();
+            });
+            timeLapseTimepointsSpinner.valueProperty().addListener((obs, o, n) -> {
+                if (n != null) {
+                    PersistentPreferences.setTimeLapseTimepoints(n);
+                    updatePreviewPanel();
+                }
+            });
+            timeLapseIntervalSpinner.valueProperty().addListener((obs, o, n) -> {
+                if (n != null) {
+                    PersistentPreferences.setTimeLapseIntervalSec(n);
+                    updatePreviewPanel();
+                }
+            });
+
+            GridPane grid = new GridPane();
+            grid.setHgap(10);
+            grid.setVgap(8);
+            grid.setPadding(new Insets(10));
+            grid.add(new Label("Timepoints:"), 0, 0);
+            grid.add(timeLapseTimepointsSpinner, 1, 0);
+            grid.add(new Label("Interval (s):"), 0, 1);
+            grid.add(timeLapseIntervalSpinner, 1, 1);
+
+            VBox content = new VBox(8, timeLapseEnableCheck, grid);
+            content.setPadding(new Insets(5));
+
+            TitledPane pane = new TitledPane("TIME-LAPSE OPTIONS", content);
+            pane.setExpanded(false);
+            pane.setAnimated(false);
+            pane.setStyle("-fx-font-weight: bold;");
+            return pane;
+        }
+
         /**
          * Returns the {@link PersistentPreferences#LOOP_ORDER_FAMILY_WIDEFIELD}
          * / {@code LOOP_ORDER_FAMILY_PPM} key for the given modality string,
@@ -1801,8 +1871,22 @@ public class UnifiedAcquisitionController {
 
                 int totalImages = totalTiles * angleCount * zPlanes;
 
+                // Time-lapse multiplier: repeat the full acquisition over N timepoints.
+                int timepoints = 1;
+                double intervalSec = 0.0;
+                if (PersistentPreferences.isTimeLapseEnabled()) {
+                    timepoints = Math.max(1, PersistentPreferences.getTimeLapseTimepoints());
+                    intervalSec = Math.max(0.0, PersistentPreferences.getTimeLapseIntervalSec());
+                }
+
                 // Estimate time: ~2s per image for capture+move, plus ~10s per AF tile
-                double estimatedSeconds = totalImages * 2.0;
+                double perTimepointAcqSeconds = totalImages * 2.0;
+                totalImages *= timepoints;
+                // If the interval exceeds per-timepoint acquisition the run is interval-bound:
+                // (N-1) intervals to start the last timepoint, plus that timepoint's acquisition.
+                double estimatedSeconds = timepoints > 1
+                        ? Math.max(totalImages * 2.0, (timepoints - 1) * intervalSec + perTimepointAcqSeconds)
+                        : perTimepointAcqSeconds;
                 String timeEstimate = formatTime(estimatedSeconds);
 
                 // Estimate storage (rough: 4MB per image for 16-bit 2048x2048)
@@ -1842,6 +1926,9 @@ public class UnifiedAcquisitionController {
                 String anglesText = String.format("Angles: %d (%s modality)", angleCount, modality);
                 if (zPlanes > 1) {
                     anglesText += String.format(", Z-planes: %d", zPlanes);
+                }
+                if (timepoints > 1) {
+                    anglesText += String.format(", Timepoints: %d", timepoints);
                 }
                 previewAnglesLabel.setText(anglesText);
                 previewTotalImagesLabel.setText(String.format("Total Images: %,d", totalImages));

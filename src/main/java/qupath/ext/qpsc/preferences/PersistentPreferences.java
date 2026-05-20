@@ -1598,6 +1598,39 @@ public class PersistentPreferences {
         zStackProjectionProperty.set(v);
     }
 
+    // --- Time-lapse acquisition preferences ---
+
+    private static final BooleanProperty timeLapseEnabledProperty =
+            PathPrefs.createPersistentPreference("qpscTimeLapseEnabled", false);
+    private static final IntegerProperty timeLapseTimepointsProperty =
+            PathPrefs.createPersistentPreference("qpscTimeLapseTimepoints", 1);
+    private static final DoubleProperty timeLapseIntervalSecProperty =
+            PathPrefs.createPersistentPreference("qpscTimeLapseIntervalSec", 60.0);
+
+    public static boolean isTimeLapseEnabled() {
+        return timeLapseEnabledProperty.get();
+    }
+
+    public static void setTimeLapseEnabled(boolean v) {
+        timeLapseEnabledProperty.set(v);
+    }
+
+    public static int getTimeLapseTimepoints() {
+        return timeLapseTimepointsProperty.get();
+    }
+
+    public static void setTimeLapseTimepoints(int v) {
+        timeLapseTimepointsProperty.set(v);
+    }
+
+    public static double getTimeLapseIntervalSec() {
+        return timeLapseIntervalSecProperty.get();
+    }
+
+    public static void setTimeLapseIntervalSec(double v) {
+        timeLapseIntervalSecProperty.set(v);
+    }
+
     // --- Per-tile loop-order toggle (channel/z or angle/z nesting) ---
     // Stored per-modality-family so widefield and PPM remember their picks
     // independently. Values: widefield {"z", "channel"}; ppm {"angle", "z"}.

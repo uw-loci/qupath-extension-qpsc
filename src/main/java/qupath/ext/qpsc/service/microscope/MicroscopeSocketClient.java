@@ -225,6 +225,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         REQHWER("reqhwer_"),
         /** Acknowledge hardware error - user chose retry/skip/cancel */
         ACKHWER("ackhwer_"),
+        /** Check if a time-lapse falling-behind warning is pending */
+        REQTWARN("reqtwarn"),
         /** Run autofocus parameter benchmark */
         AFBENCH("afbench_"),
         /** PPM birefringence maximization test */
@@ -4337,6 +4339,71 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
     }
 
+    // Tracks whether the server supports the REQTWARN command.
+    // Same auto-disable contract as hwErrorCheckSupported: an old server
+    // ignores the unknown 8-byte command, the first read times out, and the
+    // check disables itself permanently without disturbing the connection.
+    private volatile boolean timeLapseWarningCheckSupported = true;
+
+    /**
+     * Checks if the server has a pending time-lapse falling-behind warning.
+     * <p>
+     * This is a best-effort, non-critical check modeled on
+     * {@link #checkHardwareError()}. The server keeps returning the same
+     * warning on every poll until acquisition ends -- callers must de-dupe and
+     * show it once. If the server does not support the REQTWARN command, the
+     * first timeout auto-disables future checks. Does NOT call
+     * handleIOException on failure -- the connection stays intact.
+     *
+     * @return the warning message if one is pending, or null if none or unsupported
+     */
+    public String checkTimeLapseWarning() {
+        if (!timeLapseWarningCheckSupported) {
+            return null;
+        }
+
+        try {
+            synchronized (socketLock) {
+                ensureConnected();
+
+                output.write(Command.REQTWARN.getValue());
+                output.flush();
+                lastActivityTime.set(System.currentTimeMillis());
+
+                // Read 8-byte status
+                byte[] statusBytes = new byte[8];
+                input.readFully(statusBytes);
+                String status = new String(statusBytes, StandardCharsets.UTF_8).trim();
+
+                if ("IDLE____".equals(status)) {
+                    return null;
+                } else if (status.startsWith("TWARN")) {
+                    // Read 4-byte message length (big-endian), then message body
+                    byte[] lenBytes = new byte[4];
+                    input.readFully(lenBytes);
+                    int msgLen = ((lenBytes[0] & 0xFF) << 24)
+                            | ((lenBytes[1] & 0xFF) << 16)
+                            | ((lenBytes[2] & 0xFF) << 8)
+                            | (lenBytes[3] & 0xFF);
+                    byte[] msgBytes = new byte[msgLen];
+                    input.readFully(msgBytes);
+                    lastActivityTime.set(System.currentTimeMillis());
+                    return new String(msgBytes, StandardCharsets.UTF_8);
+                } else {
+                    logger.warn("Unknown time-lapse warning status: {}", status);
+                    return null;
+                }
+            }
+        } catch (Exception e) {
+            // Server doesn't support REQTWARN -- permanently disable.
+            // Do NOT call handleIOException: that tears down the connection
+            // and disrupts ongoing acquisition monitoring.
+            timeLapseWarningCheckSupported = false;
+            logger.debug("Time-lapse warning check disabled (server does not support REQTWARN)");
+            return null;
+        }
+    }
+
     /**
      * Sends the user's choice for hardware error recovery back to the server.
      *
@@ -4403,7 +4470,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             long pollIntervalMs,
             long timeoutMs)
             throws IOException, InterruptedException {
-        return monitorAcquisition(progressCallback, manualFocusCallback, null, pollIntervalMs, timeoutMs);
+        return monitorAcquisition(progressCallback, manualFocusCallback, null, null, pollIntervalMs, timeoutMs);
     }
 
     /**
@@ -4412,6 +4479,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param progressCallback Callback for progress updates (can be null)
      * @param manualFocusCallback Callback for manual focus requests (can be null)
      * @param hardwareErrorCallback Callback for hardware errors, receives error message (can be null)
+     * @param timeLapseWarningCallback Callback for time-lapse falling-behind warnings (can be null)
      * @param pollIntervalMs Interval between progress checks in milliseconds
      * @param timeoutMs Maximum time to wait in milliseconds (0 for no timeout)
      * @return Final acquisition state
@@ -4422,6 +4490,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             Consumer<AcquisitionProgress> progressCallback,
             Consumer<Integer> manualFocusCallback,
             Consumer<String> hardwareErrorCallback,
+            Consumer<String> timeLapseWarningCallback,
             long pollIntervalMs,
             long timeoutMs)
             throws IOException, InterruptedException {
@@ -4493,6 +4562,17 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         } else {
                             logger.warn("Hardware error reported but no handler: {}", hwError);
                         }
+                    }
+                }
+
+                // Check for a time-lapse falling-behind warning (non-critical,
+                // auto-disables if the server doesn't support REQTWARN). The
+                // server re-sends the same warning every poll -- the callback
+                // is responsible for de-duping and showing it once.
+                if (currentState != AcquisitionState.CANCELLING) {
+                    String timeLapseWarning = checkTimeLapseWarning();
+                    if (timeLapseWarning != null && timeLapseWarningCallback != null) {
+                        timeLapseWarningCallback.accept(timeLapseWarning);
                     }
                 }
 

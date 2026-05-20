@@ -109,6 +109,20 @@ sequenceDiagram
 | PROGRESS | `progress` | none | progress string |
 | CANCEL | `cancel__` | none | 8-byte ack |
 
+### Acquisition Monitoring Poll Commands
+
+While an acquisition runs, the client polls these best-effort channels on the primary socket alongside STATUS / PROGRESS. Each is **optional**: an older server ignores the unknown 8-byte command, the client's first read times out, and the client permanently disables that poll (via a `volatile boolean`) without disturbing the connection. New QuPath and old server, or new server and old QuPath, both work.
+
+| Command | Wire Format | Payload | Response |
+|---------|------------|---------|----------|
+| REQMANF | `reqmanf_` | none | 8-byte status: `IDLE____`, or a manual-focus request |
+| REQHWER | `reqhwer_` | none | 8-byte status: `IDLE____` / `HWERR___` + 4-byte big-endian length + UTF-8 body |
+| REQTWARN | `reqtwarn` | none | 8-byte status: `IDLE____` / `TWARN___` + 4-byte big-endian length + UTF-8 body |
+
+**REQHWER** -- polled to detect a hardware error the server is waiting on. When the status starts with `HWERR`, the 4-byte length + UTF-8 message follow; the client shows a retry/skip/cancel dialog and replies with `ACKHWER`.
+
+**REQTWARN** -- polled to detect a time-lapse "falling behind" warning. When the status starts with `TWARN`, a 4-byte big-endian unsigned length and a UTF-8 message body follow. The server raises this once the first timepoint overruns the requested interval and **keeps returning the same warning on every poll until acquisition ends** -- the client de-dupes with a one-shot latch and surfaces it exactly once (a modal dialog plus a push notification). There is no acknowledgement command; the warning is informational and the acquisition continues.
+
 ### Acquisition Message Format
 
 The ACQUIRE payload is a flag-based string:
@@ -140,9 +154,13 @@ The ACQUIRE payload is a flag-based string:
 --z-step 2.0
 --z-projection max
 --inner-axis channel
+--timepoints 5
+--interval 60.0
 --save-raw true
 ENDOFSTR
 ```
+
+`--timepoints` / `--interval` are emitted by `AcquisitionCommandBuilder` only when the user enables the Time-Lapse Options pane in the acquisition dialog (`timepoints > 1`). `--interval` is the seconds between the *start* of consecutive timepoints. Omitting both flags yields a single-timepoint acquisition (byte-identical to pre-time-lapse builds). The server's main multi-tile workflow loops over timepoints with a drift-corrected scheduler; see the `REQTWARN` poll below for the falling-behind warning channel.
 
 `--af-disabled` is mutually exclusive with the `--af-tiles`/`--af-steps`/`--af-range` triplet. When the Java side's "Disable Autofocus" preference is on, the triplet is omitted and `--af-disabled` is sent in its place. The server short-circuits `_configure_autofocus` (no YAML load required, no AF positions scheduled), so no pre-acquisition AF fires, no per-tile drift checks run, and no manual-focus prompts appear.
 
