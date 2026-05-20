@@ -359,6 +359,49 @@ public class MicroscopeController implements StagePositionProvider {
     }
 
     /**
+     * Moves the stage in Z without waiting for the device to arrive. The stage
+     * begins ramping toward the target immediately and the call returns at once.
+     *
+     * <p>Intended for interactive use such as the Live Viewer mouse-wheel Z
+     * scroll, where re-targeting a stage mid-ramp is the desired behavior: each
+     * fresh target simply redirects the in-flight ramp, so the stage tracks the
+     * wheel continuously instead of teleporting. The caller is responsible for
+     * polling {@link #getStageZFast()} if it needs to know when the stage has
+     * arrived.
+     *
+     * @param z Target Z coordinate in microns
+     * @throws IOException if communication fails
+     */
+    public void moveStageZNoWait(double z) throws IOException {
+        if (isMovementBlocked("moveStageZNoWait")) {
+            return;
+        }
+
+        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+        if (!mgr.isWithinStageBounds(z)) {
+            // Callers (e.g. the Z-scroll handler) bounds-check before dispatch;
+            // this is a defensive guard. Log rather than pop a dialog, since an
+            // interactive handler could otherwise spam alerts.
+            logger.warn("Skipping non-blocking Z move: target {} is outside stage limits", z);
+            return;
+        }
+
+        socketClient.moveStageZNoWait(z);
+        logger.debug("Non-blocking Z move dispatched to: {}", z);
+    }
+
+    /**
+     * Reads the current Z position only (fast, no X/Y read).
+     *
+     * @return Z position in microns
+     * @throws IOException if communication fails
+     */
+    public double getStageZFast() throws IOException {
+        return socketClient.getStageZFast();
+    }
+
+    /**
      * Rotates the stage to the given angle.
      *
      * @param angle The target rotation angle in ticks

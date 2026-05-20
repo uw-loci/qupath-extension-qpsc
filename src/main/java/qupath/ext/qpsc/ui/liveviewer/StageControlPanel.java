@@ -154,26 +154,30 @@ public class StageControlPanel extends VBox {
     // Position synchronization listener
     private PropertyChangeListener positionListener;
 
-    // Z scroll debouncing state
-    /** Accumulated target Z during a scroll gesture. NaN when idle. */
-    private double pendingZTarget = Double.NaN;
-    /** Debounce timer: fires 100ms after the last scroll tick. */
-    private final PauseTransition zScrollDebounce = new PauseTransition(Duration.millis(100));
-    /** True while a scroll-initiated Z move is in-flight or debouncing. Suppresses poller overwrites. */
-    private volatile boolean zScrollInFlight = false;
+    // Z scroll streaming state -- see handleZScroll / zScrollWorkerLoop.
     /** Standard JavaFX deltaY units per mouse wheel notch on Windows. */
     private static final double SCROLL_UNITS_PER_NOTCH = 40.0;
+    /** Minimum interval between non-blocking move dispatches; floors the command rate. */
+    private static final long MIN_DISPATCH_INTERVAL_MS = 50;
+    /** Worker poll cadence: re-target dispatch and live Z readback. */
+    private static final long POLL_INTERVAL_MS = 50;
+    /** A scroll gesture ends once no scroll event has arrived for this long. */
+    private static final long GESTURE_IDLE_MS = 250;
+
     /**
-     * Next Z target for the worker thread. NaN means "nothing pending".
-     * Writes are guarded by {@link #zWorkerMutex}. The worker collapses
-     * multiple pending updates to the latest value, so rapid scroll
-     * gestures produce at most one queued move beyond the current one.
+     * Live accumulated Z target for the current scroll gesture, in microns.
+     * NaN when idle. Written on the FX thread by {@link #handleZScroll}, read
+     * by the scroll worker, which re-targets the stage toward it via a
+     * non-blocking move so the stage tracks the wheel continuously.
      */
-    private double nextZTarget = Double.NaN;
-    /** True iff the Z scroll worker thread is currently alive. Guards
-     *  against spawning multiple workers for a single scroll gesture. */
+    private volatile double zGestureTarget = Double.NaN;
+    /** Wall-clock time of the most recent scroll event. */
+    private volatile long lastScrollEventMs = 0;
+    /** True while a scroll gesture is in progress. Suppresses poller overwrites of the Z field. */
+    private volatile boolean zScrollInFlight = false;
+    /** True iff the single Z scroll worker thread is currently alive. Guarded by {@link #zWorkerMutex}. */
     private boolean zWorkerRunning = false;
-    /** Mutex for {@link #nextZTarget} and {@link #zWorkerRunning}. */
+    /** Mutex for {@link #zWorkerRunning} and the worker's end-of-gesture check. */
     private final Object zWorkerMutex = new Object();
 
     // Saved Points tab components
@@ -459,8 +463,7 @@ public class StageControlPanel extends VBox {
 
         zStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
 
-        // Z scroll handler (debounced -- accumulates rapid ticks, sends one move)
-        zScrollDebounce.setOnFinished(e -> executeZScroll());
+        // Z scroll handler (streams the wheel to the stage like a focus knob)
         javafx.event.EventHandler<ScrollEvent> zScrollHandler = event -> handleZScroll(event, zStepField);
         zField.setOnScroll(zScrollHandler);
         moveZBtn.setOnScroll(zScrollHandler);
@@ -3351,17 +3354,21 @@ public class StageControlPanel extends VBox {
     }
 
     /**
-     * Accumulates scroll ticks into {@link #pendingZTarget} and resets the
-     * debounce timer. The actual MOVEZ command fires once from
-     * {@link #executeZScroll()} after 100ms of silence. This prevents
-     * rapid scroll events from spawning overlapping move threads and
-     * eliminates the race between optimistic UI updates and the position
-     * poller.
+     * Streams the mouse wheel into a live Z target so the stage tracks the
+     * wheel like a physical focus knob. Each {@code ScrollEvent} accumulates
+     * into {@link #zGestureTarget}; a single persistent worker
+     * ({@link #zScrollWorkerLoop}) continuously re-targets the stage toward it
+     * with non-blocking moves, so the stage ramps smoothly through every
+     * intermediate focus plane instead of teleporting once the gesture ends.
      *
-     * <p>Proportional: each mouse-wheel notch (~40 deltaY units) adds one
-     * step. Trackpads and high-resolution wheels produce fractional notches
-     * for finer control; fast flicks produce multiple notches for larger
-     * movement.
+     * <p>Linear mapping: each mouse-wheel notch (~40 deltaY units) adds exactly
+     * one configured Z step. Trackpads and high-resolution wheels produce
+     * fractional notches for finer control; a fast swipe simply delivers more
+     * notches and so covers more distance.
+     *
+     * <p>A gesture begins when no scroll event has arrived for
+     * {@link #GESTURE_IDLE_MS}; the target is then re-seeded from the displayed
+     * Z so accumulation starts from the true position.
      */
     private void handleZScroll(ScrollEvent event, TextField zStepField) {
         if (isAcquisitionBlocked()) {
@@ -3370,35 +3377,42 @@ public class StageControlPanel extends VBox {
         }
         try {
             double step = Double.parseDouble(zStepField.getText().replace(",", ""));
-            double deltaY = event.getDeltaY();
-
-            // Proportional: each notch (~40 units on Windows) = one step
-            double notches = deltaY / SCROLL_UNITS_PER_NOTCH;
+            double notches = event.getDeltaY() / SCROLL_UNITS_PER_NOTCH;
             double movement = step * notches;
 
-            // Seed from the current field value only on the first tick of a
-            // new gesture. Subsequent ticks accumulate from the pending target
-            // so the poller cannot roll back the accumulation.
-            if (Double.isNaN(pendingZTarget)) {
-                pendingZTarget = Double.parseDouble(zField.getText().replace(",", ""));
-            }
-            pendingZTarget += movement;
+            long now = System.currentTimeMillis();
+            boolean newGesture = Double.isNaN(zGestureTarget) || (now - lastScrollEventMs) > GESTURE_IDLE_MS;
+            double base = newGesture ? Double.parseDouble(zField.getText().replace(",", "")) : zGestureTarget;
+            double candidate = base + movement;
 
-            if (!mgr.isWithinStageBounds(pendingZTarget)) {
+            if (!mgr.isWithinStageBounds(candidate)) {
                 zStatus.setText("Z move out of bounds");
-                // Clamp to prevent drift past limits
-                pendingZTarget -= movement;
                 event.consume();
                 return;
             }
 
-            // Optimistic UI update and suppress poller overwrites
-            zField.setText(String.format("%.2f", pendingZTarget));
+            zGestureTarget = candidate;
+            lastScrollEventMs = now;
+
+            // Optimistic UI update; the worker takes over the field with live
+            // readings once it starts. zScrollInFlight suppresses the 500ms
+            // position poller so it cannot roll the value back mid-gesture.
+            zField.setText(String.format("%.2f", candidate));
             zStatus.setText("Moving...");
             zScrollInFlight = true;
 
-            // Reset debounce timer (fires executeZScroll 100ms after last tick)
-            zScrollDebounce.playFromStart();
+            boolean startWorker;
+            synchronized (zWorkerMutex) {
+                startWorker = !zWorkerRunning;
+                if (startWorker) {
+                    zWorkerRunning = true;
+                }
+            }
+            if (startWorker) {
+                Thread worker = new Thread(this::zScrollWorkerLoop, "StageControl-ZScroll");
+                worker.setDaemon(true);
+                worker.start();
+            }
         } catch (Exception ex) {
             logger.warn("Scroll Z movement failed: {}", ex.getMessage());
             zStatus.setText("Z scroll failed");
@@ -3407,76 +3421,85 @@ public class StageControlPanel extends VBox {
     }
 
     /**
-     * Publishes the accumulated {@link #pendingZTarget} to the single
-     * persistent scroll worker, starting one if none is currently
-     * running. Called by the debounce timer after scroll events stop
-     * arriving.
+     * Body of the single persistent Z scroll worker. While a gesture is active
+     * it re-dispatches a non-blocking move toward {@link #zGestureTarget}
+     * (rate-limited to {@link #MIN_DISPATCH_INTERVAL_MS}) and polls the true Z
+     * position into the field so the user sees focus track the wheel. Because
+     * each non-blocking move simply re-targets the in-flight ramp, the stage
+     * passes continuously through intermediate planes and reverses promptly.
      *
-     * <p>Prior implementation spawned a new "StageControl-ZScroll" thread
-     * on every debounce fire, which during the 2026-04-15 Z-scroll
-     * storm caused 6+ threads to pile up on the server simultaneously.
-     * Combined with the server-side lack of stage serialization, this
-     * meant every move retargeted the stage mid-wait and every
-     * `wait_z` busy-poll hung for the full 10 s timeout. Now a single
-     * worker thread consumes targets serially, collapsing multiple
-     * queued updates to the latest one so a rapid scroll burst of
-     * 10 ticks results in at most 2 actual moves (one in flight, one
-     * queued) regardless of gesture speed.
-     */
-    private void executeZScroll() {
-        double target = pendingZTarget;
-        pendingZTarget = Double.NaN;
-
-        logger.debug("Debounced scroll Z movement to: {}", target);
-
-        boolean startWorker;
-        synchronized (zWorkerMutex) {
-            nextZTarget = target;
-            startWorker = !zWorkerRunning;
-            if (startWorker) {
-                zWorkerRunning = true;
-            }
-        }
-
-        if (startWorker) {
-            Thread worker = new Thread(this::zScrollWorkerLoop, "StageControl-ZScroll");
-            worker.setDaemon(true);
-            worker.start();
-        }
-        // else: the already-running worker will pick up nextZTarget on
-        // its next iteration. No new thread, no server-side pile-up.
-    }
-
-    /**
-     * Body of the single persistent Z scroll worker. Loops until no more
-     * targets are pending, processing one move at a time. Multiple
-     * rapid scroll gestures collapse naturally: newer targets overwrite
-     * older ones in {@link #nextZTarget}, so the worker always moves to
-     * the most recent user intent, skipping intermediate positions.
+     * <p>Exactly one worker runs per gesture ({@link #zWorkerRunning} guard):
+     * this, the {@link #MIN_DISPATCH_INTERVAL_MS} floor, and the absence of any
+     * server-side {@code wait_z} mean a fast swipe cannot flood the server --
+     * the failure mode behind the 2026-04-15 Z-scroll storm.
+     *
+     * <p>The end-of-gesture check is re-evaluated under {@link #zWorkerMutex}
+     * so a scroll event racing with worker shutdown cannot be lost: either the
+     * worker sees the fresh event and stays alive, or it has already cleared
+     * {@code zWorkerRunning} and {@link #handleZScroll} starts a fresh worker.
      */
     private void zScrollWorkerLoop() {
+        double lastDispatched = Double.NaN;
+        long lastDispatchMs = 0;
         try {
             while (true) {
-                double target;
-                synchronized (zWorkerMutex) {
-                    if (Double.isNaN(nextZTarget)) {
-                        zWorkerRunning = false;
-                        return;
+                double target = zGestureTarget;
+                long now = System.currentTimeMillis();
+
+                if (!Double.isNaN(target)
+                        && target != lastDispatched
+                        && (now - lastDispatchMs) >= MIN_DISPATCH_INTERVAL_MS) {
+                    try {
+                        MicroscopeController.getInstance().moveStageZNoWait(target);
+                        lastDispatched = target;
+                        lastDispatchMs = now;
+                    } catch (Exception ex) {
+                        logger.warn("Z scroll movement failed: {}", ex.getMessage());
+                        Platform.runLater(() -> zStatus.setText("Z scroll failed"));
                     }
-                    target = nextZTarget;
-                    nextZTarget = Double.NaN;
                 }
+
+                // Live position readback -- the user watches focus track here.
                 try {
-                    MicroscopeController.getInstance().moveStageZ(target);
-                    final double landed = target;
-                    Platform.runLater(() -> zStatus.setText(String.format("Scrolled Z to %.2f", landed)));
+                    double actual = MicroscopeController.getInstance().getStageZFast();
+                    Platform.runLater(() -> zField.setText(String.format("%.2f", actual)));
                 } catch (Exception ex) {
-                    logger.warn("Z scroll movement failed: {}", ex.getMessage());
-                    Platform.runLater(() -> zStatus.setText("Z scroll failed"));
+                    logger.debug("Z scroll position poll failed: {}", ex.getMessage());
+                }
+
+                boolean exit = false;
+                synchronized (zWorkerMutex) {
+                    boolean idle = (System.currentTimeMillis() - lastScrollEventMs) > GESTURE_IDLE_MS;
+                    double t = zGestureTarget;
+                    boolean settled = Double.isNaN(t) || t == lastDispatched;
+                    if (idle && settled) {
+                        zWorkerRunning = false;
+                        exit = true;
+                    }
+                }
+                if (exit) {
+                    break;
+                }
+
+                try {
+                    Thread.sleep(POLL_INTERVAL_MS);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    synchronized (zWorkerMutex) {
+                        zWorkerRunning = false;
+                    }
+                    break;
                 }
             }
         } finally {
-            Platform.runLater(() -> zScrollInFlight = false);
+            final double finalZ = lastDispatched;
+            zGestureTarget = Double.NaN;
+            Platform.runLater(() -> {
+                zScrollInFlight = false;
+                if (!Double.isNaN(finalZ)) {
+                    zStatus.setText(String.format("Scrolled Z to %.2f", finalZ));
+                }
+            });
         }
     }
 
