@@ -530,7 +530,7 @@ Compression algorithm for OME pyramid output files.
 |----------|-------|
 | Type | Choice |
 | Default | OME_TIFF |
-| Options | OME_TIFF, OME_ZARR |
+| Options | OME_TIFF, OME_ZARR, OME_TIFF_VIA_ZARR |
 | Requires Restart | No |
 
 **Description:**
@@ -540,8 +540,9 @@ Output format for stitched images.
 |--------|------|------|
 | **OME_TIFF** | Widely compatible, single file, standard format | Slower to write, larger files |
 | **OME_ZARR** | 2-3x faster writing, 20-30% smaller, cloud-native | Directory format, less commonly used |
+| **OME_TIFF_VIA_ZARR** | Fast ZARR writing, automatic OME-TIFF conversion | Two-stage pipeline (stitches to ZARR, converts to TIFF in background) |
 
-**Note:** OME-ZARR is an emerging standard that offers significant performance benefits but may have compatibility issues with older software.
+**Note:** OME-ZARR is an emerging standard that offers significant performance benefits. OME_TIFF_VIA_ZARR combines ZARR's write speed with TIFF's compatibility by automatically converting completed ZARR datasets to OME-TIFF in the background.
 
 ---
 

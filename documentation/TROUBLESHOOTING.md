@@ -677,7 +677,7 @@ This is a QuPath / OMEPyramidWriter bug, not a disk-space or permissions problem
 
 **How to recover:**
 1. The tiles in `TempTiles/` are preserved -- a Stitching Recovery re-run is cheap to try (sometimes the level-overlap race goes the other way and the same input stitches cleanly).
-2. If a re-run also fails, change the **Output format** in the Stitching Recovery dialog to **OME-ZARR**; the OME-ZARR writer does not go through `OMEPyramidWriter` and is not affected by this bug.
+2. If a re-run also fails, change the **Output format** in the Stitching Recovery dialog to **OME-ZARR** or **OME_TIFF_VIA_ZARR**; these formats do not use the problematic `OMEPyramidWriter` code path. OME_TIFF_VIA_ZARR writes quickly to ZARR and queues an automatic background conversion to OME-TIFF.
 3. As a last resort, re-acquire the region. The bug is in the OME-TIFF pyramid writer, not the acquisition.
 
 The underlying writer issue is in QuPath core (`qupath.lib.images.writers.ome.OMEPyramidWriter`) and is being tracked there; the recovery workflow's job here is to make sure broken outputs never silently land in the project.
@@ -692,11 +692,12 @@ The underlying writer issue is in QuPath core (`qupath.lib.images.writers.ome.OM
 2. Go to **Extensions > QPSC > Utilities > Re-stitch Tiles**
 3. Browse to your tile directory (the folder containing angle subdirectories or TileConfiguration.txt)
 4. Verify the pixel size (auto-populated from your microscope config)
-5. Set compression and output format
-6. For **Matching String**: use `"."` to stitch all subdirectories, or a specific angle like `"0.0"`
-7. Click **Stitch & Import**
+5. Select **Output format**: OME_TIFF (standard), OME_ZARR (faster, directory format), or OME_TIFF_VIA_ZARR (ZARR speed with automatic TIFF conversion)
+6. Select **Compression**: available options are filtered by format. TIFF allows all compression types (LZW, JPEG, J2K, zstd, etc.), while ZARR-based formats are restricted to LZW, ZLIB, Uncompressed, and Default
+7. For **Matching String**: use `"."` to stitch all subdirectories, or a specific angle like `"0.0"`
+8. Click **Stitch & Import**
 
-The stitched images will be created in a SlideImages folder and automatically imported into your project.
+The stitched images will be created in `<projectDir>/SlideImages` (project-anchored, matching the regular acquisition path) and automatically imported into your project. Filenames follow your configured naming pattern (respecting Objective, Annotation, Angle, and other preferences).
 
 **Alternative method - standalone stitching (file only, no project import):**
 
