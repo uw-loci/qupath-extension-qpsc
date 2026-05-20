@@ -128,6 +128,22 @@ the user changed objective in MicroManager mid-workflow. All three call
 two `QPScopeChecks` methods, so the threshold (5% pixel size, 5% sensor
 ROI) and the diagnostic dialog content are identical at every layer.
 
+**Saved-alignment objective-mismatch advisory (`AlignmentHelper.checkForSlideAlignment`,
+directional as of 2026-05-19).** When the per-slide alignment JSON
+records the objective it was built against and that name differs from
+`sample.objective()`, the gate compares pixel sizes via
+`MicroscopeConfigManager.getPixelSize(objective, detector)`. The advisory
+only surfaces when the wizard's pixel size is meaningfully *smaller*
+than the saved one (within the same 5% tolerance the live gate uses) --
+i.e. the wizard is at a higher magnification than the saved alignment.
+Going the other direction (40x saved -> 10x wizard) leaves the linear
+transform valid and any refinement translation shrinks into a sub-tile
+fraction of the new tile, so the dialog is suppressed. On pixel-size
+lookup failure (config gap, missing objective entry) the gate falls back
+to the pre-2026-05-19 behaviour and surfaces the advisory regardless of
+direction. Pre-Phase-3 JSONs without the `objective` field load with
+`null` and stay silent.
+
 **Sub-image-as-source path (`processSubAcquisitionPath`).** When the open
 entry is a previously-acquired sub-image (non-zero `xy_offset`, `base_image`
 distinct from its own name), `routeSubWorkflow` dispatches to the
