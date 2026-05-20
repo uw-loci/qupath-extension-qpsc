@@ -126,7 +126,7 @@ The Navigate tab combines movement controls and direct position entry in a singl
 | Arrow Buttons | Buttons | Up/Down/Left/Right for precise single-step movement |
 | Double-Step Arrows | Buttons | Outer arrow buttons for 2x step size movement |
 | Sample Movement | CheckBox | Enable "sample perspective" movement (direction inversion for intuitive control) |
-| Z Controls | Spinner + Buttons | Z position display with up/down buttons |
+| Z Controls | Spinner + Buttons | Z position display with up/down buttons. Scroll on the Z field or Move Z button to stream Z continuously — the stage ramps smoothly through intermediate focus planes, tracking the wheel like a physical focus knob. |
 | Polarizer Controls | Spinner | Rotation angle control (PPM modality only) |
 
 **Move to Position:**
