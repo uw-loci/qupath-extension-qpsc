@@ -28,7 +28,7 @@ This document provides an overview of all utilities available in the QPSC extens
 | Re-stitch Tiles | Re-stitch tiles from a failed or incomplete acquisition | Extensions > QP Scope > Utilities > Re-stitch Tiles... |
 | [Setup Wizard](tools/setup-wizard.md) | Create microscope config files (first-time setup) | Extensions > QP Scope > Utilities > Setup Wizard... |
 | [Communication Settings](tools/server-connection.md) | Configure server connection and notification alerts | Extensions > QP Scope > Utilities > Communication Settings... |
-| Make Project Portable | Convert ZARR-backed images to portable single-file OME-TIFFs | Extensions > QP Scope > Utilities > Make Project Portable... |
+| Make Project Portable | Convert or zip ZARR-backed images and clean up raw tile folders for portability | Extensions > QP Scope > Utilities > Make Project Portable... |
 | **JAI Camera Submenu** (conditional -- only when JAI detected) | | |
 | [White Balance Calibration](tools/white-balance-calibration.md) | Calibrate JAI 3-CCD camera white balance | Extensions > QP Scope > Utilities > JAI Camera > White Balance... |
 | [JAI Noise Characterization](tools/noise-characterization.md) | Measure camera noise statistics | Extensions > QP Scope > Utilities > JAI Camera > Noise Characterization... |
@@ -223,26 +223,26 @@ Every QPSC acquisition writes a Micro-Manager 2.0 compatible Multi-Dimensional A
 
 ## Make Project Portable
 
-Converts a project from ZARR-backed images to portable single-file OME-TIFF format, making it easy to copy the project off the acquisition workstation. This is particularly useful after using the OME_TIFF_VIA_ZARR output format, which writes fast to ZARR and queues automatic background conversion to OME-TIFF.
+Cleans up a project's ZARR-backed images and raw tile folders so the project is easy to copy off the acquisition workstation. ZARR images can arise from the OME_TIFF_VIA_ZARR output format (writes fast to ZARR, queues automatic background conversion to OME-TIFF) or from **Re-stitch Tiles** recovery run in OME_ZARR / OME_TIFF_VIA_ZARR mode.
 
-**What It Does:**
+The dialog lists every ZARR-backed image with its OME-TIFF status (`READY`, `CONVERTING...`, or `MISSING`) and offers two independent choices.
 
-1. Scans the project for any ZARR-backed images (the intermediate directory format used during OME_TIFF_VIA_ZARR conversion)
-2. Converts them to single-file OME-TIFFs using the QuPath `updateURIs()` mechanism
-3. Deletes the ZARR intermediates to save space (the original per-mode acquisition tile folders can also be deleted)
+**ZARR handling** (choose one):
+
+| Choice | What it does |
+|---|---|
+| **Convert ZARR to OME-TIFF** (recommended) | Swaps each project entry from ZARR to a sibling single-file `.ome.tif` via the QuPath `updateURIs()` mechanism, then deletes the ZARR. ZARR files with **no `.ome.tif` yet** (status `MISSING`) are converted on the spot -- no need to re-stitch. Conversion can take several minutes per file depending on size. Images still mid background-conversion (`CONVERTING...`) are skipped; click **Refresh** later. |
+| **Zip ZARR to .ome.zarr.zip archive** | Zips each `.ome.zarr` directory into a sibling `.ome.zarr.zip` and deletes the directory. Use this when conversion is too slow or you want a lossless single-file archive. **Important:** QuPath's image reader cannot open a zipped ZARR -- you must extract each `.ome.zarr.zip` back to a `.ome.zarr` directory before reopening the project. The archive expands in place, so the project entry works again once extracted. |
+| **Leave ZARR untouched** | Does not touch the ZARR files at all. Combine with tile deletion to *only* clean up raw tiles. |
+
+**Tile images:** A **Keep individual tile images** checkbox (unchecked by default) controls whether the raw, un-stitched per-mode acquisition tile folders are deleted. This is independent of the ZARR choice -- e.g. *Leave ZARR untouched* + delete tiles cleans up only the raw tiles. The dialog shows the tile count and total size.
 
 **What Gets Preserved:**
 
-- All annotations, detections, image metadata, and thumbnails remain unchanged
-- Acquisition metadata files inside the tile folders are preserved -- only raw tile images are removed by default
+- For the Convert path, all annotations, detections, image metadata, and thumbnails remain unchanged (`updateURIs()` only repoints the backing file).
+- Acquisition metadata files inside the tile folders are preserved -- only raw tile images are removed.
 
-**The Tile Image Deletion Decision:**
-
-When the dialog opens it shows:
-- The count and total size of individual (raw, un-stitched) tile images found in the project
-- A **Keep individual tile images** checkbox (unchecked by default)
-
-Individual tiles are only needed if you plan to **re-stitch** the acquisition. If you're confident the stitched result is final and just want to minimize storage, the default (delete) is recommended. The dialog shows the permanent deletion warning and requires confirmation before deleting anything.
+Individual tiles are only needed if you plan to **re-stitch** the acquisition. The dialog shows a permanent-deletion warning that changes with the selected options and requires confirmation before deleting anything.
 
 **When You Need It:**
 

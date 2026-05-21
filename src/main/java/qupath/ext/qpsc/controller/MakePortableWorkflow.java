@@ -1,6 +1,7 @@
 package qupath.ext.qpsc.controller;
 
 import java.awt.image.BufferedImage;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
@@ -11,11 +12,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ScrollPane;
@@ -25,6 +29,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.workflow.StitchingHelper;
 import qupath.ext.qpsc.utilities.TileProcessingUtilities;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -34,30 +39,47 @@ import qupath.lib.projects.ProjectImageEntry;
 /**
  * "Make Project Portable" utility.
  *
- * <p>Scans the current project for images backed by .ome.zarr directories,
- * checks whether a matching .ome.tif file exists alongside each one (produced
- * by the OME_TIFF_VIA_ZARR background conversion), and offers to swap the
- * project entries from ZARR to TIFF using {@code entry.updateURIs()}.
+ * <p>Scans the current project for images backed by .ome.zarr directories and
+ * lets the user pick, independently:
  *
- * <p>After swapping, the ZARR intermediates are deleted. By default the raw
- * individual tile images (the per-mode acquisition folders alongside
- * {@code SlideImages}) are also deleted, since they are only needed to
- * re-stitch; a "Keep individual tile images" checkbox preserves them. The
- * result is a project that uses only single-file OME-TIFFs, making it easy
- * to copy off the acquisition workstation.
+ * <ul>
+ *   <li><b>ZARR handling</b> -- one of:
+ *     <ul>
+ *       <li><i>Convert to OME-TIFF</i>: swap each project entry from ZARR to a
+ *           sibling .ome.tif and delete the ZARR. ZARR files that have no
+ *           .ome.tif yet (e.g. produced by re-stitch recovery, or whose
+ *           background conversion never ran) are converted on the spot via
+ *           {@link StitchingHelper#convertSingleZarrToTiff}. This can take
+ *           several minutes per file.</li>
+ *       <li><i>Zip ZARR</i>: zip each .ome.zarr directory into a sibling
+ *           .ome.zarr.zip archive and delete the directory. The project entry
+ *           is NOT repointed -- QuPath's image reader cannot open a zipped
+ *           ZARR, so the .ome.zarr.zip archives must be extracted back to
+ *           .ome.zarr directories before the project is reopened.</li>
+ *       <li><i>Leave untouched</i>: do not touch the ZARR files (use this with
+ *           tile deletion to only clean up raw tiles).</li>
+ *     </ul></li>
+ *   <li><b>Tile images</b> -- whether to delete the raw individual tile images
+ *       (the per-mode acquisition folders alongside {@code SlideImages}), which
+ *       are only needed to re-stitch.</li>
+ * </ul>
  *
  * <p>The dialog warns that the deletions are permanent and asks for
  * confirmation before doing any work.
  *
- * <p>All annotations, detections, image type, metadata, and thumbnails are
- * preserved because {@code updateURIs()} only changes the backing file URI
- * without touching the entry's data directory. Acquisition metadata files
- * inside the tile folders are also preserved -- only raw tile images are
- * removed.
+ * <p>For the Convert path, all annotations, detections, image type, metadata,
+ * and thumbnails are preserved because {@code updateURIs()} only changes the
+ * backing file URI without touching the entry's data directory. Acquisition
+ * metadata files inside the tile folders are also preserved -- only raw tile
+ * images are removed.
  */
 public class MakePortableWorkflow {
 
     private static final Logger logger = LoggerFactory.getLogger(MakePortableWorkflow.class);
+
+    /** Compression used for the on-the-spot ZARR -> OME-TIFF conversion. LZW is
+     * lossless and valid for every OME-TIFF writer path. */
+    private static final String TIFF_COMPRESSION = "LZW";
 
     /** Entry point from the menu. */
     public static void run(QuPathGUI gui) {
@@ -88,6 +110,24 @@ public class MakePortableWorkflow {
         READY,
         CONVERTING,
         MISSING
+    }
+
+    /** What the user wants done with the .ome.zarr files. */
+    private enum ZarrAction {
+        CONVERT_TIFF("Convert ZARR to OME-TIFF (recommended)"),
+        ZIP("Zip ZARR to .ome.zarr.zip archive"),
+        LEAVE("Leave ZARR untouched");
+
+        private final String label;
+
+        ZarrAction(String label) {
+            this.label = label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
     }
 
     private static class ZarrEntry {
@@ -269,6 +309,7 @@ public class MakePortableWorkflow {
     private static void showPortabilityDialog(QuPathGUI gui, Project<BufferedImage> project, List<ZarrEntry> entries) {
 
         TileScan tileScan = scanTileDirectories(entries);
+        boolean hasTiles = !tileScan.tileDirs.isEmpty();
 
         Stage dialog = new Stage();
         dialog.setTitle("Make Project Portable");
@@ -279,7 +320,6 @@ public class MakePortableWorkflow {
 
         // Summary label
         Label summaryLabel = new Label();
-        updateSummary(summaryLabel, entries);
 
         // Entry list
         VBox entryList = new VBox(4);
@@ -290,11 +330,17 @@ public class MakePortableWorkflow {
         }
         ScrollPane scrollPane = new ScrollPane(entryList);
         scrollPane.setFitToWidth(true);
-        scrollPane.setPrefHeight(170);
+        scrollPane.setPrefHeight(150);
         VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
+        // ZARR handling selector
+        ComboBox<ZarrAction> zarrActionCombo = new ComboBox<>();
+        zarrActionCombo.getItems().addAll(ZarrAction.values());
+        zarrActionCombo.setValue(ZarrAction.CONVERT_TIFF);
+        HBox zarrActionBox = new HBox(8, new Label("ZARR handling:"), zarrActionCombo);
+        zarrActionBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+
         // Individual-tile-image controls
-        boolean hasTiles = !tileScan.tileDirs.isEmpty();
         CheckBox keepTilesCheckbox = new CheckBox("Keep individual tile images");
         keepTilesCheckbox.setSelected(false);
         keepTilesCheckbox.setDisable(!hasTiles);
@@ -312,12 +358,9 @@ public class MakePortableWorkflow {
             tileInfoLabel.setText("No individual tile images found in the project folder.");
         }
 
-        // Warning label
-        Label warningLabel = new Label("Warning: this permanently deletes the ZARR intermediates"
-                + (hasTiles ? " and the individual tile images" : "")
-                + ". This cannot be undone.");
+        // Warning label (mode-aware)
+        Label warningLabel = new Label();
         warningLabel.setWrapText(true);
-        warningLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: red;");
 
         // Progress bar (hidden initially)
         ProgressBar progressBar = new ProgressBar(0);
@@ -331,44 +374,36 @@ public class MakePortableWorkflow {
         Button makePortableBtn = new Button("Make Portable");
         Button closeBtn = new Button("Close");
 
-        long readyCount =
-                entries.stream().filter(e -> e.status == TiffStatus.READY).count();
-        makePortableBtn.setDisable(readyCount == 0);
+        // Shared UI-state refresh: summary, warning, button enablement.
+        Runnable refreshState = () -> {
+            ZarrAction action = zarrActionCombo.getValue();
+            boolean willDeleteTiles = hasTiles && !keepTilesCheckbox.isSelected();
+            updateSummary(summaryLabel, entries, action);
+            updateWarning(warningLabel, action, willDeleteTiles);
+            makePortableBtn.setDisable(!hasWorkToDo(entries, action, willDeleteTiles));
+        };
+        refreshState.run();
+
+        zarrActionCombo.valueProperty().addListener((obs, o, n) -> refreshState.run());
+        keepTilesCheckbox.selectedProperty().addListener((obs, o, n) -> refreshState.run());
 
         refreshBtn.setOnAction(e -> {
             entries.forEach(ZarrEntry::refresh);
-            entries.forEach(ze -> {
-                int idx = entries.indexOf(ze);
-                if (idx < entryList.getChildren().size()) {
-                    updateEntryLabel((Label) entryList.getChildren().get(idx), ze);
-                }
-            });
-            updateSummary(summaryLabel, entries);
-            long ready =
-                    entries.stream().filter(ze -> ze.status == TiffStatus.READY).count();
-            makePortableBtn.setDisable(ready == 0);
+            for (int idx = 0;
+                    idx < entries.size() && idx < entryList.getChildren().size();
+                    idx++) {
+                updateEntryLabel((Label) entryList.getChildren().get(idx), entries.get(idx));
+            }
+            refreshState.run();
         });
 
         makePortableBtn.setOnAction(e -> {
+            ZarrAction action = zarrActionCombo.getValue();
             boolean keepTiles = keepTilesCheckbox.isSelected();
-            long readyN =
-                    entries.stream().filter(ze -> ze.status == TiffStatus.READY).count();
+            boolean willDeleteTiles = hasTiles && !keepTiles;
 
-            StringBuilder confirmMsg = new StringBuilder();
-            confirmMsg.append(String.format(
-                    "%d image(s) will be swapped from ZARR to TIFF and the ZARR intermediates deleted.%n%n", readyN));
-            if (hasTiles) {
-                if (keepTiles) {
-                    confirmMsg.append("Individual tile images will be KEPT.\n\n");
-                } else {
-                    confirmMsg.append(String.format(
-                            "%d individual tile image(s) (%s) will be DELETED.%n%n",
-                            tileScan.tileFileCount, formatBytes(tileScan.tileSizeBytes)));
-                }
-            }
-            confirmMsg.append("This cannot be undone. Continue?");
-
-            boolean confirmed = Dialogs.showConfirmDialog("Make Project Portable", confirmMsg.toString());
+            boolean confirmed = Dialogs.showConfirmDialog(
+                    "Make Project Portable", buildConfirmMessage(entries, tileScan, action, willDeleteTiles, hasTiles));
             if (!confirmed) {
                 return;
             }
@@ -376,89 +411,21 @@ public class MakePortableWorkflow {
             makePortableBtn.setDisable(true);
             refreshBtn.setDisable(true);
             keepTilesCheckbox.setDisable(true);
+            zarrActionCombo.setDisable(true);
             progressBar.setVisible(true);
 
             Thread worker = new Thread(
-                    () -> {
-                        List<ZarrEntry> readyEntries = entries.stream()
-                                .filter(ze -> ze.status == TiffStatus.READY)
-                                .toList();
-
-                        int total = readyEntries.size();
-                        int succeeded = 0;
-                        int failed = 0;
-                        long freedBytes = 0;
-
-                        for (int i = 0; i < total; i++) {
-                            ZarrEntry ze = readyEntries.get(i);
-                            final int idx = i;
-                            Platform.runLater(() -> {
-                                statusLabel.setText("Swapping " + (idx + 1) + "/" + total + ": " + ze.entryName);
-                                progressBar.setProgress((double) idx / total);
-                            });
-
-                            try {
-                                boolean ok = swapEntryToTiff(ze, project);
-                                if (ok) {
-                                    long freed = ze.zarrSizeBytes;
-                                    deleteZarrDirectory(ze.zarrPath);
-                                    freedBytes += freed;
-                                    succeeded++;
-                                } else {
-                                    failed++;
-                                }
-                            } catch (Exception ex) {
-                                failed++;
-                                logger.error("Failed to make portable: {}: {}", ze.entryName, ex.getMessage(), ex);
-                            }
-                        }
-
-                        // Delete individual tile images unless the user chose to keep them.
-                        if (!keepTiles && !tileScan.tileDirs.isEmpty()) {
-                            Platform.runLater(() -> statusLabel.setText("Deleting individual tile images..."));
-                            for (Path tileDir : tileScan.tileDirs) {
-                                try {
-                                    TileProcessingUtilities.deleteTilesAndFolder(tileDir.toString());
-                                } catch (Exception ex) {
-                                    logger.error(
-                                            "Failed to delete tile images in {}: {}", tileDir, ex.getMessage(), ex);
-                                }
-                            }
-                            freedBytes += tileScan.tileSizeBytes;
-                        }
-
-                        final int s = succeeded;
-                        final int f = failed;
-                        final long freed = freedBytes;
-                        Platform.runLater(() -> {
-                            progressBar.setProgress(1.0);
-                            try {
-                                project.syncChanges();
-                            } catch (IOException ex) {
-                                logger.error("Failed to sync project: {}", ex.getMessage());
-                            }
-
-                            String freedStr = formatBytes(freed);
-
-                            if (f == 0) {
-                                statusLabel.setText(String.format("Done! %d images converted, %s freed.", s, freedStr));
-                                Dialogs.showInfoNotification(
-                                        "Make Project Portable",
-                                        String.format(
-                                                "Project is now portable. %d images swapped to TIFF, %s freed.",
-                                                s, freedStr));
-                            } else {
-                                statusLabel.setText(String.format(
-                                        "Done with errors: %d succeeded, %d failed, %s freed.", s, f, freedStr));
-                            }
-
-                            // Refresh the entry list
-                            entries.forEach(ZarrEntry::refresh);
-                            updateSummary(summaryLabel, entries);
-                            makePortableBtn.setDisable(true);
-                            refreshBtn.setDisable(false);
-                        });
-                    },
+                    () -> runPortability(
+                            project,
+                            entries,
+                            tileScan,
+                            action,
+                            willDeleteTiles,
+                            progressBar,
+                            statusLabel,
+                            summaryLabel,
+                            makePortableBtn,
+                            refreshBtn),
                     "make-portable-worker");
             worker.setDaemon(true);
             worker.start();
@@ -472,6 +439,7 @@ public class MakePortableWorkflow {
                 .addAll(
                         summaryLabel,
                         scrollPane,
+                        zarrActionBox,
                         keepTilesCheckbox,
                         tileInfoLabel,
                         warningLabel,
@@ -479,45 +447,130 @@ public class MakePortableWorkflow {
                         statusLabel,
                         buttons);
 
-        dialog.setScene(new Scene(root, 560, 470));
+        dialog.setScene(new Scene(root, 580, 540));
         dialog.show();
     }
 
-    private static void updateSummary(Label label, List<ZarrEntry> entries) {
+    /** True when the selected options would change something on disk. */
+    private static boolean hasWorkToDo(List<ZarrEntry> entries, ZarrAction action, boolean willDeleteTiles) {
+        if (action == ZarrAction.LEAVE) {
+            return willDeleteTiles;
+        }
+        // Convert / Zip: any non-CONVERTING ZARR entry is processable. Even with
+        // all entries mid-conversion, a pending tile cleanup is still work.
+        boolean anyProcessableZarr = entries.stream().anyMatch(ze -> ze.status != TiffStatus.CONVERTING);
+        return anyProcessableZarr || willDeleteTiles;
+    }
+
+    private static void updateSummary(Label label, List<ZarrEntry> entries, ZarrAction action) {
         long ready = entries.stream().filter(e -> e.status == TiffStatus.READY).count();
         long converting =
                 entries.stream().filter(e -> e.status == TiffStatus.CONVERTING).count();
         long missing =
                 entries.stream().filter(e -> e.status == TiffStatus.MISSING).count();
         long totalBytes = entries.stream().mapToLong(e -> e.zarrSizeBytes).sum();
-        String sizeStr = totalBytes > 1_000_000_000
-                ? String.format("%.1f GB", totalBytes / 1_000_000_000.0)
-                : String.format("%d MB", totalBytes / 1_000_000);
 
-        label.setText(String.format(
-                "Found %d ZARR-backed images (%s).\n" + "Ready for swap: %d | Converting: %d | Missing TIFF: %d",
-                entries.size(), sizeStr, ready, converting, missing));
+        StringBuilder sb = new StringBuilder(String.format(
+                "Found %d ZARR-backed images (%s).%n" + "OME-TIFF ready: %d | Converting: %d | OME-TIFF missing: %d",
+                entries.size(), formatBytes(totalBytes), ready, converting, missing));
 
         if (converting > 0) {
-            label.setText(label.getText() + "\n(Background TIFF conversion still running -- click Refresh to check.)");
+            sb.append("\n(Background TIFF conversion still running -- click Refresh to check.)");
         }
-        if (missing > 0) {
-            label.setText(label.getText() + "\n(Missing TIFFs may need re-stitching with OME_TIFF_VIA_ZARR format.)");
+        if (action == ZarrAction.CONVERT_TIFF && missing > 0) {
+            sb.append("\n(Missing OME-TIFFs will be converted from ZARR now -- this may take a while.)");
         }
+        label.setText(sb.toString());
+    }
+
+    /** Mode-aware warning text shown above the buttons. */
+    private static void updateWarning(Label label, ZarrAction action, boolean willDeleteTiles) {
+        String msg;
+        switch (action) {
+            case CONVERT_TIFF ->
+                msg = "Warning: ZARR intermediates are permanently deleted after conversion"
+                        + (willDeleteTiles ? " and the individual tile images are deleted" : "")
+                        + ". ZARR files with no existing OME-TIFF are converted now -- this may take "
+                        + "several minutes per file depending on its size. This cannot be undone.";
+            case ZIP ->
+                msg = "Warning: each ZARR is zipped to a .ome.zarr.zip archive and the original "
+                        + ".ome.zarr directory is deleted"
+                        + (willDeleteTiles ? "; individual tile images are also deleted" : "")
+                        + ". You MUST extract each .ome.zarr.zip back to a .ome.zarr directory before "
+                        + "reopening this project -- QuPath's image reader cannot open a zipped ZARR. "
+                        + "This cannot be undone.";
+            default ->
+                msg = willDeleteTiles
+                        ? "Warning: individual tile images are permanently deleted. ZARR files are left "
+                                + "untouched. This cannot be undone."
+                        : "Nothing selected to change: ZARR files are left untouched and tile images are kept.";
+        }
+        label.setText(msg);
+        boolean inert = action == ZarrAction.LEAVE && !willDeleteTiles;
+        label.setStyle("-fx-font-weight: bold; -fx-text-fill: " + (inert ? "gray" : "red") + ";");
+    }
+
+    /** Build the confirmation-dialog message for the chosen options. */
+    private static String buildConfirmMessage(
+            List<ZarrEntry> entries, TileScan tileScan, ZarrAction action, boolean willDeleteTiles, boolean hasTiles) {
+
+        StringBuilder m = new StringBuilder();
+        long converting =
+                entries.stream().filter(e -> e.status == TiffStatus.CONVERTING).count();
+        long processable = entries.size() - converting;
+
+        switch (action) {
+            case CONVERT_TIFF -> {
+                long missing = entries.stream()
+                        .filter(e -> e.status == TiffStatus.MISSING)
+                        .count();
+                m.append(String.format(
+                        "%d ZARR image(s) will be swapped to OME-TIFF and the ZARR intermediates deleted.%n",
+                        processable));
+                if (missing > 0) {
+                    m.append(String.format(
+                            "  %d of them have no OME-TIFF yet and will be converted now -- "
+                                    + "this may take several minutes per file depending on size.%n",
+                            missing));
+                }
+                if (converting > 0) {
+                    m.append(String.format(
+                            "  %d are still being converted in the background and will be skipped "
+                                    + "(use Refresh later).%n",
+                            converting));
+                }
+                m.append("\n");
+            }
+            case ZIP -> {
+                m.append(String.format(
+                        "%d ZARR director(ies) will be zipped to .ome.zarr.zip and the originals deleted.%n",
+                        entries.size()));
+                m.append("IMPORTANT: extract the .ome.zarr.zip archives back to .ome.zarr directories "
+                        + "before reopening this project, or the images will not load.\n\n");
+            }
+            default -> m.append("ZARR files will be left untouched.\n\n");
+        }
+
+        if (willDeleteTiles) {
+            m.append(String.format(
+                    "%d individual tile image(s) (%s) will be DELETED.%n%n",
+                    tileScan.tileFileCount, formatBytes(tileScan.tileSizeBytes)));
+        } else if (hasTiles) {
+            m.append("Individual tile images will be KEPT.\n\n");
+        }
+
+        m.append("This cannot be undone. Continue?");
+        return m.toString();
     }
 
     private static void updateEntryLabel(Label label, ZarrEntry ze) {
         String statusStr =
                 switch (ze.status) {
-                    case READY -> "[READY]";
+                    case READY -> "[OME-TIFF READY]";
                     case CONVERTING -> "[CONVERTING...]";
-                    case MISSING -> "[TIFF MISSING]";
+                    case MISSING -> "[OME-TIFF MISSING]";
                 };
-        String sizeStr = ze.zarrSizeBytes > 1_000_000_000
-                ? String.format("%.1f GB", ze.zarrSizeBytes / 1_000_000_000.0)
-                : String.format("%d MB", ze.zarrSizeBytes / 1_000_000);
-
-        label.setText(String.format("  %s  %s  (%s)", statusStr, ze.entryName, sizeStr));
+        label.setText(String.format("  %s  %s  (%s)", statusStr, ze.entryName, formatBytes(ze.zarrSizeBytes)));
         label.setStyle(
                 ze.status == TiffStatus.READY
                         ? "-fx-text-fill: green;"
@@ -525,7 +578,160 @@ public class MakePortableWorkflow {
     }
 
     // ------------------------------------------------------------------
-    // Swap logic
+    // Worker
+    // ------------------------------------------------------------------
+
+    /**
+     * Off-EDT worker that applies the chosen ZARR action and tile cleanup.
+     * UI updates are marshalled back via {@link Platform#runLater}.
+     */
+    private static void runPortability(
+            Project<BufferedImage> project,
+            List<ZarrEntry> entries,
+            TileScan tileScan,
+            ZarrAction action,
+            boolean willDeleteTiles,
+            ProgressBar progressBar,
+            Label statusLabel,
+            Label summaryLabel,
+            Button makePortableBtn,
+            Button refreshBtn) {
+
+        // CONVERTING entries are mid background-conversion -- never touch them.
+        List<ZarrEntry> toProcess = action == ZarrAction.LEAVE
+                ? List.of()
+                : entries.stream()
+                        .filter(ze -> ze.status != TiffStatus.CONVERTING)
+                        .toList();
+
+        int total = toProcess.size();
+        int succeeded = 0;
+        int failed = 0;
+        long freedBytes = 0;
+
+        for (int i = 0; i < total; i++) {
+            ZarrEntry ze = toProcess.get(i);
+            final int idx = i;
+            final boolean willConvert = action == ZarrAction.CONVERT_TIFF && ze.status == TiffStatus.MISSING;
+            Platform.runLater(() -> {
+                String verb = action == ZarrAction.ZIP
+                        ? "Zipping"
+                        : willConvert ? "Converting (large files may take several minutes)" : "Swapping";
+                statusLabel.setText(verb + " " + (idx + 1) + "/" + total + ": " + ze.entryName);
+                progressBar.setProgress((double) idx / total);
+            });
+
+            try {
+                if (action == ZarrAction.ZIP) {
+                    if (zipZarrDirectory(ze.zarrPath)) {
+                        long zipSize = 0;
+                        try {
+                            zipSize = Files.size(Path.of(ze.zarrPath + ".zip"));
+                        } catch (IOException ignored) {
+                            // size unavailable -- freed estimate just omits it
+                        }
+                        deleteZarrDirectory(ze.zarrPath);
+                        freedBytes += Math.max(0, ze.zarrSizeBytes - zipSize);
+                        succeeded++;
+                    } else {
+                        failed++;
+                    }
+                } else {
+                    // CONVERT_TIFF
+                    if (willConvert) {
+                        boolean converted =
+                                StitchingHelper.convertSingleZarrToTiff(ze.zarrPath.toString(), TIFF_COMPRESSION);
+                        if (!converted || !Files.exists(ze.tiffPath)) {
+                            logger.error("ZARR -> TIFF conversion failed for '{}'; skipping swap", ze.entryName);
+                            failed++;
+                            continue;
+                        }
+                    }
+                    if (swapEntryToTiff(ze, project)) {
+                        deleteZarrDirectory(ze.zarrPath);
+                        freedBytes += ze.zarrSizeBytes;
+                        succeeded++;
+                    } else {
+                        failed++;
+                    }
+                }
+            } catch (Exception ex) {
+                failed++;
+                logger.error("Failed to make portable: {}: {}", ze.entryName, ex.getMessage(), ex);
+            }
+        }
+
+        // Delete individual tile images when the user asked for it.
+        if (willDeleteTiles) {
+            Platform.runLater(() -> statusLabel.setText("Deleting individual tile images..."));
+            for (Path tileDir : tileScan.tileDirs) {
+                try {
+                    TileProcessingUtilities.deleteTilesAndFolder(tileDir.toString());
+                } catch (Exception ex) {
+                    logger.error("Failed to delete tile images in {}: {}", tileDir, ex.getMessage(), ex);
+                }
+            }
+            freedBytes += tileScan.tileSizeBytes;
+        }
+
+        final int s = succeeded;
+        final int f = failed;
+        final long freed = freedBytes;
+        Platform.runLater(() -> {
+            progressBar.setProgress(1.0);
+            try {
+                project.syncChanges();
+            } catch (IOException ex) {
+                logger.error("Failed to sync project: {}", ex.getMessage());
+            }
+
+            String freedStr = formatBytes(freed);
+            String summary = portabilityResultMessage(action, s, f, freedStr, willDeleteTiles);
+            statusLabel.setText(summary);
+            if (f == 0) {
+                Dialogs.showInfoNotification("Make Project Portable", summary);
+            } else {
+                Dialogs.showWarningNotification("Make Project Portable", summary);
+            }
+
+            entries.forEach(ZarrEntry::refresh);
+            updateSummary(summaryLabel, entries, action);
+            makePortableBtn.setDisable(true);
+            refreshBtn.setDisable(false);
+        });
+    }
+
+    /** Compose the human-readable result line for the completed operation. */
+    private static String portabilityResultMessage(
+            ZarrAction action, int succeeded, int failed, String freedStr, boolean deletedTiles) {
+        String tilePart = deletedTiles ? " Tile images deleted." : "";
+        return switch (action) {
+            case CONVERT_TIFF ->
+                failed == 0
+                        ? String.format(
+                                "Project is now portable. %d image(s) swapped to OME-TIFF, %s freed.%s",
+                                succeeded, freedStr, tilePart)
+                        : String.format(
+                                "Done with errors: %d converted, %d failed, %s freed.%s",
+                                succeeded, failed, freedStr, tilePart);
+            case ZIP ->
+                failed == 0
+                        ? String.format(
+                                "%d ZARR director(ies) zipped, %s freed. Extract the .ome.zarr.zip "
+                                        + "archives before reopening this project.%s",
+                                succeeded, freedStr, tilePart)
+                        : String.format(
+                                "Done with errors: %d zipped, %d failed, %s freed.%s",
+                                succeeded, failed, freedStr, tilePart);
+            default ->
+                deletedTiles
+                        ? String.format("Tile cleanup complete: %s freed. ZARR files left untouched.", freedStr)
+                        : "Nothing to do.";
+        };
+    }
+
+    // ------------------------------------------------------------------
+    // ZARR operations
     // ------------------------------------------------------------------
 
     /**
@@ -551,6 +757,61 @@ public class MakePortableWorkflow {
             logger.error("Failed to update URI for '{}': {}", ze.entryName, e.getMessage(), e);
             return false;
         }
+    }
+
+    /**
+     * Zip a .ome.zarr directory into a sibling {@code <name>.ome.zarr.zip}
+     * archive. Archive entries are stored relative to the directory's parent
+     * (so the archive expands back to a {@code .ome.zarr} directory in place).
+     *
+     * <p>The project entry is intentionally NOT repointed -- QuPath's image
+     * reader cannot open a zipped ZARR, so the entry keeps referencing the
+     * original {@code .ome.zarr} path, which becomes valid again once the user
+     * extracts the archive on the destination machine.
+     *
+     * @return true if the archive was written and is non-empty
+     */
+    static boolean zipZarrDirectory(Path zarrDir) {
+        if (!Files.isDirectory(zarrDir) || !zarrDir.toString().endsWith(".ome.zarr")) {
+            logger.warn("Refusing to zip non-ZARR path: {}", zarrDir);
+            return false;
+        }
+        Path zipPath = Path.of(zarrDir + ".zip");
+        Path base = zarrDir.getParent();
+        if (base == null) {
+            logger.warn("ZARR directory has no parent, cannot zip: {}", zarrDir);
+            return false;
+        }
+
+        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zipPath.toFile()));
+                Stream<Path> walk = Files.walk(zarrDir)) {
+            for (Path p : walk.filter(Files::isRegularFile).toList()) {
+                // Forward slashes for cross-platform archive entry names.
+                String rel = base.relativize(p).toString().replace('\\', '/');
+                zos.putNextEntry(new ZipEntry(rel));
+                Files.copy(p, zos);
+                zos.closeEntry();
+            }
+        } catch (IOException e) {
+            logger.error("Failed to zip ZARR {}: {}", zarrDir, e.getMessage(), e);
+            try {
+                if (Files.exists(zipPath)) Files.delete(zipPath);
+            } catch (IOException ignored) {
+                // best-effort cleanup of the partial archive
+            }
+            return false;
+        }
+
+        try {
+            if (Files.exists(zipPath) && Files.size(zipPath) > 0) {
+                logger.info("Zipped ZARR {} -> {}", zarrDir.getFileName(), zipPath.getFileName());
+                return true;
+            }
+        } catch (IOException ignored) {
+            // fall through to the failure log
+        }
+        logger.error("ZIP archive missing or empty after zipping {}", zarrDir);
+        return false;
     }
 
     /**

@@ -2100,9 +2100,14 @@ public class StitchingHelper {
      * Convert a single .ome.zarr directory to .ome.tif alongside it.
      * Does NOT modify the project or delete the ZARR.
      *
+     * <p>Public so "Make Project Portable" can convert ZARR-backed entries that
+     * never had a background conversion run (e.g. images produced by re-stitch
+     * recovery in OME_ZARR mode). Idempotent: returns {@code true} immediately
+     * if the sibling .ome.tif already exists.
+     *
      * @return true if the TIFF was written successfully
      */
-    private static boolean convertSingleZarrToTiff(String zarrPath, String compression) {
+    public static boolean convertSingleZarrToTiff(String zarrPath, String compression) {
         Path zarr = Path.of(zarrPath);
         if (!Files.isDirectory(zarr)) {
             logger.warn("ZARR path is not a directory, skipping: {}", zarrPath);
