@@ -112,12 +112,19 @@ public class StageControlPanel extends VBox {
 
     /** Callback invoked when hardware detection changes (objective/detector). */
     private Runnable onHardwareChanged;
+    /** Callback invoked when the Camera-tab modality dropdown changes. */
+    private Runnable onModalityChanged;
     /** Callback invoked when user toggles the FoV overlay button. */
     private Runnable onFovOverlayToggle;
 
     /** Sets a callback invoked whenever the detected objective/detector changes. */
     public void setOnHardwareChanged(Runnable callback) {
         this.onHardwareChanged = callback;
+    }
+
+    /** Sets a callback invoked whenever the Camera-tab modality dropdown changes. */
+    public void setOnModalityChanged(Runnable callback) {
+        this.onModalityChanged = callback;
     }
 
     /** Sets a callback invoked when the "Show Objective FoVs" button is toggled. */
@@ -1045,6 +1052,7 @@ public class StageControlPanel extends VBox {
             // modality keeps emitting -- corrupting any live exposure
             // estimates the user makes from this tab.
             applyProfileForModality(currentCameraModality);
+            if (onModalityChanged != null) onModalityChanged.run();
         });
 
         // Wrap in a ScrollPane so the Fluorescence modality (per-channel

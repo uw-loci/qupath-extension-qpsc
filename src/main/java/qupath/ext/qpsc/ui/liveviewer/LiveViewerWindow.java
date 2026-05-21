@@ -45,6 +45,7 @@ import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
@@ -948,8 +949,14 @@ public class LiveViewerWindow {
         stageControlPanel.setOnHardwareChanged(() -> {
             updateFovLabel();
             updateFocusRangeOptions();
+            updateWindowTitle();
         });
+        stageControlPanel.setOnModalityChanged(this::updateWindowTitle);
         stageControlPanel.setOnFovOverlayToggle(this::toggleFovOverlay);
+
+        // Reflect the modality + objective magnification detected at construction
+        // in the window title (e.g. "Live Viewer (Brightfield) (10x)").
+        updateWindowTitle();
 
         // Wrap in ScrollPane to handle overflow when window is short
         stageScrollPane = new ScrollPane(stageControlPanel);
@@ -2029,6 +2036,51 @@ public class LiveViewerWindow {
             fovLabel.setStyle(
                     "-fx-font-family: monospace; -fx-font-size: 11; " + "-fx-font-weight: bold; -fx-text-fill: red;");
         }
+    }
+
+    /**
+     * Sets the window title to reflect the current modality and the expected
+     * objective magnification, e.g. {@code "Live Viewer (Brightfield) (10x)"}.
+     *
+     * <p>Driven by the Camera-tab modality dropdown and the detected objective
+     * (see {@link StageControlPanel#setOnModalityChanged} /
+     * {@link StageControlPanel#setOnHardwareChanged}). Each part is omitted when
+     * its value is unknown, so the title degrades gracefully to "Live Viewer".
+     */
+    private void updateWindowTitle() {
+        if (stage == null) return;
+        String modality = stageControlPanel != null ? stageControlPanel.getCurrentCameraModality() : null;
+        String objId = stageControlPanel != null ? stageControlPanel.getCurrentObjectiveId() : null;
+
+        StringBuilder sb = new StringBuilder("Live Viewer");
+        String modalityName = prettyModality(modality);
+        if (modalityName != null) {
+            sb.append(" (").append(modalityName).append(')');
+        }
+        String mag = ObjectiveUtils.extractMagnification(objId);
+        if (mag != null && !mag.isBlank()) {
+            sb.append(" (").append(mag).append(')');
+        }
+        String title = sb.toString();
+
+        if (Platform.isFxApplicationThread()) {
+            stage.setTitle(title);
+        } else {
+            Platform.runLater(() -> stage.setTitle(title));
+        }
+    }
+
+    /**
+     * Resolves a raw modality name (e.g. {@code "bf"}, {@code "ppm"}) to a
+     * human-readable display name via the modality handler registry. Falls back
+     * to a capitalized form of the raw name when no handler exposes one, and
+     * returns {@code null} for a null/blank modality.
+     */
+    private static String prettyModality(String modality) {
+        if (modality == null || modality.isBlank()) return null;
+        String display = ModalityRegistry.getHandler(modality).getDisplayName();
+        if (display != null && !display.isBlank()) return display;
+        return Character.toUpperCase(modality.charAt(0)) + modality.substring(1);
     }
 
     /**
