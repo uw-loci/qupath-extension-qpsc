@@ -47,6 +47,7 @@ public class DualProgressDialog {
     private final Label totalProgressLabel;
     private final Label currentProgressLabel;
     private final Label timeLabel;
+    private final Label completionLabel;
     private final Label statusLabel;
     private final Button cancelButton;
     private final Timeline timeline;
@@ -193,6 +194,10 @@ public class DualProgressDialog {
         // Time and status labels
         timeLabel = new Label("Estimating total time...");
         timeLabel.setWrapText(true);
+        timeLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
+        completionLabel = new Label("");
+        completionLabel.setVisible(false);
+        completionLabel.setManaged(false);
         statusLabel = new Label("Initializing workflow...");
 
         // Stitching status section - hidden until stitching starts
@@ -263,6 +268,7 @@ public class DualProgressDialog {
                         new Separator(),
                         stitchingSection, // Stitching status - hidden until active
                         timeLabel,
+                        completionLabel,
                         statusLabel);
 
         // Add cancel button if requested
@@ -588,6 +594,12 @@ public class DualProgressDialog {
      * Uses component-based estimation that separates tile time from autofocus time.
      */
     private void updateTimeEstimate(long now, int completed) {
+        // The estimated-completion clock line is shown only when a real
+        // "time remaining" estimate is available (the final branch below);
+        // default it hidden so every early-return path leaves it off.
+        completionLabel.setVisible(false);
+        completionLabel.setManaged(false);
+
         // Enable time estimation once we have any progress (even during first annotation)
         if (workflowStartTime.get() == 0 || (completed == 0 && currentAnnotationProgress.get() == 0)) {
             timeLabel.setText("Estimating total time...");
@@ -714,6 +726,19 @@ public class DualProgressDialog {
         }
 
         timeLabel.setText(String.format("Time remaining: %s (%d positions)", estimate, positionsRemaining));
+        completionLabel.setText("Est. completion: " + formatCompletionClock(remainingSeconds));
+        completionLabel.setVisible(true);
+        completionLabel.setManaged(true);
+    }
+
+    /**
+     * Formats a wall-clock completion time {@code secondsFromNow} in the
+     * future, e.g. "Wed 16:05". Day-of-week is included so a completion that
+     * rolls past midnight is not mistaken for one earlier today.
+     */
+    private static String formatCompletionClock(long secondsFromNow) {
+        java.time.LocalDateTime done = java.time.LocalDateTime.now().plusSeconds(Math.max(0, secondsFromNow));
+        return done.format(java.time.format.DateTimeFormatter.ofPattern("EEE HH:mm"));
     }
 
     /**
