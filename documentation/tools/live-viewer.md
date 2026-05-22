@@ -9,6 +9,10 @@ Real-time camera feed with integrated stage control, histogram, and noise statis
 
 ![Live Viewer window](../images/Docs_LiveViewer.png)
 
+## Window Title
+
+The window title dynamically displays the current imaging modality and expected objective magnification, e.g. `Live Viewer (Brightfield) (10x)`. The title updates in real time when you change the modality via the Camera tab dropdown or when the objective is re-detected. If either value is unknown, the title degrades to `Live Viewer`.
+
 ## Prerequisites
 
 - Connected to microscope server (see [Communication Settings](server-connection.md))
