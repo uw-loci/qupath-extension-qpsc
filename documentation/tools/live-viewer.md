@@ -55,52 +55,44 @@ The status bar reports a clickable "Show in folder" link after each successful s
 
 ### Focus Controls Toolbar
 
-The toolbar contains two focus buttons and a range selector:
+The toolbar contains a single autofocus button and a range selector:
 
-| Control | Default Visibility | Description |
-|---|---|---|
-| **Autofocus** | Always visible | Primary focus button. Sends a streaming autofocus command to the server (~1 second on PPM at 0.73 ms exposure). While a scan is running the button reads **Cancel Autofocus** -- click it to abort the scan; Z is returned to the position autofocus started from. |
-| **Sweep Focus** | Hidden | Fallback. Stepped-Z autofocus with edge retry (up to 3 total attempts). Works on any camera and any stage. Includes automatic refinement as a final phase. |
-| **Range dropdown** | Always visible | Options are dynamically populated per objective based on magnification: 4x/5x up to 200µm, 10x up to 100µm, 20x up to 50µm, 40x up to 20µm, 60x+ up to 10µm. "Auto" uses `sweep_range_um` from `autofocus_<scope>.yml`. Explicit values override the YAML. Both Autofocus and Sweep Focus use this selection. Higher magnifications have shallower depth-of-field, so wider search ranges waste time and may misfocus on debris. |
+| Control | Description |
+|---|---|
+| **Autofocus** | Single button that runs either streaming continuous-Z autofocus or stepped Sweep Focus autofocus, depending on your selection in the Autofocus Configuration dialog (Extensions > QP Scope > Utilities > Autofocus Configuration). While a scan is running the button reads **Cancel Autofocus** -- click it to abort the scan; Z is returned to the position autofocus started from. |
+| **Range dropdown** | Options are dynamically populated per objective based on magnification: 4x/5x up to 200µm, 10x up to 100µm, 20x up to 50µm, 40x up to 20µm, 60x+ up to 10µm. "Auto" uses `sweep_range_um` from `autofocus_<scope>.yml`. Explicit values override the YAML. Both autofocus methods use this selection. Higher magnifications have shallower depth-of-field, so wider search ranges waste time and may misfocus on debris. |
 
 #### Button state transitions
 
 The Autofocus button changes appearance to communicate status:
 
-| Button State | Appearance | What happened | Sweep Focus |
-|---|---|---|---|
-| Ready | Default styling, label "Autofocus" | Normal idle state | Hidden |
-| Running | Label "Cancel Autofocus", enabled | Server is executing streaming autofocus; click to cancel | Hidden, disabled |
-| Cancelling | Label "Cancelling...", disabled | Cancel requested; waiting for the server to stop the scan | Hidden, disabled |
-| Cancelled | Returns to "Autofocus" | Scan cancelled by the user; Z restored to the pre-scan position | Hidden |
-| Success | Returns to "Autofocus" | Focus found and committed | Hidden |
-| Exposure too long | **Red** background | Client-side pre-check: exposure > ~40 ms | **Visible** |
-| Too many saturated pixels | Returns to "Autofocus", info dialog appears | Camera overexposed; saturation gate refused | **Visible** + info dialog |
-| Server unavailable | **Orange** background, label "NO FOCUS" | Server pre-flight gate refused (other reasons; see below) | **Visible** |
-| Error | **Red** background, label "FAILED" | Mid-scan error on server | **Visible** |
+| Button State | Appearance | What happened |
+|---|---|---|
+| Ready | Default styling, label "Autofocus" | Normal idle state |
+| Running | Label "Cancel Autofocus", enabled | Autofocus is running; click to cancel |
+| Cancelling | Label "Cancelling...", disabled | Cancel requested; waiting for the scan to stop |
+| Cancelled | Returns to "Autofocus" | Scan cancelled by the user; Z restored to the pre-scan position |
+| Success | Returns to "Autofocus" | Focus found and committed |
+| Failed | Dialog appears | The selected autofocus method could not find focus |
 
-When Autofocus returns UNAVAILABLE or FAILED, the error message now includes a **diagnostic hint** explaining the likely cause and how to fix it. For example:
-- **"metric_flat"** → sparse vs. dense texture strategy mismatch
-- **"no peak found"** → Z starting position or search range too narrow
-- **"saturation"** → reduce exposure or illumination
-- **"blur"** → exposure too long for streaming AF (try Sweep Focus)
-- **"no_slow_speed"** → stage hardware limitation (use Sweep Focus)
+When autofocus fails, a dialog appears with the diagnostic reason (e.g., **"metric_flat"** for sparse vs. dense texture strategy mismatch, **"no peak found"** for Z starting position outside search range, **"saturation"** for overexposure, **"blur"** for exposure too long for streaming AF on this stage). The dialog offers a button to open the Autofocus Configuration dialog so you can switch autofocus methods if desired.
 
-The hint also points you to where to change the AF strategy: the acquisition wizard's Advanced panel (one-time override) or Settings > Autofocus Configuration > Modality Bindings (persistent).
+#### Choosing the autofocus method
 
-After a successful Autofocus run, the Sweep Focus button is hidden again. It only appears when Autofocus cannot run.
+The Autofocus Configuration dialog (Extensions > QP Scope > Utilities > Autofocus Configuration) contains radio buttons labeled "Live Viewer Autofocus button uses:" that let you select which method the Live Viewer's Autofocus button runs:
 
-#### Exposure pre-check (client-side)
+- **Streaming** -- continuous-Z scan, fast (~1 second on PPM at 0.73 ms exposure). Requires a stage capable of slow continuous motion. Streaming refuses (showing the failure dialog -- there is no automatic fallback) when exposure is too long (>~40 ms on a Prior, varies by stage), the camera is saturated, or the stage lacks a speed property. If you hit these often, switch the method to Sweep.
+- **Sweep** -- stepped step-and-snap, slower (~15-30 seconds) but works on any camera and any stage. More reliable when exposure is long or the sample has sparse signal.
 
-Before contacting the server, Autofocus queries the current camera exposure. If it exceeds ~40 ms (the blur-budget ceiling on a Prior at MaxSpeed=1), the button turns red, a warning dialog appears (with a "don't show again" checkbox), and the Sweep Focus fallback is revealed. For JAI per-channel cameras (PPM), the check uses `max(unified, R, G, B)`. The user can still retry Autofocus after reducing exposure.
+Your choice is stored per QuPath installation, so each microscope rig naturally tracks its own preferred method (e.g., STREAMING on PPM where the stage can crawl, SWEEP on OWS3 where the stage cannot).
 
-#### Server feasibility gates
+#### Server feasibility gates (streaming only)
 
-If the exposure check passes, the server checks three additional pre-flight gates. If any fail, the button shows "NO FOCUS" in orange and Sweep Focus appears:
+When you select Streaming in the Autofocus Configuration, the server checks three pre-flight gates before each scan. If any fail, the Autofocus button triggers the failure dialog with diagnostic details:
 
 - **Stage speed property**: focus device must expose `MaxSpeed`, `Velocity`, `Speed`, or `MaxVelocity`. Piezo stages and demo adapters typically do not.
 - **Motion blur budget**: `min_velocity * exposure` must stay under ~0.5 um (25% of a nominal 20X DOF). On a Prior at MaxSpeed=1 (~11.5 um/s), the per-stage exposure ceiling is ~43 ms. Longer exposures (dark fluorescence, low-angle PPM) will refuse.
-- **Saturation**: the saturated-pixel fraction in a pre-scan snap must be below a per-modality threshold (brightfield 50%, PPM 5%, fluorescence/widefield 2%, laser-scanning/SHG 1%) or the focus metric will not discriminate. When saturation is detected, an info dialog appears: *"Autofocus: too many saturated pixels -- reduce exposure or gain, then try again."* The streaming-AF code path anchors absolutely on the full sensor as of microscope_command_server `7f40a47` (2026-05-11): every entry calls `clear_roi()` to establish a known full-sensor baseline, every exit calls `clear_roi()` to return there. Refusals through this gate (or the blur-budget gate) now unconditionally leave the camera at full sensor, regardless of entry state or which exit path the handler takes. The earlier partial fix (`44b0ab0`, 2026-05-08) closed the leak paths but did not heal a pre-existing cropped state; the absolute-anchoring follow-up does. See `claude-reports/2026-05-11_streaming-af-absolute-roi-anchoring.md`.
+- **Saturation**: the saturated-pixel fraction in a pre-scan snap must be below a per-modality threshold (brightfield 50%, PPM 50%, fluorescence/widefield 2%, laser-scanning/SHG 1%) or the focus metric will not discriminate. When saturation is detected, the failure dialog shows: *"Streaming autofocus could not find focus. The stage was left at its current Z."* The streaming-AF code path anchors absolutely on the full sensor as of microscope_command_server `7f40a47` (2026-05-11): every entry calls `clear_roi()` to establish a known full-sensor baseline, every exit calls `clear_roi()` to return there. Refusals through this gate (or the blur-budget gate) now unconditionally leave the camera at full sensor, regardless of entry state or which exit path the handler takes. The earlier partial fix (`44b0ab0`, 2026-05-08) closed the leak paths but did not heal a pre-existing cropped state; the absolute-anchoring follow-up does. See `claude-reports/2026-05-11_streaming-af-absolute-roi-anchoring.md`.
 
 #### Slope without peak
 

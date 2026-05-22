@@ -28,6 +28,17 @@ custom strategy to a scope-specific modality.
 
 ## Options
 
+### Live Viewer Autofocus Method
+
+At the top of the dialog, radio buttons let you choose which autofocus method the Live Viewer's **Autofocus** button will run:
+
+| Option | Description |
+|--------|-------------|
+| **Streaming** | Continuous-Z autofocus (fast, ~1 second on PPM). Requires a stage capable of slow continuous motion. May fail on stages without a speed property, with long exposures, or with saturated images. |
+| **Sweep** | Stepped step-and-snap autofocus (slower, ~15-30 seconds, but more compatible). Works on any camera and any stage. Recommended for long exposures or rigs with speed-limited stages. |
+
+Your choice is stored per QuPath installation, so each microscope rig naturally tracks its preferred method. The Live Viewer dialog always uses the method you select here.
+
 ### Acquisition Frequency & Safety Nets
 
 Controls how densely autofocus is scheduled across the tile grid.

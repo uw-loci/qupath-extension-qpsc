@@ -120,9 +120,11 @@ The sweep is designed for corrections of 1-5um per attempt, with the retry loop 
 
 ## Autofocus (Live Viewer)
 
-**Autofocus** is a streaming-based continuous-Z autofocus accessed from the [Live Viewer](tools/live-viewer.md) as the primary focus button. Sweep Focus is hidden by default and only appears when Autofocus returns UNAVAILABLE (pre-flight refusal).
+The [Live Viewer](tools/live-viewer.md) contains a single **Autofocus** button that runs either **Streaming** or **Sweep** autofocus depending on your selection in the Autofocus Configuration dialog (Extensions > QP Scope > Utilities > Autofocus Configuration). The choice is stored per QuPath installation, so each rig naturally tracks its own preferred method.
 
-Unlike the stepped Sweep Drift Check above, Autofocus does not stop and snap at each Z position. Instead it:
+### Streaming Autofocus
+
+Streaming autofocus uses continuous-Z scanning. Unlike the stepped Sweep Drift Check above, it does not stop and snap at each Z position. Instead it:
 
 1. Drops the stage speed property (`MaxSpeed` on Prior, `Velocity` on ASI/Marzhauser, etc.) to a slow value
 2. Starts the camera in continuous sequence acquisition
@@ -132,21 +134,19 @@ Unlike the stepped Sweep Drift Check above, Autofocus does not stop and snap at 
 6. Commits the peak Z with a blocking move
 7. Restores the stage speed property
 
-On PPM at the production 0.73 ms exposure, a 6 um Autofocus scan completes in ~1 second and delivers ~25-30 usable (z, metric) samples -- far denser than the stepped sweep could produce in the same time.
+On PPM at the production 0.73 ms exposure, a 6 um Streaming scan completes in ~1 second and delivers ~25-30 usable (z, metric) samples -- far denser than the stepped Sweep could produce in the same time.
 
 ### Feasibility envelope
 
-Autofocus is **opt-in with a graceful fallback**. Before running, the client checks exposure and the server checks three gates. If any check fails, the Sweep Focus fallback button appears in the Live Viewer toolbar:
+Streaming autofocus runs only when the server confirms three pre-flight gates. If any fails, the Autofocus button triggers the failure dialog and explains why:
 
 | Gate | What it checks | Typical failure |
 |---|---|---|
 | Stage speed property | `MaxSpeed`, `Velocity`, `Speed`, or `MaxVelocity` exists and is writable on the focus device | Piezo stages without a velocity knob; demo adapters |
 | **Motion blur budget** | `expected_blur = min_velocity * exposure_ms` must be within 25% of DOF (~0.5 um default) | Long exposures on slow stages -- e.g., above ~43 ms on Prior at MaxSpeed=1 |
-| Saturation | Saturated-pixel fraction below the per-modality threshold (brightfield 50%, PPM 5%, fluorescence/widefield 2%, laser-scanning/SHG 1%) | Camera overexposed -- focus metric would not discriminate. User sees a notification: *"Autofocus: too many saturated pixels -- reduce exposure or gain, then try again."* |
+| Saturation | Saturated-pixel fraction below the per-modality threshold (brightfield 50%, PPM 50%, fluorescence/widefield 2%, laser-scanning/SHG 1%) | Camera overexposed -- focus metric would not discriminate |
 
-**Exposure pre-check (client-side).** Before contacting the server, the Live Viewer queries the current camera exposure. If it exceeds ~40 ms (the blur-budget ceiling on a Prior at MaxSpeed=1), the Autofocus button turns red, a warning dialog appears (with a "don't show again" checkbox), and the Sweep Focus fallback becomes visible. For JAI per-channel cameras (PPM), the check uses `max(unified, R, G, B)`. The user can still click Autofocus after adjusting exposure.
-
-When Autofocus returns UNAVAILABLE from the server, the button shows "NO FOCUS" in orange with a tooltip explaining the reason, and the Sweep Focus fallback button appears. UNAVAILABLE is informational, not an error.
+If streaming fails on any gate, the failure dialog appears with the diagnostic reason. If you encounter these gates frequently (e.g., your stage is slow or your exposures are long), switch to **Sweep Focus** in the Autofocus Configuration dialog -- Sweep uses blocking step-and-snap moves and has no blur constraint or stage-speed requirement.
 
 If no peak is found but a focus slope is detected (monotonic profile after edge retries), the stage is left at the best Z found rather than returning to the starting position.
 
@@ -164,9 +164,13 @@ If no peak is found but a focus slope is detected (monotonic profile after edge 
 
 ### Configuration
 
-Autofocus reads `sweep_range_um` from `autofocus_<scope>.yml` per objective. There is no separate range field -- Autofocus and the stepped Sweep Drift Check share the same range knob. Change it in the [Autofocus Configuration Editor](tools/autofocus-editor.md) and both paths use the new value.
+Both Streaming and Sweep autofocus read `sweep_range_um` from `autofocus_<scope>.yml` per objective. There is no separate range field -- both methods share the same range knob. Change it in the [Autofocus Configuration Editor](tools/autofocus-editor.md) and both paths use the new value.
 
-**Disabling streaming AF via YAML:** On rigs where the stage cannot perform continuous-velocity moves (e.g. some legacy or low-cost stages), set `stage.streaming_af.enabled: false` in your microscope YAML config (`config_<scope>.yml`). When this setting is false, the Live Viewer Autofocus button automatically routes to Sweep Focus, which uses blocking step-and-snap moves and works on any stage. This avoids server-side failures and the motion blur that would occur if streaming were attempted on stages without a velocity knob. If you don't set this, the button defaults to streaming AF (the fast path).
+Select your preferred method (Streaming or Sweep) via the radio buttons in the Autofocus Configuration dialog (Extensions > QP Scope > Utilities > Autofocus Configuration). The choice is stored per QuPath installation. Each rig typically has one preferred method:
+- **Streaming** on rigs with stages capable of slow continuous motion (e.g., PPM)
+- **Sweep** on rigs with stages that cannot move slowly (e.g., OWS3), or for long-exposure modalities where Streaming's blur budget is restrictive
+
+**YAML setting (server-side):** `stage.streaming_af.enabled: false` in `config_<scope>.yml` is a separate, server-side guard, independent of the dialog radio. When false, the server refuses streaming-AF requests outright (routing them to a stepped fallback). The dialog radio controls which method the *client* Live Viewer button sends; the YAML flag controls what the *server* does with a streaming request. On a rig where streaming AF genuinely cannot work (e.g. OWS3, whose stage cannot do slow continuous motion), keep the YAML flag false *and* set the dialog radio to Sweep.
 
 ### How the server picks an objective
 
