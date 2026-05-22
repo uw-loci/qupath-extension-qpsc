@@ -1734,6 +1734,19 @@ public class AcquisitionManager {
         if (Files.exists(infoFile)) {
             return;
         }
+        // Resolve the true pixel size (um/px) for this objective+detector so
+        // Re-stitch Tiles can calibrate the recovered image without guessing.
+        String pixelSize = "";
+        try {
+            MicroscopeConfigManager mgr =
+                    MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
+            Double ps = mgr.getHardwarePixelSize(objective, detectorId);
+            if (ps != null && ps > 0) {
+                pixelSize = String.valueOf(ps);
+            }
+        } catch (Exception e) {
+            logger.debug("Could not resolve pixel size for acquisition_info.txt: {}", e.getMessage());
+        }
         try {
             Files.createDirectories(infoFile.getParent());
             try (BufferedWriter w = Files.newBufferedWriter(infoFile, StandardCharsets.UTF_8)) {
@@ -1754,6 +1767,8 @@ public class AcquisitionManager {
                 w.write("flip_y=" + flipY);
                 w.newLine();
                 w.write("detector_id=" + (detectorId != null ? detectorId : ""));
+                w.newLine();
+                w.write("pixel_size=" + pixelSize);
                 w.newLine();
             }
             logger.info("Wrote acquisition info to: {}", infoFile);

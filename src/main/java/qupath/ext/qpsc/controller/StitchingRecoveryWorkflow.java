@@ -33,12 +33,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.controller.workflow.StitchingHelper;
+import qupath.ext.qpsc.modality.ModalityHandler;
+import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.StitchRetryExecutor;
 import qupath.fx.dialogs.Dialogs;
@@ -137,12 +140,12 @@ public class StitchingRecoveryWorkflow {
             File selected = chooser.showDialog(dialog.getOwner());
             if (selected != null) {
                 folderField.setText(selected.getAbsolutePath());
-                // Auto-detect pixel size from tile TIFF metadata
-                double detected = detectPixelSizeFromFolder(selected);
-                if (detected > 0) {
-                    pixelField.setText(String.valueOf(detected));
-                    pixelSourceLabel.setText("(from tile metadata)");
-                    logger.info("Auto-detected pixel size from tiles: {} um", detected);
+                // Resolve pixel size: acquisition_info.txt -> microscope config -> tile metadata.
+                PixelSizeResolution ps = resolveRecoveryPixelSize(selected);
+                if (ps != null) {
+                    pixelField.setText(String.valueOf(ps.micronsPerPixel()));
+                    pixelSourceLabel.setText(ps.source());
+                    logger.info("Resolved recovery pixel size: {} um {}", ps.micronsPerPixel(), ps.source());
                 }
                 // Show acquisition metadata status
                 Properties info = readAcquisitionInfo(selected);
@@ -285,6 +288,56 @@ public class StitchingRecoveryWorkflow {
                 stitchThread.start();
             }
         });
+    }
+
+    /** A resolved pixel size (microns/pixel) and a human-readable label for where it came from. */
+    private record PixelSizeResolution(double micronsPerPixel, String source) {}
+
+    /**
+     * Resolves the best available pixel size for a selected tile folder, in
+     * priority order: the {@code pixel_size} recorded in acquisition_info.txt;
+     * then the objective + detector resolved against the microscope config;
+     * then the tiles' own TIFF resolution metadata.
+     *
+     * @return the resolved pixel size and its source label, or null if none apply
+     */
+    private static PixelSizeResolution resolveRecoveryPixelSize(File folder) {
+        Properties info = readAcquisitionInfo(folder);
+        if (info != null) {
+            // 1. Explicit pixel_size recorded at acquisition time (authoritative).
+            String recorded = info.getProperty("pixel_size");
+            if (recorded != null && !recorded.isBlank()) {
+                try {
+                    double ps = Double.parseDouble(recorded.trim());
+                    if (ps > 0) {
+                        return new PixelSizeResolution(ps, "(from acquisition info)");
+                    }
+                } catch (NumberFormatException ignored) {
+                    // fall through to the next source
+                }
+            }
+            // 2. Derive from objective + detector against the microscope config.
+            String objective = info.getProperty("objective");
+            String detector = info.getProperty("detector_id");
+            if (objective != null && !objective.isBlank() && detector != null && !detector.isBlank()) {
+                try {
+                    MicroscopeConfigManager mgr =
+                            MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
+                    Double ps = mgr.getHardwarePixelSize(objective, detector);
+                    if (ps != null && ps > 0) {
+                        return new PixelSizeResolution(ps, "(from config)");
+                    }
+                } catch (Exception ex) {
+                    logger.debug("Could not derive recovery pixel size from config: {}", ex.getMessage());
+                }
+            }
+        }
+        // 3. The tiles' own TIFF resolution metadata.
+        double detected = detectPixelSizeFromFolder(folder);
+        if (detected > 0) {
+            return new PixelSizeResolution(detected, "(from tile metadata)");
+        }
+        return null;
     }
 
     /**
@@ -432,6 +485,13 @@ public class StitchingRecoveryWorkflow {
             sampleName = tileFolderFile.getName();
             logger.info("No acquisition_info.txt found -- using folder name as sample: {}", sampleName);
         }
+
+        // Resolve the modality handler so the recovery import sets the same
+        // image type and channel names as the normal post-acquisition stitch.
+        // Passing null here was why recovered images came in as generic R/G/B
+        // channels with an unnamed (rather than "PPM Subtracted") channel.
+        final ModalityHandler modalityHandler =
+                (modality != null && !modality.isBlank()) ? ModalityRegistry.getHandler(modality) : null;
 
         // Compute the next available image index for this sample
         int imageIndex = 1;
@@ -621,7 +681,7 @@ public class StitchingRecoveryWorkflow {
                                     finalAngle,
                                     finalAnnotationName,
                                     finalImageIndex,
-                                    null); // modalityHandler
+                                    modalityHandler);
 
                             gui.refreshProject();
 
