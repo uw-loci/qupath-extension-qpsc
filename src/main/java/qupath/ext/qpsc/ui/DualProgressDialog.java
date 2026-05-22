@@ -1099,6 +1099,14 @@ public class DualProgressDialog {
                 && plan.zCount() <= 1
                 && plan.timepoints() <= 1;
         if (degenerate) {
+            logger.info(
+                    "applyPlanVisibility: degenerate plan (nPositions={}, ch={}, angle={}, z={}, tp={}) "
+                            + "-- per-axis row and tile bar hidden",
+                    plan.nPositions(),
+                    plan.chCount(),
+                    plan.angleCount(),
+                    plan.zCount(),
+                    plan.timepoints());
             perAxisRow.setVisible(false);
             perAxisRow.setManaged(false);
             tileProgressBar.setVisible(false);
@@ -1148,6 +1156,19 @@ public class DualProgressDialog {
             tileLabel.setText("");
             tileProgressBar.setProgress(0);
         }
+        logger.info(
+                "applyPlanVisibility: nPositions={}, ch={}, angle={}, z={}, tp={} -> showTile={}; "
+                        + "tileProgressBar visible={} managed={}; dimensionPanel visible={} managed={}",
+                plan.nPositions(),
+                plan.chCount(),
+                plan.angleCount(),
+                plan.zCount(),
+                plan.timepoints(),
+                showTile,
+                tileProgressBar.isVisible(),
+                tileProgressBar.isManaged(),
+                dimensionPanel.isVisible(),
+                dimensionPanel.isManaged());
     }
 
     // ==================== Stitching Status Methods ====================
