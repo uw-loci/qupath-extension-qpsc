@@ -4,7 +4,9 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.StagePolarity;
 
 /**
  * Registry for available stage insert configurations.
@@ -196,24 +198,40 @@ public class StageInsertRegistry {
             StageInsert.SlidePosition slide = new StageInsert.SlidePosition(
                     "Slide 1", slideXOffsetMm, slideYOffsetMm, slideWidthUm / 1000.0, slideHeightUm / 1000.0, 0);
 
+            // The synthesized aperture has no calibration points to detect axis
+            // inversion from, so take it from the stage-polarity preference.
+            // On an X-inverted stage (MM +X -> lab -X, e.g. OWS3) the visual
+            // origin is the LARGER stage value; assuming non-inverted here
+            // mirrors the whole Stage Map and sends double-click moves to the
+            // X-flipped position.
+            StagePolarity polarity = QPPreferenceDialog.getStagePolarityProperty();
+            boolean xInverted = polarity.invertX;
+            boolean yInverted = polarity.invertY;
+            double originXUm = xInverted ? Math.max(xLow, xHigh) : Math.min(xLow, xHigh);
+            double originYUm = yInverted ? Math.max(yLow, yHigh) : Math.min(yLow, yHigh);
+
             StageInsert synth = new StageInsert(
                     "single_h",
                     "Single Slide (from stage limits)",
                     apertureWidthUm / 1000.0,
                     apertureHeightUm / 1000.0,
-                    Math.min(xLow, xHigh),
-                    Math.min(yLow, yHigh),
+                    originXUm,
+                    originYUm,
                     DEFAULT_SLIDE_MARGIN_UM,
                     List.of(slide));
+            synth.setAxisInversion(xInverted, yInverted);
 
             logger.info(
-                    "Synthesized insert: aperture={}x{} mm, origin=({}, {}) um, " + "slide={}x{} mm centered",
+                    "Synthesized insert: aperture={}x{} mm, origin=({}, {}) um, "
+                            + "slide={}x{} mm centered, xInverted={}, yInverted={}",
                     String.format("%.1f", apertureWidthUm / 1000.0),
                     String.format("%.1f", apertureHeightUm / 1000.0),
-                    String.format("%.0f", Math.min(xLow, xHigh)),
-                    String.format("%.0f", Math.min(yLow, yHigh)),
+                    String.format("%.0f", originXUm),
+                    String.format("%.0f", originYUm),
                     String.format("%.1f", slideWidthUm / 1000.0),
-                    String.format("%.1f", slideHeightUm / 1000.0));
+                    String.format("%.1f", slideHeightUm / 1000.0),
+                    xInverted,
+                    yInverted);
 
             return synth;
         } catch (Exception e) {
