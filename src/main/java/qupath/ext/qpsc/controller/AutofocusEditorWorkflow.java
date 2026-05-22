@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.components.ObjectiveSelector;
@@ -1915,7 +1916,32 @@ public class AutofocusEditorWorkflow {
         });
         applyAdvancedMode.run();
 
-        mainLayout.getChildren().addAll(advancedToggle, tabPane, statusLabel, new Separator(), buttonRow);
+        // ===== LIVE VIEWER AUTOFOCUS METHOD =====
+        // Controls which autofocus the Live Viewer "Autofocus" button runs.
+        // Persisted as a QuPath preference; since each rig is a separate
+        // QuPath install this tracks per-microscope (Streaming on rigs whose
+        // stage can crawl, Sweep on rigs like OWS3 whose stage cannot).
+        Label afMethodLabel = new Label("Live Viewer Autofocus button uses:");
+        afMethodLabel.setStyle("-fx-font-weight: bold;");
+        ToggleGroup afMethodGroup = new ToggleGroup();
+        RadioButton afStreamingRadio =
+                new RadioButton("Streaming -- continuous-Z scan, fast; needs a stage that can move slowly");
+        RadioButton afSweepRadio = new RadioButton("Sweep -- stepped step-and-snap, slower but works on any stage");
+        afStreamingRadio.setToggleGroup(afMethodGroup);
+        afSweepRadio.setToggleGroup(afMethodGroup);
+        boolean afSweepSelected = "SWEEP".equals(PersistentPreferences.getLiveViewerAutofocusMethod());
+        afSweepRadio.setSelected(afSweepSelected);
+        afStreamingRadio.setSelected(!afSweepSelected);
+        afMethodGroup
+                .selectedToggleProperty()
+                .addListener((obs, oldT, newT) -> PersistentPreferences.setLiveViewerAutofocusMethod(
+                        newT == afSweepRadio ? "SWEEP" : "STREAMING"));
+        VBox afMethodBox = new VBox(4, afMethodLabel, afStreamingRadio, afSweepRadio);
+        afMethodBox.setPadding(new Insets(5));
+
+        mainLayout
+                .getChildren()
+                .addAll(afMethodBox, new Separator(), advancedToggle, tabPane, statusLabel, new Separator(), buttonRow);
 
         dialog.getDialogPane().setContent(mainLayout);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);

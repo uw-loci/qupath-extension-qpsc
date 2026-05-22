@@ -483,6 +483,24 @@ public class PersistentPreferences {
         lastAfStrategySaved.setValue(strategyName == null ? "" : strategyName);
     }
 
+    // Live Viewer autofocus method. Controls which autofocus the Live Viewer
+    // "Autofocus" button runs: "STREAMING" (continuous-Z scan) or "SWEEP"
+    // (stepped step-and-snap). Set via the radio buttons in the Autofocus
+    // Configuration dialog. Per-install: each rig is a separate QuPath
+    // install, so this naturally tracks per-microscope (e.g. STREAMING on
+    // PPM, SWEEP on OWS3 where the stage cannot do slow continuous motion).
+    private static final StringProperty liveViewerAutofocusMethodSaved =
+            PathPrefs.createPersistentPreference("LiveViewerAutofocusMethod", "STREAMING");
+
+    public static String getLiveViewerAutofocusMethod() {
+        String v = liveViewerAutofocusMethodSaved.getValue();
+        return "SWEEP".equals(v) ? "SWEEP" : "STREAMING";
+    }
+
+    public static void setLiveViewerAutofocusMethod(final String method) {
+        liveViewerAutofocusMethodSaved.setValue("SWEEP".equals(method) ? "SWEEP" : "STREAMING");
+    }
+
     // Per-channel intensity override persisted from the Live Viewer Camera tab.
     // Stored as a single delimited preference key so we can key by
     // (modality, channelId) without pre-declaring every combination. The

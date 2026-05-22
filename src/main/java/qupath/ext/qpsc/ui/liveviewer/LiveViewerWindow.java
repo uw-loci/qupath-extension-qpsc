@@ -20,6 +20,7 @@ import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -44,14 +45,14 @@ import javafx.stage.Stage;
 import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.AutofocusEditorWorkflow;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.ObjectiveUtils;
-import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
 /**
@@ -82,16 +83,16 @@ public class LiveViewerWindow {
     private Label cursorLabel;
     private Label fovLabel;
     private Button liveToggleButton;
-    // Refine Focus removed from toolbar -- Sweep Focus includes it as Phase 5
-    private Button sweepFocusButton;
-    private Button streamingFocusButton;
+    // Single Autofocus button. The method it runs (streaming continuous-Z
+    // scan or stepped sweep) is chosen by the radio in the Autofocus
+    // Configuration dialog and read from PersistentPreferences at click time.
+    private Button autofocusButton;
     private StreamingFocusController streamingFocusController;
 
     /** Tooltip shown on the Autofocus button when it is idle (not mid-scan). */
-    private static final String STREAMING_AF_TOOLTIP = "Primary autofocus.\n"
-            + "Uses streaming continuous-Z scan when available.\n"
-            + "If unavailable (long exposure, no speed property, saturated),\n"
-            + "Sweep Focus fallback button appears.\n"
+    private static final String STREAMING_AF_TOOLTIP = "Autofocus.\n"
+            + "Runs the method selected in Autofocus Configuration\n"
+            + "(Streaming continuous-Z scan, or stepped Sweep).\n"
             + "Click again while scanning to cancel.";
 
     private ComboBox<String> focusRangeCombo;
@@ -255,8 +256,7 @@ public class LiveViewerWindow {
     private void applyLock() {
         String reason = lockManager.getLockHolder();
         liveToggleButton.setDisable(true);
-        sweepFocusButton.setDisable(true);
-        if (streamingFocusButton != null) streamingFocusButton.setDisable(true);
+        if (autofocusButton != null) autofocusButton.setDisable(true);
         if (stageControlToggle != null) stageControlToggle.setDisable(true);
         if (stageControlPanel != null) stageControlPanel.setDisable(true);
         updateStatus("LOCKED: " + (reason != null ? reason : "operation in progress"));
@@ -784,18 +784,10 @@ public class LiveViewerWindow {
         updateLiveButtonStyle(false);
         liveToggleButton.setOnAction(e -> toggleLiveMode());
 
-        sweepFocusButton = new Button("Sweep Focus");
-        sweepFocusButton.setTooltip(new Tooltip("Stepped-Z autofocus. Moves Z point by point and "
-                + "snaps at each step to find the best focus. Slower but works on any camera."));
-        sweepFocusButton.setDisable(true);
-        sweepFocusButton.setVisible(false);
-        sweepFocusButton.setManaged(false);
-        sweepFocusButton.setOnAction(e -> handleSweepFocus());
-
-        streamingFocusButton = new Button("Autofocus");
-        streamingFocusButton.setTooltip(new Tooltip(STREAMING_AF_TOOLTIP));
-        streamingFocusButton.setDisable(true);
-        streamingFocusButton.setOnAction(e -> handleStreamingFocus());
+        autofocusButton = new Button("Autofocus");
+        autofocusButton.setTooltip(new Tooltip(STREAMING_AF_TOOLTIP));
+        autofocusButton.setDisable(true);
+        autofocusButton.setOnAction(e -> handleAutofocus());
 
         focusRangeCombo = new ComboBox<>();
         // Options are repopulated per-objective via updateFocusRangeOptions();
@@ -890,8 +882,7 @@ public class LiveViewerWindow {
         HBox toolbar = new HBox(
                 8,
                 liveToggleButton,
-                sweepFocusButton,
-                streamingFocusButton,
+                autofocusButton,
                 focusRangeCombo,
                 showTilesCheckBox,
                 snapButton,
@@ -1135,32 +1126,81 @@ public class LiveViewerWindow {
             return;
         }
         boolean enabled = liveActive;
-        sweepFocusButton.setText("Sweep Focus");
-        sweepFocusButton.setStyle("");
-        sweepFocusButton.setDisable(!enabled);
-        streamingFocusButton.setText("Autofocus");
-        streamingFocusButton.setStyle("");
-        streamingFocusButton.setDisable(!enabled);
+        autofocusButton.setText("Autofocus");
+        autofocusButton.setStyle("");
+        autofocusButton.setDisable(!enabled);
         focusRangeCombo.setDisable(!enabled);
     }
 
     // handleRefineFocus removed -- Sweep Focus includes Refine as Phase 5
 
+    /**
+     * Autofocus button handler. Dispatches to streaming or sweep based on the
+     * method selected in the Autofocus Configuration dialog. While a scan is
+     * already running, routes to the matching handler so the second click
+     * cancels it (not the configured method, which may have since changed).
+     */
+    private void handleAutofocus() {
+        if (sweepFocusController != null && sweepFocusController.isRunning()) {
+            handleSweepFocus();
+            return;
+        }
+        if (streamingFocusController != null && streamingFocusController.isRunning()) {
+            handleStreamingFocus();
+            return;
+        }
+        if ("SWEEP".equals(PersistentPreferences.getLiveViewerAutofocusMethod())) {
+            handleSweepFocus();
+        } else {
+            handleStreamingFocus();
+        }
+    }
+
+    /**
+     * Shows a modal dialog when autofocus fails, with a button that opens the
+     * Autofocus Configuration dialog so the user can switch methods.
+     *
+     * @param method "Streaming" or "Sweep" -- the method that just failed
+     * @param reason failure detail from the focus controller
+     */
+    private void showAutofocusFailedDialog(String method, String reason) {
+        javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+        alert.setTitle("Autofocus failed");
+        alert.setHeaderText(method + " autofocus could not find focus.");
+        javafx.scene.control.Label msg =
+                new javafx.scene.control.Label((reason == null || reason.isBlank() ? "No focus found." : reason)
+                        + "\n\nThe stage was left at its current Z. If this autofocus method "
+                        + "does not suit this sample or microscope, open Autofocus "
+                        + "Configuration and switch methods.");
+        msg.setWrapText(true);
+        msg.setMaxWidth(420);
+        alert.getDialogPane().setContent(msg);
+
+        ButtonType openConfig = new ButtonType("Open Autofocus Configuration");
+        alert.getButtonTypes().setAll(openConfig, ButtonType.CLOSE);
+
+        UIFunctions.showAlertOverParent(alert, stage).ifPresent(bt -> {
+            if (bt == openConfig) {
+                AutofocusEditorWorkflow.run();
+            }
+        });
+    }
+
     private void handleSweepFocus() {
         if (sweepFocusController != null && sweepFocusController.isRunning()) {
             sweepFocusController.cancel();
-            sweepFocusButton.setText("Cancelling...");
-            sweepFocusButton.setDisable(true);
+            autofocusButton.setText("Cancelling...");
+            autofocusButton.setDisable(true);
             return;
         }
 
         MicroscopeController controller = MicroscopeController.getInstance();
         if (controller == null || !liveActive) {
-            updateStatus("Cannot sweep focus: not connected or live not active");
+            updateStatus("Cannot autofocus: not connected or live not active");
             return;
         }
         if (controller.isAcquisitionActive()) {
-            updateStatus("Cannot sweep focus: acquisition in progress");
+            updateStatus("Cannot autofocus: acquisition in progress");
             return;
         }
 
@@ -1175,10 +1215,12 @@ public class LiveViewerWindow {
 
         sweepFocusController = new SweepFocusController(controller.getSocketClient(), () -> lastFrame, searchRange);
 
-        sweepFocusButton.setText("Cancel Sweep");
-        sweepFocusButton.setStyle("");
-
-        streamingFocusButton.setDisable(true);
+        // Sweep can run ~60s. Keep the button enabled as a Cancel control --
+        // a second click routes to the cancel branch at the top of this method.
+        autofocusButton.setText("Cancel Autofocus");
+        autofocusButton.setStyle("");
+        autofocusButton.setTooltip(new Tooltip("Click to cancel the running sweep autofocus."));
+        autofocusButton.setDisable(false);
         focusRangeCombo.setDisable(true);
         liveToggleButton.setDisable(true);
 
@@ -1193,19 +1235,16 @@ public class LiveViewerWindow {
                 if (done) {
                     liveToggleButton.setDisable(false);
                     focusRangeCombo.setDisable(!liveActive);
-
-                    streamingFocusButton.setDisable(!liveActive);
                     if (stageControlPanel != null) {
                         stageControlPanel.refreshPositions();
                     }
-                    if (outcome == RefineFocusController.Outcome.FAILED) {
-                        sweepFocusButton.setText("FAILED");
-                        sweepFocusButton.setStyle("-fx-font-size: 11; -fx-base: #F44336;");
-                        sweepFocusButton.setDisable(!liveActive);
-                    } else {
-                        sweepFocusButton.setText("Sweep Focus");
-                        sweepFocusButton.setStyle("");
-                        sweepFocusButton.setDisable(!liveActive);
+                    autofocusButton.setText("Autofocus");
+                    autofocusButton.setStyle("");
+                    autofocusButton.setTooltip(new Tooltip(STREAMING_AF_TOOLTIP));
+                    autofocusButton.setDisable(!liveActive);
+                    if (outcome == RefineFocusController.Outcome.FAILED
+                            || outcome == RefineFocusController.Outcome.ERROR) {
+                        showAutofocusFailedDialog("Sweep", msg);
                     }
                 }
             });
@@ -1223,8 +1262,8 @@ public class LiveViewerWindow {
             // stops the scan, restores Z to the pre-scan position, and the
             // STRMAFZ call returns CANCELLED (handled in the callback below).
             streamingFocusController.cancel();
-            streamingFocusButton.setText("Cancelling...");
-            streamingFocusButton.setDisable(true);
+            autofocusButton.setText("Cancelling...");
+            autofocusButton.setDisable(true);
             updateStatus("Autofocus: cancelling...");
             return;
         }
@@ -1239,123 +1278,12 @@ public class LiveViewerWindow {
             return;
         }
 
-        // YAML-disable shortcut: when stage.streaming_af.enabled is false
-        // in config_<scope>.yml, the rig's stage cannot do continuous-
-        // velocity moves and streaming AF would either fail or trigger
-        // the rapid_jump abort path server-side. Route the click straight
-        // to Sweep Focus -- it uses blocking step-and-snap, works on any
-        // stage, and avoids the server-side streaming code path entirely
-        // (including the camera ROI crop / restore that has caused
-        // CONFIG hangs on OWS3 2026-05-16 when the rapid_jump path runs).
-        try {
-            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            if (configPath != null && !configPath.isEmpty()) {
-                qupath.ext.qpsc.utilities.MicroscopeConfigManager cfg =
-                        qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(configPath);
-                Boolean enabled = cfg.getBoolean("stage", "streaming_af", "enabled");
-                if (enabled != null && !enabled) {
-                    logger.info("Streaming AF disabled in YAML (stage.streaming_af.enabled=false); "
-                            + "routing Live Viewer Autofocus button to Sweep Focus directly.");
-                    updateStatus("Autofocus: streaming disabled on this rig -- using Sweep Focus");
-                    handleSweepFocus();
-                    return;
-                }
-            }
-        } catch (Exception ex) {
-            // YAML read failures shouldn't break the AF button -- fall
-            // through to the regular streaming path, which will either
-            // succeed or surface its own error.
-            logger.debug("Streaming AF YAML enable-check failed ({}); continuing with streaming", ex.getMessage());
-        }
-
-        if (!QPPreferenceDialog.getSuppressExposureWarning()) {
-            try {
-                // Trust the user's UI intent: read the per-channel spinner
-                // snapshot directly. APPLYCH and modality-profile re-applies
-                // can revert MMCore to channel-library defaults, so an
-                // un-flushed spinner edit (still inside the 150 ms debounce)
-                // would otherwise produce a spurious "exposure too long"
-                // dialog when the user has actually dialed exposure down
-                // for fast AF. Force-flush the debounce first so MMCore
-                // matches the spinner before AF fires its own server-side
-                // exposure check.
-                // Source of truth: the live MMCore exposure via GETEXP. The
-                // per-channel spinner is only authoritative when the server
-                // is actually in per-channel mode -- otherwise it's a stale
-                // value left over from a previous modality (e.g. FITC default
-                // 80 ms still showing after switching to brightfield). For
-                // unified-mode modalities (brightfield), the spinner can show
-                // a number with no relation to what the camera will actually
-                // expose at, so trusting it produces false "exposure too long"
-                // warnings.
-                double spinnerExposure = Double.NaN;
-                if (stageControlPanel != null) {
-                    stageControlPanel.flushPendingExposureSync();
-                    spinnerExposure = stageControlPanel.getCurrentChannelExposureMs();
-                }
-                var exposures = controller.getSocketClient().getExposures();
-                double exposureMs;
-                String exposureSource;
-                if (exposures.isPerChannel() && !Double.isNaN(spinnerExposure)) {
-                    exposureMs = spinnerExposure;
-                    exposureSource = "per-channel spinner";
-                } else {
-                    exposureMs = exposures.unified();
-                    if (exposures.isPerChannel()) {
-                        exposureMs = Math.max(
-                                exposureMs, Math.max(exposures.red(), Math.max(exposures.green(), exposures.blue())));
-                    }
-                    exposureSource = exposures.isPerChannel() ? "MMCore per-channel max" : "MMCore unified";
-                }
-                logger.info(
-                        "Streaming AF preflight: source={} value={} ms (spinner={}, GETEXP unified={} R={} G={} B={} perChannel={})",
-                        exposureSource,
-                        exposureMs,
-                        spinnerExposure,
-                        exposures.unified(),
-                        exposures.red(),
-                        exposures.green(),
-                        exposures.blue(),
-                        exposures.isPerChannel());
-                double maxExposureMs = QPPreferenceDialog.getStreamingMaxExposureMs();
-                if (exposureMs > maxExposureMs) {
-                    streamingFocusButton.setStyle("-fx-base: #F44336;");
-                    sweepFocusButton.setVisible(true);
-                    sweepFocusButton.setManaged(true);
-
-                    javafx.scene.control.CheckBox dontShow =
-                            new javafx.scene.control.CheckBox("Do not show this message again");
-                    javafx.scene.control.Label msgLabel = new javafx.scene.control.Label(String.format(
-                            "Current exposure (%.1f ms) is above the streaming AF threshold "
-                                    + "(%.1f ms).\nFalling back to Sweep Focus automatically.",
-                            exposureMs, maxExposureMs));
-                    msgLabel.setWrapText(true);
-                    javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(8, msgLabel, dontShow);
-
-                    javafx.scene.control.Alert alert =
-                            new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
-                    alert.setTitle("Autofocus");
-                    alert.setHeaderText("Exposure time too long for fast autofocus");
-                    alert.getDialogPane().setContent(content);
-                    alert.showAndWait();
-
-                    if (dontShow.isSelected()) {
-                        QPPreferenceDialog.setSuppressExposureWarning(true);
-                    }
-
-                    // Auto-fallback: long exposures are common on fluorescence,
-                    // and forcing the user to read a warning then click a
-                    // separate button is friction every time. Sweep Focus
-                    // works at any exposure -- chain to it directly.
-                    updateStatus("Autofocus: switching to Sweep Focus (exposure too long for streaming)");
-                    handleSweepFocus();
-                    return;
-                }
-            } catch (java.io.IOException ex) {
-                logger.debug("Could not check exposure for pre-flight: {}", ex.getMessage());
-            }
-        }
-
+        // Note: no client-side exposure pre-check and no auto-fallback to
+        // Sweep. The autofocus method is the user's explicit choice (radio
+        // in Autofocus Configuration). If streaming refuses (long exposure,
+        // saturated, no slow-speed stage, rapid_jump), the server returns
+        // UNAVAILABLE and showAutofocusFailedDialog() surfaces the reason
+        // with a button to open Autofocus Configuration and switch methods.
         streamingFocusController = new StreamingFocusController(controller.getSocketClient());
 
         // Pass null for objective: the server resolves via pixel-size
@@ -1398,13 +1326,12 @@ public class LiveViewerWindow {
         // The Autofocus button stays ENABLED during the scan and becomes a
         // Cancel button -- a second click routes to the cancel branch at the
         // top of handleStreamingFocus(). Sweep / range / live stay disabled.
-        streamingFocusButton.setText("Cancel Autofocus");
-        streamingFocusButton.setStyle("");
-        streamingFocusButton.setTooltip(new Tooltip("Click to cancel the running autofocus scan.\n"
+        autofocusButton.setText("Cancel Autofocus");
+        autofocusButton.setStyle("");
+        autofocusButton.setTooltip(new Tooltip("Click to cancel the running autofocus scan.\n"
                 + "Z is restored to the position autofocus started from."));
-        streamingFocusButton.setDisable(false);
+        autofocusButton.setDisable(false);
 
-        sweepFocusButton.setDisable(true);
         focusRangeCombo.setDisable(true);
         liveToggleButton.setDisable(true);
 
@@ -1421,123 +1348,27 @@ public class LiveViewerWindow {
                 if (done) {
                     liveToggleButton.setDisable(false);
                     focusRangeCombo.setDisable(!liveActive);
-
-                    sweepFocusButton.setDisable(!liveActive);
                     if (stageControlPanel != null) {
                         stageControlPanel.refreshPositions();
                     }
-                    if (outcome == RefineFocusController.Outcome.FAILED) {
-                        // UNAVAILABLE / pre-flight refusal. Distinguish
-                        // FIXABLE refusals (Sweep Focus has a chance of
-                        // succeeding because it uses different sampling /
-                        // doesn't need slow-stage-speed / handles long
-                        // exposures) from SIGNAL-DEAD refusals (the metric
-                        // is genuinely flat across the scan window, so a
-                        // different algorithm running on the same data
-                        // will also fail -- and worse, may walk the stage
-                        // far from focus on noise).
-                        //
-                        // 2026-05-04 PPM 40x incident: streaming refused
-                        // with "metric range 0.91% of peak is within noise",
-                        // the auto-fallback ran Sweep Focus on the same
-                        // flat field, the boundary-peak retry shifted DOWN
-                        // twice, and the stage ended 41 um BELOW the
-                        // operator's starting in-focus Z. The flat-metric
-                        // refusal is the AF telling us "I can't find focus
-                        // from this data" -- the right response is to
-                        // leave the stage where it is and tell the user,
-                        // not to hand the same flat data to a worse
-                        // algorithm.
-                        streamingFocusButton.setText("Autofocus");
-                        streamingFocusButton.setStyle("");
-                        streamingFocusButton.setTooltip(new Tooltip("Streaming AF refused.\nReason: " + msg));
-                        streamingFocusButton.setDisable(!liveActive);
+                    autofocusButton.setText("Autofocus");
+                    autofocusButton.setStyle("");
+                    autofocusButton.setTooltip(new Tooltip(STREAMING_AF_TOOLTIP));
+                    autofocusButton.setDisable(!liveActive);
 
+                    // FAILED (UNAVAILABLE / pre-flight refusal) and ERROR both
+                    // leave the stage where it is. No auto-fallback to Sweep --
+                    // the method is the user's explicit choice in Autofocus
+                    // Configuration. Surface the reason and offer to open that
+                    // dialog so the user can switch methods. CANCELLED and
+                    // SUCCESS need no popup.
+                    if (outcome == RefineFocusController.Outcome.FAILED
+                            || outcome == RefineFocusController.Outcome.ERROR) {
                         String reason = msg;
-                        if (reason.startsWith("Autofocus unavailable: ")) {
+                        if (reason != null && reason.startsWith("Autofocus unavailable: ")) {
                             reason = reason.substring("Autofocus unavailable: ".length());
                         }
-
-                        // Recognise signal-dead refusals by their reason
-                        // string. These come from streaming_focus.py and
-                        // share the substrings "metric range" + "noise" or
-                        // "depth-of-field". If we add new flat-metric
-                        // refusal phrasings server-side, mirror them here.
-                        String lower = reason.toLowerCase();
-                        boolean signalDead = lower.contains("metric range") && lower.contains("noise")
-                                || lower.contains("depth-of-field")
-                                || lower.contains("metric_flat");
-
-                        // Saturation refusals come from the pre-flight
-                        // check in streaming_focus.py. Silently falling
-                        // through to Sweep Focus would re-run an
-                        // identical check and fail the same way -- and
-                        // the user has no idea why their click did
-                        // nothing. Match the unique "saturated" token.
-                        boolean saturated = lower.contains("saturated");
-
-                        if (saturated) {
-                            sweepFocusButton.setVisible(true);
-                            sweepFocusButton.setManaged(true);
-                            String headline = "Autofocus: too many saturated pixels";
-                            Dialogs.showInfoNotification(
-                                    headline,
-                                    reason
-                                            + "\n\nStage left at current Z. "
-                                            + "Reduce exposure or gain, then try again.");
-                            updateStatus(headline + " -- stage left at current Z");
-                        } else if (signalDead || !liveActive) {
-                            // Stage stays where it is. Show an explicit
-                            // "Sweep Focus" button so the user can opt in
-                            // manually if they believe a stepped scan
-                            // would do better.
-                            sweepFocusButton.setVisible(true);
-                            sweepFocusButton.setManaged(true);
-                            String headline = signalDead
-                                    ? "Autofocus: signal too flat to find focus"
-                                    : "Autofocus: no focus found";
-                            Dialogs.showInfoNotification(
-                                    headline,
-                                    reason
-                                            + "\n\nStage left at current Z. "
-                                            + "If you believe focus is reachable, click "
-                                            + "Sweep Focus to attempt a stepped scan.");
-                            updateStatus(headline + " -- stage left at current Z");
-                        } else {
-                            // Fixable refusal (long exposure, no slow-
-                            // speed property, etc.) -- Sweep Focus uses
-                            // a different mechanism so it has a real
-                            // chance of succeeding.
-                            updateStatus("Autofocus: streaming unavailable (" + reason + "); switching to Sweep Focus");
-                            handleSweepFocus();
-                        }
-                    } else if (outcome == RefineFocusController.Outcome.ERROR) {
-                        streamingFocusButton.setText("FAILED");
-                        streamingFocusButton.setStyle("-fx-font-size: 11; -fx-base: #F44336;");
-                        streamingFocusButton.setTooltip(new Tooltip(msg));
-                        streamingFocusButton.setDisable(!liveActive);
-
-                        sweepFocusButton.setVisible(true);
-                        sweepFocusButton.setManaged(true);
-                    } else if (outcome == RefineFocusController.Outcome.CANCELLED) {
-                        // User cancelled. The server already restored Z to the
-                        // pre-scan position; just reset the button, no error
-                        // styling, no Sweep Focus fallback prompt.
-                        streamingFocusButton.setText("Autofocus");
-                        streamingFocusButton.setStyle("");
-                        streamingFocusButton.setTooltip(new Tooltip(STREAMING_AF_TOOLTIP));
-                        streamingFocusButton.setDisable(!liveActive);
-
-                        sweepFocusButton.setVisible(false);
-                        sweepFocusButton.setManaged(false);
-                    } else {
-                        streamingFocusButton.setText("Autofocus");
-                        streamingFocusButton.setStyle("");
-                        streamingFocusButton.setTooltip(new Tooltip(STREAMING_AF_TOOLTIP));
-                        streamingFocusButton.setDisable(!liveActive);
-
-                        sweepFocusButton.setVisible(false);
-                        sweepFocusButton.setManaged(false);
+                        showAutofocusFailedDialog("Streaming", reason);
                     }
                 }
             });
