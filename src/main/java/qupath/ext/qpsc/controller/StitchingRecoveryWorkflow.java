@@ -32,7 +32,6 @@ import javax.imageio.stream.ImageInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
-import qupath.ext.basicstitching.workflow.StitchingWorkflow;
 import qupath.ext.qpsc.controller.workflow.StitchingHelper;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -41,6 +40,7 @@ import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
+import qupath.ext.qpsc.utilities.StitchRetryExecutor;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.writers.ome.OMEPyramidWriter;
@@ -60,59 +60,6 @@ import qupath.lib.projects.ProjectImageEntry;
 public class StitchingRecoveryWorkflow {
 
     private static final Logger logger = LoggerFactory.getLogger(StitchingRecoveryWorkflow.class);
-
-    /**
-     * Name of the QuPath logger that emits per-tile pyramid-write errors. The
-     * underlying OMETiffWriter (via BioFormats) raises these as logged ERRORs
-     * rather than throwing them out of StitchingWorkflow.run, so they are
-     * invisible to the recovery workflow's return path. The recovery used to
-     * report every angle as "succeeded" even when this logger had spammed
-     * dozens of NullPointerException / FormatException entries per stitch and
-     * the resulting .ome.tif had garbled pyramid levels. We watch the logger
-     * with a Logback appender (see installOmePyramidErrorCounter) and treat
-     * any non-zero error delta during a stitch as a failure.
-     */
-    private static final String OME_PYRAMID_WRITER_LOGGER = "qupath.lib.images.writers.ome.OMEPyramidWriter";
-
-    private static final AtomicInteger omePyramidErrorCounter = new AtomicInteger();
-    private static volatile boolean omePyramidErrorCounterInstalled = false;
-    private static final Object omePyramidInstallLock = new Object();
-
-    private static void installOmePyramidErrorCounter() {
-        if (omePyramidErrorCounterInstalled) return;
-        synchronized (omePyramidInstallLock) {
-            if (omePyramidErrorCounterInstalled) return;
-            try {
-                org.slf4j.Logger slf4jLogger = LoggerFactory.getLogger(OME_PYRAMID_WRITER_LOGGER);
-                if (!(slf4jLogger instanceof ch.qos.logback.classic.Logger logbackLogger)) {
-                    logger.warn(
-                            "OME pyramid writer logger is not a Logback logger ({}); "
-                                    + "per-tile error detection disabled.",
-                            slf4jLogger.getClass().getName());
-                    omePyramidErrorCounterInstalled = true;
-                    return;
-                }
-                ch.qos.logback.core.AppenderBase<ch.qos.logback.classic.spi.ILoggingEvent> appender =
-                        new ch.qos.logback.core.AppenderBase<>() {
-                            @Override
-                            protected void append(ch.qos.logback.classic.spi.ILoggingEvent event) {
-                                if (event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.ERROR)) {
-                                    omePyramidErrorCounter.incrementAndGet();
-                                }
-                            }
-                        };
-                appender.setName("QPSC-OMEPyramidErrorCounter");
-                appender.setContext(logbackLogger.getLoggerContext());
-                appender.start();
-                logbackLogger.addAppender(appender);
-                omePyramidErrorCounterInstalled = true;
-                logger.info("Installed OME pyramid writer error counter for stitching recovery");
-            } catch (Throwable t) {
-                logger.warn("Could not install OME pyramid writer error counter: {}", t.getMessage());
-                omePyramidErrorCounterInstalled = true; // don't keep retrying
-            }
-        }
-    }
 
     /**
      * Entry point - shows dialog and runs stitching recovery.
@@ -596,97 +543,50 @@ public class StitchingRecoveryWorkflow {
             futures.add(stitchPool.submit(() -> {
                 logger.info("=== Processing angle {}/{}: '{}' ===", angleNum, totalAngles, angleName);
 
-                // Snapshot the OMEPyramidWriter error counter so we can tell
-                // post-stitch whether ANY tile-write error fired during this
-                // angle. The counter is global; in sequential mode this gives
-                // exact per-angle attribution, in parallel mode it conserva-
-                // tively flags any angle whose stitch overlapped with errors.
-                installOmePyramidErrorCounter();
-                final int errorsBeforeStitch = omePyramidErrorCounter.get();
-
                 try {
-                    StitchingConfig config = new StitchingConfig(
-                            "Coordinates in TileConfiguration.txt file",
-                            angleDir.getAbsolutePath(),
-                            fnOutputFolder,
-                            compression,
-                            pixelSize,
-                            1, // downsample
-                            ".", // match everything in this single-angle directory
-                            1.0, // zSpacingMicrons
-                            outputFormat);
+                    // Builds a config for a requested output format. The
+                    // stitcher appends "_<subdirName>" (the angle dir name) so
+                    // it produces "<sampleName>_<angle>.<ext>"; the user-pattern
+                    // rename happens after the stitch (below). Pushing the full
+                    // ImageNameGenerator name in here caused duplication because
+                    // the index landed before the appended subdir name.
+                    StitchRetryExecutor.ConfigFactory configFactory = fmt -> {
+                        StitchingConfig config = new StitchingConfig(
+                                "Coordinates in TileConfiguration.txt file",
+                                angleDir.getAbsolutePath(),
+                                fnOutputFolder,
+                                compression,
+                                pixelSize,
+                                1, // downsample
+                                ".", // match everything in this single-angle directory
+                                1.0, // zSpacingMicrons
+                                fmt);
+                        config.outputFilename = ImageNameGenerator.sanitizeForFilename(fnSampleName);
+                        return config;
+                    };
 
-                    // Set outputFilename to a simple sanitized sample base.
-                    // StitchingWorkflow appends "_<subdirName>" (the angle dir
-                    // name) so the stitcher produces "<sampleName>_<angle>.<ext>".
-                    // We rename to the user-configured pattern AFTER the stitch
-                    // completes (see post-stitch rename below). Pushing the
-                    // full ImageNameGenerator name in here caused duplication
-                    // (Sample_..._0.0_001_0.0.ome.tif) because the index landed
-                    // before the stitcher's appended subdir name.
-                    config.outputFilename = ImageNameGenerator.sanitizeForFilename(fnSampleName);
-
-                    // Pass the composite stage/camera transform to the
-                    // tile-config stitching strategy. Must match the
+                    // Composite stage/camera transform; must match the
                     // TileProcessingUtilities main-acquisition path so
-                    // re-stitching a folder produces the same layout as
-                    // the original acquisition.
-                    qupath.ext.qpsc.utilities.StageImageTransform siTransform =
-                            qupath.ext.qpsc.utilities.StageImageTransform.current();
-                    boolean[] stitcherFlags = siTransform.stitcherFlipFlags();
-                    qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = stitcherFlags[0];
-                    qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = stitcherFlags[1];
-                    logger.info(
-                            "Recovery stitching for angle '{}': set flipStitchingX={}, flipStitchingY={} (from {})",
-                            angleName,
-                            stitcherFlags[0],
-                            stitcherFlags[1],
-                            siTransform);
-                    String stitchedOutPath;
-                    try {
-                        stitchedOutPath = StitchingWorkflow.run(config);
-                    } finally {
-                        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = false;
-                        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = false;
-                    }
+                    // re-stitching reproduces the original layout.
+                    boolean[] stitcherFlags = qupath.ext.qpsc.utilities.StageImageTransform.current()
+                            .stitcherFlipFlags();
 
-                    if (stitchedOutPath == null) {
-                        logger.error("Stitching returned null for angle '{}'", angleName);
-                        failureCount.incrementAndGet();
-                        return;
-                    }
+                    // Between-retry cleanup: remove the angle's partial output
+                    // so a retry's rename-over does not fail on Windows.
+                    final String outputStem =
+                            ImageNameGenerator.sanitizeForFilename(fnSampleName) + "_" + angleDir.getName();
+                    Runnable cleanup = () -> deleteStitchOutputs(new File(fnOutputFolder), outputStem);
 
-                    // The OMEPyramidWriter logs per-tile errors at ERROR level
-                    // but does NOT raise them out of StitchingWorkflow.run --
-                    // the workflow returns the output path and reports
-                    // "1 successful, 0 failed" even when dozens of tiles
-                    // failed to write. The resulting .ome.tif opens fine in
-                    // QuPath but has garbled pyramid levels (incorrect tile
-                    // counts vs image-level dimensions on non-power-of-two
-                    // bases). Treat a non-zero error delta as a stitch
-                    // failure and refuse to import the broken file.
-                    int errorsAfterStitch = omePyramidErrorCounter.get();
-                    int errorDelta = errorsAfterStitch - errorsBeforeStitch;
-                    if (errorDelta > 0) {
-                        logger.error(
-                                "Stitching for angle '{}' produced {} OMEPyramidWriter tile-write errors -- "
-                                        + "output at {} is likely incomplete (garbled pyramid levels). "
-                                        + "Skipping project import for this angle.",
-                                angleName,
-                                errorDelta,
-                                stitchedOutPath);
-                        failureCount.incrementAndGet();
-                        return;
-                    }
+                    // Detect OMEPyramidWriter tile-write errors, retry, and
+                    // escalate to ZARR. Non-interactive: the recovery workflow
+                    // shows its own end-of-run summary, so no per-angle dialog.
+                    String stitchedOutPath = StitchRetryExecutor.run(
+                            outputFormat, configFactory, stitcherFlags, cleanup, angleName, false);
 
-                    // Apply the user-configured naming pattern. The stitcher
-                    // wrote "<sampleName>_<angleName>.<ext>" (because we set
-                    // outputFilename to the sample base and the workflow
-                    // appended the subdir name). Now rename to the pattern
-                    // produced by ImageNameGenerator, which honours the
-                    // FilenameInclude{Modality,Objective,Annotation,Angle}
-                    // preferences and places the index at the end.
-                    String extension = outputFormat.stitchAsZarr() ? ".ome.zarr" : ".ome.tif";
+                    // run() returns a real path or throws. Escalation may have
+                    // produced a .ome.zarr even when the user picked OME_TIFF,
+                    // so derive the extension from the actual output path.
+                    String extension = stitchedOutPath.endsWith(".ome.zarr") ? ".ome.zarr" : ".ome.tif";
                     String desiredName = ImageNameGenerator.generateImageName(
                             fnSampleName,
                             fnImageIndex,
@@ -755,13 +655,18 @@ public class StitchingRecoveryWorkflow {
         final int finalFailure = failureCount.get();
         logger.info("=== STITCHING RECOVERY COMPLETE: {} succeeded, {} failed ===", finalSuccess, finalFailure);
 
-        // For OME_TIFF_VIA_ZARR, the stitcher wrote .ome.zarr; queue the
-        // background conversion that turns each ZARR into a sibling .ome.tif.
-        // Mirrors the main acquisition path (StitchingHelper queues this from
-        // its run() continuations).
-        if (outputFormat == StitchingConfig.OutputFormat.OME_TIFF_VIA_ZARR && !successfulOutputs.isEmpty()) {
-            StitchingHelper.queueBackgroundZarrToTiffConversion(
-                    new java.util.ArrayList<>(successfulOutputs), compression, "Recovery: " + sampleName);
+        // Queue the background ZARR->TIFF conversion for any output that is a
+        // .ome.zarr but whose requested final format is TIFF. Covers both an
+        // OME_TIFF_VIA_ZARR preference and an OME_TIFF stitch that the retry
+        // logic escalated to ZARR. Mirrors the main acquisition path.
+        if (outputFormat.finalFormatIsTiff()) {
+            var zarrOutputs = successfulOutputs.stream()
+                    .filter(p -> p.endsWith(".ome.zarr"))
+                    .collect(java.util.stream.Collectors.toList());
+            if (!zarrOutputs.isEmpty()) {
+                StitchingHelper.queueBackgroundZarrToTiffConversion(
+                        zarrOutputs, compression, "Recovery: " + sampleName);
+            }
         }
 
         Platform.runLater(() -> {
@@ -774,16 +679,14 @@ public class StitchingRecoveryWorkflow {
                         "Stitching Recovery Partial",
                         String.format(
                                 "%d angle(s) succeeded, %d failed.%n"
-                                        + "Failed angles produced OMEPyramidWriter tile-write errors "
-                                        + "and were NOT imported (check the log for details).",
+                                        + "Failed angles could not be stitched even after retries "
+                                        + "and the ZARR fallback (check the log for details).",
                                 finalSuccess, finalFailure));
             } else {
                 Dialogs.showErrorMessage(
                         "Stitching Recovery Failed",
-                        "No angles were successfully stitched. Check the log for "
-                                + "'Error writing Tile' entries from OMEPyramidWriter -- "
-                                + "the output .ome.tif files are incomplete and were not "
-                                + "imported into the project.");
+                        "No angles were successfully stitched, even after retries and the "
+                                + "ZARR fallback. Check the log for stitching errors.");
             }
         });
 
@@ -803,6 +706,34 @@ public class StitchingRecoveryWorkflow {
                                     + " failed",
                             NotificationPriority.HIGH,
                             NotificationEvent.STITCHING_ERROR);
+        }
+    }
+
+    /**
+     * Deletes an angle's partial stitch output ({@code .ome.tif},
+     * {@code .ome.zarr}, or the {@code .writing.ome.tif} temp) before a retry,
+     * so the retry's rename-over does not fail on a stale file.
+     */
+    private static void deleteStitchOutputs(File dir, String stem) {
+        for (String ext : new String[] {".ome.tif", ".ome.zarr", ".writing.ome.tif"}) {
+            File f = new File(dir, stem + ext);
+            if (!f.exists()) {
+                continue;
+            }
+            logger.info("Removing partial stitch output before retry: {}", f.getName());
+            try {
+                if (f.isDirectory()) {
+                    try (java.util.stream.Stream<java.nio.file.Path> walk = java.nio.file.Files.walk(f.toPath())) {
+                        walk.sorted(java.util.Comparator.reverseOrder())
+                                .map(java.nio.file.Path::toFile)
+                                .forEach(File::delete);
+                    }
+                } else {
+                    java.nio.file.Files.deleteIfExists(f.toPath());
+                }
+            } catch (Exception e) {
+                logger.warn("Could not delete {}: {}", f.getName(), e.getMessage());
+            }
         }
     }
 
