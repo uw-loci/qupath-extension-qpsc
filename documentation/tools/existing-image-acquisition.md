@@ -100,6 +100,18 @@ Select All / Deselect All buttons are available for convenience.
 
 ## Workflow
 
+### Startup Check: Source Microscope Mismatch
+
+When you start this workflow, QPSC checks whether the opened image's `source_microscope` metadata matches the active microscope. If they disagree, a dialog appears with three options:
+
+| Option | Behavior | When to Use |
+|--------|----------|------------|
+| **Fix source to `<active>`** | Update the image's `source_microscope` tag to the active microscope and treat it as a same-scope, native image (no flip). | The image was actually acquired on this microscope but carries an incorrect external-scanner tag from a previous operation — the most common case. The dialog highlights this when the image's `acquired_on_microscope` metadata matches the active scope. |
+| **Proceed (cross-scope)** | Keep the existing `source_microscope` tag and apply any saved cross-scope alignment (e.g., `Ocus40 -> PPM`). | The image truly was acquired on a different microscope and you want to use the saved cross-scope preset to transform its coordinates. |
+| **Cancel** | Abort the workflow. | You need to investigate or correct the metadata first. |
+
+**When the dialog does NOT appear:** If the image has no `source_microscope` tag, or if its tag already matches the active microscope, the workflow proceeds to Step 1 without prompting.
+
 ### Step 1: Sample Setup
 
 Enter a sample name and confirm the project location. If a project is already open, images will be added to it automatically.
@@ -161,6 +173,7 @@ Each annotation's acquisition is added to the project as it completes. Metadata 
 
 | Issue | Cause | Solution |
 |-------|-------|----------|
+| "Source microscope mismatch" dialog appears on startup | The image's `source_microscope` metadata differs from the active microscope | See the **Startup Check: Source Microscope Mismatch** section above. The most common fix: click **Fix source to `<active>`** to update the tag. |
 | "No annotations found" | No annotations on image | Draw annotations on the macro image before starting |
 | "Transform validation failed" | Alignment is off | Run refinement or create a new transform |
 | Scanner-preset combo is greyed out / unavailable | Image has no reachable macro (common for sub-images from prior QPSC acquisitions) | Use manual alignment, or if a slide-specific alignment was created during a prior acquisition, select "Use Existing Alignment" to access it directly without the scanner-preset combo. |

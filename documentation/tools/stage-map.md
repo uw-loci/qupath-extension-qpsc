@@ -31,7 +31,7 @@ The Stage Map displays several visual indicators:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | Insert Configuration | ComboBox | From config | Select the stage insert layout matching your hardware |
-| Preset | ComboBox | Last used | Select a saved scanner-to-stage transform preset. Determines how the macro overlay is positioned on the map. Filtered to show only presets matching the current microscope. Presets are created during [Microscope Alignment](microscope-alignment.md). |
+| Preset | ComboBox | Active microscope | Select a source microscope for coordinate transformation. The **active microscope** (the one currently connected) appears first and represents same-scope identity — no preset needed, no optical flip applied. Saved scanner-to-stage transform presets follow for genuine cross-scope work (e.g., `Ocus40 -> PPM`). Presets are created during [Microscope Alignment](microscope-alignment.md). |
 | Apply Flips | CheckBox | From config | Flip the Stage Map to match the Live Viewer orientation. Use when the map appears mirrored relative to the Live Viewer. |
 | Overlay Macro | CheckBox | Auto | Overlay the current macro image on the map display. Automatically enabled when a macro image and alignment transform are detected. Requires a Preset to be selected. Also updates when switching between images in the project. |
 
