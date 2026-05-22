@@ -1453,6 +1453,23 @@ and pick it (or `manual_only`) as the modality's default. The GUI dropdown for s
 2. Reduce acquisition region size
 3. Verify you're not trying to acquire off the slide
 
+#### "Target position is outside stage limits" -- every Stage Map move rejected
+
+**Meaning:** The bounds check rejects *every* position, not just out-of-range ones.
+
+**Cause:** `stage.limits` in the microscope YAML must use **MicroManager
+coordinates** -- the values MicroManager's `getXYPosition` / Z reports -- not
+the microscope's own stage readout. On some scopes (e.g. OWS3) MicroManager's
+frame is mirrored relative to the physical stage. If `x_um.low` is *greater*
+than `x_um.high` (or the same for `y`/`z`), older builds rejected all moves
+because the check was a literal `pos >= low && pos <= high`.
+
+**Solution:**
+1. Make sure `stage.limits` values are MicroManager coordinates.
+2. Prefer `low` = the most negative MM coordinate, `high` = the most positive.
+3. Builds from 2026-05-22 onward normalize `low`/`high` with min/max, so
+   either ordering works -- update the extension if you cannot reorder them.
+
 #### "Autofocus failed at position"
 
 **Meaning:** Couldn't find focus at one or more positions

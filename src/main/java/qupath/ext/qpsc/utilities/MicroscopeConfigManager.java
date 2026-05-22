@@ -1513,9 +1513,13 @@ public class MicroscopeConfigManager {
             return true; // Allow movement if not configured
         }
 
-        boolean valid = z >= zLow && z <= zHigh;
+        // low/high are numeric labels, not direction-relative -- tolerate a
+        // config that lists them in either order (see isWithinStageBounds(x, y)).
+        double zMin = Math.min(zLow, zHigh);
+        double zMax = Math.max(zLow, zHigh);
+        boolean valid = z >= zMin && z <= zMax;
         if (!valid) {
-            logger.warn("Z position {} outside stage bounds [{}, {}]", z, zLow, zHigh);
+            logger.warn("Z position {} outside stage bounds [{}, {}]", z, zMin, zMax);
         }
         return valid;
     }
@@ -1538,9 +1542,20 @@ public class MicroscopeConfigManager {
             return true; // Allow movement if not configured
         }
 
-        boolean valid = x >= xLow && x <= xHigh && y >= yLow && y <= yHigh;
+        // stage.limits low/high are numeric labels, not direction-relative
+        // bounds. On an inverted-axis scope a user may naturally list them in
+        // descending order (matching the stage's own readout); the limits are
+        // MicroManager coordinates and only the numeric span matters, so
+        // normalize with min/max instead of assuming low <= high. This keeps
+        // the bounds check consistent with the Stage Map's synthesized insert,
+        // which already tolerates either ordering.
+        double xMin = Math.min(xLow, xHigh);
+        double xMax = Math.max(xLow, xHigh);
+        double yMin = Math.min(yLow, yHigh);
+        double yMax = Math.max(yLow, yHigh);
+        boolean valid = x >= xMin && x <= xMax && y >= yMin && y <= yMax;
         if (!valid) {
-            logger.warn("Position ({}, {}) outside stage bounds: X[{}, {}], Y[{}, {}]", x, y, xLow, xHigh, yLow, yHigh);
+            logger.warn("Position ({}, {}) outside stage bounds: X[{}, {}], Y[{}, {}]", x, y, xMin, xMax, yMin, yMax);
         }
         return valid;
     }
