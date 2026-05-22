@@ -130,6 +130,29 @@ public final class ImageFlipHelper {
             return future;
         }
 
+        // Same-scope short-circuit. An image whose source IS the active microscope
+        // (identity transform, no pair preset) or that was acquired on the active
+        // microscope (pixels are already in this scope's frame) needs no flip.
+        // Belt-and-suspenders against stale source_microscope tags from before
+        // the active-microscope-as-source change.
+        String entrySource = openEntry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+        String entryAcquiredOn = openEntry.getMetadata().get(ImageMetadataManager.ACQUIRED_ON_MICROSCOPE);
+        MicroscopeConfigManager activeMgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        String activeScopeName = (activeMgr != null) ? activeMgr.getMicroscopeName() : null;
+        if (activeScopeName != null
+                && !activeScopeName.isBlank()
+                && (activeScopeName.equals(entrySource) || activeScopeName.equals(entryAcquiredOn))) {
+            logger.info(
+                    "validateAndFlipIfNeeded: entry '{}' is in active scope's frame "
+                            + "(source='{}', acquired_on='{}', active='{}') -- no flip",
+                    openEntry.getImageName(),
+                    entrySource,
+                    entryAcquiredOn,
+                    activeScopeName);
+            future.complete(true);
+            return future;
+        }
+
         // Resolve the flip we need.
         boolean flipX;
         boolean flipY;

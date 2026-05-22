@@ -874,16 +874,23 @@ public class StageMapWindow {
             File configDir = new File(configPath).getParentFile();
             AffineTransformManager transformManager = new AffineTransformManager(configDir.getAbsolutePath());
 
-            List<String> sources;
+            List<String> sources = new ArrayList<>();
             if (targetMicroscope != null && !"Unknown".equals(targetMicroscope)) {
-                sources = transformManager.getDistinctSourceScannersForMicroscope(targetMicroscope);
+                // The active microscope is itself a valid source: source==target means
+                // identity (no pair preset, no flip). This is the default case for
+                // images acquired on this scope. Prepend it so it's the natural
+                // first choice; pair-preset scanners follow for genuine cross-scope.
+                sources.add(targetMicroscope);
+                transformManager.getDistinctSourceScannersForMicroscope(targetMicroscope).stream()
+                        .filter(s -> !s.equals(targetMicroscope))
+                        .forEach(sources::add);
             } else {
-                sources = transformManager.getAllTransforms().stream()
+                transformManager.getAllTransforms().stream()
                         .map(AffineTransformManager.TransformPreset::getSourceScanner)
                         .filter(s -> s != null && !s.isEmpty())
                         .distinct()
                         .sorted()
-                        .toList();
+                        .forEach(sources::add);
             }
             logger.info(
                     "Source dropdown: {} scanner(s) available for target '{}': {}",
@@ -920,6 +927,7 @@ public class StageMapWindow {
      * Picks the source to show on dropdown init. Priority:
      * <ol>
      *   <li>{@code source_microscope} on the currently-open project entry</li>
+     *   <li>The active microscope (same-scope identity is the natural default)</li>
      *   <li>The persistent default ({@link PersistentPreferences#getSelectedScanner()})</li>
      *   <li>First entry in {@code sources}</li>
      * </ol>
@@ -939,6 +947,14 @@ public class StageMapWindow {
                 }
             }
         } catch (Exception ignored) {
+        }
+        // Prefer the active microscope over the persistent scanner pref. The
+        // pref only matters for genuine cross-scope work; auto-defaulting to
+        // it on a native image is what produced the Ocus40-on-OWS3-slide bug.
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        String activeScope = (mgr != null) ? mgr.getMicroscopeName() : null;
+        if (activeScope != null && sources.contains(activeScope)) {
+            return activeScope;
         }
         String fromPref = PersistentPreferences.getSelectedScanner();
         if (fromPref != null && sources.contains(fromPref)) {
@@ -1059,12 +1075,17 @@ public class StageMapWindow {
                 return;
             }
 
-            // No source on the entry -- apply the persistent default and stamp it.
-            String defaultSource = PersistentPreferences.getSelectedScanner();
-            if (defaultSource != null && !defaultSource.isEmpty() && sources.contains(defaultSource)) {
+            // No source on the entry -- default to the active microscope (same-scope
+            // identity). Genuine cross-scope must be set explicitly via the dropdown
+            // or the alignment workflow; auto-defaulting to a persistent external
+            // scanner pref is what produced the Ocus40-stamp-on-OWS3-slide bug.
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            String activeScope = (mgr != null) ? mgr.getMicroscopeName() : null;
+            if (activeScope != null && !activeScope.isEmpty() && sources.contains(activeScope)) {
                 logger.info(
-                        "onOpenedImageChanged: entry has no source_microscope; stamping default '{}'", defaultSource);
-                applySourceSelection(defaultSource, /* writeMetadata */ true);
+                        "onOpenedImageChanged: entry has no source_microscope; stamping active microscope '{}'",
+                        activeScope);
+                applySourceSelection(activeScope, /* writeMetadata */ true);
             }
         } catch (Exception e) {
             logger.debug("onOpenedImageChanged: {}", e.getMessage());

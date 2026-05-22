@@ -86,6 +86,14 @@ public class ExistingImageWorkflowV2 {
                 return;
             }
 
+            // Step 1a: If the open entry's source_microscope disagrees with the
+            // active microscope, surface that before any further setup runs.
+            // The user can fix the tag in-place (treat as native) or proceed
+            // explicitly with cross-scope alignment.
+            if (!checkAndHandleSourceMismatch()) {
+                return;
+            }
+
             // Step 1.5: Preserve annotations if this is a standalone image (no project)
             // This handles the case where user drags image into QuPath, draws annotations,
             // then starts the workflow. Without preservation, annotations would be lost
@@ -332,6 +340,88 @@ public class ExistingImageWorkflowV2 {
                         throw new RuntimeException("Unexpected annotation action: " + action);
                 }
             });
+        }
+
+        /**
+         * Warns when the open entry's {@code source_microscope} disagrees with the
+         * active microscope. Lets the user fix the tag in place (the common case:
+         * the slide is actually native to the active scope but inherited a wrong
+         * scanner tag from a default-fill) or explicitly proceed with cross-scope
+         * alignment.
+         *
+         * <p>Returns {@code true} to proceed, {@code false} when the user cancels.
+         * Must be called on the JavaFX thread; the dialog uses {@code showAndWait()}.
+         */
+        private boolean checkAndHandleSourceMismatch() {
+            if (gui.getProject() == null || gui.getImageData() == null) return true;
+            @SuppressWarnings("unchecked")
+            Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+            ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+            if (entry == null) return true;
+            String source = entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+            if (source == null || source.isBlank()) {
+                // Missing source is handled by the downstream hard-cancel gate in
+                // ImageFlipHelper for flip-needing scopes; nothing to warn about here.
+                return true;
+            }
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            String active = (mgr != null) ? mgr.getMicroscopeName() : null;
+            if (active == null || active.isBlank() || source.equals(active)) return true;
+
+            String acquiredOn = entry.getMetadata().get(ImageMetadataManager.ACQUIRED_ON_MICROSCOPE);
+            boolean inconsistentTag = active.equals(acquiredOn);
+
+            javafx.scene.control.Alert alert =
+                    new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+            alert.setTitle("Source microscope mismatch");
+            alert.setHeaderText(
+                    String.format("Image is tagged source='%s', but acquisition is on '%s'.", source, active));
+            StringBuilder body = new StringBuilder();
+            if (inconsistentTag) {
+                body.append("acquired_on_microscope='")
+                        .append(acquiredOn)
+                        .append(
+                                "' -- the image was acquired on this scope, so the source tag is inconsistent and should be corrected.\n\n");
+            }
+            body.append("Fix source to '")
+                    .append(active)
+                    .append("' -- treat as native (same-scope identity, no flip).\n\n");
+            body.append("Proceed (cross-scope) -- keep source='")
+                    .append(source)
+                    .append("' and use the saved alignment for that scanner.\n\n");
+            body.append("Cancel -- abort the workflow.");
+            alert.setContentText(body.toString());
+            javafx.scene.control.ButtonType fix = new javafx.scene.control.ButtonType("Fix source to " + active);
+            javafx.scene.control.ButtonType proceed = new javafx.scene.control.ButtonType("Proceed (cross-scope)");
+            javafx.scene.control.ButtonType cancel = new javafx.scene.control.ButtonType(
+                    "Cancel", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+            alert.getButtonTypes().setAll(fix, proceed, cancel);
+            Optional<javafx.scene.control.ButtonType> result = alert.showAndWait();
+            if (result.isEmpty() || result.get() == cancel) {
+                logger.info(
+                        "Source mismatch dialog: user cancelled (source='{}' active='{}' acquired_on='{}')",
+                        source,
+                        active,
+                        acquiredOn);
+                return false;
+            }
+            if (result.get() == fix) {
+                entry.getMetadata().put(ImageMetadataManager.SOURCE_MICROSCOPE, active);
+                try {
+                    project.syncChanges();
+                    logger.info(
+                            "Source mismatch dialog: stamped source_microscope='{}' on '{}' (was '{}')",
+                            active,
+                            entry.getImageName(),
+                            source);
+                } catch (Exception e) {
+                    logger.warn("Source mismatch dialog: failed to sync project after fix: {}", e.getMessage());
+                }
+            } else {
+                logger.info(
+                        "Source mismatch dialog: proceeding with cross-scope source='{}' active='{}'", source, active);
+            }
+            return true;
         }
 
         /**
