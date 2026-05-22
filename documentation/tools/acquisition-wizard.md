@@ -46,7 +46,7 @@ Four prerequisite steps, each with a status indicator, description, and action b
 |------|-----------|---------------|-------------|
 | Server Connection | Green/Red | Connect | Connects to the microscope control server. Required before any acquisition. |
 | White Balance | Green/Orange/Red/Gray | Calibrate... | Launches the white balance calibration workflow. Status depends on whether calibration data exists for the selected hardware. For non-JAI cameras, shows "Not Applicable" (configure through MicroManager instead). |
-| Background Correction | Green/Orange/Red | Collect... | Launches the background/flat-field image collection workflow. Checks whether background images exist for the current modality/objective/detector combination. |
+| Background Correction | Green/Orange/Red | Collect... | Launches the background/flat-field image collection workflow. Checks whether background images exist for the current modality/objective/detector combination. Orange indicates that backgrounds exist but the lamp intensity used during collection no longer matches the active acquisition profile (non-blocking; see [Troubleshooting](../TROUBLESHOOTING.md) for details). For fluorescence profiles, also checks that all in-use channels have backgrounds. |
 | Microscope Alignment | Green/Orange/Red | Align... | Launches the microscope alignment workflow. Checks for an existing alignment transform and reports its confidence level (high, aging, or stale). Required for the Existing Image workflow. |
 
 **Status dot colors:**
