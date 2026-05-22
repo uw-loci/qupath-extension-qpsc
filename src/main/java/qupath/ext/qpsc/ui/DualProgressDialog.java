@@ -17,6 +17,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.Modality;
@@ -179,7 +180,7 @@ public class DualProgressDialog {
         stage.initModality(Modality.NONE);
         stage.setTitle("Acquisition Workflow Progress");
         stage.setAlwaysOnTop(true);
-        stage.setResizable(false);
+        stage.setResizable(true);
 
         // Total progress components
         totalProgressBar = new ProgressBar(0);
@@ -600,6 +601,36 @@ public class DualProgressDialog {
 
         // Calculate and display time estimates
         updateTimeEstimate(now, completed);
+
+        // The dialog grows over the run as the dimension panel, completion
+        // clock, stitching list, and drift notice become visible. The Scene
+        // auto-sized at show() time, when most of those were hidden, so the
+        // window would clip its own Cancel button. Grow (never shrink) to
+        // fit, which also respects a user who has enlarged it manually.
+        growStageToFitContent();
+    }
+
+    /**
+     * Enlarges the stage if its current height no longer fits the laid-out
+     * content. Grow-only: never shrinks, so a manual resize larger is kept.
+     */
+    private void growStageToFitContent() {
+        if (!stage.isShowing()) {
+            return;
+        }
+        Scene scene = stage.getScene();
+        if (scene == null || !(scene.getRoot() instanceof Region root)) {
+            return;
+        }
+        double sceneHeight = scene.getHeight();
+        if (sceneHeight <= 0) {
+            return;
+        }
+        double decoration = stage.getHeight() - sceneHeight;
+        double needed = root.prefHeight(scene.getWidth()) + decoration;
+        if (needed > stage.getHeight() + 1.0) {
+            stage.setHeight(needed);
+        }
     }
 
     /**
