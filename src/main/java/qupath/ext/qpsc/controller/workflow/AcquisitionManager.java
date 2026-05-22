@@ -1253,6 +1253,46 @@ public class AcquisitionManager {
                                         NotificationPriority.HIGH,
                                         NotificationEvent.ACQUISITION_WARNING);
                     },
+                    // Saturation continue/cancel callback. The server has
+                    // paused its acquisition thread on a saturation abort;
+                    // this MUST block until the user decides and the choice
+                    // has been sent back via acknowledgeSaturation().
+                    saturationMessage -> {
+                        logger.warn("Saturation limit hit during acquisition: {}", saturationMessage);
+                        NotificationService.getInstance()
+                                .notify(
+                                        "Saturation limit exceeded",
+                                        "Initial tiles are saturated -- acquisition paused, waiting for your decision.",
+                                        NotificationPriority.HIGH,
+                                        NotificationEvent.ACQUISITION_WARNING);
+                        if (progressDialog != null) {
+                            progressDialog.pauseTimingForManualFocus();
+                        }
+                        try {
+                            java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+                            final String[] userChoice = {"cancel"};
+                            Platform.runLater(() -> {
+                                try {
+                                    userChoice[0] = showSaturationDecisionDialog(saturationMessage);
+                                } finally {
+                                    latch.countDown();
+                                }
+                            });
+                            latch.await();
+                            socketClient.acknowledgeSaturation(userChoice[0]);
+                            logger.info("User chose '{}' for saturation prompt", userChoice[0]);
+                        } catch (Exception e) {
+                            logger.error("Error handling saturation dialog", e);
+                            try {
+                                socketClient.acknowledgeSaturation("cancel");
+                            } catch (IOException ex) {
+                                logger.error("Failed to send cancel for saturation prompt", ex);
+                            }
+                        }
+                        if (progressDialog != null) {
+                            progressDialog.resumeTimingAfterManualFocus();
+                        }
+                    },
                     500, // Poll every 500ms for responsive UI
                     ACQUISITION_TIMEOUT_MS);
 
@@ -1503,6 +1543,73 @@ public class AcquisitionManager {
         if (result.isPresent()) {
             if (result.get() == retryButton) return "retry";
             if (result.get() == skipButton) return "skip";
+        }
+        return "cancel";
+    }
+
+    /**
+     * Shows the saturation continue/cancel decision dialog. Called on the FX
+     * Application Thread. The server has paused its acquisition thread and
+     * stays paused until this returns and the choice is acknowledged.
+     *
+     * @param saturationMessage The saturation-abort reason from the server
+     * @return User's choice: "continue" (acquire anyway) or "cancel"
+     */
+    private static String showSaturationDecisionDialog(String saturationMessage) {
+        try {
+            java.awt.Toolkit.getDefaultToolkit().beep();
+        } catch (Exception e) {
+            // Ignore
+        }
+
+        javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+        alert.setTitle("Saturation Limit Exceeded");
+        alert.setHeaderText("The initial tiles are saturated.\n"
+                + "Acquisition is paused. Continuing will produce data that cannot\n"
+                + "be background-corrected on the saturated angles.");
+
+        // Scrollable saturation details
+        javafx.scene.control.TextArea textArea = new javafx.scene.control.TextArea(saturationMessage);
+        textArea.setEditable(false);
+        textArea.setWrapText(true);
+        textArea.setMaxWidth(Double.MAX_VALUE);
+        textArea.setMaxHeight(200);
+        textArea.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
+
+        javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(8);
+        content.getChildren()
+                .addAll(
+                        new javafx.scene.control.Label("Saturation details:"),
+                        textArea,
+                        new javafx.scene.control.Label("Recommended: cancel, lower the White Balance Target Intensity, "
+                                + "recalibrate, then re-acquire."));
+        alert.getDialogPane().setContent(content);
+        alert.getDialogPane().setMinWidth(550);
+
+        // Custom buttons
+        javafx.scene.control.ButtonType continueButton =
+                new javafx.scene.control.ButtonType("Continue anyway", javafx.scene.control.ButtonBar.ButtonData.YES);
+        javafx.scene.control.ButtonType cancelButton = new javafx.scene.control.ButtonType(
+                "Cancel acquisition", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+        alert.getButtonTypes().setAll(continueButton, cancelButton);
+
+        // The override is the risky choice: paint it red, and make Cancel the
+        // default so an accidental Enter does not push past the saturation guard.
+        javafx.scene.control.Button continueNode =
+                (javafx.scene.control.Button) alert.getDialogPane().lookupButton(continueButton);
+        if (continueNode != null) {
+            continueNode.setStyle("-fx-base: #c0392b; -fx-text-fill: white; -fx-font-weight: bold;");
+            continueNode.setDefaultButton(false);
+        }
+        javafx.scene.control.Button cancelNode =
+                (javafx.scene.control.Button) alert.getDialogPane().lookupButton(cancelButton);
+        if (cancelNode != null) {
+            cancelNode.setDefaultButton(true);
+        }
+
+        java.util.Optional<javafx.scene.control.ButtonType> result = alert.showAndWait();
+        if (result.isPresent() && result.get() == continueButton) {
+            return "continue";
         }
         return "cancel";
     }

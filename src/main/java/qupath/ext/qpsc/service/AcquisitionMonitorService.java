@@ -52,6 +52,7 @@ public final class AcquisitionMonitorService {
                 config.manualFocusCallback,
                 buildHardwareErrorCallback(socketClient, config),
                 config.timeLapseWarningCallback,
+                config.saturationCallback,
                 config.pollIntervalMs,
                 config.timeoutMs);
 
@@ -176,6 +177,7 @@ public final class AcquisitionMonitorService {
         Consumer<Integer> manualFocusCallback;
         Consumer<String> hardwareErrorCallback;
         Consumer<String> timeLapseWarningCallback;
+        Consumer<String> saturationCallback;
         TimingCallback timingCallback;
         String tileDirPath;
         long pollIntervalMs = 500;
@@ -211,6 +213,17 @@ public final class AcquisitionMonitorService {
         /** Callback for time-lapse falling-behind warnings (receives the warning text). */
         public MonitorConfig timeLapseWarning(Consumer<String> cb) {
             this.timeLapseWarningCallback = cb;
+            return this;
+        }
+
+        /**
+         * Callback for saturation continue/cancel prompts (receives the
+         * saturation-abort reason). Must block until the user has decided.
+         * When left unset, the server's saturation guard hard-aborts the
+         * acquisition as it did before the interactive prompt existed.
+         */
+        public MonitorConfig saturation(Consumer<String> cb) {
+            this.saturationCallback = cb;
             return this;
         }
 

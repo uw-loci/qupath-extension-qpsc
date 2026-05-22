@@ -118,10 +118,14 @@ While an acquisition runs, the client polls these best-effort channels on the pr
 | REQMANF | `reqmanf_` | none | 8-byte status: `IDLE____`, or a manual-focus request |
 | REQHWER | `reqhwer_` | none | 8-byte status: `IDLE____` / `HWERR___` + 4-byte big-endian length + UTF-8 body |
 | REQTWARN | `reqtwarn` | none | 8-byte status: `IDLE____` / `TWARN___` + 4-byte big-endian length + UTF-8 body |
+| REQSAT | `reqsat__` | none | 8-byte status: `IDLE____` / `SATWARN_` + 4-byte big-endian length + UTF-8 body |
+| ACKSAT | `acksat__` | 8-byte choice (`continue` / `cancel`, underscore-padded) | 3-byte `ACK` |
 
 **REQHWER** -- polled to detect a hardware error the server is waiting on. When the status starts with `HWERR`, the 4-byte length + UTF-8 message follow; the client shows a retry/skip/cancel dialog and replies with `ACKHWER`.
 
 **REQTWARN** -- polled to detect a time-lapse "falling behind" warning. When the status starts with `TWARN`, a 4-byte big-endian unsigned length and a UTF-8 message body follow. The server raises this once the first timepoint overruns the requested interval and **keeps returning the same warning on every poll until acquisition ends** -- the client de-dupes with a one-shot latch and surfaces it exactly once (a modal dialog plus a push notification). There is no acknowledgement command; the warning is informational and the acquisition continues.
+
+**REQSAT / ACKSAT** -- polled to detect a saturation continue/cancel decision the server is blocked on. When the birefringence saturation guard trips on the initial monitoring tiles, the server pauses its acquisition thread and returns `SATWARN_` + 4-byte length + UTF-8 reason on every `REQSAT` poll until answered. The client shows a modal with a red **Continue anyway** button and a **Cancel acquisition** button, then replies with `ACKSAT` (`continue` resumes the scan with the saturation guard suppressed for the rest of the run; `cancel` aborts as a `FAILED` acquisition). If the client has no saturation handler wired (or is an older build that never polls `REQSAT`), it answers `cancel` so the server's paused thread never blocks indefinitely -- the pre-feature hard-abort behavior. The server-side wait also short-circuits to `cancel` if a `CANCEL` arrives while the prompt is open. The `FAILED:` status payload cap is 500 bytes (within the client's 512-byte read window) so the full saturation reason survives.
 
 ### Acquisition Message Format
 

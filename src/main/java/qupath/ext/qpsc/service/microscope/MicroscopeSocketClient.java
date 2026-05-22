@@ -227,6 +227,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         ACKHWER("ackhwer_"),
         /** Check if a time-lapse falling-behind warning is pending */
         REQTWARN("reqtwarn"),
+        /** Check if a saturation continue/cancel decision is pending */
+        REQSAT("reqsat__"),
+        /** Acknowledge saturation prompt - user chose continue/cancel */
+        ACKSAT("acksat__"),
         /** Run autofocus parameter benchmark */
         AFBENCH("afbench_"),
         /** PPM birefringence maximization test */
@@ -4479,6 +4483,92 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
     }
 
+    // Tracks whether the server supports the REQSAT command. Same auto-disable
+    // contract as hwErrorCheckSupported -- an old server ignores the unknown
+    // 8-byte command, the first read times out, and the check disables itself
+    // permanently without disturbing the connection. The server then falls
+    // back to a hard abort on saturation, matching pre-feature behavior.
+    private volatile boolean saturationCheckSupported = true;
+
+    /**
+     * Checks if the server has a pending saturation continue/cancel decision.
+     * <p>
+     * This is a best-effort, non-critical check modeled on
+     * {@link #checkHardwareError()}. The server keeps returning the same
+     * prompt on every poll until the user answers -- callers must de-dupe and
+     * show the dialog once. If the server does not support the REQSAT command
+     * (older versions), the first timeout auto-disables future checks. Does
+     * NOT call handleIOException on failure -- the connection stays intact.
+     *
+     * @return the saturation message if a decision is pending, or null if none or unsupported
+     */
+    public String checkSaturationDecision() {
+        if (!saturationCheckSupported) {
+            return null;
+        }
+
+        try {
+            synchronized (socketLock) {
+                ensureConnected();
+
+                output.write(Command.REQSAT.getValue());
+                output.flush();
+                lastActivityTime.set(System.currentTimeMillis());
+
+                // Read 8-byte status
+                byte[] statusBytes = new byte[8];
+                input.readFully(statusBytes);
+                String status = new String(statusBytes, StandardCharsets.UTF_8).trim();
+
+                if ("IDLE____".equals(status)) {
+                    return null;
+                } else if (status.startsWith("SATWARN")) {
+                    // Read 4-byte message length (big-endian), then message body
+                    byte[] lenBytes = new byte[4];
+                    input.readFully(lenBytes);
+                    int msgLen = ((lenBytes[0] & 0xFF) << 24)
+                            | ((lenBytes[1] & 0xFF) << 16)
+                            | ((lenBytes[2] & 0xFF) << 8)
+                            | (lenBytes[3] & 0xFF);
+                    byte[] msgBytes = new byte[msgLen];
+                    input.readFully(msgBytes);
+                    lastActivityTime.set(System.currentTimeMillis());
+                    return new String(msgBytes, StandardCharsets.UTF_8);
+                } else {
+                    logger.warn("Unknown saturation status: {}", status);
+                    return null;
+                }
+            }
+        } catch (Exception e) {
+            // Server doesn't support REQSAT -- permanently disable.
+            // Do NOT call handleIOException: that tears down the connection
+            // and disrupts ongoing acquisition monitoring.
+            saturationCheckSupported = false;
+            logger.debug("Saturation decision check disabled (server does not support REQSAT)");
+            return null;
+        }
+    }
+
+    /**
+     * Sends the user's saturation decision back to the server.
+     *
+     * @param choice "continue" (acquire anyway) or "cancel"
+     * @return true if acknowledgment was successful
+     * @throws IOException if communication fails
+     */
+    public boolean acknowledgeSaturation(String choice) throws IOException {
+        // Pad choice to 8 bytes (server strips padding)
+        String padded = String.format("%-8s", choice).substring(0, 8);
+        byte[] response = executeCommand(Command.ACKSAT, padded.getBytes(StandardCharsets.UTF_8), 3);
+        String ack = new String(response, StandardCharsets.UTF_8).trim();
+        boolean acknowledged = "ACK".equals(ack);
+        logger.info("Saturation prompt {}: user chose '{}'", acknowledged ? "acknowledged" : "failed", choice);
+        if (acknowledged) {
+            resetProgressTimeout();
+        }
+        return acknowledged;
+    }
+
     /**
      * Sends the user's choice for hardware error recovery back to the server.
      *
@@ -4545,7 +4635,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             long pollIntervalMs,
             long timeoutMs)
             throws IOException, InterruptedException {
-        return monitorAcquisition(progressCallback, manualFocusCallback, null, null, pollIntervalMs, timeoutMs);
+        return monitorAcquisition(progressCallback, manualFocusCallback, null, null, null, pollIntervalMs, timeoutMs);
     }
 
     /**
@@ -4555,6 +4645,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param manualFocusCallback Callback for manual focus requests (can be null)
      * @param hardwareErrorCallback Callback for hardware errors, receives error message (can be null)
      * @param timeLapseWarningCallback Callback for time-lapse falling-behind warnings (can be null)
+     * @param saturationCallback Callback for saturation continue/cancel prompts (can be null);
+     *        must block until the user has decided
      * @param pollIntervalMs Interval between progress checks in milliseconds
      * @param timeoutMs Maximum time to wait in milliseconds (0 for no timeout)
      * @return Final acquisition state
@@ -4566,6 +4658,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             Consumer<Integer> manualFocusCallback,
             Consumer<String> hardwareErrorCallback,
             Consumer<String> timeLapseWarningCallback,
+            Consumer<String> saturationCallback,
             long pollIntervalMs,
             long timeoutMs)
             throws IOException, InterruptedException {
@@ -4648,6 +4741,36 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     String timeLapseWarning = checkTimeLapseWarning();
                     if (timeLapseWarning != null && timeLapseWarningCallback != null) {
                         timeLapseWarningCallback.accept(timeLapseWarning);
+                    }
+                }
+
+                // Check for a pending saturation continue/cancel decision
+                // (non-critical, auto-disables if the server doesn't support
+                // REQSAT). The server blocks its acquisition thread until the
+                // answer arrives; the callback must block here too -- show the
+                // dialog and only return once acknowledgeSaturation() has been
+                // sent. The monitor loop is single-threaded, so no re-poll
+                // happens while the dialog is open.
+                if (currentState != AcquisitionState.CANCELLING) {
+                    String saturationMsg = checkSaturationDecision();
+                    if (saturationMsg != null) {
+                        lastProgressUpdateTime.set(System.currentTimeMillis());
+                        if (saturationCallback != null) {
+                            saturationCallback.accept(saturationMsg);
+                            lastProgressUpdateTime.set(System.currentTimeMillis());
+                        } else {
+                            // No handler wired -- preserve the pre-feature hard
+                            // abort by answering cancel, so the server's paused
+                            // acquisition thread does not block forever.
+                            logger.warn(
+                                    "Saturation decision requested but no handler -- sending cancel: {}",
+                                    saturationMsg);
+                            try {
+                                acknowledgeSaturation("cancel");
+                            } catch (IOException e) {
+                                logger.error("Failed to send cancel for unhandled saturation prompt", e);
+                            }
+                        }
                     }
                 }
 
