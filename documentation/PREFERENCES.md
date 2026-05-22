@@ -575,6 +575,8 @@ Output format for stitched images.
 
 **Note:** OME-ZARR is an emerging standard that offers significant performance benefits. OME_TIFF_VIA_ZARR combines ZARR's write speed with TIFF's compatibility by automatically converting completed ZARR datasets to OME-TIFF in the background.
 
+**Automatic retry and escalation:** When OME_TIFF is selected, the system automatically retries failed stitches (up to 3 times). If all retries fail, it automatically escalates to OME_TIFF_VIA_ZARR to avoid the problematic OME-TIFF pyramid writer code path. No user action is required; you are notified when tile-write errors are first detected, and (during normal acquisition stitching) offered the choice to switch to ZARR immediately.
+
 ---
 
 ## Filename Configuration
