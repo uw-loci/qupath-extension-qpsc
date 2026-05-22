@@ -86,6 +86,14 @@ public class LiveViewerWindow {
     private Button sweepFocusButton;
     private Button streamingFocusButton;
     private StreamingFocusController streamingFocusController;
+
+    /** Tooltip shown on the Autofocus button when it is idle (not mid-scan). */
+    private static final String STREAMING_AF_TOOLTIP = "Primary autofocus.\n"
+            + "Uses streaming continuous-Z scan when available.\n"
+            + "If unavailable (long exposure, no speed property, saturated),\n"
+            + "Sweep Focus fallback button appears.\n"
+            + "Click again while scanning to cancel.";
+
     private ComboBox<String> focusRangeCombo;
     private HistogramView histogramView;
     private TitledPane histogramPane;
@@ -785,10 +793,7 @@ public class LiveViewerWindow {
         sweepFocusButton.setOnAction(e -> handleSweepFocus());
 
         streamingFocusButton = new Button("Autofocus");
-        streamingFocusButton.setTooltip(new Tooltip("Primary autofocus.\n"
-                + "Uses streaming continuous-Z scan when available.\n"
-                + "If unavailable (long exposure, no speed property, saturated),\n"
-                + "Sweep Focus fallback button appears."));
+        streamingFocusButton.setTooltip(new Tooltip(STREAMING_AF_TOOLTIP));
         streamingFocusButton.setDisable(true);
         streamingFocusButton.setOnAction(e -> handleStreamingFocus());
 
@@ -1214,8 +1219,13 @@ public class LiveViewerWindow {
 
     private void handleStreamingFocus() {
         if (streamingFocusController != null && streamingFocusController.isRunning()) {
-            // Streaming AF scans are short (<2s); we do not currently support cancel.
-            // Ignore double-clicks while running.
+            // Second click while a scan is running = cancel. The server
+            // stops the scan, restores Z to the pre-scan position, and the
+            // STRMAFZ call returns CANCELLED (handled in the callback below).
+            streamingFocusController.cancel();
+            streamingFocusButton.setText("Cancelling...");
+            streamingFocusButton.setDisable(true);
+            updateStatus("Autofocus: cancelling...");
             return;
         }
 
@@ -1385,9 +1395,14 @@ public class LiveViewerWindow {
             }
         }
 
-        streamingFocusButton.setText("Scanning...");
+        // The Autofocus button stays ENABLED during the scan and becomes a
+        // Cancel button -- a second click routes to the cancel branch at the
+        // top of handleStreamingFocus(). Sweep / range / live stay disabled.
+        streamingFocusButton.setText("Cancel Autofocus");
         streamingFocusButton.setStyle("");
-        streamingFocusButton.setDisable(true);
+        streamingFocusButton.setTooltip(new Tooltip("Click to cancel the running autofocus scan.\n"
+                + "Z is restored to the position autofocus started from."));
+        streamingFocusButton.setDisable(false);
 
         sweepFocusButton.setDisable(true);
         focusRangeCombo.setDisable(true);
@@ -1504,9 +1519,21 @@ public class LiveViewerWindow {
 
                         sweepFocusButton.setVisible(true);
                         sweepFocusButton.setManaged(true);
+                    } else if (outcome == RefineFocusController.Outcome.CANCELLED) {
+                        // User cancelled. The server already restored Z to the
+                        // pre-scan position; just reset the button, no error
+                        // styling, no Sweep Focus fallback prompt.
+                        streamingFocusButton.setText("Autofocus");
+                        streamingFocusButton.setStyle("");
+                        streamingFocusButton.setTooltip(new Tooltip(STREAMING_AF_TOOLTIP));
+                        streamingFocusButton.setDisable(!liveActive);
+
+                        sweepFocusButton.setVisible(false);
+                        sweepFocusButton.setManaged(false);
                     } else {
                         streamingFocusButton.setText("Autofocus");
                         streamingFocusButton.setStyle("");
+                        streamingFocusButton.setTooltip(new Tooltip(STREAMING_AF_TOOLTIP));
                         streamingFocusButton.setDisable(!liveActive);
 
                         sweepFocusButton.setVisible(false);

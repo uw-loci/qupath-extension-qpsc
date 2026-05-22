@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Live Viewer**
 - **Snap button**: Capture and save the current live frame as an OME-TIFF with embedded metadata (stage position, pixel size, modality, objective, detector). Right-click context menu for options: save raw bit depth (default ON), apply background correction (default OFF, greyed out unless settings match), open file after save (default OFF), and reset save folder to project.
+- **Window title** now shows the current modality and expected objective magnification, e.g. `Live Viewer (Brightfield) (10x)`. Updates live when the Camera-tab modality dropdown changes or the objective is re-detected; degrades to `Live Viewer` when either value is unknown.
+- **Cancellable autofocus**: while a streaming autofocus scan is running, the **Autofocus** button becomes a **Cancel Autofocus** button. Clicking it aborts the scan -- the server stops between frames, restores the camera ROI and stage speed, and returns Z to the position autofocus started from. New `ABORTAF` socket command (sent on the auxiliary socket since the primary is blocked inside the STRMAFZ scan); the scan replies `ABORTED` and the button resets without error styling. Best-effort against older servers: a 3 s ACK timeout degrades the cancel to a silent no-op rather than freezing frame polling.
 
 **Socket protocol**
 - `CORRECTFRAME` command: Request a flat-field-corrected frame from the server using the configured background settings for the current modality, objective, detector, WB mode, and rotation angle. Same wire format as `GETFRAME` on success; returns `FAILED:<reason>` on configuration mismatches.

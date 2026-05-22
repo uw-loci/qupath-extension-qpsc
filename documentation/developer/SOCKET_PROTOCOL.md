@@ -261,7 +261,8 @@ The Live Viewer's right-click "Apply background correction" menu item routes thr
 | WBSIMPLE | `wbsimple` | params + ENDOFSTR | WB result |
 | WBPPM | `wbppm___` | params + ENDOFSTR | WB result |
 | PROBEZ | `probez__` | none | `PROBEZOK` or `PROBEZFL` (logs to server_session) |
-| STRMAFZ | `strmafz_` | `--yaml <path> [--objective <id>] [--range <um>] ENDOFSTR` | `SUCCESS:<i>:<f>:<shift>:<n>:<span>` / `UNAVAILABLE:<reason>` / `FAILED:<reason>` |
+| STRMAFZ | `strmafz_` | `--yaml <path> [--objective <id>] [--range <um>] ENDOFSTR` | `SUCCESS:<i>:<f>:<shift>:<n>:<span>` / `UNAVAILABLE:<reason>` / `ABORTED:<reason>` / `FAILED:<reason>` |
+| ABORTAF | `abortaf_` | none | `ACK` |
 
 #### PROBEZ
 
@@ -359,8 +360,34 @@ Response formats:
   (better than initial_z even without a peak). Caller should
   fall back to stepped Sweep Focus. This is informational,
   not an error. Dump path included if dump folder was created.
+- `ABORTED:<reason>[:dump=<path>]` -- the client cancelled the scan
+  via `ABORTAF` (see below). The stage is returned to the pre-scan
+  `initial_z`. No new focus committed; not an error.
 - `FAILED:<reason>` -- mid-scan error; stage state has been
   restored but no new focus was committed
+
+#### ABORTAF
+
+Cancel an in-progress `STRMAFZ` scan. No payload. Response: `ACK`
+(3 bytes).
+
+Because `STRMAFZ` blocks the **primary** socket for the entire scan,
+the QuPath client sends `ABORTAF` on its **auxiliary** socket. The
+server keys a per-client-IP abort `threading.Event` -- both the
+primary and auxiliary connections share the client IP, so the abort
+set from the auxiliary connection is observed by the `STRMAFZ`
+handler running on the primary connection.
+
+`handle_streaming_focus` polls that Event between scan attempts and,
+inside `_run_streaming_scan`, between captured frames (~2 ms cadence).
+On abort it stops the scan, restores the camera ROI and stage speed,
+returns Z to the pre-scan position, and replies `ABORTED:user-cancelled`
+on the primary socket.
+
+`ABORTAF` is best-effort: `ACK` only means the request was recorded,
+not that a scan was running. An older server without the handler
+discards the unknown command and sends no reply; the client uses a
+short read timeout on the `ACK` so this degrades to a silent no-op.
 
 The optional `:dump=<path>` suffix is appended to any response when `--dump` was enabled. Clients extract it by searching for the `:dump=` marker and parsing the path up to the next whitespace or end of string. The path is an absolute directory containing:
 - `attempt_N/` subdirectories (one per focus-search attempt)

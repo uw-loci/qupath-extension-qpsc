@@ -55,7 +55,7 @@ The toolbar contains two focus buttons and a range selector:
 
 | Control | Default Visibility | Description |
 |---|---|---|
-| **Autofocus** | Always visible | Primary focus button. Sends a streaming autofocus command to the server (~1 second on PPM at 0.73 ms exposure). |
+| **Autofocus** | Always visible | Primary focus button. Sends a streaming autofocus command to the server (~1 second on PPM at 0.73 ms exposure). While a scan is running the button reads **Cancel Autofocus** -- click it to abort the scan; Z is returned to the position autofocus started from. |
 | **Sweep Focus** | Hidden | Fallback. Stepped-Z autofocus with edge retry (up to 3 total attempts). Works on any camera and any stage. Includes automatic refinement as a final phase. |
 | **Range dropdown** | Always visible | Options are dynamically populated per objective based on magnification: 4x/5x up to 200µm, 10x up to 100µm, 20x up to 50µm, 40x up to 20µm, 60x+ up to 10µm. "Auto" uses `sweep_range_um` from `autofocus_<scope>.yml`. Explicit values override the YAML. Both Autofocus and Sweep Focus use this selection. Higher magnifications have shallower depth-of-field, so wider search ranges waste time and may misfocus on debris. |
 
@@ -66,7 +66,9 @@ The Autofocus button changes appearance to communicate status:
 | Button State | Appearance | What happened | Sweep Focus |
 |---|---|---|---|
 | Ready | Default styling, label "Autofocus" | Normal idle state | Hidden |
-| Running | Label "Scanning...", disabled | Server is executing streaming autofocus | Hidden, disabled |
+| Running | Label "Cancel Autofocus", enabled | Server is executing streaming autofocus; click to cancel | Hidden, disabled |
+| Cancelling | Label "Cancelling...", disabled | Cancel requested; waiting for the server to stop the scan | Hidden, disabled |
+| Cancelled | Returns to "Autofocus" | Scan cancelled by the user; Z restored to the pre-scan position | Hidden |
 | Success | Returns to "Autofocus" | Focus found and committed | Hidden |
 | Exposure too long | **Red** background | Client-side pre-check: exposure > ~40 ms | **Visible** |
 | Too many saturated pixels | Returns to "Autofocus", info dialog appears | Camera overexposed; saturation gate refused | **Visible** + info dialog |

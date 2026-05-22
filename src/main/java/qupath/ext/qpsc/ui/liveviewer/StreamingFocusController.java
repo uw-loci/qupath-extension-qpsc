@@ -33,9 +33,12 @@ import qupath.ext.qpsc.utilities.AfFailureHint;
  * {@link SweepFocusController} and {@link RefineFocusController}, so the
  * Live Viewer can track state with the same plumbing.
  *
- * <p><b>Cancellation:</b> not currently supported. The server-side scan is
- * short (~1 second on PPM) and best-effort cancellation would mean sending
- * a separate command mid-scan which the server does not currently handle.
+ * <p><b>Cancellation:</b> supported via {@link #cancel()}, which sends the
+ * ABORTAF command on the client's auxiliary socket (the primary socket is
+ * blocked inside the STRMAFZ round-trip). The server polls a per-IP abort
+ * signal between scan attempts and between frames, tears the scan down,
+ * restores Z to the pre-scan position, and replies {@code ABORTED}. The
+ * in-flight {@link #execute} call then finishes with {@link Outcome#CANCELLED}.
  *
  * <p><b>Fallback behavior:</b> if the server returns {@code UNAVAILABLE}
  * (pre-flight refusal -- exposure too long, saturated, no speed property,
@@ -55,6 +58,34 @@ public class StreamingFocusController {
 
     public boolean isRunning() {
         return running;
+    }
+
+    /**
+     * Request cancellation of the in-progress scan.
+     *
+     * <p>Sends ABORTAF on the auxiliary socket (best-effort). The server
+     * stops the scan, restores Z to the pre-scan position, and replies
+     * {@code ABORTED}; the {@link #execute} call then finishes with
+     * {@link Outcome#CANCELLED}. No-op when no scan is running.
+     *
+     * <p>The socket round-trip runs on a short-lived daemon thread so a
+     * call from the JavaFX thread never blocks the UI.
+     */
+    public void cancel() {
+        if (!running) {
+            return;
+        }
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        socketClient.abortStreamingFocus();
+                    } catch (IOException e) {
+                        logger.warn("Failed to send streaming-AF abort: {}", e.getMessage());
+                    }
+                },
+                "StreamingFocus-Cancel");
+        t.setDaemon(true);
+        t.start();
     }
 
     /**
@@ -114,6 +145,11 @@ public class StreamingFocusController {
                             + AfFailureHint.format(modality, result.reason);
                     logger.info("Autofocus UNAVAILABLE: {}", result.reason);
                     finish(callback, unavailableMsg, Outcome.FAILED);
+                    return;
+
+                case ABORTED:
+                    logger.info("Autofocus ABORTED by user: {}", result.reason);
+                    finish(callback, "Autofocus cancelled -- Z restored to start position", Outcome.CANCELLED);
                     return;
 
                 case FAILED:

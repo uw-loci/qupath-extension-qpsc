@@ -345,6 +345,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
         STRMAFZ("strmafz_"),
 
         /**
+         * Abort an in-progress streaming autofocus scan. Sent on the
+         * AUXILIARY socket because the primary socket is blocked inside
+         * the STRMAFZ round-trip for the whole scan. Response: {@code ACK}.
+         */
+        ABORTAF("abortaf_"),
+
+        /**
          * Setup-wizard probe: discovers the focus stage's writable speed
          * property, parses its allowed values, time-verifies via 1-um
          * round-trip, and recommends slow/normal speed values to write
@@ -1599,7 +1606,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         public enum Status {
             SUCCESS,
             UNAVAILABLE,
-            FAILED
+            FAILED,
+            /** The scan was cancelled by the client via {@link #abortStreamingFocus()};
+             * the server restored Z to the pre-scan position. */
+            ABORTED
         }
 
         public final Status status;
@@ -1821,6 +1831,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     logger.info("STRMAFZ UNAVAILABLE: {}", reason);
                     return new StreamingFocusResult(
                             StreamingFocusResult.Status.UNAVAILABLE, 0, 0, 0, 0, 0, reason, dumpPath);
+                } else if (response.startsWith("ABORTED:")) {
+                    String reason = response.substring("ABORTED:".length());
+                    logger.info("STRMAFZ ABORTED: {}", reason);
+                    return new StreamingFocusResult(
+                            StreamingFocusResult.Status.ABORTED, 0, 0, 0, 0, 0, reason, dumpPath);
                 } else if (response.startsWith("FAILED:")) {
                     String reason = response.substring("FAILED:".length());
                     logger.warn("STRMAFZ FAILED: {}", reason);
@@ -1837,6 +1852,66 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         socket.setSoTimeout(originalTimeout);
                     } catch (IOException e) {
                         logger.warn("Failed to restore socket timeout after STRMAFZ", e);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Request cancellation of an in-progress {@link #streamingFocus} scan.
+     *
+     * <p>Sent on the AUXILIARY socket: the primary socket is blocked inside
+     * the STRMAFZ round-trip for the whole scan, so the abort cannot ride
+     * the primary. The server keys the abort signal by client IP, so the
+     * auxiliary connection (same IP, different port) reaches the scan
+     * running on the primary.
+     *
+     * <p>Best-effort and non-blocking with respect to the scan: this method
+     * returns as soon as the server acknowledges the request ({@code ACK}).
+     * The in-flight {@code streamingFocus} call then tears the scan down and
+     * returns a result with {@link StreamingFocusResult.Status#ABORTED}. A
+     * no-op server-side if no scan is running.
+     *
+     * @throws IOException if the auxiliary socket communication fails
+     */
+    public void abortStreamingFocus() throws IOException {
+        synchronized (auxSocketLock) {
+            ensureAuxConnected();
+            int restoreTimeout = -1;
+            try {
+                // Short timeout for the ACK read: an older server without the
+                // ABORTAF handler consumes the 8-byte command and sends no
+                // reply, so a blind readFully would block on the aux socket's
+                // 30s+ timeout -- freezing frame polling for that whole time.
+                if (auxSocket != null) {
+                    restoreTimeout = auxSocket.getSoTimeout();
+                    auxSocket.setSoTimeout(3000);
+                }
+                auxOutput.write(Command.ABORTAF.getValue());
+                auxOutput.flush();
+                // Server replies 'ACK' (3 bytes). Read it so the next aux
+                // command does not pick up a stale ACK left in the stream.
+                byte[] ack = new byte[3];
+                auxInput.readFully(ack);
+                logger.info("ABORTAF sent; server acknowledged streaming-AF cancellation");
+            } catch (SocketTimeoutException e) {
+                // Older server with no ABORTAF handler: it discarded the
+                // command and sent nothing. The command bytes were fully
+                // consumed server-side, so the aux stream has no leftover
+                // data and the socket stays usable -- the cancel is simply
+                // a no-op and the scan runs to completion.
+                logger.warn("ABORTAF: no ACK within 3s -- server may not support "
+                        + "streaming-AF cancellation; the scan will run to completion");
+            } catch (IOException e) {
+                cleanupAuxiliary();
+                throw e;
+            } finally {
+                if (auxSocket != null && restoreTimeout >= 0) {
+                    try {
+                        auxSocket.setSoTimeout(restoreTimeout);
+                    } catch (IOException e) {
+                        logger.warn("Failed to restore aux socket timeout after ABORTAF", e);
                     }
                 }
             }

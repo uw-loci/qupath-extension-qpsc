@@ -41,7 +41,10 @@ public class RefineFocusController {
         IN_PROGRESS,
         SUCCESS,
         FAILED,
-        ERROR
+        ERROR,
+        /** The user cancelled the operation; not a failure. Treated as a
+         * terminal outcome that resets the controls without error styling. */
+        CANCELLED
     }
 
     /**
