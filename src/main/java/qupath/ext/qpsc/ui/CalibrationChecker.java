@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
+import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
@@ -32,6 +33,9 @@ public class CalibrationChecker {
 
     /** Result of a status check with a human-readable message. */
     public record StepStatus(Status status, String message) {}
+
+    /** Lamp-intensity units within which a background is considered consistent with the profile. */
+    private static final double LAMP_INTENSITY_TOLERANCE = 1.0;
 
     // ------------------------------------------------------------------
     // Server connection
@@ -167,6 +171,18 @@ public class CalibrationChecker {
                 return new StepStatus(Status.WARNING, "No background correction folder configured for " + modality);
             }
 
+            // Channel-based modalities (fluorescence): backgrounds are per-channel,
+            // keyed by acquisition profile. Validate per-channel coverage instead
+            // of WB-mode coverage.
+            String profileKey = mgr.resolveProfileKey(modality, objective);
+            if (profileKey != null) {
+                var profileChannels = mgr.getChannelsForProfile(profileKey);
+                if (!profileChannels.isEmpty()) {
+                    return checkChannelBackgrounds(
+                            bgFolder, modality, objective, detector, profileKey, profileChannels);
+                }
+            }
+
             // Monochrome cameras have no WB modes -- background correction is a simple
             // "files exist or they don't" check. BackgroundValidityChecker returns
             // NOT_NEEDED for the OFF mode regardless of whether files exist on disk,
@@ -177,7 +193,8 @@ public class CalibrationChecker {
                 if (allBgs.isEmpty()) {
                     return new StepStatus(Status.WARNING, "No backgrounds -- recommended before acquisition");
                 }
-                return new StepStatus(Status.READY, "Backgrounds collected");
+                return applyLampCheck(
+                        new StepStatus(Status.READY, "Backgrounds collected"), modality, objective, detector, mgr);
             }
 
             // Use BackgroundValidityChecker to cross-validate WB vs backgrounds
@@ -209,9 +226,14 @@ public class CalibrationChecker {
             }
 
             if (anyValid && !anyStale) {
-                return new StepStatus(
-                        Status.READY,
-                        String.format("Backgrounds valid (%d mode%s)", validCount, validCount > 1 ? "s" : ""));
+                return applyLampCheck(
+                        new StepStatus(
+                                Status.READY,
+                                String.format("Backgrounds valid (%d mode%s)", validCount, validCount > 1 ? "s" : "")),
+                        modality,
+                        objective,
+                        detector,
+                        mgr);
             }
 
             if (anyValid && anyStale) {
@@ -227,7 +249,12 @@ public class CalibrationChecker {
                         staleNames.append(result.mode().getDisplayName());
                     }
                 }
-                return new StepStatus(Status.READY, String.format("Valid: %s; Stale: %s", validNames, staleNames));
+                return applyLampCheck(
+                        new StepStatus(Status.READY, String.format("Valid: %s; Stale: %s", validNames, staleNames)),
+                        modality,
+                        objective,
+                        detector,
+                        mgr);
             }
 
             if (anyStale && !anyValid) {
@@ -244,6 +271,111 @@ public class CalibrationChecker {
             logger.debug("Error checking background correction", e);
             return new StepStatus(Status.WARNING, "Could not verify background correction status");
         }
+    }
+
+    /**
+     * If the collected backgrounds record a lamp intensity that no longer matches
+     * the active acquisition profile's {@code illumination_intensity}, downgrade a
+     * READY status to a non-blocking WARNING. Returns {@code base} unchanged when
+     * there is no lamp control, no recorded intensity, or no mismatch -- so scopes
+     * without an adjustable lamp (PPM) are never affected.
+     */
+    private static StepStatus applyLampCheck(
+            StepStatus base, String modality, String objective, String detector, MicroscopeConfigManager mgr) {
+        if (base.status() != Status.READY) {
+            return base;
+        }
+        try {
+            String profileKey = mgr.resolveProfileKey(modality, objective);
+            Double profileIntensity = profileKey != null ? mgr.getProfileIlluminationIntensity(profileKey) : null;
+            if (profileIntensity == null) {
+                return base;
+            }
+            String bgFolder = mgr.getBackgroundCorrectionFolder(modality);
+            if (bgFolder == null) {
+                return base;
+            }
+            var all = BackgroundSettingsReader.findAllBackgroundSettings(bgFolder, modality, objective, detector);
+            for (var bg : all.values()) {
+                if (Boolean.TRUE.equals(bg.lampAvailable)
+                        && bg.appliedLampIntensity != null
+                        && Math.abs(bg.appliedLampIntensity - profileIntensity) > LAMP_INTENSITY_TOLERANCE) {
+                    return new StepStatus(
+                            Status.WARNING,
+                            String.format(
+                                    "Background lamp %.0f != profile %.0f -- re-collect or proceed",
+                                    bg.appliedLampIntensity, profileIntensity));
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Lamp consistency check failed: {}", e.getMessage());
+        }
+        return base;
+    }
+
+    /** Exposure (ms) tolerance for per-channel background staleness. */
+    private static final double CHANNEL_EXPOSURE_TOLERANCE_MS = 0.5;
+
+    /**
+     * Validates per-channel (fluorescence) background coverage for an acquisition
+     * profile. Only channels in use (the unused-channel rule, {@link
+     * qupath.ext.qpsc.modality.Channel#isInUse()}) are required. Returns:
+     * <ul>
+     *   <li>READY -- every in-use channel has a matching background</li>
+     *   <li>WARNING -- a channel is missing, or its profile exposure/intensity
+     *       changed after collection (non-blocking)</li>
+     * </ul>
+     */
+    private static StepStatus checkChannelBackgrounds(
+            String bgFolder,
+            String modality,
+            String objective,
+            String detector,
+            String profileKey,
+            java.util.List<qupath.ext.qpsc.modality.Channel> profileChannels) {
+        var inUse = profileChannels.stream()
+                .filter(qupath.ext.qpsc.modality.Channel::isInUse)
+                .toList();
+        if (inUse.isEmpty()) {
+            return new StepStatus(Status.NOT_APPLICABLE, "Profile has no in-use channels");
+        }
+        var settings = BackgroundSettingsReader.findChannelBackgroundSettings(
+                bgFolder, modality, objective, detector, profileKey);
+        if (settings == null || settings.channelBackgrounds.isEmpty()) {
+            return new StepStatus(Status.WARNING, "No per-channel backgrounds for profile " + profileKey);
+        }
+        java.util.Map<String, BackgroundSettingsReader.ChannelBackground> byId = new java.util.HashMap<>();
+        for (var cb : settings.channelBackgrounds) {
+            byId.put(cb.id(), cb);
+        }
+        java.util.List<String> missing = new java.util.ArrayList<>();
+        java.util.List<String> stale = new java.util.ArrayList<>();
+        for (var ch : inUse) {
+            var cb = byId.get(ch.id());
+            if (cb == null) {
+                missing.add(ch.id());
+                continue;
+            }
+            if (Math.abs(cb.exposureMs() - ch.defaultExposureMs()) > CHANNEL_EXPOSURE_TOLERANCE_MS) {
+                stale.add(ch.id());
+                continue;
+            }
+            double chIntensity = ch.currentIntensityValue();
+            if (!Double.isNaN(chIntensity) && Math.abs(cb.intensity() - chIntensity) > LAMP_INTENSITY_TOLERANCE) {
+                stale.add(ch.id());
+            }
+        }
+        if (!missing.isEmpty()) {
+            return new StepStatus(Status.WARNING, "Missing backgrounds for channel(s): " + String.join(", ", missing));
+        }
+        if (!stale.isEmpty()) {
+            return new StepStatus(
+                    Status.WARNING, "Channel exposure/intensity changed since collection: " + String.join(", ", stale));
+        }
+        return new StepStatus(
+                Status.READY,
+                String.format(
+                        "Per-channel backgrounds valid (%d channel%s)", inUse.size(), inUse.size() > 1 ? "s" : ""));
     }
 
     // ------------------------------------------------------------------

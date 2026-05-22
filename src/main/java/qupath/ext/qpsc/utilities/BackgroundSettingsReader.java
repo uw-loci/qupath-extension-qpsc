@@ -25,7 +25,25 @@ public class BackgroundSettingsReader {
     private static final Logger logger = LoggerFactory.getLogger(BackgroundSettingsReader.class);
 
     /**
-     * Container for background settings read from file
+     * One per-channel background entry, used by channel-based modalities
+     * (fluorescence). Each entry corresponds to one {@code <channelId>.tif}
+     * background image collected at that channel's exposure and intensity.
+     */
+    public record ChannelBackground(
+            String id,
+            String displayName,
+            double exposureMs,
+            double intensity,
+            String intensityDevice,
+            String intensityProperty,
+            String imageFile) {}
+
+    /**
+     * Container for background settings read from file.
+     *
+     * <p>Angle-based modalities (PPM, brightfield) populate {@link #angleExposures};
+     * channel-based modalities (fluorescence) populate {@link #channelBackgrounds}.
+     * A file is valid if exactly one of those is non-empty.
      */
     public static class BackgroundSettings {
         public final String modality;
@@ -36,6 +54,18 @@ public class BackgroundSettingsReader {
         public final String settingsFilePath;
         /** White balance mode used during background collection (e.g., "per_angle", "simple", "camera_awb", "off"). May be null for older settings files. */
         public final String wbMode;
+        /** Acquisition profile this collection was keyed to. Null for v1.0 files. */
+        public final String profileKey;
+        /** Scalar illumination_intensity from the profile at collection time. Null if absent. */
+        public final Double profileIlluminationIntensity;
+        /** Whether the scope had an adjustable lamp. Null for v1.0 files (lamp check skipped). */
+        public final Boolean lampAvailable;
+        /** Lamp intensity actually applied during collection (from apply_profile_illumination). */
+        public final Double appliedLampIntensity;
+        /** Illumination device label (e.g. "DiaLamp"). Null when no lamp. */
+        public final String lampDeviceLabel;
+        /** Per-channel background entries for channel-based modalities; empty for angle modalities. */
+        public final List<ChannelBackground> channelBackgrounds;
 
         public BackgroundSettings(
                 String modality,
@@ -44,7 +74,13 @@ public class BackgroundSettingsReader {
                 String magnification,
                 List<AngleExposure> angleExposures,
                 String settingsFilePath,
-                String wbMode) {
+                String wbMode,
+                String profileKey,
+                Double profileIlluminationIntensity,
+                Boolean lampAvailable,
+                Double appliedLampIntensity,
+                String lampDeviceLabel,
+                List<ChannelBackground> channelBackgrounds) {
             this.modality = modality;
             this.objective = objective;
             this.detector = detector;
@@ -52,13 +88,27 @@ public class BackgroundSettingsReader {
             this.angleExposures = angleExposures;
             this.settingsFilePath = settingsFilePath;
             this.wbMode = wbMode;
+            this.profileKey = profileKey;
+            this.profileIlluminationIntensity = profileIlluminationIntensity;
+            this.lampAvailable = lampAvailable;
+            this.appliedLampIntensity = appliedLampIntensity;
+            this.lampDeviceLabel = lampDeviceLabel;
+            this.channelBackgrounds = channelBackgrounds != null ? channelBackgrounds : List.of();
         }
 
         @Override
         public String toString() {
             return String.format(
-                    "BackgroundSettings[modality=%s, objective=%s, detector=%s, angles=%d, wbMode=%s]",
-                    modality, objective, detector, angleExposures.size(), wbMode);
+                    "BackgroundSettings[modality=%s, objective=%s, detector=%s, angles=%d, channels=%d, "
+                            + "wbMode=%s, profile=%s, lamp=%s]",
+                    modality,
+                    objective,
+                    detector,
+                    angleExposures.size(),
+                    channelBackgrounds.size(),
+                    wbMode,
+                    profileKey,
+                    appliedLampIntensity);
         }
     }
 
@@ -115,6 +165,65 @@ public class BackgroundSettingsReader {
         String resolved = new File(basePath, wbMode).getPath();
         logger.debug("Resolved background folder for wbMode='{}': {}", wbMode, resolved);
         return resolved;
+    }
+
+    /**
+     * Resolve the background folder for a channel-based (fluorescence) profile.
+     *
+     * <p>Channel-based modalities have no WB-mode subfolder; instead the leaf
+     * folder is the acquisition profile key, so two profiles that share a
+     * magnification but differ in channel set / intensity get distinct folders:
+     * {@code <base>/<detector>/<family>/<magnification>/<profileKey>/}.
+     *
+     * @param baseBackgroundFolder base background correction folder from config
+     * @param modality             modality name
+     * @param objective            objective ID (supplies the magnification segment)
+     * @param detector             detector ID
+     * @param profileKey           acquisition profile key (leaf folder)
+     * @return resolved folder path, or null if inputs are invalid
+     */
+    public static String resolveChannelBackgroundFolder(
+            String baseBackgroundFolder, String modality, String objective, String detector, String profileKey) {
+        if (baseBackgroundFolder == null
+                || modality == null
+                || objective == null
+                || detector == null
+                || profileKey == null
+                || profileKey.isEmpty()) {
+            logger.debug("Cannot resolve channel background folder - missing required parameters");
+            return null;
+        }
+        String magnification = extractMagnificationFromObjective(objective);
+        return new File(
+                        baseBackgroundFolder,
+                        detector
+                                + File.separator
+                                + modalityFamily(modality)
+                                + File.separator
+                                + magnification
+                                + File.separator
+                                + profileKey)
+                .getPath();
+    }
+
+    /**
+     * Find and read the channel-based background settings for an acquisition
+     * profile. Reads {@code <profileFolder>/background_settings.yml}.
+     *
+     * @return BackgroundSettings if found and valid, null otherwise
+     */
+    public static BackgroundSettings findChannelBackgroundSettings(
+            String baseBackgroundFolder, String modality, String objective, String detector, String profileKey) {
+        String folder = resolveChannelBackgroundFolder(baseBackgroundFolder, modality, objective, detector, profileKey);
+        if (folder == null) {
+            return null;
+        }
+        File target = new File(folder, "background_settings.yml");
+        if (target.exists()) {
+            return readBackgroundSettings(target);
+        }
+        logger.debug("No channel background settings found for profile '{}' at {}", profileKey, target);
+        return null;
     }
 
     /**
@@ -235,8 +344,41 @@ public class BackgroundSettingsReader {
                 }
             }
 
-            // Validate that we have the essential information
-            if (modality == null || angleExposures.isEmpty()) {
+            // Extract per-channel background entries (v2.0 channel-based files).
+            List<ChannelBackground> channelBackgrounds = new ArrayList<>();
+            List<Map<String, Object>> channelList = getMapList(yamlData, "channels");
+            if (channelList != null) {
+                for (Map<String, Object> ch : channelList) {
+                    String id = getString(ch, "id");
+                    Double exposure = getDouble(ch, "exposure_ms");
+                    if (id == null || exposure == null) {
+                        continue;
+                    }
+                    Double intensity = getDouble(ch, "intensity");
+                    channelBackgrounds.add(new ChannelBackground(
+                            id,
+                            getString(ch, "display_name"),
+                            exposure,
+                            intensity != null ? intensity : 0.0,
+                            getString(ch, "intensity_device"),
+                            getString(ch, "intensity_property"),
+                            getString(ch, "image_file")));
+                }
+            }
+
+            // Extract the profile and lamp blocks (v2.0; absent in v1.0 files).
+            Map<String, Object> profile = getMap(yamlData, "profile");
+            String profileKey = getString(profile, "key");
+            Double profileIllumination = getDouble(profile, "illumination_intensity");
+
+            Map<String, Object> lamp = getMap(yamlData, "lamp");
+            Boolean lampAvailable = getBoolean(lamp, "available");
+            Double appliedLampIntensity = getDouble(lamp, "applied_intensity");
+            String lampDeviceLabel = getString(lamp, "device_label");
+
+            // Validate essentials: a modality and exactly one populated background
+            // list (angle-based OR channel-based). A file with neither is rejected.
+            if (modality == null || (angleExposures.isEmpty() && channelBackgrounds.isEmpty())) {
                 logger.warn(
                         "Background settings file is missing essential information: {}",
                         settingsFile.getAbsolutePath());
@@ -250,7 +392,13 @@ public class BackgroundSettingsReader {
                     magnification,
                     angleExposures,
                     settingsFile.getAbsolutePath(),
-                    wbMode);
+                    wbMode,
+                    profileKey,
+                    profileIllumination,
+                    lampAvailable,
+                    appliedLampIntensity,
+                    lampDeviceLabel,
+                    channelBackgrounds);
 
             logger.debug("Successfully read background settings: {}", settings);
             return settings;
@@ -529,6 +677,21 @@ public class BackgroundSettingsReader {
             } catch (NumberFormatException e) {
                 return null;
             }
+        }
+        return null;
+    }
+
+    /**
+     * Safely extract a Boolean from YAML data
+     */
+    private static Boolean getBoolean(Map<String, Object> data, String key) {
+        if (data == null || key == null) return null;
+        Object value = data.get(key);
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        if (value instanceof String s) {
+            return Boolean.parseBoolean(s);
         }
         return null;
     }

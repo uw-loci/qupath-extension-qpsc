@@ -19,11 +19,13 @@ import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.BackgroundCollectionController;
+import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 
@@ -79,7 +81,8 @@ public class BackgroundCollectionWorkflow {
                                             result.angleExposures(),
                                             result.outputPath(),
                                             result.wbMode(),
-                                            result.targetIntensity());
+                                            result.targetIntensity(),
+                                            result.profileKey());
                                 })
                                 .exceptionally(ex -> {
                                     logger.error("Background acquisition failed", ex);
@@ -114,9 +117,10 @@ public class BackgroundCollectionWorkflow {
             List<AngleExposure> angleExposures,
             String outputPath,
             String wbMode,
-            double targetIntensity) {
+            double targetIntensity,
+            String profileKey) {
         executeBackgroundAcquisition(
-                modality, objective, detector, angleExposures, outputPath, wbMode, targetIntensity);
+                modality, objective, detector, angleExposures, outputPath, wbMode, targetIntensity, profileKey);
     }
 
     /**
@@ -136,13 +140,15 @@ public class BackgroundCollectionWorkflow {
             List<AngleExposure> angleExposures,
             String outputPath,
             String wbMode,
-            double targetIntensity) {
+            double targetIntensity,
+            String profileKey) {
         logger.info(
-                "Executing background acquisition for modality '{}' with {} angles, wbMode={}, detector={}",
+                "Executing background acquisition for modality '{}' with {} angles, wbMode={}, detector={}, profile={}",
                 modality,
                 angleExposures.size(),
                 wbMode,
-                detector);
+                detector,
+                profileKey);
 
         // Block if MicroManager's pixel size disagrees with the chosen objective. The output
         // folder structure encodes the objective magnification; a mismatch would file the
@@ -206,6 +212,36 @@ public class BackgroundCollectionWorkflow {
                 }
             }
 
+            // Resolve the acquisition profile so the server applies (and reports)
+            // the right lamp intensity. If the caller passed one, trust it;
+            // otherwise derive it from modality + objective.
+            String effectiveProfileKey = (profileKey != null && !profileKey.isBlank())
+                    ? profileKey
+                    : configManager.resolveProfileKey(modality, objective);
+            Double profileIllumination = effectiveProfileKey != null
+                    ? configManager.getProfileIlluminationIntensity(effectiveProfileKey)
+                    : null;
+
+            // Channel-based modalities (fluorescence) collect one background per
+            // in-use channel, keyed by profile -- a separate path from the
+            // angle-based collection below.
+            List<qupath.ext.qpsc.modality.Channel> profileChannels =
+                    effectiveProfileKey != null ? configManager.getChannelsForProfile(effectiveProfileKey) : List.of();
+            if (!profileChannels.isEmpty()) {
+                executeChannelBackgroundAcquisition(
+                        socketClient,
+                        configFileLocation,
+                        configManager,
+                        modality,
+                        objective,
+                        detector,
+                        outputPath,
+                        effectiveProfileKey,
+                        profileIllumination,
+                        profileChannels);
+                return;
+            }
+
             String finalOutputPath = outputPath;
             if (objective != null && detector != null) {
                 String magnification = extractMagnificationFromObjective(objective);
@@ -250,9 +286,9 @@ public class BackgroundCollectionWorkflow {
 
             logger.info("Starting background acquisition with angles: {}, exposures: {}", angles, exposures);
 
-            // Call the synchronous background acquisition method
-            // Returns map of final exposures actually used by Python (with adaptive exposure)
-            Map<Double, Double> finalExposures = socketClient.startBackgroundAcquisition(
+            // Call the synchronous background acquisition method.
+            // Returns final exposures plus the lamp intensity the server applied.
+            MicroscopeSocketClient.BackgroundAcquisitionResult bgResult = socketClient.startBackgroundAcquisition(
                     configFileLocation,
                     finalOutputPath,
                     modality,
@@ -261,13 +297,32 @@ public class BackgroundCollectionWorkflow {
                     wbMode,
                     objective,
                     detector,
-                    targetIntensity);
+                    targetIntensity,
+                    effectiveProfileKey);
+            Map<Double, Double> finalExposures = bgResult.finalExposures();
 
-            logger.info("Background acquisition completed successfully with {} final exposures", finalExposures.size());
+            logger.info(
+                    "Background acquisition completed: {} final exposures, lamp={}, device={}, profile={}",
+                    finalExposures.size(),
+                    bgResult.appliedLampIntensity(),
+                    bgResult.lampDeviceLabel(),
+                    bgResult.resolvedProfileKey());
 
             // Save background collection defaults using actual exposures from server
+            String resolvedProfile =
+                    bgResult.resolvedProfileKey() != null ? bgResult.resolvedProfileKey() : effectiveProfileKey;
             saveBackgroundDefaults(
-                    finalOutputPath, modality, objective, detector, angleExposures, finalExposures, wbMode);
+                    finalOutputPath,
+                    modality,
+                    objective,
+                    detector,
+                    angleExposures,
+                    finalExposures,
+                    wbMode,
+                    resolvedProfile,
+                    profileIllumination,
+                    bgResult.appliedLampIntensity(),
+                    bgResult.lampDeviceLabel());
 
             // Update the modality's background_correction config to enabled=true
             // and base_folder set to the user's output path. This ensures the
@@ -320,6 +375,182 @@ public class BackgroundCollectionWorkflow {
         }
     }
     /**
+     * Collects one background image per in-use channel for a channel-based
+     * (fluorescence) profile. Channels failing the unused-channel rule
+     * ({@link Channel#isInUse()}) are skipped. Backgrounds are stored in a
+     * profile-keyed folder with a {@code channels:}-shaped settings file.
+     */
+    private static void executeChannelBackgroundAcquisition(
+            MicroscopeSocketClient socketClient,
+            String configFileLocation,
+            MicroscopeConfigManager configManager,
+            String modality,
+            String objective,
+            String detector,
+            String outputPath,
+            String profileKey,
+            Double profileIllumination,
+            List<Channel> profileChannels) {
+        try {
+            // Apply the unused-channel rule: collect only channels in use.
+            List<Channel> inUse =
+                    profileChannels.stream().filter(Channel::isInUse).toList();
+            if (inUse.isEmpty()) {
+                logger.warn("Profile '{}' has no in-use channels; nothing to collect", profileKey);
+                Platform.runLater(() -> Dialogs.showWarningNotification(
+                        "Background Collection",
+                        "Profile '" + profileKey + "' has no in-use channels (all intensities are 0)."));
+                return;
+            }
+            List<String> inUseIds = inUse.stream().map(Channel::id).toList();
+
+            String channelFolder = BackgroundSettingsReader.resolveChannelBackgroundFolder(
+                    outputPath, modality, objective, detector, profileKey);
+            java.io.File outDir = new java.io.File(channelFolder);
+            if (!outDir.exists() && !outDir.mkdirs()) {
+                throw new IOException("Failed to create channel background directory: " + channelFolder);
+            }
+
+            logger.info(
+                    "Collecting per-channel backgrounds for profile '{}': {} in-use channel(s) {}",
+                    profileKey,
+                    inUseIds.size(),
+                    inUseIds);
+
+            MicroscopeSocketClient.BackgroundAcquisitionResult bgResult =
+                    socketClient.startChannelBackgroundAcquisition(
+                            configFileLocation, channelFolder, modality, objective, detector, profileKey, inUseIds);
+
+            saveChannelBackgroundDefaults(
+                    channelFolder,
+                    modality,
+                    objective,
+                    detector,
+                    profileKey,
+                    profileIllumination,
+                    inUse,
+                    bgResult.channelExposures(),
+                    bgResult.channelIntensities());
+
+            try {
+                updateBackgroundCorrectionConfig(configFileLocation, modality, outputPath);
+            } catch (Exception cfgEx) {
+                logger.warn("Could not update background_correction config: {}", cfgEx.getMessage());
+            }
+            try {
+                MicroscopeConfigManager.getInstance(configFileLocation).reload(configFileLocation);
+                MicroscopeController.getInstance().sendReconfig();
+            } catch (Exception reloadEx) {
+                logger.warn("Config reload after channel background collection failed: {}", reloadEx.getMessage());
+            }
+
+            Platform.runLater(() -> Dialogs.showInfoNotification(
+                    "Background Collection Complete",
+                    String.format("Collected %d per-channel backgrounds for profile %s", inUseIds.size(), profileKey)));
+            qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
+        } catch (Exception e) {
+            logger.error("Channel background acquisition failed", e);
+            Platform.runLater(() -> Dialogs.showErrorMessage(
+                    "Background Acquisition Failed", "Failed to acquire per-channel backgrounds: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Writes the {@code channels:}-shaped {@code background_settings.yml} (v2.0)
+     * for a per-channel fluorescence background set.
+     */
+    private static void saveChannelBackgroundDefaults(
+            String outputPath,
+            String modality,
+            String objective,
+            String detector,
+            String profileKey,
+            Double profileIlluminationIntensity,
+            List<Channel> inUseChannels,
+            Map<String, Double> channelExposures,
+            Map<String, Double> channelIntensities)
+            throws IOException {
+
+        java.io.File settingsFile = new java.io.File(outputPath, "background_settings.yml");
+
+        DumperOptions options = new DumperOptions();
+        options.setIndent(2);
+        options.setPrettyFlow(true);
+        options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+        Yaml yaml = new Yaml(options);
+
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        Map<String, Object> yamlData = new LinkedHashMap<>();
+
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("generated", timestamp);
+        metadata.put("version", "2.0");
+        metadata.put("description", "QPSC Background Collection Settings - per-channel (fluorescence)");
+        yamlData.put("metadata", metadata);
+
+        Map<String, Object> hardware = new LinkedHashMap<>();
+        hardware.put("modality", modality);
+        hardware.put("objective", objective != null ? objective : "unknown");
+        hardware.put("detector", detector != null ? detector : "unknown");
+        hardware.put("magnification", extractMagnificationFromObjective(objective));
+        yamlData.put("hardware", hardware);
+
+        Map<String, Object> profile = new LinkedHashMap<>();
+        profile.put("key", profileKey);
+        if (profileIlluminationIntensity != null) {
+            profile.put("illumination_intensity", profileIlluminationIntensity);
+        }
+        yamlData.put("profile", profile);
+
+        List<Map<String, Object>> channelList = new ArrayList<>();
+        for (Channel ch : inUseChannels) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("id", ch.id());
+            entry.put("display_name", ch.displayName());
+            Double exp = channelExposures != null ? channelExposures.get(ch.id()) : null;
+            entry.put("exposure_ms", exp != null ? exp : ch.defaultExposureMs());
+            Double intensity = channelIntensities != null ? channelIntensities.get(ch.id()) : null;
+            double resolvedIntensity = intensity != null
+                    ? intensity
+                    : (Double.isNaN(ch.currentIntensityValue()) ? 0.0 : ch.currentIntensityValue());
+            entry.put("intensity", resolvedIntensity);
+            if (ch.intensityProperty() != null) {
+                entry.put("intensity_device", ch.intensityProperty().device());
+                entry.put("intensity_property", ch.intensityProperty().property());
+            }
+            entry.put("image_file", ch.id() + ".tif");
+            channelList.add(entry);
+        }
+        yamlData.put("channels", channelList);
+
+        Map<String, Object> acquisition = new LinkedHashMap<>();
+        acquisition.put("wb_mode", "off");
+        acquisition.put("channel_count", channelList.size());
+        yamlData.put("acquisition", acquisition);
+
+        // Per-channel modalities track illumination per channel; the scalar
+        // lamp block does not apply, so record available:false.
+        Map<String, Object> lamp = new LinkedHashMap<>();
+        lamp.put("available", false);
+        yamlData.put("lamp", lamp);
+
+        List<String> notes = new ArrayList<>();
+        notes.add("Per-channel background set: one <channelId>.tif per in-use channel.");
+        notes.add("Channels with 0 intensity were skipped (unused-channel rule).");
+        yamlData.put("notes", notes);
+
+        try (FileWriter writer = new FileWriter(settingsFile, StandardCharsets.UTF_8)) {
+            writer.write("# QPSC Background Collection Settings (per-channel)\n");
+            writer.write("# Generated: " + timestamp + "\n\n");
+            yaml.dump(yamlData, writer);
+        }
+        logger.info(
+                "Channel background settings saved: {} channels -> {}",
+                channelList.size(),
+                settingsFile.getAbsolutePath());
+    }
+
+    /**
      * Data class for background collection parameters.
      */
     public record BackgroundCollectionResult(
@@ -330,7 +561,8 @@ public class BackgroundCollectionWorkflow {
             String outputPath,
             boolean usePerAngleWhiteBalance,
             String wbMode,
-            double targetIntensity) {}
+            double targetIntensity,
+            String profileKey) {}
 
     /**
      * Updates the imageprocessing YAML to enable background correction for the
@@ -435,7 +667,11 @@ public class BackgroundCollectionWorkflow {
             String detector,
             List<AngleExposure> angleExposures,
             Map<Double, Double> finalExposures,
-            String wbMode)
+            String wbMode,
+            String profileKey,
+            Double profileIlluminationIntensity,
+            Double appliedLampIntensity,
+            String lampDeviceLabel)
             throws IOException {
 
         java.io.File settingsFile = new java.io.File(outputPath, "background_settings.yml");
@@ -489,7 +725,7 @@ public class BackgroundCollectionWorkflow {
         // Metadata
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("generated", timestamp);
-        metadata.put("version", "1.0");
+        metadata.put("version", "2.0");
         metadata.put(
                 "description",
                 "QPSC Background Collection Settings - Contains settings used for background image acquisition");
@@ -502,6 +738,31 @@ public class BackgroundCollectionWorkflow {
         hardware.put("detector", detector != null ? detector : "unknown");
         hardware.put("magnification", extractMagnificationFromObjective(objective));
         yamlData.put("hardware", hardware);
+
+        // Profile: the acquisition profile this collection was keyed to.
+        if (profileKey != null && !profileKey.isBlank()) {
+            Map<String, Object> profile = new LinkedHashMap<>();
+            profile.put("key", profileKey);
+            if (profileIlluminationIntensity != null) {
+                profile.put("illumination_intensity", profileIlluminationIntensity);
+            }
+            yamlData.put("profile", profile);
+        }
+
+        // Lamp: what the illumination device actually did. A scope with no
+        // adjustable lamp records {available: false}; the acquisition-time
+        // consistency check skips lamp validation entirely in that case.
+        Map<String, Object> lamp = new LinkedHashMap<>();
+        if (appliedLampIntensity != null) {
+            lamp.put("available", true);
+            lamp.put("applied_intensity", appliedLampIntensity);
+            if (lampDeviceLabel != null && !lampDeviceLabel.isBlank()) {
+                lamp.put("device_label", lampDeviceLabel);
+            }
+        } else {
+            lamp.put("available", false);
+        }
+        yamlData.put("lamp", lamp);
 
         // Create sorted lists from the merged data
         List<Map<String, Double>> angleExposureList = new ArrayList<>();

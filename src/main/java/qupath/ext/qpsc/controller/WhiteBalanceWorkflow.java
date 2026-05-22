@@ -207,6 +207,53 @@ public class WhiteBalanceWorkflow {
     }
 
     /**
+     * Resolves the first multi-angle modality from the config, used so PPM white
+     * balance can look up its acquisition profile. Returns null if none is found.
+     */
+    private static String resolveMultiAngleModality(String yamlPath) {
+        try {
+            var mgr = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(yamlPath);
+            for (String m : mgr.getAvailableModalities()) {
+                var handler = qupath.ext.qpsc.modality.ModalityRegistry.getHandler(m);
+                if (handler != null && handler.isMultiAngleModality()) {
+                    return m;
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not resolve multi-angle modality: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Applies the acquisition profile's {@code illumination_intensity} so white
+     * balance calibration runs under the same lamp condition as background
+     * collection and acquisition. No-op when the modality declares no
+     * {@code illumination:} block or the scope reports no lamp ("there if it is
+     * there"); on PPM scopes, which have no adjustable lamp, this is a no-op.
+     */
+    private static void applyProfileLampForWb(
+            MicroscopeSocketClient client, String yamlPath, String modality, String objective) {
+        try {
+            var mgr = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(yamlPath);
+            if (modality == null || mgr.getModalityIllumination(modality) == null) {
+                return;
+            }
+            if (!client.getIllumination().available()) {
+                return;
+            }
+            String profileKey = mgr.resolveProfileKey(modality, objective);
+            Double intensity = profileKey != null ? mgr.getProfileIlluminationIntensity(profileKey) : null;
+            if (intensity != null) {
+                client.setIllumination(intensity.floatValue());
+                logger.info("White balance: applied profile '{}' lamp intensity {}", profileKey, intensity);
+            }
+        } catch (Exception e) {
+            logger.warn("Could not apply profile lamp intensity before white balance: {}", e.getMessage());
+        }
+    }
+
+    /**
      * Runs simple white balance calibration.
      */
     private static void runSimpleCalibration(MicroscopeSocketClient client, WhiteBalanceDialog.SimpleWBParams params) {
@@ -293,6 +340,8 @@ public class WhiteBalanceWorkflow {
                                 posTarget,
                                 negTarget,
                                 crossTarget);
+
+                        applyProfileLampForWb(client, yamlPath, modality, params.objective());
 
                         MicroscopeSocketClient.WhiteBalanceResult result = client.runSimpleWhiteBalance(
                                 params.outputPath(),
@@ -414,6 +463,9 @@ public class WhiteBalanceWorkflow {
                                 qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
 
                         logger.info("WB calibration: objective={}, detector={}", params.objective(), params.detector());
+
+                        applyProfileLampForWb(
+                                client, yamlPath, resolveMultiAngleModality(yamlPath), params.objective());
 
                         Map<String, MicroscopeSocketClient.WhiteBalanceResult> results = client.runPPMWhiteBalance(
                                 params.outputPath(),

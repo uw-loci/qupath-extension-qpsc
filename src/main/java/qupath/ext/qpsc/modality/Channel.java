@@ -111,6 +111,22 @@ public record Channel(
         return Double.NaN;
     }
 
+    /**
+     * Whether this channel is "in use" for background collection. A channel is
+     * in use when it has a positive intensity, or when it has no intensity knob
+     * at all (nothing to switch off). A channel whose intensity property
+     * resolves to 0 is treated as unused: no background is collected for it and
+     * none is required at acquisition-time validation. Exposure is always
+     * positive (enforced by the constructor), so only intensity is checked here.
+     *
+     * <p>This is the single shared predicate for the unused-channel rule -- both
+     * the collection side and the validation side must call it.
+     */
+    public boolean isInUse() {
+        double intensity = currentIntensityValue();
+        return Double.isNaN(intensity) || intensity > 0.0;
+    }
+
     @Override
     public String toString() {
         return id + "(" + defaultExposureMs + "ms)";

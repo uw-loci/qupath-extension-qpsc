@@ -170,6 +170,52 @@ ENDOFSTR
 
 `--inner-axis` selects the inner loop of the per-tile snap nest. Allowed values: `z`, `channel`, `angle`. Omit the flag to get the per-modality default (`z` for widefield channel acquisitions, `angle` for PPM angle acquisitions, ignored for single-axis non-channel non-angle paths). The flag is additive -- callers that don't set it produce byte-identical command lines to pre-toggle builds. See `documentation/tools/z-stack-timelapse.md` for the user-facing semantics (fixed-slide-fast vs drift-tolerant for widefield; angle-switch-fast for PPM z-stacks).
 
+### Background Acquisition (BGACQUIRE)
+
+`BGACQUIRE` collects flat-field background images. Like `ACQUIRE` it takes a
+flag-based string ending in `ENDOFSTR`:
+
+```
+--yaml /path/config.yml
+--output /path/to/backgrounds
+--modality Brightfield
+--angles "(-7.0,0.0,7.0,90.0)"
+--exposures "(500.0,800.0,500.0,10.0)"
+--wb-mode per_angle
+--objective LOCI_OBJECTIVE_OLYMPUS_20X_POL_001
+--detector LOCI_DETECTOR_JAI_001
+--target-intensity 51200
+--profile Brightfield_10x
+--channels DAPI,FITC,TRITC
+ENDOFSTR
+```
+
+`--profile` is optional: the server applies that acquisition profile's
+`illumination_intensity` before collecting, and reports the value back. When
+omitted, the server resolves a profile itself from `--modality` + `--objective`
+(`_resolve_background_profile_key`); the Java client's `resolveProfileKey` is a
+deliberate mirror of that algorithm.
+
+`--channels` is optional and selects the per-channel (fluorescence) path: the
+server collects one background per listed channel id at that channel's
+profile-resolved exposure and intensity, instead of the angle-based path. The
+client has already applied the unused-channel rule, so the server collects
+exactly the channels it is given.
+
+The server replies `STARTED:<output>` immediately, then on completion:
+
+```
+SUCCESS:<output>|<angle:exposure,...>|<meta>
+```
+
+The third pipe-field `<meta>` is `lamp=<intensity|none>;device=<label|none>;profile=<key|none>`,
+plus `;chint=<id:intensity,...>` for the per-channel path. It carries the lamp
+intensity actually applied (the `apply_profile_illumination` return value) so the
+client can record it in `background_settings.yml` and later validate that
+acquisition runs at the same lamp level. The field is optional -- an old server
+omits it and the client tolerates its absence (lamp checks are then skipped).
+`GETILLM` is the companion probe for "does this scope have an adjustable lamp".
+
 ### Camera Control
 
 | Command | Wire Format | Payload | Response |

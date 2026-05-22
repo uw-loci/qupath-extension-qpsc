@@ -65,6 +65,10 @@ public class BackgroundCollectionController {
     private BackgroundSettingsReader.BackgroundSettings existingBackgroundSettings;
     private Label backgroundValidationLabel;
     private VBox wbValidityPanel;
+    private ComboBox<String> profileComboBox;
+    private HBox profileRow;
+    private Label lampIntensityLabel;
+    private HBox lampRow;
 
     /**
      * Shows the background collection dialog and returns the result.
@@ -135,6 +139,7 @@ public class BackgroundCollectionController {
                     okButton.setDisable(!isValid);
                     if (newVal != null) {
                         updateObjectiveSelection(newVal);
+                        updateProfileAndLampRow();
                         // Only update exposure controls if both modality and objective are selected
                         if (objectiveComboBox.getValue() != null) {
                             updateExposureControlsWithBackground(newVal, objectiveComboBox.getValue());
@@ -153,6 +158,7 @@ public class BackgroundCollectionController {
                             && newVal != null
                             && !outputPathField.getText().trim().isEmpty();
                     okButton.setDisable(!isValid);
+                    updateProfileAndLampRow();
                     // Update exposure controls when objective changes (if modality is also selected)
                     if (newVal != null && modalityComboBox.getValue() != null) {
                         updateExposureControlsWithBackground(modalityComboBox.getValue(), newVal);
@@ -254,7 +260,8 @@ public class BackgroundCollectionController {
                                                 result.angleExposures(),
                                                 result.outputPath(),
                                                 result.wbMode(),
-                                                result.targetIntensity());
+                                                result.targetIntensity(),
+                                                result.profileKey());
                             })
                             .thenRun(() -> {
                                 Platform.runLater(() -> {
@@ -417,6 +424,42 @@ public class BackgroundCollectionController {
         // Set default output path
         setDefaultOutputPath();
 
+        // Acquisition profile selector. Profiles carry the lamp intensity that
+        // the server applies during background collection; hidden when the
+        // modality declares no profiles.
+        Label profileLabel = new Label("Acquisition Profile:");
+        profileLabel.setTooltip(new Tooltip("Acquisition profile whose illumination_intensity the server "
+                + "applies while collecting backgrounds."));
+        profileComboBox = new ComboBox<>();
+        profileComboBox.setPromptText("Select profile...");
+        profileRow = new HBox(10, profileLabel, profileComboBox);
+        profileRow.setAlignment(Pos.CENTER_LEFT);
+        profileRow.setVisible(false);
+        profileRow.setManaged(false);
+        profileComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+            refreshLampLabel();
+            // A channel-based profile drives a per-channel table in the exposure
+            // pane, so refresh it when the profile changes.
+            String mod = modalityComboBox.getValue();
+            String obj = objectiveComboBox.getValue();
+            if (mod != null && obj != null) {
+                updateExposureControlsWithBackground(mod, obj);
+            }
+        });
+
+        // Read-only lamp intensity (sourced from the profile). Visible only when
+        // the modality declares an illumination block -- "there if it is there".
+        Label lampLabel = new Label("Lamp Intensity:");
+        lampLabel.setTooltip(
+                new Tooltip("Illumination intensity applied during collection, sourced from the acquisition "
+                        + "profile. Read-only here; edit it on the profile."));
+        lampIntensityLabel = new Label("--");
+        lampIntensityLabel.setStyle("-fx-font-weight: bold;");
+        lampRow = new HBox(10, lampLabel, lampIntensityLabel);
+        lampRow.setAlignment(Pos.CENTER_LEFT);
+        lampRow.setVisible(false);
+        lampRow.setManaged(false);
+
         // WB mode dropdown - replaces checkbox with full mode selection
         Label wbModeLabel = new Label("White Balance Mode:");
         wbModeLabel.setTooltip(new Tooltip("White balance mode for background acquisition.\n"
@@ -496,6 +539,8 @@ public class BackgroundCollectionController {
                         instructionLabel,
                         new Separator(),
                         modalityPane,
+                        profileRow,
+                        lampRow,
                         wbModeRow,
                         wbValidityPanel,
                         targetIntensityRow,
@@ -505,6 +550,7 @@ public class BackgroundCollectionController {
         // Initial visibility pass: depends on detector + WB mode, both of which
         // are now resolved.
         updateExposurePaneVisibility();
+        updateProfileAndLampRow();
 
         return content;
     }
@@ -548,6 +594,14 @@ public class BackgroundCollectionController {
                 objective);
 
         clearExposureControls();
+
+        // Channel-based profiles (fluorescence): show a read-only per-channel
+        // summary instead of angle/exposure controls. The collection iterates
+        // the profile channels, not these fields.
+        String selectedProfile = profileComboBox != null ? profileComboBox.getValue() : null;
+        if (selectedProfile != null && renderChannelTableIfChannelProfile(selectedProfile)) {
+            return;
+        }
 
         // Get modality handler
         ModalityHandler handler = ModalityRegistry.getHandler(modality);
@@ -816,6 +870,52 @@ public class BackgroundCollectionController {
      * Note: validateCurrentSettings() method removed as background collection shouldn't
      * validate against existing backgrounds since the purpose is to create new ones.
      */
+
+    /**
+     * If the given profile is channel-based (fluorescence), render a read-only
+     * per-channel summary table into the exposure pane and return true. Channels
+     * failing the unused-channel rule are shown greyed as "Skipped (unused)".
+     * Returns false for angle-based profiles so the caller renders normally.
+     */
+    private boolean renderChannelTableIfChannelProfile(String profileKey) {
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+            List<qupath.ext.qpsc.modality.Channel> channels = mgr.getChannelsForProfile(profileKey);
+            if (channels.isEmpty()) {
+                return false;
+            }
+            GridPane grid = new GridPane();
+            grid.setHgap(12);
+            grid.setVgap(4);
+            String[] headers = {"Channel", "Exposure (ms)", "Intensity", "Status"};
+            for (int c = 0; c < headers.length; c++) {
+                Label h = new Label(headers[c]);
+                h.setStyle("-fx-font-weight: bold;");
+                grid.add(h, c, 0);
+            }
+            int row = 1;
+            for (qupath.ext.qpsc.modality.Channel ch : channels) {
+                boolean inUse = ch.isInUse();
+                double intensity = ch.currentIntensityValue();
+                grid.add(new Label(ch.displayName()), 0, row);
+                grid.add(new Label(String.format("%.1f", ch.defaultExposureMs())), 1, row);
+                grid.add(new Label(Double.isNaN(intensity) ? "--" : String.format("%.0f", intensity)), 2, row);
+                Label status = new Label(inUse ? "In use" : "Skipped (unused)");
+                status.setStyle(inUse ? "-fx-text-fill: #2E7D32;" : "-fx-text-fill: #9E9E9E;");
+                grid.add(status, 3, row);
+                row++;
+            }
+            exposureControlsPane.getChildren().add(grid);
+            showBackgroundValidationMessage(
+                    "Fluorescence profile: one background will be collected per in-use channel.",
+                    "-fx-text-fill: blue; -fx-font-weight: bold;");
+            return true;
+        } catch (Exception e) {
+            logger.debug("Could not render channel table: {}", e.getMessage());
+            return false;
+        }
+    }
 
     /**
      * Show or hide background validation message
@@ -1121,6 +1221,77 @@ public class BackgroundCollectionController {
         }
     }
 
+    /**
+     * Repopulate the acquisition-profile combo for the selected modality and
+     * refresh the read-only lamp-intensity row. The profile row is hidden when
+     * the modality declares no profiles; the lamp row is hidden when the modality
+     * declares no {@code illumination:} block ("there if it is there").
+     */
+    private void updateProfileAndLampRow() {
+        if (profileComboBox == null) {
+            return;
+        }
+        String modality = modalityComboBox != null ? modalityComboBox.getValue() : null;
+        String objective = objectiveComboBox != null ? objectiveComboBox.getValue() : null;
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+
+            Set<String> profiles = modality != null ? mgr.getProfileKeysForModality(modality) : Set.of();
+            profileComboBox.getItems().setAll(profiles);
+            boolean hasProfiles = !profiles.isEmpty();
+            profileRow.setVisible(hasProfiles);
+            profileRow.setManaged(hasProfiles);
+            if (hasProfiles) {
+                String resolved = mgr.resolveProfileKey(modality, objective);
+                if (resolved != null && profiles.contains(resolved)) {
+                    profileComboBox.setValue(resolved);
+                } else if (profileComboBox.getValue() == null || !profiles.contains(profileComboBox.getValue())) {
+                    profileComboBox.setValue(profiles.iterator().next());
+                }
+            } else {
+                profileComboBox.setValue(null);
+            }
+            refreshLampLabel();
+        } catch (Exception e) {
+            logger.debug("Could not update profile/lamp row: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Refresh the read-only lamp-intensity label from the currently selected
+     * profile. Hides the lamp row when the modality has no illumination block.
+     */
+    private void refreshLampLabel() {
+        if (lampRow == null) {
+            return;
+        }
+        String modality = modalityComboBox != null ? modalityComboBox.getValue() : null;
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+            Map<String, Object> illum = modality != null ? mgr.getModalityIllumination(modality) : null;
+            boolean hasLamp = illum != null;
+            lampRow.setVisible(hasLamp);
+            lampRow.setManaged(hasLamp);
+            if (!hasLamp) {
+                return;
+            }
+            String label = illum.get("label") != null
+                    ? illum.get("label").toString()
+                    : (illum.get("device") != null ? illum.get("device").toString() : "lamp");
+            String profileKey = profileComboBox.getValue();
+            Double intensity = profileKey != null ? mgr.getProfileIlluminationIntensity(profileKey) : null;
+            if (intensity != null) {
+                lampIntensityLabel.setText(String.format("%s = %.0f (from profile %s)", label, intensity, profileKey));
+            } else {
+                lampIntensityLabel.setText(label + " -- not set by the selected profile");
+            }
+        } catch (Exception e) {
+            logger.debug("Could not refresh lamp label: {}", e.getMessage());
+        }
+    }
+
     /** Save the last-used output path so it persists across dialog invocations. */
     private void saveOutputPath(String path) {
         if (path != null && !path.isEmpty()) {
@@ -1229,8 +1400,18 @@ public class BackgroundCollectionController {
             }
             PersistentPreferences.setLastDetector(detector);
 
+            String profileKey = profileComboBox != null ? profileComboBox.getValue() : null;
+
             return new BackgroundCollectionResult(
-                    modality, objective, detector, finalExposures, outputPath, usePerAngleWB, wbMode, targetIntensity);
+                    modality,
+                    objective,
+                    detector,
+                    finalExposures,
+                    outputPath,
+                    usePerAngleWB,
+                    wbMode,
+                    targetIntensity,
+                    profileKey);
 
         } catch (Exception e) {
             logger.error("Error creating result", e);

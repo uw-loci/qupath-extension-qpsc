@@ -1274,6 +1274,21 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
+     * Result of a background acquisition. {@code finalExposures} carries the
+     * angle-keyed exposures for angle modalities; {@code channelExposures} /
+     * {@code channelIntensities} carry the channel-keyed values for fluorescence.
+     * Lamp fields are null when the scope reported no adjustable lamp or when an
+     * old server omitted the metadata field.
+     */
+    public record BackgroundAcquisitionResult(
+            Map<Double, Double> finalExposures,
+            Double appliedLampIntensity,
+            String lampDeviceLabel,
+            String resolvedProfileKey,
+            Map<String, Double> channelExposures,
+            Map<String, Double> channelIntensities) {}
+
+    /**
      * Starts a background acquisition workflow on the server for flat field correction.
      * This method uses the BGACQUIRE command with custom parameters that match the
      * server's expected format (--yaml, --output, --modality, --angles, --exposures).
@@ -1287,10 +1302,12 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param wbMode White balance mode: "camera_awb", "simple", "per_angle", or "off"
      * @param objective Objective ID for calibration lookup (e.g., "LOCI_OBJECTIVE_OLYMPUS_20X_POL_001")
      * @param detector Detector ID for calibration lookup (e.g., "LOCI_DETECTOR_JAI_001")
-     * @return Map of angle (degrees) to final exposure time (ms) used by Python server
+     * @param profileKey Acquisition profile key whose illumination_intensity the server
+     *                   applies; may be null (server falls back to its own resolution)
+     * @return parsed result including final exposures and applied lamp metadata
      * @throws IOException if communication fails
      */
-    public Map<Double, Double> startBackgroundAcquisition(
+    public BackgroundAcquisitionResult startBackgroundAcquisition(
             String yamlPath,
             String outputPath,
             String modality,
@@ -1299,7 +1316,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String wbMode,
             String objective,
             String detector,
-            double targetIntensity)
+            double targetIntensity,
+            String profileKey)
             throws IOException {
 
         // Build BGACQUIRE-specific command message
@@ -1320,54 +1338,226 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if (targetIntensity > 0) {
             targetFlag = " --target-intensity " + String.format("%.0f", targetIntensity);
         }
+        // Profile key drives the server's apply_profile_illumination; optional.
+        String profileFlag = "";
+        if (profileKey != null && !profileKey.isEmpty()) {
+            profileFlag = " --profile " + profileKey;
+        }
         String message = String.format(
-                "--yaml %s --output %s --modality %s --angles %s --exposures %s%s%s%s %s",
-                yamlPath, outputPath, modality, angles, exposures, wbFlags, hwFlags, targetFlag, END_MARKER);
-        byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
+                "--yaml %s --output %s --modality %s --angles %s --exposures %s%s%s%s%s %s",
+                yamlPath,
+                outputPath,
+                modality,
+                angles,
+                exposures,
+                wbFlags,
+                hwFlags,
+                targetFlag,
+                profileFlag,
+                END_MARKER);
+        String finalResponse = sendBgAcquireCommand(message);
 
-        logger.info("Sending background acquisition command:");
-        logger.info("  Message length: {} bytes", messageBytes.length);
-        logger.info("  Message content: {}", message);
+        // Parse final exposures from SUCCESS response.
+        // Format: SUCCESS:/path|angle1:exposure1,...|lamp=..;device=..;profile=..
+        String data = finalResponse.substring(8); // Remove "SUCCESS:"
+        String[] parts = data.split("\\|");
+        Map<Double, Double> finalExposures = new HashMap<>();
+        if (parts.length > 1 && !parts[1].trim().isEmpty()) {
+            for (String pair : parts[1].trim().split(",")) {
+                String[] angleExposure = pair.split(":");
+                if (angleExposure.length == 2) {
+                    try {
+                        finalExposures.put(
+                                Double.parseDouble(angleExposure[0].trim()),
+                                Double.parseDouble(angleExposure[1].trim()));
+                    } catch (NumberFormatException e) {
+                        logger.warn("Failed to parse angle:exposure pair: {}", pair);
+                    }
+                }
+            }
+            logger.info("Parsed {} final exposure values from server", finalExposures.size());
+        } else {
+            logger.warn("No exposure data in background response (old server version?)");
+        }
+        SuccessMeta meta = parseSuccessMeta(parts.length > 2 ? parts[2] : null);
+        return new BackgroundAcquisitionResult(
+                finalExposures, meta.lampIntensity(), meta.deviceLabel(), meta.profileKey(), Map.of(), Map.of());
+    }
+
+    /**
+     * Starts a per-channel background acquisition for a fluorescence profile.
+     * The server collects one background image per channel id in {@code channelIds},
+     * each at that channel's profile-resolved exposure and intensity. The caller has
+     * already applied the unused-channel rule, so the server collects exactly the
+     * channels it is given.
+     *
+     * @param yamlPath   path to microscope configuration YAML
+     * @param outputPath profile-keyed output folder for the per-channel backgrounds
+     * @param modality   modality name
+     * @param objective  objective ID
+     * @param detector   detector ID
+     * @param profileKey acquisition profile key
+     * @param channelIds the in-use channel ids to collect
+     * @return parsed result; {@code channelExposures}/{@code channelIntensities} carry
+     *         the per-channel values
+     * @throws IOException if communication fails
+     */
+    public BackgroundAcquisitionResult startChannelBackgroundAcquisition(
+            String yamlPath,
+            String outputPath,
+            String modality,
+            String objective,
+            String detector,
+            String profileKey,
+            java.util.List<String> channelIds)
+            throws IOException {
+
+        StringBuilder flags = new StringBuilder();
+        if (objective != null && !objective.isEmpty()) {
+            flags.append(" --objective ").append(objective);
+        }
+        if (detector != null && !detector.isEmpty()) {
+            flags.append(" --detector ").append(detector);
+        }
+        if (profileKey != null && !profileKey.isEmpty()) {
+            flags.append(" --profile ").append(profileKey);
+        }
+        if (channelIds != null && !channelIds.isEmpty()) {
+            flags.append(" --channels ").append(String.join(",", channelIds));
+        }
+        String message = String.format(
+                "--yaml %s --output %s --modality %s --angles () --exposures ()%s %s",
+                yamlPath, outputPath, modality, flags, END_MARKER);
+
+        String finalResponse = sendBgAcquireCommand(message);
+        String data = finalResponse.substring(8);
+        String[] parts = data.split("\\|");
+        Map<String, Double> channelExposures = new HashMap<>();
+        if (parts.length > 1 && !parts[1].trim().isEmpty()) {
+            for (String pair : parts[1].trim().split(",")) {
+                int colon = pair.lastIndexOf(':');
+                if (colon > 0) {
+                    try {
+                        channelExposures.put(
+                                pair.substring(0, colon).trim(),
+                                Double.parseDouble(pair.substring(colon + 1).trim()));
+                    } catch (NumberFormatException e) {
+                        logger.warn("Failed to parse channel:exposure pair: {}", pair);
+                    }
+                }
+            }
+        }
+        SuccessMeta meta = parseSuccessMeta(parts.length > 2 ? parts[2] : null);
+        return new BackgroundAcquisitionResult(
+                Map.of(),
+                meta.lampIntensity(),
+                meta.deviceLabel(),
+                meta.profileKey(),
+                channelExposures,
+                meta.channelIntensities());
+    }
+
+    /** Parsed third pipe-field of a BGACQUIRE SUCCESS response. */
+    private record SuccessMeta(
+            Double lampIntensity, String deviceLabel, String profileKey, Map<String, Double> channelIntensities) {}
+
+    /**
+     * Parses the optional third pipe-field of a BGACQUIRE SUCCESS response --
+     * {@code lamp=<n|none>;device=<label|none>;profile=<key|none>;chint=<id:val,...>}.
+     * Tolerates a null/empty field (old server) by returning all-null/empty.
+     */
+    private static SuccessMeta parseSuccessMeta(String metaField) {
+        Double lamp = null;
+        String device = null;
+        String profile = null;
+        Map<String, Double> chint = new HashMap<>();
+        if (metaField != null && !metaField.trim().isEmpty()) {
+            for (String tok : metaField.trim().split(";")) {
+                int eq = tok.indexOf('=');
+                if (eq < 0) {
+                    continue;
+                }
+                String k = tok.substring(0, eq).trim();
+                String v = tok.substring(eq + 1).trim();
+                boolean none = v.isEmpty() || "none".equalsIgnoreCase(v);
+                switch (k) {
+                    case "lamp" -> {
+                        if (!none) {
+                            try {
+                                lamp = Double.parseDouble(v);
+                            } catch (NumberFormatException ignored) {
+                            }
+                        }
+                    }
+                    case "device" -> {
+                        if (!none) {
+                            device = v;
+                        }
+                    }
+                    case "profile" -> {
+                        if (!none) {
+                            profile = v;
+                        }
+                    }
+                    case "chint" -> {
+                        if (!none) {
+                            for (String pair : v.split(",")) {
+                                int colon = pair.lastIndexOf(':');
+                                if (colon > 0) {
+                                    try {
+                                        chint.put(
+                                                pair.substring(0, colon).trim(),
+                                                Double.parseDouble(pair.substring(colon + 1)
+                                                        .trim()));
+                                    } catch (NumberFormatException ignored) {
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    default -> {}
+                }
+            }
+        }
+        return new SuccessMeta(lamp, device, profile, chint);
+    }
+
+    /**
+     * Sends a built BGACQUIRE message and returns the final {@code SUCCESS:...}
+     * response string. Shared by the angle-based and channel-based background
+     * acquisition entry points.
+     *
+     * @param message the fully built command message (already ending in END_MARKER)
+     * @return the final response string (guaranteed to start with "SUCCESS:")
+     * @throws IOException if the server rejects the command or returns no result
+     */
+    private String sendBgAcquireCommand(String message) throws IOException {
+        byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
+        logger.info("Sending background acquisition command ({} bytes): {}", messageBytes.length, message);
 
         synchronized (socketLock) {
             ensureConnected();
 
-            // Temporarily increase socket timeout for background acquisition
-            // Adaptive exposure requires multiple iterations per angle (typically 2-5, max 10)
-            // With 4 angles, this can take 60-120 seconds. Allow 3 minutes to be safe.
+            // Adaptive exposure runs several iterations per angle/channel; allow 3 minutes.
             int originalTimeout = readTimeout;
             try {
                 if (socket != null) {
-                    socket.setSoTimeout(180000); // 3 minutes for background acquisition with adaptive exposure
-                    logger.debug("Increased socket timeout to 180s for background acquisition");
+                    socket.setSoTimeout(180000);
                 }
 
-                // Send BGACQUIRE command (8 bytes)
                 output.write(Command.BGACQUIRE.getValue());
                 output.flush();
-                logger.debug("Sent BGACQUIRE command (8 bytes)");
-
-                // Small delay to ensure command is processed
                 Thread.sleep(50);
-
-                // Send message
                 output.write(messageBytes);
                 output.flush();
-                logger.debug("Sent background acquisition message ({} bytes)", messageBytes.length);
-
-                // Ensure all data is sent
-                output.flush();
-
                 lastActivityTime.set(System.currentTimeMillis());
                 logger.info("Background acquisition command sent successfully");
 
-                // Read the STARTED acknowledgment
                 byte[] buffer = new byte[1024];
                 int bytesRead = input.read(buffer);
                 if (bytesRead > 0) {
                     String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
                     logger.info("Received initial server response: {}", response);
-
                     if (response.startsWith("FAILED:")) {
                         throw new IOException("Server rejected background acquisition: " + response);
                     } else if (!response.startsWith("STARTED:")) {
@@ -1375,70 +1565,29 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     }
                 }
 
-                // Now wait for the final SUCCESS/FAILED response
                 logger.info("Waiting for background acquisition to complete...");
                 bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String finalResponse = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received final server response: {}", finalResponse);
-
-                    if (finalResponse.startsWith("FAILED:")) {
-                        throw new IOException("Background acquisition failed: " + finalResponse.substring(7));
-                    } else if (!finalResponse.startsWith("SUCCESS:")) {
-                        logger.warn("Unexpected final response: {}", finalResponse);
-                    }
-
-                    // Parse final exposures from SUCCESS response
-                    // Format: SUCCESS:/path|angle1:exposure1,angle2:exposure2,...
-                    Map<Double, Double> finalExposures = new HashMap<>();
-                    if (finalResponse.startsWith("SUCCESS:")) {
-                        String data = finalResponse.substring(8); // Remove "SUCCESS:"
-                        String[] parts = data.split("\\|");
-
-                        // Check if exposures are included (parts[1])
-                        if (parts.length > 1 && !parts[1].trim().isEmpty()) {
-                            String exposuresStr = parts[1].trim();
-                            logger.info("Parsing final exposures from response: {}", exposuresStr);
-
-                            String[] exposurePairs = exposuresStr.split(",");
-                            for (String pair : exposurePairs) {
-                                String[] angleExposure = pair.split(":");
-                                if (angleExposure.length == 2) {
-                                    try {
-                                        double angle = Double.parseDouble(angleExposure[0].trim());
-                                        double exposure = Double.parseDouble(angleExposure[1].trim());
-                                        finalExposures.put(angle, exposure);
-                                        logger.debug("  Angle {}deg -> {}ms", angle, exposure);
-                                    } catch (NumberFormatException e) {
-                                        logger.warn("Failed to parse angle:exposure pair: {}", pair);
-                                    }
-                                }
-                            }
-                            logger.info("Parsed {} final exposure values from server", finalExposures.size());
-                        } else {
-                            logger.warn("No exposure data in response (old server version?)");
-                        }
-
-                        lastActivityTime.set(System.currentTimeMillis());
-                        return finalExposures;
-                    }
-                } else {
+                if (bytesRead <= 0) {
                     throw new IOException("No final response received from background acquisition");
                 }
-
-                // Fallback - shouldn't reach here
+                String finalResponse = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                logger.info("Received final server response: {}", finalResponse);
+                if (finalResponse.startsWith("FAILED:")) {
+                    throw new IOException("Background acquisition failed: " + finalResponse.substring(7));
+                }
+                if (!finalResponse.startsWith("SUCCESS:")) {
+                    throw new IOException("Unexpected final background response: " + finalResponse);
+                }
                 lastActivityTime.set(System.currentTimeMillis());
-                return new HashMap<>();
+                return finalResponse;
 
             } catch (IOException | InterruptedException e) {
                 handleIOException(new IOException("Background acquisition error", e));
                 throw new IOException("Background acquisition error: " + e.getMessage(), e);
             } finally {
-                // Restore original timeout
                 if (socket != null) {
                     try {
                         socket.setSoTimeout(originalTimeout);
-                        logger.debug("Restored socket timeout to {}ms", originalTimeout);
                     } catch (IOException e) {
                         logger.warn("Failed to restore original socket timeout", e);
                     }

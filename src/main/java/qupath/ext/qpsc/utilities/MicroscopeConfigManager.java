@@ -1890,6 +1890,164 @@ public class MicroscopeConfigManager {
         return List.copyOf(result);
     }
 
+    // ========== ACQUISITION PROFILE LOOKUP METHODS ==========
+
+    /**
+     * Returns all acquisition profile keys declared under {@code acquisition_profiles}.
+     *
+     * @return ordered set of profile keys, or an empty set if the section is absent
+     */
+    public Set<String> getAcquisitionProfileKeys() {
+        Map<String, Object> profiles = getSection("acquisition_profiles");
+        return profiles != null ? new LinkedHashSet<>(profiles.keySet()) : Set.of();
+    }
+
+    /**
+     * Returns the acquisition profile keys whose {@code modality} field matches
+     * the given modality name (case-insensitive).
+     *
+     * @param modality the modality name (e.g. {@code "Brightfield"})
+     * @return ordered set of matching profile keys; empty if none
+     */
+    public Set<String> getProfileKeysForModality(String modality) {
+        if (modality == null) {
+            return Set.of();
+        }
+        Map<String, Object> profiles = getSection("acquisition_profiles");
+        if (profiles == null) {
+            return Set.of();
+        }
+        Set<String> result = new LinkedHashSet<>();
+        for (Map.Entry<String, Object> e : profiles.entrySet()) {
+            if (e.getValue() instanceof Map<?, ?> profile) {
+                Object mod = profile.get("modality");
+                if (mod != null && mod.toString().equalsIgnoreCase(modality)) {
+                    result.add(e.getKey());
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Returns the {@code modality} field of an acquisition profile.
+     *
+     * @param profileKey the acquisition profile key
+     * @return the modality name, or {@code null} if the profile or field is absent
+     */
+    public String getProfileModality(String profileKey) {
+        Map<String, Object> profile = getSection("acquisition_profiles", profileKey);
+        if (profile == null) {
+            return null;
+        }
+        Object mod = profile.get("modality");
+        return mod != null ? mod.toString() : null;
+    }
+
+    /**
+     * Returns the scalar {@code illumination_intensity} declared on an acquisition
+     * profile. This is the lamp/LED level the profile applies; for profile-based
+     * fluorescence it is an LED master and per-channel intensity lives in
+     * {@code channel_overrides} instead.
+     *
+     * @param profileKey the acquisition profile key
+     * @return the intensity, or {@code null} if the profile or field is absent
+     */
+    public Double getProfileIlluminationIntensity(String profileKey) {
+        Map<String, Object> profile = getSection("acquisition_profiles", profileKey);
+        if (profile == null) {
+            return null;
+        }
+        Object v = profile.get("illumination_intensity");
+        return (v instanceof Number n) ? n.doubleValue() : null;
+    }
+
+    /**
+     * Returns the {@code illumination} block declared on a modality, or {@code null}
+     * if the modality declares no adjustable lamp. Presence of this block is the
+     * config-level "there if it is there" signal -- a modality without it (e.g. PPM
+     * brightfield) has no lamp control and lamp checks are skipped for it.
+     *
+     * @param modality the modality name as keyed in the {@code modalities} block
+     * @return the illumination sub-map (device/label/intensity_property/...), or null
+     */
+    public Map<String, Object> getModalityIllumination(String modality) {
+        if (modality == null) {
+            return null;
+        }
+        return getSection("modalities", modality, "illumination");
+    }
+
+    /**
+     * Resolves a (modality, objective) pair to a full {@code acquisition_profiles}
+     * key. This is a deliberate Java mirror of the Python server's
+     * {@code _resolve_background_profile_key} in
+     * {@code microscope_command_server/acquisition/workflow.py} -- the two MUST
+     * stay algorithmically identical so the {@code --profile} arg Java sends and
+     * the fallback Python derives agree.
+     *
+     * <p>Java passes the bare modality name and the full objective id; profiles
+     * are keyed {@code <modality>_<objective-suffix>}. The match walks the
+     * profiles, prefers an exact modality-only key, then the longest
+     * {@code <modality>_<suffix>} whose suffix is a substring of the objective id
+     * (case-insensitive).
+     *
+     * @param modality  the bare modality name (e.g. {@code "Brightfield"})
+     * @param objective the full objective id
+     * @return the matched profile key, or {@code null} if none matches
+     */
+    public String resolveProfileKey(String modality, String objective) {
+        if (modality == null || modality.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> profiles = getSection("acquisition_profiles");
+        if (profiles == null || profiles.isEmpty()) {
+            return null;
+        }
+        // Strategy 1: exact match on modality alone.
+        if (profiles.containsKey(modality)) {
+            return modality;
+        }
+        String modalityPrefix = modality + "_";
+        String objLower = (objective == null ? "" : objective).toLowerCase();
+
+        // Strategy 2: "<modality>_<suffix>" where suffix is a substring of the
+        // objective id; prefer the longest matching suffix.
+        int bestLen = -1;
+        String bestKey = null;
+        for (String key : profiles.keySet()) {
+            if (!key.startsWith(modalityPrefix)) {
+                continue;
+            }
+            String suffix = key.substring(modalityPrefix.length());
+            if (!suffix.isEmpty() && objLower.contains(suffix.toLowerCase()) && suffix.length() > bestLen) {
+                bestLen = suffix.length();
+                bestKey = key;
+            }
+        }
+        if (bestKey != null) {
+            return bestKey;
+        }
+
+        // Strategy 3: case-insensitive prefix fallback.
+        String modalityPrefixLower = modalityPrefix.toLowerCase();
+        for (String key : profiles.keySet()) {
+            if (!key.toLowerCase().startsWith(modalityPrefixLower)) {
+                continue;
+            }
+            String suffix = key.substring(modalityPrefix.length());
+            if (!suffix.isEmpty() && objLower.contains(suffix.toLowerCase())) {
+                return key;
+            }
+        }
+        logger.warn(
+                "Could not resolve acquisition profile for modality='{}' objective='{}'. Available: {}",
+                modality,
+                objective,
+                profiles.keySet());
+        return null;
+    }
+
     /**
      * Returns the list of channel ids declared under
      * {@code acquisition_profiles.<profile>.channels} (optional filter list).
@@ -2010,9 +2168,30 @@ public class MicroscopeConfigManager {
             if (expObj instanceof Number n) {
                 exposure = n.doubleValue();
             }
+            // A 0 (or negative) exposure override marks the channel as unused
+            // for this profile. Skip it -- the Channel constructor rejects a
+            // non-positive exposure, and downstream callers treat an absent
+            // channel as "not in use" (the unused-channel rule).
+            if (exposure <= 0) {
+                logger.info(
+                        "Profile '{}' channel '{}' has exposure_ms={}; treating as unused and skipping",
+                        profileKey,
+                        c.id(),
+                        exposure);
+                continue;
+            }
             List<PropertyWrite> mergedProperties =
                     mergeDevicePropertyOverrides(c.properties(), override.get("device_properties"), c.id(), profileKey);
-            result.add(new Channel(c.id(), c.displayName(), exposure, c.presets(), mergedProperties, c.settleMs()));
+            // Preserve intensityProperty so currentIntensityValue() still works
+            // on overridden channels (the unused-channel rule depends on it).
+            result.add(new Channel(
+                    c.id(),
+                    c.displayName(),
+                    exposure,
+                    c.presets(),
+                    mergedProperties,
+                    c.intensityProperty(),
+                    c.settleMs()));
         }
         return List.copyOf(result);
     }

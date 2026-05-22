@@ -976,6 +976,33 @@ If `base_gain` is set higher than 4.0, the R/B channels are clamped to 4.0x whil
 - System will warn you if exposures don't match
 - Use the same exposure times you plan to use for your samples
 
+#### Q: Acquisition Wizard shows an orange "Background lamp ... != profile ..." warning
+
+**A:** The background images were collected at a lamp (illumination) intensity
+that no longer matches the active acquisition profile's `illumination_intensity`.
+Flat-field division would then correct for the wrong illumination level.
+
+This is a **non-blocking warning** -- the Background step turns orange and the
+pre-acquisition confirmation lists it, but you can still proceed. To clear it:
+- Re-collect backgrounds (Extensions > QPSC > Utilities > Background Collection)
+  with the current profile selected, **or**
+- Restore the profile's `illumination_intensity` to the value the backgrounds
+  were collected at.
+
+Lamp intensity is sourced from the acquisition profile and is shown read-only in
+the Background Collection dialog. Scopes with no adjustable lamp (e.g. PPM) never
+show this warning -- there is nothing to be inconsistent.
+
+#### Q: Fluorescence Background step says "Missing backgrounds for channel(s): ..."
+
+**A:** A fluorescence profile collects one background per **in-use** channel
+(keyed by profile). A channel is in use when it has a non-zero exposure and a
+non-zero illumination intensity; channels with 0 intensity are treated as unused
+and need no background. The warning means an in-use channel has no background
+image yet. Re-run Background Collection with that profile selected -- the
+per-channel table in the dialog shows which channels will be collected and which
+are skipped as unused.
+
 ### File Management
 
 #### Q: Where are my acquired images saved?
