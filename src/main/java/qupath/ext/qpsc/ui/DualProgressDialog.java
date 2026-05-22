@@ -183,12 +183,12 @@ public class DualProgressDialog {
 
         // Total progress components
         totalProgressBar = new ProgressBar(0);
-        totalProgressBar.setPrefWidth(350);
+        sizeProgressBar(totalProgressBar);
         totalProgressLabel = new Label("Overall Progress: 0 of " + totalAnnotations + " annotations complete");
 
         // Current annotation progress components
         currentProgressBar = new ProgressBar(0);
-        currentProgressBar.setPrefWidth(350);
+        sizeProgressBar(currentProgressBar);
         currentProgressLabel = new Label("Current Annotation: Waiting to start...");
 
         // Time and status labels
@@ -222,11 +222,11 @@ public class DualProgressDialog {
         perAxisRow = new HBox(12, channelLabel, angleLabel, zLabel, tileLabel);
         perAxisRow.setAlignment(Pos.CENTER_LEFT);
         tileProgressBar = new ProgressBar(0);
-        tileProgressBar.setPrefWidth(350);
+        sizeProgressBar(tileProgressBar);
         tileProgressBar.setVisible(false);
         tileProgressBar.setManaged(false);
         timepointProgressBar = new ProgressBar(0);
-        timepointProgressBar.setPrefWidth(350);
+        sizeProgressBar(timepointProgressBar);
         timepointProgressBar.setVisible(false);
         timepointProgressBar.setManaged(false);
         mdaPathLabel = new Label("");
@@ -306,6 +306,19 @@ public class DualProgressDialog {
         });
 
         logger.info("Created dual progress dialog for {} annotations", totalAnnotations);
+    }
+
+    /**
+     * Applies a fixed width and an explicit minimum/preferred height to a
+     * progress bar. The explicit height is required: inside an auto-sized
+     * Scene the enclosing VBox would otherwise allocate the bar its computed
+     * height, which collapsed to zero on the acquisition machine and left the
+     * bars invisible even though they were managed and visible.
+     */
+    private static void sizeProgressBar(ProgressBar bar) {
+        bar.setPrefWidth(350);
+        bar.setMinHeight(20);
+        bar.setPrefHeight(20);
     }
 
     /**
@@ -1099,7 +1112,7 @@ public class DualProgressDialog {
                 && plan.zCount() <= 1
                 && plan.timepoints() <= 1;
         if (degenerate) {
-            logger.info(
+            logger.debug(
                     "applyPlanVisibility: degenerate plan (nPositions={}, ch={}, angle={}, z={}, tp={}) "
                             + "-- per-axis row and tile bar hidden",
                     plan.nPositions(),
@@ -1156,7 +1169,7 @@ public class DualProgressDialog {
             tileLabel.setText("");
             tileProgressBar.setProgress(0);
         }
-        logger.info(
+        logger.debug(
                 "applyPlanVisibility: nPositions={}, ch={}, angle={}, z={}, tp={} -> showTile={}; "
                         + "tileProgressBar visible={} managed={}; dimensionPanel visible={} managed={}",
                 plan.nPositions(),
