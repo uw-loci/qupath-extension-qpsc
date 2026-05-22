@@ -596,6 +596,29 @@ The packaged manifest's default per-modality is still `laplacian_variance`; per-
 
 **A:** Fixed 2026-04-26 (commit `df1092f`). The mid-run estimator previously computed `(now - workflowStartTime) / totalTilesCompleted`, which folded everything that happened *before* the first tile finished -- pre-acquisition AF, blocking modals, manual-focus dialog wait time -- into the per-tile mean. A 30-second pause at the start could turn a 12-tile / 4 s-per-tile acquisition into "5 hours remaining" once the first tile finished. Now the estimator uses the rolling `allTileTimes` mean (already collected with tile 1 excluded for this exact reason). The first-tile fallback keeps the legacy formula because there's no sample yet, but from tile 2 onward the estimate reflects steady-state cadence only.
 
+#### Q: "Saturation Limit Exceeded" dialog appears during acquisition (PPM)
+
+**A:** This dialog appears when the birefringence saturation guard (PPM modalities) detects that the initial monitoring tiles are saturated. The acquisition pauses and offers two options:
+
+**What each choice does:**
+
+- **Continue anyway** (red button) -- Acquire despite saturation. Useful for faint signal that needs a higher exposure. This choice disables the saturation guard for the rest of this acquisition run. Saturated angles cannot be background-corrected, but the data will be acquired and stitched normally.
+
+- **Cancel acquisition** (default button) -- Abort the acquisition as you would in the old hard-abort behavior. You can lower settings and retry.
+
+**Why saturation happens and how to avoid it:**
+
+The saturation guard monitors the initial tiles to detect overexposed data before committing to a full multi-angle scan. Saturation typically occurs when the White Balance Target Intensity is too high for your sample.
+
+**To fix:**
+1. Click Cancel to abort the current acquisition
+2. Lower the White Balance Target Intensity in the next acquisition attempt (try reducing by 10-20 units)
+3. Retry the acquisition
+
+Alternatively, if you are confident the faint signal genuinely requires the higher exposure, click Continue anyway.
+
+**Server compatibility:** Older versions of `microscope_command_server` (before 2026-05-22) hard-abort on saturation instead of prompting. The interactive dialog requires a matching server build. If your server is older and saturation is detected, the acquisition will abort without showing this dialog.
+
 #### Q: Z-stack with fluorescence channels saves only one image per tile (no Z planes)
 
 **A:** Fixed 2026-04-26 (commit `e8e3799`). The widefield IF tile path was snapping once per channel and ignoring `ctx.z_offsets` entirely, so Z-stack settings on fluorescence acquisitions silently dropped to single-plane (logs showed "264 total images" but only 24 saved when channels=2, planes=11). Now the channel loop iterates Z planes per channel, accumulates, and applies the configured projection. Output: one projected file per `<output>/<channel>/<tile>.tif`; with `--save-raw` also `<output>/<channel>/z000/`, etc.

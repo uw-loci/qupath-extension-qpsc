@@ -89,6 +89,7 @@ per-channel exposure settings.
   path characteristics differ.
 - **Recalibrate** after any hardware changes affecting the light path (lamp
   replacement, filter changes, optical realignment).
+- **Target intensity and saturation during acquisition** -- During acquisition on PPM modalities, if the birefringence saturation guard detects overexposure in the initial tiles, a dialog prompts you to choose between continuing despite saturation or canceling to lower settings. The saturation guard is triggered when the White Balance Target Intensity (set here during calibration) is too high for your sample. If you experience saturation dialogs during acquisition, lower the target intensity value here (try -10 to -20 from current) and recalibrate.
 - If calibration fails to converge, check that the reference area is truly uniform
   and bright. Dust or sample residue will skew results.
 - The tolerance setting controls how precise the calibration needs to be. A tighter
