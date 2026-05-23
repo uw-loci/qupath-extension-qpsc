@@ -50,6 +50,12 @@ public class MicroscopeConfigManager {
     // Contains imaging_profiles and background_correction settings
     private volatile Map<String, Object> imageprocessingData;
 
+    // Optional sidecar with calibrated parfocality offsets, loaded from
+    // parfocality_{microscope}.yml in the same directory as the main config.
+    // When present, sidecar values override profile.parfocal_offset_um declared
+    // inline in the main YAML. Empty map when the sidecar is absent.
+    private volatile Map<String, Object> parfocalityData;
+
     // One-shot WARN guard for missing mm_stage_devices: block. Volatile so concurrent
     // callers don't all log -- a single warn per config load is enough.
     private volatile boolean warnedNoMmStageDevices = false;
@@ -66,6 +72,7 @@ public class MicroscopeConfigManager {
         this.resourceData = Collections.emptyMap();
         this.autofocusData = Collections.emptyMap();
         this.imageprocessingData = Collections.emptyMap();
+        this.parfocalityData = Collections.emptyMap();
         this.lociSectionMap = Collections.emptyMap();
     }
 
@@ -83,6 +90,9 @@ public class MicroscopeConfigManager {
 
         // Load external imageprocessing settings if available
         this.imageprocessingData = loadImageprocessingConfig(configPath);
+
+        // Load parfocality calibration sidecar if available
+        this.parfocalityData = loadParfocalityConfig(configPath);
 
         // Dynamically build field-to-section map from the top-level of resources_LOCI.yml
         this.lociSectionMap = new HashMap<>();
@@ -196,11 +206,13 @@ public class MicroscopeConfigManager {
         Map<String, Object> newResources = loadConfig(resPath);
         Map<String, Map<String, Object>> newAutofocus = loadAutofocusConfig(configPath);
         Map<String, Object> newImgproc = loadImageprocessingConfig(configPath);
+        Map<String, Object> newParfocality = loadParfocalityConfig(configPath);
 
         this.configData = newConfig;
         this.resourceData = newResources;
         this.autofocusData = newAutofocus;
         this.imageprocessingData = newImgproc;
+        this.parfocalityData = newParfocality;
         this.configPath = configPath;
 
         // Rebuild lociSectionMap from new resources
@@ -529,6 +541,49 @@ public class MicroscopeConfigManager {
         }
 
         return imageprocessingMap;
+    }
+
+    /**
+     * Loads the optional parfocality calibration sidecar from
+     * {@code parfocality_{microscope}.yml}. Sidecar layout:
+     * <pre>
+     * metadata: {generated, version, description}
+     * reference_profile_per_objective:
+     *   LOCI_OBJECTIVE_OLYMPUS_10X_001: Brightfield_10x
+     * offsets:
+     *   Brightfield_10x: 0.0
+     *   Fluorescence_10x: -12.5
+     * </pre>
+     * <p>When the sidecar is present its {@code offsets:} map overrides any
+     * inline {@code parfocal_offset_um} declared on {@code acquisition_profiles}
+     * in the main YAML. Returns an empty map when the file is absent or
+     * unreadable -- callers must tolerate that.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> loadParfocalityConfig(String configPath) {
+        Map<String, Object> parfocalityMap = new LinkedHashMap<>();
+        try {
+            File configFile = new File(configPath);
+            if (!configFile.exists()) {
+                return parfocalityMap;
+            }
+            String microscopeName = extractMicroscopeName(configFile.getName());
+            File configDir = configFile.getParentFile();
+            File sidecar = new File(configDir, "parfocality_" + microscopeName + ".yml");
+            if (!sidecar.exists()) {
+                logger.debug("No parfocality calibration sidecar at: {}", sidecar.getAbsolutePath());
+                return parfocalityMap;
+            }
+            Yaml yaml = new Yaml();
+            Map<String, Object> data = yaml.load(Files.newInputStream(sidecar.toPath()));
+            if (data != null) {
+                parfocalityMap.putAll(data);
+                logger.info("Loaded parfocality calibration sidecar from: {}", sidecar.getAbsolutePath());
+            }
+        } catch (Exception e) {
+            logger.warn("Error loading parfocality calibration sidecar", e);
+        }
+        return parfocalityMap;
     }
 
     /**
@@ -1975,6 +2030,220 @@ public class MicroscopeConfigManager {
         }
         Object v = profile.get("illumination_intensity");
         return (v instanceof Number n) ? n.doubleValue() : null;
+    }
+
+    /**
+     * Returns the {@code detector} field of an acquisition profile.
+     *
+     * @param profileKey the acquisition profile key
+     * @return the detector id, or {@code null} if the profile or field is absent
+     */
+    public String getProfileDetector(String profileKey) {
+        Map<String, Object> profile = getSection("acquisition_profiles", profileKey);
+        if (profile == null) {
+            return null;
+        }
+        Object v = profile.get("detector");
+        return v != null ? v.toString() : null;
+    }
+
+    /**
+     * Returns the {@code objective} field of an acquisition profile, if present.
+     * Not all profiles pin an objective explicitly; {@link #resolveProfileKey} is
+     * what callers use to walk in the other direction (objective id -> profile).
+     *
+     * @param profileKey the acquisition profile key
+     * @return the objective id, or {@code null} if the profile or field is absent
+     */
+    public String getProfileObjective(String profileKey) {
+        Map<String, Object> profile = getSection("acquisition_profiles", profileKey);
+        if (profile == null) {
+            return null;
+        }
+        Object v = profile.get("objective");
+        return v != null ? v.toString() : null;
+    }
+
+    /**
+     * Returns the parfocality offset (signed microns) for an acquisition profile.
+     * <p>The parfocal offset is a relative Z delta from the per-objective
+     * reference profile (see {@link #getReferenceProfileForObjective(String)}).
+     * When switching from profile A to profile B on the same objective, the
+     * stage Z is shifted by {@code offset(B) - offset(A)} to maintain focus.
+     * <p>Resolution order: sidecar {@code parfocality_{microscope}.yml}
+     * {@code offsets:} map (calibrated values) takes precedence over the inline
+     * {@code parfocal_offset_um} field on the main YAML profile entry. Returns
+     * {@code null} when neither source declares an offset.
+     *
+     * @param profileKey the acquisition profile key
+     * @return the offset in microns, or {@code null} if not declared
+     */
+    @SuppressWarnings("unchecked")
+    public Double getProfileParfocalOffset(String profileKey) {
+        if (profileKey == null) {
+            return null;
+        }
+        // Sidecar wins.
+        if (parfocalityData != null && parfocalityData.get("offsets") instanceof Map<?, ?> offsets) {
+            Object v = ((Map<String, Object>) offsets).get(profileKey);
+            if (v instanceof Number n) {
+                return n.doubleValue();
+            }
+        }
+        // Fall back to the inline value on the profile.
+        Map<String, Object> profile = getSection("acquisition_profiles", profileKey);
+        if (profile == null) {
+            return null;
+        }
+        Object v = profile.get("parfocal_offset_um");
+        return (v instanceof Number n) ? n.doubleValue() : null;
+    }
+
+    /**
+     * Returns the profile key designated as the parfocality reference (offset 0)
+     * for the given objective. Resolution: sidecar
+     * {@code reference_profile_per_objective:} map first, then the inline
+     * {@code parfocality.reference_profile_per_objective:} top-level block in
+     * the main YAML, then -- as a deterministic fallback -- the first profile
+     * (in iteration order) whose {@code objective:} matches.
+     *
+     * @param objectiveId the objective id
+     * @return the reference profile key, or {@code null} if no profile matches
+     */
+    @SuppressWarnings("unchecked")
+    public String getReferenceProfileForObjective(String objectiveId) {
+        if (objectiveId == null || objectiveId.isEmpty()) {
+            return null;
+        }
+        // Sidecar override.
+        if (parfocalityData != null
+                && parfocalityData.get("reference_profile_per_objective") instanceof Map<?, ?> refs) {
+            Object v = ((Map<String, Object>) refs).get(objectiveId);
+            if (v != null) {
+                return v.toString();
+            }
+        }
+        // Main YAML inline reference.
+        Map<String, Object> parfocalitySection = getSection("parfocality");
+        if (parfocalitySection != null
+                && parfocalitySection.get("reference_profile_per_objective") instanceof Map<?, ?> refs) {
+            Object v = ((Map<String, Object>) refs).get(objectiveId);
+            if (v != null) {
+                return v.toString();
+            }
+        }
+        // Fallback: first profile whose objective field matches.
+        Map<String, Object> profiles = getSection("acquisition_profiles");
+        if (profiles == null) {
+            return null;
+        }
+        for (Map.Entry<String, Object> e : profiles.entrySet()) {
+            if (e.getValue() instanceof Map<?, ?> profile) {
+                Object obj = profile.get("objective");
+                if (obj != null && objectiveId.equals(obj.toString())) {
+                    return e.getKey();
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Returns the full map of calibrated parfocal offsets read from the sidecar
+     * ({@code offsets:} block). Inline {@code parfocal_offset_um} values on
+     * acquisition profiles are NOT included -- callers wanting a merged view
+     * should iterate {@link #getAcquisitionProfileKeys()} and call
+     * {@link #getProfileParfocalOffset(String)} per key.
+     *
+     * @return a defensive copy of the offsets map; empty when no sidecar exists
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Double> getCalibratedParfocalOffsets() {
+        if (parfocalityData == null || !(parfocalityData.get("offsets") instanceof Map<?, ?> offsets)) {
+            return Map.of();
+        }
+        Map<String, Double> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> e : ((Map<String, Object>) offsets).entrySet()) {
+            if (e.getValue() instanceof Number n) {
+                result.put(e.getKey(), n.doubleValue());
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Returns the full reference-profile-per-objective map from the sidecar.
+     * Empty when no sidecar exists or no references are recorded.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, String> getCalibratedReferenceProfilesPerObjective() {
+        if (parfocalityData == null
+                || !(parfocalityData.get("reference_profile_per_objective") instanceof Map<?, ?> refs)) {
+            return Map.of();
+        }
+        Map<String, String> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> e : ((Map<String, Object>) refs).entrySet()) {
+            if (e.getValue() != null) {
+                result.put(e.getKey(), e.getValue().toString());
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Writes (or overwrites) the parfocality calibration sidecar
+     * {@code parfocality_{microscope}.yml} next to the main config and reloads
+     * the in-memory sidecar copy so subsequent reads see the new values without
+     * a full {@link #reload()}.
+     *
+     * @param offsets per-profile signed Z offsets (microns). Null entries removed.
+     * @param referenceProfilesPerObjective map of objective id -> reference
+     *     profile key. May be empty.
+     * @throws java.io.IOException if the sidecar cannot be written
+     */
+    public synchronized void saveParfocalityCalibration(
+            Map<String, Double> offsets, Map<String, String> referenceProfilesPerObjective) throws IOException {
+        if (configPath == null || configPath.isBlank()) {
+            throw new IOException("No microscope config path set; cannot save parfocality sidecar");
+        }
+        File configFile = new File(configPath);
+        File configDir = configFile.getParentFile();
+        String microscopeName = extractMicroscopeName(configFile.getName());
+        File sidecar = new File(configDir, "parfocality_" + microscopeName + ".yml");
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("generated", java.time.LocalDateTime.now().toString());
+        metadata.put("version", "1.0");
+        metadata.put(
+                "description",
+                "Parfocality calibration offsets (relative Z deltas) per acquisition profile."
+                        + " Switching from profile A to profile B on the same objective shifts"
+                        + " stage Z by offsets[B] - offsets[A]. Reference profile per objective"
+                        + " has offset 0 by convention.");
+        data.put("metadata", metadata);
+        if (referenceProfilesPerObjective != null && !referenceProfilesPerObjective.isEmpty()) {
+            data.put("reference_profile_per_objective", new LinkedHashMap<>(referenceProfilesPerObjective));
+        }
+        if (offsets != null && !offsets.isEmpty()) {
+            Map<String, Object> ordered = new LinkedHashMap<>();
+            for (Map.Entry<String, Double> e : offsets.entrySet()) {
+                if (e.getValue() != null) {
+                    ordered.put(e.getKey(), e.getValue());
+                }
+            }
+            data.put("offsets", ordered);
+        }
+
+        org.yaml.snakeyaml.DumperOptions opts = new org.yaml.snakeyaml.DumperOptions();
+        opts.setDefaultFlowStyle(org.yaml.snakeyaml.DumperOptions.FlowStyle.BLOCK);
+        opts.setPrettyFlow(true);
+        Yaml yaml = new Yaml(opts);
+        try (Writer w = new OutputStreamWriter(new FileOutputStream(sidecar), StandardCharsets.UTF_8)) {
+            yaml.dump(data, w);
+        }
+        this.parfocalityData = data;
+        logger.info("Saved parfocality calibration sidecar to: {}", sidecar.getAbsolutePath());
     }
 
     /**

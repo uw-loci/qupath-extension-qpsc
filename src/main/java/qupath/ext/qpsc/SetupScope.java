@@ -389,6 +389,24 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
+        // Parfocality calibration dialog (per-profile relative Z offsets)
+        MenuItem parfocalityCalibrationOption = new MenuItem(res.getString("menu.parfocalityCalibration"));
+        parfocalityCalibrationOption.setDisable(!configValid);
+        setMenuItemTooltip(
+                parfocalityCalibrationOption,
+                "Capture per-acquisition-profile Z offsets relative to a chosen "
+                        + "reference profile so the stage refocuses automatically when "
+                        + "you switch modality. Focus once under each profile, click "
+                        + "Capture, then Save. Sidecar lives next to the microscope "
+                        + "config as parfocality_<scope>.yml.");
+        parfocalityCalibrationOption.setOnAction(e -> {
+            try {
+                QPScopeController.getInstance().startWorkflow("parfocalityCalibration");
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        });
+
         // Camera control dialog (view and apply camera settings)
         MenuItem cameraControlOption = new MenuItem(res.getString("menu.cameraControl"));
         setMenuItemTooltip(
@@ -419,7 +437,10 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         // Autofocus tools
                         autofocusEditorOption,
                         autofocusBenchmarkOption,
-                        probeStageAfOption);
+                        probeStageAfOption,
+                        new SeparatorMenuItem(),
+                        // Parfocality calibration
+                        parfocalityCalibrationOption);
 
         // Z-Stack / Time-Lapse (needs microscope)
         // Default path is now SinglePointAcquisitionController -- it honors the

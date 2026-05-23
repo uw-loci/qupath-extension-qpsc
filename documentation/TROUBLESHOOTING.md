@@ -1160,6 +1160,14 @@ Quick fixes for the most common multi-channel failure modes. For the full refere
 
 **Fix:** Open the acquisition log and search for warnings around `stitchChannelDirectories` that mention the missing channel id. Common root causes: no tiles were written for that channel (filter wheel timed out, server dropped the channel mid-acquisition), the `TileConfiguration.txt` references a missing tile, or the channel subdirectory is empty. The raw per-tile TIFFs under `{projectsFolder}/{sample}/<profile>/{annotation}/{channel_id}/` survive stitch failures, so you can re-run stitching with [Stitching Recovery](WORKFLOWS.md#utility-tools) once the underlying issue is fixed.
 
+#### Q: Switching modality leaves my sample out of focus (e.g. brightfield -> fluorescence on the same detector)
+
+**A:** The optical path shifts the focal plane when you switch modality even on the same detector -- filter cubes, LED-vs-lamp illumination, and condenser changes all move focus. Without calibrated parfocality the stage Z does not move when you switch modalities, so the new path starts out of focus.
+
+**Fix:** Run [Calibrate Parfocality](tools/parfocality-calibration.md) (`Extensions > QP Scope > Utilities > Calibrate Parfocality...`). Capture a reference Z under one profile, then refocus and capture each other profile on the same objective. Save. Subsequent modality switches via the Live Viewer Camera tab Modality dropdown will refocus automatically.
+
+If the dialog says a switch was "skipped" in the log, the most common reasons are: (1) one of the two profiles has no calibrated offset, (2) the profiles are on different objectives (cross-objective is handled by the [turret design](../../claude-reports/design/2026-05-23_motorized-objective-turret-design.md), not parfocality), or (3) the very first switch of a session establishes the baseline -- subsequent switches apply deltas.
+
 #### Q: BF channel is washed out or too dark on BF+IF
 
 **A:** Transmitted-lamp intensity is wrong for the objective. The BF library entry has a `DiaLamp Intensity` (or equivalent) set for a different objective and has not been overridden for this profile.

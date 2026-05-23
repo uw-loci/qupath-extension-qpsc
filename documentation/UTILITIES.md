@@ -23,6 +23,7 @@ This document provides an overview of all utilities available in the QPSC extens
 | [WB Comparison Test](tools/wb-comparison-test.md) | Compare white balance modes side-by-side | Extensions > QP Scope > Utilities > WB Comparison Test... |
 | [Autofocus Editor](tools/autofocus-editor.md) | Configure per-objective autofocus parameters | Extensions > QP Scope > Utilities > Autofocus Configuration Editor... |
 | [Autofocus Benchmark](tools/autofocus-benchmark.md) | Find optimal autofocus settings systematically | Extensions > QP Scope > Utilities > Autofocus Parameter Benchmark... |
+| [Parfocality Calibration](tools/parfocality-calibration.md) | Capture per-profile Z offsets so the stage refocuses when switching modality | Extensions > QP Scope > Utilities > Calibrate Parfocality... |
 | [Z-Stack / Time-Lapse](tools/z-stack-timelapse.md) | Single-tile Z-stack or time-lapse acquisition | Extensions > QP Scope > Utilities > Z-Stack / Time-Lapse... |
 | [Propagation Manager](tools/propagation-manager.md) | Transfer objects between base and sub-images | Extensions > QP Scope > Utilities > Propagation Manager... |
 | Re-stitch Tiles | Re-stitch tiles from a failed or incomplete acquisition | Extensions > QP Scope > Utilities > Re-stitch Tiles... |

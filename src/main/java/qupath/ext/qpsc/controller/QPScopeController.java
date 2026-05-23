@@ -215,6 +215,10 @@ public class QPScopeController {
                 logger.debug("Launching re-probe stage AF workflow");
                 ProbeStageAfWorkflow.run();
             }
+            case "parfocalityCalibration" -> {
+                logger.debug("Launching parfocality calibration dialog");
+                qupath.ext.qpsc.ui.ParfocalityCalibrationController.show();
+            }
             default -> {
                 logger.warn("Unknown workflow mode: {}", mode);
             }

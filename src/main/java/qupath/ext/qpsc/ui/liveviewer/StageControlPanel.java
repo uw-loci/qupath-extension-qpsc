@@ -780,6 +780,12 @@ public class StageControlPanel extends VBox {
     private VBox cameraModContent; // Swapped when modality changes
     private volatile String currentCameraModality; // Current modality for preset refresh
 
+    // Profile key APPLYPR was last sent for in this panel. Used to compute the
+    // parfocality Z delta when the user changes modality -- delta is
+    // offset(new) - offset(old) and only applied when both profiles share an
+    // objective. Null until the first applyProfileForModality call lands.
+    private volatile String lastAppliedProfile;
+
     /**
      * Returns the modality currently selected in the Camera tab, or
      * {@code null} if none has been chosen yet. Thread-safe -- the
@@ -2380,6 +2386,7 @@ public class StageControlPanel extends VBox {
             logger.debug("Modality switch to '{}': no matching profile, skipping APPLYPR", modality);
             return;
         }
+        final String previousProfile = lastAppliedProfile;
         cameraStatusLabel.setText("Switching to " + profileToApply + "...");
         cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
         Thread t = new Thread(
@@ -2388,6 +2395,11 @@ public class StageControlPanel extends VBox {
                         MicroscopeController mc = MicroscopeController.getInstance();
                         if (mc == null || !mc.isConnected()) return;
                         mc.withLiveModeHandling(() -> mc.getSocketClient().applyProfile(profileToApply));
+                        // Apply parfocality offset AFTER APPLYPR so the user sees the
+                        // illumination switch even if Z motion is skipped (no calibration,
+                        // cross-objective, etc.). Same-objective only.
+                        applyParfocalityDeltaIfApplicable(previousProfile, profileToApply);
+                        lastAppliedProfile = profileToApply;
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Switched to " + profileToApply);
                             cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
@@ -2405,6 +2417,73 @@ public class StageControlPanel extends VBox {
                 "Modality-Switch");
         t.setDaemon(true);
         t.start();
+    }
+
+    /**
+     * Shifts the stage Z by the parfocality delta between two profiles when the
+     * user switches modality. Skipped when (a) either profile lacks a calibrated
+     * offset, (b) the two profiles belong to different objectives (cross-objective
+     * is a turret-swap concern, not parfocality), or (c) the delta is below the
+     * stage's resolution noise floor.
+     *
+     * <p>No-op + INFO log on the first switch of a session (previousProfile is null)
+     * and whenever either prerequisite is missing -- the user can still calibrate
+     * by capturing each profile's Z manually via the calibration dialog.
+     */
+    private void applyParfocalityDeltaIfApplicable(String previousProfile, String newProfile) {
+        if (previousProfile == null || previousProfile.equals(newProfile)) {
+            return;
+        }
+        try {
+            Double oldOffset = mgr.getProfileParfocalOffset(previousProfile);
+            Double newOffset = mgr.getProfileParfocalOffset(newProfile);
+            if (oldOffset == null || newOffset == null) {
+                logger.info(
+                        "Parfocality: skipping Z delta {} -> {} (offsets: {} -> {})",
+                        previousProfile,
+                        newProfile,
+                        oldOffset,
+                        newOffset);
+                return;
+            }
+            String oldObj = mgr.getProfileObjective(previousProfile);
+            String newObj = mgr.getProfileObjective(newProfile);
+            if (oldObj == null || newObj == null || !oldObj.equals(newObj)) {
+                logger.info(
+                        "Parfocality: skipping Z delta {} -> {} (cross-objective: {} -> {})",
+                        previousProfile,
+                        newProfile,
+                        oldObj,
+                        newObj);
+                return;
+            }
+            double delta = newOffset - oldOffset;
+            if (Math.abs(delta) < 0.05) {
+                logger.info(
+                        "Parfocality: delta {} um below threshold ({} -> {})",
+                        String.format("%.3f", delta),
+                        previousProfile,
+                        newProfile);
+                return;
+            }
+            MicroscopeController mc = MicroscopeController.getInstance();
+            double currentZ = mc.getStagePositionZ();
+            double targetZ = currentZ + delta;
+            mc.moveStageZ(targetZ);
+            logger.info(
+                    "Parfocality: applied Z delta {} -> {} ({} um, {} -> {})",
+                    previousProfile,
+                    newProfile,
+                    String.format("%+.2f", delta),
+                    String.format("%.2f", currentZ),
+                    String.format("%.2f", targetZ));
+        } catch (Exception ex) {
+            logger.warn(
+                    "Parfocality: Z delta application failed {} -> {}: {}",
+                    previousProfile,
+                    newProfile,
+                    ex.getMessage());
+        }
     }
 
     /**
