@@ -94,6 +94,16 @@ public class ExistingImageWorkflowV2 {
                 return;
             }
 
+            // Step 1b: If the open entry is a flipped sibling whose base is
+            // already in the active scope's frame, the sibling is an orphan
+            // left over from a previous (now-corrected) run. It carries no
+            // stage-bounds metadata of its own, so ManualAlignmentPath would
+            // run with the scanner's macro pixel size and produce a transform
+            // that is wrong by ~125x. Refuse with a clear pointer to the base.
+            if (!checkAndHandleOrphanedFlippedSibling()) {
+                return;
+            }
+
             // Step 1.5: Preserve annotations if this is a standalone image (no project)
             // This handles the case where user drags image into QuPath, draws annotations,
             // then starts the workflow. Without preservation, annotations would be lost
@@ -422,6 +432,77 @@ public class ExistingImageWorkflowV2 {
                         "Source mismatch dialog: proceeding with cross-scope source='{}' active='{}'", source, active);
             }
             return true;
+        }
+
+        /**
+         * Refuses the workflow when the open entry is an orphaned flipped sibling
+         * -- a {@code (flipped X|Y|XY)} entry whose base's {@code source_microscope}
+         * matches the active microscope. Such siblings only get created when the
+         * previous workflow ran under a (now-corrected) wrong source tag; once
+         * the base is in the active scope's frame, no flip is needed and the
+         * sibling carries no {@code STAGE_BOUNDS_*} metadata of its own.
+         * ManualAlignmentPath then reaches for the scanner's macro pixel size
+         * (e.g. 81 um/px) instead of the image's actual pixel calibration
+         * (e.g. 0.6502 um/px on a 10x OWS3 stitch), produces a transform off
+         * by ~125x, and the first refinement tile lands hundreds of thousands
+         * of microns outside the stage limits.
+         *
+         * <p>Returns {@code true} to proceed, {@code false} when refused.
+         * Genuine cross-scope flipped siblings (PPM running on an Ocus40 macro)
+         * are unaffected: the base's source there is the external scanner, not
+         * the active microscope, so the orphan condition does not match.
+         */
+        private boolean checkAndHandleOrphanedFlippedSibling() {
+            if (gui.getProject() == null || gui.getImageData() == null) return true;
+            @SuppressWarnings("unchecked")
+            Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+            ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+            if (entry == null) return true;
+            if (!ImageFlipHelper.isFlippedSiblingName(entry.getImageName())) return true;
+
+            String baseId = entry.getMetadata().get(ImageMetadataManager.ORIGINAL_IMAGE_ID);
+            if (baseId == null || baseId.isBlank()) return true;
+            ProjectImageEntry<BufferedImage> baseEntry = null;
+            for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
+                if (baseId.equals(e.getID())) {
+                    baseEntry = e;
+                    break;
+                }
+            }
+            if (baseEntry == null) return true;
+
+            String baseSource = baseEntry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            String active = (mgr != null) ? mgr.getMicroscopeName() : null;
+            if (active == null || active.isBlank() || !active.equals(baseSource)) {
+                // Not orphaned -- could be a legitimate cross-scope sibling
+                // (e.g. PPM running on an Ocus40 macro). Defer to existing behavior.
+                return true;
+            }
+
+            javafx.scene.control.Alert alert =
+                    new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+            alert.setTitle("Orphaned flipped sibling");
+            alert.setHeaderText(String.format(
+                    "'%s' is a flipped sibling of '%s', which is in the active scope's frame.",
+                    entry.getImageName(), baseEntry.getImageName()));
+            alert.setContentText(
+                    "The sibling was created during a previous run when the source tag was wrong. "
+                            + "It carries no stage-bounds metadata of its own, so the workflow cannot acquire against it -- "
+                            + "manual alignment here would use the scanner's macro pixel size and produce an off-by-125x transform.\n\n"
+                            + "Open '"
+                            + baseEntry.getImageName()
+                            + "' from the project pane and re-run the workflow.\n\n"
+                            + "You can delete this orphaned sibling from the project pane when convenient -- it is no longer needed.");
+            alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.OK);
+            alert.showAndWait();
+            logger.info(
+                    "Orphaned-sibling guard: refused workflow on '{}' (base '{}' source='{}' active='{}')",
+                    entry.getImageName(),
+                    baseEntry.getImageName(),
+                    baseSource,
+                    active);
+            return false;
         }
 
         /**
