@@ -155,7 +155,7 @@ Shows the current hardware and provides modality-dependent camera controls.
 | Option | Type | Description |
 |--------|------|-------------|
 | Detector / Objective | Label | Read-only display of the current detector and objective (auto-detected from MicroManager pixel size) |
-| Modality | Dropdown | Select the imaging modality (PPM, Brightfield, Fluorescence, etc.). Changing the dropdown sends `APPLYPR` to actually drive the hardware -- the cube turret moves, the light path switches, the previous source is turned off, and the new modality's source becomes active. (Previously the dropdown was UI-only and the lamp stayed on the previous modality, so any tuning values you typed were calibrated against unfiltered light.) |
+| Modality | Dropdown | Select the imaging modality (PPM, Brightfield, Fluorescence, etc.). Changing the dropdown sends `APPLYPR` to actually drive the hardware -- the cube turret moves, the light path switches, the previous source is turned off, and the new modality's source becomes active. (Previously the dropdown was UI-only and the lamp stayed on the previous modality, so any tuning values you typed were calibrated against unfiltered light.) **After switching**, if both profiles have calibrated parfocality offsets for the current objective, the stage automatically shifts Z by the calibrated delta to maintain focus. If offsets are missing or the two profiles belong to different objectives, no Z shift is applied (you may need to refocus manually). See [Parfocality Calibration](parfocality-calibration.md) to calibrate offsets per profile. |
 | Full Camera Control | Button | Opens the full [Camera Control](camera-control.md) dialog for detailed exposure / gain / binning / illumination adjustments |
 
 **PPM modality content:**
