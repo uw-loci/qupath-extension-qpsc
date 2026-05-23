@@ -118,10 +118,31 @@ public class ForwardPropagationWorkflow {
             String baseName = e.getKey();
             List<ProjectImageEntry<BufferedImage>> subList = e.getValue();
             List<ProjectImageEntry<BufferedImage>> siblings = baseVariants.getOrDefault(baseName, new ArrayList<>());
+            // Three-tier check (mirrors Show Acquisitions / detectSlideSpecificAlignment):
+            //   1. Macro-frame JSON via loadSlideAlignment (hand-saved alignment).
+            //   2. Sub-frame derived JSON via loadDerivedAlignment (auto-registered
+            //      from a bounded acquisition's stitched output).
+            //   3. STAGE_BOUNDS_* stamped on any variant entry (the self-contained
+            //      record that survives directory restructures).
+            // Without tiers 2 and 3, a stitched base whose alignment lives in
+            // alignmentFiles/derived/ or only as entry metadata is wrongly reported
+            // as ineligible for propagation, even though Stage Map navigation works.
             boolean alignmentFound = false;
             try {
-                AffineTransform t = AffineTransformManager.loadSlideAlignment(project, baseName);
-                alignmentFound = (t != null);
+                if (AffineTransformManager.loadSlideAlignment(project, baseName) != null) {
+                    alignmentFound = true;
+                }
+                if (!alignmentFound && AffineTransformManager.loadDerivedAlignment(project, baseName) != null) {
+                    alignmentFound = true;
+                }
+                if (!alignmentFound) {
+                    for (ProjectImageEntry<BufferedImage> variant : siblings) {
+                        if (ImageMetadataManager.getBoundingBoxStageBounds(variant) != null) {
+                            alignmentFound = true;
+                            break;
+                        }
+                    }
+                }
             } catch (Exception ignored) {
                 alignmentFound = false;
             }
