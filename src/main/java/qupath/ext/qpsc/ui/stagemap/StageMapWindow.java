@@ -655,13 +655,33 @@ public class StageMapWindow {
                             String imageName = entry.getImageName();
                             String strippedName = qupath.lib.common.GeneralTools.stripExtension(imageName);
 
+                            // Three-tier fallback to find a pixel->stage transform for this entry:
+                            //   1. Macro-frame per-slide JSON (alignmentFiles/) -- hand-saved
+                            //      via ManualAlignmentPath / ExistingAlignmentPath.
+                            //   2. Sub-frame per-slide JSON (alignmentFiles/derived/) -- auto-
+                            //      registered by StitchingHelper.autoRegisterBoundsTransformIfAvailable
+                            //      for bounded acquisitions with stage-bounds in metadata.
+                            //   3. STAGE_BOUNDS_* + STITCHER_FLIP_* stamped directly on the
+                            //      project entry -- the self-contained record that survives
+                            //      alignment-directory restructures. Catches annotation-based
+                            //      acquisitions whose JSON wasn't written but whose stitched
+                            //      output knows its stage rectangle.
+                            // Without all three, Show Acquisitions reports 0 even when every
+                            // entry has a perfectly good stage record.
                             AffineTransform alignment =
                                     AffineTransformManager.loadSlideAlignment(project, strippedName);
-                            if (alignment == null) continue;
+                            if (alignment == null) {
+                                alignment = AffineTransformManager.loadDerivedAlignment(project, strippedName);
+                            }
 
                             try (var server = entry.readImageData().getServer()) {
                                 int imgW = server.getWidth();
                                 int imgH = server.getHeight();
+                                if (alignment == null) {
+                                    alignment = ImageMetadataManager.buildBoundingBoxPixelToStageTransform(
+                                            entry, imgW, imgH);
+                                }
+                                if (alignment == null) continue;
                                 double downsample = Math.max(1.0, Math.max(imgW, imgH) / 200.0);
 
                                 var request = qupath.lib.regions.RegionRequest.createInstance(
@@ -698,7 +718,13 @@ public class StageMapWindow {
                         }
 
                         final int finalCount = count;
+                        final int totalEntries = project.getImageList().size();
                         final List<StageMapCanvas.AcquisitionThumbnail> finalThumbs = thumbnails;
+                        logger.info(
+                                "Show Acquisitions scan complete: {}/{} project entries have a usable alignment "
+                                        + "(macro-frame JSON, sub-frame JSON, or STAGE_BOUNDS_* metadata on the entry)",
+                                finalCount,
+                                totalEntries);
 
                         Platform.runLater(() -> {
                             canvas.setAcquisitionThumbnails(finalThumbs);
@@ -782,8 +808,10 @@ public class StageMapWindow {
                 + "overlay showing acquisition coverage."));
         showAcquisitionsCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
             if (Boolean.TRUE.equals(newVal)) {
+                logger.info("Show Acquisitions toggled ON -- scanning project for per-slide alignments");
                 loadAndPaintAcquisitions();
             } else {
+                logger.info("Show Acquisitions toggled OFF -- hiding overlay");
                 canvas.setAcquisitionOverlayVisible(false);
             }
         });
