@@ -516,6 +516,22 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
+        // MicroManager folder stitch (no microscope, no project required)
+        MenuItem stitchMicroManagerFolderOption = new MenuItem(res.getString("menu.stitchMicroManagerFolder"));
+        setMenuItemTooltip(
+                stitchMicroManagerFolderOption,
+                "Stitch a folder of MicroManager OME-TIFF tiles using positions from MMStack "
+                        + "metadata sidecars. Pick an input folder and an output folder; no QuPath "
+                        + "project is required. Channel names and other MicroManager metadata are "
+                        + "saved to a .mm-metadata.json sidecar next to the stitched output.");
+        stitchMicroManagerFolderOption.setOnAction(e -> {
+            try {
+                QPScopeController.getInstance().startWorkflow("stitchMicroManagerFolder");
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        });
+
         // Make Project Portable (doesn't need microscope connection)
         MenuItem makePortableOption = new MenuItem("Make Project Portable...");
         setMenuItemTooltip(
@@ -549,6 +565,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         propagationManagerOption,
                         migrateFlippedOption,
                         stitchingRecoveryOption,
+                        stitchMicroManagerFolderOption,
                         makePortableOption,
                         new SeparatorMenuItem(),
                         setupWizardOption,

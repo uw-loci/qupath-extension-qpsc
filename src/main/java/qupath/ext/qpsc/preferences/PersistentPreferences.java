@@ -399,6 +399,28 @@ public class PersistentPreferences {
         restitchParallelAngles.setValue(String.valueOf(parallel));
     }
 
+    // ================== MICROMANAGER FOLDER STITCH ==================
+    private static final StringProperty mmStitchOutputDir =
+            PathPrefs.createPersistentPreference("mmStitchOutputDir", "");
+
+    public static String getMmStitchOutputDir() {
+        return mmStitchOutputDir.getValue();
+    }
+
+    public static void setMmStitchOutputDir(final String dir) {
+        mmStitchOutputDir.setValue(dir);
+    }
+
+    private static final StringProperty mmStitchInputDir = PathPrefs.createPersistentPreference("mmStitchInputDir", "");
+
+    public static String getMmStitchInputDir() {
+        return mmStitchInputDir.getValue();
+    }
+
+    public static void setMmStitchInputDir(final String dir) {
+        mmStitchInputDir.setValue(dir);
+    }
+
     // ================== METADATA PROPAGATION ==================
     private static final StringProperty metadataPropagationPrefixSaved =
             PathPrefs.createPersistentPreference("MetadataPropagationPrefix", "OCR");
