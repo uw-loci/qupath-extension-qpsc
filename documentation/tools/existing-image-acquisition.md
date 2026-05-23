@@ -112,6 +112,29 @@ When you start this workflow, QPSC checks whether the opened image's `source_mic
 
 **When the dialog does NOT appear:** If the image has no `source_microscope` tag, or if its tag already matches the active microscope, the workflow proceeds to Step 1 without prompting.
 
+### Startup Check: Orphaned Flipped Sibling
+
+When you start this workflow, QPSC checks whether the opened image is an orphaned flipped sibling — a `(flipped X|Y|XY)` companion entry whose base image is already in the active microscope's frame.
+
+**What orphaned siblings are:** Flipped siblings are automatically created during alignment workflows on scopes where optical flip matters (e.g., PPM). They are companions to the unflipped base entry. In rare cases, a previous workflow run under an incorrect source tag created a sibling, then a later fix corrected the base's source metadata. When the base is now in the active scope's frame, the orphaned sibling is no longer needed — and it lacks the stage-bounds metadata it would need to guide alignment on this scope.
+
+**If the dialog appears:**
+
+| Option | Behavior | When to Use |
+|--------|----------|------------|
+| **OK** | Acknowledges the message and cancels the workflow. | You need to open the base image instead. |
+
+**Why this matters:** An orphaned sibling has no stage-bounds metadata of its own. If you tried to run the workflow on it, manual alignment would fall back to the scanner's macro pixel size (e.g., 81 µm/px) instead of the image's actual calibration (e.g., 0.65 µm/px on a 10x stitch). The coordinate transform would be wrong by ~125x, and the first refinement tile would land hundreds of thousands of microns outside the stage limits.
+
+**To fix:**
+
+1. Click **OK** to close the dialog and cancel the workflow.
+2. Open the base image (the one without the `(flipped X|Y|XY)` suffix) from the project pane.
+3. Re-run the Existing Image Acquisition workflow on the base.
+4. When convenient, you can delete the orphaned sibling from the project — it is no longer needed.
+
+**When the dialog does NOT appear:** If the image is not a flipped sibling, or if its base's source microscope differs from the active microscope (e.g., a genuine cross-scope sibling like a PPM acquisition on an Ocus40 macro), the workflow proceeds to Step 1 without prompting.
+
 ### Step 1: Sample Setup
 
 Enter a sample name and confirm the project location. If a project is already open, images will be added to it automatically.
