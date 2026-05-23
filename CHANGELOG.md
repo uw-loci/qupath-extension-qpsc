@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Time-lapse acquisition**: Collapsible **TIME-LAPSE OPTIONS** pane in the acquisition dialog. Enable to repeat the full region acquisition over multiple timepoints at a fixed interval. Includes spinner controls for number of timepoints and interval (seconds between timepoint starts). If a timepoint exceeds the interval, a one-time "falling behind" warning is shown (modal dialog + push notification if configured) and acquisition continues. The feature is optional and backward-compatible; omitting time-lapse settings yields single-timepoint acquisitions identical to pre-time-lapse builds. New socket protocol commands `REQTWARN` (best-effort, auto-disables against older servers) and ACQUIRE flags `--timepoints` / `--interval`.
 
 **Acquisition Workflow Progress dialog**
-- The per-annotation positions axis now has a **fill bar** under the "Tile n/N" counter, advancing as tiles complete. Channel/angle/Z remain plain text -- only the positions and timepoint axes get a bar.
+- The dimension panel's per-annotation positions fill bar was removed: it duplicated the larger `currentProgressBar` directly under the **Current Annotation Progress** header (both tracked positions through the current annotation, just counting completed vs in-progress -- 6/9 vs 7/9). The `Tile n/N` text label stays for granular position visibility; `timepointProgressBar` stays for the time-lapse axis.
 - The time-remaining line is now **bold and slightly larger**, with an **estimated completion clock time** ("Est. completion: Wed 16:05") on the line directly below it.
 
 **Saturation handling**

@@ -144,7 +144,6 @@ public class DualProgressDialog {
     // typically small (<10) so a label suffices and bars would be visual
     // noise. Positions per annotation routinely run into the hundreds, so
     // an immediate "how far through" cue is worth the row.
-    private final ProgressBar tileProgressBar;
     private final ProgressBar timepointProgressBar;
     private final Label mdaPathLabel;
     private final Label driftNotice;
@@ -222,10 +221,6 @@ public class DualProgressDialog {
         tileLabel = new Label("");
         perAxisRow = new HBox(12, channelLabel, angleLabel, zLabel, tileLabel);
         perAxisRow.setAlignment(Pos.CENTER_LEFT);
-        tileProgressBar = new ProgressBar(0);
-        sizeProgressBar(tileProgressBar);
-        tileProgressBar.setVisible(false);
-        tileProgressBar.setManaged(false);
         timepointProgressBar = new ProgressBar(0);
         sizeProgressBar(timepointProgressBar);
         timepointProgressBar.setVisible(false);
@@ -240,7 +235,11 @@ public class DualProgressDialog {
         driftNotice.setVisible(false);
         driftNotice.setManaged(false);
         dimensionPanel =
-                new VBox(4, summaryLabel, perAxisRow, tileProgressBar, timepointProgressBar, mdaPathLabel, driftNotice);
+                // tileProgressBar removed: it duplicated currentProgressBar above
+                // (both tracked positions within the current annotation, just
+                // counting completed vs in-progress -- 6/9 vs 7/9). The Tile n/N
+                // text label remains for granular position visibility.
+                new VBox(4, summaryLabel, perAxisRow, timepointProgressBar, mdaPathLabel, driftNotice);
         dimensionPanel.setVisible(false);
         dimensionPanel.setManaged(false);
 
@@ -359,7 +358,6 @@ public class DualProgressDialog {
             mdaPathLabel.setManaged(false);
             driftNotice.setVisible(false);
             driftNotice.setManaged(false);
-            tileProgressBar.setProgress(0);
             timepointProgressBar.setProgress(0);
             applyPlanVisibility(currentPlan);
         });
@@ -1040,8 +1038,6 @@ public class DualProgressDialog {
                 zLabel.setManaged(false);
                 tileLabel.setVisible(false);
                 tileLabel.setManaged(false);
-                tileProgressBar.setVisible(false);
-                tileProgressBar.setManaged(false);
                 perAxisRow.setVisible(false);
                 perAxisRow.setManaged(false);
                 driftNotice.setText("Dimension counters out of sync; showing aggregate only");
@@ -1063,7 +1059,6 @@ public class DualProgressDialog {
             }
             if (plan.nPositions() > 0) {
                 tileLabel.setText("Tile " + (decomp.posIdx() + 1) + "/" + plan.nPositions());
-                tileProgressBar.setProgress((decomp.posIdx() + 1.0) / plan.nPositions());
             }
             if (plan.timepoints() > 1) {
                 timepointProgressBar.setProgress((decomp.tIdx() + 1.0) / plan.timepoints());
@@ -1153,8 +1148,6 @@ public class DualProgressDialog {
                     plan.timepoints());
             perAxisRow.setVisible(false);
             perAxisRow.setManaged(false);
-            tileProgressBar.setVisible(false);
-            tileProgressBar.setManaged(false);
             return;
         }
         perAxisRow.setVisible(true);
@@ -1190,27 +1183,20 @@ public class DualProgressDialog {
         boolean showTile = plan.nPositions() > 0;
         tileLabel.setVisible(showTile);
         tileLabel.setManaged(showTile);
-        tileProgressBar.setVisible(showTile);
-        tileProgressBar.setManaged(showTile);
         if (showTile) {
             tileLabel.setText("Tile 1/" + plan.nPositions());
-            // Start at 0; updateDimensions() advances the fill as tiles complete.
-            tileProgressBar.setProgress(0);
         } else {
             tileLabel.setText("");
-            tileProgressBar.setProgress(0);
         }
         logger.debug(
                 "applyPlanVisibility: nPositions={}, ch={}, angle={}, z={}, tp={} -> showTile={}; "
-                        + "tileProgressBar visible={} managed={}; dimensionPanel visible={} managed={}",
+                        + "dimensionPanel visible={} managed={}",
                 plan.nPositions(),
                 plan.chCount(),
                 plan.angleCount(),
                 plan.zCount(),
                 plan.timepoints(),
                 showTile,
-                tileProgressBar.isVisible(),
-                tileProgressBar.isManaged(),
                 dimensionPanel.isVisible(),
                 dimensionPanel.isManaged());
     }
