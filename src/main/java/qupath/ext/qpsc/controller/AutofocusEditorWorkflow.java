@@ -174,11 +174,23 @@ public class AutofocusEditorWorkflow {
                 warnings.add("tissue_area_threshold > 0.5 is very high (typical range: 0.05-0.30)");
             }
 
-            // Sweep drift check validation
+            // Sweep drift check validation. Threshold scales with objective
+            // magnification: depth-of-field roughly scales as 1/mag, so a
+            // 50um sweep that is tight at 40x is generous at 10x. Threshold
+            // is ~600um/mag (10x->60, 20x->30, 40x->15, 60x->10), with the
+            // legacy flat 50um as a fallback when the objective ID doesn't
+            // encode a magnification.
             if (sweepRangeUm <= 0) {
                 warnings.add("sweep_range_um must be positive");
-            } else if (sweepRangeUm > 50) {
-                warnings.add("sweep_range_um > 50 um is very large (typical range: 6-20 um)");
+            } else {
+                int mag = parseObjectiveMagnification(objective);
+                int sweepThreshold = (mag > 0) ? (int) Math.round(600.0 / mag) : 50;
+                if (sweepRangeUm > sweepThreshold) {
+                    String objLabel = (mag > 0) ? (mag + "x objective") : "this objective";
+                    warnings.add(String.format(
+                            "sweep_range_um > %d um is large for %s (DOF scales ~1/mag; reduce or expect slow scans)",
+                            sweepThreshold, objLabel));
+                }
             }
 
             if (sweepNSteps < 3) {
@@ -208,6 +220,31 @@ public class AutofocusEditorWorkflow {
             }
 
             return warnings;
+        }
+
+        /**
+         * Extract the magnification (e.g. 10, 20, 40) from a conventional
+         * objective ID like "0.5NA_AIR_10x" or "1.4NA_OIL_60x". Returns the
+         * trailing {@code (digits)x} match -- so an ID with stray digits
+         * earlier (the "5" in 0.5NA) does not pollute the result. Returns
+         * 0 when no magnification token is present, so callers can fall back
+         * to a non-scaled default.
+         */
+        private static int parseObjectiveMagnification(String objectiveId) {
+            if (objectiveId == null || objectiveId.isEmpty()) {
+                return 0;
+            }
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                            "(\\d+)x", java.util.regex.Pattern.CASE_INSENSITIVE)
+                    .matcher(objectiveId);
+            int last = 0;
+            while (m.find()) {
+                try {
+                    last = Integer.parseInt(m.group(1));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            return last;
         }
     }
 
