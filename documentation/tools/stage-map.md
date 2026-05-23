@@ -34,6 +34,7 @@ The Stage Map displays several visual indicators:
 | Preset | ComboBox | Active microscope | Select a source microscope for coordinate transformation. The **active microscope** (the one currently connected) appears first and represents same-scope identity — no preset needed, no optical flip applied. Saved scanner-to-stage transform presets follow for genuine cross-scope work (e.g., `Ocus40 -> PPM`). Presets are created during [Microscope Alignment](microscope-alignment.md). |
 | Apply Flips | CheckBox | From config | Flip the Stage Map to match the Live Viewer orientation. Use when the map appears mirrored relative to the Live Viewer. |
 | Overlay Macro | CheckBox | Auto | Overlay the current macro image on the map display. Automatically enabled when a macro image and alignment transform are detected. Requires a Preset to be selected. Also updates when switching between images in the project. |
+| Show Acquisitions | CheckBox | Off | Display an overlay showing the stage bounds of all acquired images in the project. Searches for per-slide alignments (hand-saved or auto-registered from stitched acquisitions) and draws colored rectangles for each acquisition found. Useful for understanding what regions have been previously imaged. |
 
 ## Workflow
 
@@ -62,6 +63,7 @@ No persistent output. The Stage Map provides a real-time visual display showing:
 - The preset selector remembers your last selection across sessions
 - Use this tool alongside the Live Viewer to understand spatial context when navigating
 - If the current position indicator seems wrong, verify stage communication via [Communication Settings](server-connection.md)
+- **Show Acquisitions not displaying coverage?** Check the console log when toggling the checkbox. Acquired images may not display if alignment files are missing or if the project used annotation-based acquisition without alignment registration. The tool searches for three types of alignment records: saved JSON files, auto-registered sub-frame alignments from stitched outputs, and entry-level stage metadata. If none are found, no overlay is drawn.
 
 ## See Also
 
