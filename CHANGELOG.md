@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Stitch MicroManager Folder**
+- Standalone workflow for stitching MicroManager 2.0 OME-TIFF tile folders without a QuPath project. Reads tile positions from MMStack `*_metadata.txt` sidecars, auto-detects pixel size from metadata or TIFF resolution tags, and outputs a single stitched OME-TIFF or OME-ZARR. Preserves channel names, exposure, and MicroManager acquisition metadata in a `.mm-metadata.json` sidecar. Access via Extensions > QP Scope > Utilities > Stitch MicroManager Folder...
+
 **Live Viewer**
 - **Snap button**: Capture and save the current live frame as an OME-TIFF with embedded metadata (stage position, pixel size, modality, objective, detector). Right-click context menu for options: save raw bit depth (default ON), apply background correction (default OFF, greyed out unless settings match), open file after save (default OFF), and reset save folder to project.
 - **Window title** now shows the current modality and expected objective magnification, e.g. `Live Viewer (Brightfield) (10x)`. Updates live when the Camera-tab modality dropdown changes or the objective is re-detected; degrades to `Live Viewer` when either value is unknown.

@@ -27,6 +27,7 @@ This document provides an overview of all utilities available in the QPSC extens
 | [Z-Stack / Time-Lapse](tools/z-stack-timelapse.md) | Single-tile Z-stack or time-lapse acquisition | Extensions > QP Scope > Utilities > Z-Stack / Time-Lapse... |
 | [Propagation Manager](tools/propagation-manager.md) | Transfer objects between base and sub-images | Extensions > QP Scope > Utilities > Propagation Manager... |
 | Re-stitch Tiles | Re-stitch tiles from a failed or incomplete acquisition | Extensions > QP Scope > Utilities > Re-stitch Tiles... |
+| Stitch MicroManager Folder | Standalone stitching of MicroManager OME-TIFF tiles (no project required) | Extensions > QP Scope > Utilities > Stitch MicroManager Folder... |
 | [Setup Wizard](tools/setup-wizard.md) | Create microscope config files (first-time setup) | Extensions > QP Scope > Utilities > Setup Wizard... |
 | [Communication Settings](tools/server-connection.md) | Configure server connection and notification alerts | Extensions > QP Scope > Utilities > Communication Settings... |
 | Make Project Portable | Convert or zip ZARR-backed images and clean up raw tile folders for portability | Extensions > QP Scope > Utilities > Make Project Portable... |
@@ -219,6 +220,25 @@ Every QPSC acquisition writes a Micro-Manager 2.0 compatible Multi-Dimensional A
 **Multi-group channels caveat.** A QPSC channel can carry presets across more than one MM `ConfigGroup`. MM's `SequenceSettings` allows only one channel group per channels list, so the writer keeps the first preset's group and lists the dropped presets in `MDA_NOTES.txt`. If you need the dropped presets active in MM, apply them manually (or future-edit the MDA file) before running.
 
 **Live progress panel.** During acquisition the existing per-annotation progress bar gains a small dimension panel beneath it: a static summary line (tiles, channels or angles, Z, T, total images, estimated duration) plus live counters (`Channel: FITC`, `Z step 3/9`, `Tile 47/84`). A time-lapse progress bar slot is reserved and lights up when `timepoints > 1`. The MDA auto-save path is shown as an `MDA: <path>` label so you can find the saved files without leaving the dialog. If the counters ever drift from server reality, the per-axis labels collapse to a single "Dimension counters out of sync; showing aggregate only" note and the aggregate bar continues unaffected.
+
+---
+
+## Stitch MicroManager Folder
+
+Standalone stitching utility for tile folders acquired with MicroManager 2.0. Unlike the project-based **Re-stitch Tiles**, this tool operates independently without requiring a QuPath project or existing QPSC acquisition metadata.
+
+**Input:** A folder containing MicroManager OME-TIFF tiles (`*_MMStack_*.ome.tif`) with `*_metadata.txt` sidecars that record tile positions and other acquisition parameters.
+
+**Output:** A single stitched OME-TIFF or OME-ZARR image, plus a `<stem>.mm-metadata.json` sidecar preserving channel names, exposure, pixel size, grid dimensions, and other MicroManager metadata.
+
+**Key features:**
+- Reads tile positions directly from MMStack `*_metadata.txt` files (no `TileConfiguration.txt` required).
+- Auto-detects pixel size from MMStack metadata or TIFF resolution tags; fallback default is 0.5 µm.
+- Preserves channel names, MicroManager version, user/computer name, and acquisition comments in the metadata sidecar.
+- Selectable output format: OME-TIFF (single file) or OME-ZARR (directory-based).
+- Selectable compression (LZW, JPEG, etc.) with format-specific options.
+
+**Access:** Extensions > QP Scope > Utilities > Stitch MicroManager Folder...
 
 ---
 
