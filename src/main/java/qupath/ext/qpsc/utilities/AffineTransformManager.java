@@ -1238,6 +1238,57 @@ public class AffineTransformManager {
         }
     }
 
+    /**
+     * Like {@link #loadDerivedAlignment(Project, String)} but also surfaces the
+     * recorded flip frame (so back-propagation can recover flipMacroX/Y for
+     * no-macro chains where the base is itself an auto-registered stitch and
+     * its alignment lives in {@code alignmentFiles/derived/}, not in the macro-
+     * frame loader's path).
+     */
+    public static SlideAlignmentResult loadDerivedAlignmentWithFrame(
+            Project<BufferedImage> project, String subImageName) {
+        if (project == null || subImageName == null) return null;
+        try {
+            File projectDir = project.getPath().toFile().getParentFile();
+            if (projectDir == null) return null;
+            File derivedDir = new File(new File(projectDir, "alignmentFiles"), "derived");
+            if (derivedDir.exists()) {
+                SlideAlignmentResult r = loadSlideAlignmentWithFrameFromSpecificDir(derivedDir, subImageName);
+                if (r != null) return r;
+            }
+            // Backward compatibility: pre-restructure sub-image JSONs were written
+            // to the flat directory.
+            return loadSlideAlignmentWithFrameFromDirectory(projectDir, subImageName);
+        } catch (Exception e) {
+            logger.error("Failed to load derived alignment with frame for {}", subImageName, e);
+            return null;
+        }
+    }
+
+    /** Mirrors {@link #loadSlideAlignmentFromSpecificDir} but returns flip frame. */
+    private static SlideAlignmentResult loadSlideAlignmentWithFrameFromSpecificDir(
+            File alignmentDir, String sampleName) {
+        if (alignmentDir == null || !alignmentDir.exists() || sampleName == null) return null;
+        String activeMicroscope = null;
+        try {
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr != null) activeMicroscope = mgr.getMicroscopeName();
+        } catch (Exception ignore) {
+        }
+        if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
+            File scoped = new File(alignmentDir, sampleName + "_" + activeMicroscope + "_alignment.json");
+            if (scoped.exists()) {
+                SlideAlignmentResult r = readAlignmentJsonWithFrame(scoped, activeMicroscope);
+                if (r != null) return r;
+            }
+        }
+        File legacy = new File(alignmentDir, sampleName + "_alignment.json");
+        if (legacy.exists()) {
+            return readAlignmentJsonWithFrame(legacy, activeMicroscope);
+        }
+        return null;
+    }
+
     /** Directory-based variant; mirrors {@link #loadSlideAlignmentFromDirectory(File, String)}. */
     public static SlideAlignmentResult loadSlideAlignmentWithFrameFromDirectory(File projectDir, String sampleName) {
         if (projectDir == null || !projectDir.exists() || sampleName == null) return null;

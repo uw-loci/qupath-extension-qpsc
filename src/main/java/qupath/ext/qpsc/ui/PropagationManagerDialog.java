@@ -631,7 +631,18 @@ public final class PropagationManagerDialog {
                             AffineTransformManager.SlideAlignmentResult slideResult;
                             AffineTransform alignment;
                             try {
+                                // Macro-frame JSON first; then fall back to the derived/
+                                // sub-frame JSON for bases that are themselves auto-
+                                // registered stitches (the no-macro PPM/OWS3 chain case,
+                                // where there's no Ocus40 macro and the "base" is the
+                                // first stage-bounded acquisition on the scope itself).
+                                // sub-frame derived JSONs still record flipMacroX/Y, so
+                                // back-prop's flip-recovery branch reads them the same way.
                                 slideResult = AffineTransformManager.loadSlideAlignmentWithFrame(project, baseName);
+                                if (slideResult == null) {
+                                    slideResult =
+                                            AffineTransformManager.loadDerivedAlignmentWithFrame(project, baseName);
+                                }
                                 alignment = (slideResult != null) ? slideResult.getTransform() : null;
                             } catch (Exception ex) {
                                 appendStatus(results, "  alignment error: " + ex.getMessage() + "\n");
@@ -639,7 +650,9 @@ public final class PropagationManagerDialog {
                                 continue;
                             }
                             if (alignment == null) {
-                                appendStatus(results, "  no alignment file found for active scope\n");
+                                appendStatus(
+                                        results,
+                                        "  no alignment file found (checked macro-frame and derived/ sub-frame)\n");
                                 Platform.runLater(() -> grp.setStatus("no alignment"));
                                 continue;
                             }

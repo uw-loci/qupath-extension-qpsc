@@ -824,6 +824,12 @@ public class ForwardPropagationWorkflow {
         if (slideResult == null) {
             slideResult = AffineTransformManager.loadSlideAlignmentWithFrame(project, baseName);
         }
+        if (slideResult == null) {
+            // No macro-frame JSON: try the derived/ sub-frame JSON. Required for
+            // no-macro chains where the base is itself an auto-registered stitch
+            // (PPM/OWS3 starting on unstained tissue without an Ocus40 macro).
+            slideResult = AffineTransformManager.loadDerivedAlignmentWithFrame(project, baseName);
+        }
         if (slideResult != null && slideResult.hasFlipFrame()) {
             alignFlipX = Boolean.TRUE.equals(slideResult.getFlipMacroX());
             alignFlipY = Boolean.TRUE.equals(slideResult.getFlipMacroY());
