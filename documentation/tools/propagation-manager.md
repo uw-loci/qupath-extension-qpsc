@@ -16,7 +16,7 @@ Transfer annotations and detections between base images (whole-slide scans) and 
 
 - A QuPath project with at least one base image and one or more sub-images
 - Sub-images must have `base_image` metadata (automatically set during acquisition)
-- An alignment transform must exist for the base image (created by Microscope Alignment) — required for FORWARD propagation, and as a fallback for BACK when no parent tile detections are present
+- An alignment transform must exist for the base image (created by Microscope Alignment) — required for FORWARD propagation, and as a fallback for BACK when no parent tile detections are present. The alignment is sought in order: macro-frame JSON, derived/ sub-frame JSON (for no-macro bases that are themselves stitched acquisitions), then entry-level `STAGE_BOUNDS` metadata.
 - Sub-images must have `xy_offset_x_microns` and `xy_offset_y_microns` metadata (automatically set during acquisition)
 - For cross-scope projects (sub acquired on one microscope, project opened on another), the source scope's config (`config_<sourceScope>.yml`) must be next to the active config so FOV can be resolved offline; if it is missing, the dialog surfaces a warning naming the missing file
 - Microscope server connection is **not** required when the data above is present
@@ -130,7 +130,7 @@ If the parent entry's tile detections are missing (e.g. from an old workflow tha
 - **Half-tile offset**: With the GT path active, half-tile offsets are not possible — sub_px (0,0) maps exactly to tile-bbox UL. With the alignment fallback, half-FOV correction requires either `fov_x_um`/`fov_y_um` metadata on the sub, an entry in the active or source-scope config, or a live microscope connection.
 - **Cross-scope: missing config warning**: The dialog flags subs whose source scope's config file is not next to the active config. Add `config_<sourceScope>.yml` to the same directory and retry.
 - **No sub-images found**: Sub-images must have `base_image` metadata. This is set automatically during acquisition workflows.
-- **No alignment found**: Required for FORWARD propagation; for BACK, only required when the parent has no tile detections (the GT path bypasses it). Run Microscope Alignment if needed.
+- **No alignment found (checked macro-frame and derived/ sub-frame)**: Required for FORWARD propagation; for BACK, only required when the parent has no tile detections (the GT path bypasses it). The dialog checks macro-frame JSONs first, then derived/ sub-frame JSONs (for no-macro bases that are themselves auto-registered stitches), then entry-level `STAGE_BOUNDS` metadata. If all three are absent, run Microscope Alignment on the macro entry or (for sub-frame bases) on the derived entry itself.
 - **Objects missing after propagation**: Objects whose bounding box falls outside the target image bounds are clipped or filtered. This is expected.
 - **Dialog auto-closes when switching images**: Fixed (2026-05-05) — the dialog no longer initOwners to the QuPath stage, so it stays open across image switches.
 - **Empty class list on first open**: Toggle the direction and toggle back, or click "Refresh Classes" to rescan.

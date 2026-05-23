@@ -213,7 +213,7 @@ the gate.
 
 | Step | What |
 |---|---|
-| Read | Per-entry pixel size, alignment JSON's `flipMacroX/Y`, FoV (config -> entry metadata -> live detector dims -> raw live FoV) |
+| Read | Per-entry pixel size, alignment JSON's `flipMacroX/Y` (via three-tier lookup: macro-frame JSON, derived/ sub-frame JSON, entry-level `STAGE_BOUNDS`), FoV (config -> entry metadata -> live detector dims -> raw live FoV). The three-tier fallback enables propagation on no-macro bases where the base is itself an auto-registered stitch living in `alignmentFiles/derived/`. |
 | Compare | Live FoV pixel size vs entry pixel size if source-4 is reached (90-110% acceptable) |
 | Write | Annotations on parent or sub-acquisitions; nothing under `<sample>/<modality>/...` |
 | Gate | None against MM. Source-4 fallback rejected if pixel size disagrees |
