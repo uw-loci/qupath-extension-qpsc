@@ -16,7 +16,7 @@ During a tiled acquisition, the sample's focal plane can shift due to slide tilt
 | [Sweep Autofocus](#sweep-autofocus) | Subsequent AF positions during tiling | ~9s | Good (narrow Z range) |
 | [Z-Focus Tilt Model](#z-focus-tilt-prediction) | Between annotations | Instant | Approximate (guides AF search center) |
 
-Additionally, the [Live Viewer](tools/live-viewer.md) provides an interactive **Autofocus** button (primary, uses streaming scan when available) with **Sweep Focus** as a fallback that appears only when Autofocus is unavailable.
+Additionally, the [Live Viewer](tools/live-viewer.md) provides an interactive **Autofocus** button (primary, uses streaming scan when available) with **Sweep Autofocus** as a fallback that appears only when Autofocus is unavailable.
 
 ---
 
@@ -146,7 +146,7 @@ Streaming autofocus runs only when the server confirms three pre-flight gates. I
 | **Motion blur budget** | `expected_blur = min_velocity * exposure_ms` must be within 25% of DOF (~0.5 um default) | Long exposures on slow stages -- e.g., above ~43 ms on Prior at MaxSpeed=1 |
 | Saturation | Saturated-pixel fraction below the per-modality threshold (brightfield 50%, PPM 50%, fluorescence/widefield 2%, laser-scanning/SHG 1%) | Camera overexposed -- focus metric would not discriminate |
 
-If streaming fails on any gate, the failure dialog appears with the diagnostic reason. If you encounter these gates frequently (e.g., your stage is slow or your exposures are long), switch to **Sweep Focus** in the Autofocus Configuration dialog -- Sweep uses blocking step-and-snap moves and has no blur constraint or stage-speed requirement.
+If streaming fails on any gate, the failure dialog appears with the diagnostic reason. If you encounter these gates frequently (e.g., your stage is slow or your exposures are long), switch to **Sweep Autofocus** in the Autofocus Configuration dialog -- Sweep uses blocking step-and-snap moves and has no blur constraint or stage-speed requirement.
 
 If no peak is found but a focus slope is detected (monotonic profile after edge retries), the stage is left at the best Z found rather than returning to the starting position.
 
@@ -154,13 +154,13 @@ If no peak is found but a focus slope is detected (monotonic profile after edge 
 
 - **Tilted samples** where the current sweep window is marginal but a wider range would be prohibitively slow stepped
 - **Short exposures** (<=20 ms at 20X-ish blur budget on a Prior): blur is negligible and sample density is high
-- **Testing / iteration on focus workflows** -- the Live Viewer button lets you A/B against Sweep Focus on real tissue
+- **Testing / iteration on focus workflows** -- the Live Viewer button lets you A/B against Sweep Autofocus on real tissue
 
-### When to stick with Sweep Focus
+### When to stick with Sweep Autofocus
 
 - **Long-exposure modalities** (dark fluorescence, low-angle PPM): Autofocus's blur budget is dominated by exposure, and above the per-stage ceiling it will refuse
 - **Slow/fast-readout cameras where `snap_image` is competitive with streaming**: Autofocus's advantage disappears (and Sweep is already 3-4x faster thanks to the busy-poll wait)
-- **First-AF-from-scratch situations**: Autofocus is designed as a drift check, not a full search. Use a wider range (select from the Live Viewer dropdown) or Sweep Focus for recovery from far-from-focus starting positions.
+- **First-AF-from-scratch situations**: Autofocus is designed as a drift check, not a full search. Use a wider range (select from the Live Viewer dropdown) or Sweep Autofocus for recovery from far-from-focus starting positions.
 
 ### Configuration
 
@@ -219,7 +219,7 @@ When autofocus fails (both primary and fallback metrics), the system can request
 - The dialog now includes a **diagnostic hint** explaining why AF failed and suggesting how to fix it. Common failures include:
   - **Sparse vs. dense strategy mismatch** -- e.g., pollen with a tissue-texture strategy (switch to `sparse_signal`)
   - **Z starting position far from focus** -- widen the search range or move closer manually and retry
-  - **Exposure issues** -- saturation (reduce exposure) or too-long exposure for streaming AF (use Sweep Focus)
+  - **Exposure issues** -- saturation (reduce exposure) or too-long exposure for streaming AF (use Sweep Autofocus)
   - **Narrow search range** -- increase `sweep_range_um` for this objective
 - The hint also points you to where to change the AF strategy: the acquisition wizard's Advanced panel (one-time override) or Settings > Autofocus Configuration > Modality Bindings (persistent)
 - The server sends keepalive pings every 30 seconds while waiting
@@ -376,7 +376,7 @@ See the [Autofocus Editor](tools/autofocus-editor.md) for detailed parameter des
 ### Reading autofocus failure hints
 
 When autofocus fails, QPSC now provides diagnostic hints in:
-- The **Live Viewer** error dialog (Autofocus or Sweep Focus)
+- The **Live Viewer** error dialog (Autofocus or Sweep Autofocus)
 - The **Autofocus Editor** Test button result popup
 - The **Manual Focus** dialog (during acquisition)
 
@@ -384,8 +384,8 @@ These hints name the likely cause and suggest fixes. Common hints:
 - **metric_flat / within noise** -- Sample type doesn't match the current AF strategy (e.g., sparse particles with a dense-texture strategy). Switch to `sparse_signal` for beads/pollen or `dark_field` for low-contrast samples. Two places to change: acquisition wizard Advanced panel (one-time) or Settings > Autofocus Configuration > Modality Bindings (persistent).
 - **no peak found / edge** -- Z starting position is far from focus. Move the stage closer manually, or widen `sweep_range_um` for this objective.
 - **saturation** -- Camera is overexposed. Reduce exposure time, close the aperture, or lower illumination.
-- **blur** -- Exposure is too long for streaming AF's motion blur budget. Try Sweep Focus instead, which has no blur constraint.
-- **no_slow_speed** -- Stage hardware cannot run streaming AF. Use Sweep Focus, or update the stage's configuration.
+- **blur** -- Exposure is too long for streaming AF's motion blur budget. Try Sweep Autofocus instead, which has no blur constraint.
+- **no_slow_speed** -- Stage hardware cannot run streaming AF. Use Sweep Autofocus, or update the stage's configuration.
 
 ### Autofocus fails on first tile
 - The AF position may be on a blank region or hole in tissue
@@ -424,6 +424,6 @@ These hints name the likely cause and suggest fixes. Common hints:
 
 - [Autofocus Editor](tools/autofocus-editor.md) -- GUI for per-objective parameter configuration
 - [Autofocus Benchmark](tools/autofocus-benchmark.md) -- Systematic parameter optimization tool
-- [Live Viewer](tools/live-viewer.md) -- Interactive focus tools (Autofocus, Sweep Focus)
+- [Live Viewer](tools/live-viewer.md) -- Interactive focus tools (Autofocus, Sweep Autofocus)
 - [Preferences](PREFERENCES.md) -- "No Manual Autofocus" setting
 - [Autofocus YAML Template](../../microscope_configurations/templates/autofocus_template.yml) -- Full parameter reference with inline documentation
