@@ -1,12 +1,21 @@
 package qupath.ext.qpsc.controller;
 
 import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.modality.Channel;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
@@ -19,11 +28,74 @@ import qupath.lib.gui.QuPathGUI;
  *   <li>Time-lapse: repeat acquisition at regular intervals</li>
  * </ul>
  *
- * <p>Designed for future expansion to multi-tile Z-stacks and time series.
+ * <p>A shared modality + profile (+ channel) row above the tabs sets the
+ * microscope hardware state via APPLYPR (and APPLYCH for channel-based
+ * modalities) before each Start. Without this, brightfield runs at
+ * whatever exposure/lamp/condenser the previous workflow left behind,
+ * which is what produces the low-dynamic-range brightfield captures.
  */
 public class StackTimeLapseWorkflow {
 
     private static final Logger logger = LoggerFactory.getLogger(StackTimeLapseWorkflow.class);
+
+    /** Modality + profile + channel selection shared between the Z-Stack and Time-Lapse tabs. */
+    private static final class SetupState {
+        final ComboBox<String> modalityCombo = new ComboBox<>();
+        final ComboBox<String> profileCombo = new ComboBox<>();
+        final ComboBox<ChannelChoice> channelCombo = new ComboBox<>();
+        final HBox channelRow;
+        final Label setupErrorLabel = new Label();
+        final MicroscopeConfigManager configMgr;
+        // Listener guards: prevent feedback loops while we re-populate
+        // dependent combos in response to a parent combo's change.
+        boolean rebuilding = false;
+
+        SetupState(MicroscopeConfigManager configMgr, HBox channelRow) {
+            this.configMgr = configMgr;
+            this.channelRow = channelRow;
+            setupErrorLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: -fx-accent;");
+            setupErrorLabel.setWrapText(true);
+        }
+
+        String getSelectedProfile() {
+            return profileCombo.getValue();
+        }
+
+        String getSelectedModality() {
+            return modalityCombo.getValue();
+        }
+
+        String getSelectedChannelId() {
+            if (!channelRow.isVisible()) return null;
+            ChannelChoice c = channelCombo.getValue();
+            return c == null ? null : c.id();
+        }
+
+        boolean modalityHasChannels() {
+            String m = getSelectedModality();
+            if (m == null || m.isBlank()) return false;
+            try {
+                List<Channel> chans = configMgr.getModalityChannels(m);
+                return chans != null && !chans.isEmpty();
+            } catch (Exception ignored) {
+                return false;
+            }
+        }
+
+        boolean isReady() {
+            if (getSelectedProfile() == null || getSelectedProfile().isBlank()) return false;
+            if (channelRow.isVisible() && getSelectedChannelId() == null) return false;
+            return true;
+        }
+    }
+
+    /** Channel combo entry; toString drives the displayed label but we keep the id for the wire. */
+    private record ChannelChoice(String id, String displayName) {
+        @Override
+        public String toString() {
+            return displayName;
+        }
+    }
 
     /**
      * Show the Z-stack/time-lapse dialog.
@@ -33,7 +105,7 @@ public class StackTimeLapseWorkflow {
         if (!mc.isConnected()) {
             try {
                 mc.userTriggeredConnect();
-            } catch (java.io.IOException e) {
+            } catch (IOException e) {
                 logger.error("Failed to connect to microscope server: {}", e.getMessage());
                 Dialogs.showErrorMessage(
                         "Z-Stack / Time-Lapse", "Not connected to microscope server: " + e.getMessage());
@@ -41,14 +113,50 @@ public class StackTimeLapseWorkflow {
             }
         }
 
+        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        if (configPath == null || configPath.isBlank()) {
+            Dialogs.showErrorMessage("Z-Stack / Time-Lapse", "No microscope configuration file set in preferences.");
+            return;
+        }
+        MicroscopeConfigManager configMgr = MicroscopeConfigManager.getInstance(configPath);
+
         Dialog<Void> dialog = new Dialog<>();
         dialog.setTitle("Z-Stack / Time-Lapse");
         dialog.setHeaderText("Single-tile acquisition at current position");
 
+        // ===== Shared setup row (modality + profile + channel) =====
+        GridPane setupGrid = new GridPane();
+        setupGrid.setHgap(8);
+        setupGrid.setVgap(6);
+        setupGrid.setPadding(new Insets(10));
+
+        HBox channelRow = new HBox(8);
+        SetupState setup = new SetupState(configMgr, channelRow);
+        setup.modalityCombo.setPrefWidth(180);
+        setup.profileCombo.setPrefWidth(220);
+        setup.channelCombo.setPrefWidth(180);
+
+        setupGrid.add(new Label("Modality:"), 0, 0);
+        setupGrid.add(setup.modalityCombo, 1, 0);
+        setupGrid.add(new Label("Profile:"), 0, 1);
+        setupGrid.add(setup.profileCombo, 1, 1);
+        channelRow.getChildren().addAll(new Label("Channel:"), setup.channelCombo);
+        // The setupGrid layout uses 2 columns (label, control). Channel row
+        // is added as a single full-width entry so it can hide/show as one
+        // unit without leaving a blank label column.
+        setupGrid.add(channelRow, 0, 2, 2, 1);
+        setupGrid.add(setup.setupErrorLabel, 0, 3, 2, 1);
+
+        populateModalityCombo(setup);
+        wireSetupListeners(setup);
+
+        TitledPane setupPane = new TitledPane("Setup", setupGrid);
+        setupPane.setCollapsible(false);
+
         TabPane tabs = new TabPane();
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
-        // --- Z-Stack Tab ---
+        // ===== Z-Stack Tab =====
         Tab zTab = new Tab("Z-Stack");
         GridPane zGrid = new GridPane();
         zGrid.setHgap(8);
@@ -90,7 +198,6 @@ public class StackTimeLapseWorkflow {
 
         TextField zOutputField = new TextField();
         zOutputField.setPromptText("Output folder for Z-stack images");
-        // Default output path
         String defaultZOutput = getDefaultOutputFolder("zstack");
         zOutputField.setText(defaultZOutput);
 
@@ -118,6 +225,11 @@ public class StackTimeLapseWorkflow {
         Button zStartBtn = new Button("Start Z-Stack");
         zStartBtn.setStyle("-fx-font-weight: bold;");
         zStartBtn.setOnAction(e -> {
+            if (!setup.isReady()) {
+                zStatusLabel.setText("Pick a modality, profile, and channel (if shown) in Setup first.");
+                zStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                return;
+            }
             double range = zRangeSpinner.getValue();
             double step = zStepSpinner.getValue();
             double zStart = fCurrentZ - range / 2;
@@ -135,28 +247,32 @@ public class StackTimeLapseWorkflow {
             new Thread(
                             () -> {
                                 try {
-                                    String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                                    applyProfileBeforeAcquire(mc, setup);
+                                    String profile = setup.getSelectedProfile();
+                                    String modality = configMgr.getProfileModality(profile);
+                                    String objective = configMgr.getProfileObjective(profile);
+                                    String detector = configMgr.getProfileDetector(profile);
                                     String response = mc.getSocketClient()
                                             .startZStack(
                                                     output,
                                                     zStart,
                                                     zEnd,
                                                     step,
-                                                    "brightfield",
+                                                    modality,
                                                     null,
                                                     "off",
                                                     configPath,
-                                                    null,
-                                                    null,
+                                                    objective,
+                                                    detector,
                                                     null);
-                                    javafx.application.Platform.runLater(() -> {
+                                    Platform.runLater(() -> {
                                         zStatusLabel.setText("Complete: " + response);
                                         zStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
                                         zStartBtn.setDisable(false);
                                     });
                                 } catch (Exception ex) {
                                     logger.error("Z-stack failed: {}", ex.getMessage());
-                                    javafx.application.Platform.runLater(() -> {
+                                    Platform.runLater(() -> {
                                         zStatusLabel.setText("Failed: " + ex.getMessage());
                                         zStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
                                         zStartBtn.setDisable(false);
@@ -171,7 +287,7 @@ public class StackTimeLapseWorkflow {
         zContent.setPadding(new Insets(8));
         zTab.setContent(zContent);
 
-        // --- Time-Lapse Tab ---
+        // ===== Time-Lapse Tab =====
         Tab tTab = new Tab("Time-Lapse");
         GridPane tGrid = new GridPane();
         tGrid.setHgap(8);
@@ -226,6 +342,11 @@ public class StackTimeLapseWorkflow {
         Button tStartBtn = new Button("Start Time-Lapse");
         tStartBtn.setStyle("-fx-font-weight: bold;");
         tStartBtn.setOnAction(e -> {
+            if (!setup.isReady()) {
+                tStatusLabel.setText("Pick a modality, profile, and channel (if shown) in Setup first.");
+                tStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                return;
+            }
             int tp = tpSpinner.getValue();
             double interval = intervalSpinner.getValue();
             String output = tOutputField.getText().trim();
@@ -241,26 +362,30 @@ public class StackTimeLapseWorkflow {
             new Thread(
                             () -> {
                                 try {
-                                    String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                                    applyProfileBeforeAcquire(mc, setup);
+                                    String profile = setup.getSelectedProfile();
+                                    String modality = configMgr.getProfileModality(profile);
+                                    String objective = configMgr.getProfileObjective(profile);
+                                    String detector = configMgr.getProfileDetector(profile);
                                     String response = mc.getSocketClient()
                                             .startTimeLapse(
                                                     output,
                                                     tp,
                                                     interval,
-                                                    "brightfield",
+                                                    modality,
                                                     null,
                                                     "off",
                                                     configPath,
-                                                    null,
-                                                    null);
-                                    javafx.application.Platform.runLater(() -> {
+                                                    objective,
+                                                    detector);
+                                    Platform.runLater(() -> {
                                         tStatusLabel.setText("Complete: " + response);
                                         tStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
                                         tStartBtn.setDisable(false);
                                     });
                                 } catch (Exception ex) {
                                     logger.error("Time-lapse failed: {}", ex.getMessage());
-                                    javafx.application.Platform.runLater(() -> {
+                                    Platform.runLater(() -> {
                                         tStatusLabel.setText("Failed: " + ex.getMessage());
                                         tStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
                                         tStartBtn.setDisable(false);
@@ -277,11 +402,147 @@ public class StackTimeLapseWorkflow {
 
         tabs.getTabs().addAll(zTab, tTab);
 
-        dialog.getDialogPane().setContent(tabs);
+        VBox root = new VBox(8, setupPane, tabs);
+        dialog.getDialogPane().setContent(root);
         dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-        dialog.getDialogPane().setPrefWidth(500);
+        dialog.getDialogPane().setPrefWidth(540);
 
         dialog.showAndWait();
+    }
+
+    /**
+     * Push the current Setup-row selection to the microscope: profile mode
+     * switch (APPLYPR) plus channel state (APPLYCH) when the modality has
+     * channels. The mode switch is idempotent and ensures objective /
+     * detector / illumination / exposure match the YAML profile entry
+     * before tiles are snapped, which is what fixes the brightfield
+     * dynamic-range problem that motivated this dialog overhaul.
+     */
+    private static void applyProfileBeforeAcquire(MicroscopeController mc, SetupState setup) throws IOException {
+        String profile = setup.getSelectedProfile();
+        if (profile == null || profile.isBlank()) {
+            throw new IOException("No acquisition profile selected.");
+        }
+        mc.getSocketClient().applyProfile(profile);
+        String channelId = setup.getSelectedChannelId();
+        if (channelId != null && !channelId.isBlank()) {
+            mc.getSocketClient().applyChannel(profile, channelId);
+        }
+    }
+
+    private static void populateModalityCombo(SetupState setup) {
+        // Distinct, case-insensitive sorted modality list pulled from every
+        // entry in acquisition_profiles. Empty if the YAML has no profiles.
+        Set<String> modalities = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        for (String key : setup.configMgr.getAcquisitionProfileKeys()) {
+            String mod = setup.configMgr.getProfileModality(key);
+            if (mod != null && !mod.isBlank()) {
+                modalities.add(mod);
+            }
+        }
+        setup.modalityCombo.getItems().setAll(modalities);
+        if (modalities.isEmpty()) {
+            setup.setupErrorLabel.setText("No 'acquisition_profiles' entries in the microscope YAML. "
+                    + "Configure profiles before running a Z-stack or time-lapse.");
+            setup.modalityCombo.setDisable(true);
+            setup.profileCombo.setDisable(true);
+            setup.channelCombo.setDisable(true);
+            return;
+        }
+        String preferred = PersistentPreferences.getStackTimeLapseModality();
+        if (preferred != null && !preferred.isBlank() && modalities.contains(preferred)) {
+            setup.modalityCombo.setValue(preferred);
+        } else {
+            setup.modalityCombo.setValue(setup.modalityCombo.getItems().get(0));
+        }
+    }
+
+    private static void wireSetupListeners(SetupState setup) {
+        setup.modalityCombo.valueProperty().addListener((obs, oldM, newM) -> {
+            if (setup.rebuilding) return;
+            PersistentPreferences.setStackTimeLapseModality(newM);
+            rebuildProfileCombo(setup);
+            rebuildChannelRow(setup);
+        });
+        setup.profileCombo.valueProperty().addListener((obs, oldP, newP) -> {
+            if (setup.rebuilding) return;
+            if (newP != null && !newP.isBlank()) {
+                PersistentPreferences.setStackTimeLapseProfile(newP);
+            }
+        });
+        setup.channelCombo.valueProperty().addListener((obs, oldC, newC) -> {
+            if (setup.rebuilding) return;
+            if (newC != null) {
+                PersistentPreferences.setStackTimeLapseChannel(newC.id());
+            }
+        });
+        // First-time population now that listeners are wired -- the modality
+        // combo already has a value (set during populateModalityCombo), so
+        // rebuilding the dependent combos picks it up.
+        rebuildProfileCombo(setup);
+        rebuildChannelRow(setup);
+    }
+
+    private static void rebuildProfileCombo(SetupState setup) {
+        String modality = setup.getSelectedModality();
+        setup.rebuilding = true;
+        try {
+            if (modality == null || modality.isBlank()) {
+                setup.profileCombo.getItems().clear();
+                setup.profileCombo.setValue(null);
+                return;
+            }
+            List<String> profiles = new ArrayList<>(setup.configMgr.getProfileKeysForModality(modality));
+            setup.profileCombo.getItems().setAll(profiles);
+            String preferred = PersistentPreferences.getStackTimeLapseProfile();
+            if (preferred != null && !preferred.isBlank() && profiles.contains(preferred)) {
+                setup.profileCombo.setValue(preferred);
+            } else if (!profiles.isEmpty()) {
+                setup.profileCombo.setValue(profiles.get(0));
+            } else {
+                setup.profileCombo.setValue(null);
+            }
+        } finally {
+            setup.rebuilding = false;
+        }
+    }
+
+    private static void rebuildChannelRow(SetupState setup) {
+        String modality = setup.getSelectedModality();
+        setup.rebuilding = true;
+        try {
+            List<Channel> channels = (modality == null || modality.isBlank())
+                    ? List.of()
+                    : setup.configMgr.getModalityChannels(modality);
+            if (channels == null || channels.isEmpty()) {
+                setup.channelCombo.getItems().clear();
+                setup.channelCombo.setValue(null);
+                setup.channelRow.setVisible(false);
+                setup.channelRow.setManaged(false);
+                return;
+            }
+            List<ChannelChoice> choices = new ArrayList<>(channels.size());
+            for (Channel c : channels) {
+                choices.add(new ChannelChoice(c.id(), c.displayName()));
+            }
+            setup.channelCombo.getItems().setAll(choices);
+            String preferred = PersistentPreferences.getStackTimeLapseChannel();
+            ChannelChoice picked = null;
+            if (preferred != null && !preferred.isBlank()) {
+                for (ChannelChoice cc : choices) {
+                    if (preferred.equals(cc.id())) {
+                        picked = cc;
+                        break;
+                    }
+                }
+            }
+            if (picked == null) picked = choices.get(0);
+            setup.channelCombo.setValue(picked);
+            setup.channelRow.setVisible(true);
+            setup.channelRow.setManaged(true);
+        } finally {
+            setup.rebuilding = false;
+        }
     }
 
     private static String getDefaultOutputFolder(String type) {
