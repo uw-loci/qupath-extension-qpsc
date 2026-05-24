@@ -59,8 +59,8 @@ The toolbar contains a single autofocus button and a range selector:
 
 | Control | Description |
 |---|---|
-| **Autofocus** | Single button that runs either streaming continuous-Z autofocus or stepped Sweep Autofocus, depending on your selection in the Autofocus Configuration dialog (Extensions > QP Scope > Utilities > Autofocus Configuration). While a scan is running the button reads **Cancel Autofocus** -- click it to abort the scan; Z is returned to the position autofocus started from. |
-| **Range dropdown** | Options are dynamically populated per objective based on magnification: 4x/5x up to 200µm, 10x up to 100µm, 20x up to 50µm, 40x up to 20µm, 60x+ up to 10µm. "Auto" uses `sweep_range_um` from `autofocus_<scope>.yml`. Explicit values override the YAML. Both autofocus methods use this selection. Higher magnifications have shallower depth-of-field, so wider search ranges waste time and may misfocus on debris. |
+| **Autofocus** | Single button that runs either streaming continuous-Z autofocus or Sweep Autofocus, depending on your selection in the Autofocus Configuration dialog (Extensions > QP Scope > Utilities > Autofocus Configuration). While Streaming AF is running the button reads **Cancel Autofocus** and can be clicked to abort. While Sweep Autofocus is running the button reads **Sweeping...** and is disabled (server-side operation has no client-side cancel; Z is returned to the starting position on any server-side failure). |
+| **Range dropdown** | Options are dynamically populated per objective based on magnification: 4x/5x up to 200µm, 10x up to 100µm, 20x up to 50µm, 40x up to 20µm, 60x+ up to 10µm. "Config" uses `sweep_range_um` from `autofocus_<scope>.yml`. Explicit values override the YAML for Streaming AF only; Sweep Autofocus always reads from the YAML regardless of dropdown selection. Higher magnifications have shallower depth-of-field, so wider search ranges waste time and may misfocus on debris. |
 
 #### Button state transitions
 
@@ -69,9 +69,9 @@ The Autofocus button changes appearance to communicate status:
 | Button State | Appearance | What happened |
 |---|---|---|
 | Ready | Default styling, label "Autofocus" | Normal idle state |
-| Running | Label "Cancel Autofocus", enabled | Autofocus is running; click to cancel |
-| Cancelling | Label "Cancelling...", disabled | Cancel requested; waiting for the scan to stop |
-| Cancelled | Returns to "Autofocus" | Scan cancelled by the user; Z restored to the pre-scan position |
+| Streaming Running | Label "Cancel Autofocus", enabled | Streaming AF is running; click to cancel |
+| Sweep Running | Label "Sweeping...", disabled | Sweep Autofocus is running on the server (no client-side cancel) |
+| Cancelled | Returns to "Autofocus" | Streaming AF cancelled by the user; Z restored to the pre-scan position |
 | Success | Returns to "Autofocus" | Focus found and committed |
 | Failed | Dialog appears | The selected autofocus method could not find focus |
 
@@ -81,8 +81,8 @@ When autofocus fails, a dialog appears with the diagnostic reason (e.g., **"metr
 
 The Autofocus Configuration dialog (Extensions > QP Scope > Utilities > Autofocus Configuration) contains radio buttons labeled "Live Viewer Autofocus button uses:" that let you select which method the Live Viewer's Autofocus button runs:
 
-- **Streaming** -- continuous-Z scan, fast (~1 second on PPM at 0.73 ms exposure). Requires a stage capable of slow continuous motion. Streaming refuses (showing the failure dialog -- there is no automatic fallback) when exposure is too long (>~40 ms on a Prior, varies by stage), the camera is saturated, or the stage lacks a speed property. If you hit these often, switch the method to Sweep.
-- **Sweep** -- stepped step-and-snap, slower (~15-30 seconds) but works on any camera and any stage. More reliable when exposure is long or the sample has sparse signal.
+- **Streaming** -- continuous-Z scan, fast (~1 second on PPM at 0.73 ms exposure). Requires a stage capable of slow continuous motion. Streaming refuses (showing the failure dialog -- there is no automatic fallback) when exposure is too long (>~40 ms on a Prior, varies by stage), the camera is saturated, or the stage lacks a speed property. If you hit these often, switch the method to Sweep. Streaming AF can be cancelled by clicking the button while running.
+- **Sweep** -- server-side stepped scan over a narrow Z range, slower than Streaming (~5-10 seconds) but works on any camera and any stage. Always uses `sweep_range_um` from the autofocus YAML; the focus range dropdown does not override it for Sweep. More reliable when exposure is long or the sample has sparse signal. Sweep runs entirely on the server with no per-frame client feedback, so the button shows "Sweeping..." while running and cannot be cancelled.
 
 Your choice is stored per QuPath installation, so each microscope rig naturally tracks its own preferred method (e.g., STREAMING on PPM where the stage can crawl, SWEEP on OWS3 where the stage cannot).
 

@@ -16,7 +16,7 @@ During a tiled acquisition, the sample's focal plane can shift due to slide tilt
 | [Sweep Autofocus](#sweep-autofocus) | Subsequent AF positions during tiling | ~9s | Good (narrow Z range) |
 | [Z-Focus Tilt Model](#z-focus-tilt-prediction) | Between annotations | Instant | Approximate (guides AF search center) |
 
-Additionally, the [Live Viewer](tools/live-viewer.md) provides an interactive **Autofocus** button (primary, uses streaming scan when available) with **Sweep Autofocus** as a fallback that appears only when Autofocus is unavailable.
+Additionally, the [Live Viewer](tools/live-viewer.md) provides an interactive **Autofocus** button (runs either Streaming or Sweep Autofocus depending on your selection in the Autofocus Configuration dialog).
 
 ---
 
@@ -103,7 +103,9 @@ If validation fails on both the primary and fallback metrics, autofocus reports 
 
 ## Sweep Autofocus
 
-After the first tissue position uses standard AF, subsequent positions use a faster **sweep autofocus** to correct for small Z drift between tiles:
+After the first tissue position uses standard AF, subsequent positions use a faster **sweep autofocus** to correct for small Z drift between tiles. Sweep Autofocus runs entirely server-side (via the `TESTADAF` socket command) with no per-frame client loop.
+
+The server-side sweep:
 
 - Sweeps a narrow Z range (configured via `sweep_range_um`, default 6-10um)
 - Uses fewer steps (`sweep_n_steps`, default 6-10)
@@ -113,6 +115,8 @@ After the first tissue position uses standard AF, subsequent positions use a fas
 - Failed sweeps with flat profiles (no slope, no drift) are not recorded in the AF position map, preventing stale Z values from propagating to neighboring tiles via nearest-neighbor lookup
 
 The sweep is designed for corrections of 1-5um per attempt, with the retry loop extending reach to ~15um.
+
+In the Live Viewer, when you select Sweep Autofocus, clicking the Autofocus button sends a `TESTADAF` command to the server and displays "Sweeping..." on the button while the server performs the scan. The focus range dropdown always defers to the `sweep_range_um` YAML setting for Sweep Autofocus (unlike Streaming AF, where explicit um values override the YAML).
 
 **Speed note (2026-04-14):** The internal Z-wait path in `microscope_control/hardware/stage.py` now uses a tight `device_busy` poll instead of `wait_for_device`. On the Prior ProScan this cut the blocking round-trip for a 20 um move from ~240 ms to ~80 ms (~3x) with no behavioral change. Per-sweep savings are ~900 ms across a 6-step check, which adds up to ~11 minutes across a 750-sweep acquisition. Other stages see smaller but still positive gains.
 
@@ -170,7 +174,9 @@ Select your preferred method (Streaming or Sweep) via the radio buttons in the A
 - **Streaming** on rigs with stages capable of slow continuous motion (e.g., PPM)
 - **Sweep** on rigs with stages that cannot move slowly (e.g., OWS3), or for long-exposure modalities where Streaming's blur budget is restrictive
 
-**YAML setting (server-side):** `stage.streaming_af.enabled: false` in `config_<scope>.yml` is a separate, server-side guard, independent of the dialog radio. When false, the server refuses streaming-AF requests outright (routing them to a stepped fallback). The dialog radio controls which method the *client* Live Viewer button sends; the YAML flag controls what the *server* does with a streaming request. On a rig where streaming AF genuinely cannot work (e.g. OWS3, whose stage cannot do slow continuous motion), keep the YAML flag false *and* set the dialog radio to Sweep.
+**Live Viewer dropdown behavior:** The focus range dropdown ("Config" or explicit µm values) affects Streaming AF only. Streaming AF honors explicit dropdown overrides to let you widen the scan window on-the-fly. Sweep Autofocus always reads `sweep_range_um` from the YAML and ignores dropdown overrides.
+
+**YAML setting (server-side):** `stage.streaming_af.enabled: false` in `config_<scope>.yml` is a separate, server-side guard, independent of the dialog radio. When false, the server refuses streaming-AF requests outright. The dialog radio controls which method the *client* Live Viewer button sends; the YAML flag controls what the *server* does with a streaming request. On a rig where streaming AF genuinely cannot work (e.g. OWS3, whose stage cannot do slow continuous motion), keep the YAML flag false *and* set the dialog radio to Sweep.
 
 ### How the server picks an objective
 
