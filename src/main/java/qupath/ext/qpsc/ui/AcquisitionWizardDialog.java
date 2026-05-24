@@ -824,7 +824,7 @@ public class AcquisitionWizardDialog {
                 + "  2. Manually focus on the tissue (scroll Z until sharp)\n"
                 + "  3. Click this button\n\n"
                 + "THE TEST:\n"
-                + "  Phase 1: Sweep drift check from your focused position\n"
+                + "  Phase 1: Sweep autofocus from your focused position\n"
                 + "  Phase 2: Defocus 80%, then full autofocus recovery\n"
                 + "  Results show pass/fail for each phase.\n\n"
                 + "TO CHANGE SETTINGS:\n"

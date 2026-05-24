@@ -110,14 +110,14 @@ public class TestAutofocusWorkflow {
     }
 
     /**
-     * Run SWEEP drift check test with specified output path and objective.
+     * Run SWEEP autofocus test with specified output path and objective.
      * Tests the sweep-based focus correction used during acquisitions.
      *
      * @param outputPath Directory where diagnostic plots will be saved
      * @param objectiveOverride Objective to use, or null to read from config
      */
     public static void runSweep(String outputPath, String objectiveOverride) {
-        logger.info("Starting SWEEP drift check test workflow");
+        logger.info("Starting SWEEP autofocus test workflow");
         runTest(outputPath, true, objectiveOverride); // true = sweep (was adaptive)
     }
 
@@ -403,7 +403,7 @@ public class TestAutofocusWorkflow {
         alert.getDialogPane().setMinWidth(500);
 
         // Show "Open Plot" only when a diagnostic plot was produced.
-        // Sweep drift check is designed for speed and skips the plot, so
+        // Sweep autofocus is designed for speed and skips the plot, so
         // an "Open Plot" button there would be a silent no-op.
         if (plotPath != null) {
             alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.YES, javafx.scene.control.ButtonType.NO);

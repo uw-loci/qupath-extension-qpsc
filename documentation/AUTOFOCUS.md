@@ -341,9 +341,9 @@ Autofocus parameters are configured **per objective** in the autofocus YAML file
 | `score_metric` | Focus quality algorithm | `normalized_variance` |
 | `texture_threshold` | Min texture for tissue detection | 0.005-0.030 |
 | `tissue_area_threshold` | Min tissue coverage fraction | 0.05-0.30 |
-| `sweep_range_um` | Z range for drift check | 6-10 |
-| `sweep_n_steps` | Steps in drift check | 6-10 |
-| `edge_retries` | Additional sweep attempts on boundary peaks. Applies to BOTH the dense pre-acquisition AF and the mid-acquisition sweep-drift check. Each retry doubles the search range and shifts the center toward the inferred peak direction; sweeps are clamped to the configured stage Z limits, and retries that have nowhere new to search are skipped. (0=disable, 2=default) | 0-3 |
+| `sweep_range_um` | Z range for sweep autofocus | 6-10 |
+| `sweep_n_steps` | Steps in sweep autofocus | 6-10 |
+| `edge_retries` | Additional sweep attempts on boundary peaks. Applies to BOTH the dense pre-acquisition AF and the mid-acquisition sweep autofocus. Each retry doubles the search range and shifts the center toward the inferred peak direction; sweeps are clamped to the configured stage Z limits, and retries that have nowhere new to search are skipped. (0=disable, 2=default) | 0-3 |
 | `gap_index_multiplier` | Force AF after this x `n_tiles` without AF (safety net) | 2-5 (default 3) |
 | `gap_spatial_multiplier` | Force AF when nearest AF exceeds this x grid spacing (fragment safety net) | 1.5-3.0 (default 2.0) |
 

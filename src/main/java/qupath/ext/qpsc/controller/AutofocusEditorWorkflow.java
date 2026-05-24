@@ -78,7 +78,7 @@ public class AutofocusEditorWorkflow {
         double textureThreshold;
         double tissueAreaThreshold;
 
-        // Sweep drift check parameters
+        // Sweep autofocus parameters
         double sweepRangeUm;
         int sweepNSteps;
         int edgeRetries;
@@ -174,7 +174,7 @@ public class AutofocusEditorWorkflow {
                 warnings.add("tissue_area_threshold > 0.5 is very high (typical range: 0.05-0.30)");
             }
 
-            // Sweep drift check validation. Threshold scales with objective
+            // Sweep autofocus validation. Threshold scales with objective
             // magnification: depth-of-field roughly scales as 1/mag, so a
             // 50um sweep that is tight at 40x is generous at 10x. Threshold
             // is ~600um/mag (10x->60, 20x->30, 40x->15, 60x->10), with the
@@ -1778,7 +1778,7 @@ public class AutofocusEditorWorkflow {
 
                 // Update status after launching test
                 Platform.runLater(() -> {
-                    statusLabel.setText("Sweep drift check test launched - check for results dialog");
+                    statusLabel.setText("Sweep autofocus test launched - check for results dialog");
                     statusLabel.setStyle("-fx-text-fill: blue; -fx-font-weight: bold;");
                 });
 
@@ -1821,7 +1821,7 @@ public class AutofocusEditorWorkflow {
         validateButton.setTooltip(new Tooltip("Test your autofocus settings on the current tissue.\n\n"
                 + "1. Manually focus on tissue using the Live Viewer first\n"
                 + "2. Click this button to run a two-phase validation:\n"
-                + "   - Phase 1: Sweep drift check from your focused position\n"
+                + "   - Phase 1: Sweep autofocus from your focused position\n"
                 + "   - Phase 2: Defocus 80% of search range, then full recovery\n"
                 + "3. Results show how close each phase returns to your manual focus"));
         validateButton.setStyle("-fx-font-weight: bold;");
@@ -3010,7 +3010,7 @@ public class AutofocusEditorWorkflow {
                                 ? ((Number) entry.get("tissue_area_threshold")).doubleValue()
                                 : 0.2;
 
-                        // Sweep drift check parameters with defaults
+                        // Sweep autofocus parameters with defaults
                         double sweepRangeUm = entry.containsKey("sweep_range_um")
                                 ? ((Number) entry.get("sweep_range_um")).doubleValue()
                                 : 10.0;
@@ -3231,7 +3231,7 @@ public class AutofocusEditorWorkflow {
         } else {
             sb.append("SUGGESTIONS:\n");
             if (!sweepOk) {
-                sb.append("  - Sweep drift check was inaccurate. Try a different score_metric\n");
+                sb.append("  - Sweep autofocus was inaccurate. Try a different score_metric\n");
                 sb.append("    or increase sweep_n_steps.\n");
             }
             if (!recoveryOk) {
