@@ -97,7 +97,7 @@ If a timepoint takes longer than the requested interval, the remaining timepoint
 
 | Option | Type | Description |
 |--------|------|-------------|
-| Benchmark AF methods (sweep vs streaming, per tile) | CheckBox | **Diagnostic mode.** When enabled, every tile runs both the sweep drift-check autofocus and the streaming autofocus, times each method, and applies **neither result** -- the stage stays at the pre-AF Z position. The server writes per-tile timing measurements to `af_benchmark.csv` in the acquisition output folder. The acquired images will drift out of focus since no autofocus correction is applied; use a small test grid (e.g., 3×3 tiles) and treat the images as throwaway. The CSV is the deliverable. This mode is off by default and does not persist across dialog opens. |
+| Benchmark AF methods (sweep vs streaming, per tile) | CheckBox | **Diagnostic mode.** When enabled, every tile runs both the sweep autofocus and the streaming autofocus, times each method, and applies **neither result** -- the stage stays at the pre-AF Z position. The server writes per-tile timing measurements to `af_benchmark.csv` in the acquisition output folder. The acquired images will drift out of focus since no autofocus correction is applied; use a small test grid (e.g., 3×3 tiles) and treat the images as throwaway. The CSV is the deliverable. This mode is off by default and does not persist across dialog opens. |
 
 ### Acquisition Preview
 
