@@ -14,10 +14,25 @@ Acquire single-tile Z-stacks or time-lapse sequences at the current stage positi
 - Connected to the microscope server
 - Stage positioned at the area of interest (use the Live Viewer to navigate)
 - For Z-stacks: focus set to the approximate center of the desired Z range
+- Microscope YAML configuration file with `acquisition_profiles` entries
+
+## Setup Section
+
+At the top of the dialog, a **Setup** panel configures the microscope hardware state before acquisition:
+
+| Control | Description |
+|---------|-------------|
+| **Modality** | Select the imaging modality (e.g., Brightfield, PPM, Widefield IF) based on your microscope configuration |
+| **Profile** | Select the acquisition profile, which sets objective, detector, illumination, exposure, and filters for the selected modality |
+| **Channel** (when applicable) | If the modality supports multiple channels, select which channel to acquire. Channel row is hidden for single-channel modalities |
+
+**Important:** Before clicking **Start Z-Stack** or **Start Time-Lapse**, you must select a modality and profile. If channels are shown, you must also select a channel. The system will apply these settings to the microscope hardware via `APPLYPR` and `APPLYCH` commands, ensuring consistent exposure and illumination.
+
+**Error state:** If required controls are not set, the status label will display "Pick a modality, profile, and channel (if shown) in Setup first." Configure the Setup row and try again.
 
 ## Z-Stack
 
-Acquires images at multiple Z positions centered on the current focus.
+Acquires images at multiple Z positions centered on the current focus, using the modality and profile selected in the Setup section.
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
@@ -27,13 +42,15 @@ Acquires images at multiple Z positions centered on the current focus.
 
 The info label shows the computed Z range and number of planes. For example, 20 um range with 1 um step = 21 planes centered on current Z.
 
+**Note:** This dialog acquires a single channel per run -- the one picked in Setup. For widefield IF, run the dialog once per channel; for brightfield / PPM, the Channel control is hidden and the profile's settings drive the capture.
+
 ### Output
 
 Individual TIFF files named `z0000_Z<position>.tif` with metadata including Z position and plane index.
 
 ## Time-Lapse
 
-Acquires images at the current position at regular intervals.
+Acquires images at the current position at regular intervals, using the modality and profile selected in the Setup section.
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
@@ -43,17 +60,23 @@ Acquires images at the current position at regular intervals.
 
 The info label shows total acquisition duration.
 
+**Note:** This dialog acquires a single channel per run -- the one picked in Setup. For widefield IF, run the dialog once per channel; for brightfield / PPM, the Channel control is hidden and the profile's settings drive the capture.
+
 ### Output
 
 Individual TIFF files named `t00000_T<elapsed>s.tif` with metadata including timepoint index and elapsed time.
 
 ## Modality Support
 
-Both Z-stack and time-lapse support every modality the acquisition workflow handles:
+Both Z-stack and time-lapse support every modality configured in the microscope YAML. The Setup section's **Modality** dropdown lists all modalities that have acquisition profiles defined. Selecting a modality populates the **Profile** dropdown with compatible profiles for that modality.
 
-- **PPM / multi-angle:** all configured rotation angles are acquired at each Z plane or time point. Files suffixed with the angle: `z0000_Z10.0_angle90.tif`.
-- **Brightfield (single-angle, single-channel):** standard Z-stack-then-project per tile.
-- **Widefield IF / fluorescence (multi-channel):** Z-stack runs *per channel* by default (commit `e8e3799`). For each tile, the workflow iterates channels (channel-outer, Z-inner ordering minimizes filter wheel changes), accumulates Z planes per channel, and applies the configured projection per channel. Stage Z is restored to center between channels. Saturation runaway detection fires once per tile per channel.
+When you start acquisition, the selected profile's objective, detector, and illumination settings are applied to the microscope hardware before image capture.
+
+Behavior depends on the selected modality:
+
+- **PPM / multi-angle:** all configured rotation angles are acquired at each Z plane or time point. Files suffixed with the angle: `z0000_Z10.0_angle90.tif`. Channel control is hidden for this modality.
+- **Brightfield (single-angle, single-channel):** standard Z-stack per Z plane. Channel control is hidden for this modality.
+- **Widefield IF / fluorescence (multi-channel):** the **Channel** dropdown appears in Setup. Pick one channel per run; the dialog applies that channel's profile (filter wheel, exposure, intensity, illumination) before snapping. To capture multiple channels, run the dialog once per channel. The multi-channel loop-order toggle described below applies to the **Bounded** and **Existing Image** acquisition dialogs, not to this single-tile dialog.
 
 ### Loop-order toggle (added 2026-05-14)
 
