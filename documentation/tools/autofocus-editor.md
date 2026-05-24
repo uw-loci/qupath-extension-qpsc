@@ -46,10 +46,10 @@ Controls how densely autofocus is scheduled across the tile grid.
 | Parameter | Type | Typical Range | Description |
 |-----------|------|---------------|-------------|
 | Objective | ComboBox | - | Select the objective to configure. The initial selection auto-detects the currently mounted optics by querying Micro-Manager's reported pixel size and matching it against the active config (via the shared `ObjectiveSelector` component). Falls back to the last-used objective preference, then the first entry. Replaces the previous always-defaults-to-10x behavior so editing the right objective does not require a manual change first. |
-| n_tiles | Spinner | 3-10 | AF grid spacing (every N tiles in each axis). Also sets `af_min_distance = n_tiles x mean(camera FOV)` |
-| gap_index_multiplier | Spinner | 1-5 (default 3) | Force AF after `gap_index_multiplier x n_tiles` positions without one. Safety net for scan-order gaps |
-| gap_spatial_multiplier | Text | 1.0-3.0 (default 2.0) | Force AF when nearest AF exceeds `gap_spatial_multiplier x af_min_distance`. Safety net for disconnected fragments |
-| af_min_distance (derived) | Read-only | - | Computed from `n_tiles x mean FOV`. Updates live as inputs change. Also shows effective force-AF thresholds in tile count and micrometers |
+| Run AF every (tiles) | Spinner | 3-10 | AF grid spacing (`n_tiles`). Also sets `af_min_distance = n_tiles x mean(camera FOV)` |
+| Index gap multiplier | Spinner | 1-5 (default 3) | Force AF after multiplier × n_tiles positions without one (`gap_index_multiplier`). Safety net for scan-order gaps |
+| Spatial gap multiplier | Text | 1.0-3.0 (default 2.0) | Force AF when nearest AF exceeds multiplier × af_min_distance (`gap_spatial_multiplier`). Safety net for disconnected fragments |
+| Min AF distance (derived) | Read-only | - | Computed from `n_tiles x mean FOV`. Updates live as inputs change. Also shows effective force-AF thresholds in tile count and micrometers |
 
 See [AUTOFOCUS.md](../AUTOFOCUS.md#how-af-position-selection-works) for the full explanation of how the grid and safety nets interact.
 
@@ -57,8 +57,8 @@ See [AUTOFOCUS.md](../AUTOFOCUS.md#how-af-position-selection-works) for the full
 
 | Parameter | Type | Typical Range | Description |
 |-----------|------|---------------|-------------|
-| n_steps | Spinner | 5-20 | Number of Z positions to sample during autofocus |
-| search_range_um | Spinner | 10-50 | Total Z range to search in micrometers |
+| Search range (um) | Spinner | 10-50 | Total Z range to search (`search_range_um`) |
+| Z samples | Spinner | 5-20 | Number of Z positions to sample (`n_steps`) |
 
 ### Sweep Autofocus
 
@@ -66,9 +66,10 @@ The Sweep Autofocus section configures a periodic Z sweep that monitors focus dr
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| sweep_range_um | Spinner | 10 | Total Z range for the sweep in micrometers |
-| sweep_n_steps | Spinner | 6 | Number of Z positions to sample during each sweep |
-| score_metric | ComboBox | normalized_variance | Focus quality metric used to evaluate each Z position |
+| Sweep range (um) | Spinner | 10 | Total Z range for the sweep (`sweep_range_um`) |
+| Z samples | Spinner | 6 | Number of Z positions to sample during each sweep (`sweep_n_steps`) |
+| Edge retries | Spinner | 2 | Extra attempts when the best focus is at the sweep boundary (`edge_retries`) |
+| Score metric | ComboBox | normalized_variance | Focus quality metric used to evaluate each Z position |
 
 **Available score_metric options:**
 
