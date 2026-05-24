@@ -160,7 +160,7 @@ If no peak is found but a focus slope is detected (monotonic profile after edge 
 
 - **Long-exposure modalities** (dark fluorescence, low-angle PPM): Autofocus's blur budget is dominated by exposure, and above the per-stage ceiling it will refuse
 - **Slow/fast-readout cameras where `snap_image` is competitive with streaming**: Autofocus's advantage disappears (and Sweep is already 3-4x faster thanks to the busy-poll wait)
-- **First-AF-from-scratch situations**: Autofocus is designed as a drift check, not a full search. Use a wider range (select from the Live Viewer dropdown) or Sweep Autofocus for recovery from far-from-focus starting positions.
+- **First-AF-from-scratch situations**: Streaming Autofocus is designed for drift correction, not as a full search. Use a wider range (select from the Live Viewer dropdown) or Sweep Autofocus for recovery from far-from-focus starting positions.
 
 ### Configuration
 
@@ -228,7 +228,7 @@ This can be disabled with the **"No Manual Autofocus"** preference (Extensions >
 
 ## Disable All Autofocus
 
-The **"Disable All Autofocus"** preference (Extensions > QP Scope > Preferences > "Disable All Autofocus (Danger)") suppresses *every* AF call for an acquisition, not just manual fallback. When ticked, the Java side emits `--af-disabled` on the wire (in place of the `--af-tiles`/`--af-steps`/`--af-range` triplet). The server's `_configure_autofocus` short-circuits on this flag: no autofocus YAML load required, no AF positions scheduled, no pre-acquisition AF, no per-tile drift checks, no manual-focus prompts. Use only when Z drift over the acquisition window is known to be small or you're staging a hint-Z manually. Server log shows a single `Autofocus DISABLED for this acquisition` line at workflow start.
+The **"Disable All Autofocus"** preference (Extensions > QP Scope > Preferences > "Disable All Autofocus (Danger)") suppresses *every* AF call for an acquisition, not just manual fallback. When ticked, the Java side emits `--af-disabled` on the wire (in place of the `--af-tiles`/`--af-steps`/`--af-range` triplet). The server's `_configure_autofocus` short-circuits on this flag: no autofocus YAML load required, no AF positions scheduled, no pre-acquisition AF, no per-tile sweep autofocus, no manual-focus prompts. Use only when Z drift over the acquisition window is known to be small or you're staging a hint-Z manually. Server log shows a single `Autofocus DISABLED for this acquisition` line at workflow start.
 
 ## Last-Tile AF Skip
 
@@ -238,7 +238,7 @@ When a tile scheduled for AF lands at the end of the position list (e.g. spatial
 
 ## Modality-Aware Autofocus
 
-**Status: COMPLETE -- 2026-04-15.** Both AF call sites in `workflow.py` (pre-acquisition validation and per-tile drift check) now route through `af_strategy.is_valid()` / `af_strategy.brightness_acceptable()`. The strategy's `StrategyFailureMode` (DEFER / PROCEED / MANUAL) drives the existing defer-to-next-tile / manual-focus-dialog dispatch. The autofocus editor GUI (Extensions > QP Scope > Utilities > Autofocus Configuration Editor) has been extended with two new tabs that expose the full v2 strategy library and modality bindings for editing. This redesign was driven by autofocus failures on sparse-fluorescence samples (pollen, beads, FISH) where the old `has_sufficient_tissue` area gate was the wrong question to ask.
+**Status: COMPLETE -- 2026-04-15.** Both AF call sites in `workflow.py` (pre-acquisition validation and per-tile sweep autofocus) now route through `af_strategy.is_valid()` / `af_strategy.brightness_acceptable()`. The strategy's `StrategyFailureMode` (DEFER / PROCEED / MANUAL) drives the existing defer-to-next-tile / manual-focus-dialog dispatch. The autofocus editor GUI (Extensions > QP Scope > Utilities > Autofocus Configuration Editor) has been extended with two new tabs that expose the full v2 strategy library and modality bindings for editing. This redesign was driven by autofocus failures on sparse-fluorescence samples (pollen, beads, FISH) where the old `has_sufficient_tissue` area gate was the wrong question to ask.
 
 ### Why
 
