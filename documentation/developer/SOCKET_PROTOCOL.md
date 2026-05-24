@@ -408,7 +408,7 @@ Response formats:
   or no interior peak found after edge retries. The stage is
   moved to the best Z found if a focus slope was detected
   (better than initial_z even without a peak). Caller should
-  fall back to stepped Sweep Focus. This is informational,
+  fall back to stepped Sweep Autofocus. This is informational,
   not an error. Dump path included if dump folder was created.
 - `ABORTED:<reason>[:dump=<path>]` -- the client cancelled the scan
   via `ABORTAF` (see below). The stage is returned to the pre-scan

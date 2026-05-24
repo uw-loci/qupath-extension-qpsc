@@ -59,7 +59,7 @@ The toolbar contains a single autofocus button and a range selector:
 
 | Control | Description |
 |---|---|
-| **Autofocus** | Single button that runs either streaming continuous-Z autofocus or stepped Sweep Focus autofocus, depending on your selection in the Autofocus Configuration dialog (Extensions > QP Scope > Utilities > Autofocus Configuration). While a scan is running the button reads **Cancel Autofocus** -- click it to abort the scan; Z is returned to the position autofocus started from. |
+| **Autofocus** | Single button that runs either streaming continuous-Z autofocus or stepped Sweep Autofocus, depending on your selection in the Autofocus Configuration dialog (Extensions > QP Scope > Utilities > Autofocus Configuration). While a scan is running the button reads **Cancel Autofocus** -- click it to abort the scan; Z is returned to the position autofocus started from. |
 | **Range dropdown** | Options are dynamically populated per objective based on magnification: 4x/5x up to 200µm, 10x up to 100µm, 20x up to 50µm, 40x up to 20µm, 60x+ up to 10µm. "Auto" uses `sweep_range_um` from `autofocus_<scope>.yml`. Explicit values override the YAML. Both autofocus methods use this selection. Higher magnifications have shallower depth-of-field, so wider search ranges waste time and may misfocus on debris. |
 
 #### Button state transitions
@@ -96,7 +96,7 @@ When you select Streaming in the Autofocus Configuration, the server checks thre
 
 #### Slope without peak
 
-If either Autofocus or Sweep Focus detects a focus slope (monotonic profile) but cannot find a true peak even after edge retries, the stage is left at the best Z found rather than returning to the starting position.
+If either Autofocus or Sweep Autofocus detects a focus slope (monotonic profile) but cannot find a true peak even after edge retries, the stage is left at the best Z found rather than returning to the starting position.
 
 See [AUTOFOCUS.md](../AUTOFOCUS.md#autofocus-live-viewer) for the full design story and [developer/PROBEZ.md](../developer/PROBEZ.md) for how to characterize the envelope on a new rig.
 
