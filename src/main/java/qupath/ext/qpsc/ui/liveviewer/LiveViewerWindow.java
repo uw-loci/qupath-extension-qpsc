@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -47,8 +48,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.AutofocusEditorWorkflow;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.controller.TestAutofocusWorkflow;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -104,10 +107,13 @@ public class LiveViewerWindow {
     private ToggleButton stageControlToggle;
     private final ContrastSettings contrastSettings = new ContrastSettings();
 
-    // Focus controllers
-    // RefineFocusController is used internally by SweepFocusController (Phase 5)
-    // but has no standalone button or field in the Live Viewer.
-    private SweepFocusController sweepFocusController;
+    // Sweep autofocus now runs entirely server-side via TESTADAF
+    // (testAdaptiveAutofocus). The Live Viewer just tracks "is a sweep
+    // request in flight" so the button can show "Sweeping..." and ignore
+    // re-clicks while the single socket round-trip is outstanding. The
+    // old client-side step-and-snap controller is preserved in
+    // claude-reports/design/2026-05-24_sweep-focus-controller-removal.md.
+    private volatile boolean sweepRunning = false;
 
     // Live mode state (camera streaming on/off, independent of window visibility)
     private volatile boolean liveActive = false;
@@ -792,14 +798,16 @@ public class LiveViewerWindow {
         focusRangeCombo = new ComboBox<>();
         // Options are repopulated per-objective via updateFocusRangeOptions();
         // start with a safe conservative set until the first objective resolves.
-        focusRangeCombo.getItems().addAll("Auto", "10um", "20um");
-        focusRangeCombo.setValue("Auto");
-        // Width must fit "Auto" plus the 4-character "<n>um" labels with a
+        focusRangeCombo.getItems().addAll("Config", "10um", "20um");
+        focusRangeCombo.setValue("Config");
+        // Width must fit "Config" plus the 4-character "<n>um" labels with a
         // dropdown chevron; 70 px clipped "20um" -> "20" on JavaFX 21.
         focusRangeCombo.setPrefWidth(95);
         focusRangeCombo.setTooltip(new Tooltip("Search range for autofocus.\n"
-                + "Auto: uses sweep_range_um from autofocus YAML.\n"
-                + "Explicit values override the YAML setting.\n\n"
+                + "Config: uses sweep_range_um from the autofocus YAML\n"
+                + "(set in the Autofocus Configuration Editor).\n"
+                + "Explicit values override the YAML for Streaming AF only;\n"
+                + "Sweep Autofocus always reads from the YAML.\n\n"
                 + "Options are capped per-objective: 10x allows up to 100um,\n"
                 + "20x up to 50um, 40x up to 20um, 60x+ up to 10um.\n"
                 + "Smaller = faster but must be closer to focus.\n"
@@ -1116,9 +1124,9 @@ public class LiveViewerWindow {
      * current live mode and running state. Must be called on FX thread.
      */
     private void updateRefineFocusButtonState() {
-        boolean sweepRunning = sweepFocusController != null && sweepFocusController.isRunning();
         if (sweepRunning) {
-            // Keep showing cancel while either is running
+            // Server-side sweep in flight: button is "Sweeping..." and
+            // disabled; leave that state alone until the sweep completes.
             return;
         }
         boolean streamingRunning = streamingFocusController != null && streamingFocusController.isRunning();
@@ -1141,8 +1149,10 @@ public class LiveViewerWindow {
      * cancels it (not the configured method, which may have since changed).
      */
     private void handleAutofocus() {
-        if (sweepFocusController != null && sweepFocusController.isRunning()) {
-            handleSweepFocus();
+        if (sweepRunning) {
+            // Button should be disabled while a sweep is in flight, but if
+            // a click sneaks through (e.g. an accelerator) ignore it -- the
+            // server-side TESTADAF has no client-side cancel path.
             return;
         }
         if (streamingFocusController != null && streamingFocusController.isRunning()) {
@@ -1187,10 +1197,9 @@ public class LiveViewerWindow {
     }
 
     private void handleSweepFocus() {
-        if (sweepFocusController != null && sweepFocusController.isRunning()) {
-            sweepFocusController.cancel();
-            autofocusButton.setText("Cancelling...");
-            autofocusButton.setDisable(true);
+        if (sweepRunning) {
+            // No client-side cancel for server-side TESTADAF; defensively
+            // ignore re-entrant clicks (button is disabled).
             return;
         }
 
@@ -1204,53 +1213,65 @@ public class LiveViewerWindow {
             return;
         }
 
-        double searchRange = 0;
-        String rangeSelection = focusRangeCombo.getValue();
-        if (rangeSelection != null && rangeSelection.endsWith("um")) {
-            try {
-                searchRange = Double.parseDouble(rangeSelection.replace("um", ""));
-            } catch (NumberFormatException ignored) {
-            }
+        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        if (configPath == null || configPath.isBlank()) {
+            updateStatus("Cannot autofocus: microscope config not set");
+            return;
         }
+        MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
+        String objective = TestAutofocusWorkflow.getCurrentObjective(configManager);
+        if (objective == null) {
+            updateStatus("Cannot autofocus: could not determine current objective");
+            return;
+        }
+        String outputPath = TestAutofocusWorkflow.getDefaultOutputPath();
 
-        sweepFocusController = new SweepFocusController(controller.getSocketClient(), () -> lastFrame, searchRange);
-
-        // Sweep can run ~60s. Keep the button enabled as a Cancel control --
-        // a second click routes to the cancel branch at the top of this method.
-        autofocusButton.setText("Cancel Autofocus");
+        sweepRunning = true;
+        autofocusButton.setText("Sweeping...");
         autofocusButton.setStyle("");
-        autofocusButton.setTooltip(new Tooltip("Click to cancel the running sweep autofocus."));
-        autofocusButton.setDisable(false);
+        autofocusButton.setTooltip(new Tooltip(
+                "Sweep autofocus running on the server using the autofocus YAML " + "settings; wait for completion."));
+        autofocusButton.setDisable(true);
         focusRangeCombo.setDisable(true);
         liveToggleButton.setDisable(true);
+        updateStatus("Sweep Autofocus: running...");
 
-        RefineFocusController.StatusCallback callback = (msg, outcome) -> {
+        Thread sweepThread = new Thread(() -> {
+            String errorMsg = null;
+            try {
+                controller.withAllLiveViewingOff(() -> {
+                    Map<String, String> result =
+                            controller.getSocketClient().testAdaptiveAutofocus(configPath, outputPath, objective);
+                    String z0 = result.get("initial_z");
+                    String z1 = result.get("final_z");
+                    String dz = result.get("z_shift");
+                    Platform.runLater(() -> updateStatusHeld(
+                            String.format("Sweep Autofocus complete: Z shifted %s um (%s -> %s)", dz, z0, z1)));
+                });
+            } catch (IOException ex) {
+                errorMsg = ex.getMessage();
+                logger.error("Sweep Autofocus failed: {}", errorMsg, ex);
+            } catch (RuntimeException ex) {
+                errorMsg = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+                logger.error("Sweep Autofocus failed: {}", errorMsg, ex);
+            }
+            final String failure = errorMsg;
             Platform.runLater(() -> {
-                boolean done = outcome != RefineFocusController.Outcome.IN_PROGRESS;
-                if (done) {
-                    updateStatusHeld(msg);
-                } else {
-                    updateStatus(msg);
+                sweepRunning = false;
+                autofocusButton.setText("Autofocus");
+                autofocusButton.setStyle("");
+                autofocusButton.setTooltip(new Tooltip(STREAMING_AF_TOOLTIP));
+                autofocusButton.setDisable(!liveActive);
+                focusRangeCombo.setDisable(!liveActive);
+                liveToggleButton.setDisable(false);
+                if (stageControlPanel != null) {
+                    stageControlPanel.refreshPositions();
                 }
-                if (done) {
-                    liveToggleButton.setDisable(false);
-                    focusRangeCombo.setDisable(!liveActive);
-                    if (stageControlPanel != null) {
-                        stageControlPanel.refreshPositions();
-                    }
-                    autofocusButton.setText("Autofocus");
-                    autofocusButton.setStyle("");
-                    autofocusButton.setTooltip(new Tooltip(STREAMING_AF_TOOLTIP));
-                    autofocusButton.setDisable(!liveActive);
-                    if (outcome == RefineFocusController.Outcome.FAILED
-                            || outcome == RefineFocusController.Outcome.ERROR) {
-                        showAutofocusFailedDialog("Sweep", msg);
-                    }
+                if (failure != null) {
+                    showAutofocusFailedDialog("Sweep", failure);
                 }
             });
-        };
-
-        Thread sweepThread = new Thread(() -> sweepFocusController.execute(callback));
+        });
         sweepThread.setDaemon(true);
         sweepThread.setName("LiveViewer-SweepFocus");
         sweepThread.start();
@@ -1308,7 +1329,7 @@ public class LiveViewerWindow {
             modality = stageControlPanel.getCurrentCameraModality();
         }
 
-        // Read the focus range dropdown value. "Auto" -> NaN -> server
+        // Read the focus range dropdown value. "Config" -> NaN -> server
         // uses sweep_range_um from the yaml. Any explicit "Num_um" value
         // overrides. This gives the user a quick way to widen the scan
         // window when they suspect they are far from focus (the default
@@ -1797,10 +1818,11 @@ public class LiveViewerWindow {
      *   <li>Unknown objective: conservative default (10-30 um)</li>
      * </ul>
      *
-     * <p>"Auto" always remains as the first option and defers to the per-objective
-     * {@code sweep_range_um} field in {@code autofocus_<scope>.yml}. The previously
-     * selected value is preserved when still valid; otherwise the dropdown falls
-     * back to "Auto".
+     * <p>"Config" always remains as the first option and defers to the per-objective
+     * {@code sweep_range_um} field in {@code autofocus_<scope>.yml}. Sweep Autofocus
+     * always reads from the YAML regardless of dropdown selection; only Streaming AF
+     * honors the explicit um overrides. The previously selected value is preserved
+     * when still valid; otherwise the dropdown falls back to "Config".
      */
     private void updateFocusRangeOptions() {
         if (focusRangeCombo == null) return;
@@ -1808,23 +1830,25 @@ public class LiveViewerWindow {
         String previousSelection = focusRangeCombo.getValue();
 
         List<String> options = new ArrayList<>();
-        options.add("Auto");
+        options.add("Config");
         int[] umOptions = focusRangeOptionsForObjective(objId);
         for (int um : umOptions) {
             options.add(um + "um");
         }
 
         focusRangeCombo.getItems().setAll(options);
-        if (previousSelection != null && options.contains(previousSelection)) {
-            focusRangeCombo.setValue(previousSelection);
+        // Migrate any persisted "Auto" selection from older builds to "Config".
+        String migrated = "Auto".equals(previousSelection) ? "Config" : previousSelection;
+        if (migrated != null && options.contains(migrated)) {
+            focusRangeCombo.setValue(migrated);
         } else {
-            focusRangeCombo.setValue("Auto");
+            focusRangeCombo.setValue("Config");
         }
     }
 
     /**
      * Returns the magnification-appropriate range options (in um) for an objective.
-     * Excludes "Auto"; caller prepends it. Conservative fallback when magnification
+     * Excludes "Config"; caller prepends it. Conservative fallback when magnification
      * cannot be parsed.
      */
     private static int[] focusRangeOptionsForObjective(String objId) {

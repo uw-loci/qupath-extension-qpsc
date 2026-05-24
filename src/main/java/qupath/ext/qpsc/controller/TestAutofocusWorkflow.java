@@ -71,7 +71,7 @@ public class TestAutofocusWorkflow {
      *
      * @return Path to autofocus_tests directory, or user.home fallback if config not found
      */
-    private static String getDefaultOutputPath() {
+    public static String getDefaultOutputPath() {
         try {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             if (configPath != null && !configPath.isEmpty()) {
@@ -300,7 +300,7 @@ public class TestAutofocusWorkflow {
      * @return Objective identifier or null if not found
      */
     @SuppressWarnings("unchecked")
-    private static String getCurrentObjective(MicroscopeConfigManager configManager) {
+    public static String getCurrentObjective(MicroscopeConfigManager configManager) {
         try {
             Map<String, Object> config = configManager.getAllConfig();
             Map<String, Object> microscope = (Map<String, Object>) config.get("microscope");

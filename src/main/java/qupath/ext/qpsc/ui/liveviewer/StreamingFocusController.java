@@ -13,9 +13,9 @@ import qupath.ext.qpsc.utilities.AfFailureHint;
 /**
  * Thin Java-side wrapper around the server's STRMAFZ (streaming autofocus) command.
  *
- * <p>Unlike {@link SweepFocusController}, which runs a stepped loop client-
- * side issuing move + snap commands one at a time, this controller
- * delegates the whole scan to the server. The server:
+ * <p>Like the server-side TESTADAF sweep autofocus, this controller
+ * delegates the whole scan to the server -- there is no per-frame loop
+ * in Java. The server:
  *
  * <ol>
  *   <li>Looks up {@code sweep_range_um} per-objective from
@@ -30,8 +30,8 @@ import qupath.ext.qpsc.utilities.AfFailureHint;
  * side, and there is no per-frame loop in Java. The only reason it exists
  * as a separate class (instead of inlining in LiveViewerWindow) is to
  * match the existing running/cancel/callback lifecycle pattern used by
- * {@link SweepFocusController} and {@link RefineFocusController}, so the
- * Live Viewer can track state with the same plumbing.
+ * {@link RefineFocusController}, so the Live Viewer can track state with
+ * the same plumbing.
  *
  * <p><b>Cancellation:</b> supported via {@link #cancel()}, which sends the
  * ABORTAF command on the client's auxiliary socket (the primary socket is
@@ -43,7 +43,8 @@ import qupath.ext.qpsc.utilities.AfFailureHint;
  * <p><b>Fallback behavior:</b> if the server returns {@code UNAVAILABLE}
  * (pre-flight refusal -- exposure too long, saturated, no speed property,
  * too few samples), the controller reports FAILED with an explanatory
- * message. The caller is expected to fall back to the stepped Sweep Focus.
+ * message. The caller is expected to fall back to the stepped Sweep
+ * Autofocus (server-side TESTADAF).
  */
 public class StreamingFocusController {
 
